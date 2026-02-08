@@ -22,6 +22,7 @@ This document tracks critical issues and technical debt identified during the Ph
 The `searchByName` procedure uses raw SQL with a `deleted_at IS NULL` filter, but the `Product` model in `prisma/schema.prisma` does not have a `deleted_at` field. This query will fail at runtime.
 
 **Current Code:**
+
 ```typescript
 const products = await prisma.$queryRaw`
   SELECT 
@@ -37,12 +38,14 @@ const products = await prisma.$queryRaw`
 ```
 
 **Impact:**
+
 - Product search functionality will throw database errors
 - Users won't be able to search for products
 - Blocks Phase 1 feature "Product catalog CRUD + search"
 
 **Suggested Fix:**
 Option A: Add soft delete support to Product model:
+
 ```prisma
 model Product {
   // ... existing fields ...
@@ -59,7 +62,8 @@ Option B: Remove the `deleted_at IS NULL` clause from the query if soft deletes 
 
 ### 🔴 CRITICAL-2: Authentication pages are placeholder implementations
 
-**Files:** 
+**Files:**
+
 - `src/app/(auth)/login/page.tsx`
 - `src/app/(auth)/register/page.tsx`
 
@@ -70,6 +74,7 @@ Option B: Remove the `deleted_at IS NULL` clause from the query if soft deletes 
 Both login and register pages are minimal placeholders with no actual form implementation. The Auth.js configuration exists but users cannot actually log in or register.
 
 **Current Code (login):**
+
 ```tsx
 export default function LoginPage() {
   return (
@@ -81,11 +86,13 @@ export default function LoginPage() {
 ```
 
 **Impact:**
+
 - Users cannot authenticate
 - Blocks all dashboard functionality
 - Blocks Phase 1 entirely
 
 **Required Implementation:**
+
 - Login form with email/password fields
 - Register form with email, name, password, optional household name
 - Form validation using Zod schemas
@@ -107,16 +114,19 @@ export default function LoginPage() {
 No migration files exist in the repository. The schema is defined but hasn't been migrated to create the actual database tables.
 
 **Impact:**
+
 - Database tables don't exist
 - All Prisma queries will fail
 - Application cannot run
 
 **Required Actions:**
+
 1. Run `pnpm prisma migrate dev --name init` to create initial migration
 2. Commit the generated migration files to git
 3. Document migration workflow in README
 
 **Note:** Initial migration should include:
+
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -128,7 +138,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 ### 🟡 CRITICAL-4: Missing rate limiting for authentication endpoints
 
-**Files:** 
+**Files:**
+
 - `src/lib/auth.ts`
 - `src/app/api/auth/[...nextauth]/route.ts` (missing)
 
@@ -142,12 +153,14 @@ No rate limiting is implemented for login/register endpoints. This leaves the ap
 > Rate limiting: 5 login attempts/15min per IP, 3 registrations/hour per IP
 
 **Impact:**
+
 - Security vulnerability
 - Brute force password attacks possible
 - Registration spam possible
 
 **Suggested Implementation:**
 Use Valkey (Redis) to track attempts per IP:
+
 ```typescript
 // Middleware or custom authorize function
 const rateLimitKey = `auth:attempts:${ip}`;
@@ -173,6 +186,7 @@ if (attempts > 5) {
 **Status:** OPEN
 
 **Current Rule:**
+
 ```typescript
 password: z.string().min(8)
 ```
@@ -181,6 +195,7 @@ password: z.string().min(8)
 Only checks for minimum length. No complexity requirements (uppercase, lowercase, numbers, special chars).
 
 **Suggested Enhancement:**
+
 ```typescript
 password: z.string()
   .min(8, "Password must be at least 8 characters")
@@ -204,6 +219,7 @@ password: z.string()
 The `torchEnabled` state is defined but never actually passed to the scanner component to control the torch.
 
 **Current Code:**
+
 ```typescript
 const [torchEnabled, setTorchEnabled] = useState(false);
 // ...
@@ -217,6 +233,7 @@ const [torchEnabled, setTorchEnabled] = useState(false);
 
 **Suggested Fix:**
 Either:
+
 1. Pass `torchEnabled` to the scanner component if supported
 2. Remove torch functionality if not supported by `@thewirv/react-barcode-scanner`
 3. Check library documentation for correct torch API
@@ -235,6 +252,7 @@ Either:
 The service uses an in-memory Map for caching. In a multi-instance deployment (Docker Swarm, Kubernetes), each instance will have its own cache, leading to inconsistent behavior and cache misses.
 
 **Current Code:**
+
 ```typescript
 const cache = new Map<string, { data: OpenFoodFactsProduct; timestamp: number }>();
 ```
@@ -244,6 +262,7 @@ Use Valkey (Redis-compatible) cache service for production.
 
 **Suggested Fix:**
 Replace in-memory cache with Valkey when implementing the service:
+
 ```typescript
 import { Redis } from "ioredis";
 const redis = new Redis(process.env.VALKEY_URL);
@@ -270,6 +289,7 @@ async getProductByBarcode(barcode: string) {
 Many procedures throw generic errors like `"User not in a household"` or `"Product not found"` without proper TRPCError codes.
 
 **Example:**
+
 ```typescript
 if (!user?.householdId) {
   throw new Error("User not in a household"); // Should use TRPCError
@@ -278,6 +298,7 @@ if (!user?.householdId) {
 
 **Suggested Fix:**
 Use TRPCError with appropriate codes:
+
 ```typescript
 import { TRPCError } from "@trpc/server";
 
@@ -310,6 +331,7 @@ if (!product) {
 Several frequently queried fields don't have indexes, which will cause performance issues at scale.
 
 **Missing Indexes:**
+
 1. `StockEntry.productId` - Queried in every stock operation
 2. `StockEntry.householdId` (via Product relation) - Queried in inventory overview
 3. `PriceRecord.productId` - Queried for price history
@@ -317,6 +339,7 @@ Several frequently queried fields don't have indexes, which will cause performan
 5. `ReceiptItem.receiptId` - Queried when loading receipt details
 
 **Suggested Additions:**
+
 ```prisma
 model StockEntry {
   // ... fields ...
@@ -357,12 +380,14 @@ model ReceiptItem {
 Integration tests for tRPC routers and services require a test database. Currently, tests are either skipped or will fail without database setup.
 
 **Required Setup:**
+
 1. Create test database schema
 2. Add test database URL to environment
 3. Set up test fixtures/seeds
 4. Add database cleanup between tests
 
 **Suggested Implementation:**
+
 ```typescript
 // test-setup.ts
 import { prisma } from "@/lib/prisma";
@@ -390,7 +415,8 @@ afterAll(async () => {
 
 ### 🟡 TEST-2: Mock external API calls in tests
 
-**Files:** 
+**Files:**
+
 - `src/__tests__/unit/openFoodFacts.test.ts`
 
 **Severity:** MEDIUM  
@@ -401,6 +427,7 @@ Tests for OpenFoodFacts service will make real HTTP requests. This is slow, flak
 
 **Suggested Fix:**
 Mock `global.fetch` in tests:
+
 ```typescript
 beforeEach(() => {
   global.fetch = mock(() => 
@@ -435,6 +462,7 @@ No API documentation exists for the tRPC procedures. This makes it hard for fron
 
 **Suggested Solution:**
 Add JSDoc comments to all router procedures:
+
 ```typescript
 /**
  * Search for products by name using fuzzy matching (pg_trgm)
@@ -458,6 +486,7 @@ searchByName: protectedProcedure
 
 **Issue:**
 `.env.example` exists but there's no documentation on how to:
+
 - Generate `NEXTAUTH_SECRET`
 - Set up PostgreSQL locally
 - Configure Docker for development
@@ -466,6 +495,7 @@ searchByName: protectedProcedure
 
 **Suggested Addition:**
 Create `docs/setup.md` or expand README with:
+
 1. Prerequisites (Node.js 24, Docker, pnpm)
 2. Environment variable explanations
 3. Step-by-step setup commands
@@ -477,24 +507,24 @@ Create `docs/setup.md` or expand README with:
 
 ## Recommendations for Phase 1
 
-### Week 1 Priorities:
+### Week 1 Priorities
 
 1. **Fix CRITICAL-1:** Remove or add `deleted_at` field
 2. **Fix CRITICAL-2:** Implement login/register forms
 3. **Fix CRITICAL-3:** Create and commit initial migration
 4. **Setup TEST-1:** Configure test database for integration tests
 
-### Week 2 Priorities:
+### Week 2 Priorities
 
-5. **Address DEBT-3:** Implement Valkey caching for OpenFoodFacts
-6. **Address DEBT-5:** Add missing database indexes
-7. **Address DEBT-1:** Enhance password validation
+1. **Address DEBT-3:** Implement Valkey caching for OpenFoodFacts
+2. **Address DEBT-5:** Add missing database indexes
+3. **Address DEBT-1:** Enhance password validation
 
-### Before Production:
+### Before Production
 
-8. **Fix CRITICAL-4:** Implement rate limiting
-9. **Address DEBT-4:** Standardize TRPCError usage
-10. **Fix TEST-2:** Mock all external API calls
+1. **Fix CRITICAL-4:** Implement rate limiting
+2. **Address DEBT-4:** Standardize TRPCError usage
+3. **Fix TEST-2:** Mock all external API calls
 
 ---
 
@@ -509,12 +539,14 @@ Create `docs/setup.md` or expand README with:
 ---
 
 **Next Steps:**
+
 1. Fix Critical issues 1-3 before Phase 1
 2. Set up test database environment
 3. Begin Phase 1 feature implementation (F4-F7)
 4. Address technical debt incrementally during Phase 1
 
 **Sign-off:**
+
 - Code Review: COMPLETE
 - Phase 0 Commit History: 12 commits
 - Test Suite: 10 test files, 897 lines
