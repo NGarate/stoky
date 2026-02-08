@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: stoky
+      POSTGRES_PASSWORD: stoky_dev_password
+      POSTGRES_DB: stoky
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stoky -d stoky"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stoky
+    # No exposed ports - internal network only
+
+  cache:
+    image: valkey/valkey:8-alpine
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stoky
+    # No exposed ports - internal network only
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://stoky:stoky_dev_password@db:5432/stoky?schema=public
+      - VALKEY_URL=redis://cache:6379
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - uploads:/app/uploads
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    networks:
+      - stoky
+    command: pnpm dev
+
+volumes:
+  postgres_data:
+  valkey_data:
+  uploads:
+
+networks:
+  stoky:
+    driver: bridge

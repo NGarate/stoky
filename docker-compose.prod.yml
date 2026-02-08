@@ -1,0 +1,100 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - stoky
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # No exposed ports - internal only
+
+  cache:
+    image: valkey/valkey:8-alpine
+    volumes:
+      - valkey_data:/data
+    networks:
+      - stoky
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # No exposed ports - internal only
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - VALKEY_URL=${VALKEY_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - stoky
+      - traefik
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stoky.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.stoky.entrypoints=websecure"
+      - "traefik.http.routers.stoky.tls.certresolver=letsencrypt"
+      - "traefik.http.services.stoky.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.stoky-security.headers.stsSeconds=63072000"
+      - "traefik.http.middlewares.stoky-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.stoky-security.headers.stsPreload=true"
+      - "traefik.http.middlewares.stoky-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.stoky-security.headers.frameDeny=true"
+      - "traefik.http.routers.stoky.middlewares=stoky-security"
+
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - traefik
+
+volumes:
+  postgres_data:
+  valkey_data:
+  uploads:
+  letsencrypt:
+
+networks:
+  stoky:
+    driver: bridge
+    internal: true
+  traefik:
+    driver: bridge
