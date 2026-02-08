@@ -152,3 +152,20 @@ Examples:
 - **quality** (parallel): `pnpm lint` + `pnpm typecheck`
 - **test** (parallel): PostgreSQL service container + `bun test`
 - **build** (depends on quality + test): Docker multi-stage build
+
+## Agent Instructions
+
+When working with this codebase:
+
+1. **Always run lint and typecheck** after making changes
+2. **Check existing patterns** in similar files before implementing new features
+3. **Follow the domain-driven structure** — add code to the appropriate domain folder
+4. **Update migrations** when changing the Prisma schema
+5. **Add tests** for new functionality
+6. **Verify Docker services are running** before testing database-dependent features
+7. **Use Spanish (es)** for user-facing strings in i18n files
+8. **Never commit secrets** — use `.env.example` for documentation
+9. **Maintain backward compatibility** — especially for database migrations
+10. **Commit all changes** following GitHub Flow — each feature, bugfix, or meaningful change must be committed following the Git Workflow section above and git best practices (small, focused commits with conventional commit messages)
+11. **Test all changes** — every new component, piece of logic, or modification must include appropriate tests (unit, integration, or E2E) following the Testing section standards
+12. **Validate before committing** — never commit without: (a) running the full test suite (`bun test` and `bunx playwright test`), (b) verifying lint and typecheck pass, (c) manually testing the feature works correctly, and (d) assessing that no visual regressions, bugs, security threats, or degradation of project standards have been introduced

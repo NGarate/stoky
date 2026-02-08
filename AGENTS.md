@@ -206,3 +206,6 @@ When working with this codebase:
 7. **Use Spanish (es)** for user-facing strings in i18n files
 8. **Never commit secrets** — use `.env.example` for documentation
 9. **Maintain backward compatibility** — especially for database migrations
+10. **Commit all changes** following GitHub Flow — each feature, bugfix, or meaningful change must be committed following the Git Workflow section above and git best practices (small, focused commits with conventional commit messages)
+11. **Test all changes** — every new component, piece of logic, or modification must include appropriate tests (unit, integration, or E2E) following the Testing section standards
+12. **Validate before committing** — never commit without: (a) running the full test suite (`bun test` and `bunx playwright test`), (b) verifying lint and typecheck pass, (c) manually testing the feature works correctly, and (d) assessing that no visual regressions, bugs, security threats, or degradation of project standards have been introduced
