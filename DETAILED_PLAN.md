@@ -29,7 +29,7 @@ Stoky is a privacy-first, self-hosted household inventory management platform. T
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | Next.js 16, TypeScript 5.x strict, Tailwind CSS 4.x + MUI 6.x, TanStack Query v5, Zustand v5, next-intl v4.x |
+| **Frontend** | Next.js 16, TypeScript 5.x strict, Tailwind CSS 4.x + shadcn/ui, TanStack Query v5, Zustand v5, next-intl v4.x |
 | **Backend** | tRPC v11, Node.js 24 LTS, Prisma 7.x |
 | **Auth** | Auth.js v5, Argon2id, JWT (15min access + 7d refresh) |
 | **OCR** | Tesseract.js (server-side in Worker thread) |
@@ -82,6 +82,51 @@ prisma/
   migrations/                   # Migration files
   seed.ts                       # Demo data seeder
 ```
+
+### Repository Strategy: Single Repo (Enforced)
+
+**Decision: Single repository, single Next.js application. No monorepo tooling, no repo splitting.**
+
+This is a deliberate architectural constraint, not a default. The following alternatives were evaluated and rejected:
+
+#### Why NOT two separate repos (backend + frontend)
+
+1. **tRPC requires colocation.** tRPC v11 provides end-to-end type safety through direct TypeScript imports between client and server. Splitting repos would break automatic type inference and require manual type generation/export, eliminating the core benefit of choosing tRPC over REST/GraphQL.
+2. **Next.js is full-stack by design.** The API lives in `src/app/api/trpc/[trpc]/route.ts` and pages live in `src/app/`. They share the same build process, the same runtime, and the same deployment. Splitting would abandon SSR/RSC capabilities and reduce the frontend to a static SPA.
+3. **Shared Zod schemas depend on single-repo imports.** `src/lib/validations/` is imported by both client components and server routers. Two repos would require a third shared package or schema duplication.
+4. **One Docker service, one deployment.** The architecture defines a single `app` container. Two repos would mean two containers, two builds, CORS configuration, and doubled deployment complexity for zero benefit at this scale.
+
+#### Why NOT a monorepo (Turborepo/Nx with `packages/`)
+
+A monorepo with separate `apps/web` and `apps/api` packages is justified when:
+- Multiple frontends exist (web + mobile + admin dashboard)
+- A standalone API is consumed by third parties
+- A large team has separate backend/frontend squads
+
+None of these conditions apply. This is a solo-developer project with one Next.js app. Monorepo tooling would add workspace configuration overhead, package boundary management, more complex Docker builds, and zero architectural benefit.
+
+#### Enforced structure
+
+```
+stoky/                             # Single repo root
+├── src/
+│   ├── app/                       # Next.js pages + API routes (frontend + backend entry)
+│   ├── server/                    # tRPC routers + services (backend logic)
+│   ├── lib/                       # Shared code (Zod schemas, auth config)
+│   └── components/                # React components (frontend)
+├── prisma/                        # DB schema + migrations
+├── docker-compose.yml
+├── Dockerfile
+└── package.json                   # Single package.json, no workspaces
+```
+
+The separation is **by concern within one codebase**: `src/server/` is the backend, `src/components/` + `src/app/` pages are the frontend, `src/lib/` is shared — all type-safe, all in one build.
+
+#### When to revisit
+
+- **Phase 3+:** If a Capacitor native app is built, a shared API client package may be extracted — but tRPC's client generation keeps this in one repo.
+- **Phase 4:** If a plugin/webhook system with OpenAPI is added, API splitting could be reconsidered.
+- **Never during MVP.** This constraint holds for the entire MVP scope.
 
 ---
 
@@ -672,7 +717,7 @@ These must be done **in order** by a single agent because each depends on the pr
 1. Initialize git repository
 2. Run `pnpm init` and install all dependencies:
    - Next.js 16, React, TypeScript 5.x
-   - Tailwind CSS 4.x, @mui/material 6.x, @emotion/react, @emotion/styled
+   - Tailwind CSS 4.x, shadcn/ui (includes Radix UI primitives, tailwind-merge, clsx)
    - @trpc/server, @trpc/client, @trpc/tanstack-react-query, @tanstack/react-query
    - @prisma/client, prisma (dev)
    - next-auth (Auth.js v5), @auth/prisma-adapter
