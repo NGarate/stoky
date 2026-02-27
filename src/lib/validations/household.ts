@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 export const householdSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
 });
 
 export const updateHouseholdSchema = householdSchema.partial().extend({
-  id: z.string(),
+  id: z.string().trim().min(1),
 });
 
 export const householdMemberSchema = z.object({
-  userId: z.string(),
+  userId: z.string().trim().min(1),
   role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
 });
 

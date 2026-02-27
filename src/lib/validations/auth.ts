@@ -7,13 +7,13 @@ export const loginSchema = z.object({
 
 export const registerSchema = z.object({
   email: z.string().email(),
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
   password: z.string().min(8),
-  householdName: z.string().min(1).optional(),
+  householdName: z.string().trim().min(1).optional(),
 });
 
 export const createHouseholdSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
 });
 
 export const inviteMemberSchema = z.object({
