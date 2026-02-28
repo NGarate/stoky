@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+out
+
+# Version control
+.git
+.gitignore
+
+# Environment (secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE / editor
+.vscode
+.cursor
+.idea
+*.swp
+*.swo
+
+# Documentation (not needed in image)
+*.md
+docs/
+LICENSE
+
+# Test artifacts
+coverage
+test-results
+playwright-report
+
+# Upload data (mounted as volume)
+uploads
+
+# OS files
+.DS_Store
+Thumbs.db
