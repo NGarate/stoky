@@ -33,31 +33,6 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: stoky
-          POSTGRES_PASSWORD: stoky_test
-          POSTGRES_DB: stoky_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      
-      valkey:
-        image: valkey/valkey:8-alpine
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-          
     steps:
       - uses: actions/checkout@v4
       
@@ -78,19 +53,10 @@ jobs:
           
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-        
-      - name: Setup database
-        run: |
-          pnpm prisma generate
-          pnpm prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://stoky:stoky_test@localhost:5432/stoky_test?schema=public
-          
+
       - name: Run tests
-        run: bun test
+        run: pnpm test:unit && pnpm test:components && pnpm test:integration
         env:
-          DATABASE_URL: postgresql://stoky:stoky_test@localhost:5432/stoky_test?schema=public
-          VALKEY_URL: redis://localhost:6379
           NEXTAUTH_SECRET: test-secret
 
   build:
