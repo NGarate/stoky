@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import { processReceiptOcr, terminateWorker } from "@/server/services/ocr";
-import { mock, spyOn } from "bun:test";
 
 describe("OCR Service", () => {
   afterEach(async () => {

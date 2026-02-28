@@ -29,7 +29,7 @@ test.describe("Authentication Flow", () => {
 });
 
 test.describe("Dashboard Navigation", () => {
-  test("should display navigation items", async ({ page }) => {
+  test("should display navigation items", async ({ page: _page }) => {
     // This test would require authentication
     // For now, just verify the structure
     test.skip(true, "Requires authentication");
