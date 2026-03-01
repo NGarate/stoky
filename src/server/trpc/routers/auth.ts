@@ -1,6 +1,5 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
-import { signIn, signOut } from "@/lib/auth";
 import * as argon2 from "argon2";
 import { loginSchema, registerSchema } from "@/lib/validations/auth";
 
@@ -8,17 +7,31 @@ export const authRouter = createTRPCRouter({
   login: publicProcedure
     .input(loginSchema)
     .mutation(async ({ input }) => {
-      const result = await signIn("credentials", {
-        email: input.email,
-        password: input.password,
-        redirect: false,
+      const user = await prisma.user.findUnique({
+        where: { email: input.email },
       });
 
-      if (!result || result.error) {
+      if (!user) {
         throw new Error("Invalid credentials");
       }
 
-      return { success: true };
+      const isValidPassword = await argon2.verify(
+        user.passwordHash,
+        input.password,
+      );
+
+      if (!isValidPassword) {
+        throw new Error("Invalid credentials");
+      }
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
+      };
     }),
 
   register: publicProcedure
@@ -101,7 +114,6 @@ export const authRouter = createTRPCRouter({
 
   logout: protectedProcedure
     .mutation(async () => {
-      await signOut({ redirect: false });
       return { success: true };
     }),
 });

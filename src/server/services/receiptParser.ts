@@ -15,10 +15,18 @@ interface ParsedReceipt {
   items: ParsedItem[];
 }
 
-const STORE_PATTERNS = [
-  /^(?:supermercado|tienda|comercio)\s+(.+)$/im,
-  /^([A-Z][A-Za-z\s]+(?:SL|SA|\.S\.A|\.S\.L|\.S\.A\.U|GMBH|INC|LTD))$/im,
-  /^([A-Z][A-Za-z\s&]+(?:MARKET|SUPER|DIA|CARREFOUR|MERCADONA|ALDI|LIDL|ALCAMPO|CONSUM|MAS Y MAS|SPAR|EROSKI|HIPERCOR|EL CORTE INGLES))$/im,
+const KNOWN_STORES = [
+  "mercadona",
+  "carrefour",
+  "dia",
+  "lidl",
+  "aldi",
+  "el corte ingles",
+  "hipercor",
+  "alcampo",
+  "eroski",
+  "consum",
+  "spar",
 ];
 
 const DATE_PATTERNS = [
@@ -27,17 +35,7 @@ const DATE_PATTERNS = [
   /\b(\d{2})(\d{2})(\d{4})\b/,
 ];
 
-const ITEM_PATTERNS = [
-  // Standard format: PRODUCT NAME 2,50
-  /^(.+?)\s+(\d+[,.]\d{2})\s*$/m,
-  // With quantity: 2x PRODUCT NAME 5,00
-  /^(\d+)\s*x\s*(.+?)\s+(\d+[,.]\d{2})\s*$/m,
-  // Price at end: PRODUCT ... 2,50
-  /^(.+?)\s+.*?(\d+[,.]\d{2})\s*$/m,
-];
-
-const PRICE_PATTERN = /(\d+)[,.](\d{2})/;
-const TOTAL_PATTERN = /(?:total|importe|suma)\s*:?\s*(\d+[,.]\d{2})/i;
+const TOTAL_PATTERN = /(?:total|importe|suma)(?:\s+[a-záéíóúñ]+)*\s*[:€()]*\s*(\d+[,.]\d{2})/i;
 
 export function parseReceiptText(ocrText: string): ParsedReceipt {
   const lines = ocrText
@@ -49,17 +47,7 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
     items: [],
   };
 
-  // Extract store name (usually in first few lines)
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
-    for (const pattern of STORE_PATTERNS) {
-      const match = lines[i].match(pattern);
-      if (match) {
-        result.storeName = match[1].trim();
-        break;
-      }
-    }
-    if (result.storeName) break;
-  }
+  result.storeName = extractStoreName(lines);
 
   // Extract date
   for (const line of lines) {
@@ -116,11 +104,13 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
 
   // Extract items
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i].replace(/\b(?:total|importe|suma)\b.*$/i, "").trim();
+    const priceMatches = line.match(/\d+[,.]\d{2}/g) ?? [];
 
     // Skip lines that are likely headers, footers, or irrelevant
     if (
-      line.match(/(?:total|subtotal|iva|descuento|cambio|efectivo|tarjeta|factura|ticket|caja|hora|fecha)/i) ||
+      (line.match(/\b(?:subtotal|iva|descuento|cambio|efectivo|tarjeta|factura|ticket|caja|hora|fecha)\b/i) &&
+        priceMatches.length <= 1) ||
       line.match(/^\d{1,2}[/]\d{1,2}[/]\d{2,4}$/) ||
       line.match(/^\d{2}:\d{2}/) ||
       line.length < 3
@@ -128,76 +118,144 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
       continue;
     }
 
-    // Try to match item patterns
-    let item: ParsedItem | null = null;
-
-    for (const pattern of ITEM_PATTERNS) {
-      const match = line.match(pattern);
-      if (match) {
-        if (match.length === 4) {
-          // Has quantity
-          const quantity = Number.parseInt(match[1], 10);
-          const name = cleanProductName(match[2]);
-          const priceStr = match[3].replace(",", ".");
-          const price = Number.parseFloat(priceStr);
-
-          if (name && !Number.isNaN(price) && price > 0) {
-            item = {
-              rawText: line,
-              parsedName: name,
-              parsedPrice: price,
-              parsedQuantity: quantity,
-            };
-          }
-        } else {
-          // No quantity
-          const name = cleanProductName(match[1]);
-          const priceStr = match[2].replace(",", ".");
-          const price = Number.parseFloat(priceStr);
-
-          if (name && !Number.isNaN(price) && price > 0 && price < 10000) {
-            item = {
-              rawText: line,
-              parsedName: name,
-              parsedPrice: price,
-            };
-          }
-        }
-        break;
-      }
-    }
-
-    // Fallback: just look for any price in the line
-    if (!item) {
-      const priceMatch = line.match(PRICE_PATTERN);
-      if (priceMatch) {
-        const price = Number.parseFloat(`${priceMatch[1]}.${priceMatch[2]}`);
-        const name = cleanProductName(line.replace(priceMatch[0], "").trim());
-
-        if (name && price > 0 && price < 10000) {
-          item = {
-            rawText: line,
-            parsedName: name,
-            parsedPrice: price,
-          };
-        }
-      }
-    }
+    const item = parseLineItem(line);
 
     if (item) {
       result.items.push(item);
     }
   }
 
+  // Fallback for OCR text without line breaks
+  if (result.items.length === 0 && lines.length === 1) {
+    const inlineText = lines[0]
+      .replace(/\b(?:total|importe|suma)\b.*$/i, "")
+      .trim();
+    const matches = [
+      ...inlineText.matchAll(
+        /([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s/-]{1,}?)\s+(\d+[,.]\d{2})/g,
+      ),
+    ];
+
+    for (const match of matches) {
+      const name = cleanProductName(match[1]);
+      const price = Number.parseFloat(match[2].replace(",", "."));
+      if (name && !Number.isNaN(price) && price > 0 && price < 10000) {
+        result.items.push({
+          rawText: `${match[1]} ${match[2]}`.trim(),
+          parsedName: name,
+          parsedPrice: price,
+        });
+      }
+    }
+  }
+
   return result;
 }
 
+function parseLineItem(line: string): ParsedItem | null {
+  const quantityPrefixMatch = line.match(
+    /^(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s+(\d+[,.]\d{2})\s*$/i,
+  );
+  if (quantityPrefixMatch) {
+    const quantity = Number.parseFloat(
+      quantityPrefixMatch[1].replace(",", "."),
+    );
+    const name = cleanProductName(quantityPrefixMatch[2]);
+    const price = Number.parseFloat(
+      quantityPrefixMatch[3].replace(",", "."),
+    );
+    if (
+      name &&
+      !Number.isNaN(quantity) &&
+      quantity > 0 &&
+      !Number.isNaN(price) &&
+      price > 0 &&
+      price < 10000
+    ) {
+      return {
+        rawText: line,
+        parsedName: name,
+        parsedPrice: price,
+        parsedQuantity: quantity,
+      };
+    }
+  }
+
+  const prices = [...line.matchAll(/(\d+[,.]\d{2})/g)];
+  if (prices.length === 0) return null;
+
+  const firstPrice = prices[0];
+  const lastPrice = prices[prices.length - 1];
+  if (firstPrice.index === undefined) return null;
+  const price = Number.parseFloat(lastPrice[1].replace(",", "."));
+  if (Number.isNaN(price) || price <= 0 || price >= 10000) return null;
+
+  let namePart = line.slice(0, firstPrice.index).trim();
+  if (!namePart) return null;
+
+  let parsedQuantity: number | undefined;
+  const quantitySuffixMatch = namePart.match(/\b(\d+(?:[.,]\d+)?)$/);
+  if (quantitySuffixMatch) {
+    const candidateQuantity = Number.parseFloat(
+      quantitySuffixMatch[1].replace(",", "."),
+    );
+    if (!Number.isNaN(candidateQuantity) && candidateQuantity > 0 && candidateQuantity < 1000) {
+      parsedQuantity = candidateQuantity;
+      namePart = namePart
+        .slice(0, quantitySuffixMatch.index ?? namePart.length)
+        .trim();
+    }
+  }
+
+  const name = cleanProductName(namePart);
+  if (!name) return null;
+
+  return {
+    rawText: line,
+    parsedName: name,
+    parsedPrice: price,
+    parsedQuantity,
+  };
+}
+
+function extractStoreName(lines: string[]): string | undefined {
+  const maxLines = Math.min(8, lines.length);
+
+  for (let i = 0; i < maxLines; i++) {
+    const normalized = normalizeText(lines[i]).replace(/[^a-z0-9\s]/g, " ");
+    const compact = normalized.replace(/\s+/g, " ").trim();
+    if (!compact) continue;
+
+    for (const store of KNOWN_STORES) {
+      if (compact.includes(store)) {
+        return store;
+      }
+    }
+
+    const genericStoreMatch = compact.match(
+      /^(?:supermercado|tienda|comercio)\s+(.+)$/,
+    );
+    if (genericStoreMatch && genericStoreMatch[1]) {
+      return genericStoreMatch[1].trim();
+    }
+  }
+
+  return undefined;
+}
+
 function cleanProductName(name: string): string {
-  return name
+  return normalizeText(name)
     .replace(/\s+/g, " ")
-    .replace(/^[^a-zA-Z]+/, "")
-    .replace(/[^a-zA-Z0-9\s]+$/, "")
+    .replace(/^[^a-z0-9]+/, "")
+    .replace(/[^a-z0-9\s]+$/, "")
     .trim()
+    .toLowerCase();
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
 
@@ -205,6 +263,14 @@ export async function saveParsedItems(
   receiptId: string,
   parsed: ParsedReceipt,
 ): Promise<void> {
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    select: { householdId: true },
+  });
+  if (!receipt) {
+    throw new Error("Receipt not found");
+  }
+
   // Update receipt with parsed metadata
   await prisma.receipt.update({
     where: { id: receiptId },
@@ -220,21 +286,23 @@ export async function saveParsedItems(
     const existingStore = await prisma.store.findFirst({
       where: {
         name: { equals: parsed.storeName, mode: "insensitive" },
-        householdId: (
-          await prisma.receipt.findUnique({
-            where: { id: receiptId },
-            select: { householdId: true },
-          })
-        )?.householdId,
+        householdId: receipt.householdId,
       },
     });
 
-    if (existingStore) {
-      await prisma.receipt.update({
-        where: { id: receiptId },
-        data: { storeId: existingStore.id },
-      });
-    }
+    const store =
+      existingStore ??
+      (await prisma.store.create({
+        data: {
+          name: parsed.storeName,
+          householdId: receipt.householdId,
+        },
+      }));
+
+    await prisma.receipt.update({
+      where: { id: receiptId },
+      data: { storeId: store.id },
+    });
   }
 
   // Create receipt items

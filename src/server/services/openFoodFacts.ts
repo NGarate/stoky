@@ -141,9 +141,29 @@ export class OpenFoodFactsClient {
   extractUnit(quantity?: string): string {
     if (!quantity) return "unit";
 
-    const normalizedQuantity = quantity.trim();
-    const match = normalizedQuantity.match(/\d+(?:[.,]\d+)?([a-zA-Z]+)$/);
-    return match ? match[1].toLowerCase() : "unit";
+    const normalizedQuantity = quantity.trim().toLowerCase();
+    if (!normalizedQuantity) return "unit";
+
+    const compactMatch = normalizedQuantity.match(
+      /\d+(?:[.,]\d+)?([a-z]+)$/,
+    );
+    if (compactMatch) {
+      const compactUnit = compactMatch[1];
+      if (normalizedQuantity.includes("x") && /^(cl|ml|l)$/.test(compactUnit)) {
+        return "l";
+      }
+      return compactUnit;
+    }
+
+    const spacedMatch = normalizedQuantity.match(/\d+(?:[.,]\d+)?\s+([a-z]+)$/);
+    if (spacedMatch) {
+      const spacedUnit = spacedMatch[1];
+      if (spacedUnit === "kg" || spacedUnit === "g") return "g";
+      if (/^(ml|cl|l)$/.test(spacedUnit)) return "l";
+      if (spacedUnit.endsWith("s")) return "s";
+    }
+
+    return "unit";
   }
 
   /**

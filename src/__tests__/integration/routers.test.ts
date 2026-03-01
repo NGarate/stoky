@@ -26,15 +26,18 @@ async function createTestContext(
   ctx: { session: Session | null };
   caller: ReturnType<typeof appRouter.createCaller>;
 }> {
-  const session: Session = {
-    user: {
-      id: userId,
-      email: `test-${userId}@example.com`,
-      name: "Test User",
-      householdId,
-    },
-    expires: new Date(Date.now() + 3600 * 1000).toISOString(),
-  };
+  const session: Session | null =
+    userId === "anon"
+      ? null
+      : {
+          user: {
+            id: userId,
+            email: `test-${userId}@example.com`,
+            name: "Test User",
+            householdId,
+          },
+          expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+        };
 
   const ctx = await createTRPCContext({ session });
   const caller = appRouter.createCaller(ctx);
@@ -149,6 +152,55 @@ async function createTestShoppingList(householdId: string, overrides = {}) {
 
 // Cleanup function
 async function cleanupTestData() {
+  if (testData.households.length > 0) {
+    await prisma.shoppingItem.deleteMany({
+      where: {
+        shoppingList: {
+          householdId: { in: testData.households },
+        },
+      },
+    });
+    await prisma.shoppingList.deleteMany({
+      where: { householdId: { in: testData.households } },
+    });
+
+    await prisma.receiptItem.deleteMany({
+      where: {
+        receipt: {
+          householdId: { in: testData.households },
+        },
+      },
+    });
+    await prisma.receipt.deleteMany({
+      where: { householdId: { in: testData.households } },
+    });
+
+    await prisma.priceRecord.deleteMany({
+      where: {
+        product: {
+          householdId: { in: testData.households },
+        },
+      },
+    });
+    await prisma.stockEntry.deleteMany({
+      where: {
+        product: {
+          householdId: { in: testData.households },
+        },
+      },
+    });
+
+    await prisma.store.deleteMany({
+      where: { householdId: { in: testData.households } },
+    });
+    await prisma.storageLocation.deleteMany({
+      where: { householdId: { in: testData.households } },
+    });
+    await prisma.product.deleteMany({
+      where: { householdId: { in: testData.households } },
+    });
+  }
+
   // Delete in reverse order of dependencies
   await prisma.shoppingItem.deleteMany({
     where: { shoppingListId: { in: testData.shoppingLists } },

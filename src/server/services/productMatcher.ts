@@ -18,6 +18,36 @@ const AUTO_MATCH_THRESHOLD = 0.7;
 const MIN_CANDIDATE_THRESHOLD = 0.3;
 const MAX_CANDIDATES = 5;
 
+function normalizeForSimilarity(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenSimilarity(left: string, right: string): number {
+  const leftTokens = new Set(
+    normalizeForSimilarity(left).split(" ").filter(Boolean),
+  );
+  const rightTokens = new Set(
+    normalizeForSimilarity(right).split(" ").filter(Boolean),
+  );
+
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+
+  let commonTokens = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) {
+      commonTokens += 1;
+    }
+  }
+
+  return commonTokens / Math.min(leftTokens.size, rightTokens.size);
+}
+
 export async function matchReceiptItems(
   receiptId: string,
 ): Promise<MatchResult[]> {
@@ -109,30 +139,47 @@ async function findProductMatches(
   parsedName: string,
   householdId: string,
 ): Promise<ProductMatch[]> {
+  const normalizedParsedName = normalizeForSimilarity(parsedName);
+
   // Use pg_trgm similarity function
   const products = await prisma.$queryRaw<
     Array<{
       id: string;
       name: string;
-      similarity: number;
+      trigramSimilarity: number;
     }>
   >`
-    SELECT 
+    SELECT
       id,
       name,
-      similarity(name, ${parsedName}) as similarity
+      GREATEST(
+        similarity(lower(name), ${normalizedParsedName}),
+        word_similarity(lower(name), ${normalizedParsedName}),
+        strict_word_similarity(lower(name), ${normalizedParsedName}),
+        word_similarity(${normalizedParsedName}, lower(name)),
+        strict_word_similarity(${normalizedParsedName}, lower(name))
+      ) AS "trigramSimilarity"
     FROM "Product"
     WHERE "householdId" = ${householdId}
-      AND similarity(name, ${parsedName}) > 0.1
-    ORDER BY similarity DESC
-    LIMIT 10
+    ORDER BY "trigramSimilarity" DESC
+    LIMIT 50
   `;
 
-  return products.map((p) => ({
-    productId: p.id,
-    name: p.name,
-    similarity: p.similarity,
-  }));
+  return products
+    .map((product) => {
+      const boostedSimilarity = Math.max(
+        product.trigramSimilarity,
+        tokenSimilarity(product.name, parsedName),
+      );
+      return {
+        productId: product.id,
+        name: product.name,
+        similarity: boostedSimilarity,
+      };
+    })
+    .filter((product) => product.similarity > 0.1)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 10);
 }
 
 export async function getItemCandidates(
