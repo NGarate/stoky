@@ -68,6 +68,9 @@ uploads/receipts/*
 tmp/
 temp/
 
+# Local agent settings
+**/.codex/settings.local.json
+
 # Logs
 logs/
 *.log
