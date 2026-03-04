@@ -79,6 +79,7 @@ logs/
 test-results/
 playwright-report/
 playwright/.cache/
+.playwright/
 
 # Vercel
 .vercel
