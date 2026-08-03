@@ -34,11 +34,84 @@ describe("OpenFoodFacts Service", () => {
   });
 
   describe("caching behavior", () => {
-    it("should cache products by barcode", async () => {
-      // This test would require mocking the fetch API
-      // In a real test, we would mock global.fetch
-      expect(typeof client.clearCache).toBe("function");
-      expect(typeof client.clearAllCache).toBe("function");
+    const barcode = "8480000123456";
+
+    function stubFetch() {
+      const calls: string[] = [];
+      const originalFetch = global.fetch;
+
+      global.fetch = (async (url: string | URL) => {
+        calls.push(String(url));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: barcode,
+            status: 1,
+            status_verbose: "product found",
+            product: {
+              code: barcode,
+              product_name: "Leche entera",
+              brands: "Hacendado",
+              quantity: "1L",
+            },
+          }),
+        };
+      }) as unknown as typeof fetch;
+
+      return { calls, restore: () => { global.fetch = originalFetch; } };
+    }
+
+    it("serves a repeated barcode from cache instead of refetching", async () => {
+      const { calls, restore } = stubFetch();
+      try {
+        const first = await client.getProductByBarcode(barcode);
+        const second = await client.getProductByBarcode(barcode);
+
+        expect(first).not.toBeNull();
+        expect(second).toEqual(first);
+        expect(calls).toHaveLength(1);
+      } finally {
+        restore();
+      }
+    });
+
+    it("refetches after the barcode's cache entry is cleared", async () => {
+      const { calls, restore } = stubFetch();
+      try {
+        await client.getProductByBarcode(barcode);
+        client.clearCache(barcode);
+        await client.getProductByBarcode(barcode);
+
+        expect(calls).toHaveLength(2);
+      } finally {
+        restore();
+      }
+    });
+
+    it("refetches after the whole cache is cleared", async () => {
+      const { calls, restore } = stubFetch();
+      try {
+        await client.getProductByBarcode(barcode);
+        client.clearAllCache();
+        await client.getProductByBarcode(barcode);
+
+        expect(calls).toHaveLength(2);
+      } finally {
+        restore();
+      }
+    });
+
+    it("does not serve one barcode's entry for another", async () => {
+      const { calls, restore } = stubFetch();
+      try {
+        await client.getProductByBarcode(barcode);
+        await client.getProductByBarcode("8410000999999");
+
+        expect(calls).toHaveLength(2);
+      } finally {
+        restore();
+      }
     });
   });
 
