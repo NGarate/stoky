@@ -1,3 +1,9 @@
+-- CreateExtension
+-- pg_trgm must exist before the GIN index on "Product"."name" below, which
+-- uses gin_trgm_ops. Without it this migration fails on a fresh database.
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- CreateEnum
 CREATE TYPE "ReceiptStatus" AS ENUM ('UPLOADING', 'PROCESSING', 'PARSED', 'NEEDS_REVIEW', 'CONFIRMED', 'APPLIED', 'FAILED');
 
