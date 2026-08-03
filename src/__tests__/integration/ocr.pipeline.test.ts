@@ -411,7 +411,7 @@ TOTAL: 61,40 EUR`;
         { text: "15032024", description: "DDMMYYYY" },
       ];
 
-      for (const { text, description } of formats) {
+      for (const { text } of formats) {
         const ocrText = `TIENDA\n${text}\nProducto 1,00`;
         const parsed = parseReceiptText(ocrText);
         
