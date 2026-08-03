@@ -1,0 +1,340 @@
+/**
+ * Demo data seeder.
+ *
+ * Run with `corepack pnpm db:seed` (or `bash scripts/dev-local.sh --seed`).
+ *
+ * The dataset is shaped to exercise the journeys in `docs/SMOKE_JOURNEYS.md`:
+ * an inventory with healthy, low and expiring stock; products below their
+ * minimum so "generate from low stock" has something to find; and price history
+ * across several stores and dates so the price drill-down renders a real chart.
+ *
+ * Re-running is safe: the demo household and everything hanging off it is
+ * removed first, so the result is the same every time.
+ */
+import { PrismaClient, type StockOperation } from "@prisma/client";
+import * as argon2 from "argon2";
+
+const prisma = new PrismaClient();
+
+const HOUSEHOLD_NAME = "Hogar Demo";
+const DEMO_EMAIL = "demo@stoky.local";
+const DEMO_PASSWORD = "Demo1234!";
+
+/** Days from now, as a date. Negative for the past. */
+function daysFromNow(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+async function removeExistingDemoData(): Promise<void> {
+  const household = await prisma.household.findFirst({
+    where: { name: HOUSEHOLD_NAME },
+    select: { id: true },
+  });
+
+  if (!household) return;
+
+  const householdId = household.id;
+  const products = await prisma.product.findMany({
+    where: { householdId },
+    select: { id: true },
+  });
+  const productIds = products.map((product) => product.id);
+
+  // Deleted in foreign-key order, deepest first.
+  await prisma.receiptItem.deleteMany({
+    where: { receipt: { householdId } },
+  });
+  await prisma.receipt.deleteMany({ where: { householdId } });
+  await prisma.shoppingItem.deleteMany({
+    where: { shoppingList: { householdId } },
+  });
+  await prisma.shoppingList.deleteMany({ where: { householdId } });
+  await prisma.stockEntry.deleteMany({
+    where: { productId: { in: productIds } },
+  });
+  await prisma.priceRecord.deleteMany({
+    where: { productId: { in: productIds } },
+  });
+  // Children before parents: StorageLocation is self-referential.
+  await prisma.storageLocation.deleteMany({
+    where: { householdId, parentId: { not: null } },
+  });
+  await prisma.storageLocation.deleteMany({ where: { householdId } });
+  await prisma.store.deleteMany({ where: { householdId } });
+  await prisma.product.deleteMany({ where: { householdId } });
+  await prisma.user.deleteMany({ where: { householdId } });
+  await prisma.household.delete({ where: { id: householdId } });
+}
+
+async function main(): Promise<void> {
+  await removeExistingDemoData();
+
+  const household = await prisma.household.create({
+    data: { name: HOUSEHOLD_NAME },
+  });
+
+  const passwordHash = await argon2.hash(DEMO_PASSWORD, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+  });
+
+  const user = await prisma.user.create({
+    data: {
+      email: DEMO_EMAIL,
+      name: "Usuario Demo",
+      passwordHash,
+      locale: "es",
+      role: "OWNER",
+      householdId: household.id,
+    },
+  });
+
+  // --- Storage locations (two levels, to exercise the location tree) -------
+  const kitchen = await prisma.storageLocation.create({
+    data: { name: "Cocina", householdId: household.id },
+  });
+  const pantry = await prisma.storageLocation.create({
+    data: { name: "Despensa", householdId: household.id, parentId: kitchen.id },
+  });
+  const fridge = await prisma.storageLocation.create({
+    data: { name: "Nevera", householdId: household.id, parentId: kitchen.id },
+  });
+  const cellar = await prisma.storageLocation.create({
+    data: { name: "Trastero", householdId: household.id },
+  });
+
+  // --- Stores --------------------------------------------------------------
+  const [mercadona, carrefour, lidl] = await Promise.all([
+    prisma.store.create({
+      data: {
+        name: "Mercadona",
+        address: "Calle Mayor 1",
+        householdId: household.id,
+      },
+    }),
+    prisma.store.create({
+      data: {
+        name: "Carrefour",
+        address: "Avenida de la Constitución 45",
+        householdId: household.id,
+      },
+    }),
+    prisma.store.create({
+      data: { name: "Lidl", householdId: household.id },
+    }),
+  ]);
+
+  // --- Products ------------------------------------------------------------
+  // `stock` entries sum to the product's current quantity; a sum below
+  // `minStock` makes the product show as low stock and makes it a candidate
+  // for the auto-generated shopping list.
+  const catalogue = [
+    {
+      name: "Leche entera",
+      brand: "Hacendado",
+      category: "Lácteos",
+      barcode: "8480000123456",
+      defaultUnit: "L",
+      minStock: 6,
+      location: fridge.id,
+      // 2 L against a minimum of 6 → low stock.
+      stock: [{ quantity: 6, days: -20 }, { quantity: -4, days: -3 }],
+      expiration: daysFromNow(5),
+      prices: [
+        { store: mercadona.id, price: 0.89, days: -60 },
+        { store: mercadona.id, price: 0.95, days: -30 },
+        { store: carrefour.id, price: 1.05, days: -30 },
+        { store: lidl.id, price: 0.85, days: -10 },
+        { store: mercadona.id, price: 0.99, days: -2 },
+      ],
+    },
+    {
+      name: "Arroz redondo",
+      brand: "SOS",
+      category: "Despensa",
+      barcode: "8410000234567",
+      defaultUnit: "kg",
+      minStock: 2,
+      location: pantry.id,
+      stock: [{ quantity: 5, days: -45 }],
+      expiration: daysFromNow(400),
+      prices: [
+        { store: mercadona.id, price: 1.35, days: -45 },
+        { store: carrefour.id, price: 1.49, days: -20 },
+        { store: lidl.id, price: 1.29, days: -5 },
+      ],
+    },
+    {
+      name: "Aceite de oliva virgen extra",
+      brand: "Carbonell",
+      category: "Despensa",
+      barcode: "8410000345678",
+      defaultUnit: "L",
+      minStock: 2,
+      location: pantry.id,
+      // 1 L against a minimum of 2 → low stock.
+      stock: [{ quantity: 3, days: -90 }, { quantity: -2, days: -15 }],
+      expiration: daysFromNow(300),
+      prices: [
+        { store: mercadona.id, price: 8.45, days: -90 },
+        { store: mercadona.id, price: 9.2, days: -45 },
+        { store: carrefour.id, price: 9.75, days: -30 },
+        { store: lidl.id, price: 8.99, days: -7 },
+      ],
+    },
+    {
+      name: "Huevos frescos",
+      brand: null,
+      category: "Frescos",
+      barcode: "8480000456789",
+      defaultUnit: "docena",
+      minStock: 1,
+      location: fridge.id,
+      stock: [{ quantity: 2, days: -6 }],
+      // Expiring soon, for the expiring-items widget.
+      expiration: daysFromNow(3),
+      prices: [
+        { store: mercadona.id, price: 2.15, days: -35 },
+        { store: carrefour.id, price: 2.39, days: -6 },
+      ],
+    },
+    {
+      name: "Papel higiénico",
+      brand: "Scottex",
+      category: "Hogar",
+      barcode: "8410000567890",
+      defaultUnit: "paquete",
+      minStock: 1,
+      location: cellar.id,
+      stock: [{ quantity: 3, days: -30 }],
+      expiration: null,
+      prices: [
+        { store: carrefour.id, price: 6.49, days: -30 },
+        { store: lidl.id, price: 5.99, days: -12 },
+      ],
+    },
+    {
+      name: "Café molido natural",
+      brand: "Marcilla",
+      category: "Desayuno",
+      barcode: "8410000678901",
+      defaultUnit: "paquete",
+      minStock: 2,
+      location: pantry.id,
+      // Fully consumed → low stock at zero.
+      stock: [{ quantity: 2, days: -50 }, { quantity: -2, days: -8 }],
+      expiration: daysFromNow(180),
+      prices: [
+        { store: mercadona.id, price: 2.79, days: -50 },
+        { store: lidl.id, price: 2.55, days: -8 },
+      ],
+    },
+  ];
+
+  const createdProducts: Array<{ id: string; name: string }> = [];
+
+  for (const item of catalogue) {
+    const product = await prisma.product.create({
+      data: {
+        name: item.name,
+        brand: item.brand,
+        category: item.category,
+        barcode: item.barcode,
+        defaultUnit: item.defaultUnit,
+        minStock: item.minStock,
+        householdId: household.id,
+      },
+    });
+    createdProducts.push({ id: product.id, name: product.name });
+
+    for (const entry of item.stock) {
+      await prisma.stockEntry.create({
+        data: {
+          productId: product.id,
+          quantity: entry.quantity,
+          unit: item.defaultUnit,
+          expirationDate: entry.quantity > 0 ? item.expiration : null,
+          locationId: item.location,
+          operationType: (entry.quantity > 0
+            ? "PURCHASE"
+            : "CONSUME") as StockOperation,
+          createdBy: user.id,
+          createdAt: daysFromNow(entry.days),
+        },
+      });
+    }
+
+    for (const price of item.prices) {
+      await prisma.priceRecord.create({
+        data: {
+          productId: product.id,
+          storeId: price.store,
+          price: price.price,
+          currency: "EUR",
+          unit: item.defaultUnit,
+          quantity: 1,
+          recordedAt: daysFromNow(price.days),
+        },
+      });
+    }
+  }
+
+  // --- A manual shopping list ---------------------------------------------
+  // The auto-generated list is intentionally left for the app to build, so the
+  // "generate from low stock" journey has visible work to do.
+  const weeklyList = await prisma.shoppingList.create({
+    data: { name: "Compra semanal", householdId: household.id },
+  });
+
+  const milk = createdProducts.find((p) => p.name === "Leche entera");
+  const coffee = createdProducts.find((p) => p.name === "Café molido natural");
+
+  await prisma.shoppingItem.createMany({
+    data: [
+      {
+        shoppingListId: weeklyList.id,
+        productId: milk?.id ?? null,
+        quantity: 6,
+        unit: "L",
+        isChecked: false,
+      },
+      {
+        shoppingListId: weeklyList.id,
+        productId: coffee?.id ?? null,
+        quantity: 2,
+        unit: "paquete",
+        isChecked: true,
+        checkedAt: daysFromNow(-1),
+      },
+      {
+        shoppingListId: weeklyList.id,
+        productId: null,
+        customName: "Bombillas LED",
+        quantity: 4,
+        unit: "unidad",
+        isChecked: false,
+      },
+    ],
+  });
+
+  const lowStock = ["Leche entera", "Aceite de oliva virgen extra", "Café molido natural"];
+
+  console.log("Seed complete.");
+  console.log(`  Household : ${HOUSEHOLD_NAME}`);
+  console.log(`  Login     : ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`  Products  : ${createdProducts.length} (${lowStock.length} below minimum)`);
+  console.log(`  Low stock : ${lowStock.join(", ")}`);
+  console.log("  Stores    : Mercadona, Carrefour, Lidl");
+}
+
+main()
+  .catch((error) => {
+    console.error("Seed failed:", error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
