@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
 Single source of truth for where the project actually is. Replaces
 `PROJECT_ASSESSMENT.md`, `DEVELOPMENT_ROADMAP.md`, `COMPONENT_AUDIT.md`,
@@ -14,7 +14,7 @@ If a gate could not be run, say so and say why.
 
 ## Gate status
 
-Measured on 2026-08-03.
+Measured on 2026-08-04, with a live PostgreSQL and Valkey.
 
 | Gate | Command | Result |
 |---|---|---|
@@ -22,26 +22,49 @@ Measured on 2026-08-03.
 | Typecheck | `corepack pnpm typecheck` | ✅ clean |
 | Unit tests | `corepack pnpm test:unit` | ✅ 72 pass / 8 files |
 | Component tests | `corepack pnpm test:components` | ✅ 94 pass / 10 files |
+| Integration tests | `corepack pnpm test:integration` | ✅ 218 pass / 8 files |
 | Build | `corepack pnpm build` | ✅ 16 routes, all server-rendered on demand |
-| Integration tests | `corepack pnpm test:integration` | ⛔ **not run** — Docker daemon unreachable |
-| E2E | `bunx playwright test` | ⛔ **not run** — needs app + database |
+| Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database (after the pg_trgm fix below) |
+| Seed | `corepack pnpm db:seed` | ✅ verified end-to-end, and idempotent across re-runs |
+| E2E (chromium) | `bunx playwright test --project=chromium` | ⚠️ **9 pass / 6 fail** — see below |
+| E2E (firefox, webkit) | — | ⛔ browsers not installed (`bunx playwright install`) |
 
-### Why two gates are blocked
+### Two traps that made earlier measurements wrong
 
-`docker ps` fails with *permission denied on `/var/run/docker.sock`*. Nothing
-that needs PostgreSQL or Valkey can run locally until that is fixed:
+**1. The migration could never apply to a fresh database.** The initial
+migration creates a GIN index using `gin_trgm_ops` but never created the
+`pg_trgm` extension, so `prisma migrate deploy` failed with
+*operator class "gin_trgm_ops" does not exist*. It went unnoticed because the
+only path anyone ran — `scripts/test-integration-local.sh` — creates the
+extensions manually beforehand, masking the defect. Local bootstrap and
+production deploy were both broken. Fixed by adding the `CREATE EXTENSION`
+statements to the migration itself.
+
+**2. Playwright silently tested a different application.** `playwright.config.ts`
+hardcoded port 3000 with `reuseExistingServer`. When an unrelated process holds
+that port, Playwright adopts it and runs the whole suite against that other app,
+producing a wall of meaningless failures. The config now honours
+`PLAYWRIGHT_PORT`. Always confirm the port is free, or set it:
 
 ```bash
-sudo usermod -aG docker $USER && newgrp docker
+PLAYWRIGHT_PORT=3177 bunx playwright test e2e/critical-paths.spec.ts
 ```
 
-This is the single highest-value unblock in the repo — it gates the integration
-suite, the E2E suite, the seed, and local bootstrap. See
-`INFRASTRUCTURE_SOLUTIONS.md` for alternatives.
+### The 6 remaining E2E failures
 
-Note that `corepack pnpm verify:ci` will fail at its integration step for this
-reason, even though lint, typecheck, both fast suites and the build all pass
-individually.
+Measured against a real Stoky instance on a free port, so these are genuine:
+
+- **3 are a missing feature, not a bug.** *add stock*, *consume stock* and
+  *low stock warnings* fail because `/inventory` renders no interactive
+  controls at all — the page contains zero buttons or click handlers. Stock
+  movement has no UI yet. This is the Phase 2 gap below, showing up as a test
+  failure.
+- **2 are stale test expectations.** The login error assertions search for
+  `/incorrect|inválido|error/i`, but the app correctly renders
+  *"Credenciales inválidas"* — feminine plural, which that regex does not
+  match. The app behaves correctly; the tests need fixing.
+- **1 is an onboarding URL expectation** that no longer matches the registration
+  redirect.
 
 ---
 
@@ -65,11 +88,12 @@ demand — nothing is statically prerendered), 16 domain components, and
 **i18n — complete for what exists.** `messages/es.json` and `messages/en.json`
 have matching top-level keys. Spanish is primary.
 
-**Seed — written, unverified.** `prisma/seed.ts` creates a demo household,
-6 products (3 deliberately below minimum stock), 4 storage locations, 3 stores,
-price history and a shopping list. It compiles and fails only on database
-connectivity; it has **never been run against a live database**. Login is
-`demo@stoky.local` / `Demo1234!`.
+**Seed — verified.** `prisma/seed.ts` creates a demo household, 6 products
+(3 deliberately below minimum stock), 4 storage locations, 3 stores, 18 price
+records and a shopping list. Confirmed against a live database: it produces
+exactly the intended low-stock set (Leche entera 2/6, Aceite 1/2, Café 0/2) and
+re-running leaves the row counts unchanged. Login is `demo@stoky.local` /
+`Demo1234!`.
 
 ---
 
@@ -103,7 +127,10 @@ that does not exist, and sat outside Playwright's `testDir`, so it never ran)
 and `src/__tests__/e2e/` (a divergent duplicate of `e2e/`).
 
 The integration suite is genuine — it drives `appRouter.createCaller` against
-real Prisma — but is unverified here because it needs Docker.
+real Prisma — and now verified: **218 pass, 0 fail, 406 assertions**. It stubs
+`global.fetch` for every Open Food Facts test, so no suite makes real network
+calls; the `OFF API error: 403` lines in its output come from the service
+logging deliberately malformed fixtures.
 
 ---
 
@@ -181,16 +208,27 @@ Next.js 16, React 19, Tailwind 4, next-intl 4 and pnpm 10 all match.
 
 ## What to do next
 
-1. **Unblock Docker** (needs sudo). Everything below depends on it.
-2. Run `corepack pnpm verify:ci` and record the real integration result in this
-   file. Lint, typecheck, both fast suites and the build already pass; the
-   integration step is the only unknown.
-3. Run the seed against a live database and confirm the smoke journeys in
-   `docs/SMOKE_JOURNEYS.md` render.
-4. Implement rate limiting on login/register — the last critical security gap.
+1. **Build the stock-movement UI.** `/inventory` is read-only — no add, consume,
+   adjust or transfer controls exist, even though the `inventory` router
+   implements all four. This is the largest functional gap and it is what three
+   E2E failures are pointing at. Journey 1 in `docs/SMOKE_JOURNEYS.md` cannot be
+   completed today.
+2. **Implement rate limiting** on login and register — the last critical
+   security gap (`ISSUES.md` CRITICAL-4).
+3. **Fix the 3 stale E2E expectations** (login error regex, onboarding redirect
+   URL) so the suite's failures mean something.
+4. **Install the missing browsers** with `bunx playwright install` — only
+   chromium is present, so firefox and webkit currently cannot run at all.
 5. Standardise `TRPCError` across the seven routers still throwing bare errors.
-6. Start Phase 2: install the shadcn primitives listed above, then refactor the
-   domain components onto them.
+6. Start Phase 2 proper: install the shadcn primitives listed above, then
+   refactor the domain components onto them.
+
+### Environment note
+
+The `docker` group exists and includes this user, but a login session started
+before that change will not have it. Either re-login, or prefix commands with
+`sg docker -c "..."`. Port 3000 is occupied on this machine, so pass
+`PLAYWRIGHT_PORT` when running E2E.
 
 ---
 

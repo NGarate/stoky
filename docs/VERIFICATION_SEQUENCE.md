@@ -60,17 +60,25 @@ bunx playwright test e2e/critical-paths.spec.ts
 
 ## Current validation notes
 
-Last measured 2026-08-03. See `docs/STATUS.md` for the full table.
+Last measured 2026-08-04. See `docs/STATUS.md` for the full table.
 
 - `corepack pnpm lint` is clean: 0 warnings, 0 errors
 - `corepack pnpm typecheck` is green
 - `corepack pnpm test:unit` — 72 pass across 8 files
 - `corepack pnpm test:components` — 94 pass across 10 files
+- `corepack pnpm test:integration` — 218 pass across 8 files
 - `corepack pnpm build` succeeds — 16 routes, all server-rendered on demand
-- `corepack pnpm test:integration` is **unverified**: the Docker daemon is
-  unreachable on this machine, so `verify:ci` fails at that step
-- Playwright coverage still depends on local infra and fixture setup rather
-  than a one-command disposable harness
+- `bunx playwright test --project=chromium` — 9 pass, 6 fail; the failures are
+  real and catalogued in `docs/STATUS.md`. Only chromium is installed.
+
+Two environment traps on this machine:
+
+- The `docker` group exists and includes this user, but a session started
+  before the group was granted will not have it. Re-login, or prefix with
+  `sg docker -c "..."`.
+- Port 3000 is occupied. Playwright's `reuseExistingServer` will otherwise run
+  the whole suite against whatever else is listening, so pass a free port:
+  `PLAYWRIGHT_PORT=3177 bunx playwright test ...`
 
 `test:components` must be run through the pnpm script. It passes
 `--preload ./src/__tests__/setup/register-dom.ts`, which installs the happy-dom
