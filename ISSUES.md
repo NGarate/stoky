@@ -1,22 +1,49 @@
-# Stoky Phase 0 - Critical Issues & Technical Debt
+# Stoky - Issues & Technical Debt
 
 ## Overview
 
-This document tracks critical issues and technical debt identified during the Phase 0 (Foundation) code review. These issues should be addressed before proceeding to Phase 1 or during the early stages of Phase 1.
+This document tracks open issues and technical debt. It started as the Phase 0
+(Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2025-02-08  
-**Phase:** 0 (Foundation)  
-**Status:** Code Review Complete
+**Last Updated:** 2026-08-03  
+**Status:** 3 critical issues resolved, 1 open; 5 debt items open
+
+For overall project state and gate results, see `docs/STATUS.md`.
+
+### Summary
+
+| ID | Title | Status |
+|---|---|---|
+| CRITICAL-1 | `deleted_at` in product search | ✅ Resolved 2026-08-03 |
+| CRITICAL-2 | Auth pages were placeholders | ✅ Resolved (commit `7f393ac`) |
+| CRITICAL-3 | Missing database migrations | ✅ Resolved (`20260213234844`) |
+| CRITICAL-4 | No rate limiting on auth | 🔴 **OPEN** |
+| DEBT-1 | Minimal password validation | 🟡 Open |
+| DEBT-2 | Barcode scanner torch is inert | 🟡 Open (pinned by test) |
+| DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
+| DEBT-4 | Bare `Error` instead of `TRPCError` | 🟡 Open (7 of 8 routers) |
+| DEBT-5 | Missing database indexes | 🟡 Open |
+| TEST-1 | Integration tests need a database | 🟡 Partly addressed |
+| TEST-2 | Mock external API calls | ✅ Resolved |
+| DOCS-1 | No API documentation | 🟡 Open |
+| DOCS-2 | No environment setup instructions | ✅ Resolved |
 
 ---
 
 ## Critical Issues
 
-### 🔴 CRITICAL-1: Non-existent `deleted_at` field in product search query
+### ✅ CRITICAL-1: Non-existent `deleted_at` field in product search query
 
-**File:** `src/server/trpc/routers/product.ts` (Line 287-297)  
+**File:** `src/server/trpc/routers/product.ts`  
 **Severity:** HIGH  
-**Status:** OPEN
+**Status:** RESOLVED 2026-08-03
+
+**Resolution:** The `AND deleted_at IS NULL` clause was removed from the raw
+pg_trgm query. No model in `prisma/schema.prisma` has a soft-delete column, so
+Option B below was the correct choice; adding `deletedAt` would have introduced
+a column nothing else in the codebase reads.
+
+**Original report follows.**
 
 **Description:**
 The `searchByName` procedure uses raw SQL with a `deleted_at IS NULL` filter, but the `Product` model in `prisma/schema.prisma` does not have a `deleted_at` field. This query will fail at runtime.
@@ -60,7 +87,7 @@ Option B: Remove the `deleted_at IS NULL` clause from the query if soft deletes 
 
 ---
 
-### 🔴 CRITICAL-2: Authentication pages are placeholder implementations
+### ✅ CRITICAL-2: Authentication pages are placeholder implementations
 
 **Files:**
 
@@ -68,7 +95,13 @@ Option B: Remove the `deleted_at IS NULL` clause from the query if soft deletes 
 - `src/app/(auth)/register/page.tsx`
 
 **Severity:** HIGH  
-**Status:** OPEN
+**Status:** RESOLVED in commit `7f393ac`
+
+**Resolution:** Both pages are real client components with form submission,
+`signIn("credentials")`, translated error mapping via
+`src/lib/auth/error-messages.ts`, pending state and post-login redirect.
+
+**Original report follows.**
 
 **Description:**
 Both login and register pages are minimal placeholders with no actual form implementation. The Auth.js configuration exists but users cannot actually log in or register.
@@ -104,11 +137,17 @@ export default function LoginPage() {
 
 ---
 
-### 🔴 CRITICAL-3: Missing database migrations
+### ✅ CRITICAL-3: Missing database migrations
 
 **Location:** `prisma/migrations/`  
 **Severity:** HIGH  
-**Status:** OPEN
+**Status:** RESOLVED
+
+**Resolution:** `prisma/migrations/20260213234844` is committed, together with
+`migration_lock.toml`. A seeder now also exists at `prisma/seed.ts`, wired to
+`corepack pnpm db:seed` through the `prisma.seed` key in `package.json`.
+
+**Original report follows.**
 
 **Description:**
 No migration files exist in the repository. The schema is defined but hasn't been migrated to create the actual database tables.
@@ -144,10 +183,15 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 - `src/app/api/auth/[...nextauth]/route.ts` (missing)
 
 **Severity:** MEDIUM-HIGH  
-**Status:** OPEN
+**Status:** OPEN — re-confirmed 2026-08-03
 
 **Description:**
 No rate limiting is implemented for login/register endpoints. This leaves the application vulnerable to brute force attacks.
+
+**Verification:** grepping `src/` for `rateLimit`, `redis`, `ioredis` or
+`valkey` returns nothing. There is no cache client in the application at all,
+despite `cache` (Valkey) being defined in `docker-compose.dev.yml`. This is now
+the most serious open issue in the repo.
 
 **Requirements from DETAILED_PLAN.md:**
 > Rate limiting: 5 login attempts/15min per IP, 3 registrations/hour per IP
@@ -213,10 +257,15 @@ password: z.string()
 
 **File:** `src/components/barcode/Scanner.tsx`  
 **Severity:** LOW  
-**Status:** OPEN
+**Status:** OPEN — behaviour pinned by test
 
 **Issue:**
 The `torchEnabled` state is defined but never actually passed to the scanner component to control the torch.
+
+**Note:** `src/__tests__/components/Scanner.test.tsx` contains a test named
+*"does not yet drive the camera torch"* which documents the current behaviour.
+When this debt is fixed, that test must be updated — it asserts the torch prop
+is absent.
 
 **Current Code:**
 
@@ -281,12 +330,17 @@ async getProductByBarcode(barcode: string) {
 
 ### 🟡 DEBT-4: tRPC error handling uses generic messages
 
-**File:** `src/server/trpc/routers/product.ts`  
+**Files:** all routers except `src/server/trpc/routers/receipt.ts`  
 **Severity:** LOW  
-**Status:** OPEN
+**Status:** OPEN — scope measured 2026-08-03
 
 **Issue:**
 Many procedures throw generic errors like `"User not in a household"` or `"Product not found"` without proper TRPCError codes.
+
+**Scope:** `receipt.ts` uses `TRPCError` in 24 places. The other seven routers
+(`auth`, `product`, `location`, `inventory`, `store`, `price`, `shopping`) use
+none, so every one of their failures reaches the client as
+`INTERNAL_SERVER_ERROR`.
 
 **Example:**
 
@@ -374,7 +428,17 @@ model ReceiptItem {
 
 **Location:** `src/__tests__/integration/`  
 **Severity:** MEDIUM  
-**Status:** OPEN
+**Status:** PARTLY ADDRESSED
+
+**Resolution so far:** `scripts/test-integration-local.sh` (run by
+`corepack pnpm test:integration`) brings up the repo's own `db` and `cache`
+services and recreates an isolated `stoky_test` database on every run. See
+`docs/TEST_SETUP.md`.
+
+**Still open:** the harness depends on a working Docker daemon, which is
+currently unavailable on this machine, so the integration suite is unverified.
+
+**Original report follows.**
 
 **Issue:**
 Integration tests for tRPC routers and services require a test database. Currently, tests are either skipped or will fail without database setup.
@@ -413,14 +477,24 @@ afterAll(async () => {
 
 ---
 
-### 🟡 TEST-2: Mock external API calls in tests
+### ✅ TEST-2: Mock external API calls in tests
 
 **Files:**
 
 - `src/__tests__/unit/openFoodFacts.test.ts`
+- `src/__tests__/integration/openFoodFacts.comprehensive.test.ts`
 
 **Severity:** MEDIUM  
-**Status:** OPEN
+**Status:** RESOLVED 2026-08-03
+
+**Resolution:** No test makes a real HTTP request. The integration suite
+replaces `global.fetch` with a spy; the unit suite's caching tests now stub
+`global.fetch`, count calls and restore the original afterwards. The previous
+placeholder test — which only asserted that `clearCache` and `clearAllCache`
+were functions — was replaced with four tests that actually exercise cache
+hits, per-barcode invalidation, full invalidation and key isolation.
+
+**Original report follows.**
 
 **Issue:**
 Tests for OpenFoodFacts service will make real HTTP requests. This is slow, flaky, and rate-limited.
@@ -479,10 +553,17 @@ searchByName: protectedProcedure
 
 ---
 
-### 🟡 DOCS-2: Missing environment setup instructions
+### ✅ DOCS-2: Missing environment setup instructions
 
 **Severity:** MEDIUM  
-**Status:** OPEN
+**Status:** RESOLVED 2026-08-03
+
+**Resolution:** `README.md` now covers prerequisites, setup and the command
+ladder; `docs/LOCAL_BOOTSTRAP.md` documents the clone-to-running-app path and
+its success checks; `docs/TEST_SETUP.md` covers test database configuration and
+troubleshooting. `prisma/seed.ts` makes the seeding step real.
+
+**Original report follows.**
 
 **Issue:**
 `.env.example` exists but there's no documentation on how to:
@@ -505,49 +586,47 @@ Create `docs/setup.md` or expand README with:
 
 ---
 
-## Recommendations for Phase 1
+## What to fix next
 
-### Week 1 Priorities
+### Blocking everything else
 
-1. **Fix CRITICAL-1:** Remove or add `deleted_at` field
-2. **Fix CRITICAL-2:** Implement login/register forms
-3. **Fix CRITICAL-3:** Create and commit initial migration
-4. **Setup TEST-1:** Configure test database for integration tests
+1. **Restore Docker access** (needs sudo — `sudo usermod -aG docker $USER`).
+   Until this works, the integration suite, the E2E suite and the seed cannot
+   be run at all, so TEST-1 stays half-open and nothing database-dependent can
+   be verified.
 
-### Week 2 Priorities
+### Before public deployment
 
-1. **Address DEBT-3:** Implement Valkey caching for OpenFoodFacts
-2. **Address DEBT-5:** Add missing database indexes
-3. **Address DEBT-1:** Enhance password validation
+2. **CRITICAL-4:** Implement rate limiting on login and register. This is the
+   only remaining critical issue and the largest security gap.
+3. **DEBT-1:** Strengthen the password policy beyond `min(8)`.
 
-### Before Production
+### Correctness and scale
 
-1. **Fix CRITICAL-4:** Implement rate limiting
-2. **Address DEBT-4:** Standardize TRPCError usage
-3. **Fix TEST-2:** Mock all external API calls
+4. **DEBT-4:** Convert the seven routers still throwing bare `Error` to
+   `TRPCError` with proper codes.
+5. **DEBT-5:** Add the missing indexes on `StockEntry.productId`,
+   `PriceRecord.productId`/`storeId`, `Receipt.householdId`/`status` and
+   `ReceiptItem.receiptId`.
+6. **DEBT-3:** Move the OpenFoodFacts cache from the process-local `Map` to
+   Valkey.
+
+### Polish
+
+7. **DEBT-2:** Wire the barcode torch toggle to the camera, and update the test
+   that currently pins the inert behaviour.
+8. **DOCS-1:** Add JSDoc to the tRPC procedures.
 
 ---
 
 ## Notes
 
-- All Phase 0 core infrastructure is in place and committed
-- The remaining untracked files (inventory, products, receipts, etc.) are Phase 1 features
-- Tests are comprehensive but need database setup to run
-- Code quality is generally high with TypeScript strict mode
-- Security foundation is good (Argon2id, JWT, httpOnly cookies)
+- Backend, auth, schema and migrations are in place; the UI component library
+  (Phase 2) is the largest unstarted body of work.
+- Unit and component suites run without a database and are green. The
+  integration suite is genuine but unverified here — Docker is unavailable.
+- TypeScript strict mode is on and both lint and typecheck are clean.
+- Security foundation is good (Argon2id, JWT, httpOnly cookies) with rate
+  limiting as the notable hole.
 
----
-
-**Next Steps:**
-
-1. Fix Critical issues 1-3 before Phase 1
-2. Set up test database environment
-3. Begin Phase 1 feature implementation (F4-F7)
-4. Address technical debt incrementally during Phase 1
-
-**Sign-off:**
-
-- Code Review: COMPLETE
-- Phase 0 Commit History: 12 commits
-- Test Suite: 10 test files, 897 lines
-- Issues Documented: 12 items
+For gate results and overall project state, see `docs/STATUS.md`.

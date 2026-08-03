@@ -6,10 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Stoky is a privacy-first, self-hosted household inventory management platform. It covers grocery/household inventory tracking, receipt scanning with OCR, price intelligence, and shopping list management. Primary language is Spanish (es), secondary English (en). Default currency is EUR.
 
+For the current state of the project — which gates pass, what is unverified, and what is still missing — read `docs/STATUS.md` before planning work.
+
 ## Tech Stack
 
 - **Frontend:** Next.js 16 (App Router), TypeScript 5.x strict, Tailwind CSS 4.x + shadcn/ui, TanStack Query v5, Zustand v5, next-intl v4.x
-- **Backend:** tRPC v11 (end-to-end type safety), Node.js 24 LTS, Prisma 7.x
+- **Backend:** tRPC v11 (currently the `11.0.0-rc.802` release candidate, end-to-end type safety), Node.js 24 LTS, Prisma 6.x
 - **Auth:** Auth.js v5 (credentials provider), Argon2id, JWT (15min access + 7d refresh)
 - **Database:** PostgreSQL 16 (with pg_trgm for fuzzy search)
 - **Cache:** Valkey 8 (Redis-compatible)
@@ -34,10 +36,15 @@ pnpm lint                   # oxlint
 pnpm typecheck              # tsc --noEmit
 
 # Testing
-bun test                    # Unit + integration tests
-bun test <path>             # Run single test file
+pnpm test                   # Unit + component + integration
+pnpm test:unit              # No database needed
+pnpm test:components        # No database needed (preloads happy-dom)
+pnpm test:integration       # Brings up its own db + cache
 bunx playwright test        # E2E tests
 bunx playwright test <file> # Single E2E test
+
+pnpm verify:local           # lint + typecheck + unit + components
+pnpm verify:ci              # the above + integration + build
 
 # Database
 pnpm prisma migrate dev     # Create/apply migrations
@@ -150,7 +157,7 @@ Examples:
 ## CI Pipeline (GitHub Actions)
 
 - **quality** (parallel): `pnpm lint` + `pnpm typecheck`
-- **test** (parallel): PostgreSQL service container + `bun test`
+- **test** (parallel): `pnpm test:unit && pnpm test:components && pnpm test:integration`
 - **build** (depends on quality + test): Docker multi-stage build
 
 ## Agent Instructions
@@ -167,5 +174,5 @@ When working with this codebase:
 8. **Never commit secrets** — use `.env.example` for documentation
 9. **Maintain backward compatibility** — especially for database migrations
 10. **Commit all changes** following GitHub Flow — each feature, bugfix, or meaningful change must be committed following the Git Workflow section above and git best practices (small, focused commits with conventional commit messages)
-11. **Test all changes** — every new component, piece of logic, or modification must include appropriate tests (unit, integration, or E2E) following the Testing section standards
-12. **Validate before committing** — never commit without: (a) running the full test suite (`bun test` and `bunx playwright test`), (b) verifying lint and typecheck pass, (c) manually testing the feature works correctly, and (d) assessing that no visual regressions, bugs, security threats, or degradation of project standards have been introduced
+11. **Test all changes** — every new component, piece of logic, or modification must include appropriate tests (unit, integration, or E2E) following the Testing section standards. **A test must be able to fail** — an assertion that holds regardless of the implementation (`expect(true).toBe(true)`, or a locally-declared boolean) is not a test. If unsure, break the code deliberately and confirm the test goes red
+12. **Validate before committing** — never commit without: (a) running the full test suite (`pnpm verify:ci` and, for UI-affecting work, `bunx playwright test`), (b) verifying lint and typecheck pass, (c) manually testing the feature works correctly, and (d) assessing that no visual regressions, bugs, security threats, or degradation of project standards have been introduced
