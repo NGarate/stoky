@@ -197,9 +197,9 @@ Stoky instance to the public internet until `ISSUES.md` CRITICAL-4 is closed.
 
 ## Contributing
 
-GitHub Flow: branch from `master` as `feat/<scope>-<description>` or
-`fix/<scope>-<description>`, keep commits small, open a PR, merge once CI is
-green, delete the branch.
+Trunk-based: work directly on `master`, in small focused commits. No feature
+branches, no pull requests. Since there is no PR gate, `master` must be green
+at every commit — run the checks before committing, not after.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -211,7 +211,7 @@ fix(inventory): correct stock quantity aggregation query
 Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`, `shopping`,
 `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
 
-Before opening a PR: `corepack pnpm verify:ci` must pass, new behaviour needs
+Before every commit: `corepack pnpm verify:ci` must pass, new behaviour needs
 tests, and user-facing strings go in `messages/es.json` first.
 
 **Tests must be able to fail.** An assertion that holds regardless of the code

@@ -136,14 +136,20 @@ Examples:
 - `fix(inventory): correct stock quantity aggregation query`
 - `refactor(auth): extract JWT rotation logic to separate service`
 
-## Git Workflow (GitHub Flow)
+## Git Workflow (trunk-based, master only)
 
-1. `master` is the main branch — always deployable
-2. Create feature branches from `master`: `feat/<scope>-<description>`, `fix/<scope>-<description>`
-3. Make small, focused commits following conventional commit format
-4. Open a pull request to `master` when ready
-5. Merge after CI passes (lint, typecheck, test, build)
-6. Delete branch after merge
+This project works directly on `master`. Do not create feature branches and do
+not open pull requests.
+
+1. `master` is the only long-lived branch — and must always be deployable
+2. Commit directly to `master`, in small focused commits following the
+   conventional commit format
+3. Because there is no PR gate, the validation in "Agent Instructions" below is
+   the only safety net: lint, typecheck and the test suites must pass *before*
+   each commit, not after a batch of them
+4. Never commit something known-broken to `master`. If work must be paused
+   mid-change, leave it uncommitted or stash it
+5. Push when the working tree is green
 
 ## Security Constraints
 
@@ -173,6 +179,6 @@ When working with this codebase:
 7. **Use Spanish (es)** for user-facing strings in i18n files
 8. **Never commit secrets** — use `.env.example` for documentation
 9. **Maintain backward compatibility** — especially for database migrations
-10. **Commit all changes** following GitHub Flow — each feature, bugfix, or meaningful change must be committed following the Git Workflow section above and git best practices (small, focused commits with conventional commit messages)
+10. **Commit all changes** directly to `master` — each feature, bugfix, or meaningful change must be committed following the Git Workflow section above and git best practices (small, focused commits with conventional commit messages). No feature branches, no pull requests
 11. **Test all changes** — every new component, piece of logic, or modification must include appropriate tests (unit, integration, or E2E) following the Testing section standards. **A test must be able to fail** — an assertion that holds regardless of the implementation (`expect(true).toBe(true)`, or a locally-declared boolean) is not a test. If unsure, break the code deliberately and confirm the test goes red
 12. **Validate before committing** — never commit without: (a) running the full test suite (`pnpm verify:ci` and, for UI-affecting work, `bunx playwright test`), (b) verifying lint and typecheck pass, (c) manually testing the feature works correctly, and (d) assessing that no visual regressions, bugs, security threats, or degradation of project standards have been introduced
