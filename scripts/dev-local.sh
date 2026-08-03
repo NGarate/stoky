@@ -24,6 +24,7 @@ COMPOSE_FILE="docker-compose.dev.yml"
 MAX_WAIT=60  # seconds to wait for healthy services
 SEED=false
 START_APP=true
+PNPM_CMD=()
 
 for arg in "$@"; do
     case "$arg" in
@@ -71,10 +72,15 @@ if ! docker info >/dev/null 2>&1; then
 fi
 ok "Docker daemon is running"
 
-if ! command_exists pnpm; then
-    fail "pnpm is not installed. Install with: npm install -g pnpm"
+if command_exists pnpm; then
+    PNPM_CMD=(pnpm)
+    ok "pnpm found ($(pnpm --version))"
+elif command_exists corepack; then
+    PNPM_CMD=(corepack pnpm)
+    ok "pnpm will be resolved through corepack"
+else
+    fail "pnpm is not installed and corepack is unavailable. Install pnpm or enable corepack."
 fi
-ok "pnpm found ($(pnpm --version))"
 
 # ---------------------------------------------------------------------------
 # Environment file
@@ -148,10 +154,10 @@ fi
 header "Installing dependencies"
 
 if [ ! -d node_modules ]; then
-    pnpm install
+    "${PNPM_CMD[@]}" install
     ok "Dependencies installed"
 else
-    ok "node_modules already exists (run 'pnpm install' to update)"
+    ok "node_modules already exists (run 'corepack pnpm install' to update)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -159,10 +165,10 @@ fi
 # ---------------------------------------------------------------------------
 header "Running database migrations"
 
-pnpm prisma generate
+"${PNPM_CMD[@]}" prisma generate
 ok "Prisma client generated"
 
-pnpm prisma migrate dev
+"${PNPM_CMD[@]}" prisma migrate dev
 ok "Migrations applied"
 
 # ---------------------------------------------------------------------------
@@ -170,7 +176,7 @@ ok "Migrations applied"
 # ---------------------------------------------------------------------------
 if $SEED; then
     header "Seeding database"
-    pnpm prisma db seed
+"${PNPM_CMD[@]}" prisma db seed
     ok "Database seeded"
 fi
 
@@ -195,8 +201,8 @@ echo ""
 
 if $START_APP; then
     header "Starting Next.js dev server"
-    exec pnpm dev
+    exec "${PNPM_CMD[@]}" dev
 else
-    echo -e "  Run ${YELLOW}pnpm dev${NC} to start the Next.js dev server."
+    echo -e "  Run ${YELLOW}corepack pnpm dev${NC} to start the Next.js dev server."
     echo ""
 fi

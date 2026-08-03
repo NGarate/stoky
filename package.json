@@ -14,12 +14,17 @@
     "typecheck": "tsc --noEmit",
     "test": "pnpm test:unit && pnpm test:components && pnpm test:integration",
     "test:unit": "bun test src/__tests__/unit",
-    "test:components": "bun test src/__tests__/components src/__tests__/utils",
+    "test:components": "bun test --preload ./src/__tests__/setup/register-dom.ts src/__tests__/components",
     "test:integration": "bash scripts/test-integration-local.sh",
     "test:integration:only": "bun test src/__tests__/integration",
+    "verify:local": "bash scripts/verify-local.sh",
+    "verify:ci": "bash scripts/verify-local.sh --ci",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "bun run prisma/seed.ts"
   },
   "keywords": [
     "inventory",
@@ -67,8 +72,15 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@happy-dom/global-registrator": "^20.11.1",
     "@playwright/test": "^1.58.2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/bun": "^1.2.2",
+    "@types/react-test-renderer": "^19.1.0",
+    "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
     "playwright": "^1.58.2"
   }
