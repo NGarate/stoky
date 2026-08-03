@@ -3,7 +3,16 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Playwright configuration for E2E testing
  * @see https://playwright.dev/docs/test-configuration
+ *
+ * The port is configurable because `reuseExistingServer` will happily adopt
+ * whatever is already listening. If an unrelated process holds the port, the
+ * whole suite runs against that other application and reports a wall of
+ * confusing failures rather than a port conflict. Set PLAYWRIGHT_PORT to a free
+ * port when 3000 is taken.
  */
+const PORT = process.env.PLAYWRIGHT_PORT ?? "3000";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -12,7 +21,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: BASE_URL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -41,8 +50,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
+    command: `pnpm dev --port ${PORT}`,
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
   },
 });
