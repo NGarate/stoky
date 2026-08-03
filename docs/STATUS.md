@@ -26,8 +26,7 @@ Measured on 2026-08-04, with a live PostgreSQL and Valkey.
 | Build | `corepack pnpm build` | ✅ 16 routes, all server-rendered on demand |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database (after the pg_trgm fix below) |
 | Seed | `corepack pnpm db:seed` | ✅ verified end-to-end, and idempotent across re-runs |
-| E2E (chromium) | `bunx playwright test --project=chromium` | ⚠️ **9 pass / 6 fail** — see below |
-| E2E (firefox, webkit) | — | ⛔ browsers not installed (`bunx playwright install`) |
+| E2E (chromium) | `bunx playwright test --project=chromium` | ✅ 12 pass, 4 skipped (`test.fixme`), 0 fail |
 
 ### Two traps that made earlier measurements wrong
 
@@ -50,21 +49,40 @@ producing a wall of meaningless failures. The config now honours
 PLAYWRIGHT_PORT=3177 bunx playwright test e2e/critical-paths.spec.ts
 ```
 
-### The 6 remaining E2E failures
+### What the E2E failures turned out to be
 
-Measured against a real Stoky instance on a free port, so these are genuine:
+All six original failures were investigated. **None was an application bug.**
 
-- **3 are a missing feature, not a bug.** *add stock*, *consume stock* and
-  *low stock warnings* fail because `/inventory` renders no interactive
-  controls at all — the page contains zero buttons or click handlers. Stock
-  movement has no UI yet. This is the Phase 2 gap below, showing up as a test
-  failure.
-- **2 are stale test expectations.** The login error assertions search for
-  `/incorrect|inválido|error/i`, but the app correctly renders
-  *"Credenciales inválidas"* — feminine plural, which that regex does not
-  match. The app behaves correctly; the tests need fixing.
-- **1 is an onboarding URL expectation** that no longer matches the registration
-  redirect.
+- **3 were broken tests, now fixed.** The login-error assertions searched for
+  `/incorrect|inválido|error/i` while the app correctly renders *"Credenciales
+  inválidas"* — feminine plural, which that regex misses. The empty-fields test
+  expected an app-rendered error, but both inputs are `required`, so the browser
+  blocks submission and the app is never reached. And the duplicate-email test
+  navigated away while the first registration was still in flight, aborting it,
+  so no user existed and the "duplicate" attempt simply succeeded. Assertions
+  now read the real strings from `messages/es.json`.
+- **1 was test parallelism.** With `fullyParallel` against a single shared
+  database, results moved between runs. The suite is now serial.
+- **4 are blocked on missing routes** and are marked `test.fixme` with the
+  reason inline. See below.
+
+### Dead links: four routes that are linked but do not exist
+
+| Linked from | Target | Exists |
+|---|---|---|
+| `/products` | `/products/new` | ❌ |
+| `/inventory` | `/inventory/add` | ❌ |
+| `/inventory` | `/inventory/consume` | ❌ |
+| `DashboardNav` | `/settings` | ❌ |
+
+Clicking any of these gives a 404. The last one is in the main navigation of
+every dashboard page. The `inventory` router already implements add, consume,
+adjust and transfer — only the UI is missing, so Journey 1 of
+`docs/SMOKE_JOURNEYS.md` cannot be completed today.
+
+(An earlier revision of this document claimed `/inventory` had no interactive
+controls at all. That was wrong — the controls are `<Link>` elements, and they
+point at routes that were never built.)
 
 ---
 
@@ -208,19 +226,15 @@ Next.js 16, React 19, Tailwind 4, next-intl 4 and pnpm 10 all match.
 
 ## What to do next
 
-1. **Build the stock-movement UI.** `/inventory` is read-only — no add, consume,
-   adjust or transfer controls exist, even though the `inventory` router
-   implements all four. This is the largest functional gap and it is what three
-   E2E failures are pointing at. Journey 1 in `docs/SMOKE_JOURNEYS.md` cannot be
-   completed today.
+1. **Build the four missing routes** — `/products/new`, `/inventory/add`,
+   `/inventory/consume` and `/settings`. They are linked from the UI today and
+   404. The routers behind them already exist, so this is UI work only. Doing it
+   unblocks the four `test.fixme` E2E tests and Journey 1 of
+   `docs/SMOKE_JOURNEYS.md`.
 2. **Implement rate limiting** on login and register — the last critical
    security gap (`ISSUES.md` CRITICAL-4).
-3. **Fix the 3 stale E2E expectations** (login error regex, onboarding redirect
-   URL) so the suite's failures mean something.
-4. **Install the missing browsers** with `bunx playwright install` — only
-   chromium is present, so firefox and webkit currently cannot run at all.
-5. Standardise `TRPCError` across the seven routers still throwing bare errors.
-6. Start Phase 2 proper: install the shadcn primitives listed above, then
+3. Standardise `TRPCError` across the seven routers still throwing bare errors.
+4. Start Phase 2 proper: install the shadcn primitives listed above, then
    refactor the domain components onto them.
 
 ### Environment note

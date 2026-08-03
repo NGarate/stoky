@@ -27,6 +27,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-2 | Mock external API calls | ✅ Resolved |
 | DOCS-1 | No API documentation | 🟡 Open |
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
+| UI-1 | Four linked routes do not exist (404) | 🔴 **OPEN** |
 
 ---
 
@@ -218,6 +219,44 @@ if (attempts > 5) {
 ```
 
 **Priority:** Implement before public deployment
+
+---
+
+### 🔴 UI-1: Four linked routes do not exist
+
+**Files:** `src/app/(dashboard)/products/page.tsx`,
+`src/app/(dashboard)/inventory/page.tsx`,
+`src/components/dashboard/DashboardNav.tsx`  
+**Severity:** HIGH  
+**Status:** OPEN — found 2026-08-04
+
+**Description:**
+The UI links to four routes that have no `page.tsx`. Every one of them 404s:
+
+| Linked from | Target |
+|---|---|
+| `/products` | `/products/new` |
+| `/inventory` | `/inventory/add` |
+| `/inventory` | `/inventory/consume` |
+| `DashboardNav` (every dashboard page) | `/settings` |
+
+**Impact:**
+Stock movement is unreachable from the UI even though `inventory.addStock`,
+`consumeStock`, `adjustStock` and `transferStock` are all implemented in the
+router. Journey 1 in `docs/SMOKE_JOURNEYS.md` cannot be completed. The
+`/settings` link is in the main navigation, so it is reachable from anywhere.
+
+**Detection:**
+
+```bash
+comm -13 \
+  <(find "src/app/(dashboard)" -name page.tsx | sed 's|src/app/(dashboard)||;s|/page.tsx||' | sort) \
+  <(grep -rhoE 'href="/[a-z/]+"' src/app src/components | tr -d '"' | sed 's|href=||' | sort -u)
+```
+
+**Blocks:** four `test.fixme` tests in `e2e/critical-paths.spec.ts`.
+
+**Priority:** This is the largest functional gap in the MVP.
 
 ---
 
