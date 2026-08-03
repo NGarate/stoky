@@ -15,10 +15,13 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // The suite registers users against one shared database, so tests are not
+  // independent. Running them in parallel made results move between runs — the
+  // same test passing or failing depending on who else was mid-registration.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
     baseURL: BASE_URL,
