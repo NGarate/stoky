@@ -1,162 +1,87 @@
-import { describe, it, expect } from "bun:test";
+import "../setup/matchers";
+import { describe, it, expect, afterEach, mock } from "bun:test";
+import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Input } from "@/components/ui/input";
 
-/**
- * Input Component Test Suite
- * 
- * Tests for shadcn/ui Input component
- * Location: src/components/ui/input.tsx
- */
+afterEach(cleanup);
 
-describe("Input Component", () => {
-  describe("Props Interface", () => {
-    it("should extend HTMLInputElement props", () => {
-      // InputProps extends React.InputHTMLAttributes<HTMLInputElement>
-      const expectedHtmlProps = [
-        "type",
-        "value",
-        "defaultValue",
-        "placeholder",
-        "disabled",
-        "readOnly",
-        "required",
-        "name",
-        "id",
-        "onChange",
-        "onFocus",
-        "onBlur",
-        "onKeyDown",
-        "onKeyUp",
-        "autoComplete",
-        "autoFocus",
-        "maxLength",
-        "minLength",
-        "pattern",
-      ];
-      
-      expect(expectedHtmlProps.length).toBeGreaterThan(0);
-    });
+describe("Input", () => {
+  it("renders an input associated with its label", () => {
+    render(
+      <>
+        <label htmlFor="email">Correo</label>
+        <Input id="email" />
+      </>,
+    );
 
-    it("should support className prop for customization", () => {
-      const supportsClassName = true;
-      expect(supportsClassName).toBe(true);
-    });
+    expect(screen.getByLabelText("Correo")).toBeInTheDocument();
   });
 
-  describe("Accessibility", () => {
-    it("should have focus-visible ring styles", () => {
-      // Input includes: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-      const hasFocusStyles = true;
-      expect(hasFocusStyles).toBe(true);
-    });
+  it("accepts typed text", async () => {
+    render(<Input placeholder="Nombre" />);
 
-    it("should have disabled state styles", () => {
-      // Input includes: disabled:cursor-not-allowed disabled:opacity-50
-      const hasDisabledStyles = true;
-      expect(hasDisabledStyles).toBe(true);
-    });
+    const input = screen.getByPlaceholderText("Nombre");
+    await userEvent.type(input, "Leche entera");
 
-    it("should support aria attributes", () => {
-      // All HTML aria attributes are supported via InputHTMLAttributes
-      const supportsAria = true;
-      expect(supportsAria).toBe(true);
-    });
-
-    it("should support ref forwarding for focus management", () => {
-      // Input uses React.forwardRef
-      const supportsRef = true;
-      expect(supportsRef).toBe(true);
-    });
+    expect(input).toHaveValue("Leche entera");
   });
 
-  describe("Visual Styles", () => {
-    it("should have proper base styling", () => {
-      const expectedClasses = [
-        "flex",
-        "h-10",
-        "w-full",
-        "rounded-md",
-        "border",
-        "border-input",
-        "bg-background",
-        "px-3",
-        "py-2",
-        "text-sm",
-      ];
-      
-      for (const cls of expectedClasses) {
-        expect(typeof cls).toBe("string");
-      }
-    });
+  it("calls onChange for each keystroke", async () => {
+    const onChange = mock(() => {});
+    render(<Input placeholder="Nombre" onChange={onChange} />);
 
-    it("should have proper file input styling", () => {
-      // Includes: file:border-0 file:bg-transparent file:text-sm file:font-medium
-      const hasFileStyles = true;
-      expect(hasFileStyles).toBe(true);
-    });
+    await userEvent.type(screen.getByPlaceholderText("Nombre"), "abc");
 
-    it("should have proper placeholder styling", () => {
-      // Includes: placeholder:text-muted-foreground
-      const hasPlaceholderStyles = true;
-      expect(hasPlaceholderStyles).toBe(true);
-    });
+    expect(onChange).toHaveBeenCalledTimes(3);
   });
 
-  describe("Supported Input Types", () => {
-    const supportedTypes = [
-      "text",
+  it("forwards the type attribute", () => {
+    render(<Input type="password" placeholder="Contraseña" />);
+
+    expect(screen.getByPlaceholderText("Contraseña")).toHaveAttribute(
+      "type",
       "password",
-      "email",
-      "number",
-      "tel",
-      "url",
-      "search",
-      "date",
-      "datetime-local",
-      "time",
-      "month",
-      "week",
-      "file",
-    ];
-
-    for (const type of supportedTypes) {
-      it(`should support ${type} input type`, () => {
-        expect(typeof type).toBe("string");
-      });
-    }
+    );
   });
 
-  describe("Event Handling", () => {
-    it("should support onChange events", () => {
-      const supportsOnChange = true;
-      expect(supportsOnChange).toBe(true);
-    });
+  it("rejects input while disabled", async () => {
+    render(<Input disabled placeholder="Nombre" />);
 
-    it("should support onFocus events", () => {
-      const supportsOnFocus = true;
-      expect(supportsOnFocus).toBe(true);
-    });
+    const input = screen.getByPlaceholderText("Nombre");
+    expect(input).toBeDisabled();
 
-    it("should support onBlur events", () => {
-      const supportsOnBlur = true;
-      expect(supportsOnBlur).toBe(true);
-    });
-
-    it("should support onKeyDown events", () => {
-      const supportsOnKeyDown = true;
-      expect(supportsOnKeyDown).toBe(true);
-    });
-  });
-});
-
-describe("Input Component - Integration Notes", () => {
-  it("should be tested with form libraries (react-hook-form)", () => {
-    // Note: Integration with form libraries requires additional setup
-    expect(true).toBe(true);
+    await userEvent.type(input, "algo");
+    expect(input).toHaveValue("");
   });
 
-  it("should be tested for visual states", () => {
-    // Note: Visual testing requires Playwright screenshots
-    // States: default, focus, disabled, error, placeholder
-    expect(true).toBe(true);
+  it("supports required and name for native form semantics", () => {
+    render(<Input name="email" required placeholder="Correo" />);
+
+    const input = screen.getByPlaceholderText("Correo");
+    expect(input).toBeRequired();
+    expect(input).toHaveAttribute("name", "email");
+  });
+
+  it("merges a caller-supplied className with the base classes", () => {
+    render(<Input className="mt-2" placeholder="Nombre" />);
+
+    const input = screen.getByPlaceholderText("Nombre");
+    expect(input).toHaveClass("mt-2");
+    expect(input).toHaveClass("rounded-md");
+  });
+
+  it("forwards a ref to the underlying input", () => {
+    let captured: HTMLInputElement | null = null;
+    render(
+      <Input
+        ref={(node) => {
+          captured = node;
+        }}
+      />,
+    );
+
+    expect(captured).not.toBeNull();
+    expect((captured as unknown as HTMLInputElement).tagName).toBe("INPUT");
   });
 });

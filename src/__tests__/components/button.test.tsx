@@ -1,151 +1,109 @@
-import { describe, it, expect } from "bun:test";
-import React from "react";
+import "../setup/matchers";
+import { describe, it, expect, afterEach, mock } from "bun:test";
+import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Button } from "@/components/ui/button";
 
-/**
- * Button Component Test Suite
- * 
- * Tests for shadcn/ui Button component
- * Location: src/components/ui/button.tsx
- */
+afterEach(cleanup);
 
-describe("Button Component", () => {
-  describe("Props Interface", () => {
-    it("should have correct TypeScript interface definition", () => {
-      const expectedProps = [
-        "variant",
-        "size",
-        "asChild",
-        "className",
-        "disabled",
-        "onClick",
-        "type",
-      ];
-      
-      // Interface validation - ensure all props are documented
-      expect(expectedProps.length).toBeGreaterThan(0);
-    });
+describe("Button", () => {
+  it("renders its children inside a native button element", () => {
+    render(<Button>Guardar</Button>);
 
-    it("should support all variant types", () => {
-      const variants = [
-        "default",
-        "destructive",
-        "outline",
-        "secondary",
-        "ghost",
-        "link",
-      ];
-      
-      for (const variant of variants) {
-        expect(typeof variant).toBe("string");
-      }
-    });
-
-    it("should support all size types", () => {
-      const sizes = ["default", "sm", "lg", "icon"];
-      
-      for (const size of sizes) {
-        expect(typeof size).toBe("string");
-      }
-    });
+    const button = screen.getByRole("button", { name: "Guardar" });
+    expect(button.tagName).toBe("BUTTON");
   });
 
-  describe("Accessibility", () => {
-    it("should have focus-visible ring styles", () => {
-      // Button includes: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-      const hasFocusStyles = true; // Verified in source code
-      expect(hasFocusStyles).toBe(true);
-    });
+  it("fires onClick when activated with the mouse", async () => {
+    const onClick = mock(() => {});
+    render(<Button onClick={onClick}>Guardar</Button>);
 
-    it("should have disabled state styles", () => {
-      // Button includes: disabled:pointer-events-none disabled:opacity-50
-      const hasDisabledStyles = true; // Verified in source code
-      expect(hasDisabledStyles).toBe(true);
-    });
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
-    it("should support asChild pattern for accessibility", () => {
-      // Button supports asChild prop for composition with links
-      const supportsAsChild = true; // Verified in source code
-      expect(supportsAsChild).toBe(true);
-    });
-
-    it("should have proper button semantics", () => {
-      // Default renders as <button> element
-      // Can render as child component when asChild=true
-      const hasButtonSemantics = true;
-      expect(hasButtonSemantics).toBe(true);
-    });
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  describe("Visual Styles", () => {
-    it("should have proper default variant styles", () => {
-      const expectedClasses = [
-        "bg-primary",
-        "text-primary-foreground",
-        "hover:bg-primary/90",
-      ];
-      
-      for (const cls of expectedClasses) {
-        expect(typeof cls).toBe("string");
-      }
-    });
+  it("is activatable from the keyboard", async () => {
+    const onClick = mock(() => {});
+    render(<Button onClick={onClick}>Guardar</Button>);
 
-    it("should have proper destructive variant styles", () => {
-      const expectedClasses = [
-        "bg-destructive",
-        "text-destructive-foreground",
-        "hover:bg-destructive/90",
-      ];
-      
-      for (const cls of expectedClasses) {
-        expect(typeof cls).toBe("string");
-      }
-    });
+    screen.getByRole("button").focus();
+    await userEvent.keyboard("{Enter}");
 
-    it("should have proper outline variant styles", () => {
-      const expectedClasses = [
-        "border",
-        "border-input",
-        "bg-background",
-        "hover:bg-accent",
-        "hover:text-accent-foreground",
-      ];
-      
-      for (const cls of expectedClasses) {
-        expect(typeof cls).toBe("string");
-      }
-    });
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  describe("Usage Patterns", () => {
-    it("should support click handlers", () => {
-      const mockHandler = () => {};
-      expect(typeof mockHandler).toBe("function");
-    });
+  it("does not fire onClick while disabled", async () => {
+    const onClick = mock(() => {});
+    render(
+      <Button disabled onClick={onClick}>
+        Guardar
+      </Button>,
+    );
 
-    it("should support form submission", () => {
-      // Button can be used with type="submit"
-      const supportsSubmit = true;
-      expect(supportsSubmit).toBe(true);
-    });
+    const button = screen.getByRole("button", { name: "Guardar" });
+    expect(button).toBeDisabled();
 
-    it("should support loading states via disabled", () => {
-      // Loading state achieved via disabled prop
-      const supportsLoading = true;
-      expect(supportsLoading).toBe(true);
-    });
-  });
-});
-
-describe("Button Component - Integration Notes", () => {
-  it("should be tested in real browser for click interactions", () => {
-    // Note: Full interaction testing requires a browser environment
-    // See: src/__tests__/e2e/components/button.spec.ts (to be created)
-    expect(true).toBe(true);
+    await userEvent.click(button);
+    expect(onClick).not.toHaveBeenCalled();
   });
 
-  it("should be tested for visual regression", () => {
-    // Note: Visual testing requires Playwright screenshots
-    // See: src/__tests__/visual/components/button.visual.spec.ts (to be created)
-    expect(true).toBe(true);
+  it("applies the destructive variant styling", () => {
+    render(<Button variant="destructive">Eliminar</Button>);
+
+    expect(screen.getByRole("button")).toHaveClass("bg-destructive");
+  });
+
+  it("applies the icon size styling", () => {
+    render(<Button size="icon">X</Button>);
+
+    const button = screen.getByRole("button");
+    expect(button).toHaveClass("h-10");
+    expect(button).toHaveClass("w-10");
+  });
+
+  it("merges a caller-supplied className with the variant classes", () => {
+    render(<Button className="mt-4">Guardar</Button>);
+
+    const button = screen.getByRole("button");
+    expect(button).toHaveClass("mt-4");
+    expect(button).toHaveClass("bg-primary");
+  });
+
+  it("renders as the child element when asChild is set", () => {
+    render(
+      <Button asChild>
+        <a href="/inventory">Inventario</a>
+      </Button>,
+    );
+
+    const link = screen.getByRole("link", { name: "Inventario" });
+    expect(link.tagName).toBe("A");
+    expect(link).toHaveAttribute("href", "/inventory");
+    // The variant classes are forwarded onto the anchor, not a wrapper button.
+    expect(link).toHaveClass("bg-primary");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("forwards a ref to the underlying button", () => {
+    let captured: HTMLButtonElement | null = null;
+    render(
+      <Button
+        ref={(node) => {
+          captured = node;
+        }}
+      >
+        Guardar
+      </Button>,
+    );
+
+    expect(captured).not.toBeNull();
+    expect((captured as unknown as HTMLButtonElement).tagName).toBe("BUTTON");
+  });
+
+  it("forwards arbitrary button attributes such as type", () => {
+    render(<Button type="submit">Enviar</Button>);
+
+    expect(screen.getByRole("button")).toHaveAttribute("type", "submit");
   });
 });

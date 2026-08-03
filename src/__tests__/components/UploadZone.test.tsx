@@ -1,231 +1,117 @@
-import { describe, it, expect } from "bun:test";
+import "../setup/matchers";
+import { describe, it, expect, afterEach, mock } from "bun:test";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { UploadZone } from "@/components/receipt/UploadZone";
 
-/**
- * UploadZone Component Test Suite
- * 
- * Tests for receipt UploadZone component
- * Location: src/components/receipt/UploadZone.tsx
- */
+afterEach(cleanup);
 
-describe("UploadZone Component", () => {
-  describe("Props Interface", () => {
-    it("should accept onUpload callback", () => {
-      // onUpload: (file: File) => void
-      expect(true).toBe(true);
-    });
+function fileInput(container: HTMLElement): HTMLInputElement {
+  const input = container.querySelector('input[type="file"]');
+  if (!input) throw new Error("UploadZone rendered no file input");
+  return input as HTMLInputElement;
+}
 
-    it("should accept isUploading flag", () => {
-      // isUploading?: boolean
-      expect(true).toBe(true);
-    });
+function jpeg(name = "ticket.jpg"): File {
+  return new File(["receipt-bytes"], name, { type: "image/jpeg" });
+}
+
+describe("UploadZone", () => {
+  it("prompts for a receipt image", () => {
+    render(<UploadZone onUpload={() => {}} />);
+
+    expect(
+      screen.getByText(
+        "Arrastra una foto del ticket o haz clic para seleccionar",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("JPG, PNG o WebP (máx. 10MB)")).toBeInTheDocument();
   });
 
-  describe("Component State", () => {
-    it("should manage preview state", () => {
-      // Uses useState for preview (string | null)
-      const managesPreview = true;
-      expect(managesPreview).toBe(true);
-    });
+  it("accepts only the supported image types", () => {
+    const { container } = render(<UploadZone onUpload={() => {}} />);
 
-    it("should handle file drop", () => {
-      // Uses react-dropzone onDrop callback
-      const handlesDrop = true;
-      expect(handlesDrop).toBe(true);
-    });
-
-    it("should read file as data URL", () => {
-      // Uses FileReader to create preview
-      const readsFile = true;
-      expect(readsFile).toBe(true);
-    });
+    const accept = fileInput(container).getAttribute("accept") ?? "";
+    for (const type of ["image/jpeg", "image/png", "image/webp"]) {
+      expect(accept).toContain(type);
+    }
   });
 
-  describe("Accessibility", () => {
-    it("should have clear button for preview", () => {
-      // Clear button has type="button" and disabled when uploading
-      const hasClearButton = true;
-      expect(hasClearButton).toBe(true);
-    });
+  it("hands the selected file to onUpload", async () => {
+    const onUpload = mock((_file: File) => {});
+    const { container } = render(<UploadZone onUpload={onUpload} />);
 
-    it("should have camera button", () => {
-      // Camera button has type="button" and disabled when uploading
-      const hasCameraButton = true;
-      expect(hasCameraButton).toBe(true);
-    });
+    await userEvent.upload(fileInput(container), jpeg());
 
-    it("should have alt text on preview image", () => {
-      // Preview img has alt="Receipt preview"
-      const hasAltText = true;
-      expect(hasAltText).toBe(true);
+    await waitFor(() => {
+      expect(onUpload).toHaveBeenCalledTimes(1);
     });
-
-    it("should have disabled states during upload", () => {
-      // Both buttons disabled when isUploading
-      const hasDisabledStates = true;
-      expect(hasDisabledStates).toBe(true);
-    });
-
-    it("should have visual feedback for disabled state", () => {
-      // opacity-50 cursor-not-allowed when uploading
-      const hasDisabledVisuals = true;
-      expect(hasDisabledVisuals).toBe(true);
-    });
+    expect(onUpload.mock.calls[0]?.[0]?.name).toBe("ticket.jpg");
   });
 
-  describe("File Handling", () => {
-    it("should accept JPEG files", () => {
-      // Accepts: image/jpeg (.jpg, .jpeg)
-      const acceptsJpeg = true;
-      expect(acceptsJpeg).toBe(true);
-    });
+  it("shows a preview of the chosen receipt", async () => {
+    const { container } = render(<UploadZone onUpload={() => {}} />);
 
-    it("should accept PNG files", () => {
-      // Accepts: image/png (.png)
-      const acceptsPng = true;
-      expect(acceptsPng).toBe(true);
-    });
+    await userEvent.upload(fileInput(container), jpeg());
 
-    it("should accept WebP files", () => {
-      // Accepts: image/webp (.webp)
-      const acceptsWebp = true;
-      expect(acceptsWebp).toBe(true);
-    });
-
-    it("should limit to single file", () => {
-      // maxFiles: 1
-      const limitsToSingle = true;
-      expect(limitsToSingle).toBe(true);
-    });
-
-    it("should handle camera capture", () => {
-      // Creates input element with capture="environment"
-      const handlesCamera = true;
-      expect(handlesCamera).toBe(true);
-    });
-
-    it("should clear preview on clear button click", () => {
-      // clearPreview sets preview to null
-      const clearsPreview = true;
-      expect(clearsPreview).toBe(true);
-    });
+    const preview = await screen.findByAltText("Receipt preview");
+    expect(preview).toBeInTheDocument();
+    // The dropzone prompt is replaced by the preview.
+    expect(
+      screen.queryByText(
+        "Arrastra una foto del ticket o haz clic para seleccionar",
+      ),
+    ).toBeNull();
   });
 
-  describe("Visual States", () => {
-    it("should show drag active state", () => {
-      // Changes border and background when isDragActive
-      const showsDragState = true;
-      expect(showsDragState).toBe(true);
-    });
+  it("lets the user clear the preview and choose again", async () => {
+    const { container } = render(<UploadZone onUpload={() => {}} />);
 
-    it("should show upload icon", () => {
-      // Displays Upload icon from lucide-react
-      const showsIcon = true;
-      expect(showsIcon).toBe(true);
-    });
+    await userEvent.upload(fileInput(container), jpeg());
+    await screen.findByAltText("Receipt preview");
 
-    it("should show camera icon", () => {
-      // Displays Camera icon from lucide-react
-      const showsCameraIcon = true;
-      expect(showsCameraIcon).toBe(true);
-    });
+    // The clear control is the only button besides the camera action.
+    const clear = screen
+      .getAllByRole("button")
+      .find((button) => button.className.includes("bg-red-500"));
+    await userEvent.click(clear as HTMLElement);
 
-    it("should show clear icon", () => {
-      // Displays X icon from lucide-react
-      const showsClearIcon = true;
-      expect(showsClearIcon).toBe(true);
-    });
-
-    it("should display supported formats text", () => {
-      // Shows "JPG, PNG o WebP (máx. 10MB)"
-      const showsFormats = true;
-      expect(showsFormats).toBe(true);
-    });
+    expect(screen.queryByAltText("Receipt preview")).toBeNull();
+    expect(
+      screen.getByText("Arrastra una foto del ticket o haz clic para seleccionar"),
+    ).toBeInTheDocument();
   });
 
-  describe("Styling", () => {
-    it("should have proper dropzone styling", () => {
-      const expectedClasses = [
-        "border-2",
-        "border-dashed",
-        "rounded-lg",
-        "p-8",
-        "text-center",
-        "cursor-pointer",
-      ];
-      for (const cls of expectedClasses) {
-        expect(typeof cls).toBe("string");
-      }
-    });
+  it("offers a camera capture action", () => {
+    render(<UploadZone onUpload={() => {}} />);
 
-    it("should have drag active styling", () => {
-      // border-blue-500 bg-blue-50 when dragging
-      const hasDragStyles = true;
-      expect(hasDragStyles).toBe(true);
-    });
-
-    it("should have proper preview image styling", () => {
-      // w-full h-64 object-contain rounded-lg border
-      const hasPreviewStyles = true;
-      expect(hasPreviewStyles).toBe(true);
-    });
-
-    it("should have proper clear button styling", () => {
-      // absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full
-      const hasClearButtonStyles = true;
-      expect(hasClearButtonStyles).toBe(true);
-    });
-
-    it("should have hover state on clear button", () => {
-      // hover:bg-red-600
-      const hasClearHover = true;
-      expect(hasClearHover).toBe(true);
-    });
+    expect(
+      screen.getByRole("button", { name: /Hacer foto con la cámara/ }),
+    ).toBeInTheDocument();
   });
 
-  describe("Internationalization", () => {
-    it("should use Spanish text for instructions", () => {
-      // "Arrastra una foto del ticket o haz clic para seleccionar"
-      const usesSpanish = true;
-      expect(usesSpanish).toBe(true);
-    });
+  it("disables the camera action while uploading", () => {
+    render(<UploadZone onUpload={() => {}} isUploading />);
 
-    it("should use Spanish text for camera button", () => {
-      // "Hacer foto con la cámara"
-      const usesSpanishCamera = true;
-      expect(usesSpanishCamera).toBe(true);
-    });
-
-    it("should use Spanish text for drop state", () => {
-      // "Suelta el archivo aquí..."
-      const usesSpanishDrop = true;
-      expect(usesSpanishDrop).toBe(true);
-    });
-  });
-});
-
-describe("UploadZone - Integration Notes", () => {
-  it("uses react-dropzone library", () => {
-    // Main dropzone functionality from react-dropzone
-    expect(true).toBe(true);
+    expect(
+      screen.getByRole("button", { name: /Hacer foto con la cámara/ }),
+    ).toBeDisabled();
   });
 
-  it("uses lucide-react for icons", () => {
-    // Upload, Camera, X icons
-    expect(true).toBe(true);
+  it("shows the dropzone as unavailable while uploading", () => {
+    const { container } = render(<UploadZone onUpload={() => {}} isUploading />);
+
+    // react-dropzone disables at the root rather than on the input element,
+    // so the affordance the user sees is the zone's own styling.
+    const zone = container.querySelector("div.border-dashed");
+    expect(zone).toHaveClass("cursor-not-allowed");
+    expect(zone).toHaveClass("opacity-50");
   });
 
-  it("should validate file size", () => {
-    // TODO: Add maxSize validation (10MB mentioned in text)
-    expect(true).toBe(true);
-  });
+  it("does not call onUpload when nothing is selected", async () => {
+    const onUpload = mock((_file: File) => {});
+    render(<UploadZone onUpload={onUpload} />);
 
-  it("should handle file read errors", () => {
-    // TODO: Add error handling for FileReader
-    expect(true).toBe(true);
-  });
-
-  it("should be tested with file upload simulation", () => {
-    // Drag and drop simulation required for full testing
-    expect(true).toBe(true);
+    expect(onUpload).not.toHaveBeenCalled();
   });
 });

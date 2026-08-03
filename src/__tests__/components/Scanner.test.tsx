@@ -1,186 +1,197 @@
-import { describe, it, expect } from "bun:test";
+import "../setup/matchers";
+import { describe, it, expect, afterEach, beforeEach, mock, spyOn } from "bun:test";
+import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
-/**
- * Scanner Component Test Suite
- * 
- * Tests for barcode Scanner component
- * Location: src/components/barcode/Scanner.tsx
- */
+type ScannerProps = {
+  doScan: boolean;
+  onSuccess: (barcode: string) => void;
+  onError: (error?: Error) => void;
+};
 
-describe("Scanner Component", () => {
-  describe("Props Interface", () => {
-    it("should accept onScan callback", () => {
-      // onScan: (barcode: string) => void
-      expect(true).toBe(true);
-    });
+// Handles onto the props the component hands the third-party scanner, so a
+// test can simulate a scan or a camera failure.
+let lastScannerProps: ScannerProps | undefined;
 
-    it("should accept onError callback", () => {
-      // onError?: (error: Error) => void - optional
-      expect(true).toBe(true);
-    });
+mock.module("@thewirv/react-barcode-scanner", () => ({
+  BarcodeScanner: (props: ScannerProps) => {
+    lastScannerProps = props;
+    return <div data-testid="barcode-scanner" />;
+  },
+}));
 
-    it("should accept isScanning flag", () => {
-      // isScanning?: boolean - default: true
-      expect(true).toBe(true);
-    });
+/** Stub `getUserMedia`, optionally reporting torch capability. */
+function stubCamera({ torch, reject }: { torch?: boolean; reject?: boolean }) {
+  const stop = mock(() => {});
+  const track = {
+    getCapabilities: () => (torch ? { torch: true } : {}),
+    stop,
+  };
+  const stream = {
+    getVideoTracks: () => [track],
+    getTracks: () => [track],
+  };
+
+  Object.defineProperty(globalThis.navigator, "mediaDevices", {
+    value: {
+      getUserMedia: reject
+        ? mock(async () => {
+            throw new Error("Permission denied");
+          })
+        : mock(async () => stream),
+    },
+    configurable: true,
+    writable: true,
   });
 
-  describe("Component State", () => {
-    it("should manage torch state", () => {
-      // Uses useState for torchEnabled
-      const managesTorch = true;
-      expect(managesTorch).toBe(true);
-    });
+  return { stop };
+}
 
-    it("should track torch availability", () => {
-      // Uses useState for hasTorch
-      const tracksTorchAvailability = true;
-      expect(tracksTorchAvailability).toBe(true);
-    });
+const { BarcodeScanner } = await import("@/components/barcode/Scanner");
 
-    it("should track scan errors", () => {
-      // Uses useState for scanError
-      const tracksErrors = true;
-      expect(tracksErrors).toBe(true);
-    });
-
-    it("should check for torch capability on mount", () => {
-      // Uses useEffect to check getUserMedia capabilities
-      const checksTorch = true;
-      expect(checksTorch).toBe(true);
-    });
-  });
-
-  describe("Accessibility", () => {
-    it("should have aria-label on torch button", () => {
-      // Torch button has aria-label for on/off states
-      const hasTorchAriaLabel = true;
-      expect(hasTorchAriaLabel).toBe(true);
-    });
-
-    it("should have title on torch button", () => {
-      // Torch button has title attribute
-      const hasTorchTitle = true;
-      expect(hasTorchTitle).toBe(true);
-    });
-
-    it("should have SVG title for torch icon on state", () => {
-      // Torch on icon has title="Apagar linterna"
-      const hasTorchOnTitle = true;
-      expect(hasTorchOnTitle).toBe(true);
-    });
-
-    it("should have SVG title for torch icon off state", () => {
-      // Torch off icon has title="Encender linterna"
-      const hasTorchOffTitle = true;
-      expect(hasTorchOffTitle).toBe(true);
-    });
-
-    it("should have descriptive text when disabled", () => {
-      // Shows "Escáner desactivado" when !isScanning
-      const hasDisabledText = true;
-      expect(hasDisabledText).toBe(true);
-    });
-
-    it("should have instructions text", () => {
-      // Shows "Coloca el código de barras dentro del rectángulo verde"
-      const hasInstructions = true;
-      expect(hasInstructions).toBe(true);
-    });
-  });
-
-  describe("Visual Elements", () => {
-    it("should have scanning overlay guides", () => {
-      // Includes corner markers with green borders
-      const hasOverlayGuides = true;
-      expect(hasOverlayGuides).toBe(true);
-    });
-
-    it("should have dark overlay background", () => {
-      // Overlay has bg-black/20
-      const hasOverlayBackground = true;
-      expect(hasOverlayBackground).toBe(true);
-    });
-
-    it("should have rounded corners on video container", () => {
-      // Container has rounded-lg
-      const hasRoundedCorners = true;
-      expect(hasRoundedCorners).toBe(true);
-    });
-
-    it("should maintain 4:3 aspect ratio", () => {
-      // Container has aspect-[4/3]
-      const hasAspectRatio = true;
-      expect(hasAspectRatio).toBe(true);
-    });
-
-    it("should conditionally render torch button", () => {
-      // Only shows torch button when hasTorch is true
-      const conditionallyRendersTorch = true;
-      expect(conditionallyRendersTorch).toBe(true);
-    });
-  });
-
-  describe("Error Handling", () => {
-    it("should display error message on camera failure", () => {
-      // Shows error div with red styling when scanError exists
-      const displaysErrors = true;
-      expect(displaysErrors).toBe(true);
-    });
-
-    it("should have error title", () => {
-      // Shows "Error al acceder a la cámara"
-      const hasErrorTitle = true;
-      expect(hasErrorTitle).toBe(true);
-    });
-
-    it("should show error instructions", () => {
-      // Shows instructions to allow camera access
-      const hasErrorInstructions = true;
-      expect(hasErrorInstructions).toBe(true);
-    });
-
-    it("should handle unknown errors gracefully", () => {
-      // Default error message: "Error desconocido"
-      const handlesUnknownErrors = true;
-      expect(handlesUnknownErrors).toBe(true);
-    });
-  });
-
-  describe("External Dependencies", () => {
-    it("uses @thewirv/react-barcode-scanner", () => {
-      // Main scanning functionality from external library
-      const usesExternalLibrary = true;
-      expect(usesExternalLibrary).toBe(true);
-    });
-
-    it("should handle library errors via onError callback", () => {
-      // BarcodeScannerComponent onError prop
-      const handlesLibraryErrors = true;
-      expect(handlesLibraryErrors).toBe(true);
-    });
-  });
+beforeEach(() => {
+  lastScannerProps = undefined;
+  stubCamera({ torch: false });
 });
 
-describe("Scanner - Integration Notes", () => {
-  it("requires camera permissions", () => {
-    // Uses navigator.mediaDevices.getUserMedia
-    expect(true).toBe(true);
+afterEach(cleanup);
+
+describe("BarcodeScanner", () => {
+  it("shows a disabled placeholder when scanning is off", () => {
+    render(<BarcodeScanner onScan={() => {}} isScanning={false} />);
+
+    expect(screen.getByText("Escáner desactivado")).toBeInTheDocument();
+    expect(screen.queryByTestId("barcode-scanner")).toBeNull();
   });
 
-  it("should be tested with mocked getUserMedia", () => {
-    // Browser API mocking required for unit tests
-    expect(true).toBe(true);
+  it("mounts the camera view and framing hint while scanning", () => {
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    expect(screen.getByTestId("barcode-scanner")).toBeInTheDocument();
+    expect(
+      screen.getByText("Coloca el código de barras dentro del rectángulo verde"),
+    ).toBeInTheDocument();
   });
 
-  it("should handle browser without camera support", () => {
-    // Graceful degradation when getUserMedia unavailable
-    expect(true).toBe(true);
+  it("tells the underlying scanner to scan", () => {
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    expect(lastScannerProps?.doScan).toBe(true);
   });
 
-  it("should cleanup video tracks on unmount", () => {
-    // Currently tracks are stopped after capability check
-    // Should ensure cleanup in useEffect cleanup function
-    expect(true).toBe(true);
+  it("reports a scanned barcode to onScan", () => {
+    const onScan = mock((_barcode: string) => {});
+    render(<BarcodeScanner onScan={onScan} />);
+
+    act(() => {
+      lastScannerProps?.onSuccess("8410000000123");
+    });
+
+    expect(onScan).toHaveBeenCalledWith("8410000000123");
+  });
+
+  it("surfaces a camera error and forwards it to onError", () => {
+    const onError = mock((_error: Error) => {});
+    const consoleError = spyOn(console, "error").mockImplementation(() => {});
+    render(<BarcodeScanner onScan={() => {}} onError={onError} />);
+
+    const failure = new Error("Permission denied");
+    act(() => {
+      lastScannerProps?.onError(failure);
+    });
+
+    expect(screen.getByText("Error al acceder a la cámara")).toBeInTheDocument();
+    expect(screen.getByText("Permission denied")).toBeInTheDocument();
+    expect(onError).toHaveBeenCalledWith(failure);
+
+    consoleError.mockRestore();
+  });
+
+  it("shows a fallback message when the error carries no detail", () => {
+    const onError = mock((_error: Error) => {});
+    const consoleError = spyOn(console, "error").mockImplementation(() => {});
+    render(<BarcodeScanner onScan={() => {}} onError={onError} />);
+
+    act(() => {
+      lastScannerProps?.onError(undefined);
+    });
+
+    expect(screen.getByText("Error desconocido")).toBeInTheDocument();
+    // No Error instance means nothing to forward to the caller.
+    expect(onError).not.toHaveBeenCalled();
+
+    consoleError.mockRestore();
+  });
+
+  it("hides the error panel until something fails", () => {
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    expect(screen.queryByText("Error al acceder a la cámara")).toBeNull();
+  });
+
+  it("omits the torch control on devices without a torch", async () => {
+    stubCamera({ torch: false });
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    await waitFor(() => {
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole("button", { name: /linterna/ })).toBeNull();
+  });
+
+  it("omits the torch control when camera access is refused", async () => {
+    stubCamera({ reject: true });
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    await waitFor(() => {
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole("button", { name: /linterna/ })).toBeNull();
+  });
+
+  it("offers a torch toggle on capable devices", async () => {
+    stubCamera({ torch: true });
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Encender linterna" }),
+    ).toBeInTheDocument();
+  });
+
+  it("flips the torch label when toggled", async () => {
+    stubCamera({ torch: true });
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    const toggle = await screen.findByRole("button", {
+      name: "Encender linterna",
+    });
+    await userEvent.click(toggle);
+
+    expect(
+      screen.getByRole("button", { name: "Apagar linterna" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not yet drive the camera torch (see ISSUES.md DEBT-2)", async () => {
+    stubCamera({ torch: true });
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Encender linterna" }),
+    );
+
+    // Documents current behaviour: the toggle is local state only and is never
+    // passed to the scanner, so the torch never actually turns on.
+    expect(lastScannerProps).not.toHaveProperty("torch");
+    expect(lastScannerProps).not.toHaveProperty("torchEnabled");
+  });
+
+  it("releases the camera track used for the capability probe", async () => {
+    const { stop } = stubCamera({ torch: true });
+    render(<BarcodeScanner onScan={() => {}} />);
+
+    await waitFor(() => {
+      expect(stop).toHaveBeenCalled();
+    });
   });
 });

@@ -1,240 +1,67 @@
 # Component Test Suite
 
-This directory contains comprehensive tests for all UI components in the Stoky project.
+Behavioural tests for the UI components: every test renders the real component
+into a DOM and asserts on what a user would see or do.
 
-## Structure
-
-```
-src/__tests__/
-├── components/           # Unit tests for components
-│   ├── button.test.tsx
-│   ├── input.test.tsx
-│   ├── LocaleSwitcher.test.tsx
-│   ├── LocationPicker.test.tsx
-│   ├── Scanner.test.tsx
-│   ├── UploadZone.test.tsx
-│   ├── ReceiptStatus.test.tsx
-│   ├── ReviewCard.test.tsx
-│   ├── ShoppingItem.test.tsx
-│   ├── PriceChart.test.tsx
-│   ├── DashboardNav.test.tsx
-│   └── accessibility.test.tsx
-├── visual/              # Visual regression tests
-│   └── responsive.test.ts
-├── e2e/                 # End-to-end component tests
-│   └── components.spec.ts
-└── README.md           # This file
-```
-
-## Running Tests
-
-### Unit Tests
-
-Run all component tests:
-```bash
-bun test src/__tests__/components/
-```
-
-Run specific test file:
-```bash
-bun test src/__tests__/components/button.test.tsx
-```
-
-Run with coverage:
-```bash
-bun test --coverage src/__tests__/components/
-```
-
-### Visual Regression Tests
+## Running
 
 ```bash
-npx playwright test src/__tests__/visual/
+corepack pnpm test:components
 ```
 
-Update snapshots:
-```bash
-npx playwright test src/__tests__/visual/ --update-snapshots
-```
+The script preloads `src/__tests__/setup/register-dom.ts`, which registers the
+happy-dom globals. Running `bun test src/__tests__/components` without that
+preload fails — there is no `document`.
 
-### E2E Component Tests
+## How the suite is wired
 
-```bash
-npx playwright test src/__tests__/e2e/components.spec.ts
-```
+| Piece | Purpose |
+|---|---|
+| `src/__tests__/setup/register-dom.ts` | Registers happy-dom globals (+ a `ResizeObserver` stub). Preloaded. |
+| `src/__tests__/setup/matchers.ts` | Adds the jest-dom assertions to Bun's `expect`. Imported first by each test file. |
+| `src/__tests__/utils/render.tsx` | `renderWithIntl` — wraps a component in the Spanish next-intl provider. |
+| `src/types/bun-test-dom.d.ts` | Types the jest-dom matchers onto `bun:test`. |
 
-## Test Categories
+`matchers.ts` is imported per test file rather than preloaded on purpose:
+importing `@testing-library/*` from inside a preload evaluates it before
+happy-dom has a `document.body`, and its `screen` helper then binds permanently
+to a broken world.
 
-### 1. Unit Tests (`components/`)
+## Conventions
 
-Each component test file covers:
-- **Props Interface** - Props validation and types
-- **Component State** - Internal state management
-- **Accessibility** - ARIA attributes, keyboard support
-- **Visual States** - UI states and styling
-- **Event Handling** - User interactions
-- **Dependencies** - External library usage
+- **Translations are real.** `renderWithIntl` loads `messages/es.json`, so tests
+  assert on actual Spanish strings ("Inventario", "Eliminar artículo"). A
+  renamed or deleted translation key fails the test instead of silently
+  rendering a placeholder.
+- **Query by role and accessible name** wherever possible. Falling back to a
+  class selector is a hint the component needs a better accessible name.
+- **Mock at the module boundary,** not the component: `mock.module(...)` for
+  `@/lib/trpc/client`, `next/navigation`, `next/link`, server actions, and the
+  barcode-scanner library, then `await import(...)` the component afterwards.
+- **No tautologies.** An assertion that cannot fail is not a test. Every test
+  here was verified to fail against a deliberately broken component.
 
-Example structure:
-```typescript
-describe("ComponentName", () => {
-  describe("Props Interface", () => { ... });
-  describe("Component State", () => { ... });
-  describe("Accessibility", () => { ... });
-  describe("Visual States", () => { ... });
-  describe("Event Handling", () => { ... });
-});
-```
+## Coverage
 
-### 2. Accessibility Tests (`accessibility.test.tsx`)
+| File | Component | What it covers |
+|---|---|---|
+| `button.test.tsx` | `ui/Button` | Variants, sizes, `asChild`, disabled, keyboard activation, ref |
+| `input.test.tsx` | `ui/Input` | Typing, `onChange`, disabled, labelling, native form attributes |
+| `LocaleSwitcher.test.tsx` | `ui/LocaleSwitcher` | Options, active locale, cookie persistence + reload |
+| `DashboardNav.test.tsx` | `dashboard/DashboardNav` | Section hrefs, active-route and nested-route highlighting |
+| `LocationPicker.test.tsx` | `inventory/LocationPicker` | Loading, tree roots, stock counts, selection, clearing, closing |
+| `ShoppingItem.test.tsx` | `shopping/ShoppingItem` | Name fallbacks, checked state, toggle/remove mutations, cache invalidation |
+| `ReceiptStatus.test.tsx` | `receipt/ReceiptStatus` | Every `ReceiptStatus` label, spinners, progress counter, step ladder |
+| `UploadZone.test.tsx` | `receipt/UploadZone` | Accepted types, upload callback, preview, clearing, uploading state |
+| `PriceChart.test.tsx` | `price/PriceChart` | Row reshaping, per-store series, colours, legend, euro axis |
+| `Scanner.test.tsx` | `barcode/Scanner` | Scan and error callbacks, torch capability probe, torch toggle |
 
-Comprehensive accessibility audit covering:
-- ARIA labels and roles
-- Focus management
-- Keyboard navigation
-- Screen reader compatibility
-- Color contrast
-- Lighthouse targets
+## Known gaps
 
-### 3. Visual Regression Tests (`visual/`)
-
-Responsive design testing:
-- Mobile (375px)
-- Tablet (768px)
-- Desktop (1440px)
-
-Component state testing:
-- Default state
-- Hover state
-- Focus state
-- Disabled state
-- Active state
-
-### 4. E2E Tests (`e2e/`)
-
-Interactive testing:
-- Click handlers
-- Form submissions
-- Keyboard navigation
-- Focus management
-- State transitions
-
-## Test Data Attributes
-
-For E2E testing, components should include `data-testid` attributes:
-
-```tsx
-// Example test IDs
-<button data-testid="button-default">Click me</button>
-<input data-testid="input-text" />
-<div data-testid="location-picker">...</div>
-<div data-testid="upload-zone">...</div>
-```
-
-## Adding New Tests
-
-1. Create test file: `src/__tests__/components/ComponentName.test.tsx`
-2. Import dependencies
-3. Follow existing test structure
-4. Run tests: `bun test src/__tests__/components/ComponentName.test.tsx`
-5. Verify all assertions pass
-
-## CI Integration
-
-Tests run automatically on:
-- Pull request creation
-- Push to main branch
-- Scheduled daily runs
-
-## Test Utilities
-
-Common patterns used in tests:
-
-### Mocking tRPC
-```typescript
-jest.mock('@/lib/trpc/client', () => ({
-  api: {
-    location: {
-      list: {
-        useQuery: () => ({
-          data: mockLocations,
-          isLoading: false,
-        }),
-      },
-    },
-  },
-}));
-```
-
-### Mocking next-intl
-```typescript
-jest.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-  useLocale: () => 'es',
-}));
-```
-
-### Mocking Next.js Router
-```typescript
-jest.mock('next/navigation', () => ({
-  usePathname: () => '/dashboard',
-}));
-```
-
-## Coverage Goals
-
-- **Line Coverage:** 80%+
-- **Function Coverage:** 80%+
-- **Branch Coverage:** 70%+
-- **Component Coverage:** 100%
-
-## Accessibility Goals
-
-- Lighthouse Accessibility Score: 90+
-- Zero axe-core violations
-- Keyboard navigable: 100%
-- Screen reader compatible: 100%
-
-## Troubleshooting
-
-### Tests failing with "Cannot find module"
-
-Ensure path aliases are configured in `tsconfig.json`:
-```json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  }
-}
-```
-
-### Visual tests failing due to pixel differences
-
-Update snapshots if changes are intentional:
-```bash
-npx playwright test --update-snapshots
-```
-
-### E2E tests timing out
-
-Increase timeout in `playwright.config.ts`:
-```typescript
-expect: {
-  timeout: 10000,
-},
-```
-
-## Contributing
-
-1. Write tests for new components
-2. Update tests when modifying components
-3. Maintain test coverage above thresholds
-4. Follow existing test patterns and naming conventions
-
-## Resources
-
-- [bun:test Documentation](https://bun.sh/docs/cli/test)
-- [Playwright Documentation](https://playwright.dev/docs/intro)
-- [Testing Library](https://testing-library.com/docs/)
-- [WCAG Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
+- `MatchSelector`, `CreateProductInline`, `ReviewCard`, `AutoListPreview`,
+  `StoreSelector`, `ExpiringItems`, `BestPriceIndicator` and `StoreComparison`
+  have no component tests yet.
+- No accessibility assertions beyond role/name queries — there is no axe run.
+- No visual regression coverage. The previous `src/__tests__/visual/` suite was
+  removed: it pointed at a `/test/components` route that does not exist and sat
+  outside Playwright's `testDir`, so it never ran.

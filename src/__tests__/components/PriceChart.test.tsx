@@ -1,192 +1,136 @@
-import { describe, it, expect } from "bun:test";
+import "../setup/matchers";
+import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
+import { cleanup } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { renderWithIntl } from "../utils/render";
 
 /**
- * PriceChart Component Test Suite
- * 
- * Tests for price PriceChart component
- * Location: src/components/price/PriceChart.tsx
+ * Recharts renders through SVG measurement that happy-dom cannot perform, so
+ * the chart primitives are replaced with prop recorders. What is under test is
+ * PriceChart's own work: reshaping price records into chart rows and deciding
+ * how many series to draw.
  */
+type ChartRow = { date: string; [key: string]: string | number };
 
-describe("PriceChart Component", () => {
-  describe("Props Interface", () => {
-    it("should accept data prop", () => {
-      // data: PriceDataPoint[] - { date, price, storeName? }
-      expect(true).toBe(true);
-    });
+let chartData: ChartRow[] = [];
+let lineProps: Array<{ dataKey: string; stroke: string }> = [];
+let legendRendered = false;
+let yTickFormatter: ((value: number) => string) | undefined;
 
-    it("should accept showStores flag", () => {
-      // showStores?: boolean - default: false
-      expect(true).toBe(true);
-    });
-  });
+mock.module("recharts", () => ({
+  ResponsiveContainer: ({ children }: { children: ReactNode }) => (
+    <div data-testid="chart">{children}</div>
+  ),
+  LineChart: ({ data, children }: { data: ChartRow[]; children: ReactNode }) => {
+    chartData = data;
+    return <div>{children}</div>;
+  },
+  Line: (props: { dataKey: string; stroke: string }) => {
+    lineProps.push(props);
+    return null;
+  },
+  XAxis: () => null,
+  YAxis: (props: { tickFormatter?: (value: number) => string }) => {
+    yTickFormatter = props.tickFormatter;
+    return null;
+  },
+  CartesianGrid: () => null,
+  Tooltip: () => null,
+  Legend: () => {
+    legendRendered = true;
+    return null;
+  },
+}));
 
-  describe("Data Processing", () => {
-    it("should format dates for display", () => {
-      // Uses toLocaleDateString() for date formatting
-      const formatsDates = true;
-      expect(formatsDates).toBe(true);
-    });
+const { PriceChart } = await import("@/components/price/PriceChart");
 
-    it("should group data by date for multi-store view", () => {
-      // Groups by date when showStores is true
-      const groupsByDate = true;
-      expect(groupsByDate).toBe(true);
-    });
+const data = [
+  { date: "2026-01-05T00:00:00.000Z", price: 1.19, storeName: "Mercadona" },
+  { date: "2026-01-05T00:00:00.000Z", price: 1.25, storeName: "Carrefour" },
+  { date: "2026-02-10T00:00:00.000Z", price: 1.09, storeName: "Mercadona" },
+];
 
-    it("should extract unique store names", () => {
-      // Uses Set to get unique store names
-      const extractsStores = true;
-      expect(extractsStores).toBe(true);
-    });
-
-    it("should handle unknown store names", () => {
-      // Defaults to "Unknown" when storeName is undefined
-      const handlesUnknown = true;
-      expect(handlesUnknown).toBe(true);
-    });
-  });
-
-  describe("Chart Configuration", () => {
-    it("should have fixed height", () => {
-      // Container has h-80 (320px)
-      const hasFixedHeight = true;
-      expect(hasFixedHeight).toBe(true);
-    });
-
-    it("should be responsive", () => {
-      // Uses ResponsiveContainer with width="100%"
-      const isResponsive = true;
-      expect(isResponsive).toBe(true);
-    });
-
-    it("should have Cartesian grid", () => {
-      // Shows grid with strokeDasharray="3 3"
-      const hasGrid = true;
-      expect(hasGrid).toBe(true);
-    });
-
-    it("should format Y-axis as EUR", () => {
-      // tickFormatter: (value) => `€${value.toFixed(2)}`
-      const formatsCurrency = true;
-      expect(formatsCurrency).toBe(true);
-    });
-
-    it("should have tooltip", () => {
-      // Shows tooltip on hover with formatted price
-      const hasTooltip = true;
-      expect(hasTooltip).toBe(true);
-    });
-  });
-
-  describe("Multi-Store View", () => {
-    it("should render line per store when showStores is true", () => {
-      // Maps storeNames to Line components
-      const rendersMultiple = true;
-      expect(rendersMultiple).toBe(true);
-    });
-
-    it("should use different colors for each store", () => {
-      // Colors: #2563eb, #dc2626, #16a34a, #9333ea, #ea580c
-      const usesColors = true;
-      expect(usesColors).toBe(true);
-    });
-
-    it("should cycle colors for many stores", () => {
-      // Uses index % colors.length
-      const cyclesColors = true;
-      expect(cyclesColors).toBe(true);
-    });
-
-    it("should show legend when showing stores", () => {
-      // Legend component only when showStores
-      const showsLegend = true;
-      expect(showsLegend).toBe(true);
-    });
-  });
-
-  describe("Single View", () => {
-    it("should render single line when showStores is false", () => {
-      // Single Line with dataKey="price"
-      const rendersSingle = true;
-      expect(rendersSingle).toBe(true);
-    });
-
-    it("should use blue color for single line", () => {
-      // stroke="#2563eb"
-      const usesBlue = true;
-      expect(usesBlue).toBe(true);
-    });
-  });
-
-  describe("Styling", () => {
-    it("should have proper container styling", () => {
-      // h-80 w-full
-      const hasContainerStyles = true;
-      expect(hasContainerStyles).toBe(true);
-    });
-
-    it("should have proper axis styling", () => {
-      // tick={{ fontSize: 12 }}, stroke="#6b7280"
-      const hasAxisStyles = true;
-      expect(hasAxisStyles).toBe(true);
-    });
-
-    it("should have proper grid styling", () => {
-      // strokeDasharray="3 3", stroke="#e5e7eb"
-      const hasGridStyles = true;
-      expect(hasGridStyles).toBe(true);
-    });
-
-    it("should have proper line styling", () => {
-      // strokeWidth={2}, dot={{ r: 4 }}, activeDot={{ r: 6 }}
-      const hasLineStyles = true;
-      expect(hasLineStyles).toBe(true);
-    });
-  });
-
-  describe("Internationalization", () => {
-    it("should use next-intl for translations", () => {
-      // Uses useTranslations("prices.chart")
-      const usesTranslations = true;
-      expect(usesTranslations).toBe(true);
-    });
-
-    it("should translate tooltip label", () => {
-      // Uses t("yAxis") for tooltip label
-      const translatesTooltip = true;
-      expect(translatesTooltip).toBe(true);
-    });
-  });
+beforeEach(() => {
+  chartData = [];
+  lineProps = [];
+  legendRendered = false;
+  yTickFormatter = undefined;
 });
 
-describe("PriceChart - Integration Notes", () => {
-  it("uses recharts library", () => {
-    // LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-    expect(true).toBe(true);
+afterEach(cleanup);
+
+describe("PriceChart", () => {
+  it("plots one point per record in single-series mode", () => {
+    renderWithIntl(<PriceChart data={data} />);
+
+    expect(chartData).toHaveLength(3);
+    expect(chartData.map((row) => row.price)).toEqual([1.19, 1.25, 1.09]);
   });
 
-  it("uses next-intl for translations", () => {
-    // useTranslations hook
-    expect(true).toBe(true);
+  it("draws a single price series by default", () => {
+    renderWithIntl(<PriceChart data={data} />);
+
+    expect(lineProps).toHaveLength(1);
+    expect(lineProps[0]?.dataKey).toBe("price");
   });
 
-  it("should handle empty data", () => {
-    // TODO: Add empty state handling
-    expect(true).toBe(true);
+  it("collapses records onto one row per date when comparing stores", () => {
+    renderWithIntl(<PriceChart data={data} showStores />);
+
+    // Two distinct dates, with the same-day stores merged into one row.
+    expect(chartData).toHaveLength(2);
+    expect(chartData[0]?.Mercadona).toBe(1.19);
+    expect(chartData[0]?.Carrefour).toBe(1.25);
+    expect(chartData[1]?.Mercadona).toBe(1.09);
+    expect(chartData[1]?.Carrefour).toBeUndefined();
   });
 
-  it("should handle single data point", () => {
-    // Chart should render with one point
-    expect(true).toBe(true);
+  it("draws one series per distinct store when comparing", () => {
+    renderWithIntl(<PriceChart data={data} showStores />);
+
+    expect(lineProps.map((line) => line.dataKey)).toEqual([
+      "Mercadona",
+      "Carrefour",
+    ]);
   });
 
-  it("should handle many stores", () => {
-    // Color cycling handles more than 5 stores
-    expect(true).toBe(true);
+  it("gives each store series a distinct colour", () => {
+    renderWithIntl(<PriceChart data={data} showStores />);
+
+    const strokes = lineProps.map((line) => line.stroke);
+    expect(new Set(strokes).size).toBe(strokes.length);
   });
 
-  it("should be tested for responsiveness", () => {
-    // Container should adapt to parent width
-    expect(true).toBe(true);
+  it("labels records with no store as Unknown", () => {
+    renderWithIntl(
+      <PriceChart
+        data={[{ date: "2026-01-05T00:00:00.000Z", price: 2 }]}
+        showStores
+      />,
+    );
+
+    expect(lineProps.map((line) => line.dataKey)).toEqual(["Unknown"]);
+  });
+
+  it("only shows the legend in store-comparison mode", () => {
+    renderWithIntl(<PriceChart data={data} />);
+    expect(legendRendered).toBe(false);
+
+    cleanup();
+    renderWithIntl(<PriceChart data={data} showStores />);
+    expect(legendRendered).toBe(true);
+  });
+
+  it("formats the price axis in euros", () => {
+    renderWithIntl(<PriceChart data={data} />);
+
+    expect(yTickFormatter?.(1.5)).toBe("€1.50");
+  });
+
+  it("renders an empty chart without crashing", () => {
+    renderWithIntl(<PriceChart data={[]} />);
+
+    expect(chartData).toEqual([]);
+    expect(lineProps).toHaveLength(1);
   });
 });
