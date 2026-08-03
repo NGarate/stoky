@@ -290,7 +290,6 @@ export const productRouter = createTRPCRouter({
           similarity(name, ${input.query}) as similarity
         FROM "Product"
         WHERE "householdId" = ${user.householdId}
-          AND deleted_at IS NULL
           AND name % ${input.query}
         ORDER BY similarity(name, ${input.query}) DESC
         LIMIT ${input.limit}
