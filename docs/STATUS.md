@@ -26,7 +26,8 @@ Measured on 2026-08-04, with a live PostgreSQL and Valkey.
 | Build | `corepack pnpm build` | ✅ 16 routes, all server-rendered on demand |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database (after the pg_trgm fix below) |
 | Seed | `corepack pnpm db:seed` | ✅ verified end-to-end, and idempotent across re-runs |
-| E2E (chromium) | `bunx playwright test --project=chromium` | ✅ 12 pass, 4 skipped (`test.fixme`), 0 fail |
+| E2E (chromium, firefox, Mobile Chrome) | `bunx playwright test` | ✅ 36 pass, 12 skipped (`test.fixme`), 0 fail |
+| E2E (webkit, Mobile Safari) | — | ⛔ WebKit cannot launch: missing system libraries, needs root |
 | Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
 
 ### Two traps that made earlier measurements wrong
