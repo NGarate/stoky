@@ -86,8 +86,10 @@ reports 100%, then extract by hand into
 `~/.cache/ms-playwright/<browser>-<revision>/` and `touch` the
 `INSTALLATION_COMPLETE` marker beside it. Revisions must match the ones in
 `node_modules/.pnpm/playwright-core@<version>/.../browsers.json` — currently
-chromium 1208, firefox 1509, webkit 2248. Do not install with `bunx playwright`;
-that resolves a newer Playwright and fetches revisions this project cannot use.
+chromium 1234, firefox 1538, webkit 2336 for Playwright 1.62.1. These change on
+every Playwright bump, so re-check after one. Do not install with
+`bunx playwright`; that resolves a newer Playwright and fetches revisions this
+project cannot use.
 
 WebKit additionally needs system libraries, installed once with root:
 
@@ -95,7 +97,9 @@ WebKit additionally needs system libraries, installed once with root:
 sudo ./node_modules/.bin/playwright install-deps webkit
 ```
 
-After that, `webkit` and `Mobile Safari` both run. `ldd` still reports
+After that, `webkit` and `Mobile Safari` both run. The libraries are installed
+system-wide, so a browser-revision bump does not need it repeating. `ldd` still
+reports
 `libjxl.so.0.8`, `libwpe-1.0.so.1` and `libWPEWebKit-2.0.so.1` as unresolved,
 but only against the bundled `minibrowser-wpe` binary and optional codecs.
 Playwright drives `minibrowser-gtk` on Linux, so this is harmless — do not

@@ -20,10 +20,14 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 10
-          
+          version: 11
+
+      # --trust-lockfile skips re-verifying each entry against pnpm's
+      # minimumReleaseAge policy. That check is for resolution time; CI installs
+      # a committed, reviewed lockfile, which is the documented case for this
+      # flag. Without it, CI fails for a day whenever a dependency publishes.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --trust-lockfile
 
       - name: Generate Prisma client
         run: pnpm db:generate
@@ -47,15 +51,15 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 10
-          
+          version: 11
+
       - name: Install Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
           
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --trust-lockfile
 
       - name: Generate Prisma client
         run: pnpm db:generate

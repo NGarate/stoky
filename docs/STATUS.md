@@ -132,6 +132,21 @@ renders under the overridden lodash.
 Re-check with `corepack pnpm audit`. GitHub's Dependabot count is higher than
 pnpm's because it counts one alert per advisory-path pair.
 
+### The overrides live in pnpm-workspace.yaml
+
+pnpm 11 stopped reading the `pnpm` field in `package.json` — it warns once and
+ignores it. During the upgrade to 11.19.0 the overrides above were moved to
+`pnpm-workspace.yaml`, and `onlyBuiltDependencies` became `allowBuilds`, now a
+map rather than a list. Had they been left in `package.json`, the four
+transitive advisories would have silently returned on the next install.
+
+pnpm 11 also refuses lockfile entries published within the last 24 hours
+(`minimumReleaseAge`). This is a good default against a freshly-compromised
+release, but it fails an install of versions resolved hours earlier. CI passes
+`--trust-lockfile`, which is the documented case for it: the lockfile is
+committed and reviewed, so the age check has already served its purpose at
+resolution time.
+
 ## What exists
 
 **Backend — substantially complete.**
@@ -263,10 +278,11 @@ navigation is `DashboardNav` alone.
 
 | Claimed | Actual |
 |---|---|
-| Prisma 7.x | 6.19.2 |
-| tRPC v11 | `11.0.0-rc.802` (release candidate) |
+| Prisma 7.x | 6.19.3 |
 
-Next.js 16, React 19, Tailwind 4, next-intl 4 and pnpm 10 all match.
+tRPC reached stable `11.18.0` in the 2026-08-04 update, closing the other drift.
+Next.js 16, React 19, Tailwind 4 and next-intl 4 match. pnpm is now 11.19.0,
+ahead of the documented 10.x.
 
 ---
 

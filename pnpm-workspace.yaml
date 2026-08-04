@@ -1,0 +1,39 @@
+# pnpm settings.
+#
+# pnpm 11 no longer reads the `pnpm` field in package.json — it warns and
+# ignores it. These settings were moved here from package.json during the
+# upgrade to pnpm 11.19.0. Leaving them behind would have silently dropped the
+# security overrides below and let four transitive advisories return.
+#
+# See https://pnpm.io/settings
+
+# Transitive packages with no fixed parent release. Each override is scoped to
+# the single parent that pulls it, so no unrelated dependant is forced onto a
+# different version, and every bump stays within the same major.
+# See docs/STATUS.md § Dependency security.
+overrides:
+  "@parcel/watcher>picomatch": ^4.0.5
+  "recharts>lodash": ^4.18.1
+  "@prisma/config>effect": ^3.22.1
+  "c12>defu": ^6.1.7
+
+# Packages allowed to run install scripts. pnpm blocks them by default, which is
+# the right default — each entry here is something that does not work without
+# its build step:
+#
+#   argon2, @swc/core, @parcel/watcher, sharp  compile native bindings
+#   prisma, @prisma/client, @prisma/engines    generate the client and fetch engines
+#   tesseract.js                               fetches its OCR worker assets
+#   @biomejs/biome                             downloads its platform binary
+#
+# Replaces `onlyBuiltDependencies`, which pnpm 11 renamed to `allowBuilds`.
+allowBuilds:
+  "@biomejs/biome": true
+  "@parcel/watcher": true
+  "@prisma/client": true
+  "@prisma/engines": true
+  "@swc/core": true
+  argon2: true
+  prisma: true
+  sharp: true
+  tesseract.js: true
