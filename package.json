@@ -35,7 +35,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
-    "@auth/prisma-adapter": "^2.7.4",
+    "@auth/prisma-adapter": "^2.11.3",
     "@prisma/client": "^6.19.2",
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/postcss": "^4.1.18",
@@ -51,17 +51,17 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
-    "next": "^16.1.6",
-    "next-auth": "5.0.0-beta.30",
-    "next-intl": "^4.8.2",
-    "postcss": "^8.5.6",
+    "next": "^16.2.12",
+    "next-auth": "5.0.0-beta.32",
+    "next-intl": "^4.9.2",
+    "postcss": "^8.5.25",
     "prisma": "^6.19.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-dropzone": "^14.4.0",
     "recharts": "^2.15.1",
     "server-only": "^0.0.1",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.3",
     "superjson": "^2.2.2",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
@@ -83,5 +83,13 @@
     "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
     "playwright": "^1.58.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@parcel/watcher>picomatch": "^4.0.5",
+      "recharts>lodash": "^4.18.1",
+      "@prisma/config>effect": "^3.22.1",
+      "c12>defu": "^6.1.7"
+    }
   }
 }

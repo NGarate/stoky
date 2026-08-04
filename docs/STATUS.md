@@ -27,6 +27,7 @@ Measured on 2026-08-04, with a live PostgreSQL and Valkey.
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database (after the pg_trgm fix below) |
 | Seed | `corepack pnpm db:seed` | ✅ verified end-to-end, and idempotent across re-runs |
 | E2E (chromium) | `bunx playwright test --project=chromium` | ✅ 12 pass, 4 skipped (`test.fixme`), 0 fail |
+| Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
 
 ### Two traps that made earlier measurements wrong
 
@@ -85,6 +86,51 @@ controls at all. That was wrong — the controls are `<Link>` elements, and they
 point at routes that were never built.)
 
 ---
+
+## Dependency security
+
+`corepack pnpm audit` → **no known vulnerabilities** (was 57: 4 critical,
+25 high, 24 moderate, 4 low).
+
+Cleared on 2026-08-04 without any source change. Every direct dependency stayed
+within its existing major, so no breaking-change boundary was crossed:
+
+| Package | From | To | Minimum that patched | Cleared |
+|---|---|---|---|---|
+| `next` | 16.1.6 | 16.3.0 | 16.2.5 | 28 advisories |
+| `next-auth` | 5.0.0-beta.30 | 5.0.0-beta.32 | beta.32 | 4, incl. 2 critical |
+| `@auth/prisma-adapter` | 2.7.4 | 2.11.3 | — | pulls `@auth/core` ≥0.41.3 (3, incl. 1 critical) |
+| `next-intl` | 4.8.2 | 4.13.4 | 4.9.2 | 2, plus transitive `icu-minify` |
+| `postcss` | 8.5.6 | 8.5.25 | 8.5.12 | 4 |
+| `sharp` | 0.33.5 | 0.35.3 | 0.35.0 | 1 |
+
+`next` and `next-intl` sit above their minimum patched version because the
+existing `^` ranges resolve to the newest compatible minor. That is the repo's
+convention and it keeps future patches flowing; the lockfile is what pins the
+exact versions. If a future regression is suspected, `~16.2.12` and `~4.9.2`
+are the tighter alternatives that still clear every advisory.
+
+Four transitive packages had no fixed parent release, so they use
+`pnpm.overrides` in `package.json`. Each override is **scoped to the single
+parent that pulls it** — `"recharts>lodash"` rather than a bare `"lodash"` — so
+no unrelated dependant is forced onto a different version, and every bump stays
+within the same major:
+
+| Override | From | To |
+|---|---|---|
+| `@parcel/watcher>picomatch` | 4.0.3 | 4.0.5 |
+| `recharts>lodash` | 4.17.23 | 4.18.1 |
+| `@prisma/config>effect` | 3.18.4 | 3.22.1 |
+| `c12>defu` | 6.1.4 | 6.1.7 |
+
+Verified after the upgrade: lint, typecheck, unit, component, integration,
+build and E2E all pass, `pnpm install --frozen-lockfile` resolves with no peer
+conflicts, sharp round-trips a JPEG through the exact call chain
+`src/server/trpc/routers/receipt.ts` uses, and a real (unmocked) recharts chart
+renders under the overridden lodash.
+
+Re-check with `corepack pnpm audit`. GitHub's Dependabot count is higher than
+pnpm's because it counts one alert per advisory-path pair.
 
 ## What exists
 
