@@ -68,9 +68,9 @@ Last measured 2026-08-04. See `docs/STATUS.md` for the full table.
 - `corepack pnpm test:components` — 94 pass across 10 files
 - `corepack pnpm test:integration` — 218 pass across 8 files
 - `corepack pnpm build` succeeds — 16 routes, all server-rendered on demand
-- `bunx playwright test` — 12 pass, 4 skipped (`test.fixme`) per project, on
-  chromium, firefox and Mobile Chrome. WebKit and Mobile Safari cannot launch
-  on this machine; see below.
+- `bunx playwright test` — 60 pass, 20 skipped (`test.fixme`), 0 fail across all
+  five browser projects: chromium, firefox, webkit, Mobile Chrome, Mobile
+  Safari. That is 12 pass + 4 skipped per project.
 
 ## Playwright browsers on this machine
 
@@ -89,16 +89,17 @@ reports 100%, then extract by hand into
 chromium 1208, firefox 1509, webkit 2248. Do not install with `bunx playwright`;
 that resolves a newer Playwright and fetches revisions this project cannot use.
 
-WebKit additionally needs system libraries that are not present, so the
-`webkit` and `Mobile Safari` projects fail to launch. Installing them needs
-root:
+WebKit additionally needs system libraries, installed once with root:
 
 ```bash
 sudo ./node_modules/.bin/playwright install-deps webkit
 ```
 
-Missing: `libavif.so.16`, `libevent-2.1.so.7`, `libjxl.so.0.8`,
-`libwoff2dec.so.1.0.2`, `libwpe-1.0.so.1`, `libWPEWebKit-2.0.so.1`.
+After that, `webkit` and `Mobile Safari` both run. `ldd` still reports
+`libjxl.so.0.8`, `libwpe-1.0.so.1` and `libWPEWebKit-2.0.so.1` as unresolved,
+but only against the bundled `minibrowser-wpe` binary and optional codecs.
+Playwright drives `minibrowser-gtk` on Linux, so this is harmless — do not
+chase those three.
 
 Two environment traps on this machine:
 
