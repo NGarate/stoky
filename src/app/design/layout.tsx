@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import "./lab.css";
 
@@ -21,11 +22,19 @@ try {
 } catch (e) {}
 `;
 
-export default function DesignLabLayout({ children }: { children: ReactNode }) {
+export default async function DesignLabLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  // The CSP nonce minted per request in src/middleware.ts. Without it this
+  // inline script is blocked and the stored theme flashes on every load.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <>
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: constant string, no interpolation */}
-      <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
+      <script nonce={nonce} dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
       {children}
     </>
   );

@@ -3,8 +3,43 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin();
 
+// Security headers that do not vary per request.
+//
+// Content-Security-Policy is NOT here: it carries a per-request nonce and is set
+// in src/middleware.ts. A static CSP strict enough to be worth having blocks
+// Next's inline bootstrap scripts, which stops hydration and silently breaks the
+// login form.
+//
+// Some of these are also set by Traefik in docker-compose.prod.yml, but that
+// only helps someone deploying behind that exact proxy. A self-hosted app runs
+// behind whatever the operator already has, so the defaults belong in the app.
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // The barcode scanner is the only feature needing a device. Everything off.
+  {
+    key: "Permissions-Policy",
+    value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
+  },
+  // Two years, matching the Traefik middleware. Only applies over HTTPS.
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains; preload",
+  },
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+];
+
 const nextConfig: NextConfig = {
   output: "standalone",
+
+  // Applied to every route, including API and tRPC responses.
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
+
+  // The version banner tells an attacker which advisories to try.
+  poweredByHeader: false,
 
   // Hosts allowed to load dev assets. Without this, `next dev` answers 403 to
   // requests for /_next/static chunks from any origin other than localhost, so
