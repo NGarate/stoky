@@ -1,88 +1,273 @@
 name: CI
 
+# Trunk-based: master is the only branch, so every push to it is a release
+# candidate. There is no pull-request gate to lean on — this pipeline is the
+# gate, and it has to be trustworthy enough that a red run means something.
 on:
   push:
-    branches: [master, main]
-  pull_request:
-    branches: [master, main]
+    branches: [master]
+  workflow_dispatch:
+
+# Superseded runs are wasted work on a trunk. Cancel them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default. Jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+# Actions are pinned by commit SHA rather than tag: a tag can be moved to point
+# at different code, a SHA cannot. The comment records the human-readable version.
+env:
+  NODE_VERSION: "24"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # --------------------------------------------------------------- quality --
   quality:
+    name: Lint, types, contrast
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
-          
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 11
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
-      # --trust-lockfile skips re-verifying each entry against pnpm's
-      # minimumReleaseAge policy. That check is for resolution time; CI installs
-      # a committed, reviewed lockfile, which is the documented case for this
-      # flag. Without it, CI fails for a day whenever a dependency publishes.
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --trust-lockfile
+      # --trust-lockfile skips re-verifying each entry against minimumReleaseAge.
+      # That check belongs to resolution time; CI installs a committed, reviewed
+      # lockfile, and without it CI breaks for a day whenever a dependency publishes.
+      - run: pnpm install --frozen-lockfile --trust-lockfile
+      - run: pnpm db:generate
 
-      - name: Generate Prisma client
-        run: pnpm db:generate
-        
-      - name: Run lint
-        run: pnpm lint
-        
-      - name: Run typecheck
-        run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: WCAG AAA contrast
+        run: pnpm check:contrast
 
+  # ----------------------------------------------------------------- tests --
   test:
+    name: Unit, component, integration
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 11
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-          
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --trust-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm db:generate
-
-      - name: Run tests
-        run: pnpm test:unit && pnpm test:components && pnpm test:integration
+    timeout-minutes: 15
+    # Service containers rather than docker compose inside the runner: the
+    # runner owns health and teardown, and a hung compose cannot wedge the job.
+    services:
+      postgres:
+        image: postgres:16-alpine
         env:
-          NEXTAUTH_SECRET: test-secret
-
-  build:
-    needs: [quality, test]
-    runs-on: ubuntu-latest
+          POSTGRES_USER: stoky
+          POSTGRES_PASSWORD: stoky_ci
+          POSTGRES_DB: stoky_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U stoky -d stoky_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      cache:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky_test?schema=public
+      VALKEY_URL: redis://localhost:6379
+      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+      NEXTAUTH_URL: http://localhost:3000
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - run: pnpm install --frozen-lockfile --trust-lockfile
+      - run: pnpm db:generate
+
+      # Applying migrations to an empty database is itself a test. A migration
+      # that only works against an already-prepared database is one that fails
+      # on someone's first install — exactly what happened with pg_trgm.
+      - name: Apply migrations to a fresh database
+        run: pnpm prisma migrate deploy
+
+      - run: pnpm test:unit
+      - run: pnpm test:components
+      - run: pnpm test:integration:only
+
+  # ------------------------------------------------------------------- e2e --
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: stoky
+          POSTGRES_PASSWORD: stoky_ci
+          POSTGRES_DB: stoky
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U stoky -d stoky"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      cache:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky?schema=public
+      VALKEY_URL: redis://localhost:6379
+      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - run: pnpm install --frozen-lockfile --trust-lockfile
+      - run: pnpm db:generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm db:seed
+
+      # --with-deps installs the system libraries WebKit needs. Skipping it is
+      # how a suite ends up silently only ever running Chromium.
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - run: pnpm exec playwright test
+        env:
+          PLAYWRIGHT_PORT: "3000"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ----------------------------------------------------------------- audit --
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --trust-lockfile
+
+      # Dependabot's automatic pull requests are off, because they open branches
+      # and this repository is trunk-only. Its alerts stay on for visibility, and
+      # this job is what actually blocks a vulnerable dependency tree.
+      - name: pnpm audit
+        run: pnpm audit --audit-level moderate
+
+  # ----------------------------------------------------------------- image --
+  image:
+    name: Build, scan and publish image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [quality, test, e2e, audit]
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # provenance attestation
+      attestations: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      # Built and loaded locally first so it is scanned before anyone can pull
+      # it. Publishing an image and scanning it afterwards is the wrong order.
+      - name: Build for scanning
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          push: false
-          tags: stoky:${{ github.sha }}
+          target: production
+          load: true
+          tags: stoky:scan
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: stoky:scan
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload scan results
+        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        if: always()
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+      # A separate gate so the SARIF above is always uploaded, even when this
+      # fails. An image people self-host should not ship known criticals.
+      - name: Fail on critical or high findings
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: stoky:scan
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Log in to the registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Lets an operator verify the image they are about to self-host really was
+      # built from this repository, by this workflow, from this commit.
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
