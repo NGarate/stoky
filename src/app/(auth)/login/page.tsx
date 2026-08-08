@@ -96,7 +96,12 @@ export default function LoginPage(): JSX.Element {
                 </p>
               </div>
 
-              <form className="space-y-5" onSubmit={handleSubmit}>
+              {/* method="post" so that if JavaScript has not loaded, the
+                  browser falls back to a POST instead of a GET, which would
+                  put the password in the URL and therefore in history and
+                  server logs. The JS path calls preventDefault and never
+                  reaches it. */}
+              <form className="space-y-5" method="post" onSubmit={handleSubmit}>
                 <div className="space-y-2">
                   <label
                     className="text-sm font-medium text-slate-800"
