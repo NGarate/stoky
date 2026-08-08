@@ -107,7 +107,9 @@ export default function RegisterPage(): JSX.Element {
                 </p>
               </div>
 
-              <form className="space-y-5" onSubmit={handleSubmit}>
+              {/* method="post" so a no-JS submit cannot leak the password
+                  through the query string. See the note on the login form. */}
+              <form className="space-y-5" method="post" onSubmit={handleSubmit}>
                 <div className="space-y-2">
                   <label
                     className="text-sm font-medium text-slate-800"
