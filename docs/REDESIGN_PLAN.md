@@ -161,11 +161,11 @@ JWT and session callbacks and `next-auth.d.ts`, add `adminProcedure` and a
 capability check to tRPC, and apply it per procedure. **Hiding buttons is not
 enough** — every restriction has to hold on the server.
 
-### 5.3 Rating — not in the MVP, phase 4
+### 5.3 Rating — not in the MVP, last phase
 
 Confirmed. It is the most eye-catching part and the least connected to the
 original problem, which is knowing what is in the house. Full research on the
-data source is in §6 so nothing has to be rediscovered later.
+data source is in §6 so nothing has to be rediscovered later. It is Phase 6.
 
 ### 5.4 Installable PWA — deferred
 
@@ -222,7 +222,7 @@ Project documentation stays in English.
 
 ---
 
-## 6. Rating — research for phase 4
+## 6. Rating — research for Phase 6
 
 Reference point: Yuka. **The brand and algorithm are not copied** — we compute
 our own from open data and explain it.
@@ -243,7 +243,7 @@ Verified against the live API (barcode 3017620422003, Nutella):
 | `labels_tags` | where organic certification comes from |
 
 **The current service requests none of these.** It asks only for name, brand,
-categories, image and macronutrients. Phase 4 must extend the `fields` list and
+categories, image and macronutrients. Phase 6 must extend the `fields` list and
 the Zod schema — small and localised.
 
 **Proposed formula**, following Yuka's published methodology: 60% nutritional
@@ -291,32 +291,80 @@ run, both belonging to the chosen design rather than to five prototypes.
 
 Each phase leaves the app usable and verifiable.
 
-**Phase 0 — Close the dead routes.** `/products/new`, `/inventory/add`,
-`/inventory/consume`, `/settings`. *Done when:* the four `test.fixme` tests in
-`e2e/critical-paths.spec.ts` pass without `fixme`, and Journey 1 of
-`SMOKE_JOURNEYS.md` completes.
+### Phase 0 — Clean slate
 
-**Phase 1 — One design system.** Merge the Estante and Horizonte tokens, move
-them into `globals.css`, and fix the existing defect: `button.tsx` and
-`input.tsx` reference thirteen tokens that do not exist, which is why the login
-button renders unstyled. *Done when:* `check:contrast` stays green and no
-component references a missing token.
+Nothing new is built. The repository is made to describe the thing we have
+actually decided to build, so later phases start from an honest baseline instead
+of carrying the old one along. The items below are an audit of the current tree,
+not a wish list.
 
-**Phase 2 — Roles.** Enum, session, middleware, capability matrix. Before the
-screens, because both depend on who is looking. *Done when:* a kitchen account
-is refused a write **by the server**, proven by a test, not by a hidden button.
+**Code**
 
-**Phase 3 — Phone screen, offline from the start.** Shopping list, tick off, ±
-stepper, scan, plus the service worker and write queue. *Done when:* a full shop
-can be done in aeroplane mode and syncs correctly on reconnect.
+| What | Why |
+|---|---|
+| Drop `zustand` | Declared as a core part of the stack and documented as holding client state. **Zero imports.** |
+| Drop `@biomejs/biome` | No config file, zero references. Linting is oxlint. |
+| Drop `@types/react-test-renderer` | Added during the DOM test setup and never used. My own leftover. |
+| Decide on `spa.traineddata` | A **3.3 MB binary tracked in git**, while `ocr.ts` calls `createWorker("spa")`, which fetches its own data. Verify it is genuinely unused before deleting; if it is needed offline, it belongs in the image, not the history. |
+| Remove `tailwind.config.ts` | Referenced by nothing. Tailwind 4 is CSS-first, and the file only redeclares two colours. |
+| Move the Prisma seed config | `package.json#prisma` is deprecated and disappears in Prisma 7; it already warns on every install. Move to `prisma.config.ts`. |
+| Prune the design lab | Consola, Triaje and Bolsillo are decided against as screens. Lift the ± stepper out of Bolsillo into a shared component **first**, then delete the three. Estante and Horizonte stay until Phase 2 consumes them. |
 
-**Phase 4 — Kitchen screen.** Expiries, one-tap use, useful data. *Done when:*
-it runs for a week on a tablet untouched except for using things up.
+**Documentation** — the rule is *one owner per subject*. Six overlapping status
+files is what let a fake test suite survive five months; that must not grow back.
 
-**Phase 5 — Rating.** Extend the Open Food Facts fields, compute, display.
-*Done when:* a product with no data and a non-food product both behave well —
-not just the happy path.
+| Document | Action |
+|---|---|
+| `DETAILED_PLAN.md` | **Superseded.** 48 KB describing three parallel work streams and an information architecture we have just replaced. Delete it; this plan is the successor. |
+| `docs/DESIGN_PROPOSALS.md` | Rewrite as a **decision record**: what was tried, what was chosen, what was rejected and why. It currently reads as a menu, and the choice has been made. |
+| `docs/SMOKE_JOURNEYS.md` | Rewrite around the two screens. The four journeys describe the old navigation, and journeys are what "done" is measured against — stale ones are worse than none. |
+| `CLAUDE.md` / `AGENTS.md` | Fix claims that are simply false: tooling says "dprint/biome" (it is oxlint), the stack lists Zustand for client state (unused), pnpm is 11 not 10. Add the two screens, roles, offline and bilingual rules. |
+| `README.md` | Lead with the two screens and the roles, not a flat feature list. |
+| `INFRASTRUCTURE_SOLUTIONS.md` | Fold the part that still matters into `docs/LOCAL_BOOTSTRAP.md` and delete the rest — the Docker problem it documents is solved. |
+| `ISSUES.md` | Point each open item at the phase that closes it, so the two documents cannot drift. |
+| `docs/STATUS.md` | Keep — it is the gate record. Re-point "what to do next" at these phases. |
+
+*Done when:* `pnpm verify:ci` is green; no dependency is declared without being
+imported; no document contradicts this plan or another document; and every
+claim in `docs/STATUS.md` is still reproducible by running the command next to
+it.
+
+### Phase 1 — Close the dead routes
+
+`/products/new`, `/inventory/add`, `/inventory/consume`, `/settings`.
+*Done when:* the four `test.fixme` tests in `e2e/critical-paths.spec.ts` pass
+without `fixme`, and Journey 1 of the rewritten `SMOKE_JOURNEYS.md` completes.
+
+### Phase 2 — One design system
+
+Merge the Estante and Horizonte tokens, move them into `globals.css`, and fix
+the existing defect: `button.tsx` and `input.tsx` reference thirteen tokens that
+do not exist, which is why the login button renders unstyled.
+*Done when:* `check:contrast` stays green and no component references a missing
+token.
+
+### Phase 3 — Roles
+
+Enum, session, middleware, capability matrix. Before the screens, because both
+depend on who is looking. *Done when:* a kitchen account is refused a write **by
+the server**, proven by a test, not by a hidden button.
+
+### Phase 4 — Phone screen, offline from the start
+
+Shopping list, tick off, ± stepper, scan, plus the service worker and write
+queue. *Done when:* a full shop can be done in aeroplane mode and syncs
+correctly on reconnect.
+
+### Phase 5 — Kitchen screen
+
+Expiries, one-tap use, useful data. *Done when:* it runs for a week on a tablet
+untouched except for using things up.
+
+### Phase 6 — Rating
+
+Extend the Open Food Facts fields, compute, display. *Done when:* a product with
+no data and a non-food product both behave well — not just the happy path.
 
 **Cross-cutting:** login rate limiting (`ISSUES.md` CRITICAL-4) stays open and is
 the only critical security gap before anything faces the internet. It should
-land with Phase 2, since both touch auth.
+land with Phase 3, since both touch auth.
