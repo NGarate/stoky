@@ -30,6 +30,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-1 | Four linked routes do not exist (404) | 🔴 **OPEN** |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
 | INV-1 | Expiring items report entry quantity, not net stock | 🔴 **OPEN** |
+| UI-2 | LocationPicker never renders child locations | 🔴 **OPEN** |
+| UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
 
 ---
 
@@ -335,6 +337,79 @@ deliberate decision rather than a side effect.
 
 **Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
 until the number means what the screen says it means.
+
+---
+
+### 🔴 UI-2: LocationPicker never renders child locations
+
+**File:** `src/components/inventory/LocationPicker.tsx`  
+**Severity:** HIGH  
+**Status:** OPEN — found 2026-08-09
+
+**Description:**
+`buildLocationTree` builds a full nested tree, attaching each location to its
+parent's `children`. The render then maps over the roots only and never recurses
+— `node.children` appears zero times in the JSX. Every non-root location is
+invisible and unselectable.
+
+**Evidence** — the seeded household has a two-level tree:
+
+```
+Cocina (root)      Trastero (root)
+  └ Despensa         (no children)
+  └ Nevera
+```
+
+The picker offers Cocina and Trastero. Despensa and Nevera — where five of the
+six seeded products actually live — cannot be chosen.
+
+**Impact:**
+Anyone whose storage is nested, which is the arrangement the schema exists to
+support, cannot file stock where it really is. It affects every screen using the
+picker, including the new `/inventory/add`.
+
+**Suggested fix:**
+Render recursively with indentation, and give each option an accessible name
+that includes its parent, so "Nevera" is distinguishable from another "Nevera"
+elsewhere in the tree.
+
+---
+
+### 🟡 UI-3: Validation and accessibility gaps found while building add-stock
+
+**Files:** `src/server/trpc/routers/inventory.ts`,
+`src/components/inventory/LocationPicker.tsx`,
+`src/components/dashboard/DashboardNav.tsx`, `src/components/ui/*`  
+**Severity:** MEDIUM  
+**Status:** OPEN — found 2026-08-09
+
+Collected while building `/inventory/add`. Each is small; together they are the
+reason that page avoids the shared primitives.
+
+1. **`addStock` requires `operationType` and then ignores it.** The input
+   extends `stockEntrySchema`, so the field is mandatory, but the handler
+   hardcodes `"PURCHASE"`. Same in `consumeStock` and `adjustStock`. These want
+   per-procedure inputs rather than a shared entity schema.
+2. **Quantity has no sign constraint.** `z.number()` with `Math.abs()` in the
+   handler, so posting `-5` silently books `+5`. Rejected client-side today;
+   the server still accepts it.
+3. **`LocationPicker` hardcodes Spanish** — "Cargando ubicaciones..." and "Sin
+   ubicación específica" are baked in, so the English UI shows Spanish there.
+4. **`LocationPicker` accessibility**: the trigger has no `aria-expanded` or
+   `aria-haspopup`; the click-away layer is a full-viewport `div` with
+   `role="button"` and `tabIndex={0}`, putting an invisible tab stop across the
+   whole page while open; the trigger is under 44px.
+5. **`button.tsx` and `input.tsx` are unsafe to use.** They combine
+   `focus-visible:outline-none` with `ring-ring`/`ring-offset-background`, and
+   those tokens resolve to nothing — so they remove the focus outline and
+   replace it with an invisible ring. Phase 2 must fix this before anything
+   adopts them.
+6. **Touch targets under 44px** in `DashboardNav` (every dashboard page) and on
+   the back links of the new routes.
+7. **`/inventory` has no next-intl at all** — its strings are hardcoded
+   Spanish, while the page it links to is bilingual.
+
+**Closed by:** Phase 2 (items 5, 6), Phase 3 (items 1, 2), Phase 4 (3, 4, 7).
 
 ---
 
