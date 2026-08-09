@@ -416,6 +416,10 @@
     "stores": "Tiendas",
     "notifications": "Notificaciones",
     "profile": "Perfil",
+    "theme": "Tema",
+    "themeSystem": "Sistema",
+    "themeLight": "Claro",
+    "themeDark": "Oscuro",
     "hub": {
       "title": "Configuración",
       "intro": "Aquí ajustas cómo organiza Stoky las cosas de tu hogar.",
@@ -423,8 +427,8 @@
       "locationsDescription": "Consulta dónde guardas los productos: la nevera, la despensa, el trastero y los estantes que cuelgan de ellos. Las ubicaciones se crean al añadir stock.",
       "storesTitle": "Tiendas",
       "storesDescription": "Da de alta las tiendas donde compras. Se usan para registrar los precios y para asignar los tickets que escaneas.",
-      "languageTitle": "Idioma",
-      "languageDescription": "El selector de idioma está arriba a la derecha, en la barra de navegación. El cambio se aplica a toda la aplicación y se recuerda en este navegador.",
+      "preferencesTitle": "Idioma y tema",
+      "preferencesDescription": "Elige el idioma de la aplicación y si quieres verla en claro, en oscuro o siguiendo la configuración de tu dispositivo. El tema se guarda en este navegador; el idioma se aplica a toda la aplicación.",
       "pendingTitle": "Todavía no hay más ajustes",
       "pendingDescription": "El hogar, el perfil y las notificaciones aún no se pueden configurar desde aquí."
     }

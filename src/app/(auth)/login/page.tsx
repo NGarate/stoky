@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import type { FormEvent, JSX } from "react";
 import type { AuthErrorKey } from "@/lib/auth/error-messages";
@@ -58,8 +59,18 @@ export default function LoginPage(): JSX.Element {
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
+    <main className="flex min-h-screen flex-col bg-background px-4 py-10">
+      {/* Theme and language before sign-in: someone whose system is light but
+          who needs dark for a visual reason must not have to log in first
+          (DESIGN_AUDIT A1.3, A2.2). */}
+      <div className="mx-auto flex w-full max-w-5xl justify-end">
+        <PreferencesCluster />
+      </div>
+
+      {/* `flex-1` rather than a min-height calculation: the cluster above has
+          a height, and hardcoding 100vh minus the padding would push the card
+          off the bottom by exactly that much. */}
+      <div className="mx-auto flex w-full max-w-5xl flex-1 items-center justify-center pt-6">
         <div className="grid w-full overflow-hidden rounded-3xl border border-border bg-card shadow-xl lg:grid-cols-[1.05fr_0.95fr]">
           <section className="hidden bg-primary p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
             <div className="space-y-4">

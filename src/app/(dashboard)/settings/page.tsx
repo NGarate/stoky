@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import type { JSX } from "react";
 
 /**
@@ -11,20 +12,17 @@ import type { JSX } from "react";
  * at all is the point; it is deliberately a plain index of the settings screens
  * that are actually built, not a settings screen itself.
  *
- * Two things it does not do, both on purpose:
+ * It now renders the preferences cluster inline. It previously could not:
+ * `LocaleSwitcher` hardcoded `id="locale-switcher"` and `DashboardNav` renders
+ * it on every dashboard page including this one, so a second instance put two
+ * elements with the same id on the page and `<label for>` named the wrong one.
+ * Both controls take their ids and their radio group name from `useId()`, so
+ * two instances no longer collide (DESIGN_AUDIT A2.1).
  *
- * - It does not render `LocaleSwitcher`. That component hardcodes
- *   `id="locale-switcher"`, and `DashboardNav` already renders it on every
- *   dashboard page — including this one. A second instance would put two
- *   elements with the same id on the page, and its `<label for>` would then
- *   name the wrong one. The language section points at the switcher in the nav
- *   instead.
- * - It does not offer household, profile or notification settings. The
- *   `settings.household`, `settings.profile` and `settings.notifications`
- *   strings exist in both catalogues, but no procedure backs any of them.
- *
- * It is a Client Component only for consistency with every other page under
- * `(dashboard)`; nothing here is interactive.
+ * What it still does not do, on purpose: household, profile and notification
+ * settings. The `settings.household`, `settings.profile` and
+ * `settings.notifications` strings exist in both catalogues, but no procedure
+ * backs any of them.
  */
 export default function SettingsPage(): JSX.Element {
   const t = useTranslations("settings.hub");
@@ -60,8 +58,11 @@ export default function SettingsPage(): JSX.Element {
         </li>
       </ul>
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("languageTitle")}</h2>
-      <p className="mt-2 text-muted-foreground">{t("languageDescription")}</p>
+      <h2 className="mt-8 text-lg font-semibold text-heading">
+        {t("preferencesTitle")}
+      </h2>
+      <p className="mt-2 text-muted-foreground">{t("preferencesDescription")}</p>
+      <PreferencesCluster className="mt-4" />
 
       <h2 className="mt-8 text-lg font-semibold text-heading">{t("pendingTitle")}</h2>
       <p className="mt-2 text-muted-foreground">{t("pendingDescription")}</p>

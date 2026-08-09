@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { api } from "@/components/providers/TRPCProvider";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import type { FormEvent, JSX } from "react";
@@ -69,8 +70,15 @@ export default function RegisterPage(): JSX.Element {
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
+    <main className="flex min-h-screen flex-col bg-background px-4 py-10">
+      {/* Theme and language before sign-in. Switching language here no longer
+          reloads the page, so a half-filled registration form survives it
+          (DESIGN_AUDIT A2.2, A2.3). */}
+      <div className="mx-auto flex w-full max-w-5xl justify-end">
+        <PreferencesCluster />
+      </div>
+
+      <div className="mx-auto flex w-full max-w-5xl flex-1 items-center justify-center pt-6">
         <div className="grid w-full overflow-hidden rounded-3xl border border-border bg-card shadow-xl lg:grid-cols-[1.05fr_0.95fr]">
           <section className="hidden bg-primary p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
             <div className="space-y-4">

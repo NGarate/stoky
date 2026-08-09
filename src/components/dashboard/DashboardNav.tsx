@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { LocaleSwitcher } from "@/components/ui/LocaleSwitcher";
+import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 
 export function DashboardNav() {
   const t = useTranslations("navigation");
@@ -21,7 +21,10 @@ export function DashboardNav() {
 
   return (
     <nav className="border-b border-border bg-card">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+      {/* `flex-wrap` because the preferences cluster is wider than the locale
+          select it replaces; without it the row overflows horizontally, which
+          DESIGN_AUDIT A3.3 counts as a defect rather than a nit. */}
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
         <div className="flex items-center gap-8">
           <Link href="/dashboard" className="text-xl font-bold text-primary">
             Stoky
@@ -43,9 +46,7 @@ export function DashboardNav() {
             ))}
           </ul>
         </div>
-        <div className="flex items-center gap-4">
-          <LocaleSwitcher />
-        </div>
+        <PreferencesCluster />
       </div>
     </nav>
   );

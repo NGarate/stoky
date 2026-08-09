@@ -416,6 +416,10 @@
     "stores": "Stores",
     "notifications": "Notifications",
     "profile": "Profile",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
     "hub": {
       "title": "Settings",
       "intro": "This is where you adjust how Stoky organises your household's things.",
@@ -423,8 +427,8 @@
       "locationsDescription": "See where you keep your products: the fridge, the pantry, the storeroom and the shelves inside them. Locations are created when you add stock.",
       "storesTitle": "Stores",
       "storesDescription": "Register the stores you shop at. They are used to record prices and to assign the receipts you scan.",
-      "languageTitle": "Language",
-      "languageDescription": "The language selector is at the top right, in the navigation bar. The change applies to the whole application and is remembered in this browser.",
+      "preferencesTitle": "Language and theme",
+      "preferencesDescription": "Choose the language of the application and whether to see it light, dark or following your device settings. The theme is saved in this browser; the language applies to the whole application.",
       "pendingTitle": "There are no other settings yet",
       "pendingDescription": "Household, profile and notifications cannot be configured from here yet."
     }
