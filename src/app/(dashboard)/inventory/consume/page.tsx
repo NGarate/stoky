@@ -67,6 +67,7 @@ export default function ConsumeStockPage(): JSX.Element {
   const unitErrorId = useId();
   const locationLabelId = useId();
   const noteId = useId();
+  const noteHintId = useId();
 
   const summaryRef = useRef<HTMLDivElement | null>(null);
 
@@ -181,9 +182,7 @@ export default function ConsumeStockPage(): JSX.Element {
       // Deliberately sent as `locationId` and not `consumeFromLocationId`.
       // `consumeFromLocationId` narrows the server's availability check to that
       // one location, which would contradict the household-wide figure shown
-      // above and, while UI-2 keeps child locations unselectable, would reject
-      // most real consumptions outright. The entry is still filed against the
-      // chosen location either way.
+      // above. The entry is still filed against the chosen location either way.
       ...(locationId ? { locationId } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
     });
@@ -308,8 +307,9 @@ export default function ConsumeStockPage(): JSX.Element {
           ) : null}
         </div>
 
-        {/* LocationPicker renders a button, not a form control, so it cannot be
-            the target of a <label for>. It is named by the group instead. */}
+        {/* LocationPicker renders a combobox, not a form control, so it cannot
+            be the target of a <label for>. The group and the combobox are both
+            named by the same span instead. */}
         <div role="group" aria-labelledby={locationLabelId}>
           <span
             id={locationLabelId}
@@ -321,6 +321,7 @@ export default function ConsumeStockPage(): JSX.Element {
             value={locationId}
             onChange={setLocationId}
             placeholder={t("locationPlaceholder")}
+            labelledBy={locationLabelId}
           />
           <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
         </div>
@@ -339,8 +340,12 @@ export default function ConsumeStockPage(): JSX.Element {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder={t("notePlaceholder")}
+            aria-describedby={noteHintId}
             className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
+          <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
+            {t("noteHint")}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

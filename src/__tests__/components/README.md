@@ -50,7 +50,7 @@ to a broken world.
 | `LocaleSwitcher.test.tsx` | `ui/LocaleSwitcher` | Options, active locale, cookie persistence + router refresh, unique ids |
 | `ThemeControl.test.tsx` | `ui/ThemeControl` | Three states, group name, stored choice, `data-theme`, shared store, cross-tab |
 | `DashboardNav.test.tsx` | `dashboard/DashboardNav` | Section hrefs, active-route and nested-route highlighting |
-| `LocationPicker.test.tsx` | `inventory/LocationPicker` | Loading, tree roots, stock counts, selection, clearing, closing |
+| `LocationPicker.test.tsx` | `inventory/LocationPicker` | Loading, the whole tree with its depth in each name, stock counts, combobox/listbox roles, arrow-key and Home/End navigation, Enter/Space, Escape, tab order |
 | `ShoppingItem.test.tsx` | `shopping/ShoppingItem` | Name fallbacks, checked state, toggle/remove mutations, cache invalidation |
 | `ReceiptStatus.test.tsx` | `receipt/ReceiptStatus` | Every `ReceiptStatus` label, spinners, progress counter, step ladder |
 | `UploadZone.test.tsx` | `receipt/UploadZone` | Accepted types, upload callback, preview, clearing, uploading state |
