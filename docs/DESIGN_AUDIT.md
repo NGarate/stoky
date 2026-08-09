@@ -110,15 +110,21 @@ This is the largest finding and it is structural, not cosmetic.
 
 **Actions**
 
-- **A3.1** Build the mobile navigation — see A3.6 for the shape. This closes
+- ~~**A3.1**~~ **Done.** Mobile navigation — see A3.6 for the shape. This closes
   NAV-1 and is a precondition for everything else here: an audit finding you
   cannot navigate to is academic.
-- **A3.2** Convert the five tables to a responsive pattern: cards on narrow
+- ~~**A3.2**~~ **Done.** Converted the five tables to a responsive pattern: cards on narrow
   screens, table from `md` up. Cards, not horizontal scrolling — a scrolling
   table hides the columns that carry the status.
-- **A3.3** Re-audit every route at 390px for horizontal overflow, which is the
+- ~~**A3.3**~~ **Done** — 0 overflow across 19 routes at 390/820/1280px. Re-audit every route at 390px for horizontal overflow, which is the
   clearest single signal of a broken mobile layout, and treat any overflow as a
   defect rather than a cosmetic nit.
+
+  **Correction, from doing it:** overflow alone was a weak signal here. The
+  baseline also measured zero, because `inventory` and `products` wrapped their
+  tables in `overflow-hidden` — the status column was clipped rather than
+  scrolling, which loses the information just as completely. The check now also
+  counts elements that clip or scroll internally.
 - **A3.4** Adopt mobile-first authoring as the convention: unprefixed classes
   describe the phone, `md:`/`lg:` add to it. The codebase currently does the
   reverse where it does anything at all, which is how `hidden md:flex` came to
@@ -221,7 +227,10 @@ below cannot be machine-checked at all.
 **Actions**
 
 - ~~**A4.1** Add automated axe checks per route, in both themes.~~ **Done** —
-  `e2e/accessibility.spec.ts`, 30 checks passing. A floor, not a certificate.
+  `e2e/accessibility.spec.ts`, **90 checks** across 15 routes × 2 themes × 3
+  viewport tiers, all passing. It began as desktop-only, which left two of the
+  three navigation renderers unchecked; the tiers were added once that was
+  noticed. A floor, not a certificate.
 - **A4.2** Target size (2.5.5, AAA): **44×44px minimum**, and 48px where a thumb
   is expected. Known offenders: `DashboardNav` links, the back links on the new
   routes, `LocationPicker`'s trigger.

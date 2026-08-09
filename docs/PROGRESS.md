@@ -43,9 +43,12 @@ Rules for this log:
 | Auth pages on the tokens; opacity contrast fixed | `0158b1b`, `c839cde` |
 | axe-core AAA audit, 30 checks over 15 routes × 2 themes | `1c6b2d6` |
 | Theme and language controls | `24a2203`, `c6d02d2` |
+| Mobile-first: bottom bar, tablet rail, tables to cards | `fcb3cad` |
+| axe extended to all three viewport tiers — 90 checks | (this commit) |
 
-Remaining: A0 dead-link check in CI, A3 mobile-first (bottom bar, tables to
-cards below `lg`), A4.2–A4.4 target sizes, headings, landmarks.
+Remaining: A0 dead-link check in CI, A4.2–A4.4 target sizes, headings and
+landmarks, then A4.5–A4.6 (the AAA criteria no tool can check, and a
+screen-reader pass).
 
 ### Phase 2 — One design system
 
