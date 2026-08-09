@@ -71,22 +71,22 @@ export default function RegisterPage(): JSX.Element {
   return (
     <main className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-emerald-50 px-4 py-10">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="hidden bg-emerald-950 p-10 text-emerald-50 lg:flex lg:flex-col lg:justify-between">
+        <div className="grid w-full overflow-hidden rounded-3xl border border-border bg-card shadow-xl lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="hidden bg-primary p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
             <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.3em] text-amber-200">
+              <p className="text-sm uppercase tracking-[0.3em] text-primary-foreground/80">
                 Stoky
               </p>
               <h1 className="max-w-sm text-4xl font-semibold leading-tight">
                 Register
               </h1>
-              <p className="max-w-md text-sm leading-6 text-emerald-100/80">
+              <p className="max-w-md text-sm leading-6 text-primary-foreground/80">
                 {t("registerSubtitle")}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-emerald-50">
-              <p className="font-medium text-white">Primer hogar</p>
-              <p className="mt-2 leading-6 text-emerald-100/80">
+            <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground/90">
+              <p className="font-medium text-primary-foreground">Primer hogar</p>
+              <p className="mt-2 leading-6 text-primary-foreground/80">
                 Puedes crear el hogar inicial ahora o dejarlo para después si
                 solo quieres validar la entrada a la app.
               </p>
@@ -96,13 +96,13 @@ export default function RegisterPage(): JSX.Element {
           <section className="p-6 sm:p-10">
             <div className="mx-auto max-w-md space-y-8">
               <div className="space-y-3">
-                <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500 lg:hidden">
+                <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground lg:hidden">
                   Stoky
                 </p>
-                <h1 className="text-3xl font-semibold text-slate-950 lg:hidden">
+                <h1 className="text-3xl font-semibold text-heading lg:hidden">
                   Register
                 </h1>
-                <p className="text-sm leading-6 text-slate-600 lg:hidden">
+                <p className="text-sm leading-6 text-muted-foreground lg:hidden">
                   {t("registerSubtitle")}
                 </p>
               </div>
@@ -112,7 +112,7 @@ export default function RegisterPage(): JSX.Element {
               <form className="space-y-5" method="post" onSubmit={handleSubmit}>
                 <div className="space-y-2">
                   <label
-                    className="text-sm font-medium text-slate-800"
+                    className="text-sm font-medium text-foreground"
                     htmlFor="name"
                   >
                     {t("name")}
@@ -128,7 +128,7 @@ export default function RegisterPage(): JSX.Element {
 
                 <div className="space-y-2">
                   <label
-                    className="text-sm font-medium text-slate-800"
+                    className="text-sm font-medium text-foreground"
                     htmlFor="email"
                   >
                     {t("email")}
@@ -144,7 +144,7 @@ export default function RegisterPage(): JSX.Element {
 
                 <div className="space-y-2">
                   <label
-                    className="text-sm font-medium text-slate-800"
+                    className="text-sm font-medium text-foreground"
                     htmlFor="password"
                   >
                     {t("password")}
@@ -160,7 +160,7 @@ export default function RegisterPage(): JSX.Element {
 
                 <div className="space-y-2">
                   <label
-                    className="text-sm font-medium text-slate-800"
+                    className="text-sm font-medium text-foreground"
                     htmlFor="householdName"
                   >
                     {t("householdName")}
@@ -170,7 +170,7 @@ export default function RegisterPage(): JSX.Element {
                     name="householdName"
                     type="text"
                   />
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted-foreground">
                     {t("householdHint")}
                   </p>
                 </div>
@@ -189,10 +189,10 @@ export default function RegisterPage(): JSX.Element {
                 </Button>
               </form>
 
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 {t("haveAccount")}{" "}
                 <Link
-                  className="font-medium text-emerald-700 underline underline-offset-4"
+                  className="font-medium text-primary underline underline-offset-4"
                   href="/login"
                 >
                   {t("login")}
