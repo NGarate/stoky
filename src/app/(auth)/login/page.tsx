@@ -120,13 +120,22 @@ export default function LoginPage(): JSX.Element {
                   >
                     {t("email")}
                   </label>
+                  {/* WCAG 3.3.5 (AAA). The hint is attached with
+                      `aria-describedby` rather than merely placed underneath,
+                      because otherwise a screen reader announces "Correo
+                      electrónico, editable" and stops — the help exists for
+                      sighted mouse users and for nobody else. */}
                   <Input
+                    aria-describedby="email-hint"
                     autoComplete="email"
                     id="email"
                     name="email"
                     required
                     type="email"
                   />
+                  <p className="text-sm text-muted-foreground" id="email-hint">
+                    {t("emailHint")}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -137,12 +146,16 @@ export default function LoginPage(): JSX.Element {
                     {t("password")}
                   </label>
                   <Input
+                    aria-describedby="password-hint"
                     autoComplete="current-password"
                     id="password"
                     name="password"
                     required
                     type="password"
                   />
+                  <p className="text-sm text-muted-foreground" id="password-hint">
+                    {t("passwordHintLogin")}
+                  </p>
                 </div>
 
                 {errorKey ? (

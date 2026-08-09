@@ -25,28 +25,43 @@ export default function PricesPage() {
         <h1 className="text-2xl font-bold text-heading">{t("prices.title")}</h1>
       </div>
 
-      <div className="relative">
-        <input
-          type="text"
-          placeholder={t("products.searchPlaceholder")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="min-h-[48px] w-full rounded-md border border-input bg-card px-4 py-2 pl-10 text-foreground"
-        />
-        <svg
-          className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      {/* The placeholder was doing the job of the label, which means the field
+          loses its name the moment someone types in it — and keeps it lost for
+          anyone who comes back to a half-filled search. A real label stays. */}
+      <div>
+        <label
+          className="mb-1 block text-sm font-medium text-foreground"
+          htmlFor="price-search"
         >
-          <title>{t("common.search")}</title>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          {t("common.search")}
+        </label>
+        {/* The icon is positioned against this wrapper rather than the whole
+            block, so the label can sit above without the magnifier drifting
+            up into it. */}
+        <div className="relative">
+          <input
+            id="price-search"
+            type="search"
+            placeholder={t("products.searchPlaceholder")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="min-h-[48px] w-full rounded-md border border-input bg-card px-4 py-2 pl-10 text-foreground"
           />
-        </svg>
+          <svg
+            aria-hidden="true"
+            className="-translate-y-1/2 absolute top-1/2 left-3 h-5 w-5 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card shadow-sm">
@@ -83,14 +98,19 @@ export default function PricesPage() {
                       </span>
                     )}
                     <BestPriceIndicator productId={product.id} />
+                    {/* The whole row is the link, so its name already reads
+                        "Leche entera · Lácteos · Último precio €0.99 …". A
+                        chevron announcing "Ver detalles" on the end of that
+                        adds a hardcoded Spanish string to an otherwise
+                        translated name, and says nothing the row has not
+                        already said. */}
                     <svg
+                      aria-hidden="true"
                       className="h-5 w-5 text-muted-foreground"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      aria-label="Ver detalles"
                     >
-                      <title>Ver detalles</title>
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"

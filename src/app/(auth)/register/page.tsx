@@ -125,13 +125,22 @@ export default function RegisterPage(): JSX.Element {
                   >
                     {t("name")}
                   </label>
+                  {/* WCAG 3.3.5 (AAA). Attached with `aria-describedby` rather
+                      than merely placed underneath: unattached hint text is
+                      help for sighted mouse users and for nobody else. The
+                      household hint below was already written and already
+                      invisible to a screen reader — that is what this fixes. */}
                   <Input
+                    aria-describedby="name-hint"
                     autoComplete="name"
                     id="name"
                     name="name"
                     required
                     type="text"
                   />
+                  <p className="text-sm text-muted-foreground" id="name-hint">
+                    {t("nameHint")}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -142,12 +151,16 @@ export default function RegisterPage(): JSX.Element {
                     {t("email")}
                   </label>
                   <Input
+                    aria-describedby="email-hint"
                     autoComplete="email"
                     id="email"
                     name="email"
                     required
                     type="email"
                   />
+                  <p className="text-sm text-muted-foreground" id="email-hint">
+                    {t("emailHintRegister")}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -158,12 +171,16 @@ export default function RegisterPage(): JSX.Element {
                     {t("password")}
                   </label>
                   <Input
+                    aria-describedby="password-hint"
                     autoComplete="new-password"
                     id="password"
                     name="password"
                     required
                     type="password"
                   />
+                  <p className="text-sm text-muted-foreground" id="password-hint">
+                    {t("passwordHintRegister")}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -174,11 +191,12 @@ export default function RegisterPage(): JSX.Element {
                     {t("householdName")}
                   </label>
                   <Input
+                    aria-describedby="household-hint"
                     id="householdName"
                     name="householdName"
                     type="text"
                   />
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground" id="household-hint">
                     {t("householdHint")}
                   </p>
                 </div>
