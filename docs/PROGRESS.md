@@ -22,8 +22,8 @@ Rules for this log:
 | Phase | State |
 |---|---|
 | 0 — Clean slate | ✅ Complete |
-| 1 — Close the dead routes | ▶ In progress |
-| 2 — One design system | Not started |
+| 1 — Close the dead routes | ✅ Complete |
+| 2 — One design system | ▶ Next |
 | 3 — Roles | Not started |
 | 4 — Phone screen, offline | Not started |
 | 5 — Kitchen screen | Not started |
@@ -41,10 +41,13 @@ Rules for this log:
 | `/inventory/add` built and driven in a browser; filed UI-2, UI-3 | `fb26255`, `1ce42e1` |
 | `/inventory/consume` built and driven, incl. the over-consume path | `b7f06bb` |
 | `/products/new` built and driven; found a fifth dead route | `21e9cf5` |
-| `/settings` and `/products/[id]` built and driven | (this commit) |
+| `/settings` and `/products/[id]` built and driven | `d09dd94` |
+| Four `test.fixme` tests enabled and green; filed NAV-1, HOUSE-1 | `249fb8d` |
 
-All five dead routes now exist. Remaining: un-skip the four `test.fixme` tests
-in `e2e/critical-paths.spec.ts`, which is what actually closes the phase.
+**Phase 1 complete.** All five dead routes exist and the E2E suite runs 70
+passed / 10 skipped / 0 failed across all five browser projects. The ten skips
+are the stock flows on phone viewports, scoped with a reason and a pointer to
+Phase 4.
 
 ### Phase 0 — Clean slate
 
@@ -112,6 +115,18 @@ Its siblings redirect on success. This one cannot: the natural destination,
 `/products/{id}`, is a 404. Rather than redirect to `/products`, which says
 nothing about which of three outcomes occurred, the page keeps the result on
 screen with onward links. Revisit once the detail route exists.
+
+**D9 — Stock flows are scoped to desktop until Phase 4.**
+They failed on both phone viewports because the dashboard has no mobile
+navigation at all (NAV-1) and the forms were built desktop-first under D1.
+Running them on a phone today measures an absence rather than a regression. The
+skip carries its reason inline, and removing it is part of Phase 4's definition
+of done.
+
+**D10 — E2E selectors target hrefs, not link text.**
+The app ships in two languages, so a selector matching "Añadir" passes in
+Spanish and fails in English. Href-based selectors are stable across both and
+survive copy changes.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
