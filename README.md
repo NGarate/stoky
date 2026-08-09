@@ -50,7 +50,7 @@ constraint for the MVP.
 - **Docker**, with a daemon your user can actually reach. Verify with
   `docker ps`. If that says *permission denied*, run
   `sudo usermod -aG docker $USER && newgrp docker` — see
-  [`INFRASTRUCTURE_SOLUTIONS.md`](INFRASTRUCTURE_SOLUTIONS.md).
+  [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md).
 - **Node.js 24 LTS**
 - **pnpm**, or `corepack` (every command below works with `corepack pnpm`)
 - **Bun**, for the test suites

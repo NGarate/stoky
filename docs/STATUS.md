@@ -318,4 +318,3 @@ before that change will not have it. Either re-login, or prefix commands with
 | `docs/TEST_SETUP.md` | Test database configuration and troubleshooting |
 | `ISSUES.md` | Open issues and technical debt, with file references |
 | `DETAILED_PLAN.md` | The original MVP blueprint (aspirational, not status) |
-| `INFRASTRUCTURE_SOLUTIONS.md` | Docker permission fixes |
