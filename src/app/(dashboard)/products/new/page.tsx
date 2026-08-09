@@ -299,7 +299,7 @@ function NewProductForm(): JSX.Element {
       <div className="mx-auto max-w-2xl">
         <Link
           href="/products"
-          className="inline-flex min-h-[44px] items-center text-primary underline"
+          className="inline-flex min-h-[48px] items-center text-primary underline"
         >
           {t("backToProducts")}
         </Link>
@@ -323,7 +323,7 @@ function NewProductForm(): JSX.Element {
           <li>
             <Link
               href="/products"
-              className="inline-flex min-h-[44px] items-center text-primary underline"
+              className="inline-flex min-h-[48px] items-center text-primary underline"
             >
               {t("successViewProducts")}
             </Link>
@@ -331,7 +331,7 @@ function NewProductForm(): JSX.Element {
           <li>
             <Link
               href="/inventory/add"
-              className="inline-flex min-h-[44px] items-center text-primary underline"
+              className="inline-flex min-h-[48px] items-center text-primary underline"
             >
               {t("successAddStock")}
             </Link>
@@ -340,7 +340,7 @@ function NewProductForm(): JSX.Element {
             <button
               type="button"
               onClick={handleCreateAnother}
-              className="min-h-[44px] text-primary underline"
+              className="min-h-[48px] text-primary underline"
             >
               {t("successCreateAnother")}
             </button>
@@ -354,7 +354,7 @@ function NewProductForm(): JSX.Element {
     <div className="mx-auto max-w-2xl">
       <Link
         href="/products"
-        className="inline-flex min-h-[44px] items-center text-primary underline"
+        className="inline-flex min-h-[48px] items-center text-primary underline"
       >
         {t("backToProducts")}
       </Link>
@@ -410,7 +410,7 @@ function NewProductForm(): JSX.Element {
             aria-describedby={
               fieldErrors.name ? `${nameHintId} ${nameErrorId}` : nameHintId
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={nameHintId} className="mt-1 text-sm text-muted-foreground">
             {t("nameHint")}
@@ -447,7 +447,7 @@ function NewProductForm(): JSX.Element {
                 ? `${barcodeHintId} ${barcodeTakenId} ${barcodeErrorId}`
                 : `${barcodeHintId} ${barcodeTakenId}`
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={barcodeHintId} className="mt-1 text-sm text-muted-foreground">
             {t("barcodeHint")}
@@ -484,7 +484,7 @@ function NewProductForm(): JSX.Element {
             onClick={handleLookup}
             disabled={trimmedBarcode === "" || lookup.isPending}
             aria-describedby={`${lookupHintId} ${lookupStatusId}`}
-            className="mt-3 min-h-[44px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
+            className="mt-3 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
           >
             {t("lookupButton")}
           </button>
@@ -515,7 +515,7 @@ function NewProductForm(): JSX.Element {
             value={brand}
             onChange={(event) => setBrand(event.target.value)}
             aria-describedby={brandHintId}
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={brandHintId} className="mt-1 text-sm text-muted-foreground">
             {t("brandHint")}
@@ -537,7 +537,7 @@ function NewProductForm(): JSX.Element {
             value={category}
             onChange={(event) => setCategory(event.target.value)}
             aria-describedby={categoryHintId}
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={categoryHintId} className="mt-1 text-sm text-muted-foreground">
             {t("categoryHint")}
@@ -562,7 +562,7 @@ function NewProductForm(): JSX.Element {
             aria-describedby={
               fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
             {t("unitHint")}
@@ -596,7 +596,7 @@ function NewProductForm(): JSX.Element {
                 ? `${minStockHintId} ${minStockErrorId}`
                 : minStockHintId
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={minStockHintId} className="mt-1 text-sm text-muted-foreground">
             {t("minStockHint")}
@@ -615,13 +615,13 @@ function NewProductForm(): JSX.Element {
           <button
             type="submit"
             disabled={createProduct.isPending}
-            className="min-h-[44px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="min-h-[48px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
           </button>
           <Link
             href="/products"
-            className="inline-flex min-h-[44px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
           >
             {t("cancel")}
           </Link>

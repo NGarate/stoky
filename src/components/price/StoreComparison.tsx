@@ -32,11 +32,17 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
   const avgPrice =
     sortedPrices.reduce((sum, p) => sum + p.price, 0) / sortedPrices.length;
 
+  /** The premium over the cheapest store, as a whole percentage. */
+  const premium = (price: number): string =>
+    `${((price / sortedPrices[0].price - 1) * 100).toFixed(0)}%`;
+
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="mb-4 text-lg font-semibold text-heading">{t("prices.comparison")}</h3>
+      <h3 className="mb-4 text-lg font-semibold text-heading md:text-2xl">{t("prices.comparison")}</h3>
 
-      <div className="mb-4 grid grid-cols-3 gap-4">
+      {/* Three figures side by side needs 390px it does not have; they stack on
+          the phone and go back to a row from `md`. */}
+      <div className="mb-4 grid gap-3 md:grid-cols-3 md:gap-4">
         <div className="rounded-md bg-ok p-3">
           <p className="text-sm text-ok-foreground">{t("prices.bestPrice")}</p>
           <p className="text-2xl font-bold text-ok-foreground">
@@ -59,7 +65,51 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
         </div>
       </div>
 
-      <table className="w-full">
+      {/* Phone and tablet: one card per store, cheapest first. All four columns
+          survive — store, price, date and the premium over the cheapest
+          (DESIGN_AUDIT A3.2). */}
+      <ul className="space-y-3 lg:hidden">
+        {sortedPrices.map((price, index) => (
+          <li
+            key={price.id}
+            className="rounded-md border border-border p-3 md:p-4"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-medium text-foreground md:text-xl">
+                {price.store.name}
+              </span>
+              <span className="text-lg font-semibold text-heading md:text-2xl">
+                €{price.price.toFixed(2)}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground md:text-lg">
+              {new Date(price.recordedAt).toLocaleDateString()}
+            </p>
+            <p className="mt-1 text-sm md:text-lg">
+              <span className="text-muted-foreground">
+                {t("prices.priceChange")}:{" "}
+              </span>
+              {index === 0 ? (
+                <span className="font-medium text-ok-foreground">
+                  {t("prices.bestPrice")}
+                </span>
+              ) : (
+                <span
+                  className={`font-medium ${
+                    price.price < sortedPrices[0].price * 1.1
+                      ? "text-ok-foreground"
+                      : "text-danger-foreground"
+                  }`}
+                >
+                  {premium(price.price)}
+                </span>
+              )}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      <table className="hidden w-full lg:table">
         <thead>
           <tr className="border-b border-border">
             <th className="pb-2 text-left text-sm font-medium text-muted-foreground">
@@ -104,10 +154,7 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
                         : "text-danger-foreground"
                     }`}
                   >
-                    {((price.price / sortedPrices[0].price - 1) * 100).toFixed(
-                      0
-                    )}
-                    %
+                    {premium(price.price)}
                   </span>
                 ) : (
                   <span className="text-sm text-muted-foreground">-</span>

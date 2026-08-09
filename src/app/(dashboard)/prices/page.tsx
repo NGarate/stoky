@@ -31,7 +31,7 @@ export default function PricesPage() {
           placeholder={t("products.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-md border border-input bg-card px-4 py-2 pl-10 text-foreground"
+          className="min-h-[48px] w-full rounded-md border border-input bg-card px-4 py-2 pl-10 text-foreground"
         />
         <svg
           className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground"

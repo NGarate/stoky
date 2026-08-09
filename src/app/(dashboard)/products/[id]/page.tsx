@@ -158,7 +158,7 @@ export default function ProductDetailPage({
       <div className="mx-auto max-w-3xl">
         <Link
           href="/products"
-          className="inline-flex min-h-[44px] items-center text-primary underline"
+          className="inline-flex min-h-[48px] items-center text-primary underline"
         >
           {t("backToProducts")}
         </Link>
@@ -177,7 +177,7 @@ export default function ProductDetailPage({
       <div className="mx-auto max-w-3xl">
         <Link
           href="/products"
-          className="inline-flex min-h-[44px] items-center text-primary underline"
+          className="inline-flex min-h-[48px] items-center text-primary underline"
         >
           {t("backToProducts")}
         </Link>
@@ -198,7 +198,7 @@ export default function ProductDetailPage({
             onClick={() => {
               void query.refetch();
             }}
-            className="mt-4 min-h-[44px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+            className="mt-4 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {t("retry")}
           </button>
@@ -214,7 +214,7 @@ export default function ProductDetailPage({
     <div className="mx-auto max-w-3xl">
       <Link
         href="/products"
-        className="inline-flex min-h-[44px] items-center text-primary underline"
+        className="inline-flex min-h-[48px] items-center text-primary underline"
       >
         {t("backToProducts")}
       </Link>
@@ -398,7 +398,7 @@ export default function ProductDetailPage({
       <p className="mt-2">
         <Link
           href={`/prices/${product.id}`}
-          className="inline-flex min-h-[44px] items-center text-primary underline"
+          className="inline-flex min-h-[48px] items-center text-primary underline"
         >
           {t("pricesHistoryLink")}
         </Link>
@@ -463,7 +463,7 @@ export default function ProductDetailPage({
         <li>
           <Link
             href="/inventory/add"
-            className="inline-flex min-h-[44px] items-center text-primary underline"
+            className="inline-flex min-h-[48px] items-center text-primary underline"
           >
             {t("addStock")}
           </Link>
@@ -471,7 +471,7 @@ export default function ProductDetailPage({
         <li>
           <Link
             href="/inventory/consume"
-            className="inline-flex min-h-[44px] items-center text-primary underline"
+            className="inline-flex min-h-[48px] items-center text-primary underline"
           >
             {t("consumeStock")}
           </Link>

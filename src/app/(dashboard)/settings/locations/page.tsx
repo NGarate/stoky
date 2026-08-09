@@ -62,7 +62,7 @@ export default function LocationsPage() {
         <h1 className="text-2xl font-bold text-heading">Ubicaciones de Almacenamiento</h1>
         <Link
           href="/settings"
-          className="text-primary hover:underline"
+          className="inline-flex min-h-[48px] items-center text-primary hover:underline"
         >
           ← Volver a configuración
         </Link>

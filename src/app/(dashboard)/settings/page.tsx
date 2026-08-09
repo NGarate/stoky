@@ -37,7 +37,7 @@ export default function SettingsPage(): JSX.Element {
           <h2 className="text-lg font-semibold text-heading">
             <Link
               href="/settings/locations"
-              className="inline-flex min-h-[44px] items-center text-primary underline"
+              className="inline-flex min-h-[48px] items-center text-primary underline"
             >
               {t("locationsTitle")}
             </Link>
@@ -49,7 +49,7 @@ export default function SettingsPage(): JSX.Element {
           <h2 className="text-lg font-semibold text-heading">
             <Link
               href="/settings/stores"
-              className="inline-flex min-h-[44px] items-center text-primary underline"
+              className="inline-flex min-h-[48px] items-center text-primary underline"
             >
               {t("storesTitle")}
             </Link>

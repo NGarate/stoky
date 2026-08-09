@@ -85,10 +85,16 @@ export function LocationPicker({
 
   return (
     <div className="relative">
+      {/* 48px, not the 40 that `p-2` produced: WCAG 2.5.5 (AAA) asks for 44 and
+          the phone is the tier where a thumb is expected (DESIGN_AUDIT A4.2,
+          which named this trigger). `pr-8` keeps the label clear of the chevron
+          that is absolutely positioned over the right-hand edge. */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full rounded border border-input bg-card p-2 text-left text-foreground hover:bg-muted"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        className="flex min-h-[48px] w-full items-center rounded border border-input bg-card px-3 py-2 pr-8 text-left text-foreground hover:bg-muted"
       >
         {selectedLocation ? (
           <span>{selectedLocation.name}</span>
@@ -135,8 +141,8 @@ export function LocationPicker({
                   onChange(undefined);
                   setIsOpen(false);
                 }}
-                className={`w-full p-2 text-left hover:bg-muted ${
-                  !value ? "bg-accent text-accent-foreground" : ""
+                className={`flex min-h-[48px] w-full items-center px-3 py-2 text-left hover:bg-muted ${
+                  !value ? "bg-accent font-semibold text-accent-foreground" : ""
                 }`}
               >
                 Sin ubicación específica
@@ -150,12 +156,16 @@ export function LocationPicker({
                   onChange(node.id);
                   setIsOpen(false);
                 }}
-                className={`w-full p-2 text-left hover:bg-muted ${
-                  value === node.id ? "bg-accent text-accent-foreground" : ""
+                className={`flex min-h-[48px] w-full items-center px-3 py-2 text-left hover:bg-muted ${
+                  value === node.id
+                    ? "bg-accent font-semibold text-accent-foreground"
+                    : ""
                 }`}
               >
                 {node.name}
-        {node.stockCount && node.stockCount > 0 ? ` (${node.stockCount})` : ""}
+                {node.stockCount && node.stockCount > 0
+                  ? ` (${node.stockCount})`
+                  : ""}
               </button>
             ))}
           </div>

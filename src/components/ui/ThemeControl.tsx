@@ -40,7 +40,9 @@ const LABEL_KEY: Record<ThemeMode, "themeSystem" | "themeLight" | "themeDark"> =
  * one value rather than two copies.
  *
  * Selection is shown by weight as well as fill, so the current mode is not
- * conveyed by colour alone, and each option is a 44px target (2.5.5, AAA).
+ * conveyed by colour alone, and each option is a 48px target — the AAA
+ * minimum of 44 (2.5.5), raised to the phone tier's thumb floor (DESIGN_AUDIT
+ * A4.2).
  */
 export function ThemeControl(): JSX.Element {
   const t = useTranslations("settings");
@@ -65,7 +67,7 @@ export function ThemeControl(): JSX.Element {
           return (
             <label
               key={value}
-              className={`relative inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-3 text-sm transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring ${
+              className={`relative inline-flex min-h-[48px] min-w-[48px] cursor-pointer items-center justify-center rounded px-3 text-sm transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring ${
                 isSelected
                   ? "bg-primary font-semibold text-primary-foreground"
                   : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -76,7 +78,7 @@ export function ThemeControl(): JSX.Element {
                   behaviour a div would have to reimplement.
 
                   Stretched over the whole segment rather than hidden in a
-                  corner with `sr-only`, so the 44px target belongs to the
+                  corner with `sr-only`, so the 48px target belongs to the
                   control itself and not merely to the box it sits in. */}
               <input
                 type="radio"

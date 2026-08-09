@@ -36,7 +36,13 @@ export function DashboardNav(): JSX.Element {
           DESIGN_AUDIT A3.3 counts as a defect rather than a nit. */}
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
         <div className="flex items-center gap-8">
-          <Link href="/dashboard" className="text-xl font-bold text-primary">
+          {/* The wordmark is a link like any other and gets the same target
+              floor; at 54×28 it was the smallest control on every signed-in
+              route (DESIGN_AUDIT A4.2). */}
+          <Link
+            href="/dashboard"
+            className="inline-flex min-h-[48px] items-center text-xl font-bold text-primary"
+          >
             Stoky
           </Link>
           <ul className="flex items-center gap-1">
@@ -48,7 +54,7 @@ export function DashboardNav(): JSX.Element {
                   <Link
                     aria-current={isCurrent ? "page" : undefined}
                     href={destination.href}
-                    className={`inline-flex min-h-[44px] items-center rounded-md px-3 py-2 text-sm transition-colors ${
+                    className={`inline-flex min-h-[48px] items-center rounded-md px-3 py-2 text-sm transition-colors ${
                       isCurrent
                         ? "bg-primary font-semibold text-primary-foreground"
                         : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"

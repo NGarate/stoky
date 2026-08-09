@@ -75,7 +75,7 @@ export default function StoresPage() {
           <button
             type="button"
             onClick={() => setIsCreating(true)}
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+            className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
           >
             {t("stores.create")}
           </button>
@@ -114,7 +114,7 @@ export default function StoresPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {t("common.save")}
             </button>
@@ -149,7 +149,7 @@ export default function StoresPage() {
                   <button
                     type="button"
                     onClick={() => handleEdit(store)}
-                    className="rounded-md px-3 py-1 text-sm text-primary hover:bg-accent"
+                    className="min-h-[48px] rounded-md px-3 py-1 text-sm text-primary hover:bg-accent"
                   >
                     {t("common.edit")}
                   </button>
@@ -157,7 +157,7 @@ export default function StoresPage() {
                     type="button"
                     onClick={() => deleteMutation.mutate({ id: store.id })}
                     disabled={deleteMutation.isPending}
-                    className="rounded-md px-3 py-1 text-sm text-destructive hover:bg-danger disabled:opacity-50"
+                    className="min-h-[48px] rounded-md px-3 py-1 text-sm text-destructive hover:bg-danger disabled:opacity-50"
                   >
                     {t("common.delete")}
                   </button>

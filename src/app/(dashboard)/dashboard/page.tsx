@@ -155,7 +155,7 @@ export default function DashboardPage(): JSX.Element {
           </h2>
           <Link
             href="/shopping"
-            className="text-sm text-primary underline underline-offset-4"
+            className="inline-flex min-h-[48px] items-center text-sm text-primary underline underline-offset-4"
           >
             {t("restockListLink")}
           </Link>
@@ -173,7 +173,7 @@ export default function DashboardPage(): JSX.Element {
                 >
                   <Link
                     href={`/products/${product.id}`}
-                    className="font-medium text-primary underline underline-offset-4"
+                    className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4"
                   >
                     {product.name}
                   </Link>
@@ -212,7 +212,7 @@ export default function DashboardPage(): JSX.Element {
           </h2>
           <Link
             href="/inventory"
-            className="text-sm text-primary underline underline-offset-4"
+            className="inline-flex min-h-[48px] items-center text-sm text-primary underline underline-offset-4"
           >
             {t("expiryInventoryLink")}
           </Link>
@@ -352,7 +352,7 @@ function ExpiryRow({
       <div>
         <Link
           href={`/products/${productId}`}
-          className="font-medium text-primary underline underline-offset-4"
+          className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4"
         >
           {name}
         </Link>
@@ -379,7 +379,7 @@ function QuickLink({
     <li>
       <Link
         href={href}
-        className={`flex min-h-[44px] items-center justify-center rounded px-4 py-2 text-center font-medium ${
+        className={`flex min-h-[48px] items-center justify-center rounded px-4 py-2 text-center font-medium ${
           primary
             ? "bg-primary text-primary-foreground hover:bg-primary/90"
             : "border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground"

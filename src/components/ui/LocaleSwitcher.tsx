@@ -52,7 +52,7 @@ export function LocaleSwitcher(): JSX.Element {
         defaultValue={locale}
         disabled={isPending}
         onChange={onSelectChange}
-        className="min-h-[44px] rounded-md border border-input bg-card px-3 text-sm text-foreground"
+        className="min-h-[48px] rounded-md border border-input bg-card px-3 text-sm text-foreground"
       >
         <option value="es">{t("spanish")}</option>
         <option value="en">{t("english")}</option>

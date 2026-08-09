@@ -155,7 +155,7 @@ export default function AddStockPage(): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/inventory" className="inline-block py-2 text-primary underline">
+      <Link href="/inventory" className="inline-flex min-h-[48px] items-center text-primary underline">
         {t("backToInventory")}
       </Link>
 
@@ -208,7 +208,7 @@ export default function AddStockPage(): JSX.Element {
                 ? `${quantityHintId} ${quantityErrorId}`
                 : quantityHintId
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={quantityHintId} className="mt-1 text-sm text-muted-foreground">
             {t("quantityHint")}
@@ -244,7 +244,7 @@ export default function AddStockPage(): JSX.Element {
             aria-describedby={
               fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
             {t("unitHint")}
@@ -275,7 +275,7 @@ export default function AddStockPage(): JSX.Element {
                 ? `${expirationHintId} ${expirationErrorId}`
                 : expirationHintId
             }
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={expirationHintId} className="mt-1 text-sm text-muted-foreground">
             {t("expirationHint")}
@@ -321,7 +321,7 @@ export default function AddStockPage(): JSX.Element {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder={t("notePlaceholder")}
-            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
         </div>
 
@@ -329,13 +329,13 @@ export default function AddStockPage(): JSX.Element {
           <button
             type="submit"
             disabled={addStock.isPending}
-            className="min-h-[44px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="min-h-[48px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
           </button>
           <Link
             href="/inventory"
-            className="inline-flex min-h-[44px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
           >
             {t("cancel")}
           </Link>

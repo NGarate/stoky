@@ -25,9 +25,9 @@ export function ExpiringItems({
   if (loadingExpiring || (showExpired && loadingExpired)) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 shadow">
-        <h3 className="text-lg font-semibold mb-4 text-heading">
+        <h2 className="text-lg font-semibold mb-4 text-heading">
           Productos próximos a caducar
-        </h3>
+        </h2>
         <div className="space-y-2">
           {['loading-skeleton-1', 'loading-skeleton-2', 'loading-skeleton-3'].map((key) => (
             <div key={key} className="h-12 bg-muted rounded animate-pulse" />
@@ -89,9 +89,9 @@ export function ExpiringItems({
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
               />
             </svg>
-            <h3 className="font-semibold text-danger-foreground">
+            <h2 className="font-semibold text-danger-foreground">
               Productos caducados ({expiredItems?.length})
-            </h3>
+            </h2>
           </div>
           <ul className="space-y-2">
             {displayExpired.map((item) => (
@@ -102,7 +102,7 @@ export function ExpiringItems({
                 <div className="flex items-center gap-3">
                   <Link
                     href={`/products/${item.product.id}`}
-                    className="font-medium text-danger-foreground hover:underline"
+                    className="inline-flex min-h-[48px] items-center font-medium text-danger-foreground hover:underline"
                   >
                     {item.product.name}
                   </Link>
@@ -144,9 +144,9 @@ export function ExpiringItems({
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <h3 className="font-semibold text-warn-foreground">
+            <h2 className="font-semibold text-warn-foreground">
               Caducan en los próximos {days} días ({expiringItems?.length})
-            </h3>
+            </h2>
           </div>
           <ul className="space-y-2">
             {displayExpiring.map((item) => (
@@ -159,7 +159,7 @@ export function ExpiringItems({
                 <div className="flex items-center gap-3">
                   <Link
                     href={`/products/${item.product.id}`}
-                    className={`font-medium hover:underline ${
+                    className={`inline-flex min-h-[48px] items-center font-medium hover:underline ${
                       item.isExpiringSoon
                         ? "text-danger-foreground"
                         : "text-warn-foreground"

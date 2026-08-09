@@ -82,7 +82,7 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={t("productSearchPlaceholder")}
-          className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+          className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
         />
       </div>
 
@@ -115,7 +115,7 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
                 : null,
             );
           }}
-          className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+          className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
         >
           <option value="">{t("productPlaceholder")}</option>
           {products.map((product) => (

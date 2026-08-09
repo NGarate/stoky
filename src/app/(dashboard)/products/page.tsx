@@ -107,7 +107,7 @@ export default function ProductsPage(): JSX.Element {
                 <td className="px-4 py-3">
                   <Link
                     href={`/products/${product.id}`}
-                    className="text-primary hover:underline"
+                    className="inline-flex min-h-[48px] items-center text-primary hover:underline"
                   >
                     {product.name}
                   </Link>
@@ -126,11 +126,17 @@ export default function ProductsPage(): JSX.Element {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center">
+                  {/* 48px in both directions: three characters made this the
+                      narrowest control in the app at 21px wide (DESIGN_AUDIT
+                      A4.2). The product name is added for a screen reader as
+                      well, because a column of identical "Ver" links says
+                      nothing about where any of them goes. */}
                   <Link
                     href={`/products/${product.id}`}
-                    className="text-sm text-primary hover:underline"
+                    className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center text-sm text-primary hover:underline"
                   >
                     Ver
+                    <span className="sr-only"> {product.name}</span>
                   </Link>
                 </td>
               </tr>
@@ -149,7 +155,7 @@ export default function ProductsPage(): JSX.Element {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <Link
                 href={`/products/${product.id}`}
-                className="font-medium text-primary underline underline-offset-4 md:text-xl"
+                className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4 md:text-xl"
               >
                 {product.name}
               </Link>

@@ -106,7 +106,7 @@ export default function InventoryPage(): JSX.Element {
                 <td className="px-4 py-3">
                   <Link
                     href={`/products/${product.id}`}
-                    className="text-primary hover:underline font-medium"
+                    className="inline-flex min-h-[48px] items-center text-primary hover:underline font-medium"
                   >
                     {product.name}
                   </Link>
@@ -147,7 +147,7 @@ export default function InventoryPage(): JSX.Element {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <Link
                 href={`/products/${product.id}`}
-                className="font-medium text-primary underline underline-offset-4 md:text-xl"
+                className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4 md:text-xl"
               >
                 {product.name}
               </Link>
