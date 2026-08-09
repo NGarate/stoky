@@ -41,9 +41,10 @@ Rules for this log:
 | `/inventory/add` built and driven in a browser; filed UI-2, UI-3 | `fb26255`, `1ce42e1` |
 | `/inventory/consume` built and driven, incl. the over-consume path | `b7f06bb` |
 | `/products/new` built and driven; found a fifth dead route | `21e9cf5` |
+| `/settings` and `/products/[id]` built and driven | (this commit) |
 
-Remaining: `/settings`, `/products/[id]` (found mid-phase), then un-skip the
-four `test.fixme` tests, which is what actually closes the phase.
+All five dead routes now exist. Remaining: un-skip the four `test.fixme` tests
+in `e2e/critical-paths.spec.ts`, which is what actually closes the phase.
 
 ### Phase 0 — Clean slate
 
