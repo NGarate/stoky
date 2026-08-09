@@ -43,7 +43,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | A11Y-2 | Confirming a receipt line changes nothing on screen | ✅ Resolved |
 | UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
-| I18N-2..6 | Wording and untranslated strings | 🟡 Open |
+| I18N-2..7 | Wording and untranslated strings | 🟡 Open |
+| UI-8 | A failed query leaves four routes on a skeleton forever | 🔴 **OPEN** |
 
 ---
 
@@ -745,6 +746,53 @@ visible text to fall back on.
 
 **Suggested fix:** take it with I18N-2, since both are catalogue work on the same
 area.
+
+---
+
+### 🔴 UI-8: A failed query leaves four routes on a skeleton forever
+
+**Files:** `src/app/(dashboard)/inventory/page.tsx`,
+`src/app/(dashboard)/shopping/page.tsx`, `src/app/(dashboard)/products/page.tsx`,
+`src/app/(dashboard)/settings/locations/page.tsx`
+**Severity:** HIGH
+**Status:** OPEN — found 2026-08-10 while making the E2E suite run in parallel
+
+All four render `if (isLoading || !result)` and return a loading state. When the
+query *fails*, `isLoading` goes false and the data stays undefined, so the
+condition holds forever: the skeleton never resolves, no error is shown, and
+there is no retry and no way out but a reload. A tRPC error is not a state any
+of these pages models.
+
+Found under load rather than by reading: with the suite running at six workers,
+`/inventory` twice never produced its "Añadir stock" link inside a 15 second
+timeout, and `/shopping` was audited with no `h1`, no landmark and no controls
+because it was still showing `{t("common.loading")}`.
+
+`/shopping` is the worst of the four — its loading state is a bare `<div>` with
+a single string, so a screen-reader user gets a page with no heading at all.
+
+**Suggested fix:** distinguish the three states the query actually has. `error`
+needs a message and a retry; `!data` after a successful load is an empty state,
+not a loading one. Related to HOUSE-1, which is the same shape: an account with
+no household loads a skeleton forever.
+
+---
+
+### 🟡 I18N-7: The low-stock badge is hardcoded and disagrees with the catalogue
+
+**File:** `src/app/(dashboard)/inventory/page.tsx`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-10 while giving the low-stock test a real assertion
+
+The badge renders the literal string `"Stock Bajo"`. The catalogue already has
+`inventory.lowStock` — "Stock bajo" / "Low stock" — and nothing reads it. So the
+key is dead, the badge is Spanish under an English catalogue, and the two
+spellings disagree on the capital B.
+
+Same class as I18N-1 and I18N-5. Worth noting that `e2e/critical-paths.spec.ts`
+now asserts the literal, so whoever translates this has to update that
+assertion — which is the correct coupling, not an obstacle: the test should
+break when the visible string changes.
 
 ---
 
