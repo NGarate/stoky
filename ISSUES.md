@@ -29,6 +29,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
 | UI-1 | Four linked routes do not exist (404) | 🔴 **OPEN** |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
+| INV-1 | Expiring items report entry quantity, not net stock | 🔴 **OPEN** |
 
 ---
 
@@ -292,6 +293,48 @@ Bake the traineddata into the image and point tesseract.js at it with
 binary. It was a cache artefact that landed in git by accident and has been
 untracked; it never reached the production image, so removing it changes
 nothing about this issue.
+
+---
+
+### 🔴 INV-1: Expiring items report entry quantity, not net stock
+
+**File:** `src/server/trpc/routers/inventory.ts` (`getExpiringItems`)  
+**Severity:** HIGH  
+**Status:** OPEN — found 2026-08-09
+
+**Description:**
+`getExpiringItems` selects `StockEntry` rows with `quantity: { gt: 0 }` and
+reports each row's own quantity. Consumption is recorded as a *separate* entry
+with a negative quantity and no expiry date, so it is filtered out and never
+subtracted. The figure returned is therefore the size of the original purchase,
+not what is left.
+
+**Evidence** — from the seeded demo household:
+
+```
+Leche entera: entries with an expiry date and quantity > 0 = 6 L
+              net stock                                    = 2 L
+```
+
+The product has a +6 L purchase carrying the expiry date and a −4 L consumption
+carrying none.
+
+**Impact:**
+The kitchen screen is built on this procedure while the phone screen is built on
+`getStockOverview`, which sums correctly. The two screens will show different
+numbers for the same product on the same day — 6 L expiring against 2 L in
+stock — which reads as a bug in the app to anyone using both. It also
+overstates how much food is about to be wasted, which is the one number the
+kitchen screen exists to get right.
+
+**Suggested fix:**
+Report net stock per product alongside the soonest expiry date, rather than
+per-entry quantities. If per-batch detail is wanted later, consumption has to be
+attributed to a batch, which is a larger modelling change and should be a
+deliberate decision rather than a side effect.
+
+**Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
+until the number means what the screen says it means.
 
 ---
 
