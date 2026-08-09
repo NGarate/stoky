@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import "./stepper.css";
+import "./quantity-stepper.css";
 
 /**
  * Inline quantity stepper.
@@ -16,7 +16,7 @@ import "./stepper.css";
  * so it works with a thumb. The live region announces the new value, since a
  * sighted user sees the number change but a screen-reader user would not.
  */
-export function Stepper({
+export function QuantityStepper({
   label,
   unit,
   initial,

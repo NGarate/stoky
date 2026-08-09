@@ -6,10 +6,12 @@ Five designs for the inventory screen were built during 2026-08 so that one
 could be chosen. The choice has been made. This document records what was tried,
 what was chosen, what was rejected and why.
 
-It is a record, not a menu. Three of the five are being deleted from
-`src/app/design/` as part of Phase 0 of `docs/REDESIGN_PLAN.md`, so this is the
-only remaining account of what they were. It is written to be readable without
-the code.
+It is a record, not a menu. **All five have since been deleted** — the three
+rejected ones in Phase 0, and Estante and Horizonte in Phase 2 once their
+palette became the application's own. This document is therefore the only
+account of what any of them were, and is written to be readable without the
+code. The palette that survived lives in `src/app/globals.css`; the reasoning
+for it lives here.
 
 The decision itself is stated in `docs/REDESIGN_PLAN.md` §1; this document gives
 the reasoning behind it.
@@ -145,21 +147,13 @@ their output looked at, not only asserted about.
 the chosen design rather than being done five times over; they are carried in
 `REDESIGN_PLAN.md` §8 as still outstanding.
 
-## 6. Where the work lives now
+## Where the work lives now
 
-`src/app/design/` remains until Phase 2 consumes it, then goes entirely.
+Nothing of the lab remains in the tree. What it produced does:
 
-| Path | Status |
+| What | Where |
 |---|---|
-| `src/app/design/estante/` | Kept until Phase 2 folds it into the phone screen |
-| `src/app/design/horizonte/` | Kept until Phase 2 folds it into the kitchen screen |
-| `src/app/design/bolsillo/` | Deleted in Phase 0, after `Stepper.tsx` is lifted out |
-| `src/app/design/triaje/` | Deleted in Phase 0 |
-| `src/app/design/consola/` | Deleted in Phase 0 |
-| `src/app/design/_lib/tokens.ts` | The palettes; the surviving two merge into `globals.css` in Phase 2 |
-| `src/app/design/_lib/fixture.ts` | Replaced by the live `getStockOverview` query |
-| `scripts/check-contrast.ts` | **Kept.** Runs in CI as `pnpm check:contrast` |
-
-The two chosen designs are not two applications. They are two doors onto the
-same data, sharing one design system. What each looks like, who uses it and in
-what order it gets built are in `docs/REDESIGN_PLAN.md` §3, §4 and §9.
+| The palette (Estante's, verbatim) | `src/app/globals.css` under `@theme` |
+| The AAA gate it created | `scripts/check-contrast.ts`, run by CI |
+| The ± stepper kept from Bolsillo | `src/components/inventory/QuantityStepper.tsx`, retargeted to the app tokens |
+| The two screens' structure | `docs/REDESIGN_PLAN.md` §3 and §4 |
