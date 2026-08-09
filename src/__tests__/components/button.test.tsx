@@ -58,8 +58,25 @@ describe("Button", () => {
     render(<Button size="icon">X</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("h-10");
-    expect(button).toHaveClass("w-10");
+    expect(button).toHaveClass("min-h-[48px]");
+    expect(button).toHaveClass("min-w-[48px]");
+  });
+
+  it("gives every size a 48px target floor", () => {
+    // WCAG 2.5.5 (AAA) asks for 44; the phone is the tier where a thumb is
+    // expected, so the floor is 48 and it is unprefixed rather than added back
+    // at a breakpoint (DESIGN_AUDIT A4.2). Measured for real in
+    // `e2e/a11y-structure.spec.ts` — happy-dom has no layout engine, so this
+    // can only assert the class that produces it.
+    for (const size of ["default", "sm", "lg", "icon"] as const) {
+      cleanup();
+      render(<Button size={size}>Guardar</Button>);
+
+      const height = screen
+        .getByRole("button")
+        .className.match(/min-h-\[(\d+)px\]/);
+      expect(Number(height?.[1] ?? 0)).toBeGreaterThanOrEqual(48);
+    }
   });
 
   it("merges a caller-supplied className with the variant classes", () => {

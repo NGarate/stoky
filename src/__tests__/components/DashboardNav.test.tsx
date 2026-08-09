@@ -144,14 +144,14 @@ describe("DashboardNav", () => {
     expect(nav?.className).toContain("lg:block");
   });
 
-  it("gives every link a 44px target", () => {
+  it("gives every link a 48px target", () => {
     pathname = "/dashboard";
     renderWithIntl(<DashboardNav />);
 
     for (const label of ["Panel", "Inventario", "Configuración"]) {
       expect(
         screen.getByRole("link", { name: label }).className,
-      ).toContain("min-h-[44px]");
+      ).toContain("min-h-[48px]");
     }
   });
 
