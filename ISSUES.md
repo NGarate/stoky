@@ -372,11 +372,17 @@ until the number means what the screen says it means.
 
 ---
 
-### 🔴 UI-2: LocationPicker never renders child locations
+### ✅ UI-2: LocationPicker never renders child locations
 
 **File:** `src/components/inventory/LocationPicker.tsx`  
 **Severity:** HIGH  
-**Status:** OPEN — found 2026-08-09
+**Status:** RESOLVED 2026-08-09 — taken together with UI-4, since both were
+rewrites of the same component. `flattenTree` now walks depth-first and every
+option carries its ancestors, shown twice: as indentation, and as an `sr-only`
+prefix so the accessible name is "Cocina → Nevera" rather than a second row
+reading "Nevera". Verified in a browser at 390px with the keyboard only — the
+picker offered 3 options before and offers 5 now, and a nested option was
+reachable and choosable with the arrow keys, which it had never been.
 
 **Description:**
 `buildLocationTree` builds a full nested tree, attaching each location to its
@@ -504,11 +510,17 @@ better than the current silence. The tRPC procedures should also raise a
 
 ---
 
-### 🟡 UI-4: LocationPicker's dropdown is not a real listbox
+### ✅ UI-4: LocationPicker's dropdown is not a real listbox
 
 **File:** `src/components/inventory/LocationPicker.tsx`
 **Severity:** MEDIUM
-**Status:** OPEN — found 2026-08-09 while fixing its target size (A4.2)
+**Status:** RESOLVED 2026-08-09 — a `combobox`/`listbox`/`option` pairing with
+`aria-activedescendant`, Up/Down/Home/End/Enter/Space/Escape, and a scrim that
+is `aria-hidden` with no role and no tab stop. Measured in a browser: the page
+had 26 focusable elements with the picker closed and 26 with it open and again
+closed, where before opening it added the invisible "Close dropdown" control;
+Escape closes the listbox and leaves focus on the trigger; every option is
+356×48. See UI-6 for what this rewrite exposed.
 
 The trigger now reports `aria-expanded`/`aria-haspopup` and every option is a
 48px target, but the control underneath is still a set of plain buttons in a
@@ -540,7 +552,13 @@ the same component.
 `src/app/(dashboard)/receipts/upload/page.tsx`,
 `src/components/receipt/*`
 **Severity:** LOW
-**Status:** OPEN — found 2026-08-09 while building `/receipts/[id]/applied`
+**Status:** RESOLVED 2026-08-09 — all three routes and all five receipt
+components now read `receipts.*`, with `useLocale()` + `Intl.*` for dates and
+money. 53 keys added to each catalogue, removing none. Verified by switching
+language through the app's own control and reading all three pages in English;
+product names stay Spanish because they are database rows, not UI. A new unit
+test, `src/__tests__/unit/messages.test.ts`, now fails if the two catalogues
+ever drift apart again.
 
 Every string on the receipts list, the review page, the upload page and the
 receipt components is written into the JSX. Switching the language to English
@@ -560,7 +578,11 @@ through, which is more visible than it was.
 **File:** `src/app/(dashboard)/receipts/[id]/review/page.tsx`,
 `src/components/receipt/ReceiptStatus.tsx`
 **Severity:** MEDIUM
-**Status:** OPEN — found 2026-08-09 while driving the apply → applied hop
+**Status:** RESOLVED 2026-08-09 — below `md` the stepper collapses to a numbered
+circle and "Paso 5 de 6 · Confirmado"; the six-rung ladder returns from `md` up.
+The review page also dropped its own `p-6`, which the dashboard `main` was
+already supplying. Measured: the document was 505px wide at a 390px viewport and
+is now 390px, and 0px of horizontal overflow at 390, 820 and 1280.
 
 `ReceiptStatusStep` lays six numbered steps and five connectors in a single
 non-wrapping row. At 390px the document is about 505px wide, so the page scrolls
@@ -576,6 +598,113 @@ dynamic, so neither enumerates it.
 `md`, or wrap it. Take it with I18N-1, which touches the same file.
 
 **Closed by:** unscheduled.
+
+---
+
+### 🔴 UI-6: The location picker's options open under the bottom bar
+
+**File:** `src/components/inventory/LocationPicker.tsx`
+**Severity:** HIGH
+**Status:** OPEN — found 2026-08-09 while verifying the UI-2/UI-4 rewrite
+
+The panel is absolutely positioned below the trigger and has no idea what is
+underneath it. On `/inventory/add` at 390px the picker is the last field on a
+long form, so opening it puts a 240px panel into the 64px that remain: measured,
+the last option ends at 892px on an 844px viewport, and the fixed bottom
+navigation starts at 780px. The screenshot of the open picker at that scroll
+position shows the trigger with its chevron flipped to "open" and **not one
+option visible**.
+
+Pre-existing — the panel has always opened downward — but routine rather than
+rare now that the picker lists the whole tree instead of only its roots, and it
+lands on the phone, which is the tier this product is primarily for.
+
+Nothing catches it: axe does not model occlusion, and the target-size check
+measures the rectangle, which is a correct 356×48 whether or not anything is
+drawn on top of it.
+
+**Suggested fix:** flip the panel above the trigger when the space below is
+smaller than it needs, measuring against the viewport rather than the document.
+A scroll-into-view on open is not enough on its own — the bottom bar is fixed,
+so it covers the last rows wherever the page is scrolled to.
+
+**Closed by:** next unit.
+
+---
+
+### 🟡 UI-7: The review page's pending count never moves
+
+**File:** `src/app/(dashboard)/receipts/[id]/review/page.tsx`
+**Severity:** MEDIUM
+**Status:** OPEN — found 2026-08-09 while verifying UI-5
+
+`const [confirmedCount] = useState(0)` has no setter, so the counter is frozen at
+zero for the life of the page. Two consequences a reviewer sees directly: the
+heading keeps saying "2 productos pendientes de revisión" when both lines on
+screen already read "✓ Confirmado", and "Confirmar todos" stays disabled while
+any item is unconfirmed, which is precisely when someone would reach for it.
+
+Confirmed in a browser on the seeded `CONFIRMED` receipt: both items show as
+confirmed and the count above them still reads 2.
+
+**Suggested fix:** derive the count from the receipt's items rather than holding
+it in state. There is no state here that the query does not already have.
+
+---
+
+### 🟡 I18N-2: The catalogue calls the same thing a receipt and a ticket
+
+**Files:** `messages/es.json`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-09 while closing I18N-1
+
+`navigation.receipts` and the `receipts.*` keys say "recibo"; the
+`receipts.applied.*` subtree and `dashboard.quickUploadReceipt` say "ticket".
+The pipeline therefore changes word at its last step, which is the same class of
+seam I18N-1 was — a language change mid-journey, only subtler because both words
+are Spanish.
+
+Not resolved while fixing I18N-1 because picking the term is an editorial
+decision about the product's voice, not a translation fix, and doing it silently
+inside a larger change would have buried it.
+
+**Suggested fix:** pick one. "Ticket" is what the paper is called in a Spanish
+supermarket; "recibo" is the more formal word and the one the navigation uses.
+
+---
+
+### 🟡 I18N-3: `formatDate` is hardcoded to `es-ES`
+
+**File:** `src/lib/utils.ts`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-09 while closing I18N-1
+
+The helper pins the locale, so every caller prints a Spanish date under an
+English catalogue. The receipts routes stopped calling it as part of I18N-1 and
+use `useLocale()` with `Intl.DateTimeFormat` instead; every other caller still
+has the old behaviour.
+
+**Suggested fix:** take the locale as an argument, so the pinning has to be
+written down at each call site that really wants it.
+
+---
+
+### 🟡 I18N-4: "Procesado" and "Procesando" are a letter apart
+
+**File:** `messages/es.json`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-09 while closing I18N-1
+
+`receipts.status.parsed` is "Procesado" and `receipts.status.processing` is
+"Procesando". As badge labels that alternate while an upload is polled, they are
+almost indistinguishable at a glance, and they name two genuinely different
+phases: OCR running, and OCR finished and the text parsed.
+
+Pre-existing wording; visible now because the badge reads the catalogue instead
+of its own hardcoded strings.
+
+**Suggested fix:** name the phases by what the reader is waiting for — "Leyendo
+el ticket" and "Datos extraídos" — rather than by the internal state.
 
 ---
 

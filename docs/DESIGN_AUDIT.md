@@ -256,12 +256,40 @@ below cannot be machine-checked at all.
   `aria-pressed` must differ from its unselected peers in something other than
   colour, and anything painted with a status token must carry words. Both were
   already clean, which is the result worth having from a test like this.
-- **A4.5** AAA-specific criteria that have never been considered: **1.4.8 visual
-  presentation** (line length, spacing, no justified text), **2.4.9 link purpose
-  from the link alone** — "Ver" and "→" fail this — **3.3.5 context-sensitive
-  help**, and **2.3.3 animation from interactions** (respect
-  `prefers-reduced-motion`, which is currently honoured only in the deleted lab's
-  stylesheet).
+- ~~**A4.5**~~ **Done.** The AAA criteria no tool checks, now in
+  `e2e/a11y-aaa.spec.ts` — 16 routes, measured rather than reviewed, because the
+  reviewed version of this list has been walked three times in this project and
+  missed something each time.
+
+  - **1.4.8 visual presentation.** Five prose blocks were over the 80-character
+    limit, at 84 to 116, and two were set at 1.43 line spacing. Both causes were
+    systemic and both are fixed once, in `globals.css`: Tailwind's own `text-sm`
+    and `text-xs` sit below 1.5 by default and a utility beats anything the base
+    layer says, so the scale itself was raised; and `p` now has `max-width:
+    72ch`. Scoped to `p` — `li` and `dd` are held to the same rule by the test,
+    but constraining them in CSS would reshape card grids that are not blocks of
+    text in 1.4.8's sense.
+  - **2.4.9 link purpose.** No findings, and the check is not vacuous: injecting
+    `<a href="/inventory">Ver</a>` into `/settings/stores` reproduced it. The
+    audit's guess that "Ver" and "→" fail here was wrong — both sit inside links
+    whose name is the whole row, so the product name is already in it.
+  - **3.3.5 help.** Six form fields had no help attached: both on `/login`, all
+    four on `/register`, and the note on each stock route. `/register`'s
+    household hint was the instructive one — it was written, visible, and
+    invisible to a screen reader, which is why the test demands attachment
+    rather than presence. Scoped to fields inside a `<form>`: a language
+    selector and a filter box are controls that change the view, not information
+    someone is being asked to supply, and demanding a sentence of help for
+    "Buscar" is padding dressed as accessibility.
+  - **2.3.3 animation from interactions.** `prefers-reduced-motion` was honoured
+    nowhere. Every animation in the application is a loading affordance sitting
+    beside text that says the same thing, so all of them can stop; the rule is
+    blanket rather than per-component because the per-component version fails
+    silently when someone adds the next animation.
+
+  Two things the check caught that were not on this list: a field named only by
+  its placeholder on `/prices`, which axe accepts and which loses its name the
+  moment anyone types; and an accessible name that was a raw translation key.
 - **A4.6** One manual screen-reader pass per primary journey. Not automatable,
   not optional.
 

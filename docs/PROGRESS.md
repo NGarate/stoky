@@ -45,11 +45,18 @@ Rules for this log:
 | Theme and language controls | `24a2203`, `c6d02d2` |
 | Mobile-first: bottom bar, tablet rail, tables to cards | `fcb3cad` |
 | axe extended to all three viewport tiers — 90 checks | `fcb3cad`+ |
-| `/receipts/[id]/applied` built and driven; sixth dead route closed | (this commit) |
-| A4.2–A4.4 measured in a browser — `e2e/a11y-structure.spec.ts`, 16 routes × 3 tiers | (this commit) |
+| `/receipts/[id]/applied` built and driven; sixth dead route closed | `364528b` |
+| Every interactive element raised to the AAA target size | `e6aadea` |
+| A4.2–A4.4 measured in a browser — `e2e/a11y-structure.spec.ts`, 16 routes × 3 tiers | `225bc19` |
+| `check:links` gating CI and `verify:local` | `a0b388a` |
+| UI-5 and I18N-1 closed: the receipts pipeline fits a phone and speaks both languages | (this commit) |
+| UI-2 and UI-4 closed: the location picker is a real listbox and offers the whole tree | (this commit) |
+| A4.5 — the AAA criteria no tool checks, in `e2e/a11y-aaa.spec.ts` | (this commit) |
+| Catalogue drift caught by a unit test | (this commit) |
 
-Remaining: A0 dead-link check in CI, then A4.5–A4.6 (the AAA criteria no tool
-can check, and a screen-reader pass).
+Remaining: UI-6 (the picker's panel opens under the fixed bottom bar — found
+while verifying the rewrite that caused it to matter), then A4.6, the manual
+screen-reader pass.
 
 ### Phase 2 — One design system
 
@@ -222,6 +229,26 @@ with lines still AUTO_MATCHED and those get stock too. The filter now mirrors
 count of lines that produced nothing. Fixed rather than filed under D6, because a
 confirmation screen that under-reports what it just did is the one defect that
 would make the new page untrue.
+
+**D19 — 3.3.5's help must be attached, and only fields inside a `<form>` owe it.**
+The criterion says help must be *available* and stops short of requiring it to be
+programmatically associated. This project requires the association anyway: its
+premise is that anyone in a household can use it, and a hint that exists only as
+text under an input is help for sighted mouse users and nobody else. The evidence
+is `/register`, whose household hint was written, visible, and unreachable by a
+screen reader. The other half of the decision is the boundary: a language
+selector and a filter box change the view rather than collect information, so
+demanding a sentence of help for "Buscar" would be padding dressed as
+accessibility. `<form>` membership is where "requires user input" actually lands.
+
+**D20 — Two defects found while verifying a fix are filed, not folded in.**
+Verifying the receipts and picker work turned up UI-6 (the picker's panel opens
+under the fixed bottom bar) and UI-7 (the review page's pending count is frozen
+at zero). Both are real and both are in files that were open at the time, which
+is exactly when D6 is tempting to skip. They are filed. UI-6 is then taken as
+its own next unit rather than silently — because a picker whose options a phone
+user cannot see is not a working control, and closing UI-2 and UI-4 while
+leaving it would make those two closures read as more than they are.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
