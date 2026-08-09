@@ -345,6 +345,26 @@ button renders with layout but no colour.
 *Done when:* `check:contrast` stays green and no component references a missing
 token.
 
+### Phase 2b — Foundations of use
+
+Comes out of `docs/DESIGN_AUDIT.md` and sits here because every later phase is
+harder without it, and because two of its items — choosing a theme, choosing a
+language — are things a person can see and use immediately.
+
+- **A0** dead-link check in CI. It has already caught two dead routes that three
+  manual passes missed, including `/receipts/[id]/applied`.
+- **A1** theme control: System / Light / Dark, persisted, applied before paint,
+  reachable before sign-in.
+- **A2** language control: unique id, on the auth pages, no full page reload.
+- **A3** mobile-first at three sizes with two breakpoints, the bottom-bar
+  navigation, and the tables converted to cards below `lg`.
+- **A4.2–A4.4** the automated accessibility floor beyond axe: target sizes,
+  heading order, landmarks.
+
+*Done when:* axe stays green across every route in both themes at all three
+sizes, no route overflows horizontally at 390px, and every destination is
+reachable on a phone.
+
 ### Phase 3 — Roles
 
 Enum, session, middleware, capability matrix. Before the screens, because both

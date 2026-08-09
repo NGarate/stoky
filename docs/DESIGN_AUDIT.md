@@ -110,9 +110,9 @@ This is the largest finding and it is structural, not cosmetic.
 
 **Actions**
 
-- **A3.1** Build the mobile navigation. This closes NAV-1 and is a precondition
-  for everything else on this list — an audit finding you cannot navigate to is
-  academic.
+- **A3.1** Build the mobile navigation — see A3.6 for the shape. This closes
+  NAV-1 and is a precondition for everything else here: an audit finding you
+  cannot navigate to is academic.
 - **A3.2** Convert the five tables to a responsive pattern: cards on narrow
   screens, table from `md` up. Cards, not horizontal scrolling — a scrolling
   table hides the columns that carry the status.
@@ -120,9 +120,78 @@ This is the largest finding and it is structural, not cosmetic.
   clearest single signal of a broken mobile layout, and treat any overflow as a
   defect rather than a cosmetic nit.
 - **A3.4** Adopt mobile-first authoring as the convention: unprefixed classes
-  describe the phone, `sm:`/`md:` add to it. The codebase currently does the
+  describe the phone, `md:`/`lg:` add to it. The codebase currently does the
   reverse where it does anything at all, which is how `hidden md:flex` came to
   delete the navigation on phones.
+
+### A3.5 Three sizes, two breakpoints — and tablet is not "small desktop"
+
+Exactly two breakpoints, giving three targets. Tailwind's defaults are used as
+they are; no custom values.
+
+| Target | Range | Who is using it |
+|---|---|---|
+| **Phone** | base, up to `md` (768px) | One hand, in a shop, standing. The Phase 4 screen. |
+| **Tablet** | `md` → `lg` (768–1024px) | **The kitchen tablet.** The Phase 5 screen. |
+| **Desktop** | `lg` and up (1024px+) | Sitting down, planning, managing the household. |
+
+**The tablet tier is not an interpolation between the other two, and treating it
+as one would be the mistake.** The usual assumption is that density rises with
+width: phone sparse, tablet middling, desktop dense. The kitchen tablet inverts
+it. It is read **from a metre away**, propped on a worktop, often by someone
+walking past — so it needs the **largest** type of the three and the **fewest**
+things on screen, at a width where a naive layout would start adding columns.
+`REDESIGN_PLAN.md` §4 already specifies 20–24px body and 40px+ headings for it,
+which is bigger than the desktop tier.
+
+So the rule is *distance*, not width:
+
+- **Phone** — arm's length, one thumb. Dense enough to scan, targets ≥48px.
+- **Tablet** — a metre away, glanceable, possibly untouched for days. Largest
+  type, biggest targets, least content. Not a two-column phone.
+- **Desktop** — half a metre, mouse and keyboard. Densest tier; tables are
+  legitimate here and only here.
+
+Current usage is the opposite of this and confirms nothing has been designed:
+**17 uses of `lg:`, 5 of `sm:`, 2 of `md:`** across the whole codebase.
+Whatever exists was written desktop-down.
+
+**Consequence for A3.2.** The tables become cards on phone *and* tablet, and
+stay tables only from `lg`. A table at 800px on a screen read from a metre away
+is unreadable even though it fits — fitting is not the test.
+
+### A3.6 The mobile menu — reviewed
+
+The plan was one line ("build the mobile navigation"), which is not enough to
+build from. What it has to satisfy:
+
+**A bottom bar on phone, not a drawer.** The phone screen is used one-handed,
+standing, in a shop. A hamburger in the top corner is the furthest point from a
+thumb on a modern phone; a bottom bar is the nearest. It also keeps the
+destinations visible instead of hiding them behind a control someone has to know
+to press.
+
+**Four destinations, not seven.** The current nav has seven — Panel, Inventario,
+Productos, Recibos, Lista de compras, Precios, Configuración. Seven does not fit
+a bottom bar at 48px targets on a 390px screen, and it should not: Phase 4 says
+the phone answers *what do I need to buy*. Proposed: **Compra · Inventario ·
+Escanear · Más**, with "Más" opening a sheet holding the rest. Scan earns its
+place because it is the phone's primary action.
+
+**The tablet keeps a rail, not a bottom bar.** A kitchen tablet is propped up and
+touched rarely; a bottom bar wastes the most valuable strip of a screen read from
+a metre away. Between `md` and `lg`, use a compact side rail with large targets.
+
+**It has to survive Phase 4 and 5, not fight them.** Those phases introduce the
+real phone and kitchen screens. The navigation built here should be the one they
+keep, which is the argument for deciding the destinations now rather than
+shipping a hamburger that gets thrown away.
+
+**Accessibility requirements**, since this is the control every route depends on:
+a real `<nav>` with an accessible name, `aria-current="page"`, ≥48px targets,
+keyboard reachable and operable in DOM order, the "Más" sheet focus-trapped and
+dismissible with Escape, and no reliance on colour alone to show the active
+destination.
 
 ---
 

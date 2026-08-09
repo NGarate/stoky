@@ -24,7 +24,8 @@ Rules for this log:
 | 0 — Clean slate | ✅ Complete |
 | 1 — Close the dead routes | ✅ Complete |
 | 2 — One design system | ✅ Complete |
-| 3 — Roles | ▶ Next |
+| 2b — Foundations of use (audit) | ▶ Next |
+| 3 — Roles | Not started |
 | 4 — Phone screen, offline | Not started |
 | 5 — Kitchen screen | Not started |
 | 6 — Rating | Not started |
@@ -163,6 +164,22 @@ what lifting it out of Bolsillo in Phase 0 was meant to prevent. It now lives at
 `src/components/inventory/QuantityStepper.tsx` with its stylesheet retargeted
 from the lab's tokens to the application's. Caught only because the deletion was
 checked afterwards rather than assumed complete.
+
+**D14 — Three sizes, two breakpoints, and tablet is the least dense.**
+Density normally rises with width. The kitchen tablet inverts it: read from a
+metre away, it needs the largest type and the fewest elements of the three tiers,
+at a width where a naive layout starts adding columns. So the rule is viewing
+distance, not screen width — phone at arm's length, tablet at a metre, desktop
+at half a metre. Tables therefore become cards on phone *and* tablet and survive
+only from `lg`.
+
+**D15 — The phone navigation is a bottom bar with four destinations.**
+Not a hamburger: on a phone used one-handed in a shop, the top corner is the
+furthest point from a thumb and a drawer hides the destinations behind a control
+you have to know about. Seven destinations do not fit at 48px targets, and they
+should not — the phone answers "what do I need to buy". Compra · Inventario ·
+Escanear · Más. The tablet keeps a side rail instead, because a bottom bar wastes
+the most valuable strip of a screen read from a metre away.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
