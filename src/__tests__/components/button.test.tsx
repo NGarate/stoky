@@ -70,6 +70,18 @@ describe("Button", () => {
     expect(button).toHaveClass("bg-primary");
   });
 
+  it("keeps a visible focus indicator instead of removing the outline", () => {
+    // The previous version paired `outline-none` with a ring built from tokens
+    // that did not exist, so keyboard focus was invisible (ISSUES UI-3.5).
+    render(<Button>Guardar</Button>);
+
+    const button = screen.getByRole("button");
+    expect(button.className).not.toContain("outline-none");
+    expect(button).toHaveClass("focus-visible:outline-2");
+    expect(button).toHaveClass("focus-visible:outline-offset-2");
+    expect(button).toHaveClass("focus-visible:outline-ring");
+  });
+
   it("renders as the child element when asChild is set", () => {
     render(
       <Button asChild>

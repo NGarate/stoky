@@ -71,6 +71,18 @@ describe("Input", () => {
     expect(input).toHaveClass("rounded-md");
   });
 
+  it("keeps a visible focus indicator instead of removing the outline", () => {
+    // The previous version paired `outline-none` with a ring built from tokens
+    // that did not exist, so keyboard focus was invisible (ISSUES UI-3.5).
+    render(<Input placeholder="Nombre" />);
+
+    const input = screen.getByPlaceholderText("Nombre");
+    expect(input.className).not.toContain("outline-none");
+    expect(input).toHaveClass("focus-visible:outline-2");
+    expect(input).toHaveClass("focus-visible:outline-offset-2");
+    expect(input).toHaveClass("focus-visible:outline-ring");
+  });
+
   it("forwards a ref to the underlying input", () => {
     let captured: HTMLInputElement | null = null;
     render(
