@@ -21,7 +21,20 @@ import { type Page, expect, test } from "@playwright/test";
  * Every route is checked in both themes, because a contrast failure that only
  * exists in dark mode is still a contrast failure — and this project has
  * already shipped one.
+ *
+ * And at all three viewport tiers, because the navigation is a different
+ * component at each: a bottom bar on a phone, a rail on a tablet, a top bar on
+ * a desktop. Auditing only the desktop width left two of the three renderers
+ * machine-unchecked, which is how this suite was written until the compact
+ * tiers existed.
  */
+
+/** The three tiers from docs/DESIGN_AUDIT.md A3.5, chosen by viewing distance. */
+const VIEWPORTS = [
+  { name: "phone", width: 390, height: 844 },
+  { name: "tablet", width: 820, height: 1180 },
+  { name: "desktop", width: 1280, height: 900 },
+] as const;
 
 const AAA_TAGS = [
   "wcag2a",
@@ -61,7 +74,13 @@ async function signIn(page: Page) {
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 }
 
-async function audit(page: Page, route: string, theme: "light" | "dark") {
+async function audit(
+  page: Page,
+  route: string,
+  theme: "light" | "dark",
+  viewport?: { width: number; height: number },
+) {
+  if (viewport) await page.setViewportSize(viewport);
   await page.emulateMedia({ colorScheme: theme });
   await page.goto(route);
   await page.waitForLoadState("domcontentloaded");
@@ -82,7 +101,8 @@ async function audit(page: Page, route: string, theme: "light" | "dark") {
       })
       .join("\n");
     throw new Error(
-      `${results.violations.length} accessibility violation(s) on ${route} (${theme}):\n${report}`,
+      `${results.violations.length} accessibility violation(s) on ${route} ` +
+        `(${theme}${viewport ? `, ${viewport.width}px` : ""}):\n${report}`,
     );
   }
 
@@ -92,9 +112,11 @@ async function audit(page: Page, route: string, theme: "light" | "dark") {
 test.describe("Accessibility (WCAG 2.1 AAA)", () => {
   for (const route of PUBLIC_ROUTES) {
     for (const theme of ["light", "dark"] as const) {
-      test(`${route} — ${theme}`, async ({ page }) => {
-        await audit(page, route, theme);
-      });
+      for (const vp of VIEWPORTS) {
+        test(`${route} — ${theme} — ${vp.name}`, async ({ page }) => {
+          await audit(page, route, theme, vp);
+        });
+      }
     }
   }
 
@@ -105,9 +127,11 @@ test.describe("Accessibility (WCAG 2.1 AAA)", () => {
 
     for (const route of PRIVATE_ROUTES) {
       for (const theme of ["light", "dark"] as const) {
-        test(`${route} — ${theme}`, async ({ page }) => {
-          await audit(page, route, theme);
-        });
+        for (const vp of VIEWPORTS) {
+          test(`${route} — ${theme} — ${vp.name}`, async ({ page }) => {
+            await audit(page, route, theme, vp);
+          });
+        }
       }
     }
   });
