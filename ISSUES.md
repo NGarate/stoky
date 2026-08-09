@@ -747,3 +747,17 @@ Create `docs/setup.md` or expand README with:
   limiting as the notable hole.
 
 For gate results and overall project state, see `docs/STATUS.md`.
+For which phase closes each item, see `docs/REDESIGN_PLAN.md` §9, and
+`docs/PROGRESS.md` for what is currently in flight.
+
+| Item | Closed by |
+|---|---|
+| UI-1 dead routes | Phase 1 |
+| INV-1 expiring quantity | Phase 5 (kitchen screen depends on it) |
+| CRITICAL-4 rate limiting | Phase 3, verified in Phase 7 |
+| DEBT-1 password policy | Phase 3 |
+| DEBT-4 bare `Error` in routers | Phase 3 |
+| DEBT-2 scanner torch | Phase 4 |
+| DEBT-3 OpenFoodFacts cache | Phase 6 |
+| OCR-1 runtime language download | Phase 6 |
+| DEBT-5 missing indexes | Phase 7 |

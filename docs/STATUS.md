@@ -288,16 +288,16 @@ ahead of the documented 10.x.
 
 ## What to do next
 
-1. **Build the four missing routes** — `/products/new`, `/inventory/add`,
-   `/inventory/consume` and `/settings`. They are linked from the UI today and
-   404. The routers behind them already exist, so this is UI work only. Doing it
-   unblocks the four `test.fixme` E2E tests and Journey 1 of
-   `docs/SMOKE_JOURNEYS.md`.
-2. **Implement rate limiting** on login and register — the last critical
-   security gap (`ISSUES.md` CRITICAL-4).
-3. Standardise `TRPCError` across the seven routers still throwing bare errors.
-4. Start Phase 2 proper: install the shadcn primitives listed above, then
-   refactor the domain components onto them.
+Execution follows `docs/REDESIGN_PLAN.md`, phase by phase. Live progress,
+including decisions taken without asking, is in `docs/PROGRESS.md`.
+
+Phase 0 (clean slate) is complete. Phase 1 closes the four dead routes below,
+which is what unblocks everything else — the scanner already works and already
+redirects to one of them.
+
+Open defects are tracked in `ISSUES.md`; the ones that gate the plan are UI-1
+(dead routes), INV-1 (expiring items report the wrong quantity) and CRITICAL-4
+(no rate limiting, the only critical security gap).
 
 ### Environment note
 
