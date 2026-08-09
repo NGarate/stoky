@@ -17,6 +17,15 @@ concurrency:
 permissions:
   contents: read
 
+# Every job that runs tests is held to ten minutes. That is a product decision,
+# not a runner constraint: verification that takes longer stops being run, and a
+# suite nobody runs still has to be maintained while telling nobody anything.
+# The jobs run concurrently, so ten minutes is also the whole test phase.
+#
+# Where a tool has its own ceiling, the job's is set just above it, so the tool
+# fails first and names what it was doing. A runner that kills the job produces
+# no report, no trace, and nothing anyone can act on.
+#
 # Actions are pinned by commit SHA rather than tag: a tag can be moved to point
 # at different code, a SHA cannot. The comment records the human-readable version.
 env:
@@ -59,7 +68,9 @@ jobs:
   test:
     name: Unit, component, integration
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Measured at 52s for all three suites. Ten is the shared budget, not an
+    # estimate of this job.
+    timeout-minutes: 10
     # Service containers rather than docker compose inside the runner: the
     # runner owns health and teardown, and a hung compose cannot wedge the job.
     services:
@@ -110,7 +121,15 @@ jobs:
   e2e:
     name: End-to-end
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Ten, like every other test job. Playwright's own `globalTimeout` is seven,
+    # which leaves three for install, migrate and seed and means Playwright fails
+    # first and names the test it was sitting on — a job killed by the runner
+    # produces no report and no trace.
+    #
+    # 55 was the previous value and it was wrong in the other direction: the
+    # budget belongs to the suite, and a ceiling set above what the suite should
+    # ever take enforces nothing.
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16-alpine
@@ -147,11 +166,28 @@ jobs:
       - run: pnpm prisma migrate deploy
       - run: pnpm db:seed
 
+      # Cached, because otherwise the download eats the budget the tests are
+      # supposed to be measured against. Keyed on the Playwright version, so a
+      # bump fetches fresh binaries instead of reusing incompatible ones.
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
+        id: browser-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
       # --with-deps installs the system libraries WebKit needs. Skipping it is
-      # how a suite ends up silently only ever running Chromium.
+      # how a suite ends up silently only ever running Chromium. The system
+      # libraries are not in the cache, so that half runs either way.
       - name: Install browsers
         run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      # `--project` is not narrowed here: the projects that skip the tier sweeps
+      # do so in playwright.config.ts, so CI and a local run execute the same
+      # matrix. A flag would let the two drift.
       - run: pnpm exec playwright test
         env:
           PLAYWRIGHT_PORT: "3000"
