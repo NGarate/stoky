@@ -1,4 +1,10 @@
 import { type Page, expect, test } from "@playwright/test";
+import { SESSION_FILE } from "./session";
+import { settle } from "./settle";
+
+// One route each, read and measured, nothing written: the order they run in and
+// the worker they run on cannot change what they find.
+test.describe.configure({ mode: "parallel" });
 
 /**
  * The accessibility floor that axe does not measure — DESIGN_AUDIT A4.2–A4.4.
@@ -75,17 +81,6 @@ interface Violation {
   rule: string;
   selector: string;
   detail: string;
-}
-
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.waitForSelector('input[name="email"]');
-  // Let the client hydrate: a pre-hydration submit falls back to a native POST.
-  await page.waitForTimeout(1500);
-  await page.fill('input[name="email"]', "demo@stoky.local");
-  await page.fill('input[name="password"]', "Demo1234!");
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 }
 
 /**
@@ -478,17 +473,33 @@ async function collectViolations(
   }, minTarget);
 }
 
-/** Runs every tier for one route and reports all of them at once. */
+/**
+ * Runs every tier for one route and reports all of them at once.
+ *
+ * One page load for the three tiers. A tier is a viewport size, which the
+ * stylesheet resolves in the browser without a navigation, so reloading between
+ * them cost three loads per route and measured the same three layouts. Two
+ * frames after the resize before measuring: the reflow lands in the next one,
+ * and whatever measures itself — the charts, the picker's placement — reacts in
+ * the one after, and a rect read before that is the previous tier's.
+ */
 async function auditStructure(page: Page, route: string): Promise<void> {
   const failures: string[] = [];
 
+  await page.setViewportSize({ width: TIERS[0].width, height: TIERS[0].height });
+  await page.goto(route);
+  // Data-driven pages render their real content after the tRPC round trip,
+  // and auditing the skeleton would pass while telling us nothing.
+  await settle(page);
+
   for (const tier of TIERS) {
     await page.setViewportSize({ width: tier.width, height: tier.height });
-    await page.goto(route);
-    await page.waitForLoadState("domcontentloaded");
-    // Data-driven pages render their real content after the tRPC round trip,
-    // and auditing the skeleton would pass while telling us nothing.
-    await page.waitForTimeout(2500);
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)));
+        }),
+    );
 
     const violations = await collectViolations(page, tier.minTarget);
 
@@ -519,9 +530,7 @@ test.describe("Structural accessibility (DESIGN_AUDIT A4.2–A4.4)", () => {
   }
 
   test.describe("signed in", () => {
-    test.beforeEach(async ({ page }) => {
-      await signIn(page);
-    });
+    test.use({ storageState: SESSION_FILE });
 
     for (const route of PRIVATE_ROUTES) {
       test(`${route}`, async ({ page }) => {

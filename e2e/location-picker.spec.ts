@@ -1,4 +1,12 @@
 import { type Page, expect, test } from "@playwright/test";
+import { SESSION_FILE } from "./session";
+import { settle } from "./settle";
+
+test.use({ storageState: SESSION_FILE });
+
+// Every test opens the same form and drives the same closed picker; none of them
+// writes, so they are independent of each other and of their order.
+test.describe.configure({ mode: "parallel" });
 
 /**
  * The LocationPicker, driven the way a keyboard user drives it — UI-2 and UI-4.
@@ -23,22 +31,14 @@ import { type Page, expect, test } from "@playwright/test";
 /** WCAG 2.5.5 AAA is 44; the project floor is 48 everywhere (D17). */
 const MIN_TARGET = 48;
 
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.waitForSelector('input[name="email"]');
-  // Let the client hydrate: a pre-hydration submit falls back to a native POST.
-  await page.waitForTimeout(1500);
-  await page.fill('input[name="email"]', "demo@stoky.local");
-  await page.fill('input[name="password"]', "Demo1234!");
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-}
-
 async function gotoAddStock(page: Page): Promise<void> {
   await page.goto("/inventory/add");
-  await page.waitForLoadState("domcontentloaded");
   // The locations arrive over tRPC; the picker is a loading box until they do.
-  await page.waitForTimeout(2500);
+  // `settle` waits for exactly that and no longer — the flat pause it replaces
+  // was paid in full on every one of these tests whether or not it was needed,
+  // and it could not be lengthened for a loaded server without lengthening it
+  // for an idle one.
+  await settle(page);
 }
 
 /** The text of the option `aria-activedescendant` currently points at. */
@@ -55,7 +55,6 @@ async function activeOptionText(page: Page): Promise<string | null> {
 test.describe("LocationPicker on /inventory/add", () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await signIn(page);
     await gotoAddStock(page);
   });
 
@@ -194,7 +193,7 @@ test.describe("LocationPicker on /inventory/add", () => {
     // only one where the picker is the last field of a long form.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await page.waitForTimeout(2500);
+    await settle(page);
 
     const trigger = page.locator('[role="combobox"]');
     await trigger.scrollIntoViewIfNeeded();

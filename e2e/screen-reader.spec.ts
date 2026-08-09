@@ -1,4 +1,6 @@
 import { type CDPSession, type Page, expect, test } from "@playwright/test";
+import { DEMO_EMAIL, DEMO_PASSWORD, SESSION_FILE } from "./session";
+import { settle } from "./settle";
 
 /**
  * The half of a screen-reader pass that is not a judgement call.
@@ -433,11 +435,6 @@ function assertTree(nodes: AxNode[], where: string): void {
 
 /* ------------------------------------------------------------ journeys -- */
 
-async function settle(page: Page): Promise<void> {
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(2500);
-}
-
 test.describe("Screen-reader journeys", () => {
   // `newCDPSession` throws outright on anything but Chromium, so without this
   // the suite does not degrade on the other four projects — it fails them, and
@@ -453,6 +450,10 @@ test.describe("Screen-reader journeys", () => {
     "Accessibility.getFullAXTree is a Chrome DevTools Protocol API",
   );
 
+  // The one journey that still drives the form. Everything below it starts from
+  // the session `e2e/session.setup.ts` saved, which is the whole reason this
+  // suite is not a sequence of sign-ins; this test is what keeps the form itself
+  // covered, so it runs signed out like a first-time visitor.
   test("sign in", async ({ page }) => {
     await page.goto("/login");
     await page.waitForSelector('input[name="email"]');
@@ -463,7 +464,7 @@ test.describe("Screen-reader journeys", () => {
     // The rejected attempt first, because it is the same form and the same
     // controls: whatever the tree gets wrong here it gets wrong for everyone who
     // mistypes a password, which is more people than get it right first time.
-    await page.fill('input[name="email"]', "demo@stoky.local");
+    await page.fill('input[name="email"]', DEMO_EMAIL);
     await page.fill('input[name="password"]', "definitely-not-the-password");
     await page.click('button[type="submit"]');
     await expect(page.getByText(/inválid|invalid/i)).toBeVisible({ timeout: 20_000 });
@@ -480,7 +481,7 @@ test.describe("Screen-reader journeys", () => {
       ),
     ).not.toEqual([]);
 
-    await page.fill('input[name="password"]', "Demo1234!");
+    await page.fill('input[name="password"]', DEMO_PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
     await settle(page);
@@ -488,15 +489,7 @@ test.describe("Screen-reader journeys", () => {
   });
 
   test.describe("signed in", () => {
-    test.beforeEach(async ({ page }) => {
-      await page.goto("/login");
-      await page.waitForSelector('input[name="email"]');
-      await page.waitForTimeout(1500);
-      await page.fill('input[name="email"]', "demo@stoky.local");
-      await page.fill('input[name="password"]', "Demo1234!");
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-    });
+    test.use({ storageState: SESSION_FILE });
 
     test("add stock", async ({ page }) => {
       await page.goto("/inventory/add");
@@ -675,9 +668,22 @@ test.describe("Screen-reader journeys", () => {
       await page.goto(reviewable as string);
       await settle(page);
 
+      const count = page.getByRole("status").first();
+      const wasSaying = ((await count.textContent()) ?? "").trim();
       const before = spoken(await snapshot(page));
+
       await confirmItemButton(page).first().click();
-      await page.waitForTimeout(2000);
+
+      // Confirming is two round trips, not one: the mutation resolves, and only
+      // then does its `invalidate` issue the refetch that moves this number. A
+      // flat pause after the click was tuned against an idle dev server and went
+      // red under a parallel run as "confirming an item announced nothing new",
+      // which is the message for a defect rather than for a fetch still in
+      // flight. Waited for, bounded, and swallowed: if the sentence never
+      // changes, the assertion below is still the one that speaks.
+      await expect(count)
+        .not.toHaveText(wasSaying, { timeout: 15_000 })
+        .catch(() => {});
 
       const after = await snapshot(page);
       assertTree(after, "/receipts/[id]/review after confirming an item");

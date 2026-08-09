@@ -1,11 +1,25 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SESSION_FILE } from "./session";
+import { settle } from "./settle";
 import es from "../messages/es.json";
 
 /**
- * Generate unique test email
+ * An address no other test can produce.
+ *
+ * The timestamp was unique enough while the suite ran one test at a time. With
+ * files running in parallel two registrations can begin in the same
+ * millisecond, and the collision does not surface as a collision: it surfaces as
+ * "email already registered" inside a test that is not about duplicates, in
+ * whichever of the two lost the race. The worker index makes it impossible
+ * rather than unlikely — no two tests running at once share one.
+ *
+ * This file never signs in with the stored session (`e2e/session.ts`): these are
+ * the tests that exercise registration and the login form themselves, so they
+ * start signed out, which is what Playwright does by default.
  */
 function generateTestEmail(prefix = "test"): string {
-  return `${prefix}.${Date.now()}.${Math.random().toString(36).substring(7)}@example.com`;
+  const worker = test.info().parallelIndex;
+  return `${prefix}.w${worker}.${Date.now()}.${Math.random().toString(36).substring(7)}@example.com`;
 }
 
 /**
@@ -479,45 +493,6 @@ test.describe("Inventory Management Flow", () => {
     // Verify the operation completed (no error)
     await inventoryPage.expectStockEntry(productName);
   });
-
-  test("should show low stock warnings", async ({ page }) => {
-    const registerPage = new RegisterPage(page);
-    const dashboardPage = new DashboardPage(page);
-    const productsPage = new ProductsPage(page);
-    const inventoryPage = new InventoryPage(page);
-
-    // Setup
-    const testEmail = generateTestEmail("e2e-lowstock");
-    const testName = generateTestName("E2E Low Stock User");
-    const testPassword = "E2ETestPassword123!";
-
-    await registerPage.goto();
-    // A household is required, not optional decoration: every product and stock
-    // procedure resolves through householdId. Registering without one produces
-    // an account that cannot use these screens at all — see ISSUES.md HOUSE-1.
-    await registerPage.register(
-      testName,
-      testEmail,
-      testPassword,
-      generateTestName("E2E Household"),
-    );
-    await dashboardPage.expectLoaded();
-
-    // Create product with min stock threshold
-    await dashboardPage.navigateToProducts();
-    const productName = generateTestName("E2E Low Stock Product");
-    // Note: This assumes there's a way to set minStock in the UI
-    await productsPage.createProduct(productName);
-
-    // Add minimal stock
-    await dashboardPage.navigateToInventory();
-    await inventoryPage.addStock(productName, "1");
-
-    // Check for low stock indicator (if implemented in UI)
-    // eslint-disable-next-line no-unused-vars
-    const _lowStockIndicator = page.locator("text=/low|bajo|poco/i");
-    // Assertion omitted - depends on UI implementation
-  });
 });
 
 test.describe("Login Flow", () => {
@@ -591,32 +566,65 @@ test.describe("Internationalization", () => {
   });
 });
 
-test.describe("Responsive Design", () => {
-  test("should display correctly on mobile", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto("/");
-    await expect(page.locator("body")).toBeVisible();
-    
-    // Check that mobile menu is accessible or layout is responsive
-    const viewport = page.viewportSize();
-    expect(viewport?.width).toBe(375);
-  });
+/**
+ * The three "Responsive Design" tests that stood here have been removed.
+ *
+ * Each set a viewport, went to `/`, asserted `body` was visible, and then
+ * asserted that `page.viewportSize()?.width` equalled the width it had just
+ * passed to `setViewportSize`. That is a test of Playwright, not of Stoky: it
+ * cannot fail for any change to this application.
+ *
+ * What they were reaching for is covered properly now, and by measurement
+ * rather than by assertion of a value already known: `a11y-structure.spec.ts`
+ * sweeps sixteen routes at phone, tablet and desktop, `dynamic-routes.spec.ts`
+ * does the same for the routes with an id in them, and both fail on horizontal
+ * overflow — which is the thing a responsive layout actually gets wrong.
+ */
 
-  test("should display correctly on tablet", async ({ page }) => {
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto("/");
-    await expect(page.locator("body")).toBeVisible();
-    
-    const viewport = page.viewportSize();
-    expect(viewport?.width).toBe(768);
-  });
+/**
+ * The low-stock display, read as the seeded household.
+ *
+ * It sits in its own block because it needs the opposite setup from its
+ * neighbours: they register a fresh account precisely to prove onboarding
+ * works, and a fresh account has an empty inventory. The condition being
+ * checked here only exists in seeded data.
+ *
+ * The version this replaces registered an account, created a product, added one
+ * unit and then asserted nothing at all — it ended on
+ * `// Assertion omitted - depends on UI implementation`. It could not have
+ * worked in any case: a product created through `/products/new` carries no
+ * minimum, so nothing about it is ever low. I rewrote it against the seeded
+ * products and left it registering, which failed for exactly that reason —
+ * the new household cannot see them.
+ */
+test.describe("Low stock, as the seeded household", () => {
+  test.use({ storageState: SESSION_FILE });
 
-  test("should display correctly on desktop", async ({ page }) => {
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto("/");
-    await expect(page.locator("body")).toBeVisible();
-    
-    const viewport = page.viewportSize();
-    expect(viewport?.width).toBe(1920);
+  test("marks the products that are below their minimum", async ({ page }) => {
+    await page.goto("/inventory");
+    await settle(page);
+
+    // The seed guarantees three: Leche entera at 2 of 6, Aceite at 1 of 2,
+    // Café at 0 of 2. Named rather than counted — "three badges are showing"
+    // passes just as well when they are attached to the wrong products.
+    const lowStock = page.getByText("Stock Bajo", { exact: false });
+    await expect(lowStock.first()).toBeVisible();
+
+    for (const product of [
+      "Leche entera",
+      "Aceite de oliva virgen extra",
+      "Café molido natural",
+    ]) {
+      await expect(
+        page.getByRole("row", { name: new RegExp(product) }).getByText("Stock Bajo"),
+        `${product} is below its minimum in the seed and should be marked`,
+      ).toBeVisible();
+    }
+
+    // Arroz is at 5 of a minimum of 2. If everything were marked, the assertions
+    // above would pass while meaning nothing.
+    await expect(
+      page.getByRole("row", { name: /Arroz redondo/ }).getByText("Stock Bajo"),
+    ).toHaveCount(0);
   });
 });

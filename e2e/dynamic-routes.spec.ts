@@ -1,5 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type Page, expect, test } from "@playwright/test";
+import { SESSION_FILE } from "./session";
+import { settle } from "./settle";
+
+test.use({ storageState: SESSION_FILE });
+
+// Each test discovers its own id by following a link and audits what it lands
+// on. Nothing is written and nothing is shared, so they can run anywhere.
+test.describe.configure({ mode: "parallel" });
 
 /**
  * The routes with an id in them.
@@ -34,16 +42,6 @@ const AAA_TAGS = [
   "wcag21aaa",
 ];
 
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.waitForSelector('input[name="email"]');
-  await page.waitForTimeout(1500);
-  await page.fill('input[name="email"]', "demo@stoky.local");
-  await page.fill('input[name="password"]', "Demo1234!");
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-}
-
 /**
  * Discovers a real id by following a link, rather than reading one out of the
  * database. If the index stops linking to its own detail pages, this fails —
@@ -55,13 +53,29 @@ async function firstDetailLink(
   pattern: RegExp,
 ): Promise<string> {
   await page.goto(index);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(2500);
+  await settle(page);
 
-  const hrefs = await page.$$eval("a[href]", (anchors) =>
-    anchors.map((a) => a.getAttribute("href") ?? ""),
-  );
-  const found = hrefs.find((href) => pattern.test(href));
+  // Waited for rather than sampled once. The list arrives over tRPC, so reading
+  // the anchors the instant the page settles asks the question before the answer
+  // exists — which under a loaded dev server is most of the time, and which
+  // fails as "the index stopped linking to its detail pages" when the index is
+  // merely slow. The assertion below is unchanged; only its patience is.
+  const found = await page
+    .waitForFunction(
+      (source: string) => {
+        const wanted = new RegExp(source);
+        return (
+          [...document.querySelectorAll("a[href]")]
+            .map((a) => a.getAttribute("href") ?? "")
+            .find((href) => wanted.test(href)) ?? null
+        );
+      },
+      pattern.source,
+      { timeout: 15_000 },
+    )
+    .then((handle) => handle.jsonValue())
+    .catch(() => null);
+
   expect(
     found,
     `${index} linked to nothing matching ${pattern}. Either the seed created no rows, ` +
@@ -89,10 +103,6 @@ const DESTINATIONS = [
 ];
 
 test.describe("Routes reached by following a link", () => {
-  test.beforeEach(async ({ page }) => {
-    await signIn(page);
-  });
-
   for (const destination of DESTINATIONS) {
     test(`${destination.name} — fits every tier`, async ({ page }) => {
       const href = await firstDetailLink(
@@ -101,11 +111,24 @@ test.describe("Routes reached by following a link", () => {
         destination.pattern,
       );
 
+      await page.setViewportSize(VIEWPORTS[0]);
+      await page.goto(href);
+      await settle(page);
+
       for (const viewport of VIEWPORTS) {
         await page.setViewportSize(viewport);
-        await page.goto(href);
-        await page.waitForLoadState("domcontentloaded");
-        await page.waitForTimeout(2500);
+        // The reflow lands on the next frame, and anything that measures itself
+        // reacts on the one after. Nothing is reloaded between tiers: a tier is a
+        // width, the stylesheet resolves it in the browser, and the three
+        // reloads this replaces asked the same question of the same page.
+        await page.evaluate(
+          () =>
+            new Promise((resolve) => {
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve(null)),
+              );
+            }),
+        );
 
         const overflow = await page.evaluate(() => {
           const root = document.documentElement;
@@ -137,8 +160,7 @@ test.describe("Routes reached by following a link", () => {
       // where this application is primarily used.
       await page.setViewportSize(VIEWPORTS[0]);
       await page.goto(href);
-      await page.waitForLoadState("domcontentloaded");
-      await page.waitForTimeout(2500);
+      await settle(page);
 
       const results = await new AxeBuilder({ page }).withTags(AAA_TAGS).analyze();
       const report = results.violations

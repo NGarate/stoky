@@ -1,4 +1,10 @@
 import { type Page, expect, test } from "@playwright/test";
+import { SESSION_FILE } from "./session";
+import { settle } from "./settle";
+
+// One route each, read and measured, nothing written: the order they run in and
+// the worker they run on cannot change what they find.
+test.describe.configure({ mode: "parallel" });
 
 /**
  * The AAA criteria that no tool checks for you.
@@ -43,20 +49,9 @@ const PRIVATE_ROUTES = [
   "/settings/stores",
 ];
 
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.waitForSelector('input[name="email"]');
-  await page.waitForTimeout(1500);
-  await page.fill('input[name="email"]', "demo@stoky.local");
-  await page.fill('input[name="password"]', "Demo1234!");
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-}
-
-async function settle(page: Page, route: string) {
+async function visit(page: Page, route: string) {
   await page.goto(route);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(2500);
+  await settle(page);
 }
 
 /* ------------------------------------------------------------------ 1.4.8 -- */
@@ -337,20 +332,18 @@ test.describe("WCAG AAA criteria that axe does not cover", () => {
   test.describe("public", () => {
     for (const route of PUBLIC_ROUTES) {
       test(`${route} — 1.4.8, 2.4.9, 3.3.5`, async ({ page }) => {
-        await settle(page, route);
+        await visit(page, route);
         await assertPresentationAndLinks(page, route);
       });
     }
   });
 
   test.describe("signed in", () => {
-    test.beforeEach(async ({ page }) => {
-      await signIn(page);
-    });
+    test.use({ storageState: SESSION_FILE });
 
     for (const route of PRIVATE_ROUTES) {
       test(`${route} — 1.4.8, 2.4.9, 3.3.5`, async ({ page }) => {
-        await settle(page, route);
+        await visit(page, route);
         await assertPresentationAndLinks(page, route);
       });
     }
@@ -365,7 +358,7 @@ test.describe("WCAG AAA criteria that axe does not cover", () => {
       // sweep is scoped to where the risk is rather than padded out to look
       // thorough.
       for (const route of ["/inventory", "/products", "/products/scan"]) {
-        await settle(page, route);
+        await visit(page, route);
         const moving = await page.evaluate(() => {
           const out: string[] = [];
           for (const el of document.querySelectorAll("*")) {
