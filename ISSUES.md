@@ -28,6 +28,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DOCS-1 | No API documentation | 🟡 Open |
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
 | UI-1 | Four linked routes do not exist (404) | 🔴 **OPEN** |
+| OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
 
 ---
 
@@ -257,6 +258,40 @@ comm -13 \
 **Blocks:** four `test.fixme` tests in `e2e/critical-paths.spec.ts`.
 
 **Priority:** This is the largest functional gap in the MVP.
+
+---
+
+### 🟡 OCR-1: OCR downloads its language data at runtime in production
+
+**Files:** `src/server/services/ocr.ts`, `Dockerfile`  
+**Severity:** MEDIUM  
+**Status:** OPEN — found 2026-08-09
+
+**Description:**
+`createWorker("spa")` makes tesseract.js fetch the Spanish traineddata (~3.3 MB)
+from a CDN on first use and cache it in the working directory. The production
+image does not carry it: that stage copies only the standalone build, static
+assets, `public`, `prisma` and `package.json` — not the repository root.
+
+**Impact:**
+The first receipt scan on a fresh container needs outbound internet. On an
+air-gapped or firewalled self-hosted install it fails; everywhere else it is a
+silent runtime download into a container with a read-only root filesystem,
+which will fail there too unless the path happens to be writable.
+
+This is the same class of defect as the Prisma CLI being fetched by `npx` at
+container start, fixed in `fix(docker): stop the production image fetching code
+at every start`. This one was missed because the OCR path was never exercised
+in a production image.
+
+**Suggested fix:**
+Bake the traineddata into the image and point tesseract.js at it with
+`langPath`/`cachePath`, so no network access is needed to read a receipt.
+
+**Note:** the file was previously committed at the repository root as a 3.3 MB
+binary. It was a cache artefact that landed in git by accident and has been
+untracked; it never reached the production image, so removing it changes
+nothing about this issue.
 
 ---
 

@@ -104,3 +104,8 @@ public/worker-*.js
 
 # Turbo (if used later)
 .turbo/
+
+# Tesseract language data. Downloaded by tesseract.js into the working
+# directory on first OCR run, so it is a build artefact, not a source asset.
+# A 3.3 MB binary does not belong in the history.
+*.traineddata
