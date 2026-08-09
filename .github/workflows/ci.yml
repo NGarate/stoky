@@ -50,6 +50,11 @@ jobs:
       - name: WCAG AAA contrast
         run: pnpm check:contrast
 
+      # Three manual audits missed a dead route each, always because the call
+      # site used a template literal rather than a string. This does not.
+      - name: Internal links
+        run: pnpm check:links
+
   # ----------------------------------------------------------------- tests --
   test:
     name: Unit, component, integration

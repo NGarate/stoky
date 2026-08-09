@@ -49,6 +49,7 @@ run_step() {
 
 run_step "Lint" "${PNPM_CMD[@]}" lint
 run_step "Typecheck" "${PNPM_CMD[@]}" typecheck
+run_step "Internal links" "${PNPM_CMD[@]}" check:links
 run_step "Unit tests" "${PNPM_CMD[@]}" test:unit
 run_step "Component tests" "${PNPM_CMD[@]}" test:components
 
