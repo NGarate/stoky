@@ -280,7 +280,8 @@ credit is part of the work. The Yuka name appears nowhere in the interface.
 ## 8. Accessibility
 
 Keeps the level the proposals reached: **WCAG AAA contrast**, enforced by
-`pnpm check:contrast` (140 checks). Extended with 48px targets, state never by
+`pnpm check:contrast` (54 checks against the tokens in `globals.css` since
+Phase 2; 140 while it measured the five prototypes). Extended with 48px targets, state never by
 colour alone, a real one-metre readability test for the kitchen screen, and
 visible focus throughout. Still outstanding: an axe pass and a screen-reader
 run, both belonging to the chosen design rather than to five prototypes.

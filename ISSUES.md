@@ -428,11 +428,16 @@ reason that page avoids the shared primitives.
    `aria-haspopup`; the click-away layer is a full-viewport `div` with
    `role="button"` and `tabIndex={0}`, putting an invisible tab stop across the
    whole page while open; the trigger is under 44px.
-5. **`button.tsx` and `input.tsx` are unsafe to use.** They combine
-   `focus-visible:outline-none` with `ring-ring`/`ring-offset-background`, and
-   those tokens resolve to nothing — so they remove the focus outline and
-   replace it with an invisible ring. Phase 2 must fix this before anything
-   adopts them.
+5. ~~**`button.tsx` and `input.tsx` are unsafe to use.** They combine
+   `focus-visible:outline-none` with an invisible ring built from tokens that
+   resolve to nothing — so they remove the focus outline and replace it with
+   nothing.~~ **RESOLVED in Phase 2.** The tokens now exist in
+   `src/app/globals.css` under `@theme`, and focus is drawn with a real
+   `outline` (`focus-visible:outline-2 outline-offset-2 outline-ring`) with no
+   `outline-none` anywhere. `globals.css` also carries a base `:focus-visible`
+   rule so the floor cannot be removed by omission. Guarded by
+   `src/__tests__/unit/design-tokens.test.ts` and by focus assertions in the
+   two component test files.
 6. **Touch targets under 44px** in `DashboardNav` (every dashboard page) and on
    the back links of the new routes.
 7. **`/inventory` has no next-intl at all** — its strings are hardcoded

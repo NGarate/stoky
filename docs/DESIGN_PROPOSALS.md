@@ -107,12 +107,13 @@ reproducible. Because the field names already matched the live query, adopting a
 proposal is a change of import rather than a rewrite.
 
 **Contrast was enforced rather than asserted.** `scripts/check-contrast.ts`
-reads the same token module the pages render from and fails the process if any
-declared pair misses 7:1 for body text or 4.5:1 for large text, with 3:1 for
-borders and gauge fills under 1.4.11. It reports **140 checks across 5 designs ×
-2 themes, all passing**. The gate outlives the prototypes: `pnpm check:contrast`
-runs in the quality job of `.github/workflows/ci.yml`, and the same standard
-carries into the two real screens.
+read the same token module the pages rendered from and failed the process if any
+declared pair missed 7:1 for body text or 4.5:1 for large text, with 3:1 for
+borders and gauge fills under 1.4.11. It reported **140 checks across 5 designs ×
+2 themes, all passing**. The gate outlived the prototypes: Phase 2 repointed it
+at `src/app/globals.css`, where it now runs 54 checks over the one shipped
+palette. It runs in the quality job of `.github/workflows/ci.yml` as
+`pnpm check:contrast`, and the same standard carries into the two real screens.
 
 **A real defect surfaced that the test suite could not see.** Building against
 `src/app/globals.css` exposed that it defines only `--background` and
