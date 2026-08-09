@@ -320,6 +320,146 @@ async function main(): Promise<void> {
     ],
   });
 
+  // --- Two receipts, so the receipt routes exist at all --------------------
+  //
+  // Before this the seed deleted receipts and created none, which meant
+  // `/receipts` was empty on every fresh install and in CI, and
+  // `/receipts/[id]/review` and `/receipts/[id]/applied` were unreachable
+  // through the interface. That is not a cosmetic gap: it is why the review
+  // page's horizontal overflow at 390px (ISSUES UI-5) survived three responsive
+  // sweeps — every one of them enumerated the static routes, and there was no
+  // id to put in the dynamic one.
+  //
+  // Two, because the two states a reviewer meets are different pages: one still
+  // needing decisions, one already confirmed and waiting to be applied. No
+  // APPLIED receipt is seeded on purpose — reaching that state by pressing the
+  // button is the journey worth keeping testable.
+  // Looked up by name and then asserted, because `find` returns undefined for a
+  // typo and Prisma accepts a null `matchedProductId` without complaint — the
+  // fixture would quietly become "matched nothing", which is a different test.
+  const eggs = createdProducts.find((p) => p.name === "Huevos frescos");
+  const rice = createdProducts.find((p) => p.name === "Arroz redondo");
+  for (const [label, product] of [
+    ["Leche entera", milk],
+    ["Huevos frescos", eggs],
+    ["Arroz redondo", rice],
+  ] as const) {
+    if (!product) throw new Error(`Seed: no product named "${label}" to match a receipt line against.`);
+  }
+
+  const needsReview = await prisma.receipt.create({
+    data: {
+      imagePath: "seed/ticket-mercadona-pendiente.jpg",
+      status: "NEEDS_REVIEW",
+      storeId: mercadona.id,
+      purchaseDate: daysFromNow(-3),
+      totalAmount: 7.44,
+      householdId: household.id,
+      uploadedBy: user.id,
+      processedAt: daysFromNow(-3),
+      rawOcrText: [
+        "MERCADONA S.A.",
+        "LECHE ENTERA 1L        1,09",
+        "ARROZ REDONDO 1KG      1,85",
+        "HUEVOS FRESCOS 12U     3,20",
+        "SERVILLETAS 100U       1,30",
+        "TOTAL                  7,44",
+      ].join("\n"),
+    },
+  });
+
+  // One of each match outcome, so the review page has something to review: a
+  // confident automatic match, a weak one worth a second look, and a line that
+  // matched nothing and needs a product created.
+  await prisma.receiptItem.createMany({
+    data: [
+      {
+        receiptId: needsReview.id,
+        rawText: "LECHE ENTERA 1L        1,09",
+        parsedName: "Leche entera 1L",
+        parsedPrice: 1.09,
+        parsedQuantity: 1,
+        matchedProductId: milk?.id ?? null,
+        matchConfidence: 0.92,
+        matchStatus: "AUTO_MATCHED",
+      },
+      {
+        receiptId: needsReview.id,
+        rawText: "ARROZ REDONDO 1KG      1,85",
+        parsedName: "Arroz redondo 1kg",
+        parsedPrice: 1.85,
+        parsedQuantity: 1,
+        matchedProductId: rice?.id ?? null,
+        matchConfidence: 0.61,
+        matchStatus: "PENDING",
+      },
+      {
+        receiptId: needsReview.id,
+        rawText: "HUEVOS FRESCOS 12U     3,20",
+        parsedName: "Huevos frescos 12u",
+        parsedPrice: 3.2,
+        parsedQuantity: 1,
+        matchedProductId: eggs?.id ?? null,
+        matchConfidence: 0.88,
+        matchStatus: "AUTO_MATCHED",
+      },
+      {
+        receiptId: needsReview.id,
+        rawText: "SERVILLETAS 100U       1,30",
+        parsedName: "Servilletas 100u",
+        parsedPrice: 1.3,
+        parsedQuantity: 1,
+        matchedProductId: null,
+        matchConfidence: null,
+        matchStatus: "PENDING",
+      },
+    ],
+  });
+
+  const confirmed = await prisma.receipt.create({
+    data: {
+      imagePath: "seed/ticket-lidl-confirmado.jpg",
+      status: "CONFIRMED",
+      storeId: lidl.id,
+      purchaseDate: daysFromNow(-1),
+      totalAmount: 3.94,
+      householdId: household.id,
+      uploadedBy: user.id,
+      processedAt: daysFromNow(-1),
+      rawOcrText: [
+        "LIDL",
+        "LECHE ENTERA 1L        1,09",
+        "ARROZ REDONDO 1KG      1,85",
+        "TOTAL                  3,94",
+      ].join("\n"),
+    },
+  });
+
+  await prisma.receiptItem.createMany({
+    data: [
+      {
+        receiptId: confirmed.id,
+        rawText: "LECHE ENTERA 1L        1,09",
+        parsedName: "Leche entera 1L",
+        parsedPrice: 1.09,
+        parsedQuantity: 2,
+        matchedProductId: milk?.id ?? null,
+        matchConfidence: 0.95,
+        matchStatus: "USER_CONFIRMED",
+      },
+      {
+        receiptId: confirmed.id,
+        rawText: "ARROZ REDONDO 1KG      1,85",
+        parsedName: "Arroz redondo 1kg",
+        parsedPrice: 1.85,
+        parsedQuantity: 1,
+        matchedProductId: rice?.id ?? null,
+        matchConfidence: 0.9,
+        matchStatus: "USER_CONFIRMED",
+      },
+    ],
+  });
+
   const lowStock = ["Leche entera", "Aceite de oliva virgen extra", "Café molido natural"];
 
   console.log("Seed complete.");
@@ -328,6 +468,7 @@ async function main(): Promise<void> {
   console.log(`  Products  : ${createdProducts.length} (${lowStock.length} below minimum)`);
   console.log(`  Low stock : ${lowStock.join(", ")}`);
   console.log("  Stores    : Mercadona, Carrefour, Lidl");
+  console.log("  Receipts  : 2 (one needing review, one confirmed and ready to apply)");
 }
 
 main()
