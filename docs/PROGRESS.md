@@ -55,8 +55,13 @@ Rules for this log:
 | Catalogue drift caught by a unit test | `14164d3` |
 | UI-6 closed: the picker opens where it can be seen | `0e74c32` |
 | Two receipts in the seed; the dynamic routes audited by following links | `fe8bbcf`, `ad6cc6b` |
+| Journey states corrected; I18N-5 filed | `e93428b` |
+| A4.6 automatable half — `e2e/screen-reader.spec.ts`; A11Y-2 and UI-7 fixed | (this commit) |
 
-Remaining: A4.6, the manual screen-reader pass.
+**Phase 2b is complete except the human screen-reader pass**, which is the one
+piece of this phase that cannot be delegated to a machine or to an agent. Four
+journeys are audited against the accessibility tree; what is left is whether the
+result sounds right to a person using it.
 
 ### Phase 2 — One design system
 
@@ -262,6 +267,29 @@ then discovers ids by following links rather than by reading the database: a
 route reachable by clicking is a route that gets checked, and an index that stops
 linking to its own detail pages fails the discovery step, which is worth knowing
 on its own.
+
+**D22 — A11Y-2 was fixed, not filed, and that is the exception D6 needs.**
+D6 says defects found in passing get filed rather than fixed, and it has held all
+phase. This one broke it deliberately. "Confirmar" wrote `USER_CONFIRMED` to the
+database and left the page byte-identical — no refetch, no count change, no
+announcement — so the only reasonable response to it was to press it again, and
+that was a second write. A defect whose symptom is "the control lies to
+everyone" is not a finding with a workaround; it is the control not working. The
+rule stays: file when the fix is a separate piece of work, fix when leaving it
+would mean shipping something that does not do what its label says.
+
+Fixing it closed UI-7, which was the same root cause seen from the outside, and
+exposed a third thing neither entry had noticed: "Confirmar todos" is disabled
+while anything is pending, so with the count frozen above zero the bulk action
+was disabled *permanently*. Its name is now the only thing wrong with it, which
+is filed as I18N-6 rather than renamed, because wording is a product decision.
+
+**D23 — The predicate for "reviewed" lives in one module.**
+`ReviewCard` computed it correctly from `matchStatus` while the review page kept
+a `useState(0)` that never moved, so the heading said "4 productos pendientes"
+above four cards all reading "Confirmado". Two definitions of one word, one of
+them wrong — the same shape as D18. It is `isItemReviewed` in
+`src/lib/receipts.ts` now, imported by both.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather

@@ -5,8 +5,10 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-08-03  
-**Status:** 3 critical issues resolved, 1 open; 5 debt items open
+**Last Updated:** 2026-08-09  
+**Status:** 3 critical issues resolved, 1 open; 5 debt items open.
+The interface findings opened during the Phase 2b design audit are closed except
+A11Y-1 and the wording items.
 
 For overall project state and gate results, see `docs/STATUS.md`.
 
@@ -27,16 +29,21 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-2 | Mock external API calls | ✅ Resolved |
 | DOCS-1 | No API documentation | 🟡 Open |
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
-| UI-1 | Four linked routes do not exist (404) | 🔴 **OPEN** |
+| UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
 | INV-1 | Expiring items report entry quantity, not net stock | 🔴 **OPEN** |
-| UI-2 | LocationPicker never renders child locations | 🔴 **OPEN** |
+| UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
-| NAV-1 | No mobile navigation — the dashboard is unusable on a phone | 🔴 **OPEN** |
+| NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | 🔴 **OPEN** |
-| UI-4 | LocationPicker's dropdown is not a real listbox | 🟡 Open |
-| I18N-1 | The receipts routes are hardcoded Spanish | 🟡 Open |
-| UI-5 | The receipt review page overflows at 390px | 🟡 Open |
+| UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
+| I18N-1 | The receipts routes are hardcoded Spanish | ✅ Resolved (`621185d`) |
+| UI-5 | The receipt review page overflows at 390px | ✅ Resolved (`621185d`) |
+| A11Y-1 | A saved stock movement is never announced | 🟡 Open (pinned by test) |
+| A11Y-2 | Confirming a receipt line changes nothing on screen | ✅ Resolved |
+| UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
+| UI-7 | The review page's pending count never moves | ✅ Resolved |
+| I18N-2..6 | Wording and untranslated strings | 🟡 Open |
 
 ---
 
@@ -460,11 +467,16 @@ reason that page avoids the shared primitives.
 
 ---
 
-### 🔴 NAV-1: No mobile navigation
+### ✅ NAV-1: No mobile navigation
 
 **File:** `src/components/dashboard/DashboardNav.tsx`  
 **Severity:** HIGH  
-**Status:** OPEN — found 2026-08-09
+**Status:** RESOLVED 2026-08-09 in `fcb3cad`, ahead of the Phase 4 estimate
+below, because the design audit made it a blocker for everything else: a
+mobile-first sweep cannot be verified on a phone that cannot reach a second
+page. `CompactNav` renders a bottom bar with four destinations below `md`, a
+rail from `md`, and the existing top bar from `lg`; `NavSheet` holds the rest
+behind a focus-trapped "Más". Audited by axe at all three tiers in both themes.
 
 `DashboardNav` renders its links in a `<ul className="hidden … md:flex">`, so
 below the `md` breakpoint they are not rendered at all. No replacement exists —
@@ -477,7 +489,10 @@ on. Everything else requires typing a URL.
 Found because the stock-management E2E tests passed on all three desktop
 engines and failed on both phone viewports.
 
-**Closed by:** Phase 4, which builds the phone screen.
+**Originally deferred to** Phase 4, which builds the phone screen proper. What
+landed here is navigation, not that screen: Phase 4 still owes the one-handed
+shopping journey. The two `test.skip`s left in `e2e/critical-paths.spec.ts` are
+scoped to it and name it as the reason.
 
 ---
 
@@ -642,11 +657,21 @@ clean.
 
 ---
 
-### 🟡 UI-7: The review page's pending count never moves
+### ✅ UI-7: The review page's pending count never moves
 
 **File:** `src/app/(dashboard)/receipts/[id]/review/page.tsx`
 **Severity:** MEDIUM
-**Status:** OPEN — found 2026-08-09 while verifying UI-5
+**Status:** RESOLVED 2026-08-09 — found while verifying UI-5, closed with A11Y-2,
+which was its root cause. The count is derived from the items rather than held in
+state, using the predicate `ReviewCard` already drew its own badge from — now
+`isItemReviewed` in `src/lib/receipts.ts`, so the two cannot disagree again. That
+disagreement is what produced "4 productos pendientes" above four cards all
+reading "Confirmado".
+
+Worse than the wrong number, and not noticed when this was filed: "Confirmar
+todos" is disabled while anything is pending, and with the count frozen above
+zero it was **disabled permanently** — the bulk action could never be used at
+all. See I18N-6 for what remains, which is its name.
 
 `const [confirmedCount] = useState(0)` has no setter, so the counter is frozen at
 zero for the life of the page. Two consequences a reviewer sees directly: the
@@ -723,6 +748,27 @@ area.
 
 ---
 
+### 🟡 I18N-6: "Confirmar todos" is not what that button does
+
+**Files:** `messages/es.json`, `messages/en.json`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-09 while closing UI-7
+
+With the pending count fixed the button behaves coherently, and its name is now
+the thing that is wrong. It is disabled while any line is unreviewed and enabled
+once none are, so it is pressed *after* the work rather than instead of it: it
+finalises the receipt and moves it to CONFIRMED. "Confirmar todos" promises a
+bulk action that skips the reviewing, which is the one thing it cannot do.
+
+Not renamed here because the wording is a product decision, and because doing it
+inside the fix for UI-7 would have buried it in a commit about state derivation.
+
+**Suggested fix:** "Terminar revisión" / "Finish review". Take it with I18N-2,
+which is the same catalogue and the same question of what the interface calls
+things.
+
+---
+
 ### 🟡 I18N-4: "Procesado" and "Procesando" are a letter apart
 
 **File:** `messages/es.json`
@@ -739,6 +785,90 @@ of its own hardcoded strings.
 
 **Suggested fix:** name the phases by what the reader is waiting for — "Leyendo
 el ticket" and "Datos extraídos" — rather than by the internal state.
+
+---
+
+### 🟡 A11Y-1: A saved stock movement is never announced
+
+**Files:** `src/app/(dashboard)/inventory/add/page.tsx`,
+`src/app/(dashboard)/inventory/consume/page.tsx`
+**Severity:** MEDIUM
+**Status:** OPEN — found 2026-08-09 building `e2e/screen-reader.spec.ts`
+(DESIGN_AUDIT A4.6), pinned by that suite
+
+Both stock forms announce their *refusals* well — the error summary is a focused
+`role="alert"` and it names the number the household actually has. Success says
+nothing. `addStock.onSuccess` invalidates the overview and calls
+`router.push("/inventory")`, and the destination has no live region of its own,
+so the entire confirmation a screen-reader user receives is Next's route
+announcer reading the new page's name: **"Inventario"**.
+
+That is the same word it would read if the person had clicked "Inventario" in
+the navigation and saved nothing. It answers "where am I", never "did that
+work", and it is silent about what was written, how much, or where it was filed.
+A sighted user gets the same non-answer but can scan the table for the row that
+changed; a reader would have to walk the whole table to find out whether the
+button did anything.
+
+Measured on `/inventory/add`, driving the form as a user does.
+`/inventory/consume` is the same code shape — `onSuccess` → invalidate →
+`router.push("/inventory")` — but only the add path was exercised end to end, so
+treat the consume half as inferred rather than observed.
+
+Nothing else catches this: axe has no rule for "the outcome of an action was
+announced", and the tree is otherwise clean on both routes — every interactive
+node has a name and the reading order matches the layout.
+
+**Suggested fix:** decide once how these screens confirm work, rather than adding
+a live region per route. Two candidates: keep the redirect and have `/inventory`
+read a one-shot `role="status"` handed to it by the navigation, or stop
+redirecting and let the form report what it wrote, which is what `/products/new`
+already does and why D8 exists. The second also answers "how much, where"
+without a table scan.
+
+`e2e/screen-reader.spec.ts` pins the current behaviour with
+`expect(spoken(saved)).toEqual([])`. It goes red the moment the outcome is
+announced — flip the assertion then.
+
+---
+
+### ✅ A11Y-2: Confirming a receipt line changes nothing on screen
+
+**File:** `src/app/(dashboard)/receipts/[id]/review/page.tsx`
+**Severity:** HIGH
+**Status:** RESOLVED 2026-08-09 — found building `e2e/screen-reader.spec.ts`
+(DESIGN_AUDIT A4.6) and fixed rather than filed, because a button that writes to
+the database and leaves the page untouched is not an accessibility gap with a
+workaround; it is a control that lies to everyone. Closed UI-7 with it, as
+predicted below. Verified in a browser: the count moves 4 → 3, one "Confirmar"
+disappears, the live region changes, and `getReceiptWithItems` is refetched.
+
+`confirmItemMutation` is declared bare — no `onSuccess`, no invalidation of
+`receipt.getReceiptWithItems`. Pressing "Confirmar" on a line therefore writes
+`USER_CONFIRMED` to the database and then leaves the page exactly as it was: the
+card keeps its unconfirmed styling and its buttons, the pending count keeps the
+frozen zero of UI-7, and no live region says a word. Measured by diffing every
+live region in the accessibility tree before and after the click — the two sets
+are identical.
+
+This is worse than A11Y-1 rather than the same class of thing. There the outcome
+was under-reported; here the interface actively contradicts the database, and it
+does so for everyone, sighted or not. The natural response to a button that
+appears to have done nothing is to press it again, which is a second write.
+Reloading is the only way to learn that the first one landed.
+
+UI-7 is the visible half of the same root cause and can be read as a symptom of
+it: a count derived from the query would move on its own once the query were
+invalidated.
+
+**Suggested fix:** give the mutation an `onSuccess` that invalidates
+`receipt.getReceiptWithItems`, which makes the card, the count and the
+"Confirmar todos" button correct at once, and add a `role="status"` naming the
+line that was confirmed. Closing this should close UI-7 with it.
+
+The assertion in `e2e/screen-reader.spec.ts` is no longer a pin: it now requires
+confirming to announce something new, and goes red if the invalidation is
+removed again.
 
 ---
 

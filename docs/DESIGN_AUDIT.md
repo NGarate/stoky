@@ -290,8 +290,34 @@ below cannot be machine-checked at all.
   Two things the check caught that were not on this list: a field named only by
   its placeholder on `/prices`, which axe accepts and which loses its name the
   moment anyone types; and an accessible name that was a raw translation key.
-- **A4.6** One manual screen-reader pass per primary journey. Not automatable,
-  not optional.
+- **A4.6** ~~One manual screen-reader pass per primary journey. Not automatable,
+  not optional.~~ **Half done, and the wording above was half wrong.** A screen
+  reader reads the *accessibility tree* — the roles, names, states and order the
+  browser computes — and that tree is machine-readable through the DevTools
+  protocol. What needs a person is whether the result *sounds* sensible: whether
+  "Cantidad consumida" is the right words, whether four announcements in a row
+  are three too many. What does not need a person is whether the information is
+  in the tree at all.
+
+  `e2e/screen-reader.spec.ts` covers the second half across the four primary
+  journeys, driving the real controls rather than navigating between steps that
+  have a button. Every interactive node named, no name a raw translation key,
+  outcomes announced, tree order against bounding boxes.
+
+  What it found: the tree is in good shape — zero unnamed controls, zero leaked
+  keys, zero reading-order findings over seven routes, and every *refusal*
+  already announces properly, including an over-consume rejection that names the
+  quantity the household actually has. What it found missing was on the success
+  side. Confirming a receipt line wrote to the database and changed nothing at
+  all on screen, for everyone, which was fixed rather than filed (ISSUES A11Y-2,
+  and UI-7 with it). Saving a stock movement still announces nothing beyond the
+  route name, which is filed as A11Y-1 and pinned by an assertion that goes red
+  when someone fixes it.
+
+  **Still owed:** the human pass. This shrinks it; it does not close it. Also
+  desktop-only and Chromium-only — `getFullAXTree` is CDP — and the consume
+  journey's success path is inferred from identical code rather than observed,
+  because its refusal never reaches the server.
 
 ---
 
