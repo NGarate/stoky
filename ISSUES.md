@@ -196,7 +196,7 @@ No rate limiting is implemented for login/register endpoints. This leaves the ap
 despite `cache` (Valkey) being defined in `docker-compose.dev.yml`. This is now
 the most serious open issue in the repo.
 
-**Requirements from DETAILED_PLAN.md:**
+**Requirement (`CLAUDE.md`, Security Constraints):**
 > Rate limiting: 5 login attempts/15min per IP, 3 registrations/hour per IP
 
 **Impact:**
@@ -423,7 +423,7 @@ The service uses an in-memory Map for caching. In a multi-instance deployment (D
 const cache = new Map<string, { data: OpenFoodFactsProduct; timestamp: number }>();
 ```
 
-**Planned Solution (from DETAILED_PLAN.md):**
+**Planned solution:**
 Use Valkey (Redis-compatible) cache service for production.
 
 **Suggested Fix:**

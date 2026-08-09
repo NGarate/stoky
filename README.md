@@ -230,7 +230,6 @@ is not a test — this repository has been burned by that before, see the note i
 | [`docs/SMOKE_JOURNEYS.md`](docs/SMOKE_JOURNEYS.md) | Journeys that must work before work is called done |
 | [`docs/TEST_SETUP.md`](docs/TEST_SETUP.md) | Test database configuration and troubleshooting |
 | [`ISSUES.md`](ISSUES.md) | Open issues and technical debt |
-| [`DETAILED_PLAN.md`](DETAILED_PLAN.md) | The original MVP blueprint |
 | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) | Instructions for AI agents working in this repo |
 
 ---

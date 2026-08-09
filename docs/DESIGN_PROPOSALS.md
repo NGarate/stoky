@@ -1,6 +1,6 @@
 # Design proposals — decision record
 
-Updated: 2026-08-09 · branch `design/ui-proposals`
+Updated: 2026-08-09
 
 Five designs for the inventory screen were built during 2026-08 so that one
 could be chosen. The choice has been made. This document records what was tried,

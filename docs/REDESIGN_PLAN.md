@@ -1,6 +1,6 @@
 # Redesign plan — two entry screens
 
-Updated: 2026-08-09 · branch `design/ui-proposals`
+Updated: 2026-08-09
 
 A **plan, not an implementation**. It records what gets built, in what order, and
 what each decision commits us to.

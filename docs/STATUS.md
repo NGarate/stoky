@@ -274,7 +274,7 @@ navigation is `DashboardNav` alone.
 
 ## Spec drift
 
-`CLAUDE.md` and `DETAILED_PLAN.md` state versions the repo does not use:
+`CLAUDE.md` and `docs/REDESIGN_PLAN.md` state versions the repo does not use:
 
 | Claimed | Actual |
 |---|---|
@@ -317,4 +317,3 @@ before that change will not have it. Either re-login, or prefix commands with
 | `docs/SMOKE_JOURNEYS.md` | User journeys that must work before calling work done |
 | `docs/TEST_SETUP.md` | Test database configuration and troubleshooting |
 | `ISSUES.md` | Open issues and technical debt, with file references |
-| `DETAILED_PLAN.md` | The original MVP blueprint (aspirational, not status) |
