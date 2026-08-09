@@ -1,9 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import "./stepper.css";
 
 /**
- * Inline quantity stepper — the signature of this proposal.
+ * Inline quantity stepper.
+ *
+ * The one piece kept from the Bolsillo proposal, which was otherwise rejected
+ * as a screen (see docs/DESIGN_PROPOSALS.md). It is the phone screen's way of
+ * changing stock in Phase 4 of docs/REDESIGN_PLAN.md, so it is retained here
+ * deliberately rather than being rediscovered later.
  *
  * Adjusting stock happens on the card instead of on a separate page, which is
  * what the current dead "Añadir stock" link was reaching for. Targets are 48px
@@ -25,10 +31,10 @@ export function Stepper({
   const round = (n: number) => Math.round(n * 100) / 100;
 
   return (
-    <div className="bo__stepper">
+    <div className="stepper__stepper">
       <button
         type="button"
-        className="bo__step"
+        className="stepper__step"
         onClick={() => setValue((v) => round(Math.max(0, v - step)))}
         disabled={value <= 0}
         aria-label={`Quitar ${step} ${unit} de ${label}`}
@@ -38,14 +44,14 @@ export function Stepper({
         </svg>
       </button>
 
-      <p className="bo__value" aria-live="polite">
+      <p className="stepper__value" aria-live="polite">
         <strong>{value}</strong>
         <span>{unit}</span>
       </p>
 
       <button
         type="button"
-        className="bo__step"
+        className="stepper__step"
         onClick={() => setValue((v) => round(v + step))}
         aria-label={`Añadir ${step} ${unit} a ${label}`}
       >
