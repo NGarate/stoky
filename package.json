@@ -24,9 +24,6 @@
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed"
   },
-  "prisma": {
-    "seed": "bun run prisma/seed.ts"
-  },
   "keywords": [
     "inventory",
     "household",
