@@ -10,13 +10,13 @@ For the current state of the project — which gates pass, what is unverified, a
 
 ## Tech Stack
 
-- **Frontend:** Next.js 16 (App Router), TypeScript 5.x strict, Tailwind CSS 4.x + shadcn/ui, TanStack Query v5, Zustand v5, next-intl v4.x
+- **Frontend:** Next.js 16 (App Router), TypeScript 5.x strict, Tailwind CSS 4.x + shadcn/ui, TanStack Query v5, next-intl v4.x
 - **Backend:** tRPC v11 (currently the `11.0.0-rc.802` release candidate, end-to-end type safety), Node.js 24 LTS, Prisma 6.x
 - **Auth:** Auth.js v5 (credentials provider), Argon2id, JWT (15min access + 7d refresh)
 - **Database:** PostgreSQL 16 (with pg_trgm for fuzzy search)
 - **Cache:** Valkey 8 (Redis-compatible)
 - **OCR:** Tesseract.js (server-side Worker thread), Sharp (image processing)
-- **Dev Tooling:** pnpm 10.x, oxlint, Bun test runner, Playwright, dprint/biome
+- **Dev Tooling:** pnpm 11.x, oxlint, Bun test runner, Playwright
 
 ## Build & Development Commands
 
@@ -97,7 +97,7 @@ messages/
 - **tRPC as API layer:** Shared types between client/server via tRPC v11 with Superjson serialization. Every procedure requires a Zod input schema
 - **Zod schemas in `src/lib/validations/`:** Single source of truth for validation, shared between client and server
 - **Server Components for data fetching, Client Components for interactivity** (explicit `"use client"` boundaries)
-- **State bifurcation:** TanStack Query for server state, Zustand for client-only UI state
+- **Server state via TanStack Query.** There is no separate client-state library: local UI state is React's. Do not reach for one without a case that React cannot serve
 - **Receipt scanning pipeline:** Upload → OCR (Tesseract.js Worker) → Parser (regex) → Matcher (pg_trgm) → Review UI → Apply (creates StockEntry + PriceRecord). Uses `ReceiptStatus` enum as a state machine with strict phase progression
 - **Product matching:** PostgreSQL `pg_trgm` similarity — auto-match >0.7, candidates 0.3–0.7, no match <0.3
 

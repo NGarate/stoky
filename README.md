@@ -32,10 +32,10 @@ there is no external service holding your data.
 
 Next.js 16 (App Router) · TypeScript 5 strict · tRPC 11 · Prisma 6 ·
 PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Auth.js v5 (Argon2id) ·
-Tailwind CSS 4 · TanStack Query v5 · Zustand v5 · next-intl v4 ·
+Tailwind CSS 4 · TanStack Query v5 · next-intl v4 ·
 Tesseract.js · Sharp
 
-Tooling: pnpm 10, oxlint, Bun test runner, Playwright, Docker Compose.
+Tooling: pnpm 11, oxlint, Bun test runner, Playwright, Docker Compose.
 
 **Single repository, single Next.js application — not a monorepo.** tRPC needs
 client and server colocated for end-to-end type inference. This is an enforced
@@ -173,7 +173,7 @@ Code is organised by **domain**, not by technical layer.
 - **Zod schemas live in `src/lib/validations/`** and are imported by both sides.
 - **Server Components fetch, Client Components interact** — explicit
   `"use client"` boundaries.
-- **TanStack Query for server state, Zustand for client-only UI state.**
+- **TanStack Query for server state.** Local UI state is React's; there is no separate client-state library.
 - **Receipt pipeline:** upload → OCR → parse → match → review → apply.
   `ReceiptStatus` is a state machine with strict phase progression.
 - **Product matching** uses PostgreSQL `pg_trgm`: auto-match above 0.7,
