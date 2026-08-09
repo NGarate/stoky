@@ -51,12 +51,12 @@ Rules for this log:
 | `check:links` gating CI and `verify:local` | `a0b388a` |
 | UI-5 and I18N-1 closed: the receipts pipeline fits a phone and speaks both languages | (this commit) |
 | UI-2 and UI-4 closed: the location picker is a real listbox and offers the whole tree | (this commit) |
-| A4.5 — the AAA criteria no tool checks, in `e2e/a11y-aaa.spec.ts` | (this commit) |
-| Catalogue drift caught by a unit test | (this commit) |
+| A4.5 — the AAA criteria no tool checks, in `e2e/a11y-aaa.spec.ts` | `7c7206f` |
+| Catalogue drift caught by a unit test | `14164d3` |
+| UI-6 closed: the picker opens where it can be seen | `0e74c32` |
+| Two receipts in the seed; the dynamic routes audited by following links | `fe8bbcf`, `ad6cc6b` |
 
-Remaining: UI-6 (the picker's panel opens under the fixed bottom bar — found
-while verifying the rewrite that caused it to matter), then A4.6, the manual
-screen-reader pass.
+Remaining: A4.6, the manual screen-reader pass.
 
 ### Phase 2 — One design system
 
@@ -249,6 +249,19 @@ is exactly when D6 is tempting to skip. They are filed. UI-6 is then taken as
 its own next unit rather than silently — because a picker whose options a phone
 user cannot see is not a working control, and closing UI-2 and UI-4 while
 leaving it would make those two closures read as more than they are.
+
+**D21 — The seed owns the fixtures the dynamic routes need.**
+`/receipts/[id]/review` was unreachable through the interface on a fresh install
+and in CI, because the seeder deleted receipts and created none. Every suite here
+works from a list of static paths, so a route with an id in it was audited by
+nobody — which is how a 505px-wide page survived three responsive sweeps, and
+how a dead `/products/[id]` survived three link audits before that. The fixtures
+go in the seed rather than into a test's setup, so that one dataset serves the
+suite, CI and anyone opening the app for the first time. `e2e/dynamic-routes.spec.ts`
+then discovers ids by following links rather than by reading the database: a
+route reachable by clicking is a route that gets checked, and an index that stops
+linking to its own detail pages fails the discovery step, which is worth knowing
+on its own.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather

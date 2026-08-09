@@ -605,7 +605,13 @@ dynamic, so neither enumerates it.
 
 **File:** `src/components/inventory/LocationPicker.tsx`
 **Severity:** HIGH
-**Status:** OPEN — found 2026-08-09 while verifying the UI-2/UI-4 rewrite
+**Status:** RESOLVED 2026-08-09 — the panel measures and flips up when there is
+no room, capped by the space on whichever side it lands. The floor is the top of
+the bottom bar, found through a `data-fixed-bottom` attribute on the nav:
+`window.innerHeight` is the wrong number whenever something is parked across the
+bottom of the viewport. Verified at 390px — the last option now ends at 740px
+with the bar at 780px — and the mutation that restores the old behaviour
+reproduces the numbers below exactly.
 
 The panel is absolutely positioned below the trigger and has no idea what is
 underneath it. On `/inventory/add` at 390px the picker is the last field on a
@@ -623,12 +629,16 @@ Nothing catches it: axe does not model occlusion, and the target-size check
 measures the rectangle, which is a correct 356×48 whether or not anything is
 drawn on top of it.
 
-**Suggested fix:** flip the panel above the trigger when the space below is
-smaller than it needs, measuring against the viewport rather than the document.
-A scroll-into-view on open is not enough on its own — the bottom bar is fixed,
-so it covers the last rows wherever the page is scrolled to.
+**Two false starts worth recording**, because each produced a green test over a
+broken control. A minimum panel height reintroduced the defect in miniature —
+with 100px below and 90px above, neither side clears the minimum, so it stayed
+below and hung 20px under the bar. And measuring once, keyed on the open state,
+painted the default placement in about one run in three, because the trigger's
+final position is settled by a scroll the effect cannot see coming; it is a
+`useLayoutEffect` with no dependency array now, and four consecutive runs are
+clean.
 
-**Closed by:** next unit.
+**Closed by:** `0e74c32`.
 
 ---
 
