@@ -27,7 +27,7 @@ export function CreateProductInline({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="block">
-        <label htmlFor="product-name" className="text-sm font-medium text-gray-700">
+        <label htmlFor="product-name" className="text-sm font-medium text-foreground">
           Nombre del producto:
         </label>
         <Input

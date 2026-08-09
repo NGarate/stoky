@@ -66,8 +66,8 @@ function NewProductFallback(): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mt-2 text-2xl font-bold">{t("title")}</h1>
-      <p role="status" aria-live="polite" className="mt-2 text-gray-700">
+      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
+      <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
         {t("loading")}
       </p>
     </div>
@@ -299,7 +299,7 @@ function NewProductForm(): JSX.Element {
       <div className="mx-auto max-w-2xl">
         <Link
           href="/products"
-          className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+          className="inline-flex min-h-[44px] items-center text-primary underline"
         >
           {t("backToProducts")}
         </Link>
@@ -308,7 +308,7 @@ function NewProductForm(): JSX.Element {
           ref={successRef}
           role="status"
           tabIndex={-1}
-          className="mt-2 rounded border border-green-700 bg-green-50 p-4 text-green-900"
+          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
         >
           <h1 className="text-2xl font-bold">{t("successTitle")}</h1>
           <p className="mt-2">
@@ -318,12 +318,12 @@ function NewProductForm(): JSX.Element {
           </p>
         </div>
 
-        <h2 className="mt-6 text-lg font-semibold">{t("successNextTitle")}</h2>
+        <h2 className="mt-6 text-lg font-semibold text-heading">{t("successNextTitle")}</h2>
         <ul className="mt-2 space-y-2">
           <li>
             <Link
               href="/products"
-              className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+              className="inline-flex min-h-[44px] items-center text-primary underline"
             >
               {t("successViewProducts")}
             </Link>
@@ -331,7 +331,7 @@ function NewProductForm(): JSX.Element {
           <li>
             <Link
               href="/inventory/add"
-              className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+              className="inline-flex min-h-[44px] items-center text-primary underline"
             >
               {t("successAddStock")}
             </Link>
@@ -340,7 +340,7 @@ function NewProductForm(): JSX.Element {
             <button
               type="button"
               onClick={handleCreateAnother}
-              className="min-h-[44px] text-blue-700 underline"
+              className="min-h-[44px] text-primary underline"
             >
               {t("successCreateAnother")}
             </button>
@@ -354,23 +354,23 @@ function NewProductForm(): JSX.Element {
     <div className="mx-auto max-w-2xl">
       <Link
         href="/products"
-        className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+        className="inline-flex min-h-[44px] items-center text-primary underline"
       >
         {t("backToProducts")}
       </Link>
 
-      <h1 className="mt-2 text-2xl font-bold">{t("title")}</h1>
-      <p className="mt-2 text-gray-700">{t("intro")}</p>
+      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
+      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
 
       {showScanContext ? (
-        <div className="mt-4 rounded border border-blue-700 bg-blue-50 p-4">
-          <h2 className="text-sm font-medium text-blue-950">
+        <div className="mt-4 rounded border border-border bg-muted p-4">
+          <h2 className="text-sm font-medium text-foreground">
             {t("scanContextTitle")}
           </h2>
-          <p className="mt-1 font-mono text-lg font-semibold text-blue-950">
+          <p className="mt-1 font-mono text-lg font-semibold text-foreground">
             {scannedBarcode}
           </p>
-          <p className="mt-1 text-sm text-blue-950">{t("scanContextIntro")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("scanContextIntro")}</p>
         </div>
       ) : null}
 
@@ -380,7 +380,7 @@ function NewProductForm(): JSX.Element {
             ref={summaryRef}
             role="alert"
             tabIndex={-1}
-            className="rounded border border-red-700 bg-red-50 p-4 text-red-900"
+            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
           >
             <h2 className="font-semibold">{t("errorTitle")}</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -394,7 +394,7 @@ function NewProductForm(): JSX.Element {
         <div>
           <label
             htmlFor={nameId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("nameLabel")}
           </label>
@@ -410,13 +410,13 @@ function NewProductForm(): JSX.Element {
             aria-describedby={
               fieldErrors.name ? `${nameHintId} ${nameErrorId}` : nameHintId
             }
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={nameHintId} className="mt-1 text-sm text-gray-700">
+          <p id={nameHintId} className="mt-1 text-sm text-muted-foreground">
             {t("nameHint")}
           </p>
           {fieldErrors.name ? (
-            <p id={nameErrorId} className="mt-1 text-sm font-medium text-red-800">
+            <p id={nameErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
               {fieldErrors.name}
             </p>
           ) : null}
@@ -425,7 +425,7 @@ function NewProductForm(): JSX.Element {
         <div>
           <label
             htmlFor={barcodeId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("barcodeLabel")}
           </label>
@@ -447,9 +447,9 @@ function NewProductForm(): JSX.Element {
                 ? `${barcodeHintId} ${barcodeTakenId} ${barcodeErrorId}`
                 : `${barcodeHintId} ${barcodeTakenId}`
             }
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={barcodeHintId} className="mt-1 text-sm text-gray-700">
+          <p id={barcodeHintId} className="mt-1 text-sm text-muted-foreground">
             {t("barcodeHint")}
           </p>
           {/* Kept mounted so the clash is announced the moment the lookup comes
@@ -458,25 +458,25 @@ function NewProductForm(): JSX.Element {
             id={barcodeTakenId}
             role="status"
             aria-live="polite"
-            className="mt-1 text-sm font-medium text-red-800"
+            className="mt-1 text-sm font-medium text-danger-foreground"
           >
             {takenBy ? t("barcodeTakenBy", { name: takenBy.name }) : ""}
           </p>
           {fieldErrors.barcode ? (
             <p
               id={barcodeErrorId}
-              className="mt-1 text-sm font-medium text-red-800"
+              className="mt-1 text-sm font-medium text-danger-foreground"
             >
               {fieldErrors.barcode}
             </p>
           ) : null}
         </div>
 
-        <div className="rounded border border-gray-300 bg-gray-50 p-4">
-          <h2 className="text-sm font-medium text-gray-900">
+        <div className="rounded border border-border bg-muted p-4">
+          <h2 className="text-sm font-medium text-foreground">
             {t("lookupTitle")}
           </h2>
-          <p id={lookupHintId} className="mt-1 text-sm text-gray-700">
+          <p id={lookupHintId} className="mt-1 text-sm text-muted-foreground">
             {t("lookupHint")}
           </p>
           <button
@@ -484,7 +484,7 @@ function NewProductForm(): JSX.Element {
             onClick={handleLookup}
             disabled={trimmedBarcode === "" || lookup.isPending}
             aria-describedby={`${lookupHintId} ${lookupStatusId}`}
-            className="mt-3 min-h-[44px] rounded border border-gray-500 bg-white px-4 py-2 font-medium text-gray-900 hover:bg-gray-100 disabled:opacity-60"
+            className="mt-3 min-h-[44px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
           >
             {t("lookupButton")}
           </button>
@@ -494,7 +494,7 @@ function NewProductForm(): JSX.Element {
             id={lookupStatusId}
             role="status"
             aria-live="polite"
-            className="mt-2 text-sm text-gray-700"
+            className="mt-2 text-sm text-muted-foreground"
           >
             {lookupMessage}
           </p>
@@ -503,7 +503,7 @@ function NewProductForm(): JSX.Element {
         <div>
           <label
             htmlFor={brandId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("brandLabel")}
           </label>
@@ -515,9 +515,9 @@ function NewProductForm(): JSX.Element {
             value={brand}
             onChange={(event) => setBrand(event.target.value)}
             aria-describedby={brandHintId}
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={brandHintId} className="mt-1 text-sm text-gray-700">
+          <p id={brandHintId} className="mt-1 text-sm text-muted-foreground">
             {t("brandHint")}
           </p>
         </div>
@@ -525,7 +525,7 @@ function NewProductForm(): JSX.Element {
         <div>
           <label
             htmlFor={categoryId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("categoryLabel")}
           </label>
@@ -537,9 +537,9 @@ function NewProductForm(): JSX.Element {
             value={category}
             onChange={(event) => setCategory(event.target.value)}
             aria-describedby={categoryHintId}
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={categoryHintId} className="mt-1 text-sm text-gray-700">
+          <p id={categoryHintId} className="mt-1 text-sm text-muted-foreground">
             {t("categoryHint")}
           </p>
         </div>
@@ -547,7 +547,7 @@ function NewProductForm(): JSX.Element {
         <div>
           <label
             htmlFor={unitId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("unitLabel")}
           </label>
@@ -562,13 +562,13 @@ function NewProductForm(): JSX.Element {
             aria-describedby={
               fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
             }
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={unitHintId} className="mt-1 text-sm text-gray-700">
+          <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
             {t("unitHint")}
           </p>
           {fieldErrors.unit ? (
-            <p id={unitErrorId} className="mt-1 text-sm font-medium text-red-800">
+            <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
               {fieldErrors.unit}
             </p>
           ) : null}
@@ -577,7 +577,7 @@ function NewProductForm(): JSX.Element {
         <div>
           <label
             htmlFor={minStockId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("minStockLabel")}
           </label>
@@ -596,15 +596,15 @@ function NewProductForm(): JSX.Element {
                 ? `${minStockHintId} ${minStockErrorId}`
                 : minStockHintId
             }
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={minStockHintId} className="mt-1 text-sm text-gray-700">
+          <p id={minStockHintId} className="mt-1 text-sm text-muted-foreground">
             {t("minStockHint")}
           </p>
           {fieldErrors.minStock ? (
             <p
               id={minStockErrorId}
-              className="mt-1 text-sm font-medium text-red-800"
+              className="mt-1 text-sm font-medium text-danger-foreground"
             >
               {fieldErrors.minStock}
             </p>
@@ -615,19 +615,19 @@ function NewProductForm(): JSX.Element {
           <button
             type="submit"
             disabled={createProduct.isPending}
-            className="min-h-[44px] rounded bg-green-700 px-4 py-2 font-medium text-white hover:bg-green-800 disabled:opacity-60"
+            className="min-h-[44px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
           </button>
           <Link
             href="/products"
-            className="inline-flex min-h-[44px] items-center rounded border border-gray-400 px-4 py-2"
+            className="inline-flex min-h-[44px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
           >
             {t("cancel")}
           </Link>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
-          <p role="status" aria-live="polite" className="text-sm text-gray-700">
+          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
             {createProduct.isPending ? t("submitting") : ""}
           </p>
         </div>

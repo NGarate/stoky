@@ -42,11 +42,11 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       <div className="flex items-center gap-4">
         <Link
           href="/prices"
-          className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+          className="rounded-md border border-input bg-card px-3 py-1 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
         >
           {t("common.back")}
         </Link>
-        <h1 className="text-2xl font-bold">{t("prices.history")}</h1>
+        <h1 className="text-2xl font-bold text-heading">{t("prices.history")}</h1>
       </div>
 
       <div className="flex items-center gap-4">
@@ -55,7 +55,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
           id="days-select"
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="rounded-md border border-gray-300 px-3 py-1"
+          className="rounded-md border border-input bg-card px-3 py-1 text-foreground"
         >
           <option value={30}>30 {t("common.days")}</option>
           <option value={90}>90 {t("common.days")}</option>
@@ -64,23 +64,23 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
         </select>
       </div>
 
-      <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">{t("prices.chart.title")}</h2>
+      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.chart.title")}</h2>
         {chartData.length > 0 ? (
           <PriceChart data={chartData} showStores={true} />
         ) : (
-          <p className="py-8 text-center text-gray-500">{t("prices.noPrices")}</p>
+          <p className="py-8 text-center text-muted-foreground">{t("prices.noPrices")}</p>
         )}
       </div>
 
       <StoreComparison productId={productId} />
 
       {trends && trends.length > 0 && (
-        <div className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">{t("prices.trends")}</h2>
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.trends")}</h2>
           <table className="w-full">
             <thead>
-              <tr className="border-b">
+              <tr className="border-b border-border">
                 <th className="pb-2 text-left">{t("common.date")}</th>
                 <th className="pb-2 text-right">{t("prices.averagePrice")}</th>
                 <th className="pb-2 text-right">{t("prices.bestPrice")}</th>
@@ -89,17 +89,17 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
             </thead>
             <tbody>
               {trends.map((trend) => (
-                <tr key={trend.date} className="border-b last:border-0">
+                <tr key={trend.date} className="border-b border-border last:border-0">
                   <td className="py-3">
                     {new Date(trend.date).toLocaleDateString()}
                   </td>
                   <td className="py-3 text-right">
                     €{trend.averagePrice.toFixed(2)}
                   </td>
-                  <td className="py-3 text-right text-green-600">
+                  <td className="py-3 text-right text-ok-foreground">
                     €{trend.minPrice.toFixed(2)}
                   </td>
-                  <td className="py-3 text-right text-red-600">
+                  <td className="py-3 text-right text-danger-foreground">
                     €{trend.maxPrice.toFixed(2)}
                   </td>
                 </tr>

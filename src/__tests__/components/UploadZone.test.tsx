@@ -73,7 +73,7 @@ describe("UploadZone", () => {
     // The clear control is the only button besides the camera action.
     const clear = screen
       .getAllByRole("button")
-      .find((button) => button.className.includes("bg-red-500"));
+      .find((button) => button.className.includes("bg-destructive"));
     await userEvent.click(clear as HTMLElement);
 
     expect(screen.queryByAltText("Receipt preview")).toBeNull();

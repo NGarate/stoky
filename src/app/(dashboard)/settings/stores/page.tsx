@@ -70,12 +70,12 @@ export default function StoresPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("stores.title")}</h1>
+        <h1 className="text-2xl font-bold text-heading">{t("stores.title")}</h1>
         {!isCreating && (
           <button
             type="button"
             onClick={() => setIsCreating(true)}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
           >
             {t("stores.create")}
           </button>
@@ -83,8 +83,8 @@ export default function StoresPage() {
       </div>
 
       {isCreating && (
-        <form onSubmit={handleSubmit} className="rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">
+        <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-heading">
             {editingStore ? t("stores.edit") : t("stores.create")}
           </h2>
           <div className="space-y-4">
@@ -95,7 +95,7 @@ export default function StoresPage() {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
                 required
               />
             </div>
@@ -106,7 +106,7 @@ export default function StoresPage() {
                 type="text"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
               />
             </div>
           </div>
@@ -114,14 +114,14 @@ export default function StoresPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {t("common.save")}
             </button>
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-md border border-gray-300 px-4 py-2 hover:bg-gray-50"
+              className="rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground"
             >
               {t("common.cancel")}
             </button>
@@ -129,27 +129,27 @@ export default function StoresPage() {
         </form>
       )}
 
-      <div className="rounded-lg border bg-white shadow-sm">
+      <div className="rounded-lg border border-border bg-card shadow-sm">
         {stores?.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-muted-foreground">
             <p>{t("stores.noStores")}</p>
             <p className="mt-2 text-sm">{t("stores.addFirst")}</p>
           </div>
         ) : (
-          <ul className="divide-y">
+          <ul className="divide-y divide-border">
             {stores?.map((store: Store) => (
               <li key={store.id} className="flex items-center justify-between p-4">
                 <div>
                   <p className="font-medium">{store.name}</p>
                   {store.address && (
-                    <p className="text-sm text-gray-500">{store.address}</p>
+                    <p className="text-sm text-muted-foreground">{store.address}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => handleEdit(store)}
-                    className="rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-blue-50"
+                    className="rounded-md px-3 py-1 text-sm text-primary hover:bg-accent"
                   >
                     {t("common.edit")}
                   </button>
@@ -157,7 +157,7 @@ export default function StoresPage() {
                     type="button"
                     onClick={() => deleteMutation.mutate({ id: store.id })}
                     disabled={deleteMutation.isPending}
-                    className="rounded-md px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    className="rounded-md px-3 py-1 text-sm text-destructive hover:bg-danger disabled:opacity-50"
                   >
                     {t("common.delete")}
                   </button>

@@ -38,7 +38,7 @@ afterEach(cleanup);
 function activeLink(): HTMLElement | undefined {
   return screen
     .getAllByRole("link")
-    .find((link) => link.className.includes("bg-blue-100"));
+    .find((link) => link.className.includes("bg-primary"));
 }
 
 describe("DashboardNav", () => {
@@ -94,7 +94,7 @@ describe("DashboardNav", () => {
 
     const highlighted = screen
       .getAllByRole("link")
-      .filter((link) => link.className.includes("bg-blue-100"));
+      .filter((link) => link.className.includes("bg-primary"));
     expect(highlighted).toHaveLength(1);
   });
 

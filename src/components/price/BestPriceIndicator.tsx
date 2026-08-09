@@ -33,7 +33,7 @@ export function BestPriceIndicator({
 
     if (isBestPrice) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+        <span className="inline-flex items-center gap-1 rounded-full bg-ok px-2 py-1 text-xs font-medium text-ok-foreground">
           <svg
             className="h-3 w-3"
             fill="currentColor"
@@ -53,7 +53,7 @@ export function BestPriceIndicator({
 
     if (isGoodDeal) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
           {t("priceStable")}
         </span>
       );
@@ -61,7 +61,7 @@ export function BestPriceIndicator({
 
     const priceDiff = ((currentPrice / bestPrice.price - 1) * 100).toFixed(0);
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-warn px-2 py-1 text-xs font-medium text-warn-foreground">
         +{priceDiff}%
       </span>
     );
@@ -70,11 +70,11 @@ export function BestPriceIndicator({
   // Show best price badge
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-500">{t("bestPrice")}:</span>
-      <span className="font-medium text-green-600">
+      <span className="text-sm text-muted-foreground">{t("bestPrice")}:</span>
+      <span className="font-medium text-ok-foreground">
         €{bestPrice.price.toFixed(2)}
       </span>
-      <span className="text-sm text-gray-500">{t("atStore", { store: bestPrice.store.name })}</span>
+      <span className="text-sm text-muted-foreground">{t("atStore", { store: bestPrice.store.name })}</span>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
   return (
     <div
       className={`flex items-center justify-between rounded-lg border p-3 ${
-        item.isChecked ? "bg-gray-50" : "bg-white"
+        item.isChecked ? "border-border bg-muted" : "border-border bg-card"
       }`}
     >
       <div className="flex items-center gap-3">
@@ -52,17 +52,17 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
               isChecked: !item.isChecked,
             })
           }
-          className="h-5 w-5 rounded border-gray-300"
+          className="h-5 w-5 rounded border-input accent-primary"
         />
         <div>
           <p
             className={`font-medium ${
-              item.isChecked ? "text-gray-400 line-through" : "text-gray-900"
+              item.isChecked ? "text-muted-foreground line-through" : "text-foreground"
             }`}
           >
             {name}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {item.quantity} {item.unit}
           </p>
         </div>
@@ -72,7 +72,7 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
         type="button"
         onClick={() => deleteMutation.mutate({ id: item.id })}
         disabled={deleteMutation.isPending}
-        className="rounded-md p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+        className="rounded-md p-2 text-destructive hover:bg-danger disabled:opacity-50"
         aria-label={t("removeItem")}
       >
         <svg

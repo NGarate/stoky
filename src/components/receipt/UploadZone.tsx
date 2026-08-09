@@ -69,12 +69,12 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
           <img
             src={preview}
             alt="Receipt preview"
-            className="w-full h-64 object-contain rounded-lg border"
+            className="w-full h-64 object-contain rounded-lg border border-border"
           />
           <button
             type="button"
             onClick={clearPreview}
-            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+            className="absolute top-2 right-2 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90"
             disabled={isUploading}
           >
             <X className="w-4 h-4" />
@@ -86,22 +86,26 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
           className={cn(
             "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
             isDragActive
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 hover:border-gray-400",
+              ? "border-primary bg-accent"
+              : "border-border bg-card hover:border-input",
             isUploading && "opacity-50 cursor-not-allowed",
           )}
         >
-          <input {...getInputProps()} />
+          {/* react-dropzone renders a visually hidden file input. Without an
+              accessible name a screen-reader user hears only "file upload
+              button" with no indication of what it takes — axe flags it as a
+              critical `label` violation. */}
+          <input {...getInputProps({ "aria-label": "Seleccionar una foto del ticket" })} />
           <div className="space-y-4">
             <div className="flex justify-center">
-              <Upload className="w-12 h-12 text-gray-400" />
+              <Upload className="w-12 h-12 text-muted-foreground" />
             </div>
-            <p className="text-gray-600">
+            <p className="text-foreground">
               {isDragActive
                 ? "Suelta el archivo aquí..."
                 : "Arrastra una foto del ticket o haz clic para seleccionar"}
             </p>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-muted-foreground">
               JPG, PNG o WebP (máx. 10MB)
             </p>
           </div>
@@ -112,7 +116,7 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
         type="button"
         onClick={handleCameraCapture}
         disabled={isUploading}
-        className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
       >
         <Camera className="w-5 h-5" />
         <span>Hacer foto con la cámara</span>

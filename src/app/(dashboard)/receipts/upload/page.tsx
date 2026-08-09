@@ -60,14 +60,14 @@ export default function UploadPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Subir Ticket</h1>
+      <h1 className="text-2xl font-bold mb-6 text-heading">Subir Ticket</h1>
 
       {!uploadedReceiptId ? (
         <div className="space-y-6">
           <UploadZone onUpload={handleUpload} isUploading={isUploading} />
 
           {isUploading && (
-            <p className="text-center text-gray-600">Subiendo ticket... Espera un momento.</p>
+            <p className="text-center text-muted-foreground">Subiendo ticket... Espera un momento.</p>
           )}
         </div>
       ) : (
@@ -80,8 +80,8 @@ export default function UploadPage() {
               />
 
               {statusQuery.data.status === "FAILED" && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-700">
+                <div className="rounded-lg border border-danger-foreground bg-danger p-4">
+                  <p className="text-danger-foreground">
                     Error al procesar el ticket. Intenta subirlo de nuevo.
                   </p>
                   <Button
@@ -98,7 +98,7 @@ export default function UploadPage() {
               {(statusQuery.data.status === "NEEDS_REVIEW" ||
                 statusQuery.data.status === "CONFIRMED") && (
                 <div className="text-center">
-                  <p className="text-green-600 mb-4">
+                  <p className="text-ok-foreground mb-4">
                     ¡Ticket procesado! {statusQuery.data.progress?.processed || 0} productos
                     encontrados.
                   </p>

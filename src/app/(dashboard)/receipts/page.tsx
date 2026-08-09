@@ -27,10 +27,10 @@ export default function ReceiptsPage() {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Tickets</h1>
+          <h1 className="text-2xl font-bold text-heading">Tickets</h1>
         </div>
         <div className="text-center py-12">
-          <p className="text-gray-600">Cargando tickets...</p>
+          <p className="text-muted-foreground">Cargando tickets...</p>
         </div>
       </div>
     );
@@ -39,7 +39,7 @@ export default function ReceiptsPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Tickets</h1>
+        <h1 className="text-2xl font-bold text-heading">Tickets</h1>
         <Link href="/receipts/upload">
           <Button type="button">
             <Plus className="w-4 h-4 mr-2" />
@@ -49,10 +49,10 @@ export default function ReceiptsPage() {
       </div>
 
       {receipts.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2">No tienes tickets guardados</p>
-          <p className="text-sm text-gray-500">
+        <div className="text-center py-12 rounded-lg border border-border bg-muted">
+          <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-foreground mb-2">No tienes tickets guardados</p>
+          <p className="text-sm text-muted-foreground">
             Sube tu primer ticket para empezar a gestionar tu inventario
           </p>
           <Link href="/receipts/upload">
@@ -71,14 +71,14 @@ export default function ReceiptsPage() {
                 ? `/receipts/${receipt.id}/review`
                 : "/receipts/upload"
             }
-              className="block p-4 border rounded-lg hover:border-blue-300 hover:bg-gray-50 transition-colors"
+              className="block p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">
                     {receipt.store?.name || "Tienda desconocida"}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {formatDate(receipt.createdAt)}
                     {receipt.totalAmount && ` • ${receipt.totalAmount.toFixed(2)} €`}
                     {receipt._count.items > 0 && ` • ${receipt._count.items} productos`}

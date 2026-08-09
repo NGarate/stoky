@@ -77,7 +77,7 @@ export function LocationPicker({
 
   if (isLoading) {
     return (
-      <div className="w-full p-2 border rounded bg-gray-50 text-gray-500">
+      <div className="w-full rounded border border-border bg-muted p-2 text-muted-foreground">
         Cargando ubicaciones...
       </div>
     );
@@ -88,12 +88,12 @@ export function LocationPicker({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-2 border rounded text-left bg-white hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        className="w-full rounded border border-input bg-card p-2 text-left text-foreground hover:bg-muted"
       >
         {selectedLocation ? (
           <span>{selectedLocation.name}</span>
         ) : (
-          <span className="text-gray-500">{placeholder}</span>
+          <span className="text-muted-foreground">{placeholder}</span>
         )}
         <svg
           className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform ${
@@ -127,7 +127,7 @@ export function LocationPicker({
             tabIndex={0}
             aria-label="Close dropdown"
           />
-          <div className="absolute z-20 w-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-auto">
+          <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-border bg-card shadow-lg">
             {allowRoot && (
               <button
                 type="button"
@@ -135,8 +135,8 @@ export function LocationPicker({
                   onChange(undefined);
                   setIsOpen(false);
                 }}
-                className={`w-full p-2 text-left hover:bg-gray-100 ${
-                  !value ? "bg-blue-50 text-blue-700" : ""
+                className={`w-full p-2 text-left hover:bg-muted ${
+                  !value ? "bg-accent text-accent-foreground" : ""
                 }`}
               >
                 Sin ubicación específica
@@ -150,8 +150,8 @@ export function LocationPicker({
                   onChange(node.id);
                   setIsOpen(false);
                 }}
-                className={`w-full p-2 text-left hover:bg-gray-100 ${
-                  value === node.id ? "bg-blue-50 text-blue-700" : ""
+                className={`w-full p-2 text-left hover:bg-muted ${
+                  value === node.id ? "bg-accent text-accent-foreground" : ""
                 }`}
               >
                 {node.name}

@@ -31,40 +31,40 @@ export default function SettingsPage(): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mt-2 text-2xl font-bold">{t("title")}</h1>
-      <p className="mt-2 text-gray-700">{t("intro")}</p>
+      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
+      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
 
       <ul className="mt-6 space-y-4">
-        <li className="rounded border border-gray-300 bg-white p-4">
-          <h2 className="text-lg font-semibold">
+        <li className="rounded border border-border bg-card p-4">
+          <h2 className="text-lg font-semibold text-heading">
             <Link
               href="/settings/locations"
-              className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+              className="inline-flex min-h-[44px] items-center text-primary underline"
             >
               {t("locationsTitle")}
             </Link>
           </h2>
-          <p className="mt-1 text-gray-700">{t("locationsDescription")}</p>
+          <p className="mt-1 text-muted-foreground">{t("locationsDescription")}</p>
         </li>
 
-        <li className="rounded border border-gray-300 bg-white p-4">
-          <h2 className="text-lg font-semibold">
+        <li className="rounded border border-border bg-card p-4">
+          <h2 className="text-lg font-semibold text-heading">
             <Link
               href="/settings/stores"
-              className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+              className="inline-flex min-h-[44px] items-center text-primary underline"
             >
               {t("storesTitle")}
             </Link>
           </h2>
-          <p className="mt-1 text-gray-700">{t("storesDescription")}</p>
+          <p className="mt-1 text-muted-foreground">{t("storesDescription")}</p>
         </li>
       </ul>
 
-      <h2 className="mt-8 text-lg font-semibold">{t("languageTitle")}</h2>
-      <p className="mt-2 text-gray-700">{t("languageDescription")}</p>
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("languageTitle")}</h2>
+      <p className="mt-2 text-muted-foreground">{t("languageDescription")}</p>
 
-      <h2 className="mt-8 text-lg font-semibold">{t("pendingTitle")}</h2>
-      <p className="mt-2 text-gray-700">{t("pendingDescription")}</p>
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("pendingTitle")}</h2>
+      <p className="mt-2 text-muted-foreground">{t("pendingDescription")}</p>
     </div>
   );
 }

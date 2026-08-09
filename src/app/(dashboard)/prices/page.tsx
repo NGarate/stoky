@@ -22,7 +22,7 @@ export default function PricesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("prices.title")}</h1>
+        <h1 className="text-2xl font-bold text-heading">{t("prices.title")}</h1>
       </div>
 
       <div className="relative">
@@ -31,10 +31,10 @@ export default function PricesPage() {
           placeholder={t("products.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2 pl-10 focus:border-blue-500 focus:outline-none"
+          className="w-full rounded-md border border-input bg-card px-4 py-2 pl-10 text-foreground"
         />
         <svg
-          className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+          className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -49,42 +49,42 @@ export default function PricesPage() {
         </svg>
       </div>
 
-      <div className="rounded-lg border bg-white shadow-sm">
+      <div className="rounded-lg border border-border bg-card shadow-sm">
         {products?.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-muted-foreground">
             <p>{t("prices.noPrices")}</p>
             <p className="mt-2 text-sm">{t("prices.addFirst")}</p>
           </div>
         ) : (
-          <ul className="divide-y">
+          <ul className="divide-y divide-border">
             {products?.map((product) => (
               <li key={product.id}>
                 <Link
                   href={`/prices/${product.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50"
+                  className="flex items-center justify-between p-4 hover:bg-muted"
                 >
                   <div className="flex-1">
                     <p className="font-medium">{product.name}</p>
                     {product.category && (
-                      <p className="text-sm text-gray-500">{product.category}</p>
+                      <p className="text-sm text-muted-foreground">{product.category}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-4">
                     {product.priceRecords.length > 0 ? (
                       <div className="text-right">
-                        <p className="text-sm text-gray-500">{t("products.lastPrice")}</p>
+                        <p className="text-sm text-muted-foreground">{t("products.lastPrice")}</p>
                         <p className="font-medium">
                           €{product.priceRecords[0].price.toFixed(2)}
                         </p>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-400">
+                      <span className="text-sm text-muted-foreground">
                         {t("prices.noPrices")}
                       </span>
                     )}
                     <BestPriceIndicator productId={product.id} />
                     <svg
-                      className="h-5 w-5 text-gray-400"
+                      className="h-5 w-5 text-muted-foreground"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"

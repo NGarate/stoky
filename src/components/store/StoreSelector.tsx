@@ -21,7 +21,7 @@ export function StoreSelector({
 
   if (isLoading) {
     return (
-      <select disabled className={`rounded-md border border-gray-300 px-3 py-2 ${className}`}>
+      <select disabled className={`rounded-md border border-input bg-card px-3 py-2 text-foreground ${className}`}>
         <option>{t("select")}...</option>
       </select>
     );
@@ -31,7 +31,7 @@ export function StoreSelector({
     <select
       value={value || ""}
       onChange={(e) => onChange(e.target.value)}
-      className={`rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none ${className}`}
+      className={`rounded-md border border-input bg-card px-3 py-2 text-foreground ${className}`}
     >
       <option value="">{placeholder || t("select")}</option>
       {stores?.map((store: { id: string; name: string }) => (

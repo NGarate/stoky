@@ -65,19 +65,19 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
     <div
       className={`p-4 border rounded-lg ${
         isConfirmed
-          ? "bg-green-50 border-green-200"
+          ? "bg-ok border-ok-foreground"
           : isAutoMatched
-            ? "bg-blue-50 border-blue-200"
-            : "bg-white"
+            ? "bg-muted border-border"
+            : "bg-card border-border"
       }`}
     >
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="font-medium text-gray-900">
+          <p className="font-medium text-foreground">
             {item.parsedName || item.rawText}
           </p>
           {item.parsedPrice && (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {item.parsedPrice.toFixed(2)} €
               {item.parsedQuantity && item.parsedQuantity > 1 &&
                 ` × ${item.parsedQuantity}`}
@@ -86,12 +86,12 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
         </div>
 
         {isConfirmed ? (
-          <div className="flex items-center gap-1 text-green-600">
+          <div className="flex items-center gap-1 text-ok-foreground">
             <Check className="w-4 h-4" />
             <span className="text-sm">Confirmado</span>
           </div>
         ) : isAutoMatched ? (
-          <div className="flex items-center gap-1 text-blue-600">
+          <div className="flex items-center gap-1 text-primary">
             <ShoppingCart className="w-4 h-4" />
             <span className="text-sm">Auto-detectado</span>
           </div>

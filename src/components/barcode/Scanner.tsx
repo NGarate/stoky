@@ -60,8 +60,8 @@ export function BarcodeScanner({
 
   if (!isScanning) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 bg-gray-100 rounded-lg">
-        <p className="text-gray-600">Escáner desactivado</p>
+      <div className="flex flex-col items-center justify-center rounded-lg bg-muted p-8">
+        <p className="text-muted-foreground">Escáner desactivado</p>
       </div>
     );
   }
@@ -75,7 +75,9 @@ export function BarcodeScanner({
           onError={handleError}
         />
 
-        {/* Overlay guides */}
+        {/* Overlay guides. Deliberately outside the token system: these sit
+            on live camera output rather than a themed surface, so they are
+            fixed black/white/green for legibility against any scene. */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute inset-0 bg-black/20" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-48 border-2 border-white/50 rounded-lg">
@@ -133,7 +135,7 @@ export function BarcodeScanner({
       </div>
 
       {scanError && (
-        <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+        <div className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">
           <p className="font-medium">Error al acceder a la cámara</p>
           <p className="text-sm">{scanError}</p>
           <p className="text-sm mt-2">
@@ -142,7 +144,7 @@ export function BarcodeScanner({
         </div>
       )}
 
-      <p className="mt-4 text-sm text-gray-600 text-center">
+      <p className="mt-4 text-center text-sm text-muted-foreground">
         Coloca el código de barras dentro del rectángulo verde
       </p>
     </div>

@@ -70,7 +70,7 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
       <div>
         <label
           htmlFor={searchId}
-          className="mb-1 block text-sm font-medium text-gray-900"
+          className="mb-1 block text-sm font-medium text-foreground"
         >
           {t("productSearchLabel")}
         </label>
@@ -82,14 +82,14 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={t("productSearchPlaceholder")}
-          className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+          className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
         />
       </div>
 
       <div>
         <label
           htmlFor={selectId}
-          className="mb-1 block text-sm font-medium text-gray-900"
+          className="mb-1 block text-sm font-medium text-foreground"
         >
           {t("productLabel")}
         </label>
@@ -115,7 +115,7 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
                 : null,
             );
           }}
-          className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+          className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
         >
           <option value="">{t("productPlaceholder")}</option>
           {products.map((product) => (
@@ -133,12 +133,12 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
           id={statusId}
           role="status"
           aria-live="polite"
-          className="mt-1 text-sm text-gray-700"
+          className="mt-1 text-sm text-muted-foreground"
         >
           {statusMessage}
         </p>
         {error ? (
-          <p id={errorId} className="mt-1 text-sm font-medium text-red-800">
+          <p id={errorId} className="mt-1 text-sm font-medium text-danger-foreground">
             {error}
           </p>
         ) : null}

@@ -191,12 +191,12 @@ export default function ConsumeStockPage(): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/inventory" className="inline-block py-2 text-blue-700 underline">
+      <Link href="/inventory" className="inline-block py-2 text-primary underline">
         {t("backToInventory")}
       </Link>
 
-      <h1 className="mt-2 text-2xl font-bold">{t("title")}</h1>
-      <p className="mt-2 text-gray-700">{t("intro")}</p>
+      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
+      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
         {summaryMessages.length > 0 ? (
@@ -204,7 +204,7 @@ export default function ConsumeStockPage(): JSX.Element {
             ref={summaryRef}
             role="alert"
             tabIndex={-1}
-            className="rounded border border-red-700 bg-red-50 p-4 text-red-900"
+            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
           >
             <h2 className="font-semibold">{t("errorTitle")}</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -221,8 +221,8 @@ export default function ConsumeStockPage(): JSX.Element {
           error={fieldErrors.product}
         />
 
-        <div className="rounded border border-gray-300 bg-gray-50 p-4">
-          <h2 className="text-sm font-medium text-gray-900">
+        <div className="rounded border border-border bg-muted p-4">
+          <h2 className="text-sm font-medium text-foreground">
             {t("availableLabel")}
           </h2>
           {/* Kept mounted so the figure is announced when the product changes,
@@ -231,7 +231,7 @@ export default function ConsumeStockPage(): JSX.Element {
             id={availableId}
             role="status"
             aria-live="polite"
-            className="mt-1 text-lg font-semibold text-gray-900"
+            className="mt-1 text-lg font-semibold text-foreground"
           >
             {availableMessage}
           </p>
@@ -240,7 +240,7 @@ export default function ConsumeStockPage(): JSX.Element {
         <div>
           <label
             htmlFor={quantityId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("quantityLabel")}
           </label>
@@ -260,15 +260,15 @@ export default function ConsumeStockPage(): JSX.Element {
                 ? `${availableId} ${quantityHintId} ${quantityErrorId}`
                 : `${availableId} ${quantityHintId}`
             }
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={quantityHintId} className="mt-1 text-sm text-gray-700">
+          <p id={quantityHintId} className="mt-1 text-sm text-muted-foreground">
             {t("quantityHint")}
           </p>
           {fieldErrors.quantity ? (
             <p
               id={quantityErrorId}
-              className="mt-1 text-sm font-medium text-red-800"
+              className="mt-1 text-sm font-medium text-danger-foreground"
             >
               {fieldErrors.quantity}
             </p>
@@ -278,7 +278,7 @@ export default function ConsumeStockPage(): JSX.Element {
         <div>
           <label
             htmlFor={unitId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("unitLabel")}
           </label>
@@ -296,13 +296,13 @@ export default function ConsumeStockPage(): JSX.Element {
             aria-describedby={
               fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
             }
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={unitHintId} className="mt-1 text-sm text-gray-700">
+          <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
             {t("unitHint")}
           </p>
           {fieldErrors.unit ? (
-            <p id={unitErrorId} className="mt-1 text-sm font-medium text-red-800">
+            <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
               {fieldErrors.unit}
             </p>
           ) : null}
@@ -313,7 +313,7 @@ export default function ConsumeStockPage(): JSX.Element {
         <div role="group" aria-labelledby={locationLabelId}>
           <span
             id={locationLabelId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("locationLabel")}
           </span>
@@ -322,13 +322,13 @@ export default function ConsumeStockPage(): JSX.Element {
             onChange={setLocationId}
             placeholder={t("locationPlaceholder")}
           />
-          <p className="mt-1 text-sm text-gray-700">{t("locationHint")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
         </div>
 
         <div>
           <label
             htmlFor={noteId}
-            className="mb-1 block text-sm font-medium text-gray-900"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {t("noteLabel")}
           </label>
@@ -339,7 +339,7 @@ export default function ConsumeStockPage(): JSX.Element {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder={t("notePlaceholder")}
-            className="min-h-[44px] w-full rounded border border-gray-400 bg-white px-3 py-2"
+            className="min-h-[44px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
         </div>
 
@@ -347,19 +347,19 @@ export default function ConsumeStockPage(): JSX.Element {
           <button
             type="submit"
             disabled={consumeStock.isPending}
-            className="min-h-[44px] rounded bg-orange-700 px-4 py-2 font-medium text-white hover:bg-orange-800 disabled:opacity-60"
+            className="min-h-[44px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
           </button>
           <Link
             href="/inventory"
-            className="inline-flex min-h-[44px] items-center rounded border border-gray-400 px-4 py-2"
+            className="inline-flex min-h-[44px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
           >
             {t("cancel")}
           </Link>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
-          <p role="status" aria-live="polite" className="text-sm text-gray-700">
+          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
             {consumeStock.isPending ? t("submitting") : ""}
           </p>
         </div>

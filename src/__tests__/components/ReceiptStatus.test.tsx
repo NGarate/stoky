@@ -84,7 +84,7 @@ describe("ReceiptStatusBadge", () => {
  */
 function stepActivity(container: HTMLElement): boolean[] {
   return Array.from(container.querySelectorAll("div.flex.flex-col")).map(
-    (step) => step.className.includes("text-blue-600"),
+    (step) => step.className.includes("text-primary"),
   );
 }
 
@@ -113,7 +113,7 @@ describe("ReceiptStatusStep", () => {
       <ReceiptStatusStep status={ReceiptStatus.NEEDS_REVIEW} />,
     );
 
-    const current = container.querySelector(".bg-blue-600.text-white");
+    const current = container.querySelector(".bg-primary.text-primary-foreground");
     expect(current).not.toBeNull();
     expect(within(current as HTMLElement).getByText("4")).toBeInTheDocument();
   });

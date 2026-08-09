@@ -158,12 +158,12 @@ export default function ProductDetailPage({
       <div className="mx-auto max-w-3xl">
         <Link
           href="/products"
-          className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+          className="inline-flex min-h-[44px] items-center text-primary underline"
         >
           {t("backToProducts")}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">{t("loadingTitle")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-gray-700">
+        <h1 className="mt-2 text-2xl font-bold text-heading">{t("loadingTitle")}</h1>
+        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
           {t("loading")}
         </p>
       </div>
@@ -177,14 +177,14 @@ export default function ProductDetailPage({
       <div className="mx-auto max-w-3xl">
         <Link
           href="/products"
-          className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+          className="inline-flex min-h-[44px] items-center text-primary underline"
         >
           {t("backToProducts")}
         </Link>
 
         <div
           role="alert"
-          className="mt-2 rounded border border-red-700 bg-red-50 p-4 text-red-900"
+          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
         >
           <h1 className="text-2xl font-bold">{t("errorTitle")}</h1>
           <p className="mt-2">{t(errorKey)}</p>
@@ -198,7 +198,7 @@ export default function ProductDetailPage({
             onClick={() => {
               void query.refetch();
             }}
-            className="mt-4 min-h-[44px] rounded border border-gray-500 bg-white px-4 py-2 font-medium text-gray-900 hover:bg-gray-100"
+            className="mt-4 min-h-[44px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {t("retry")}
           </button>
@@ -214,12 +214,12 @@ export default function ProductDetailPage({
     <div className="mx-auto max-w-3xl">
       <Link
         href="/products"
-        className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+        className="inline-flex min-h-[44px] items-center text-primary underline"
       >
         {t("backToProducts")}
       </Link>
 
-      <h1 className="mt-2 text-2xl font-bold">{product.name}</h1>
+      <h1 className="mt-2 text-2xl font-bold text-heading">{product.name}</h1>
 
       {/* Decorative: the name it illustrates is directly above it, so an alt
           text would only repeat the heading. Open Food Facts is the only thing
@@ -229,21 +229,21 @@ export default function ProductDetailPage({
         <img
           src={product.imageUrl}
           alt=""
-          className="mt-4 h-40 w-40 rounded border border-gray-300 bg-white object-contain"
+          className="mt-4 h-40 w-40 rounded border border-border bg-card object-contain"
         />
       ) : null}
 
-      <h2 className="mt-6 text-lg font-semibold">{t("stockTitle")}</h2>
-      <p className="mt-2 text-2xl font-bold text-gray-900">
+      <h2 className="mt-6 text-lg font-semibold text-heading">{t("stockTitle")}</h2>
+      <p className="mt-2 text-2xl font-bold text-heading">
         {t("stockValue", {
           quantity: product.totalStock,
           unit: product.defaultUnit,
         })}
       </p>
       {product.totalStock <= 0 ? (
-        <p className="mt-1 font-medium text-red-800">{t("stockEmpty")}</p>
+        <p className="mt-1 font-medium text-danger-foreground">{t("stockEmpty")}</p>
       ) : isLowStock && product.minStock !== null ? (
-        <p className="mt-1 font-medium text-red-800">
+        <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
             minimum: product.minStock,
             unit: product.defaultUnit,
@@ -251,21 +251,21 @@ export default function ProductDetailPage({
         </p>
       ) : null}
 
-      <h2 className="mt-8 text-lg font-semibold">{t("locationsTitle")}</h2>
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("locationsTitle")}</h2>
       {stockByLocation.length === 0 ? (
-        <p className="mt-2 text-gray-700">{t("locationsEmpty")}</p>
+        <p className="mt-2 text-muted-foreground">{t("locationsEmpty")}</p>
       ) : (
         <>
-          <ul className="mt-2 divide-y divide-gray-200 rounded border border-gray-300 bg-white">
+          <ul className="mt-2 divide-y divide-border rounded border border-border bg-card">
             {stockByLocation.map((total) => (
               <li
                 key={total.key}
                 className="flex items-center justify-between gap-4 px-4 py-3"
               >
-                <span className="text-gray-900">
+                <span className="text-foreground">
                   {total.name ?? t("locationNone")}
                 </span>
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-foreground">
                   {t("stockValue", {
                     quantity: total.quantity,
                     unit: product.defaultUnit,
@@ -274,27 +274,27 @@ export default function ProductDetailPage({
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-sm text-gray-700">{t("locationsNote")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("locationsNote")}</p>
         </>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold">{t("expiryTitle")}</h2>
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("expiryTitle")}</h2>
       {batches.length === 0 ? (
-        <p className="mt-2 text-gray-700">{t("expiryEmpty")}</p>
+        <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
       ) : (
         <>
-          <ul className="mt-2 divide-y divide-gray-200 rounded border border-gray-300 bg-white">
+          <ul className="mt-2 divide-y divide-border rounded border border-border bg-card">
             {batches.map((batch) => (
               <li key={batch.id} className="px-4 py-3">
-                <p className="font-medium text-gray-900">
+                <p className="font-medium text-foreground">
                   {dateFormat.format(batch.expiresAt)}
                   {batch.expiresAt.getTime() < Date.now() ? (
-                    <span className="ml-2 font-semibold text-red-800">
+                    <span className="ml-2 font-semibold text-danger-foreground">
                       {t("expiryExpired")}
                     </span>
                   ) : null}
                 </p>
-                <p className="mt-1 text-sm text-gray-700">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {t("expiryBatch", {
                     quantity: batch.quantity,
                     unit: batch.unit,
@@ -304,19 +304,19 @@ export default function ProductDetailPage({
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-sm text-gray-700">{t("expiryNote")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("expiryNote")}</p>
         </>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold">{t("pricesTitle")}</h2>
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("pricesTitle")}</h2>
       {product.priceRecords.length === 0 ? (
-        <p className="mt-2 text-gray-700">{t("pricesEmpty")}</p>
+        <p className="mt-2 text-muted-foreground">{t("pricesEmpty")}</p>
       ) : (
         <div className="mt-2 overflow-x-auto">
-          <table className="w-full border-collapse bg-white text-left">
+          <table className="w-full border-collapse bg-card text-left">
             <caption className="sr-only">{t("pricesCaption")}</caption>
             <thead>
-              <tr className="border-b border-gray-300">
+              <tr className="border-b border-border">
                 <th scope="col" className="px-4 py-2 font-medium">
                   {t("priceDateHeader")}
                 </th>
@@ -333,7 +333,7 @@ export default function ProductDetailPage({
             </thead>
             <tbody>
               {product.priceRecords.map((record) => (
-                <tr key={record.id} className="border-b border-gray-200">
+                <tr key={record.id} className="border-b border-border">
                   <td className="px-4 py-2">
                     {dateFormat.format(record.recordedAt)}
                   </td>
@@ -356,45 +356,45 @@ export default function ProductDetailPage({
       <p className="mt-2">
         <Link
           href={`/prices/${product.id}`}
-          className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+          className="inline-flex min-h-[44px] items-center text-primary underline"
         >
           {t("pricesHistoryLink")}
         </Link>
       </p>
 
-      <h2 className="mt-8 text-lg font-semibold">{t("detailsTitle")}</h2>
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("detailsTitle")}</h2>
       <dl className="mt-2 space-y-3">
         <div>
-          <dt className="text-sm font-medium text-gray-700">
+          <dt className="text-sm font-medium text-muted-foreground">
             {t("brandLabel")}
           </dt>
-          <dd className="text-gray-900">{product.brand || t("notSet")}</dd>
+          <dd className="text-foreground">{product.brand || t("notSet")}</dd>
         </div>
         <div>
-          <dt className="text-sm font-medium text-gray-700">
+          <dt className="text-sm font-medium text-muted-foreground">
             {t("categoryLabel")}
           </dt>
-          <dd className="text-gray-900">{product.category || t("notSet")}</dd>
+          <dd className="text-foreground">{product.category || t("notSet")}</dd>
         </div>
         <div>
-          <dt className="text-sm font-medium text-gray-700">
+          <dt className="text-sm font-medium text-muted-foreground">
             {t("barcodeLabel")}
           </dt>
-          <dd className="font-mono text-gray-900">
+          <dd className="font-mono text-foreground">
             {product.barcode || t("notSet")}
           </dd>
         </div>
         <div>
-          <dt className="text-sm font-medium text-gray-700">
+          <dt className="text-sm font-medium text-muted-foreground">
             {t("unitLabel")}
           </dt>
-          <dd className="text-gray-900">{product.defaultUnit}</dd>
+          <dd className="text-foreground">{product.defaultUnit}</dd>
         </div>
         <div>
-          <dt className="text-sm font-medium text-gray-700">
+          <dt className="text-sm font-medium text-muted-foreground">
             {t("minStockLabel")}
           </dt>
-          <dd className="text-gray-900">
+          <dd className="text-foreground">
             {product.minStock === null
               ? t("minStockNone")
               : t("stockValue", {
@@ -404,24 +404,24 @@ export default function ProductDetailPage({
           </dd>
         </div>
         <div>
-          <dt className="text-sm font-medium text-gray-700">
+          <dt className="text-sm font-medium text-muted-foreground">
             {t("addedLabel")}
           </dt>
-          <dd className="text-gray-900">
+          <dd className="text-foreground">
             {dateFormat.format(product.createdAt)}
           </dd>
         </div>
       </dl>
 
-      <h2 className="mt-8 text-lg font-semibold">{t("actionsTitle")}</h2>
-      <p className="mt-2 text-sm text-gray-700">
+      <h2 className="mt-8 text-lg font-semibold text-heading">{t("actionsTitle")}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
         {t("actionsHint", { name: product.name })}
       </p>
       <ul className="mt-2 space-y-2">
         <li>
           <Link
             href="/inventory/add"
-            className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+            className="inline-flex min-h-[44px] items-center text-primary underline"
           >
             {t("addStock")}
           </Link>
@@ -429,7 +429,7 @@ export default function ProductDetailPage({
         <li>
           <Link
             href="/inventory/consume"
-            className="inline-flex min-h-[44px] items-center text-blue-700 underline"
+            className="inline-flex min-h-[44px] items-center text-primary underline"
           >
             {t("consumeStock")}
           </Link>

@@ -14,50 +14,50 @@ interface ReceiptStatusProps {
 const statusConfig = {
   [ReceiptStatus.UPLOADING]: {
     label: "Subiendo...",
-    color: "text-blue-500",
-    bgColor: "bg-blue-50",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
     icon: Loader2,
     spin: true,
   },
   [ReceiptStatus.PROCESSING]: {
     label: "Procesando OCR...",
-    color: "text-yellow-500",
-    bgColor: "bg-yellow-50",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
     icon: Loader2,
     spin: true,
   },
   [ReceiptStatus.PARSED]: {
     label: "Analizando...",
-    color: "text-purple-500",
-    bgColor: "bg-purple-50",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
     icon: Loader2,
     spin: true,
   },
   [ReceiptStatus.NEEDS_REVIEW]: {
     label: "Necesita revisión",
-    color: "text-orange-500",
-    bgColor: "bg-orange-50",
+    color: "text-warn-foreground",
+    bgColor: "bg-warn",
     icon: AlertCircle,
     spin: false,
   },
   [ReceiptStatus.CONFIRMED]: {
     label: "Confirmado",
-    color: "text-green-500",
-    bgColor: "bg-green-50",
+    color: "text-ok-foreground",
+    bgColor: "bg-ok",
     icon: CheckCircle,
     spin: false,
   },
   [ReceiptStatus.APPLIED]: {
     label: "Aplicado",
-    color: "text-green-600",
-    bgColor: "bg-green-100",
+    color: "text-ok-foreground",
+    bgColor: "bg-ok",
     icon: Check,
     spin: false,
   },
   [ReceiptStatus.FAILED]: {
     label: "Error",
-    color: "text-red-500",
-    bgColor: "bg-red-50",
+    color: "text-danger-foreground",
+    bgColor: "bg-danger",
     icon: AlertCircle,
     spin: false,
   },
@@ -74,7 +74,7 @@ export function ReceiptStatusBadge({ status, progress }: ReceiptStatusProps) {
         {config.label}
       </span>
       {progress && status !== ReceiptStatus.APPLIED && (
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-muted-foreground">
           ({progress.processed}/{progress.total})
         </span>
       )}
@@ -108,16 +108,16 @@ export function ReceiptStatusStep({ status }: ReceiptStatusStepProps) {
           <div key={step.id} className="flex items-center">
             <div
               className={`flex flex-col items-center ${
-                isActive ? "text-blue-600" : "text-gray-400"
+                isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   isCurrent
-                    ? "bg-blue-600 text-white"
+                    ? "bg-primary text-primary-foreground"
                     : isActive
-                      ? "bg-blue-100 text-blue-600"
-                      : "bg-gray-100 text-gray-400"
+                      ? "bg-accent text-primary"
+                      : "bg-muted text-muted-foreground"
                 }`}
               >
                 {index + 1}
@@ -127,7 +127,7 @@ export function ReceiptStatusStep({ status }: ReceiptStatusStepProps) {
             {index < steps.length - 1 && (
               <div
                 className={`w-8 h-0.5 mx-1 ${
-                  index < currentIndex ? "bg-blue-600" : "bg-gray-200"
+                  index < currentIndex ? "bg-primary" : "bg-border"
                 }`}
               />
             )}

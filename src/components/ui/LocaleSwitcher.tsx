@@ -27,7 +27,7 @@ export function LocaleSwitcher() {
         defaultValue={locale}
         disabled={isPending}
         onChange={onSelectChange}
-        className="rounded-md border border-gray-300 px-3 py-1 text-sm focus:border-blue-500 focus:outline-none"
+        className="rounded-md border border-input bg-card px-3 py-1 text-sm text-foreground"
       >
         <option value="es">{t("spanish")}</option>
         <option value="en">{t("english")}</option>

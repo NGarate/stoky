@@ -80,8 +80,8 @@ export default function ReviewPage() {
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">Revisar Ticket</h1>
-          <p className="text-gray-600">
+          <h1 className="text-2xl font-bold text-heading">Revisar Ticket</h1>
+          <p className="text-muted-foreground">
             {receipt.store?.name || "Tienda desconocida"}
             {receipt.purchaseDate && ` • ${new Date(receipt.purchaseDate).toLocaleDateString("es-ES")}`}
           </p>
@@ -93,9 +93,9 @@ export default function ReviewPage() {
       </div>
 
       {receipt.status === "APPLIED" ? (
-        <div className="text-center py-8 bg-green-50 rounded-lg mb-6">
-          <Package className="w-12 h-12 text-green-600 mx-auto mb-4" />
-          <p className="text-green-700 font-medium">
+        <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">
+          <Package className="w-12 h-12 text-ok-foreground mx-auto mb-4" />
+          <p className="text-ok-foreground font-medium">
             Este ticket ya ha sido aplicado al inventario
           </p>
           <Link href="/inventory">
@@ -107,7 +107,7 @@ export default function ReviewPage() {
       ) : (
         <>
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               {pendingItems === 0
                 ? "¡Todos los productos han sido revisados!"
                 : `${pendingItems} productos pendientes de revisión`}

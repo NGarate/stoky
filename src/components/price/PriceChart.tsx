@@ -49,21 +49,31 @@ export function PriceChart({ data, showStores = false }: PriceChartProps) {
     ? [...new Set(data.map((item) => item.storeName || "Unknown"))]
     : [];
 
-  const colors = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"];
+  // Categorical series colours. The design system has no series scale — its
+  // tokens name surfaces and states, not "store 3" — so the first series uses
+  // the gauge token and the rest are fixed hues chosen to stay legible on both
+  // the light and the dark card. Adding a scale is a separate piece of work.
+  const colors = [
+    "var(--gauge)",
+    "#c2410c",
+    "#7e22ce",
+    "#0e7490",
+    "#a16207",
+  ];
 
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 12 }}
-            stroke="#6b7280"
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+            stroke="var(--border)"
           />
           <YAxis
-            tick={{ fontSize: 12 }}
-            stroke="#6b7280"
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+            stroke="var(--border)"
             tickFormatter={(value) => `€${value.toFixed(2)}`}
           />
           <Tooltip
@@ -86,7 +96,7 @@ export function PriceChart({ data, showStores = false }: PriceChartProps) {
             <Line
               type="monotone"
               dataKey="price"
-              stroke="#2563eb"
+              stroke="var(--gauge)"
               strokeWidth={2}
               dot={{ r: 4 }}
               activeDot={{ r: 6 }}
