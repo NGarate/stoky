@@ -9,6 +9,11 @@ import { renderWithIntl } from "../utils/render";
 const setLocaleCookie = mock(async (_locale: string) => {});
 mock.module("@/lib/i18n/cookies", () => ({ setLocaleCookie }));
 
+// The switcher now applies the locale with a router refresh instead of a full
+// page reload, so the router is what the test has to observe.
+const refresh = mock(() => {});
+mock.module("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
 const reload = mock(() => {});
 Object.defineProperty(window.location, "reload", {
   value: reload,
@@ -20,6 +25,7 @@ const { LocaleSwitcher } = await import("@/components/ui/LocaleSwitcher");
 
 beforeEach(() => {
   setLocaleCookie.mockClear();
+  refresh.mockClear();
   reload.mockClear();
 });
 
@@ -50,7 +56,7 @@ describe("LocaleSwitcher", () => {
     expect(screen.getByLabelText("Idioma")).toHaveValue("es");
   });
 
-  it("persists the chosen locale and reloads", async () => {
+  it("persists the chosen locale and refreshes without reloading", async () => {
     renderWithIntl(<LocaleSwitcher />);
 
     await userEvent.selectOptions(screen.getByLabelText("Idioma"), "en");
@@ -58,13 +64,60 @@ describe("LocaleSwitcher", () => {
     await waitFor(() => {
       expect(setLocaleCookie).toHaveBeenCalledWith("en");
     });
-    expect(reload).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+    // A reload would throw away anything already typed into a form on the
+    // page, which is the defect this replaces (DESIGN_AUDIT A2.3).
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("writes the cookie before refreshing", async () => {
+    // The locale is read back from the cookie on the server, so refreshing
+    // first would re-render in the language the user just left.
+    const order: string[] = [];
+    setLocaleCookie.mockImplementationOnce(async () => {
+      // A server action is a network round-trip, so it does not settle in the
+      // same tick. Resolving synchronously would let a `refresh()` that was
+      // never awaited still land second, and the test would prove nothing.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      order.push("cookie");
+    });
+    refresh.mockImplementationOnce(() => {
+      order.push("refresh");
+    });
+
+    renderWithIntl(<LocaleSwitcher />);
+    await userEvent.selectOptions(screen.getByLabelText("Idioma"), "en");
+
+    await waitFor(() => {
+      expect(order).toEqual(["cookie", "refresh"]);
+    });
   });
 
   it("does not persist anything before an interaction", () => {
     renderWithIntl(<LocaleSwitcher />);
 
     expect(setLocaleCookie).not.toHaveBeenCalled();
-    expect(reload).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("gives each instance its own id so two can share a page", () => {
+    renderWithIntl(
+      <>
+        <LocaleSwitcher />
+        <LocaleSwitcher />
+      </>,
+    );
+
+    // The hardcoded id="locale-switcher" duplicated the id and pointed both
+    // labels at the first select, which is why /settings could not render it.
+    const selects = screen.getAllByRole("combobox");
+    expect(selects).toHaveLength(2);
+    expect(selects[0]?.id).not.toBe(selects[1]?.id);
+
+    const labelled = screen.getAllByLabelText("Idioma");
+    expect(labelled).toHaveLength(2);
+    expect(labelled[0]).not.toBe(labelled[1]);
   });
 });

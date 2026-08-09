@@ -8,6 +8,8 @@ let pathname = "/dashboard";
 
 mock.module("next/navigation", () => ({
   usePathname: () => pathname,
+  // The locale switcher applies its choice with a router refresh.
+  useRouter: () => ({ refresh: () => {} }),
 }));
 
 // `next/link` needs an App Router context that does not exist in a unit test;
@@ -113,10 +115,11 @@ describe("DashboardNav", () => {
     expect(activeLink()).toBeUndefined();
   });
 
-  it("includes the locale switcher", () => {
+  it("includes the preferences cluster", () => {
     pathname = "/dashboard";
     renderWithIntl(<DashboardNav />);
 
     expect(screen.getByLabelText("Idioma")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Tema" })).toBeInTheDocument();
   });
 });

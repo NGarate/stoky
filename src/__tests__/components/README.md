@@ -47,7 +47,8 @@ to a broken world.
 |---|---|---|
 | `button.test.tsx` | `ui/Button` | Variants, sizes, `asChild`, disabled, keyboard activation, ref |
 | `input.test.tsx` | `ui/Input` | Typing, `onChange`, disabled, labelling, native form attributes |
-| `LocaleSwitcher.test.tsx` | `ui/LocaleSwitcher` | Options, active locale, cookie persistence + reload |
+| `LocaleSwitcher.test.tsx` | `ui/LocaleSwitcher` | Options, active locale, cookie persistence + router refresh, unique ids |
+| `ThemeControl.test.tsx` | `ui/ThemeControl` | Three states, group name, stored choice, `data-theme`, shared store, cross-tab |
 | `DashboardNav.test.tsx` | `dashboard/DashboardNav` | Section hrefs, active-route and nested-route highlighting |
 | `LocationPicker.test.tsx` | `inventory/LocationPicker` | Loading, tree roots, stock counts, selection, clearing, closing |
 | `ShoppingItem.test.tsx` | `shopping/ShoppingItem` | Name fallbacks, checked state, toggle/remove mutations, cache invalidation |
