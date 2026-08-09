@@ -32,7 +32,14 @@
     "prices": "Prices",
     "settings": "Settings",
     "dashboard": "Dashboard",
-    "stores": "Stores"
+    "stores": "Stores",
+    "shoppingShort": "Shopping",
+    "scan": "Scan",
+    "more": "More",
+    "mainLabel": "Main navigation",
+    "moreTitle": "More sections",
+    "moreContainsCurrent": "the current page is in here",
+    "preferencesTitle": "Language and theme"
   },
   "dashboard": {
     "title": "Dashboard",

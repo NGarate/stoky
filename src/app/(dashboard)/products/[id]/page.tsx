@@ -312,7 +312,48 @@ export default function ProductDetailPage({
       {product.priceRecords.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("pricesEmpty")}</p>
       ) : (
-        <div className="mt-2 overflow-x-auto">
+        <>
+          {/* Phone and tablet: one card per price record. Every column the
+              table carries is on the card — date, store, amount and quantity —
+              stacked rather than dropped (DESIGN_AUDIT A3.2). */}
+          <ul className="mt-2 space-y-3 lg:hidden">
+            {product.priceRecords.map((record) => (
+              <li
+                key={record.id}
+                className="rounded border border-border bg-card p-4"
+              >
+                <p className="font-medium text-foreground md:text-xl">
+                  {record.store.name}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-heading md:text-2xl">
+                  {formatMoney(locale, record.price, record.currency)}
+                </p>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:text-lg">
+                  <div>
+                    <dt className="text-muted-foreground">
+                      {t("priceDateHeader")}
+                    </dt>
+                    <dd className="mt-1 text-foreground">
+                      {dateFormat.format(record.recordedAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">
+                      {t("priceQuantityHeader")}
+                    </dt>
+                    <dd className="mt-1 text-foreground">
+                      {t("stockValue", {
+                        quantity: record.quantity,
+                        unit: record.unit,
+                      })}
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-2 hidden overflow-x-auto lg:block">
           <table className="w-full border-collapse bg-card text-left">
             <caption className="sr-only">{t("pricesCaption")}</caption>
             <thead>
@@ -351,7 +392,8 @@ export default function ProductDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
       <p className="mt-2">
         <Link

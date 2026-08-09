@@ -115,6 +115,46 @@ describe("DashboardNav", () => {
     expect(activeLink()).toBeUndefined();
   });
 
+  it("names the landmark", () => {
+    pathname = "/dashboard";
+    renderWithIntl(<DashboardNav />);
+
+    expect(
+      screen.getByRole("navigation", { name: "Navegación principal" }),
+    ).toBeInTheDocument();
+  });
+
+  it("marks the current section with aria-current, not colour alone", () => {
+    pathname = "/inventory";
+    renderWithIntl(<DashboardNav />);
+
+    const link = screen.getByRole("link", { name: "Inventario" });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link.className).toContain("font-semibold");
+  });
+
+  it("is the desktop tier only, and hands over rather than disappearing", () => {
+    pathname = "/dashboard";
+    const { container } = renderWithIntl(<DashboardNav />);
+
+    // Below `lg` this bar is hidden — but `CompactNav` renders a bottom bar or
+    // a rail at those widths, so nothing is dropped (ISSUES.md NAV-1).
+    const nav = container.querySelector("nav");
+    expect(nav?.className).toContain("hidden");
+    expect(nav?.className).toContain("lg:block");
+  });
+
+  it("gives every link a 44px target", () => {
+    pathname = "/dashboard";
+    renderWithIntl(<DashboardNav />);
+
+    for (const label of ["Panel", "Inventario", "Configuración"]) {
+      expect(
+        screen.getByRole("link", { name: label }).className,
+      ).toContain("min-h-[44px]");
+    }
+  });
+
   it("includes the preferences cluster", () => {
     pathname = "/dashboard";
     renderWithIntl(<DashboardNav />);

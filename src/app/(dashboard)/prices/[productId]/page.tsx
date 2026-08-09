@@ -39,23 +39,23 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <Link
           href="/prices"
-          className="rounded-md border border-input bg-card px-3 py-1 text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+          className="inline-flex min-h-[48px] items-center rounded-md border border-input bg-card px-3 py-1 text-sm text-foreground hover:bg-accent hover:text-accent-foreground md:text-lg"
         >
           {t("common.back")}
         </Link>
-        <h1 className="text-2xl font-bold text-heading">{t("prices.history")}</h1>
+        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("prices.history")}</h1>
       </div>
 
-      <div className="flex items-center gap-4">
-        <label htmlFor="days-select" className="text-sm font-medium">{t("common.date")}:</label>
+      <div className="flex flex-wrap items-center gap-4">
+        <label htmlFor="days-select" className="text-sm font-medium md:text-lg">{t("common.date")}:</label>
         <select
           id="days-select"
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="rounded-md border border-input bg-card px-3 py-1 text-foreground"
+          className="min-h-[48px] rounded-md border border-input bg-card px-3 py-1 text-foreground md:text-lg"
         >
           <option value={30}>30 {t("common.days")}</option>
           <option value={90}>90 {t("common.days")}</option>
@@ -64,7 +64,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
         </select>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
         <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.chart.title")}</h2>
         {chartData.length > 0 ? (
           <PriceChart data={chartData} showStores={true} />
@@ -76,9 +76,51 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       <StoreComparison productId={productId} />
 
       {trends && trends.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.trends")}</h2>
-          <table className="w-full">
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+          <h2 className="mb-4 text-lg font-semibold text-heading md:text-2xl">{t("prices.trends")}</h2>
+
+          {/* Phone and tablet: one card per day. All four columns survive —
+              date, average, best and worst (DESIGN_AUDIT A3.2). */}
+          <ul className="space-y-3 lg:hidden">
+            {trends.map((trend) => (
+              <li
+                key={trend.date}
+                className="rounded-md border border-border p-3 md:p-4"
+              >
+                <p className="font-medium text-foreground md:text-xl">
+                  {new Date(trend.date).toLocaleDateString()}
+                </p>
+                <dl className="mt-2 grid grid-cols-3 gap-2 text-sm md:text-lg">
+                  <div>
+                    <dt className="text-muted-foreground">
+                      {t("prices.averagePrice")}
+                    </dt>
+                    <dd className="mt-1 font-medium text-foreground">
+                      €{trend.averagePrice.toFixed(2)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">
+                      {t("prices.bestPrice")}
+                    </dt>
+                    <dd className="mt-1 font-medium text-ok-foreground">
+                      €{trend.minPrice.toFixed(2)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">
+                      {t("prices.worstPrice")}
+                    </dt>
+                    <dd className="mt-1 font-medium text-danger-foreground">
+                      €{trend.maxPrice.toFixed(2)}
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <table className="hidden w-full lg:table">
             <thead>
               <tr className="border-b border-border">
                 <th className="pb-2 text-left">{t("common.date")}</th>

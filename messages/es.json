@@ -32,7 +32,14 @@
     "prices": "Precios",
     "settings": "Configuración",
     "dashboard": "Panel",
-    "stores": "Tiendas"
+    "stores": "Tiendas",
+    "shoppingShort": "Compra",
+    "scan": "Escanear",
+    "more": "Más",
+    "mainLabel": "Navegación principal",
+    "moreTitle": "Más secciones",
+    "moreContainsCurrent": "aquí está la página actual",
+    "preferencesTitle": "Idioma y tema"
   },
   "dashboard": {
     "title": "Panel",

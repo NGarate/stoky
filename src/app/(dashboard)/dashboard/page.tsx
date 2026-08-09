@@ -126,7 +126,7 @@ export default function DashboardPage(): JSX.Element {
         <h2 id="dashboard-summary" className="sr-only">
           {t("summaryTitle")}
         </h2>
-        <ul className="grid gap-4 sm:grid-cols-3">
+        <ul className="grid gap-4 md:grid-cols-3">
           <StatCard
             label={t("statProducts")}
             note={catalogueIsCapped ? t("statProductsCapped") : undefined}
@@ -284,7 +284,7 @@ export default function DashboardPage(): JSX.Element {
         <h2 id="dashboard-quick" className="text-lg font-semibold text-heading">
           {t("quickTitle")}
         </h2>
-        <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <QuickLink href="/inventory/add" label={t("quickAddStock")} primary />
           <QuickLink href="/inventory/consume" label={t("quickConsumeStock")} />
           <QuickLink href="/receipts/upload" label={t("quickUploadReceipt")} />

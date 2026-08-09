@@ -1,0 +1,265 @@
+import "../setup/matchers";
+import { describe, it, expect, afterEach, mock } from "bun:test";
+import { screen, cleanup, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { renderWithIntl } from "../utils/render";
+
+/**
+ * The phone bottom bar, the tablet rail and the "Más" sheet.
+ *
+ * This is the control every route below `lg` depends on — before it existed,
+ * the only page reachable on a phone was the one you landed on (ISSUES.md
+ * NAV-1) — so the accessibility contract from DESIGN_AUDIT A3.6 is asserted
+ * here rather than assumed: a named landmark, `aria-current="page"`, a sheet
+ * that traps focus, closes on Escape, and hands focus back.
+ */
+
+let pathname = "/dashboard";
+
+mock.module("next/navigation", () => ({
+  usePathname: () => pathname,
+  useRouter: () => ({ refresh: () => {} }),
+}));
+
+mock.module("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    children: ReactNode;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+mock.module("@/lib/i18n/cookies", () => ({
+  setLocaleCookie: async () => {},
+}));
+
+const { CompactNav } = await import("@/components/dashboard/CompactNav");
+
+afterEach(cleanup);
+
+/** The bottom bar and the rail carry the same four items. */
+function bars(): HTMLElement[] {
+  return screen.getAllByRole("navigation", { name: "Navegación principal" });
+}
+
+function openSheet(): Promise<void> {
+  return userEvent.click(
+    within(bars()[0]).getByRole("button", { name: /Más/ }),
+  );
+}
+
+describe("CompactNav", () => {
+  it("renders a phone bar and a tablet rail, both named", () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    // Only one is ever visible, which is why they can share the name: a
+    // display:none landmark is not in the accessibility tree.
+    expect(bars()).toHaveLength(2);
+  });
+
+  it("carries the four phone destinations, Spanish and short", () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    const bar = within(bars()[0]);
+    expect(bar.getByRole("link", { name: "Compra" })).toHaveAttribute(
+      "href",
+      "/shopping",
+    );
+    expect(bar.getByRole("link", { name: "Inventario" })).toHaveAttribute(
+      "href",
+      "/inventory",
+    );
+    expect(bar.getByRole("link", { name: "Escanear" })).toHaveAttribute(
+      "href",
+      "/products/scan",
+    );
+    expect(bar.getByRole("button", { name: /Más/ })).toBeInTheDocument();
+  });
+
+  it("marks the current destination with aria-current, not colour alone", () => {
+    pathname = "/inventory";
+    renderWithIntl(<CompactNav />);
+
+    const link = within(bars()[0]).getByRole("link", { name: "Inventario" });
+    expect(link).toHaveAttribute("aria-current", "page");
+    // Weight and a solid edge indicator carry the state as well as the fill.
+    expect(link.className).toContain("font-semibold");
+    expect(link.className).toContain("border-primary");
+  });
+
+  it("keeps a destination current on its nested routes", () => {
+    pathname = "/shopping/list-1";
+    renderWithIntl(<CompactNav />);
+
+    expect(
+      within(bars()[0]).getByRole("link", { name: "Compra" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("marks exactly one destination as current", () => {
+    pathname = "/products/scan";
+    renderWithIntl(<CompactNav />);
+
+    // "/products" is a prefix of "/products/scan" and is also a destination.
+    const current = within(bars()[0])
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0]).toHaveAttribute("href", "/products/scan");
+  });
+
+  it("says in words when the current page is inside the sheet", () => {
+    pathname = "/receipts";
+    renderWithIntl(<CompactNav />);
+
+    // The dot on screen is repeated for a screen reader, so "you are in here"
+    // is never a colour or a glyph on its own.
+    expect(
+      within(bars()[0]).getByRole("button", {
+        name: /aquí está la página actual/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the sheet closed, and its links out of the tab order, until asked", () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Recibos" })).toBeNull();
+    expect(
+      within(bars()[0]).getByRole("button", { name: /Más/ }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("opens a named dialog holding the remaining destinations", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+
+    const sheet = screen.getByRole("dialog", { name: "Más secciones" });
+    expect(sheet).toHaveAttribute("aria-modal", "true");
+
+    const expected = [
+      ["Panel", "/dashboard"],
+      ["Productos", "/products"],
+      ["Recibos", "/receipts"],
+      ["Precios", "/prices"],
+      ["Configuración", "/settings"],
+    ];
+    for (const [label, href] of expected) {
+      expect(within(sheet).getByRole("link", { name: label })).toHaveAttribute(
+        "href",
+        href,
+      );
+    }
+  });
+
+  it("carries theme and language into the sheet", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+
+    const sheet = screen.getByRole("dialog");
+    // A1.3: the two settings that change how the app looks must be reachable
+    // from every screen, including a phone.
+    expect(within(sheet).getByLabelText("Idioma")).toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("group", { name: "Tema" }),
+    ).toBeInTheDocument();
+  });
+
+  it("marks the current page inside the sheet too", async () => {
+    pathname = "/settings/stores";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+
+    expect(
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: "Configuración",
+      }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("moves focus into the sheet when it opens", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toHaveFocus();
+    });
+  });
+
+  it("closes on Escape and gives focus back to the button that opened it", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    const trigger = within(bars()[0]).getByRole("button", { name: /Más/ });
+    await userEvent.click(trigger);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes from its own button", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Cerrar",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  it("traps Tab inside the sheet", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+    const sheet = screen.getByRole("dialog");
+
+    // Walk past the end of the panel; focus must come back round rather than
+    // land on the bar underneath, which is covered.
+    for (let step = 0; step < 24; step += 1) {
+      await userEvent.tab();
+      expect(sheet.contains(document.activeElement)).toBe(true);
+    }
+  });
+
+  it("wraps backwards from the first control to the last", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+    const sheet = screen.getByRole("dialog");
+
+    await userEvent.tab({ shift: true });
+    expect(sheet.contains(document.activeElement)).toBe(true);
+  });
+});
