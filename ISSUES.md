@@ -699,6 +699,30 @@ written down at each call site that really wants it.
 
 ---
 
+### 🟡 I18N-5: The location picker is hardcoded Spanish
+
+**File:** `src/components/inventory/LocationPicker.tsx`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-09 while rewriting it for UI-2 and UI-4
+
+Four strings are written into the component: `"Cargando ubicaciones..."`, the
+`"Sin ubicación específica"` row, the `"No hay ubicaciones"` empty state and the
+`aria-label="Ubicación"` fallback the trigger uses when no caller names it. The
+default `placeholder` prop, `"Seleccionar ubicación"`, is the same.
+
+Left alone deliberately during that rewrite: the change was already a rewrite of
+the component's semantics, and folding a translation pass into it would have made
+the diff unreviewable. Same class as I18N-1, which is closed.
+
+The last one matters more than the rest — an `aria-label` is what a screen reader
+announces, so an English-speaking user meets a Spanish control name with no
+visible text to fall back on.
+
+**Suggested fix:** take it with I18N-2, since both are catalogue work on the same
+area.
+
+---
+
 ### 🟡 I18N-4: "Procesado" and "Procesando" are a letter apart
 
 **File:** `messages/es.json`

@@ -8,22 +8,22 @@ Stoky product work. They are rewritten around the two entry screens defined in
 The previous four journeys described an information architecture that has been
 replaced.
 
-**None of these passes today.** Each journey is tagged with the phase from
-`REDESIGN_PLAN.md` §9 that makes it passable. Read the tag as a promise about
-when it can be measured, not as a claim that it works now. A journey that cannot
-yet be run is still useful: it is what the phase is aiming at.
+**Journey 1 passes; the rest do not yet.** Each journey is tagged with the phase
+from `REDESIGN_PLAN.md` §9 that makes it passable. Read the tag as a promise
+about when it can be measured, not as a claim that it works now. A journey that
+cannot yet be run is still useful: it is what the phase is aiming at.
 
-| # | Journey | Passable from |
-|---|---|---|
-| 1 | Stock changes through the interface | Phase 1 |
-| 2 | A kitchen account is refused a write by the server | Phase 3 |
-| 3 | The phone screen answers "what do I need to buy" | Phase 4 |
-| 4 | Stock changes without a form | Phase 4 |
-| 5 | Scanning never dead-ends | Phase 4 |
-| 6 | A whole shop with no signal | Phase 4 |
-| 7 | The kitchen screen answers "what should we eat first" | Phase 5 |
-| 8 | The screen choice is remembered per person and per device | Phase 5 |
-| 9 | Both languages, everywhere | Phase 1 onwards, then every phase |
+| # | Journey | Passable from | State |
+|---|---|---|---|
+| 1 | Stock changes through the interface | Phase 1 | ✅ passes |
+| 2 | A kitchen account is refused a write by the server | Phase 3 | not yet |
+| 3 | The phone screen answers "what do I need to buy" | Phase 4 | not yet |
+| 4 | Stock changes without a form | Phase 4 | not yet |
+| 5 | Scanning never dead-ends | Phase 4 | not yet |
+| 6 | A whole shop with no signal | Phase 4 | not yet |
+| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | not yet |
+| 8 | The screen choice is remembered per person and per device | Phase 5 | not yet |
+| 9 | Both languages, everywhere | Phase 1 onwards, then every phase | partial |
 
 ---
 
@@ -75,10 +75,12 @@ Receipts and price history keep their meaning but no longer have a journey — s
 
 ## Journey 1. Stock changes through the interface
 
-**Passable from Phase 1.** Blocked today by `ISSUES.md` UI-1: `/products/new`,
-`/inventory/add`, `/inventory/consume` and `/settings` are linked from the UI and
-all 404. The directories `src/app/(dashboard)/products/new`,
-`inventory/add` and `inventory/consume` exist but contain no `page.tsx`.
+**Passes as of 2026-08-09** (Phase 1, closed by `249fb8d`). It was blocked by
+`ISSUES.md` UI-1 — `/products/new`, `/inventory/add`, `/inventory/consume` and
+`/settings` were linked from the interface and all four 404'd. All of them now
+exist and are driven by `e2e/critical-paths.spec.ts`, whose four `test.fixme`
+tests were removed rather than left as a promise. Two `test.skip`s remain, both
+scoped to phone viewports with Phase 4 named as the reason.
 
 This is the bridge journey. It proves the existing routers are reachable by a
 person before either new screen is built, and it is the journey Phase 1 is
@@ -103,8 +105,10 @@ Proof required:
 - after: Leche entera reads 5 and is still marked as below its minimum; a second
   add of 1 L takes it to 6 and the marking clears
 
-Also passes when: the four `test.fixme` tests in `e2e/critical-paths.spec.ts`
-run without `fixme`.
+Proven by: `e2e/critical-paths.spec.ts`, 16 passing. The location picker on both
+routes was rebuilt on the way (`ISSUES.md` UI-2, UI-4, UI-6) — until then the
+nested locations five of the six seeded products live in could not be chosen at
+all, so the journey's "where it is stored" half was passing on the roots only.
 
 ## Journey 2. A kitchen account is refused a write by the server
 
@@ -317,10 +321,17 @@ Proof required:
 
 ## Journey 9. Both languages, everywhere
 
-**Passable from Phase 1** for the switcher, then re-run at the end of every
-subsequent phase. `/settings` does not exist yet (`ISSUES.md` UI-1), and the
-locale is currently read from a `locale` cookie in `src/i18n/request.ts` with
-Spanish as the default; there is no visible way to change it.
+**Partly passing, and re-run at the end of every subsequent phase.** The
+switcher exists: `/settings` was built in Phase 1 and `LocaleSwitcher` is in the
+preferences cluster on every surface including `/login`, writing the `locale`
+cookie that `src/i18n/request.ts` reads, with Spanish still the default.
+
+What is not yet true is "everywhere". The receipt routes were hardcoded Spanish
+until `621185d` (`ISSUES.md` I18N-1) and `LocationPicker` still is (I18N-5).
+`src/__tests__/unit/messages.test.ts` now fails if the two catalogues stop
+matching, which covers the "no key is missing" half of the proof below without
+anyone having to walk the app — but a string that never reached a catalogue at
+all is invisible to it, which is exactly what I18N-1 and I18N-5 are.
 
 Trigger:
 Switch the language from settings, on either screen.
