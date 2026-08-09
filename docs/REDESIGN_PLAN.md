@@ -365,6 +365,45 @@ untouched except for using things up.
 Extend the Open Food Facts fields, compute, display. *Done when:* a product with
 no data and a non-food product both behave well — not just the happy path.
 
-**Cross-cutting:** login rate limiting (`ISSUES.md` CRITICAL-4) stays open and is
-the only critical security gap before anything faces the internet. It should
-land with Phase 3, since both touch auth.
+### Phase 7 — Security review
+
+The last phase, and a gate rather than a feature: nothing ships to a public
+address until this passes. The infrastructure was hardened before the product
+existed, so this reviews what the product itself ended up doing — which is where
+the interesting holes are.
+
+Scope, in order of how much damage a mistake would do:
+
+1. **Authorisation, per procedure.** The capability matrix from Phase 3 is
+   verified against every tRPC procedure, not sampled. Every restriction is
+   proven by a test that calls the procedure directly as the wrong role — a
+   hidden button is not a control.
+2. **Household isolation.** Every query is checked for a `householdId` filter.
+   The failure mode here is one household reading another's inventory,
+   receipts and prices, and it would be invisible in single-household testing.
+3. **Rate limiting**, verified as working rather than merely present
+   (`ISSUES.md` CRITICAL-4). If it has not landed by now, it lands here.
+4. **The offline queue as an attack surface.** Phase 4 introduces mutations
+   that are composed on a device and replayed later. Replay must be
+   idempotent, a queued mutation must not be able to act on another household,
+   and a stale queue from a revoked account must not apply.
+5. **Uploads.** Receipt images are the one place untrusted bytes enter: MIME and
+   magic-byte checks, Sharp re-encoding actually stripping EXIF, UUID
+   filenames, and no path traversal into the volume.
+6. **Session handling.** Kitchen tablets hold a long-lived session by design;
+   check what that session can reach if the device is stolen, and that a role
+   change or removal takes effect without waiting for expiry.
+7. **Dependency and image posture.** `pnpm audit` clean, Trivy clean, base image
+   current, no secret ever committed.
+8. **Headers in production.** The CSP is verified against a production build,
+   not just dev — the nonce path differs.
+
+*Done when:* each item above has either a passing test or a written finding with
+an owner, and `SECURITY.md` "known gaps" reflects reality rather than intent.
+
+Where possible the checks become tests, so the review is repeatable instead of a
+one-off audit that decays the moment it is finished.
+
+**Cross-cutting:** login rate limiting (`ISSUES.md` CRITICAL-4) is the only
+critical security gap today and should not wait for Phase 7. It lands with
+Phase 3, since both touch auth; Phase 7 verifies it rather than introduces it.
