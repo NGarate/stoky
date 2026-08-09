@@ -23,7 +23,7 @@ Rules for this log:
 |---|---|
 | 0 — Clean slate | ✅ Complete |
 | 1 — Close the dead routes | ✅ Complete |
-| 2 — One design system | ▶ Next |
+| 2 — One design system | ▶ In progress |
 | 3 — Roles | Not started |
 | 4 — Phone screen, offline | Not started |
 | 5 — Kitchen screen | Not started |
@@ -127,6 +127,22 @@ of done.
 The app ships in two languages, so a selector matching "Añadir" passes in
 Spanish and fails in English. Href-based selectors are stable across both and
 survive copy changes.
+
+**D11 — Estante's palette becomes the application's, not a merge of two.**
+Phase 2 was written as "merge the Estante and Horizonte tokens". Averaging two
+AAA-verified palettes would produce a third that is verified as neither, and the
+contrast headroom is what makes them safe. Estante wins because it is the phone
+app's basis and therefore the everyday surface; the token set is checked against
+the kitchen screen's needs — large type, calm dark theme — rather than blended
+with Horizonte's.
+
+**D12 — The CSS is the single source of truth for tokens, not a TypeScript module.**
+Tailwind 4 is CSS-first and the JS config was removed as vestigial, so tokens
+live in `globals.css` under `@theme`. The contrast audit is reworked to parse
+that file instead of importing the design-lab module. An audit that measures a
+different copy of the palette than the one shipped is how a green check comes to
+mean nothing — which this repository has already experienced once with the
+component tests.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
