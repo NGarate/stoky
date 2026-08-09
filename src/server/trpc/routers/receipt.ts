@@ -516,20 +516,33 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
       const user = ctx.session.user;
-      
+
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
         include: {
+          // The confirmation page names the shop the stock came from, and the
+          // store is the only field on the receipt it cannot derive.
+          store: true,
           items: {
+            // The same condition `applyReceipt` applies stock under, rather than
+            // a list of match statuses. It used to filter on
+            // `USER_CONFIRMED | USER_CREATED`, which is narrower than what is
+            // actually applied: `confirmAll` accepts a subset of the lines, so a
+            // partly-reviewed receipt can reach CONFIRMED with lines still
+            // AUTO_MATCHED, and `applyReceipt` creates stock for those too. The
+            // summary would then under-report what it had just done — which is
+            // the one thing a confirmation screen must not do.
             where: {
-              matchStatus: {
-                in: [MatchStatus.USER_CONFIRMED, MatchStatus.USER_CREATED],
-              },
+              matchedProductId: { not: null },
+              matchStatus: { not: MatchStatus.SKIPPED },
             },
             include: {
               matchedProduct: true,
             },
           },
+          // Every parsed line, applied or not, so the page can say how many were
+          // left out instead of implying the receipt held only what it shows.
+          _count: { select: { items: true } },
         },
       });
 
@@ -561,6 +574,9 @@ export const receiptRouter = createTRPCRouter({
         receipt,
         itemsAdded: stockEntries.length,
         pricesRecorded: priceRecords.length,
+        // Lines the parser found that produced no stock: skipped by the reviewer,
+        // or never matched to a product.
+        linesNotApplied: receipt._count.items - receipt.items.length,
         totalAmount: receipt.totalAmount,
         items: receipt.items.map((item) => ({
           ...item,

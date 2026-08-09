@@ -74,11 +74,14 @@ export default function ReviewPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center gap-4 mb-6">
-        <Link href="/receipts">
-          <Button type="button" variant="ghost" size="icon">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-        </Link>
+        {/* `asChild` so the anchor is the button rather than a boxless wrapper
+            around one — an `<a>` containing a `<button>` is neither valid HTML
+            nor a target of its own (DESIGN_AUDIT A4.2). */}
+        <Button asChild variant="ghost" size="icon">
+          <Link aria-label="Volver a tickets" href="/receipts">
+            <ArrowLeft aria-hidden="true" className="w-5 h-5" />
+          </Link>
+        </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-heading">Revisar Ticket</h1>
           <p className="text-muted-foreground">
@@ -98,11 +101,19 @@ export default function ReviewPage() {
           <p className="text-ok-foreground font-medium">
             Este ticket ya ha sido aplicado al inventario
           </p>
-          <Link href="/inventory">
-            <Button type="button" variant="outline" className="mt-4">
-              Ver inventario
+          {/* The summary is what the apply redirects to; coming back to the
+              review afterwards should be able to reach it too, rather than
+              dead-ending on the fact that it happened. */}
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
+            <Button asChild>
+              <Link href={`/receipts/${receiptId}/applied`}>
+                Ver qué añadió este ticket
+              </Link>
             </Button>
-          </Link>
+            <Button asChild variant="outline">
+              <Link href="/inventory">Ver inventario</Link>
+            </Button>
+          </div>
         </div>
       ) : (
         <>

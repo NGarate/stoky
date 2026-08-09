@@ -19,6 +19,26 @@ interface Receipt {
   _count: { items: number };
 }
 
+/**
+ * Where a row in the list goes, by the phase the receipt is in.
+ *
+ * An applied receipt used to send you to `/receipts/upload`, which is neither
+ * about that receipt nor anywhere near it in the pipeline. It now goes to its
+ * own summary — which also stops that route being reachable only by a redirect
+ * that fires once and is never seen again.
+ */
+function receiptHref(receipt: Receipt): string {
+  if (receipt.status === "NEEDS_REVIEW" || receipt.status === "CONFIRMED") {
+    return `/receipts/${receipt.id}/review`;
+  }
+
+  if (receipt.status === "APPLIED") {
+    return `/receipts/${receipt.id}/applied`;
+  }
+
+  return "/receipts/upload";
+}
+
 export default function ReceiptsPage() {
   const { data, isLoading } = api.receipt.list.useQuery({ limit: 50 });
   const receipts: Receipt[] = data?.items ?? [];
@@ -40,12 +60,16 @@ export default function ReceiptsPage() {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-heading">Tickets</h1>
-        <Link href="/receipts/upload">
-          <Button type="button">
+        {/* `asChild` so the anchor *is* the button: a `<Link>` wrapping a
+            `<Button>` produced an `<a>` with no box of its own — 103×17, well
+            under the target floor — around a button that had one, and an anchor
+            containing a button is not valid HTML either (DESIGN_AUDIT A4.2). */}
+        <Button asChild>
+          <Link href="/receipts/upload">
             <Plus className="w-4 h-4 mr-2" />
             Subir ticket
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
 
       {receipts.length === 0 ? (
@@ -55,22 +79,16 @@ export default function ReceiptsPage() {
           <p className="text-sm text-muted-foreground">
             Sube tu primer ticket para empezar a gestionar tu inventario
           </p>
-          <Link href="/receipts/upload">
-            <Button type="button" variant="outline" className="mt-4">
-              Subir ticket
-            </Button>
-          </Link>
+          <Button asChild variant="outline" className="mt-4">
+            <Link href="/receipts/upload">Subir ticket</Link>
+          </Button>
         </div>
       ) : (
         <div className="space-y-4">
           {receipts.map((receipt) => (
           <Link
             key={receipt.id}
-            href={
-              receipt.status === "NEEDS_REVIEW" || receipt.status === "CONFIRMED"
-                ? `/receipts/${receipt.id}/review`
-                : "/receipts/upload"
-            }
+            href={receiptHref(receipt)}
               className="block p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors"
             >
               <div className="flex items-center justify-between">
