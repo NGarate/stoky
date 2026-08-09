@@ -439,6 +439,20 @@ async function settle(page: Page): Promise<void> {
 }
 
 test.describe("Screen-reader journeys", () => {
+  // `newCDPSession` throws outright on anything but Chromium, so without this
+  // the suite does not degrade on the other four projects — it fails them, and
+  // CI runs every project. Skipped rather than guarded inside each test so the
+  // reason appears in the report instead of the run looking thinner than it is.
+  //
+  // The tree this reads is the browser's, not the page's, so it does differ
+  // between engines and one engine is not full coverage. It is the engine the
+  // dominant screen readers pair with, and the alternative — no automated tree
+  // check at all — is what this file replaced.
+  test.skip(
+    ({ browserName }) => browserName !== "chromium",
+    "Accessibility.getFullAXTree is a Chrome DevTools Protocol API",
+  );
+
   test("sign in", async ({ page }) => {
     await page.goto("/login");
     await page.waitForSelector('input[name="email"]');
