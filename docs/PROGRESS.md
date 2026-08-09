@@ -34,6 +34,15 @@ Rules for this log:
 
 ## Done
 
+### Phase 1 — Close the dead routes
+
+| Unit | Commit |
+|---|---|
+| `/inventory/add` built and driven in a browser; filed UI-2, UI-3 | `fb26255`, `1ce42e1` |
+
+Remaining: `/inventory/consume`, `/products/new`, `/settings`, then un-skip the
+four `test.fixme` tests.
+
 ### Phase 0 — Clean slate
 
 | Unit | Commit |
@@ -75,6 +84,25 @@ goes last.
 The plan's acceptance for Phase 1 is the four `test.fixme` tests passing without
 `fixme`. A route is not counted done until its test is un-skipped and green, so
 the phase cannot drift into "written but unproven".
+
+**D5 — Product selection uses `product.list`, not `searchByName`.**
+`searchByName` is a raw pg_trgm query; under the default 0.3 similarity
+threshold a short prefix matches nothing, and an empty query returns nothing at
+all, so it cannot back a picker. `product.list` does substring matching and
+returns `defaultUnit` for prefilling. Trigram similarity stays where it belongs,
+matching OCR'd receipt lines.
+
+**D6 — Defects found while building are filed, never fixed in passing.**
+Building `/inventory/add` surfaced UI-2 and seven smaller issues. Fixing them
+inside a feature commit would have hidden them; each is now tagged with the
+phase that closes it. The exception is anything that would make the new work
+untrue — none did.
+
+**D7 — Verification is a browser, not a green typecheck.**
+The delivered route passed lint and typecheck while I could still not tell
+whether it worked. Driving it as a user found the truth in one run: stock went
+from 0 to 3 and the status badge changed. Every route in this phase gets the
+same treatment before it counts as done.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
