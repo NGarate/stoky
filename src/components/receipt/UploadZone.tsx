@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { useTranslations } from "next-intl";
 import { Upload, Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ interface UploadZoneProps {
 }
 
 export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
+  const t = useTranslations("receipts");
   const [preview, setPreview] = useState<string | null>(null);
 
   const onDrop = useCallback(
@@ -68,11 +70,12 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
         <div className="relative">
           <img
             src={preview}
-            alt="Receipt preview"
+            alt={t("previewAlt")}
             className="w-full h-64 object-contain rounded-lg border border-border"
           />
           <button
             type="button"
+            aria-label={t("clearPreview")}
             onClick={clearPreview}
             className="absolute top-2 right-2 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90"
             disabled={isUploading}
@@ -95,19 +98,15 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
               accessible name a screen-reader user hears only "file upload
               button" with no indication of what it takes — axe flags it as a
               critical `label` violation. */}
-          <input {...getInputProps({ "aria-label": "Seleccionar una foto del ticket" })} />
+          <input {...getInputProps({ "aria-label": t("dropzoneLabel") })} />
           <div className="space-y-4">
             <div className="flex justify-center">
               <Upload className="w-12 h-12 text-muted-foreground" />
             </div>
             <p className="text-foreground">
-              {isDragActive
-                ? "Suelta el archivo aquí..."
-                : "Arrastra una foto del ticket o haz clic para seleccionar"}
+              {isDragActive ? t("dropActive") : t("dropPrompt")}
             </p>
-            <p className="text-sm text-muted-foreground">
-              JPG, PNG o WebP (máx. 10MB)
-            </p>
+            <p className="text-sm text-muted-foreground">{t("dropHint")}</p>
           </div>
         </div>
       )}
@@ -119,7 +118,7 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
         className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
       >
         <Camera className="w-5 h-5" />
-        <span>Hacer foto con la cámara</span>
+        <span>{t("cameraCapture")}</span>
       </button>
     </div>
   );

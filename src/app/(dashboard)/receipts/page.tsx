@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { useMemo } from "react";
 import { Plus, FileText } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
-import { formatDate } from "@/lib/utils";
 
 import type { ReceiptStatus } from "@prisma/client";
 
@@ -40,17 +41,35 @@ function receiptHref(receipt: Receipt): string {
 }
 
 export default function ReceiptsPage() {
+  const t = useTranslations("receipts");
+  const locale = useLocale();
   const { data, isLoading } = api.receipt.list.useQuery({ limit: 50 });
   const receipts: Receipt[] = data?.items ?? [];
+
+  // `lib/utils`'s `formatDate` is pinned to `es-ES`, so it would keep printing
+  // Spanish dates under an English catalogue.
+  const dateFormat = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+    [locale],
+  );
+  const moneyFormat = useMemo(
+    () => new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }),
+    [locale],
+  );
 
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-heading">Tickets</h1>
+          <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
         </div>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Cargando tickets...</p>
+          <p className="text-muted-foreground">{t("loadingList")}</p>
         </div>
       </div>
     );
@@ -59,7 +78,7 @@ export default function ReceiptsPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">Tickets</h1>
+        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
         {/* `asChild` so the anchor *is* the button: a `<Link>` wrapping a
             `<Button>` produced an `<a>` with no box of its own — 103×17, well
             under the target floor — around a button that had one, and an anchor
@@ -67,7 +86,7 @@ export default function ReceiptsPage() {
         <Button asChild>
           <Link href="/receipts/upload">
             <Plus className="w-4 h-4 mr-2" />
-            Subir ticket
+            {t("upload")}
           </Link>
         </Button>
       </div>
@@ -75,12 +94,10 @@ export default function ReceiptsPage() {
       {receipts.length === 0 ? (
         <div className="text-center py-12 rounded-lg border border-border bg-muted">
           <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-foreground mb-2">No tienes tickets guardados</p>
-          <p className="text-sm text-muted-foreground">
-            Sube tu primer ticket para empezar a gestionar tu inventario
-          </p>
+          <p className="text-foreground mb-2">{t("noReceipts")}</p>
+          <p className="text-sm text-muted-foreground">{t("uploadFirst")}</p>
           <Button asChild variant="outline" className="mt-4">
-            <Link href="/receipts/upload">Subir ticket</Link>
+            <Link href="/receipts/upload">{t("upload")}</Link>
           </Button>
         </div>
       ) : (
@@ -94,12 +111,13 @@ export default function ReceiptsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">
-                    {receipt.store?.name || "Tienda desconocida"}
+                    {receipt.store?.name || t("storeUnknown")}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {formatDate(receipt.createdAt)}
-                    {receipt.totalAmount && ` • ${receipt.totalAmount.toFixed(2)} €`}
-                    {receipt._count.items > 0 && ` • ${receipt._count.items} productos`}
+                    {dateFormat.format(receipt.createdAt)}
+                    {receipt.totalAmount && ` • ${moneyFormat.format(receipt.totalAmount)}`}
+                    {receipt._count.items > 0 &&
+                      ` • ${t("itemCount", { count: receipt._count.items })}`}
                   </p>
                 </div>
                 <ReceiptStatusBadge status={receipt.status} />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Check, X, Plus, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MatchSelector } from "./MatchSelector";
@@ -34,6 +35,8 @@ interface ReviewCardProps {
 }
 
 export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
+  const t = useTranslations("receipts");
+  const locale = useLocale();
   const [isCreating, setIsCreating] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     item.matchedProductId,
@@ -61,6 +64,11 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
 
   const isAutoMatched = item.matchStatus === "AUTO_MATCHED";
 
+  const moneyFormat = useMemo(
+    () => new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }),
+    [locale],
+  );
+
   return (
     <div
       className={`p-4 border rounded-lg ${
@@ -78,7 +86,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
           </p>
           {item.parsedPrice && (
             <p className="text-sm text-muted-foreground">
-              {item.parsedPrice.toFixed(2)} €
+              {moneyFormat.format(item.parsedPrice)}
               {item.parsedQuantity && item.parsedQuantity > 1 &&
                 ` × ${item.parsedQuantity}`}
             </p>
@@ -88,12 +96,12 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
         {isConfirmed ? (
           <div className="flex items-center gap-1 text-ok-foreground">
             <Check className="w-4 h-4" />
-            <span className="text-sm">Confirmado</span>
+            <span className="text-sm">{t("itemConfirmed")}</span>
           </div>
         ) : isAutoMatched ? (
           <div className="flex items-center gap-1 text-primary">
             <ShoppingCart className="w-4 h-4" />
-            <span className="text-sm">Auto-detectado</span>
+            <span className="text-sm">{t("itemAutoMatched")}</span>
           </div>
         ) : null}
       </div>
@@ -126,7 +134,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                   className="flex-1"
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  Crear nuevo
+                  {t("createProduct")}
                 </Button>
 
                 {selectedProductId && (
@@ -137,17 +145,20 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                     className="flex-1"
                   >
                     <Check className="w-4 h-4 mr-1" />
-                    Confirmar
+                    {t("confirmItem")}
                   </Button>
                 )}
 
+                {/* Icon-only, so the name has to come from the label rather
+                    than from the glyph. */}
                 <Button
                   type="button"
+                  aria-label={t("skip")}
                   variant="ghost"
                   size="sm"
                   onClick={() => onConfirm("SKIP")}
                 >
-                  <X className="w-4 h-4" />
+                  <X aria-hidden="true" className="w-4 h-4" />
                 </Button>
               </div>
             </>

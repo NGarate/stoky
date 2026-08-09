@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 
 export default function UploadPage() {
+  const t = useTranslations("receipts");
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export default function UploadPage() {
       reader.readAsDataURL(file);
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("Error al subir el ticket");
+      alert(t("uploadError"));
     } finally {
       setIsUploading(false);
     }
@@ -60,14 +62,14 @@ export default function UploadPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 text-heading">Subir Ticket</h1>
+      <h1 className="text-2xl font-bold mb-6 text-heading">{t("upload")}</h1>
 
       {!uploadedReceiptId ? (
         <div className="space-y-6">
           <UploadZone onUpload={handleUpload} isUploading={isUploading} />
 
           {isUploading && (
-            <p className="text-center text-muted-foreground">Subiendo ticket... Espera un momento.</p>
+            <p className="text-center text-muted-foreground">{t("uploadingHint")}</p>
           )}
         </div>
       ) : (
@@ -81,16 +83,14 @@ export default function UploadPage() {
 
               {statusQuery.data.status === "FAILED" && (
                 <div className="rounded-lg border border-danger-foreground bg-danger p-4">
-                  <p className="text-danger-foreground">
-                    Error al procesar el ticket. Intenta subirlo de nuevo.
-                  </p>
+                  <p className="text-danger-foreground">{t("processingFailed")}</p>
                   <Button
                     type="button"
                     variant="outline"
                     className="mt-2"
                     onClick={() => setUploadedReceiptId(null)}
                   >
-                    Intentar de nuevo
+                    {t("retry")}
                   </Button>
                 </div>
               )}
@@ -99,11 +99,12 @@ export default function UploadPage() {
                 statusQuery.data.status === "CONFIRMED") && (
                 <div className="text-center">
                   <p className="text-ok-foreground mb-4">
-                    ¡Ticket procesado! {statusQuery.data.progress?.processed || 0} productos
-                    encontrados.
+                    {t("processed", {
+                      count: statusQuery.data.progress?.processed || 0,
+                    })}
                   </p>
                   <Button type="button" onClick={handleContinue}>
-                    Revisar productos
+                    {t("reviewItems")}
                   </Button>
                 </div>
               )}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { Check, ArrowLeft, Package } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/trpc/client";
@@ -10,6 +11,8 @@ import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
 
 export default function ReviewPage() {
+  const t = useTranslations("receipts");
+  const locale = useLocale();
   const params = useParams();
   const router = useRouter();
   const receiptId = params.id as string;
@@ -33,18 +36,20 @@ export default function ReviewPage() {
 
   const [confirmedCount] = useState(0);
 
+  const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale), [locale]);
+
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <p>Cargando ticket...</p>
+      <div className="mx-auto max-w-4xl">
+        <p>{t("loadingReceipt")}</p>
       </div>
     );
   }
 
   if (!receipt) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <p>Ticket no encontrado</p>
+      <div className="mx-auto max-w-4xl">
+        <p>{t("notFound")}</p>
       </div>
     );
   }
@@ -72,21 +77,24 @@ export default function ReviewPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    // No padding of its own: the dashboard `main` already pads every route, and
+    // a second `p-6` on top of it cost 48px of a 390px screen (ISSUES UI-5).
+    <div className="mx-auto max-w-4xl">
       <div className="flex items-center gap-4 mb-6">
         {/* `asChild` so the anchor is the button rather than a boxless wrapper
             around one — an `<a>` containing a `<button>` is neither valid HTML
             nor a target of its own (DESIGN_AUDIT A4.2). */}
         <Button asChild variant="ghost" size="icon">
-          <Link aria-label="Volver a tickets" href="/receipts">
+          <Link aria-label={t("backToList")} href="/receipts">
             <ArrowLeft aria-hidden="true" className="w-5 h-5" />
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-heading">Revisar Ticket</h1>
+          <h1 className="text-2xl font-bold text-heading">{t("review")}</h1>
           <p className="text-muted-foreground">
-            {receipt.store?.name || "Tienda desconocida"}
-            {receipt.purchaseDate && ` • ${new Date(receipt.purchaseDate).toLocaleDateString("es-ES")}`}
+            {receipt.store?.name || t("storeUnknown")}
+            {receipt.purchaseDate &&
+              ` • ${dateFormat.format(new Date(receipt.purchaseDate))}`}
           </p>
         </div>
       </div>
@@ -98,30 +106,30 @@ export default function ReviewPage() {
       {receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">
           <Package className="w-12 h-12 text-ok-foreground mx-auto mb-4" />
-          <p className="text-ok-foreground font-medium">
-            Este ticket ya ha sido aplicado al inventario
-          </p>
+          <p className="text-ok-foreground font-medium">{t("alreadyApplied")}</p>
           {/* The summary is what the apply redirects to; coming back to the
               review afterwards should be able to reach it too, rather than
               dead-ending on the fact that it happened. */}
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <Button asChild>
               <Link href={`/receipts/${receiptId}/applied`}>
-                Ver qué añadió este ticket
+                {t("viewApplied")}
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/inventory">Ver inventario</Link>
+              <Link href="/inventory">{t("viewInventory")}</Link>
             </Button>
           </div>
         </div>
       ) : (
         <>
-          <div className="mb-4 flex items-center justify-between">
+          {/* Wraps: at 390px the sentence and the action do not fit on one line,
+              and the action is what pushed the row past the viewport. */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-muted-foreground">
               {pendingItems === 0
-                ? "¡Todos los productos han sido revisados!"
-                : `${pendingItems} productos pendientes de revisión`}
+                ? t("allReviewed")
+                : t("pendingItems", { count: pendingItems })}
             </p>
 
             {receipt.status === "CONFIRMED" ? (
@@ -132,8 +140,8 @@ export default function ReviewPage() {
               >
                 <Package className="w-4 h-4 mr-2" />
                 {applyReceiptMutation.isPending
-                  ? "Aplicando..."
-                  : "Aplicar al inventario"}
+                  ? t("applying")
+                  : t("applyToInventory")}
               </Button>
             ) : (
               <Button
@@ -142,7 +150,7 @@ export default function ReviewPage() {
                 disabled={pendingItems > 0 || confirmAllMutation.isPending}
               >
                 <Check className="w-4 h-4 mr-2" />
-                Confirmar todos
+                {t("confirmAll")}
               </Button>
             )}
           </div>

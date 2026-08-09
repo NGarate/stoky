@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 
 interface ProductCandidate {
@@ -21,8 +22,14 @@ export function MatchSelector({
   onSelect,
   autoMatch,
 }: MatchSelectorProps) {
+  const t = useTranslations("receipts");
+  const locale = useLocale();
+
   const formatScore = (score: number) => {
-    return `${Math.round(score * 100)}%`;
+    return new Intl.NumberFormat(locale, {
+      style: "percent",
+      maximumFractionDigits: 0,
+    }).format(score);
   };
 
   const getScoreColor = (score: number) => {
@@ -33,11 +40,13 @@ export function MatchSelector({
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium text-muted-foreground">Coincidencias encontradas:</p>
+      <p className="text-sm font-medium text-muted-foreground">
+        {t("matchesFound")}
+      </p>
 
       {autoMatch && (
         <div className="rounded border border-border bg-muted p-2 text-sm text-foreground">
-          Mejor coincidencia automática: <strong>{autoMatch.name}</strong>
+          {t("bestAutoMatch")} <strong>{autoMatch.name}</strong>
         </div>
       )}
 
