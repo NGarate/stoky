@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Check, ArrowLeft, Package } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/trpc/client";
+import { isItemReviewed } from "@/lib/receipts";
 import { Button } from "@/components/ui/button";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
@@ -17,6 +18,7 @@ export default function ReviewPage() {
   const router = useRouter();
   const receiptId = params.id as string;
 
+  const utils = api.useUtils();
   const { data: receipt, isLoading } = api.receipt.getReceiptWithItems.useQuery({
     receiptId,
   });
@@ -27,14 +29,21 @@ export default function ReviewPage() {
     },
   });
 
-  const confirmItemMutation = api.receipt.confirmItem.useMutation();
+  // Without the invalidation the write landed and the page did not move: the
+  // card kept its Confirmar button, the count kept its number, nothing was
+  // announced. The reasonable response to a button that does nothing is to
+  // press it again, so the defect cost a second write every time (ISSUES
+  // A11Y-2). Its two neighbours above already refetch by navigating away.
+  const confirmItemMutation = api.receipt.confirmItem.useMutation({
+    onSuccess: () => {
+      utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+    },
+  });
   const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
     onSuccess: () => {
       router.push(`/receipts/${receiptId}/applied`);
     },
   });
-
-  const [confirmedCount] = useState(0);
 
   const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale), [locale]);
 
@@ -54,8 +63,13 @@ export default function ReviewPage() {
     );
   }
 
-  const totalItems = receipt.items.length;
-  const pendingItems = totalItems - confirmedCount;
+  // Derived, not held. The `useState(0)` this replaces had no setter, so the
+  // count never moved and "Confirmar todos" — disabled while anything is
+  // pending — was disabled permanently, which is to say the bulk action could
+  // never be used at all (ISSUES UI-7).
+  const pendingItems = receipt.items.filter(
+    (item) => !isItemReviewed(item.matchStatus),
+  ).length;
 
 
 
@@ -126,7 +140,11 @@ export default function ReviewPage() {
           {/* Wraps: at 390px the sentence and the action do not fit on one line,
               and the action is what pushed the row past the viewport. */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-muted-foreground">
+            {/* A live region because this sentence is the only feedback a
+                confirmation produces. It is one region on the element that
+                already states the outcome, rather than an announcement bolted
+                onto every route: the number changing is the confirmation. */}
+            <p aria-live="polite" className="text-muted-foreground" role="status">
               {pendingItems === 0
                 ? t("allReviewed")
                 : t("pendingItems", { count: pendingItems })}

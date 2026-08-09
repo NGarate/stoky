@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Check, X, Plus, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
 
@@ -57,10 +58,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
     }
   };
 
-  const isConfirmed =
-    item.matchStatus === "USER_CONFIRMED" ||
-    item.matchStatus === "USER_CREATED" ||
-    item.matchStatus === "SKIPPED";
+  const isConfirmed = isItemReviewed(item.matchStatus);
 
   const isAutoMatched = item.matchStatus === "AUTO_MATCHED";
 
