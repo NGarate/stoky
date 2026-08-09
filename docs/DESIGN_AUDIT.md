@@ -26,15 +26,22 @@ normalise dynamic segments on both sides, and compare in both directions.
 **Result: 21 routes, no orphans.** Every page is reachable from somewhere. No
 page should be deleted on grounds of disuse.
 
-**One broken link, and it is a sixth dead route:**
+**One broken link, and it was a sixth dead route — now closed:**
 
 | Link | From | Status |
 |---|---|---|
-| `/receipts/${receiptId}/applied` | `receipts/[id]/review/page.tsx` | **404 — route does not exist** |
+| `/receipts/${receiptId}/applied` | `receipts/[id]/review/page.tsx` | ~~404~~ **built** |
 
 This is the end of the receipt pipeline: OCR → parse → match → review → *apply*.
-The final step navigates nowhere. It was missed by the earlier audits for the
+The final step navigated nowhere. It was missed by the earlier audits for the
 same reason `/products/[id]` was — the target is a template literal.
+
+`src/app/(dashboard)/receipts/[id]/applied/page.tsx` now reports what the apply
+actually did: stock entries written, prices recorded, lines left out, and the
+store, date and total from the receipt header. It handles an id that is not in
+the household and a receipt that has not been applied with a message rather than
+a crash, and the receipts list now sends an applied receipt there instead of to
+`/receipts/upload`, so the route is reachable and not only redirected to once.
 
 **Action A0.** Add the check above to CI as a script, so a link to a route that
 does not exist fails the build. It has caught two dead routes that three manual
@@ -231,13 +238,24 @@ below cannot be machine-checked at all.
   viewport tiers, all passing. It began as desktop-only, which left two of the
   three navigation renderers unchecked; the tiers were added once that was
   noticed. A floor, not a certificate.
-- **A4.2** Target size (2.5.5, AAA): **44×44px minimum**, and 48px where a thumb
-  is expected. Known offenders: `DashboardNav` links, the back links on the new
-  routes, `LocationPicker`'s trigger.
-- **A4.3** Headings and landmarks: exactly one `h1` per route, no skipped levels,
-  and a real `main`/`nav`/`header`. Verified per route, not assumed.
-- **A4.4** Every control programmatically labelled; state never conveyed by
-  colour alone (already the convention, now enforced by test).
+- ~~**A4.2**~~ **Done.** Target size (2.5.5, AAA): 44×44px minimum, 48px at the
+  phone tier where a thumb is expected. Measured in a browser rather than
+  asserted from class names — `e2e/a11y-structure.spec.ts`, 16 routes × 3 tiers.
+  The known offenders were all real and all fixed, and the check found more than
+  the list had: `button.tsx` and `input.tsx` were 40px, so **every** form control
+  in the app was under the minimum; the `Stoky` wordmark was 54×28 on every
+  signed-in route; `<Link><Button/></Link>` on `/receipts` produced an anchor
+  with no box at all; the `Ver` link in the products table was 21px wide.
+- ~~**A4.3**~~ **Done.** Headings and landmarks, in the same suite: exactly one
+  *visible* `h1`, no skipped levels, exactly one non-empty `main`, every `nav`
+  named. Visible rather than present, because `/login` and `/register` render two
+  `h1`s and hide one per tier. It caught `ExpiringItems` and the shopping list
+  cards jumping `h1` → `h3`.
+- ~~**A4.4**~~ **Done.** Every control programmatically labelled, and no state by
+  colour alone — an element carrying `aria-current`/`aria-selected`/
+  `aria-pressed` must differ from its unselected peers in something other than
+  colour, and anything painted with a status token must carry words. Both were
+  already clean, which is the result worth having from a test like this.
 - **A4.5** AAA-specific criteria that have never been considered: **1.4.8 visual
   presentation** (line length, spacing, no justified text), **2.4.9 link purpose
   from the link alone** — "Ver" and "→" fail this — **3.3.5 context-sensitive

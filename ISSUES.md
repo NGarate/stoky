@@ -34,6 +34,9 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | 🔴 **OPEN** |
 | HOUSE-1 | An account without a household loads a skeleton forever | 🔴 **OPEN** |
+| UI-4 | LocationPicker's dropdown is not a real listbox | 🟡 Open |
+| I18N-1 | The receipts routes are hardcoded Spanish | 🟡 Open |
+| UI-5 | The receipt review page overflows at 390px | 🟡 Open |
 
 ---
 
@@ -498,6 +501,81 @@ better than the current silence. The tRPC procedures should also raise a
 (DEBT-4), so a client can tell this apart from a server fault.
 
 **Closed by:** Phase 3, alongside roles and the `TRPCError` work.
+
+---
+
+### 🟡 UI-4: LocationPicker's dropdown is not a real listbox
+
+**File:** `src/components/inventory/LocationPicker.tsx`
+**Severity:** MEDIUM
+**Status:** OPEN — found 2026-08-09 while fixing its target size (A4.2)
+
+The trigger now reports `aria-expanded`/`aria-haspopup` and every option is a
+48px target, but the control underneath is still a set of plain buttons in a
+`div`. There is no `listbox`/`option` role pairing, no `aria-activedescendant`,
+no arrow-key navigation and no Escape to dismiss — a keyboard user tabs through
+every location one at a time and cannot close the panel without choosing one.
+
+The dismissal scrim is a `div` with `role="button"`, `tabIndex={0}` and an
+`aria-label`, which puts a second, invisible "Close dropdown" control into the
+tab order of every page that renders the picker.
+
+axe does not flag either, because each individual element is technically
+labelled; it is the composite that is wrong.
+
+**Suggested fix:** rebuild on the same pattern as `NavSheet` — a real role
+pairing, arrow keys, Escape, and a scrim that is `aria-hidden` and out of the
+tab order. Related to UI-2, which is about the same component not rendering its
+child locations at all.
+
+**Closed by:** unscheduled. Worth taking with UI-2, since both are rewrites of
+the same component.
+
+---
+
+### 🟡 I18N-1: The receipts routes are hardcoded Spanish
+
+**Files:** `src/app/(dashboard)/receipts/page.tsx`,
+`src/app/(dashboard)/receipts/[id]/review/page.tsx`,
+`src/app/(dashboard)/receipts/upload/page.tsx`,
+`src/components/receipt/*`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-09 while building `/receipts/[id]/applied`
+
+Every string on the receipts list, the review page, the upload page and the
+receipt components is written into the JSX. Switching the language to English
+leaves them in Spanish, and the `receipts.*` catalogue entries that exist
+(`title`, `store`, `purchaseDate`, `status.*`, …) are unused by them.
+
+Noticed rather than fixed: the new `/receipts/[id]/applied` route is fully
+translated in both catalogues, so the pipeline now switches language half-way
+through, which is more visible than it was.
+
+**Closed by:** unscheduled. Mechanical but touches six files.
+
+---
+
+### 🟡 UI-5: The receipt review page overflows horizontally at 390px
+
+**File:** `src/app/(dashboard)/receipts/[id]/review/page.tsx`,
+`src/components/receipt/ReceiptStatus.tsx`
+**Severity:** MEDIUM
+**Status:** OPEN — found 2026-08-09 while driving the apply → applied hop
+
+`ReceiptStatusStep` lays six numbered steps and five connectors in a single
+non-wrapping row. At 390px the document is about 505px wide, so the page scrolls
+sideways and the last step ("Aplicado") — the one a reviewer is heading for — is
+off screen. The page also keeps its own `max-w-4xl mx-auto p-6` rather than
+using the shell's padding, so it is doubly padded inside the dashboard `main`.
+
+Missed by the A3.3 overflow sweep and by `e2e/accessibility.spec.ts` for the
+same reason `/products/[id]` was missed by the dead-link audit: the route is
+dynamic, so neither enumerates it.
+
+**Suggested fix:** collapse the stepper to "step 5 of 6 — Confirmado" below
+`md`, or wrap it. Take it with I18N-1, which touches the same file.
+
+**Closed by:** unscheduled.
 
 ---
 

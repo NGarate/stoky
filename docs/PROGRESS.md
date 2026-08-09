@@ -44,11 +44,12 @@ Rules for this log:
 | axe-core AAA audit, 30 checks over 15 routes × 2 themes | `1c6b2d6` |
 | Theme and language controls | `24a2203`, `c6d02d2` |
 | Mobile-first: bottom bar, tablet rail, tables to cards | `fcb3cad` |
-| axe extended to all three viewport tiers — 90 checks | (this commit) |
+| axe extended to all three viewport tiers — 90 checks | `fcb3cad`+ |
+| `/receipts/[id]/applied` built and driven; sixth dead route closed | (this commit) |
+| A4.2–A4.4 measured in a browser — `e2e/a11y-structure.spec.ts`, 16 routes × 3 tiers | (this commit) |
 
-Remaining: A0 dead-link check in CI, A4.2–A4.4 target sizes, headings and
-landmarks, then A4.5–A4.6 (the AAA criteria no tool can check, and a
-screen-reader pass).
+Remaining: A0 dead-link check in CI, then A4.5–A4.6 (the AAA criteria no tool
+can check, and a screen-reader pass).
 
 ### Phase 2 — One design system
 
@@ -195,6 +196,32 @@ you have to know about. Seven destinations do not fit at 48px targets, and they
 should not — the phone answers "what do I need to buy". Compra · Inventario ·
 Escanear · Más. The tablet keeps a side rail instead, because a bottom bar wastes
 the most valuable strip of a screen read from a metre away.
+
+**D16 — The structural a11y checks are an E2E suite, and a separate one.**
+A4.2 is a measurement in CSS pixels, A4.3 assembles a layout and a page, and
+A4.4's colour rule compares an element with its peers' computed styles. The
+component suite runs on happy-dom, which has no layout engine — every rect there
+is 0×0 — so it can only assert that a class name is present, which is what
+`DashboardNav.test.tsx` does and which is a proxy for the property rather than
+the property. They live in `e2e/a11y-structure.spec.ts` rather than inside
+`accessibility.spec.ts` so that suite's 90 axe checks keep meaning one thing.
+
+**D17 — The target-size floor is 48px everywhere, not 44 with a phone exception.**
+WCAG 2.5.5 asks for 44 and A4.2 asks for 48 "where a thumb is expected". Written
+mobile-first (A3.4), unprefixed describes the phone, so the floor is simply 48
+and no call site has to reason about which tier it is visible at. The test still
+keeps the tiers honest — 48 at 390px, the AAA 44 above it — so a desktop-only
+control is not held to a phone rule it can never be used under.
+
+**D18 — `getAppliedSummary` counts what `applyReceipt` applied, not a list of
+match statuses.** It filtered items to `USER_CONFIRMED | USER_CREATED`, which is
+narrower than the condition `applyReceipt` writes stock under: `confirmAll`
+accepts a subset of the lines, so a partly-reviewed receipt can reach CONFIRMED
+with lines still AUTO_MATCHED and those get stock too. The filter now mirrors
+`applyReceipt`'s own condition, and the procedure also returns the store and the
+count of lines that produced nothing. Fixed rather than filed under D6, because a
+confirmation screen that under-reports what it just did is the one defect that
+would make the new page untrue.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
