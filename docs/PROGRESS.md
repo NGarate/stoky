@@ -23,8 +23,8 @@ Rules for this log:
 |---|---|
 | 0 — Clean slate | ✅ Complete |
 | 1 — Close the dead routes | ✅ Complete |
-| 2 — One design system | ▶ In progress |
-| 3 — Roles | Not started |
+| 2 — One design system | ✅ Complete |
+| 3 — Roles | ▶ Next |
 | 4 — Phone screen, offline | Not started |
 | 5 — Kitchen screen | Not started |
 | 6 — Rating | Not started |
@@ -33,6 +33,19 @@ Rules for this log:
 ---
 
 ## Done
+
+### Phase 2 — One design system
+
+| Unit | Commit |
+|---|---|
+| 26 tokens in `globals.css`; primitives fixed; audit reads the CSS | `86c2149` |
+| Token existence and focus indicators enforced by tests | `4eec006` |
+| Contrast figures corrected; UI-3 item 5 closed | `2da0bb5` |
+| Design lab retired; stepper rehomed and retargeted | `3612a36` |
+
+**Phase 2 complete.** `.bg-primary` went from zero occurrences in the built CSS
+to a real rule; the login button has colour for the first time, measured at
+`#0e4f42` on white with a solid 2px focus outline in both themes.
 
 ### Phase 1 — Close the dead routes
 
@@ -143,6 +156,13 @@ that file instead of importing the design-lab module. An audit that measures a
 different copy of the palette than the one shipped is how a green check comes to
 mean nothing — which this repository has already experienced once with the
 component tests.
+
+**D13 — The lab goes, the stepper stays.**
+Retiring `src/app/design` nearly took the ± stepper with it, which is exactly
+what lifting it out of Bolsillo in Phase 0 was meant to prevent. It now lives at
+`src/components/inventory/QuantityStepper.tsx` with its stylesheet retargeted
+from the lab's tokens to the application's. Caught only because the deletion was
+checked afterwards rather than assumed complete.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
