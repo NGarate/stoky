@@ -32,6 +32,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | INV-1 | Expiring items report entry quantity, not net stock | 🔴 **OPEN** |
 | UI-2 | LocationPicker never renders child locations | 🔴 **OPEN** |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
+| NAV-1 | No mobile navigation — the dashboard is unusable on a phone | 🔴 **OPEN** |
+| HOUSE-1 | An account without a household loads a skeleton forever | 🔴 **OPEN** |
 
 ---
 
@@ -441,6 +443,56 @@ reason that page avoids the shared primitives.
    namespace should be a prop.
 
 **Closed by:** Phase 2 (items 5, 6), Phase 3 (items 1, 2), Phase 4 (3, 4, 7).
+
+---
+
+### 🔴 NAV-1: No mobile navigation
+
+**File:** `src/components/dashboard/DashboardNav.tsx`  
+**Severity:** HIGH  
+**Status:** OPEN — found 2026-08-09
+
+`DashboardNav` renders its links in a `<ul className="hidden … md:flex">`, so
+below the `md` breakpoint they are not rendered at all. No replacement exists —
+there is no drawer, no menu button, no bottom bar; grepping the components for
+any mobile navigation returns nothing.
+
+On a phone, once past login the only reachable page is whichever one you landed
+on. Everything else requires typing a URL.
+
+Found because the stock-management E2E tests passed on all three desktop
+engines and failed on both phone viewports.
+
+**Closed by:** Phase 4, which builds the phone screen.
+
+---
+
+### 🔴 HOUSE-1: An account without a household loads a skeleton forever
+
+**Files:** `src/app/(dashboard)/products/page.tsx`,
+`src/app/(dashboard)/inventory/page.tsx`, `src/server/trpc/routers/*`  
+**Severity:** HIGH  
+**Status:** OPEN — found 2026-08-09
+
+Registration treats `householdName` as optional, so an account can be created
+with no household. Every product, stock, shopping and price procedure then
+throws `"User not in a household"`.
+
+The pages do not handle it. `/products` renders on
+`if (isLoading || !result)`, and on error `result` is `undefined` — so the
+loading skeleton stays on screen indefinitely, with no message and no way
+forward. `/inventory` has the same shape.
+
+Someone can therefore complete registration and land in an application that
+appears to be permanently loading, with nothing telling them why or what to do.
+
+**Suggested fix:** either require a household at registration, or create one
+implicitly, or detect the state and offer to create one. Any of the three is
+better than the current silence. The tRPC procedures should also raise a
+`TRPCError` with a `PRECONDITION_FAILED` code rather than a bare `Error`
+(DEBT-4), so a client can tell this apart from a server fault.
+
+**Closed by:** Phase 3, alongside roles and the `TRPCError` work.
 
 ---
 
