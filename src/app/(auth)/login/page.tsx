@@ -63,19 +63,19 @@ export default function LoginPage(): JSX.Element {
         <div className="grid w-full overflow-hidden rounded-3xl border border-border bg-card shadow-xl lg:grid-cols-[1.05fr_0.95fr]">
           <section className="hidden bg-primary p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
             <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.3em] text-primary-foreground/80">
+              <p className="text-sm uppercase tracking-[0.3em] text-primary-foreground">
                 Stoky
               </p>
               <h1 className="max-w-sm text-4xl font-semibold leading-tight">
                 Login
               </h1>
-              <p className="max-w-md text-sm leading-6 text-primary-foreground/90">
+              <p className="max-w-md text-sm leading-6 text-primary-foreground">
                 {t("loginSubtitle")}
               </p>
             </div>
-            <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground/90">
+            <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground">
               <p className="font-medium text-primary-foreground">Hogar compartido</p>
-              <p className="mt-2 leading-6 text-primary-foreground/90">
+              <p className="mt-2 leading-6 text-primary-foreground">
                 Inventario, tickets y precios quedan vinculados a la misma
                 sesión del hogar para mantener el estado sincronizado.
               </p>
@@ -137,7 +137,7 @@ export default function LoginPage(): JSX.Element {
                 {errorKey ? (
                   <p
                     aria-live="polite"
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                    className="rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
                   >
                     {t(errorKey)}
                   </p>

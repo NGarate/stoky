@@ -69,24 +69,24 @@ export default function RegisterPage(): JSX.Element {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-emerald-50 px-4 py-10">
+    <main className="min-h-screen bg-background px-4 py-10">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-3xl border border-border bg-card shadow-xl lg:grid-cols-[1.05fr_0.95fr]">
           <section className="hidden bg-primary p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
             <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.3em] text-primary-foreground/80">
+              <p className="text-sm uppercase tracking-[0.3em] text-primary-foreground">
                 Stoky
               </p>
               <h1 className="max-w-sm text-4xl font-semibold leading-tight">
                 Register
               </h1>
-              <p className="max-w-md text-sm leading-6 text-primary-foreground/80">
+              <p className="max-w-md text-sm leading-6 text-primary-foreground">
                 {t("registerSubtitle")}
               </p>
             </div>
-            <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground/90">
+            <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground">
               <p className="font-medium text-primary-foreground">Primer hogar</p>
-              <p className="mt-2 leading-6 text-primary-foreground/80">
+              <p className="mt-2 leading-6 text-primary-foreground">
                 Puedes crear el hogar inicial ahora o dejarlo para después si
                 solo quieres validar la entrada a la app.
               </p>
@@ -178,7 +178,7 @@ export default function RegisterPage(): JSX.Element {
                 {errorKey ? (
                   <p
                     aria-live="polite"
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                    className="rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
                   >
                     {t(errorKey)}
                   </p>
