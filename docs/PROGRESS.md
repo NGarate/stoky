@@ -40,9 +40,10 @@ Rules for this log:
 |---|---|
 | `/inventory/add` built and driven in a browser; filed UI-2, UI-3 | `fb26255`, `1ce42e1` |
 | `/inventory/consume` built and driven, incl. the over-consume path | `b7f06bb` |
+| `/products/new` built and driven; found a fifth dead route | `21e9cf5` |
 
-Remaining: `/products/new`, `/settings`, then un-skip the four `test.fixme`
-tests, which is what actually closes the phase.
+Remaining: `/settings`, `/products/[id]` (found mid-phase), then un-skip the
+four `test.fixme` tests, which is what actually closes the phase.
 
 ### Phase 0 — Clean slate
 
@@ -104,6 +105,12 @@ The delivered route passed lint and typecheck while I could still not tell
 whether it worked. Driving it as a user found the truth in one run: stock went
 from 0 to 3 and the status badge changed. Every route in this phase gets the
 same treatment before it counts as done.
+
+**D8 — `/products/new` reports the outcome instead of redirecting.**
+Its siblings redirect on success. This one cannot: the natural destination,
+`/products/{id}`, is a 404. Rather than redirect to `/products`, which says
+nothing about which of three outcomes occurred, the page keeps the result on
+screen with onward links. Revisit once the detail route exists.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather

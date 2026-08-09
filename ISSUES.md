@@ -243,6 +243,18 @@ The UI links to four routes that have no `page.tsx`. Every one of them 404s:
 | `/inventory` | `/inventory/add` |
 | `/inventory` | `/inventory/consume` |
 | `DashboardNav` (every dashboard page) | `/settings` |
+| `/products` (every row), `/inventory` (every row), `/products/scan` | `/products/[id]` |
+
+**The fifth was missed in the original audit** (added 2026-08-09). It is the
+most-linked of the lot: `src/app/(dashboard)/products/[id]/` is an empty
+directory, while three call sites link to it — every row of the product list,
+every product name in the inventory table, and both success paths of the
+scanner, which also passes a `?new=true` that nothing reads. Confirmed with a
+real product id: HTTP 404.
+
+It was missed because the first audit compared `href="/…"` string literals
+against the route tree, and these are template literals — `` `/products/${id}` ``
+— which that pattern does not catch.
 
 **Impact:**
 Stock movement is unreachable from the UI even though `inventory.addStock`,
