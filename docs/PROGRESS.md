@@ -39,9 +39,10 @@ Rules for this log:
 | Unit | Commit |
 |---|---|
 | `/inventory/add` built and driven in a browser; filed UI-2, UI-3 | `fb26255`, `1ce42e1` |
+| `/inventory/consume` built and driven, incl. the over-consume path | `b7f06bb` |
 
-Remaining: `/inventory/consume`, `/products/new`, `/settings`, then un-skip the
-four `test.fixme` tests.
+Remaining: `/products/new`, `/settings`, then un-skip the four `test.fixme`
+tests, which is what actually closes the phase.
 
 ### Phase 0 — Clean slate
 

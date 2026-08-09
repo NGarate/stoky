@@ -329,9 +329,24 @@ stock — which reads as a bug in the app to anyone using both. It also
 overstates how much food is about to be wasted, which is the one number the
 kitchen screen exists to get right.
 
+**A second location, found 2026-08-09 while building `/inventory/consume`:**
+`consumeStock`'s availability guard has the same shape. It selects entries with
+`quantity: { gt: 0 }` and sums them, so it measures *gross purchases* and
+ignores every prior consumption. Measured on the seeded household after adding
+3 paquete of coffee: `gross = 5`, `net = 3`. The server would accept a
+consumption of 5 and drive stock to −2.
+
+It is latent rather than live, because `/inventory/consume` computes its own
+limit from net stock and refuses first — verified in a browser, asking for 5
+against a net of 3 is blocked on the page. But the server is the authority, and
+anything that is not that page — an API client, or the offline replay queue
+planned for Phase 4 — would corrupt stock. **Phase 4 must not build replay on
+top of this.**
+
 **Suggested fix:**
 Report net stock per product alongside the soonest expiry date, rather than
-per-entry quantities. If per-batch detail is wanted later, consumption has to be
+per-entry quantities, and make `consumeStock` guard against net rather than
+gross. If per-batch detail is wanted later, consumption has to be
 attributed to a batch, which is a larger modelling change and should be a
 deliberate decision rather than a side effect.
 
@@ -408,6 +423,10 @@ reason that page avoids the shared primitives.
    the back links of the new routes.
 7. **`/inventory` has no next-intl at all** — its strings are hardcoded
    Spanish, while the page it links to is bilingual.
+8. **`ProductPicker` hardcodes `useTranslations("inventory.add")`.** On
+   `/inventory/consume` its hint therefore reads "Elige el producto al que
+   quieres **añadir** stock" — the wrong verb. Confirmed in a browser. The
+   namespace should be a prop.
 
 **Closed by:** Phase 2 (items 5, 6), Phase 3 (items 1, 2), Phase 4 (3, 4, 7).
 
