@@ -338,8 +338,9 @@ without `fixme`, and Journey 1 of the rewritten `SMOKE_JOURNEYS.md` completes.
 ### Phase 2 — One design system
 
 Merge the Estante and Horizonte tokens, move them into `globals.css`, and fix
-the existing defect: `button.tsx` and `input.tsx` reference thirteen tokens that
-do not exist, which is why the login button renders unstyled.
+the existing defect: `button.tsx` and `input.tsx` use fourteen theme colour
+utilities resolving to twelve token names, none of which exist — so the login
+button renders with layout but no colour.
 *Done when:* `check:contrast` stays green and no component references a missing
 token.
 
