@@ -44,21 +44,21 @@ passes missed, and it costs nothing to run.
 
 ## 1. Themes — there is no way for a user to choose
 
-**Finding.** Nothing in `src/` lets anyone pick a theme. `globals.css` responds
+**Resolved 2026-08-09** (`24a2203`). Original finding: nothing in `src/` let anyone pick a theme. `globals.css` responds
 to `prefers-color-scheme`, and that is the whole story: if your operating system
 is in dark mode you get dark, and there is no override. The `ThemeControl`
 component that did this was part of the design lab and was deleted with it.
 
 **Actions**
 
-- **A1.1** Build a theme control with three states — *System / Light / Dark* —
+- ~~**A1.1**~~ **Done.** Theme control with three states — *System / Light / Dark* —
   not a two-state switch. A binary toggle destroys "follow my system" the first
   time it is touched, and that is the setting most people actually want.
-- **A1.2** Persist per device and re-apply **before first paint** via an inline
+- ~~**A1.2**~~ **Done.** Persisted per device and re-applied **before first paint** via an inline
   script on `<html>`, or the chosen theme flashes the wrong one on every load.
   The pattern is already proven — it existed in the deleted lab layout and can
   be recovered from git history rather than reinvented.
-- **A1.3** Put it where it is reachable from every screen, including **before
+- ~~**A1.3**~~ **Done.** Reachable from every screen, including **before
   sign-in**. Someone whose system is set to light but who needs dark for a visual
   reason must not have to log in first.
 - **A1.4** Extend `scripts/check-contrast.ts` to assert AAA for both themes on
@@ -69,7 +69,7 @@ component that did this was part of the design lab and was deleted with it.
 
 ## 2. Language — exists, but not where it is needed
 
-**Finding.** `LocaleSwitcher` is rendered in `DashboardNav` and on `/settings`.
+**Resolved 2026-08-09** (`24a2203`). Original finding: `LocaleSwitcher` was rendered in `DashboardNav` and on `/settings` only.
 It is **absent from `/login` and `/register`**, so the language cannot be changed
 until after signing in. It is also a native `<select>` whose `onChange` calls
 `window.location.reload()`, and it hardcodes `id="locale-switcher"`, so a second
@@ -78,13 +78,13 @@ instance on one page duplicates the id (this already blocked putting it on
 
 **Actions**
 
-- **A2.1** Make the id unique with `useId()`, so the control can appear more than
+- ~~**A2.1**~~ **Done.** Id made unique with `useId()`, so the control can appear more than
   once without breaking its label association.
-- **A2.2** Render it on the auth pages, beside the theme control.
-- **A2.3** Replace the full page reload with a router refresh, so the choice does
+- ~~**A2.2**~~ **Done.** Rendered on the auth pages, beside the theme control.
+- ~~**A2.3**~~ **Done.** Replaced the full page reload with a router refresh, so the choice does
   not throw away form state — someone half-way through registering should not
   lose what they typed because they switched language.
-- **A2.4** Pair it with the theme control as one "preferences" cluster, so the
+- ~~**A2.4**~~ **Done.** Paired with the theme control as one "preferences" cluster, so the
   two settings that change how the app looks live together rather than in two
   unrelated places.
 

@@ -24,7 +24,7 @@ Rules for this log:
 | 0 — Clean slate | ✅ Complete |
 | 1 — Close the dead routes | ✅ Complete |
 | 2 — One design system | ✅ Complete |
-| 2b — Foundations of use (audit) | ▶ Next |
+| 2b — Foundations of use (audit) | ▶ In progress |
 | 3 — Roles | Not started |
 | 4 — Phone screen, offline | Not started |
 | 5 — Kitchen screen | Not started |
@@ -34,6 +34,18 @@ Rules for this log:
 ---
 
 ## Done
+
+### Phase 2b — Foundations of use
+
+| Unit | Commit |
+|---|---|
+| Every page on the tokens; real dashboard | `4eafd1c` |
+| Auth pages on the tokens; opacity contrast fixed | `0158b1b`, `c839cde` |
+| axe-core AAA audit, 30 checks over 15 routes × 2 themes | `1c6b2d6` |
+| Theme and language controls | `24a2203`, `c6d02d2` |
+
+Remaining: A0 dead-link check in CI, A3 mobile-first (bottom bar, tables to
+cards below `lg`), A4.2–A4.4 target sizes, headings, landmarks.
 
 ### Phase 2 — One design system
 
