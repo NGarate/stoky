@@ -68,11 +68,9 @@
     "tailwindcss": "^4.3.3",
     "tesseract.js": "^6.0.1",
     "typescript": "^5.9.3",
-    "zod": "^3.25.76",
-    "zustand": "^5.0.14"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
     "@happy-dom/global-registrator": "^20.11.1",
     "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
@@ -80,7 +78,6 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.3",
     "@types/bun": "^1.3.14",
-    "@types/react-test-renderer": "^19.1.0",
     "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1"

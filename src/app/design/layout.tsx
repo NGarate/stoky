@@ -33,7 +33,8 @@ export default async function DesignLabLayout({
 
   return (
     <>
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: constant string, no interpolation */}
+      {/* Inline by necessity: it must run before first paint. Constant
+          string, no interpolation, and nonce-guarded by the CSP. */}
       <script nonce={nonce} dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
       {children}
     </>

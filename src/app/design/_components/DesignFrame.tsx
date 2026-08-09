@@ -18,7 +18,7 @@ export function DesignFrame({
 }) {
   return (
     <>
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: tokens are authored constants, not input */}
+      {/* Tokens are authored constants, never user input. */}
       <style dangerouslySetInnerHTML={{ __html: themeCss(design) }} />
 
       <a href="#contenido" className="lab__skip">
