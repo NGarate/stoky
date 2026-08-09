@@ -13,6 +13,7 @@
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
     "check:contrast": "bun scripts/check-contrast.ts",
+    "check:links": "bun scripts/check-links.ts",
     "test": "pnpm test:unit && pnpm test:components && pnpm test:integration",
     "test:unit": "bun test src/__tests__/unit",
     "test:components": "bun test --preload ./src/__tests__/setup/register-dom.ts src/__tests__/components",
