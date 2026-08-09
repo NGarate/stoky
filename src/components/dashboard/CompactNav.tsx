@@ -63,9 +63,17 @@ export function CompactNav(): JSX.Element {
 
   return (
     <>
-      {/* Phone: bottom bar. */}
+      {/* Phone: bottom bar.
+
+          `data-fixed-bottom` is a contract, not decoration: it marks the
+          element that covers the bottom of the viewport, so a popup can ask how
+          much room it really has instead of trusting `window.innerHeight`. The
+          location picker opened its panel into the 64px underneath this bar and
+          drew every option behind it (ISSUES UI-6). One attribute is cheaper
+          than teaching each popup about this component. */}
       <nav
         aria-label={t("mainLabel")}
+        data-fixed-bottom=""
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <ul className="flex items-stretch">

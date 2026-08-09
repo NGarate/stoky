@@ -188,4 +188,50 @@ test.describe("LocationPicker on /inventory/add", () => {
     await page.keyboard.press("Tab");
     await expect(trigger).not.toBeFocused();
   });
+
+  test("every option is on screen, not behind the bottom bar", async ({ page }) => {
+    // A phone, because that is the only tier with a fixed bottom bar and the
+    // only one where the picker is the last field of a long form.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.waitForTimeout(2500);
+
+    const trigger = page.locator('[role="combobox"]');
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator('[role="listbox"]')).toBeVisible();
+
+    const verdict = await page.evaluate(() => {
+      const listbox = document.querySelector('[role="listbox"]');
+      if (!listbox) return { error: "no listbox" };
+      const bar = document.querySelector<HTMLElement>("[data-fixed-bottom]");
+      const floor = bar?.getBoundingClientRect().top ?? window.innerHeight;
+
+      const panel = listbox.getBoundingClientRect();
+      return {
+        placement: listbox.getAttribute("data-placement"),
+        panelTop: Math.round(panel.top),
+        panelBottom: Math.round(panel.bottom),
+        floor: Math.round(floor),
+        // A panel this short has to scroll, and that is fine: a row you can
+        // reach by scrolling the list is reachable. A row drawn under the
+        // navigation bar is not.
+        scrollable: listbox.scrollHeight > listbox.clientHeight + 1,
+        firstRowVisible: (() => {
+          const first = document.querySelector('[role="option"]');
+          if (!first) return false;
+          const r = first.getBoundingClientRect();
+          return r.height > 0 && r.bottom <= floor + 1 && r.top >= -1;
+        })(),
+      };
+    });
+
+    // Before this, the last option ended at 892px on an 844px viewport with the
+    // bar starting at 780px, and the screenshot showed no option at all.
+    const where = JSON.stringify(verdict);
+    expect(verdict.panelBottom, where).toBeLessThanOrEqual((verdict.floor ?? 0) + 1);
+    expect(verdict.panelTop, where).toBeGreaterThanOrEqual(-1);
+    expect(verdict.firstRowVisible, where).toBe(true);
+  });
 });

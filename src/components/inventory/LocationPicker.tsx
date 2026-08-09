@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { api } from "@/lib/trpc/client";
 
 interface LocationPickerProps {
@@ -100,6 +108,13 @@ function flattenTree(
   ]);
 }
 
+/** Breathing room between the trigger and the panel, in CSS pixels. */
+const GAP = 4;
+/** Two rows and a hint of a third, so the panel always reads as a list. */
+const MIN_PANEL = 120;
+/** What the panel asks for when there is room: the old `max-h-60`. */
+const DEFAULT_PANEL = 240;
+
 function optionLabel(option: LocationOption): string {
   const count =
     option.stockCount && option.stockCount > 0 ? ` (${option.stockCount})` : "";
@@ -115,6 +130,10 @@ export function LocationPicker({
 }: LocationPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [placement, setPlacement] = useState({
+    dropUp: false,
+    maxHeight: DEFAULT_PANEL,
+  });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const listboxId = useId();
@@ -239,6 +258,74 @@ export function LocationPicker({
     optionRefs.current[activeIndex]?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex, isOpen]);
 
+  // Where the panel fits, recomputed while it is open (ISSUES UI-6).
+  //
+  // It used to open downward unconditionally. On a phone the picker is the last
+  // field of a long form, so "downward" meant into the 64px left under the fixed
+  // bottom bar: measured, the last option ended at 892px on an 844px viewport
+  // and not one row was visible. The bar is `position: fixed`, so scrolling the
+  // page does not help — the floor has to be the top of that element, not the
+  // bottom of the viewport.
+  // No dependency array: this runs after every render while the panel is open,
+  // which is two `getBoundingClientRect` calls and is the price of not having to
+  // be right about *when* to measure. The version that measured once, keyed on
+  // `isOpen`, painted the default placement in about one run in three — the
+  // trigger's position is settled by a scroll that the effect cannot see coming.
+  // `useLayoutEffect` so the decision lands before the browser paints, rather
+  // than as a visible jump from below to above.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    function place(): void {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+
+      // Whatever the shell has parked across the bottom of the viewport. Absent
+      // from `md` up, where the navigation is a rail and then a top bar.
+      const bar = document.querySelector<HTMLElement>("[data-fixed-bottom]");
+      const barRect = bar?.getBoundingClientRect();
+      const floor =
+        barRect && barRect.height > 0 ? barRect.top : window.innerHeight;
+
+      const below = floor - rect.bottom - GAP;
+      const above = rect.top - GAP;
+
+      // Prefer downward, as a `<select>` does, and only flip when the panel
+      // would be more usable the other way round. The height is capped either
+      // way: a panel that runs off the screen is the defect, whichever
+      // direction it runs off in.
+      // Prefer downward, as a `<select>` does, and flip only when downward is
+      // too cramped and upward is genuinely roomier.
+      const dropUp = below < MIN_PANEL && above > below;
+
+      // Capped by the room on the side actually chosen, never floored past it.
+      // A floor was the first attempt and it reintroduced the defect in
+      // miniature: with 100px below and 90px above, neither side clears
+      // MIN_PANEL, so it stayed below and a 120px panel hung 20px under the bar.
+      // A short panel that scrolls is recoverable; one drawn under the
+      // navigation is the bug.
+      const room = Math.max(Math.round(dropUp ? above : below), 0);
+      setPlacement((current) => {
+        const next = { dropUp, maxHeight: Math.min(DEFAULT_PANEL, room) };
+        return current.dropUp === next.dropUp &&
+          current.maxHeight === next.maxHeight
+          ? current
+          : next;
+      });
+    }
+
+    place();
+    window.addEventListener("resize", place);
+    // Capture, so it also fires for a scrollable ancestor rather than only the
+    // document.
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  });
+
   if (isLoading) {
     return (
       <div className="w-full rounded border border-border bg-muted p-2 text-muted-foreground">
@@ -315,7 +402,11 @@ export function LocationPicker({
             // Keeps the trigger focused through a mouse selection, so the
             // keyboard still works afterwards and Escape has somewhere to go.
             onMouseDown={(event) => event.preventDefault()}
-            className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-border bg-card shadow-lg"
+            data-placement={placement.dropUp ? "above" : "below"}
+            style={{ maxHeight: `${placement.maxHeight}px` }}
+            className={`absolute z-20 w-full overflow-auto rounded border border-border bg-card shadow-lg ${
+              placement.dropUp ? "bottom-full mb-1" : "top-full mt-1"
+            }`}
           >
             {options.map((option, index) => {
               const isSelected = option.selectable && index === selectedIndex;
