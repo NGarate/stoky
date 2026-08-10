@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import { stockEntrySchema } from "@/lib/validations/inventory";
 import type { StockOperation } from "@prisma/client";
 
 export const inventoryRouter = createTRPCRouter({
-  getStockOverview: protectedProcedure
+  getStockOverview: householdProcedure
     .input(
       z.object({
         locationId: z.string().optional(),
@@ -16,19 +16,8 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const where = {
-        householdId: user.householdId,
+        householdId: ctx.householdId,
         ...(input.category && { category: input.category }),
       };
 
@@ -102,7 +91,7 @@ export const inventoryRouter = createTRPCRouter({
       };
     }),
 
-  addStock: protectedProcedure
+  addStock: writeProcedure
     .input(
       stockEntrySchema.extend({
         price: z.number().optional(),
@@ -112,20 +101,11 @@ export const inventoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // Verify product exists and belongs to household
       const product = await prisma.product.findFirst({
         where: {
           id: input.productId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -138,7 +118,7 @@ export const inventoryRouter = createTRPCRouter({
         const location = await prisma.storageLocation.findFirst({
           where: {
             id: input.locationId,
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         });
 
@@ -181,7 +161,7 @@ export const inventoryRouter = createTRPCRouter({
       return stockEntry;
     }),
 
-  consumeStock: protectedProcedure
+  consumeStock: householdProcedure
     .input(
       stockEntrySchema.extend({
         consumeFromLocationId: z.string().optional(),
@@ -190,20 +170,11 @@ export const inventoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // Verify product exists and belongs to household
       const product = await prisma.product.findFirst({
         where: {
           id: input.productId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
         include: {
           stockEntries: {
@@ -251,7 +222,7 @@ export const inventoryRouter = createTRPCRouter({
       return stockEntry;
     }),
 
-  adjustStock: protectedProcedure
+  adjustStock: writeProcedure
     .input(
       stockEntrySchema.extend({
         reason: z.string().min(1),
@@ -260,20 +231,11 @@ export const inventoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // Verify product exists and belongs to household
       const product = await prisma.product.findFirst({
         where: {
           id: input.productId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -300,7 +262,7 @@ export const inventoryRouter = createTRPCRouter({
       return stockEntry;
     }),
 
-  transferStock: protectedProcedure
+  transferStock: writeProcedure
     .input(
       z.object({
         productId: z.string(),
@@ -314,15 +276,6 @@ export const inventoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       if (input.fromLocationId === input.toLocationId) {
         throw new Error("Cannot transfer to the same location");
       }
@@ -331,7 +284,7 @@ export const inventoryRouter = createTRPCRouter({
       const product = await prisma.product.findFirst({
         where: {
           id: input.productId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
         include: {
           stockEntries: {
@@ -360,7 +313,7 @@ export const inventoryRouter = createTRPCRouter({
       const locations = await prisma.storageLocation.findMany({
         where: {
           id: { in: [input.fromLocationId, input.toLocationId] },
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -405,7 +358,7 @@ export const inventoryRouter = createTRPCRouter({
       return { fromEntry, toEntry };
     }),
 
-  getStockHistory: protectedProcedure
+  getStockHistory: householdProcedure
     .input(
       z.object({
         productId: z.string(),
@@ -414,22 +367,11 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // Verify product exists and belongs to household
       const product = await prisma.product.findFirst({
         where: {
           id: input.productId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -464,7 +406,7 @@ export const inventoryRouter = createTRPCRouter({
     }),
 
   // F19: Expiration Tracking
-  getExpiringItems: protectedProcedure
+  getExpiringItems: householdProcedure
     .input(
       z.object({
         days: z.number().default(7),
@@ -472,24 +414,13 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const expiryThreshold = new Date();
       expiryThreshold.setDate(expiryThreshold.getDate() + input.days);
 
       const expiringItems = await prisma.stockEntry.findMany({
         where: {
           product: {
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
           expirationDate: {
             lte: expiryThreshold,
@@ -523,28 +454,17 @@ export const inventoryRouter = createTRPCRouter({
         });
     }),
 
-  getExpiredItems: protectedProcedure
+  getExpiredItems: householdProcedure
     .input(
       z.object({
         locationId: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const expiredItems = await prisma.stockEntry.findMany({
         where: {
           product: {
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
           expirationDate: {
             lt: new Date(),

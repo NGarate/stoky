@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
 import {
@@ -11,23 +11,13 @@ import {
 } from "@/lib/validations/product";
 
 export const productRouter = createTRPCRouter({
-  list: protectedProcedure
+  list: householdProcedure
     .input(productPaginationSchema)
     .query(async ({ ctx, input }) => {
       const { cursor, limit, search } = input;
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
 
       const where = {
-        householdId: user.householdId,
+        householdId: ctx.householdId,
         ...(search && {
           name: {
             contains: search,
@@ -81,24 +71,13 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
-  getById: protectedProcedure
+  getById: householdProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const product = await prisma.product.findFirst({
         where: {
           id: input.id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
         include: {
           stockEntries: {
@@ -132,25 +111,14 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
-  getByBarcode: protectedProcedure
+  getByBarcode: householdProcedure
     .input(productByBarcodeSchema)
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const product = await prisma.product.findUnique({
         where: {
           barcode_householdId: {
             barcode: input.barcode,
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         },
         include: {
@@ -178,49 +146,28 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
-  create: protectedProcedure
+  create: writeProcedure
     .input(productSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const product = await prisma.product.create({
         data: {
           ...input,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
       return product;
     }),
 
-  update: protectedProcedure
+  update: writeProcedure
     .input(updateProductSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
       const { id, ...data } = input;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
 
       const existingProduct = await prisma.product.findFirst({
         where: {
           id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -236,24 +183,13 @@ export const productRouter = createTRPCRouter({
       return product;
     }),
 
-  delete: protectedProcedure
+  delete: writeProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const existingProduct = await prisma.product.findFirst({
         where: {
           id: input.id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -269,27 +205,16 @@ export const productRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  searchByName: protectedProcedure
+  searchByName: householdProcedure
     .input(productSearchSchema)
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // Use pg_trgm similarity search
       const products = await prisma.$queryRaw`
         SELECT 
           id, name, barcode, brand, category, "defaultUnit", "minStock",
           similarity(name, ${input.query}) as similarity
         FROM "Product"
-        WHERE "householdId" = ${user.householdId}
+        WHERE "householdId" = ${ctx.householdId}
           AND name % ${input.query}
         ORDER BY similarity(name, ${input.query}) DESC
         LIMIT ${input.limit}
@@ -307,26 +232,15 @@ export const productRouter = createTRPCRouter({
       }>;
     }),
 
-  scanBarcode: protectedProcedure
+  scanBarcode: writeProcedure
     .input(productByBarcodeSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // First, check if product already exists in local database
       const existingProduct = await prisma.product.findUnique({
         where: {
           barcode_householdId: {
             barcode: input.barcode,
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         },
         include: {
@@ -378,7 +292,7 @@ export const productRouter = createTRPCRouter({
           imageUrl: offProduct.image_url || offProduct.image_front_url || null,
           defaultUnit: openFoodFacts.extractUnit(offProduct.quantity),
           openFoodFactsData: offProduct,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 

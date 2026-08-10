@@ -4,6 +4,7 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
+import { TRPCError } from "@trpc/server";
 import type { HouseholdRole } from "@prisma/client";
 
 // Test data tracking for cleanup
@@ -18,6 +19,25 @@ const testData = {
   stockEntries: [] as string[],
   priceRecords: [] as string[],
 };
+
+/**
+ * Asserts a call was refused with a particular tRPC code.
+ *
+ * These used to assert on the message text. The code is the thing a client can
+ * act on — telling "you are not signed in" apart from "the server fell over"
+ * is exactly what ISSUES.md DEBT-4 is about — and the message is free to be
+ * reworded without silently loosening the check.
+ */
+async function expectCode(call: Promise<unknown>, code: TRPCError["code"]) {
+  let thrown: unknown;
+  try {
+    await call;
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toBeInstanceOf(TRPCError);
+  expect((thrown as TRPCError).code).toBe(code);
+}
 
 // Helper to create test context with session.
 //
@@ -414,7 +434,7 @@ describe("tRPC Router Integration Tests", () => {
         const { ctx } = await createTestContext("anon");
         const caller = appRouter.createCaller(ctx);
 
-        await expect(caller.auth.me()).rejects.toThrow("Unauthorized");
+        await expectCode(caller.auth.me(), "UNAUTHORIZED");
       });
     });
 
@@ -434,7 +454,7 @@ describe("tRPC Router Integration Tests", () => {
         const { ctx } = await createTestContext("anon");
         const caller = appRouter.createCaller(ctx);
 
-        await expect(caller.auth.logout()).rejects.toThrow("Unauthorized");
+        await expectCode(caller.auth.logout(), "UNAUTHORIZED");
       });
     });
   });
@@ -919,12 +939,13 @@ describe("tRPC Router Integration Tests", () => {
       ]);
       const base64 = jpegBuffer.toString("base64");
 
-      await expect(
+      await expectCode(
         caller.receipt.upload({
           fileBase64: base64,
           mimeType: "image/jpeg",
-        })
-      ).rejects.toThrow("User must belong to a household to upload receipts");
+        }),
+        "PRECONDITION_FAILED"
+      );
     });
 
     it("should reject invalid file type", async () => {
@@ -1466,17 +1487,16 @@ describe("tRPC Router Integration Tests", () => {
       const caller = appRouter.createCaller(ctx);
 
       // All these should fail without authentication
-      await expect(caller.product.list({})).rejects.toThrow("Unauthorized");
-      await expect(caller.inventory.getStockOverview({})).rejects.toThrow(
-        "Unauthorized"
+      await expectCode(caller.product.list({}), "UNAUTHORIZED");
+      await expectCode(caller.inventory.getStockOverview({}), "UNAUTHORIZED");
+      await expectCode(caller.location.list(), "UNAUTHORIZED");
+      await expectCode(caller.receipt.list({}), "UNAUTHORIZED");
+      await expectCode(caller.store.list({}), "UNAUTHORIZED");
+      await expectCode(
+        caller.price.getHistory({ productId: "test", days: 30 }),
+        "UNAUTHORIZED"
       );
-      await expect(caller.location.list()).rejects.toThrow("Unauthorized");
-      await expect(caller.receipt.list({})).rejects.toThrow("Unauthorized");
-      await expect(caller.store.list({})).rejects.toThrow("Unauthorized");
-      await expect(
-        caller.price.getHistory({ productId: "test", days: 30 })
-      ).rejects.toThrow("Unauthorized");
-      await expect(caller.shopping.list({})).rejects.toThrow("Unauthorized");
+      await expectCode(caller.shopping.list({}), "UNAUTHORIZED");
     });
 
     it("should require household membership for household-scoped operations", async () => {
@@ -1486,19 +1506,13 @@ describe("tRPC Router Integration Tests", () => {
       );
       const { caller } = await createTestContext(user.id);
 
-      // These should fail without household membership
-      await expect(caller.product.create({ name: "Test" })).rejects.toThrow(
-        "User not in a household"
-      );
-      await expect(caller.inventory.getStockOverview({})).rejects.toThrow(
-        "User not in a household"
-      );
-      await expect(caller.location.create({ name: "Test" })).rejects.toThrow(
-        "User not in a household"
-      );
-      await expect(caller.store.create({ name: "Test" })).rejects.toThrow(
-        "User not associated with a household"
-      );
+      // These should fail without household membership. PRECONDITION_FAILED
+      // rather than FORBIDDEN: nothing is wrong with the account, it is
+      // missing a household, and that is a state the client can resolve.
+      await expectCode(caller.product.create({ name: "Test" }), "PRECONDITION_FAILED");
+      await expectCode(caller.inventory.getStockOverview({}), "PRECONDITION_FAILED");
+      await expectCode(caller.location.create({ name: "Test" }), "PRECONDITION_FAILED");
+      await expectCode(caller.store.create({ name: "Test" }), "PRECONDITION_FAILED");
     });
 
     it("should isolate data between households", async () => {

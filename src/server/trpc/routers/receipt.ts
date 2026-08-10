@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import { ReceiptStatus, MatchStatus, StockOperation } from "@prisma/client";
 import sharp from "sharp";
@@ -14,7 +14,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const receiptRouter = createTRPCRouter({
   // F8: Upload receipt image
-  upload: protectedProcedure
+  upload: writeProcedure
     .input(
       z.object({
         fileBase64: z.string(),
@@ -25,14 +25,7 @@ export const receiptRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
-      const householdId = user.householdId;
-
-      if (!householdId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "User must belong to a household to upload receipts",
-        });
-      }
+      const householdId = ctx.householdId;
 
       // Validate MIME type
       if (!VALID_MIME_TYPES.includes(input.mimeType)) {
@@ -107,10 +100,9 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F8: Get receipt processing status
-  getStatus: protectedProcedure
+  getStatus: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const user = ctx.session.user;
       
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
@@ -131,7 +123,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -156,10 +148,9 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F9: Parse receipt (internal, triggered after OCR)
-  parseReceipt: protectedProcedure
+  parseReceipt: writeProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const user = ctx.session.user;
       
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
@@ -172,7 +163,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -193,10 +184,9 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F10: Match items to products
-  matchItems: protectedProcedure
+  matchItems: writeProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const user = ctx.session.user;
       
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
@@ -209,7 +199,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -227,10 +217,9 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F11: Get receipt with items and candidates
-  getReceiptWithItems: protectedProcedure
+  getReceiptWithItems: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const user = ctx.session.user;
       
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
@@ -251,7 +240,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -279,7 +268,7 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F11: Confirm match for single item
-  confirmItem: protectedProcedure
+  confirmItem: writeProcedure
     .input(
       z.object({
         receiptItemId: z.string(),
@@ -289,7 +278,6 @@ export const receiptRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const user = ctx.session.user;
       
       const item = await prisma.receiptItem.findUnique({
         where: { id: input.receiptItemId },
@@ -305,7 +293,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (item.receipt.householdId !== user.householdId) {
+      if (item.receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -344,7 +332,7 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F11: Confirm all items at once
-  confirmAll: protectedProcedure
+  confirmAll: writeProcedure
     .input(
       z.object({
         receiptId: z.string(),
@@ -359,7 +347,6 @@ export const receiptRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const user = ctx.session.user;
       
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
@@ -372,7 +359,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -418,7 +405,7 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F12: Apply receipt to inventory
-  applyReceipt: protectedProcedure
+  applyReceipt: writeProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
@@ -442,7 +429,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -512,11 +499,9 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F12: Get applied summary
-  getAppliedSummary: protectedProcedure
+  getAppliedSummary: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const user = ctx.session.user;
-
       const receipt = await prisma.receipt.findUnique({
         where: { id: input.receiptId },
         include: {
@@ -553,7 +538,7 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      if (receipt.householdId !== user.householdId) {
+      if (receipt.householdId !== ctx.householdId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -589,7 +574,7 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // List receipts for household
-  list: protectedProcedure
+  list: householdProcedure
     .input(
       z.object({
         status: z.enum([
@@ -606,15 +591,9 @@ export const receiptRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const user = ctx.session.user;
-      
-      if (!user.householdId) {
-        return { items: [], nextCursor: null };
-      }
-
       const receipts = await prisma.receipt.findMany({
         where: {
-          householdId: user.householdId,
+          householdId: ctx.householdId,
           ...(input.status && { status: input.status }),
         },
         take: input.limit + 1,

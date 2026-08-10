@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import {
   storageLocationSchema,
@@ -7,21 +7,10 @@ import {
 } from "@/lib/validations/inventory";
 
 export const locationRouter = createTRPCRouter({
-  list: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { householdId: true },
-    });
-
-    if (!user?.householdId) {
-      throw new Error("User not in a household");
-    }
-
+  list: householdProcedure.query(async ({ ctx }) => {
     const locations = await prisma.storageLocation.findMany({
       where: {
-        householdId: user.householdId,
+        householdId: ctx.householdId,
       },
       orderBy: {
         name: "asc",
@@ -44,22 +33,11 @@ export const locationRouter = createTRPCRouter({
     return locations;
   }),
 
-  getTree: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { householdId: true },
-    });
-
-    if (!user?.householdId) {
-      throw new Error("User not in a household");
-    }
-
+  getTree: householdProcedure.query(async ({ ctx }) => {
     // Get all locations
     const allLocations = await prisma.storageLocation.findMany({
       where: {
-        householdId: user.householdId,
+        householdId: ctx.householdId,
       },
       orderBy: {
         name: "asc",
@@ -101,26 +79,15 @@ export const locationRouter = createTRPCRouter({
     return roots;
   }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(storageLocationSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       // Verify parent exists if provided
       if (input.parentId) {
         const parent = await prisma.storageLocation.findFirst({
           where: {
             id: input.parentId,
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         });
 
@@ -133,7 +100,7 @@ export const locationRouter = createTRPCRouter({
         data: {
           name: input.name,
           parentId: input.parentId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
         include: {
           parent: true,
@@ -144,25 +111,15 @@ export const locationRouter = createTRPCRouter({
       return location;
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(updateStorageLocationSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
       const { id, ...data } = input;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
 
       const existingLocation = await prisma.storageLocation.findFirst({
         where: {
           id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -179,7 +136,7 @@ export const locationRouter = createTRPCRouter({
         const parent = await prisma.storageLocation.findFirst({
           where: {
             id: data.parentId,
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         });
 
@@ -206,24 +163,13 @@ export const locationRouter = createTRPCRouter({
       return location;
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not in a household");
-      }
-
       const location = await prisma.storageLocation.findFirst({
         where: {
           id: input.id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
         include: {
           children: true,

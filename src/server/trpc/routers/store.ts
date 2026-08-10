@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import {
   storeSchema,
@@ -8,22 +8,12 @@ import {
 } from "@/lib/validations/store";
 
 export const storeRouter = createTRPCRouter({
-  list: protectedProcedure
+  list: householdProcedure
     .input(storeQuerySchema)
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       const stores = await prisma.store.findMany({
         where: {
-          householdId: user.householdId,
+          householdId: ctx.householdId,
           ...(input.search && {
             name: {
               contains: input.search,
@@ -38,48 +28,28 @@ export const storeRouter = createTRPCRouter({
       return stores;
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(storeSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       const store = await prisma.store.create({
         data: {
           ...input,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
       return store;
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(updateStoreSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       const { id, ...data } = input;
 
       const store = await prisma.store.update({
         where: {
           id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
         data,
       });
@@ -87,23 +57,13 @@ export const storeRouter = createTRPCRouter({
       return store;
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       await prisma.store.delete({
         where: {
           id: input.id,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 

@@ -285,7 +285,7 @@ describe("Authentication Flow Integration Tests", () => {
       }
 
       expect(error).toBeDefined();
-      expect(error?.message).toContain("Unauthorized");
+      expect(error?.message).toContain("Not signed in");
     });
 
     it("should return user without household when user has no household", async () => {
@@ -339,7 +339,7 @@ describe("Authentication Flow Integration Tests", () => {
       }
 
       expect(error).toBeDefined();
-      expect(error?.message).toContain("Unauthorized");
+      expect(error?.message).toContain("Not signed in");
     });
   });
 

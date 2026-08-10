@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import {
   priceRecordSchema,
@@ -7,24 +7,14 @@ import {
 } from "@/lib/validations/price";
 
 export const priceRouter = createTRPCRouter({
-  recordPrice: protectedProcedure
+  recordPrice: writeProcedure
     .input(priceRecordSchema)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       // Verify product belongs to household
       const product = await prisma.product.findFirst({
         where: {
           id: input.productId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -36,7 +26,7 @@ export const priceRouter = createTRPCRouter({
       const store = await prisma.store.findFirst({
         where: {
           id: input.storeId,
-          householdId: user.householdId,
+          householdId: ctx.householdId,
         },
       });
 
@@ -53,19 +43,9 @@ export const priceRouter = createTRPCRouter({
       return priceRecord;
     }),
 
-  getHistory: protectedProcedure
+  getHistory: householdProcedure
     .input(priceHistorySchema)
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - input.days);
 
@@ -77,7 +57,7 @@ export const priceRouter = createTRPCRouter({
             gte: startDate,
           },
           product: {
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         },
         include: {
@@ -91,25 +71,15 @@ export const priceRouter = createTRPCRouter({
       return history;
     }),
 
-  getLatestPrices: protectedProcedure
+  getLatestPrices: householdProcedure
     .input(z.object({ productId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       // Get latest price per store for the product
       const latestPrices = await prisma.priceRecord.findMany({
         where: {
           productId: input.productId,
           product: {
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         },
         include: {
@@ -131,7 +101,7 @@ export const priceRouter = createTRPCRouter({
       return Array.from(pricesByStore.values());
     }),
 
-  getPriceTrends: protectedProcedure
+  getPriceTrends: householdProcedure
     .input(
       z.object({
         productId: z.string(),
@@ -139,16 +109,6 @@ export const priceRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - input.days);
 
@@ -159,7 +119,7 @@ export const priceRouter = createTRPCRouter({
             gte: startDate,
           },
           product: {
-            householdId: user.householdId,
+            householdId: ctx.householdId,
           },
         },
         include: {
@@ -188,7 +148,7 @@ export const priceRouter = createTRPCRouter({
       }));
     }),
 
-  getProductPrices: protectedProcedure
+  getProductPrices: householdProcedure
     .input(
       z.object({
         search: z.string().optional(),
@@ -196,19 +156,9 @@ export const priceRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { householdId: true },
-      });
-
-      if (!user?.householdId) {
-        throw new Error("User not associated with a household");
-      }
-
       const products = await prisma.product.findMany({
         where: {
-          householdId: user.householdId,
+          householdId: ctx.householdId,
           ...(input.search && {
             name: {
               contains: input.search,
