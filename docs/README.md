@@ -68,9 +68,9 @@ run a gate, the file says so and says why, rather than omitting it.
 - **How it goes stale:** by recording a measurement and never re-measuring. It
   has happened — a note about spec drift had itself drifted for a week.
 
-**[`PROGRESS.md`](PROGRESS.md)** · 338 lines
+**[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **26 numbered decisions taken
+commits, and — the part worth reading in full — **32 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -89,8 +89,8 @@ The plan. Two entry screens (a phone screen for day-to-day use, a kitchen screen
 for a tablet), the decisions that shaped them, and eight phases each with an
 explicit *done when*.
 
-Phases 0, 1, 2 and 2b are complete. **Phase 3 is next: roles, and the rate
-limiting that has been open since the beginning.**
+Phases 0 to 3 are complete. **Phase 4 is next: the phone screen, offline from
+the start.**
 
 - **Read** to know what you are building and what finishing it means.
 - **Write** when a phase closes — with what it actually did, including where the

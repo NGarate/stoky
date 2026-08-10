@@ -112,10 +112,24 @@ all, so the journey's "where it is stored" half was passing on the roots only.
 
 ## Journey 2. A kitchen account is refused a write by the server
 
-**Passable from Phase 3.** Not runnable today: `HouseholdRole` exists in the
-schema but is never checked, the role does not reach the JWT or session, there is
-no `KITCHEN` value, and `protectedProcedure` is the only procedure type
-(`REDESIGN_PLAN.md` §5.2).
+**✅ Passes since Phase 3**, proved by
+`src/__tests__/integration/capabilities.test.ts`, which builds a caller per role
+and calls the router directly — no screen involved. `consumeStock` succeeds for
+a kitchen account; `addStock`, `shopping.updateItem`,
+`shopping.generateFromLowStock`, `product.create` and `product.scanBarcode` are
+each refused with FORBIDDEN, and the suite asserts afterwards that no
+`StockEntry`, no `ShoppingItem` and no `Product` was left behind.
+
+The per-procedure half the plan asks for is
+`src/__tests__/unit/capabilities.test.ts`: it reads how each of the 45
+procedures is declared and compares it against the matrix, so a procedure added
+later cannot quietly take the wrong tier. Sampling six would have missed that.
+
+**One honest limit.** Nothing in the interface creates a KITCHEN account — the
+enum value and the middleware exist, but the only way to get one today is a
+database write, which is how the test makes them. The journey proves the
+server refuses a kitchen account; it does not prove anyone can make one. That
+arrives with the kitchen screen in Phase 5.
 
 A hidden button is not a control. This journey exists specifically to prove the
 restriction holds when the interface is bypassed.

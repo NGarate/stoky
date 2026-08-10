@@ -12,8 +12,8 @@ say what measured it.
 
 ## Gate status
 
-Measured on 2026-08-09 against a live PostgreSQL and Valkey, and a dev server on
-port 3101.
+Measured on 2026-08-10 against a live PostgreSQL and Valkey, and a dev server on
+port 3102, after Phase 3.
 
 | Gate | Command | Result |
 |---|---|---|
@@ -21,13 +21,13 @@ port 3101.
 | Typecheck | `corepack pnpm typecheck` | ✅ clean |
 | Internal links | `corepack pnpm check:links` | ✅ 74 links against 24 routes, none broken |
 | Contrast | `corepack pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
-| Unit tests | `corepack pnpm test:unit` | ✅ 96 pass / 12 files |
-| Component tests | `corepack pnpm test:components` | ✅ 155 pass / 13 files |
-| Integration tests | `corepack pnpm test:integration` | ✅ 218 pass / 8 files, 406 assertions |
+| Unit tests | `corepack pnpm test:unit` | ✅ 134 pass / 16 files |
+| Component tests | `corepack pnpm test:components` | ✅ 164 pass / 14 files |
+| Integration tests | `corepack pnpm test:integration` | ✅ 242 pass / 11 files |
 | Build | `corepack pnpm build` | ✅ 25 routes, all server-rendered on demand |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
 | Seed | `corepack pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ 187 pass / 10 skipped / 0 fail, **6.0 min** |
+| E2E | `bunx playwright test` | ✅ 174 pass / 8 skipped / 0 fail, **5.6 min** |
 | Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
 
 `corepack pnpm verify:local` runs the first six — **17s** of a **600s budget**,
@@ -163,7 +163,8 @@ These are recorded because each one produced a confident, wrong number.
 `receiptParser`, `productMatcher`, `openFoodFacts`.
 
 **Auth — working.** Real forms wired to Auth.js `signIn()` with Argon2id
-hashing, error mapping and i18n. Still no rate limiting (CRITICAL-4).
+hashing, error mapping and i18n. Rate-limited per IP in Valkey since Phase 3 —
+5 sign-ins per 15 minutes, 3 registrations per hour (CRITICAL-4 closed).
 
 **Frontend — 22 pages, and no route is linked that does not exist.** That last
 part is enforced by `check:links` in CI rather than by audit; the manual version
@@ -186,6 +187,15 @@ at all three tiers in both themes.
 other, on an empty value, and on an English string that is a byte-identical copy
 of the Spanish. It cannot see a string that never reached a catalogue at all,
 which is what I18N-5 is.
+
+**Roles — enforced on the server, per procedure.** Four values
+(`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
+`src/server/trpc/trpc.ts`, and all 45 procedures assigned. Membership and role
+are read from the database on every call rather than from the JWT, so a
+demotion takes effect on the next request rather than whenever the 15-minute
+token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
+of every procedure against the matrix; the integration suite proves the
+refusals by calling the router as a kitchen account.
 
 **Security posture.** Per-request CSP nonce in `src/middleware.ts` with
 `strict-dynamic`. CI pins every action by SHA, scans the image with Trivy before
@@ -281,33 +291,36 @@ prevent, and it survived because nobody re-read the source it was describing.
 ## Known gaps, by severity
 
 **Security**
-- **No rate limiting anywhere.** `CLAUDE.md` specifies 5 login attempts/15min
-  and 3 registrations/hour per IP. There is no implementation and no Valkey
-  client in `src/`, despite `cache` being defined in compose. This has been the
-  most serious open issue since Phase 0 and is scheduled for Phase 3.
-  (ISSUES CRITICAL-4)
-- Password policy is `min(8)` only. (DEBT-1)
-- No roles. `HouseholdRole` exists in the schema, is never checked, never
-  reaches the JWT, and has no `KITCHEN` value. Phase 3. (SMOKE_JOURNEYS 2)
+- Password policy is `min(8)` only, and with CRITICAL-4 closed this is the
+  largest remaining gap in the auth surface. (DEBT-1)
+- Rate limiting covers the two auth endpoints and nothing else. It is per IP,
+  so one NAT shares a bucket and an attacker with a range gets one each;
+  per-account limiting is not implemented. It also **fails closed**, which
+  makes Valkey a hard dependency of signing in. (SECURITY.md)
+- Roles are enforced on the server per procedure, but **no interface creates a
+  KITCHEN account** — the value exists in the enum and in the middleware, and
+  the only way to get one today is a database write. Phase 5, with the kitchen
+  screen.
 
 **Correctness**
 - `getExpiringItems` reports entry quantity rather than net stock, so a fully
   consumed batch still appears as expiring. (INV-1)
-- An account without a household loads a skeleton forever. (HOUSE-1)
-- 7 of 8 routers throw bare `Error` rather than `TRPCError`, so clients receive
-  `INTERNAL_SERVER_ERROR` for what are auth and not-found conditions. (DEBT-4)
+- The services layer (`ocr`, `productMatcher`, `receiptParser`,
+  `openFoodFacts`) still throws bare `Error`, so a procedure that calls one
+  still surfaces `INTERNAL_SERVER_ERROR` for a missing row. The routers no
+  longer do. (DEBT-6)
 - `openFoodFacts` caches in a process-local `Map`; multi-instance deployments
   diverge. (DEBT-3)
 - The barcode scanner's torch toggle never reaches the camera. (DEBT-2, pinned
   by a test that documents the behaviour.)
 
 **Accessibility and interface**
-- **A failed query leaves two routes on a skeleton forever.** `/inventory` and
-  `/products` render `if (isLoading || !result)`, so an error shows no message,
-  offers no retry and never resolves. Found under parallel load, which is the
-  same condition as a slow network. Filed as four routes and corrected to two by
-  an audit — `/shopping` and `/settings/locations` fall through to an empty
-  state, which is wrong but recoverable. (UI-8)
+- `/shopping` and `/settings/locations` test `if (isLoading)` alone, so a
+  failed query renders the empty state: someone with ten locations is told they
+  have none. `/inventory` and `/products` were the worse half of this and are
+  fixed. (UI-9)
+- The low-stock badge is asserted only on the table tier; the card tier, which
+  is what a phone and the kitchen tablet show, is covered by nothing. (TEST-4)
 - Saving a stock movement announces nothing beyond the route name. (A11Y-1,
   pinned by a test that goes red when it is fixed.)
 - The location picker, the low-stock badge and several wording items are still
@@ -337,8 +350,8 @@ taken without asking are in `docs/PROGRESS.md`.
 | 1 — Close the dead routes | ✅ Complete |
 | 2 — One design system | ✅ Complete |
 | 2b — Foundations of use | ✅ Complete except the manual screen-reader pass |
-| 3 — Roles, rate limiting | Next |
-| 4 — Phone screen, offline | Not started |
+| 3 — Roles, rate limiting | ✅ Complete |
+| 4 — Phone screen, offline | Next |
 | 5 — Kitchen screen | Not started |
 | 6 — Product rating | Not started |
 | 7 — Security review | Not started |

@@ -12,7 +12,8 @@ there is no external service holding your data.
 > **Status:** MVP in development. Backend, auth, schema and routing are in
 > place, and so is the design system — 26 theme tokens in CSS, light and dark,
 > with a WCAG AAA accessibility floor enforced by the test suite. Still missing:
-> roles, rate limiting, the phone and kitchen screens, and offline. See
+> the phone and kitchen screens, and offline. Roles and rate limiting landed in
+> Phase 3. See
 > [`docs/STATUS.md`](docs/STATUS.md) for an honest, command-verified breakdown
 > of what works and what does not.
 
@@ -202,8 +203,13 @@ Code is organised by **domain**, not by technical layer.
 - Only Traefik exposes ports in production; PostgreSQL and Valkey have none.
 - Raw SQL only through parameterised tagged template literals.
 
-**Not yet implemented:** rate limiting on login and register. Do not expose a
-Stoky instance to the public internet until `ISSUES.md` CRITICAL-4 is closed.
+**Rate limiting** on sign-in and registration is in place — 5 sign-ins per 15
+minutes and 3 registrations per hour, per IP, counted in Valkey. It fails
+closed, so signing in needs the cache to be reachable.
+
+**Still not hardened enough to publish:** the password policy is a length check
+and Phase 7's security review has not run. Prefer a LAN or a VPN. See
+`SECURITY.md` for what is and is not covered.
 
 ---
 

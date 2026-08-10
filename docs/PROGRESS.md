@@ -26,8 +26,8 @@ Rules for this log:
 | 2 — One design system | ✅ Complete |
 | 2b — Foundations of use (audit) | ✅ Complete except the human screen-reader pass |
 | — Test infrastructure (unplanned) | ✅ Complete |
-| 3 — Roles, and CRITICAL-4 | ▶ Next |
-| 4 — Phone screen, offline | Not started |
+| 3 — Roles, and CRITICAL-4 | ✅ Complete |
+| 4 — Phone screen, offline | ▶ Next |
 | 5 — Kitchen screen | Not started |
 | 6 — Rating | Not started |
 | 7 — Security review | Not started |
@@ -35,6 +35,24 @@ Rules for this log:
 ---
 
 ## Done
+
+### Phase 3 — Roles, and the security gap that outlived every phase
+
+| Unit | Commit |
+|---|---|
+| `KITCHEN` added to `HouseholdRole` | `05be1e9` |
+| The role reaches the JWT and the session | `cd23d3c` |
+| The capability matrix enforced per procedure, all 45 | `7dcea39` |
+| DEBT-4 closed — every router throws `TRPCError` | `8cbf641` |
+| CRITICAL-4 closed — sign-in and registration limited per IP | `93cb97d` |
+| HOUSE-1 and UI-8 closed — a way out of the no-household state | `039d911` |
+| The second, unmetered credential endpoint removed | `422803c` |
+| TEST-3 fixed and TEST-4 filed; the browser suite green again | `2f8552a` |
+
+**Phase 3 complete.** Journey 2 passes. Filed in passing: DEBT-6 (the services
+layer still throws bare `Error`), UI-9 (`/shopping` and `/settings/locations`
+show an empty state on a failed query) and TEST-4 (the card tier's low-stock
+badge is asserted by nothing).
 
 ### Phase 2b — Foundations of use
 
@@ -332,6 +350,72 @@ asserted that `page.viewportSize()?.width` equalled the width just passed to
 movement before ending on `// Assertion omitted`. This is the same rule that
 retired 352 tautological component tests in Phase 0, applied to the suite that
 replaced them — the rule does not stop applying once the tests are ours.
+
+**D27 — Authorisation reads the database, not the JWT.**
+The plan says to carry `role` through the session callbacks, and it is carried —
+but the session copy exists for the interface, which uses it to hide what an
+account cannot do. `householdProcedure` reads membership and role per request.
+Two things follow that are worth one indexed lookup: a demotion or a removal
+takes effect on the next request rather than whenever the 15-minute token
+happens to expire, and an account that has just created its household can use it
+immediately instead of signing out and in again to mint a token that knows about
+it. The second is not a nicety — without it the HOUSE-1 fix appears to do
+nothing for fifteen minutes. In five routers the lookup is free: those
+procedures were already making exactly that query, one copy each, to find the
+household id. 36 copies are gone.
+
+**D28 — The per-procedure check is a static test, and the behavioural one is
+separate.** The phase's *done when* says "repeated per procedure rather than
+sampled", and calling all 45 procedures with valid input as three roles is 135
+calls of scaffolding whose failure modes are mostly its own. So the coverage is
+split by what each tier can answer honestly (D25): a unit test reads how every
+procedure is *declared* and compares it against the matrix, and an integration
+test proves the middleware actually refuses. The static half earns its place
+independently — when a `TRPCError` was reverted to a bare `Error` in `price.ts`
+to check the tests could fail, only the static test went red. No behavioural
+test provokes that path, and none would have noticed.
+
+**D29 — The rate limiter fails closed, and the limits are configurable.**
+An attempt that cannot be counted is refused. Failing open hands an unlimited
+auth endpoint to anyone who can take the cache down, which is the state
+CRITICAL-4 describes; the cost is that Valkey becomes a hard dependency of
+signing in, which is stated in `SECURITY.md` and named in the server log rather
+than left for an operator to discover through a login form that rejects a
+correct password. The limits are read from the environment because the browser
+suite registers dozens of accounts per run against a server with no proxy in
+front of it, so the whole matrix shares one bucket; `playwright.config.ts`
+raises them rather than switching the limiter off, so it still runs on every
+request the suite makes, and a unit test asserts the shipped defaults with the
+environment unset so the override cannot become the product's behaviour.
+
+**D30 — A successful sign-in clears its counter.**
+`CLAUDE.md` says 5 login *attempts* per 15 minutes. Taken literally that locks
+out a household signing in from a phone, a tablet and a laptop before anyone has
+mistyped anything. Clearing on success leaves the ceiling exactly where the
+specification puts it for someone who cannot sign in, which is the only case the
+limit defends against.
+
+**D31 — The second credential endpoint was removed, not limited.**
+An adversarial review of the finished phase found `auth.login`: a public tRPC
+procedure doing its own `argon2.verify` and returning the account's identity,
+which the interface has never called and which the new limiter did not cover. So
+five wrong passwords on the Auth.js door locked an address out while the same
+guesses through `/api/trpc/auth.login` were unlimited. Deleting it beat limiting
+it — Auth.js already owns credential verification, and a second path nothing
+calls is a liability whether or not it is metered. Its four tests were repointed
+at `authorize`, which had no coverage below the browser until then; that
+immediately caught a second thing, which is that
+`authConfig.providers[0].authorize` is Auth.js's placeholder `() => null` and the
+configured function lives in `options`. Three sign-in tests passed against a stub
+for one run.
+
+**D32 — TEST-3 was fixed rather than left filed, on D22's reasoning.**
+D6 says file, do not fix in passing. TEST-3 — one E2E journey writing the stock
+another journey asserts — was filed and then fixed inside the same phase,
+because a filed defect that keeps a gate red is not a finding with a workaround;
+it is a gate nobody can use, and the next person to run the suite would have had
+to rediscover it. The rule stands: file when the fix is separate work, fix when
+leaving it means the project cannot tell whether it is broken.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather

@@ -450,12 +450,39 @@ browser projects. The non-browser gates total 17 seconds.
 the budget fails the run when it does not. Both are true, and both were checked
 by watching the guard fire rather than by reading the config.
 
-### Phase 3 — Roles, and the security gap that has outlived every phase ▶
+### Phase 3 — Roles, and the security gap that has outlived every phase ✅
 
 Enum, session, middleware, capability matrix. Before the screens, because both
 depend on who is looking. *Done when:* a kitchen account is refused a write **by
 the server**, proven by a test, not by a hidden button — Journey 2 of
 `SMOKE_JOURNEYS.md`, repeated per procedure rather than sampled.
+
+**Complete 2026-08-10.** Journey 2 passes, and the per-procedure requirement is
+met in two tiers: a unit test compares how all 45 procedures are declared
+against the matrix, and an integration test calls the router as each role. All
+three riders closed — CRITICAL-4, HOUSE-1 and DEBT-4.
+
+Where the plan turned out to be wrong or short:
+
+- **The middleware reads the database, not the JWT.** The plan says "carry
+  `role` through the JWT and session callbacks", and that is done — but the
+  session copy is for the interface. Authorisation reads membership and role
+  per request, which the plan did not call for and which HOUSE-1 needs: an
+  account that has just created a household would otherwise wait up to fifteen
+  minutes for a token that knows about it.
+- **Closing CRITICAL-4 took two commits, not one.** The limiter went into
+  Auth.js's `authorize` — and `auth.login`, a second credential-verification
+  procedure on the public tRPC router that nothing in the interface called, was
+  left unmetered beside it. An adversarial review of the finished phase found
+  it. It is removed.
+- **UI-8 was closed with HOUSE-1**, because they are the same four lines.
+- **Nothing creates a KITCHEN account.** The enum, the middleware and the tests
+  exist; no screen makes one. That belongs with the kitchen screen in Phase 5,
+  and Journey 2 says so rather than implying the feature is reachable.
+- **The browser suite was red for reasons that predate the phase** — one
+  journey wrote the stock another asserted, and a `.first()` selector resolved
+  to the hidden copy of a two-tier layout. Both fixed; TEST-4 filed for the card
+  tier the suite still does not check.
 
 Three things ride with it, because they are the same layer and the first is the
 most serious defect in the repository:
