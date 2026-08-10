@@ -90,7 +90,7 @@ disagree, STATUS is the one that gets re-measured.
 - `corepack pnpm check:contrast` — 54 checks over 26 tokens × 2 themes, all AAA
 - `corepack pnpm test:unit` — 134 pass across 12 files
 - `corepack pnpm test:components` — 164 pass across 13 files
-- `corepack pnpm test:integration` — 242 pass across 8 files
+- `corepack pnpm test:integration` — 281 pass across 8 files
 - `corepack pnpm build` succeeds — 25 routes, all server-rendered on demand
 - `bunx playwright test` — 174 pass, 10 skipped, 0 fail in **6.0 minutes**
 - `bash scripts/verify-local.sh` — 17s of its 600s budget

@@ -23,7 +23,7 @@ port 3102, after Phase 3.
 | Contrast | `corepack pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
 | Unit tests | `corepack pnpm test:unit` | ✅ 134 pass / 16 files |
 | Component tests | `corepack pnpm test:components` | ✅ 164 pass / 14 files |
-| Integration tests | `corepack pnpm test:integration` | ✅ 242 pass / 11 files |
+| Integration tests | `corepack pnpm test:integration` | ✅ 281 pass / 12 files |
 | Build | `corepack pnpm build` | ✅ 25 routes, all server-rendered on demand |
 | Coverage | `bun test --coverage <dir>` | ℹ️ per tier, not a project figure — see *Known gaps* |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
