@@ -11,6 +11,7 @@ describe("tRPC Infrastructure", () => {
           email: "test@example.com",
           name: "Test User",
           householdId: "household-123",
+          role: "MEMBER",
         },
         expires: new Date(Date.now() + 3600 * 1000).toISOString(),
       };
@@ -34,6 +35,7 @@ describe("tRPC Infrastructure", () => {
           id: "user-456",
           email: "minimal@example.com",
           name: "Minimal User",
+          role: "MEMBER",
         },
         expires: new Date().toISOString(),
       };

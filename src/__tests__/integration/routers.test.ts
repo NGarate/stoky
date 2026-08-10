@@ -4,6 +4,7 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
+import type { HouseholdRole } from "@prisma/client";
 
 // Test data tracking for cleanup
 const testData = {
@@ -18,10 +19,15 @@ const testData = {
   priceRecords: [] as string[],
 };
 
-// Helper to create test context with session
+// Helper to create test context with session.
+//
+// The role defaults to OWNER because this suite predates roles and is about
+// what each procedure does, not about who may call it. Who may call what is
+// the capability suite's subject, and it names the role at every call site.
 async function createTestContext(
   userId: string,
-  householdId?: string
+  householdId?: string,
+  role: HouseholdRole = "OWNER"
 ): Promise<{
   ctx: { session: Session | null };
   caller: ReturnType<typeof appRouter.createCaller>;
@@ -35,6 +41,7 @@ async function createTestContext(
             email: `test-${userId}@example.com`,
             name: "Test User",
             householdId,
+            role,
           },
           expires: new Date(Date.now() + 3600 * 1000).toISOString(),
         };

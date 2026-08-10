@@ -3,6 +3,7 @@ import type { NextAuthConfig } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import * as argon2 from "argon2";
+import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 
@@ -32,6 +33,7 @@ export const authConfig: NextAuthConfig = {
           email: user.email,
           name: user.name,
           householdId: user.householdId ?? undefined,
+          role: user.role,
         };
       },
     }),
@@ -47,6 +49,7 @@ export const authConfig: NextAuthConfig = {
     jwt: async ({ token, user }) => {
       if (user) {
         token.householdId = user.householdId;
+        token.role = user.role;
       }
       return token;
     },
@@ -54,6 +57,10 @@ export const authConfig: NextAuthConfig = {
       if (token) {
         session.user.id = token.sub as string;
         session.user.householdId = token.householdId as string | undefined;
+        // A token minted before roles existed carries none. Falling back to
+        // the least-privileged role rather than to MEMBER means an old
+        // session cannot outrank a new one; it expires within 15 minutes.
+        session.user.role = (token.role as HouseholdRole | undefined) ?? "KITCHEN";
       }
       return session;
     },

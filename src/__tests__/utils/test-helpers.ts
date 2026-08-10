@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
-import type { User, Household, Product, StockEntry, StorageLocation } from "@prisma/client";
+import type { User, Household, HouseholdRole, Product, StockEntry, StorageLocation } from "@prisma/client";
 
 /**
  * Test data factories for creating database entities
@@ -11,7 +11,7 @@ export interface TestUserData {
   name: string;
   password?: string;
   householdId?: string;
-  role?: "OWNER" | "ADMIN" | "MEMBER";
+  role?: HouseholdRole;
 }
 
 export interface TestHouseholdData {
@@ -263,6 +263,10 @@ export function createMockSession(user: User & { household?: Household | null })
       email: user.email,
       name: user.name,
       householdId: user.householdId || undefined,
+      // Taken from the row rather than defaulted, so a test that creates a
+      // KITCHEN user gets a KITCHEN session and the capability middleware is
+      // exercised instead of bypassed.
+      role: user.role,
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
   };
