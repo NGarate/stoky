@@ -293,10 +293,16 @@ prevent, and it survived because nobody re-read the source it was describing.
 **Security**
 - Password policy is `min(8)` only, and with CRITICAL-4 closed this is the
   largest remaining gap in the auth surface. (DEBT-1)
-- Rate limiting covers the two auth endpoints and nothing else. It is per IP,
-  so one NAT shares a bucket and an attacker with a range gets one each;
-  per-account limiting is not implemented. It also **fails closed**, which
-  makes Valkey a hard dependency of signing in. (SECURITY.md)
+- Rate limiting covers the two auth endpoints and nothing else, and is per IP
+  rather than per account — NIST SP 800-63B §5.2.2 asks for the latter, and a
+  per-IP limit alone is defeated by a distributed guess. `receipt.upload` runs
+  OCR on an authenticated request with no limit (OWASP ASVS V11.1.4), and a
+  refusal carries no `Retry-After` header (RFC 9110 §10.2.3). It also **fails
+  closed**, which makes Valkey a hard dependency of signing in. The full table,
+  with the phase that owns each, is in `REDESIGN_PLAN.md` under Phase 3.
+  (SECURITY.md)
+- An authorisation refusal is logged nowhere (OWASP ASVS V7.1.3), so an account
+  probing what it may write leaves no trace. Phase 7.
 - Roles are enforced on the server per procedure, but **no interface creates a
   KITCHEN account** — the value exists in the enum and in the middleware, and
   the only way to get one today is a database write. Phase 5, with the kitchen

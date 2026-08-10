@@ -484,6 +484,24 @@ Where the plan turned out to be wrong or short:
   to the hidden copy of a two-tier layout. Both fixed; TEST-4 filed for the card
   tier the suite still does not check.
 
+#### What Phase 3 does *not* cover, and which phase owns it
+
+Recorded here rather than in a commit message because each one reads as done
+from a distance, and because a later phase has to pick it up. Measured against
+**OWASP ASVS 4.0.3**, **OWASP Top 10 A07:2021 (Identification and
+Authentication Failures)** and **NIST SP 800-63B**, which are the references
+Phase 7 will be audited with.
+
+| Gap | Standard it falls short of | Owner |
+|---|---|---|
+| No interface creates a KITCHEN account | ASVS **V4.1.1** — access control enforced on a trusted service layer. The enforcement is there; the *provisioning* is not, so the role cannot be exercised by anyone who is not writing SQL | Phase 5 |
+| Throttling is per IP only, never per account | NIST SP 800-63B **§5.2.2** asks for a limit on consecutive failed attempts *against an account*. A per-IP limit alone is defeated by a distributed guess and punishes a shared NAT | Phase 7 §3 |
+| Only the two auth endpoints are throttled | ASVS **V11.1.4** — anti-automation on any resource-intensive operation. `receipt.upload` runs OCR and Sharp on an authenticated request and has no limit at all | Phase 7 §3 |
+| No `Retry-After` on a refusal | RFC 9110 **§10.2.3** and RFC 6585 **§4**. tRPC's `TOO_MANY_REQUESTS` maps to HTTP 429, and the seconds remaining are computed and put in the message — but not in the header a client is meant to read | Phase 7 §3 |
+| Failing closed makes Valkey a hard dependency of signing in | Not a standards gap but an availability trade-off, taken deliberately: ASVS **V2.2.1** wants anti-automation to actually hold, and an attempt that cannot be counted is one that is not being limited. Stated in `SECURITY.md` | — |
+| The card tier's low-stock badge is asserted by nothing | The tier a phone and the kitchen tablet actually render (`ISSUES.md` TEST-4) | Phase 4 |
+| No audit trail on an authorisation refusal | ASVS **V7.1.3** — log access-control failures. A FORBIDDEN is returned and nothing records that it happened, so a kitchen tablet probing writes leaves no trace | Phase 7 |
+
 Three things ride with it, because they are the same layer and the first is the
 most serious defect in the repository:
 
@@ -511,6 +529,11 @@ correctly on reconnect.
 Expiries, one-tap use, useful data. *Done when:* it runs for a week on a tablet
 untouched except for using things up.
 
+**Inherited from Phase 3:** the KITCHEN role is enforced but unprovisionable —
+nothing in the interface creates such an account. This phase owns that, and the
+week-long run is not a real test of it until the tablet is running under a real
+KITCHEN account rather than an owner's.
+
 ### Phase 6 — Rating
 
 Extend the Open Food Facts fields, compute, display. *Done when:* a product with
@@ -533,7 +556,12 @@ Scope, in order of how much damage a mistake would do:
    The failure mode here is one household reading another's inventory,
    receipts and prices, and it would be invisible in single-household testing.
 3. **Rate limiting**, verified as working rather than merely present
-   (`ISSUES.md` CRITICAL-4). If it has not landed by now, it lands here.
+   (`ISSUES.md` CRITICAL-4). It landed in Phase 3, so this verifies it — and
+   closes the four gaps Phase 3 left, listed in its table above: throttling is
+   per IP and never per account (NIST SP 800-63B §5.2.2), only the two auth
+   endpoints are covered while `receipt.upload` runs OCR unthrottled (ASVS
+   V11.1.4), a refusal carries no `Retry-After` header (RFC 9110 §10.2.3), and
+   an authorisation failure is logged nowhere (ASVS V7.1.3).
 4. **The offline queue as an attack surface.** Phase 4 introduces mutations
    that are composed on a device and replayed later. Replay must be
    idempotent, a queued mutation must not be able to act on another household,
