@@ -169,6 +169,22 @@ export default defineConfig({
     command: `pnpm dev --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
+    env: {
+      // The auth rate limiter (ISSUES.md CRITICAL-4) counts per IP, and every
+      // browser project reaches the dev server without a proxy in front of it,
+      // so the whole matrix shares one bucket. At the shipped limits — 5
+      // sign-ins per 15 minutes, 3 registrations per hour — the suite would
+      // spend most of a run locked out of a control it is not testing.
+      //
+      // Raised here rather than switched off, so the limiter still runs on
+      // every request the suite makes and a crash in it still fails the suite.
+      // The shipped defaults are asserted with the environment unset in
+      // `src/__tests__/unit/rate-limit.test.ts`, and the counting itself is
+      // proven against a real Valkey in the integration suite — so this
+      // override cannot quietly become the product's behaviour.
+      RATE_LIMIT_LOGIN_ATTEMPTS: "10000",
+      RATE_LIMIT_REGISTER_ATTEMPTS: "10000",
+    },
     // A cold `next dev` compile is slow; a wedged one never answers at all. Two
     // minutes tells the two apart and reports the port instead of hanging.
     timeout: 120_000,

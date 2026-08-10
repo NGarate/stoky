@@ -156,22 +156,43 @@ Dependency status as of the last audit is recorded in `docs/STATUS.md` under
 Read this section before deciding where to run Stoky. It is not a wish list; it
 is what is wrong today.
 
-### There is no rate limiting anywhere — brute force works
+### Rate limiting covers authentication only
 
-`ISSUES.md` CRITICAL-4. There is no rate limiting on login, on registration, or
-on anything else. `src/` contains no cache client at all — no Valkey, no Redis,
-no in-process limiter — despite a `cache` service being defined in both compose
-files. `CLAUDE.md` specifies 5 login attempts per 15 minutes and 3 registrations
-per hour per IP; none of that is implemented.
+`ISSUES.md` CRITICAL-4 is closed as of Phase 3: `src/lib/rate-limit.ts` counts
+sign-ins and registrations per IP in Valkey, at the numbers `CLAUDE.md`
+specifies — 5 sign-ins per 15 minutes, 3 registrations per hour. A successful
+sign-in clears its counter, so a household signing in from several devices is
+not locked out by a limit meant for someone guessing.
 
-The practical consequence: an attacker who can reach the login form can try
-passwords as fast as Argon2id will answer, indefinitely, and can create accounts
-in bulk.
+What is still open, and worth knowing before publishing an instance:
 
-**Do not expose Stoky to the public internet until rate limiting lands.** Run it
-on your LAN, or behind a VPN. This is the project's own position, stated in
-`docs/STATUS.md` and `docs/REDESIGN_PLAN.md`, where it is the only critical
-security item still open.
+- **Only the two auth endpoints are limited.** Every other tRPC procedure is
+  unlimited, so an authenticated account can still make as many calls as it
+  likes. That is a smaller problem — it needs credentials first — but it is not
+  nothing on a shared household instance.
+- **The identifier is an IP address**, read from the last hop of
+  `X-Forwarded-For` (the entry the proxy in front of the app writes, and the
+  only one a client cannot forge). Everyone behind one NAT therefore shares a
+  bucket, and an attacker with a range of addresses gets one bucket per
+  address. Per-account limiting is the complement and is not implemented.
+- **It fails closed.** If Valkey is unreachable, nobody can sign in. That is
+  deliberate — failing open would hand an unlimited auth endpoint to anyone who
+  can take the cache down — but it makes Valkey a hard dependency of signing
+  in, which it was not before. The server log names Valkey and `VALKEY_URL`
+  when it happens, and the browser is told the service is unavailable rather
+  than that the password was wrong.
+- **The limits are configurable** through `RATE_LIMIT_LOGIN_ATTEMPTS`,
+  `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS` and
+  `RATE_LIMIT_REGISTER_WINDOW_SECONDS`. Raising them raises the exposure; the
+  browser suite raises them because it registers dozens of accounts per run,
+  and a unit test asserts the shipped defaults with the environment unset so
+  that override cannot become the product's behaviour.
+
+Verified in a browser, not only by test: five wrong passwords are refused as
+wrong, the sixth is refused as rate-limited, a *correct* password is still
+refused while the window is open, and the counter carries a TTL so the refusal
+expires. The counting itself is proven against a real Valkey in
+`src/__tests__/integration/rate-limit.test.ts`.
 
 ### The password policy is a length check
 
@@ -180,14 +201,15 @@ complexity rules, no check against known-breached passwords, no maximum.
 Combined with the absence of rate limiting, weak passwords are the most likely
 way an instance gets broken into. `ISSUES.md` DEBT-1.
 
-### Seven of eight tRPC routers throw bare `Error`
+### The services layer still throws bare `Error`
 
-Only `receipt.ts` uses `TRPCError`. The other seven (`auth`, `product`,
-`location`, `inventory`, `store`, `price`, `shopping`) throw plain `Error`, as
-does the `protectedProcedure` middleware in `src/server/trpc/trpc.ts` for its
-`"Unauthorized"` case. Every one of those reaches the client as
-`INTERNAL_SERVER_ERROR`, so a client cannot distinguish "not signed in" from
-"not found" from a genuine server fault. That is a correctness problem first,
+The routers no longer do — `ISSUES.md` DEBT-4 closed in Phase 3, and all eight
+now raise `TRPCError` with a code chosen by what the client can do about the
+condition. One layer down, `ocr`, `productMatcher`, `receiptParser` and
+`openFoodFacts` still throw plain `Error`, so a procedure that calls one still
+surfaces `INTERNAL_SERVER_ERROR` and a client cannot distinguish a missing
+receipt from a genuine server fault. `ISSUES.md` DEBT-6. That is a correctness
+problem first,
 but it also makes any future authorisation logic harder to reason about and
 harder to test. `ISSUES.md` DEBT-4.
 
@@ -274,8 +296,10 @@ the socket mount entirely.
 
 ### Where to run it
 
-**Prefer a private network.** Given the missing rate limiting, the safest
-deployment today is one that is not reachable from the internet at all:
+**Prefer a private network.** Authentication is rate-limited now, but the
+password policy is still a length check and Phase 7's security review has not
+run, so the safest deployment today is still one that is not reachable from the
+internet at all:
 
 - your LAN only, with no port forwarding on the router; or
 - behind a VPN — WireGuard, or Tailscale, which needs no open inbound port at

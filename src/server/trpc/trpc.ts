@@ -6,9 +6,13 @@ import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const createTRPCContext = cache(
-  async (opts: { session: Session | null }) => {
+  async (opts: { session: Session | null; headers?: Headers }) => {
     return {
       session: opts.session,
+      // Optional because the integration suite builds contexts directly, with
+      // no HTTP request behind them. Only the public auth procedures read it,
+      // and they say what they do when it is absent.
+      headers: opts.headers ?? null,
     };
   },
 );

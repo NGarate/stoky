@@ -19,7 +19,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | CRITICAL-1 | `deleted_at` in product search | ✅ Resolved 2026-08-03 |
 | CRITICAL-2 | Auth pages were placeholders | ✅ Resolved (commit `7f393ac`) |
 | CRITICAL-3 | Missing database migrations | ✅ Resolved (`20260213234844`) |
-| CRITICAL-4 | No rate limiting on auth | 🔴 **OPEN** |
+| CRITICAL-4 | No rate limiting on auth | ✅ Resolved (Phase 3) |
 | DEBT-1 | Minimal password validation | 🟡 Open |
 | DEBT-2 | Barcode scanner torch is inert | 🟡 Open (pinned by test) |
 | DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
@@ -194,15 +194,49 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 ---
 
-### 🔴 CRITICAL-4: Missing rate limiting for authentication endpoints
+### ✅ CRITICAL-4: Missing rate limiting for authentication endpoints
 
 **Files:**
 
+- `src/lib/rate-limit.ts` (new)
 - `src/lib/auth.ts`
-- `src/app/api/auth/[...nextauth]/route.ts`
+- `src/server/trpc/routers/auth.ts`
 
 **Severity:** MEDIUM-HIGH  
-**Status:** OPEN — re-confirmed 2026-08-03
+**Status:** RESOLVED 2026-08-10 (Phase 3)
+
+**Resolution.** `src/lib/rate-limit.ts` counts attempts per IP in Valkey — a
+fixed window of INCR/EXPIRE — at the numbers this file quotes below: 5 sign-ins
+per 15 minutes, 3 registrations per hour. Sign-in is counted inside Auth.js's
+`authorize`, before the credentials are looked at, so the endpoint cannot be
+used to make the server spend 250ms of Argon2id on demand. Registration is
+counted in the tRPC procedure, which needed the request headers in the context.
+
+Three decisions worth knowing, each recorded in PROGRESS.md:
+
+- **The identifier is the last hop of `X-Forwarded-For`, not the first.** The
+  leftmost entry is whatever the client sent; varying it per request would turn
+  a per-IP limit into no limit at all. A unit test asserts this specifically.
+- **A successful sign-in clears its counter.** The specification counts
+  attempts, and taken literally that locks out a household signing in from a
+  phone, a tablet and a laptop. Clearing on success keeps the ceiling exactly
+  where the specification puts it for someone who *cannot* sign in.
+- **It fails closed.** An attempt that cannot be counted is refused. The cost is
+  that Valkey is now a hard dependency of signing in, which is stated in
+  SECURITY.md and reported to the operator by name in the server log.
+
+Verified in a browser as well as by test: five wrong passwords refused as
+wrong, the sixth refused as rate-limited with the Spanish message, a *correct*
+password still refused while the window was open (TTL 893s of 900), and the
+counter gone after a successful sign-in. Counting is proven against a real
+Valkey in `src/__tests__/integration/rate-limit.test.ts`; the identifier and
+the shipped defaults in `src/__tests__/unit/rate-limit.test.ts`.
+
+**Still open, and deliberately out of scope:** only the two auth endpoints are
+limited, and the limit is per IP rather than per account. Phase 7 §3 verifies
+this rather than introduces it.
+
+**Original report follows.**
 
 **Description:**
 No rate limiting is implemented for login/register endpoints. This leaves the application vulnerable to brute force attacks.
@@ -1370,9 +1404,8 @@ run: 218 integration, 187 E2E, and a seed that is idempotent.
 
 ### Before public deployment
 
-2. **CRITICAL-4:** Implement rate limiting on login and register. This is the
-   only remaining critical issue and the largest security gap.
-3. **DEBT-1:** Strengthen the password policy beyond `min(8)`.
+2. **DEBT-1:** Strengthen the password policy beyond `min(8)`. With CRITICAL-4
+   closed, this is the largest remaining gap in the auth surface.
 
 ### Correctness and scale
 

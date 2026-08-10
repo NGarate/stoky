@@ -11,7 +11,7 @@ const handler = async (req: NextRequest) => {
     endpoint: "/api/trpc",
     req,
     router: appRouter,
-    createContext: () => createTRPCContext({ session }),
+    createContext: () => createTRPCContext({ session, headers: req.headers }),
   });
 };
 

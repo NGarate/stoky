@@ -38,7 +38,7 @@ export default function LoginPage(): JSX.Element {
       });
 
       if (!result || result.error) {
-        setErrorKey(getAuthErrorKey(result?.error, "login"));
+        setErrorKey(getAuthErrorKey(result?.error, "login", result?.code));
         return;
       }
 

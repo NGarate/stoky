@@ -49,7 +49,7 @@ async function createTestContext(
   householdId?: string,
   role: HouseholdRole = "OWNER"
 ): Promise<{
-  ctx: { session: Session | null };
+  ctx: Awaited<ReturnType<typeof createTRPCContext>>;
   caller: ReturnType<typeof appRouter.createCaller>;
 }> {
   const session: Session | null =

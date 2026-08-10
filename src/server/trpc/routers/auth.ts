@@ -3,6 +3,12 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import { loginSchema, registerSchema } from "@/lib/validations/auth";
+import {
+  RateLimitUnavailableError,
+  consumeRateLimit,
+  rateLimitIdentifier,
+  registerRateLimit,
+} from "@/lib/rate-limit";
 
 export const authRouter = createTRPCRouter({
   login: publicProcedure
@@ -43,8 +49,42 @@ export const authRouter = createTRPCRouter({
 
   register: publicProcedure
     .input(registerSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { email, name, password, householdName } = input;
+
+      // ISSUES.md CRITICAL-4. Counted before anything is created, and before
+      // the ~250ms of Argon2id below, so the endpoint cannot be used to make
+      // the server do that work on demand.
+      //
+      // A context with no headers is the integration suite calling the router
+      // directly; there is no request to attribute an attempt to, and there is
+      // also no way to reach this procedure from outside without one.
+      if (ctx.headers) {
+        const limit = registerRateLimit();
+        const identifier = rateLimitIdentifier(ctx.headers);
+        try {
+          const { allowed, retryAfterSeconds } = await consumeRateLimit(limit, identifier);
+          if (!allowed) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Too many registrations from this address. Try again in ${Math.ceil(retryAfterSeconds / 60)} minutes.`,
+            });
+          }
+        } catch (error) {
+          if (error instanceof RateLimitUnavailableError) {
+            // Fails closed, like sign-in. See `src/lib/rate-limit.ts`.
+            console.error(
+              "[auth] registration refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
+              error.cause,
+            );
+            throw new TRPCError({
+              code: "SERVICE_UNAVAILABLE",
+              message: "Registration is temporarily unavailable",
+            });
+          }
+          throw error;
+        }
+      }
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
