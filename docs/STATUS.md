@@ -228,11 +228,20 @@ What is measured, and by what:
 | Reading order | `screen-reader.spec.ts`, tree order vs geometry | ✅ desktop only |
 | Announcements | `screen-reader.spec.ts` | ⚠️ refusals yes, one success no (A11Y-1) |
 
+| Reading level (3.1.5) | `src/__tests__/unit/readability.test.ts` | ✅ es 69.0 "fácil", en 66.3 |
+| Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, driven in a browser | ✅ slides on activity, warns at T−2min |
+
 **Two honest limits.** Automated testing catches roughly a third of real
 accessibility problems, so this is a floor that stops regressions, not a
 certificate. And **the manual screen-reader pass has not happened**. Four
 journeys are audited against the tree; whether the result *sounds* sensible to
 someone using it is the part no tool and no agent can answer.
+
+The procedure for the manual half — pa11y for the AAA checklist, Accessibility
+Insights for the guided assessment, and what neither covers — is in
+`docs/DESIGN_AUDIT.md` §5. Both were evaluated rather than assumed: pa11y at
+`WCAG2AAA` returns 0 errors and 60 "Check that…" notices on `/login`, which is
+a good checklist and a bad gate, so neither tool is in CI.
 
 ---
 

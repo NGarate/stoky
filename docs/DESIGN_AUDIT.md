@@ -333,7 +333,94 @@ below cannot be machine-checked at all.
 
 ---
 
-## 5. Design consistency across routes
+## 5. The manual pass — pa11y and Accessibility Insights
+
+Automated testing decides roughly a third of real accessibility problems. This
+project measures what a machine can (`accessibility`, `a11y-structure`,
+`a11y-aaa`, `screen-reader`, and the reading-level gate on the catalogues), and
+what remains is a human pass that no tool replaces. These two tools do not
+replace it either — they make it repeatable.
+
+### Why neither is in CI
+
+Both were evaluated on 2026-08-11 rather than assumed.
+
+`pa11y` run against `/login` at its `WCAG2AAA` standard returns **0 errors, 1
+warning and 60 notices**, and every AAA item begins "Check that…". HTML
+CodeSniffer, which pa11y wraps, does implement a full AAA standard — but what
+it delivers for AAA is a checklist for a person, not a verdict. That is a good
+checklist and a bad gate: put it in CI and it either passes vacuously or floods
+the log.
+
+Accessibility Insights is a guided assessment, which is a person's task by
+construction.
+
+### pa11y — generating the checklist
+
+Needs a running server. Nothing to install permanently; `npx` is enough.
+
+```bash
+# One route, everything HTML CodeSniffer knows about AAA
+npx pa11y@8 --standard WCAG2AAA --include-notices --include-warnings \
+  --reporter json --timeout 60000 http://localhost:3000/login > pa11y-login.json
+
+# Several routes at once, human-readable
+npx pa11y-ci@3 --config .pa11yci.json
+```
+
+Read it as three separate things:
+
+- **errors** — real defects. There should be none; if there are, the axe suites
+  missed something and that is worth understanding before fixing it.
+- **warnings** — conditional ("If this selection list contains groups…").
+  Answer the condition, then move on.
+- **notices** — the AAA checklist. This is the value. Work through it once per
+  route that has changed shape, not every sprint.
+
+The notices that matter most here, because the automated suites cannot reach
+them at all: 3.1.3 unusual words, 3.1.4 abbreviations, 1.3.2 meaningful
+sequence when linearised, 3.3.6 error prevention, and 1.4.1 information
+conveyed by colour alone.
+
+**Do not add pa11y to `verify:local` or CI.** It duplicates axe for A and AA,
+it is slower, and its AAA half cannot pass or fail.
+
+### Accessibility Insights for Web — the guided assessment
+
+A free Chrome and Edge extension from Microsoft. Two modes, and only the second
+is worth the time here:
+
+- *FastPass* — axe underneath. It finds what `accessibility.spec.ts` already
+  finds on every run; use it only to check a page mid-development.
+- **Assessment** — the one to use. It walks a person through the checks no tool
+  makes: keyboard traps, focus order against visual order, whether a live
+  region says something *useful* rather than merely something, contrast on
+  states a test never enters, and whether an error message tells someone what
+  to do rather than that something is wrong.
+
+Suggested order for a pass, which is the same order as `SMOKE_JOURNEYS.md`
+rather than a route list — the journeys are where the defects have been:
+
+1. `/login` and `/register` — the only surfaces a signed-out person meets
+2. `/inventory` → `/inventory/add` → back — the picker, and the announcement
+   after a save (A11Y-1 is open here, and Assessment is how it gets confirmed
+   fixed)
+3. `/receipts/[id]/review` → applied — the longest interaction in the product
+4. The kitchen screen, when Phase 5 exists — at a metre, on the tablet, which
+   is a condition no emulated viewport reproduces
+
+Record findings in `ISSUES.md` with the criterion number, the same as anything
+else. A finding from a manual pass is not a lesser finding.
+
+### What still is not covered by either
+
+The screen-reader pass with a real screen reader — NVDA, VoiceOver or Orca —
+driven by someone who uses one. `screen-reader.spec.ts` audits the accessibility
+tree across four journeys and can tell you the tree is well formed. Whether the
+result *sounds* sensible is the question neither a tool nor an agent can
+answer, and it is the one item of Phase 2b still open.
+
+## 6. Design consistency across routes
 
 **Landed in Phase 2b** (`4eafd1c`, `0158b1b`). Converting the dashboard pages
 from hardcoded palette classes to the tokens is done. It exists because Phase 2 made the primitives
@@ -367,7 +454,7 @@ not enumerate them.
 
 ---
 
-## 6. Suggested order
+## 7. Suggested order
 
 Sequenced by what unblocks what, not by severity.
 
@@ -383,7 +470,7 @@ Sequenced by what unblocks what, not by severity.
 
 ---
 
-## 7. What this plan does not cover
+## 8. What this plan does not cover
 
 - The **phone and kitchen screens** themselves (`REDESIGN_PLAN.md` Phases 4
   and 5). This audit fixes the app as it exists; those replace how it is
@@ -394,7 +481,7 @@ Sequenced by what unblocks what, not by severity.
 
 ---
 
-## 8. Decisions needed
+## 9. Decisions needed
 
 1. **Does the audit fix the current pages, or wait for the two-screen model?**
    Recommendation: fix now. Phases 3–5 are a long way off, the app is used

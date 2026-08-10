@@ -448,6 +448,18 @@ become something nobody runs. It is five minutes locally, where the suite takes
 workers on four cores that also run the dev server, with two retries on
 failure.
 
+**D36 — The two AAA criteria a machine can decide are decided here, and the
+rest are a documented manual pass.** pa11y's `WCAG2AAA` standard was run before
+deciding anything: 0 errors, 1 warning, 60 notices on `/login`, every AAA item
+beginning "Check that…". So no tool automates the AAA half, and the project
+measures the two that are mechanically decidable and were missing — 3.1.5
+reading level, on the catalogues, with Fernández-Huerta for Spanish because
+Flesch reports Spanish as harder than it is; and 2.2.6 timeouts, by sliding the
+session on activity and warning before an idle one ends. pa11y and
+Accessibility Insights are documented as the manual procedure in
+`DESIGN_AUDIT.md` §5 and deliberately kept out of CI: a check that can only say
+"ask a person" either passes vacuously or floods the log.
+
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
 than swept up later, because a translation backlog never gets paid off.
