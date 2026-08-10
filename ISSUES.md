@@ -45,6 +45,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
 | I18N-2..7 | Wording and untranslated strings | 🟡 Open |
+| I18N-8 | Both auth pages hardcoded, in the wrong two languages | 🔴 **OPEN** |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-9 | Two routes show an empty state when the query failed | 🟡 Open |
 
@@ -883,6 +884,42 @@ a single string, so a screen-reader user gets a page with no heading at all.
 needs a message and a retry; `!data` after a successful load is an empty state,
 not a loading one. Related to HOUSE-1, which is the same shape: an account with
 no household loads a skeleton forever.
+
+---
+
+### 🔴 I18N-8: Both auth pages are hardcoded, and in the wrong two languages
+
+**Files:** `src/app/(auth)/login/page.tsx:81,103,88-93`,
+`src/app/(auth)/register/page.tsx:89,111,96-101`
+**Severity:** MEDIUM-HIGH
+**Status:** OPEN — found 2026-08-10
+
+The first two screens anyone sees get this wrong in both directions at once.
+
+- **The `<h1>` is hardcoded English** — literally `Login` and `Register` — and
+  appears twice per page, once in the desktop aside and once as the mobile
+  heading. Directly beneath each sits `{t("loginSubtitle")}`, which *is*
+  translated. So a Spanish reader gets an English heading over a Spanish
+  sentence.
+- **The aside panel is hardcoded Spanish** — "Hogar compartido" and "Primer
+  hogar", each with a two-line paragraph. So an English reader gets an English
+  heading, an English subtitle, and a Spanish promotional block beside it.
+
+`auth.login` and `auth.register` already exist in both catalogues — "Iniciar
+sesión"/"Sign in", "Registrarse"/"Sign up" — and are already used for the submit
+button on the same page. The heading ignores the key sitting next to it.
+
+Rated above the other I18N items because of where it is: `/login` is the only
+page an unauthenticated visitor can reach, and the language control is on it, so
+this is the first thing anyone tests when they switch language.
+
+Invisible to `src/__tests__/unit/messages.test.ts`, which compares the two
+catalogues against each other and cannot see a string that never reached either.
+Same blind spot as I18N-1 and I18N-5.
+
+**Suggested fix:** use `t("login")`/`t("register")` for the headings and move the
+four aside strings into `auth.*`. Take it with I18N-5, which is the same kind of
+work.
 
 ---
 
