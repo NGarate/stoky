@@ -12,6 +12,7 @@ import {
   createMockSession,
 } from "../utils/test-helpers";
 import * as argon2 from "argon2";
+import { signInWith } from "../utils/authorize";
 
 describe("Authentication Flow Integration Tests", () => {
   const testEmailPattern = "@example.com";
@@ -169,76 +170,52 @@ describe("Authentication Flow Integration Tests", () => {
     });
   });
 
-  describe("User Login", () => {
-    it("should login with valid credentials", async () => {
+  describe("Sign-in, through Auth.js", () => {
+    // Repointed from `auth.login`, a second credential endpoint on the public
+    // tRPC router that nothing in the interface called and that the CRITICAL-4
+    // limiter never covered. It has been removed; this is the path the login
+    // form uses.
+
+    it("should accept valid credentials", async () => {
       const email = generateTestEmail("login");
       const name = generateTestName("Login User");
       const password = "ValidPassword123!";
 
-      // Create user first
       await createTestUser({ email, name, password });
 
-      // Try to login
-      const result = await caller.auth.login({
-        email,
-        password,
-      });
+      const result = await signInWith({ email, password });
 
-      expect(result.success).toBe(true);
+      expect(result).not.toBeNull();
+      expect((result as { email: string }).email).toBe(email);
     });
 
-    it("should fail to login with invalid password", async () => {
+    it("should refuse an invalid password", async () => {
       const email = generateTestEmail("invalid-password");
       const name = generateTestName("Invalid Password User");
       const password = "CorrectPassword123!";
 
-      // Create user
       await createTestUser({ email, name, password });
 
-      // Try to login with wrong password
-      let error: Error | null = null;
-      try {
-        await caller.auth.login({
-          email,
-          password: "WrongPassword123!",
-        });
-      } catch (e) {
-        error = e as Error;
-      }
+      const result = await signInWith({ email, password: "WrongPassword123!" });
 
-      expect(error).toBeDefined();
-      expect(error?.message).toContain("Invalid credentials");
+      expect(result).toBeNull();
     });
 
-    it("should fail to login with non-existent email", async () => {
-      const email = generateTestEmail("non-existent");
+    it("should refuse a non-existent email the same way", async () => {
+      const result = await signInWith({
+        email: generateTestEmail("non-existent"),
+        password: "AnyPassword123!",
+      });
 
-      let error: Error | null = null;
-      try {
-        await caller.auth.login({
-          email,
-          password: "AnyPassword123!",
-        });
-      } catch (e) {
-        error = e as Error;
-      }
-
-      expect(error).toBeDefined();
-      expect(error?.message).toContain("Invalid credentials");
+      // Indistinguishable from a wrong password, which is what stops an
+      // attacker enumerating which addresses have accounts.
+      expect(result).toBeNull();
     });
 
-    it("should fail to login with empty credentials", async () => {
-      let error: Error | null = null;
-      try {
-        await caller.auth.login({
-          email: "",
-          password: "",
-        });
-      } catch (e) {
-        error = e as Error;
-      }
+    it("should refuse empty credentials", async () => {
+      const result = await signInWith({ email: "", password: "" });
 
-      expect(error).toBeDefined();
+      expect(result).toBeNull();
     });
   });
 

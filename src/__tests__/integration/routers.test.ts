@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 import { TRPCError } from "@trpc/server";
+import { signInWith, freshTestAddress } from "../utils/authorize";
+import { loginRateLimit } from "@/lib/rate-limit";
 import type { HouseholdRole } from "@prisma/client";
 
 // Test data tracking for cleanup
@@ -377,60 +379,101 @@ describe("tRPC Router Integration Tests", () => {
       });
     });
 
-    describe("login", () => {
-      it("should login with valid credentials", async () => {
-        await createTestUserWithoutHousehold(
+    describe("sign-in, through Auth.js", () => {
+      // These used to call `auth.login`, a second credential-verification
+      // procedure on the public tRPC router that the interface never called
+      // and that CRITICAL-4's limiter never covered. It is gone; the only
+      // credential path left is the one the login form actually uses, so the
+      // tests point at that.
+
+      it("accepts valid credentials and returns the identity a session needs", async () => {
+        const { user } = await createTestUserWithoutHousehold(
           "logintest@example.com",
           "Login Test User"
         );
 
-        const { ctx } = await createTestContext("anon");
-        const caller = appRouter.createCaller(ctx);
-
-        // Note: login requires actual auth.js setup, so we expect it might fail in test
-        // but should not throw validation errors
-        const result = await caller.auth.login({
+        const result = await signInWith({
           email: "logintest@example.com",
           password: "TestPassword123!",
         });
 
-        // If we get here, login succeeded or failed gracefully
-        expect(result).toBeDefined();
+        expect(result).not.toBeNull();
+        expect((result as { id: string }).id).toBe(user.id);
+        // The role has to come back, or no procedure downstream can check one.
+        expect((result as { role: string }).role).toBe("MEMBER");
       });
 
-      it("should reject invalid credentials", async () => {
-        const { ctx } = await createTestContext("anon");
-        const caller = appRouter.createCaller(ctx);
-
-        await expect(
-          caller.auth.login({
-            email: "nonexistent@example.com",
-            password: "WrongPassword123!",
-          })
-        ).rejects.toThrow("Invalid credentials");
-        await expectCode(
-          caller.auth.login({
-            email: "nonexistent@example.com",
-            password: "WrongPassword123!",
-          }),
-          "UNAUTHORIZED"
+      it("refuses a wrong password", async () => {
+        await createTestUserWithoutHousehold(
+          "wrongpass@example.com",
+          "Wrong Password User"
         );
+
+        const result = await signInWith({
+          email: "wrongpass@example.com",
+          password: "NotThePassword123!",
+        });
+
+        expect(result).toBeNull();
       });
 
-      it("should reject invalid email format", async () => {
-        const { ctx } = await createTestContext("anon");
-        const caller = appRouter.createCaller(ctx);
+      it("refuses an unknown address without saying it is unknown", async () => {
+        const result = await signInWith({
+          email: "nonexistent@example.com",
+          password: "WrongPassword123!",
+        });
 
+        // Null either way: the caller cannot tell a wrong password from an
+        // address that has no account, which is what stops enumeration.
+        expect(result).toBeNull();
+      });
+
+      it("refuses input that is not a valid email", async () => {
+        const result = await signInWith({
+          email: "invalid-email",
+          password: "TestPassword123!",
+        });
+
+        expect(result).toBeNull();
+      });
+
+      it("stops accepting attempts from one address once the limit is spent", async () => {
+        // CRITICAL-4 at the layer that enforces it. The limiter lives inside
+        // `authorize`, so nothing below the browser covered it before.
+        const { user } = await createTestUserWithoutHousehold(
+          "limited@example.com",
+          "Limited User"
+        );
+        const address = freshTestAddress();
+        const attempts = loginRateLimit().attempts;
+
+        for (let i = 0; i < attempts; i++) {
+          await signInWith(
+            { email: "limited@example.com", password: "NotThePassword123!" },
+            { address }
+          );
+        }
+
+        // The budget is spent, so even the correct password is refused - and
+        // refused by throwing rather than by returning null, so the browser can
+        // say "wait" instead of "wrong password".
         await expect(
-          caller.auth.login({
-            email: "invalid-email",
-            password: "TestPassword123!",
-          })
+          signInWith(
+            { email: "limited@example.com", password: "TestPassword123!" },
+            { address }
+          )
         ).rejects.toThrow();
+
+        // A different address is unaffected.
+        const elsewhere = await signInWith({
+          email: "limited@example.com",
+          password: "TestPassword123!",
+        });
+        expect((elsewhere as { id: string } | null)?.id).toBe(user.id);
       });
     });
 
-    describe("me", () => {
+  describe("me", () => {
       it("should return current user data when authenticated", async () => {
         const { user, householdId } = await createTestUserWithHousehold(
           "metest@example.com",

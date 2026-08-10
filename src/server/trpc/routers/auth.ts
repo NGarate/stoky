@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
-import { loginSchema, registerSchema } from "@/lib/validations/auth";
+import { registerSchema } from "@/lib/validations/auth";
 import {
   RateLimitUnavailableError,
   consumeRateLimit,
@@ -11,42 +11,6 @@ import {
 } from "@/lib/rate-limit";
 
 export const authRouter = createTRPCRouter({
-  login: publicProcedure
-    .input(loginSchema)
-    .mutation(async ({ input }) => {
-      const user = await prisma.user.findUnique({
-        where: { email: input.email },
-      });
-
-      if (!user) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid credentials",
-        });
-      }
-
-      const isValidPassword = await argon2.verify(
-        user.passwordHash,
-        input.password,
-      );
-
-      if (!isValidPassword) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid credentials",
-        });
-      }
-
-      return {
-        success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
-      };
-    }),
-
   register: publicProcedure
     .input(registerSchema)
     .mutation(async ({ ctx, input }) => {

@@ -20,7 +20,9 @@ import { CAPABILITY_ROLES } from "@/server/trpc/trpc";
  */
 const EXPECTED: Record<string, Record<string, string>> = {
   "auth.ts": {
-    login: "publicProcedure",
+    // `login` used to be here: a second credential-verification procedure the
+    // interface never called and the CRITICAL-4 limiter never covered. Removed
+    // rather than limited — Auth.js already owns that path.
     register: "publicProcedure",
     me: "protectedProcedure",
     logout: "protectedProcedure",

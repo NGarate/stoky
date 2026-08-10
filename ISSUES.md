@@ -48,6 +48,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | I18N-8 | Both auth pages hardcoded, in the wrong two languages | 🔴 **OPEN** |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-9 | Two routes show an empty state when the query failed | 🟡 Open |
+| TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | 🟡 Open |
 
 ---
 
@@ -233,6 +234,30 @@ password still refused while the window was open (TTL 893s of 900), and the
 counter gone after a successful sign-in. Counting is proven against a real
 Valkey in `src/__tests__/integration/rate-limit.test.ts`; the identifier and
 the shipped defaults in `src/__tests__/unit/rate-limit.test.ts`.
+
+**A second door, found by review after this was first marked resolved.** The
+limiter went into Auth.js's `authorize`, which is what the login form uses —
+but `auth.login` was a *second* credential-verification procedure on the public
+tRPC router, doing its own `argon2.verify` and returning the account's identity
+on a hit. Nothing in the interface called it; the login page has always used
+`signIn("credentials")`. So five wrong passwords on the Auth.js door locked an
+address out while the same guesses through `/api/trpc/auth.login` were
+unlimited, unmetered and parallel — an exact credential oracle, and a cheap way
+to make the server spend Argon2id on demand.
+
+It was removed rather than limited: Auth.js already owns credential
+verification, and a second path that nothing calls is a liability whether or
+not it is metered. The four integration tests that pointed at it were repointed
+at `authorize`, which had no coverage below the browser until then — including,
+now, that the limit actually refuses the *correct* password once the budget is
+spent.
+
+That repointing immediately caught something else: reading
+`authConfig.providers[0].authorize` gets Auth.js's placeholder `() => null`,
+not the configured function, which lives in `options`. Three sign-in tests
+passed against a stub for one run before the helper was corrected;
+`src/__tests__/utils/authorize.ts` now refuses to run against a function that
+does not take `(credentials, request)`.
 
 **Still open, and deliberately out of scope:** only the two auth endpoints are
 limited, and the limit is per IP rather than per account. Phase 7 §3 verifies
@@ -1242,6 +1267,40 @@ if (!product) {
 ```
 
 **Priority:** Address during Phase 1 implementation
+
+---
+
+### 🟡 TEST-3: An E2E test writes to the seeded household that another one asserts
+
+**Files:** `e2e/screen-reader.spec.ts` (the "add stock" journey),
+`e2e/critical-paths.spec.ts:603`  
+**Severity:** MEDIUM  
+**Status:** OPEN — found 2026-08-10 running the suite for Phase 3
+
+`screen-reader.spec.ts › signed in › add stock` submits the add-stock form as
+the seeded demo account, choosing `firstProductValue(page)` — the first product
+in the select, which is "Aceite de oliva virgen extra" — and adds 2 units.
+`critical-paths.spec.ts:603` then asserts that Aceite is *below* its minimum,
+which the seed guarantees at 1 of 2.
+
+Whichever runs first decides. Measured directly: after a full run the seeded
+Aceite stood at 3 of a minimum of 2 across 3 stock entries where the seed
+creates 1, and the low-stock test failed on four of the five browser projects.
+Re-seeding and running the low-stock test alone passes.
+
+Not caused by Phase 3 — nothing in it touches stock — but Phase 3's run is
+where it surfaced, and it will keep surfacing: the pollution persists in the
+database until someone re-seeds, so once it has happened the low-stock test
+fails on *every* subsequent run until `pnpm db:seed` is run again.
+
+Three fixes worth considering, in ascending order of cost: have the
+screen-reader journey create its own product rather than take the first one;
+give the low-stock assertions their own household; or re-seed between suites.
+The first is the smallest and keeps the journey honest, since what it is
+testing is the accessibility tree, not which product it picks.
+
+Related: `e2e/location-picker.spec.ts` asserts `"Cocina → Despensa (5)"`, a
+count that the same write moves.
 
 ---
 
