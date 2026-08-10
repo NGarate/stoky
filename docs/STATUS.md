@@ -25,6 +25,7 @@ port 3102, after Phase 3.
 | Component tests | `corepack pnpm test:components` | ✅ 164 pass / 14 files |
 | Integration tests | `corepack pnpm test:integration` | ✅ 242 pass / 11 files |
 | Build | `corepack pnpm build` | ✅ 25 routes, all server-rendered on demand |
+| Coverage | `bun test --coverage <dir>` | ℹ️ per tier, not a project figure — see *Known gaps* |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
 | Seed | `corepack pnpm db:seed` | ✅ idempotent across re-runs |
 | E2E | `bunx playwright test` | ✅ 174 pass / 8 skipped / 0 fail, **5.6 min** |
@@ -340,7 +341,13 @@ prevent, and it survived because nobody re-read the source it was describing.
 - No PWA. Deferred deliberately on iOS grounds, not overlooked.
 - No error tracking, monitoring or health-check endpoint.
 - No data export or backup.
-- Coverage percentage is unknown; `bun test --coverage` has not been run.
+- Coverage is measured now, but **per tier, and the denominators differ**: each
+  report counts only the files that tier loads, so the three numbers do not
+  compose into a project figure and must not be added. Integration 90.2% of
+  functions / 87.1% of lines; components near 100% on every component except
+  `UploadZone` (83.5%); unit 70.0% / 63.4%, which is low by construction —
+  it loads modules it only partly exercises on purpose (D25). No tier covers
+  `src/app/**`; those routes are reached only by the browser suite.
 - No visual regression coverage.
 
 ---
