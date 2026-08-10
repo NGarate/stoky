@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Stoky is a privacy-first, self-hosted household inventory management platform. It covers grocery/household inventory tracking, receipt scanning with OCR, price intelligence, and shopping list management. Primary language is Spanish (es), secondary English (en). Default currency is EUR.
 
+**Picking this project up? Read [`docs/README.md`](docs/README.md) first.** It
+indexes the thirteen planning documents, says which one owns which question, and
+gives a three-document reading order. Then come back here for the commit and git
+rules, which are unusual in this repository.
+
 For the current state of the project — which gates pass, what is unverified, and what is still missing — read `docs/STATUS.md` before planning work.
 
 ## Tech Stack

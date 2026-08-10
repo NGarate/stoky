@@ -234,9 +234,18 @@ is not a test — this repository has been burned by that before, see the note i
 
 ## Documentation
 
+**[`docs/README.md`](docs/README.md) indexes all thirteen documents** — what each
+contains, when to read it, when to write to it, and which one owns which
+question. Start there; the table below is the short version.
+
 | Document | Purpose |
 |---|---|
+| [`docs/README.md`](docs/README.md) | **Index. Start here** — reading order and document ownership |
 | [`docs/STATUS.md`](docs/STATUS.md) | Where the project actually is, with gate results |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | What is done, and the 26 decisions taken without asking |
+| [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) | What is being built, in what order, and what done means |
+| [`docs/DESIGN_AUDIT.md`](docs/DESIGN_AUDIT.md) | The interface and WCAG AAA audit, with numbered actions |
+| [`SECURITY.md`](SECURITY.md) | Threat model and hardening for a self-hosted deployment |
 | [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md) | Clone → running app, and what to record if it breaks |
 | [`docs/VERIFICATION_SEQUENCE.md`](docs/VERIFICATION_SEQUENCE.md) | The command ladder |
 | [`docs/SMOKE_JOURNEYS.md`](docs/SMOKE_JOURNEYS.md) | Journeys that must work before work is called done |
