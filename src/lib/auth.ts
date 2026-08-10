@@ -98,7 +98,31 @@ export const authConfig: NextAuthConfig = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 15 * 60, // 15 minutes
+
+    /**
+     * Fifteen minutes of **inactivity**, not fifteen minutes of session.
+     *
+     * `maxAge` was a hard ceiling: a session died fifteen minutes after
+     * sign-in whatever the person was doing, so a slow shop or a long receipt
+     * review ended with a login form and a lost form. WCAG 2.1 **2.2.6
+     * Timeouts** (AAA) asks that users be warned of an inactivity duration
+     * that could cause data loss; nothing warned, and there was nothing to
+     * warn about because activity did not help.
+     *
+     * `updateAge` makes it slide. Auth.js re-issues the token whenever the
+     * session is read and the token is older than this, so any navigation or
+     * any call to `/api/auth/session` pushes the expiry out. Five minutes is
+     * the trade: often enough that an active person never notices, rarely
+     * enough that reading the session is not a write on every request.
+     *
+     * The ceiling stays short on purpose. Phase 5 puts this application on a
+     * kitchen tablet that lives in a kitchen, and Phase 7 §6 asks what a
+     * stolen device can reach — a session that expires quickly once it is put
+     * down is the answer, and sliding it on real activity is what makes that
+     * bearable rather than hostile.
+     */
+    maxAge: 15 * 60,
+    updateAge: 5 * 60,
   },
   callbacks: {
     jwt: async ({ token, user }) => {

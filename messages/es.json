@@ -563,5 +563,10 @@
     "loadFailedTitle": "No se han podido cargar los datos",
     "loadFailedBody": "La consulta al servidor ha fallado. Puede ser algo temporal de la conexión.",
     "retry": "Reintentar"
+  },
+  "session": {
+    "expiringIn": "Tu sesión se cerrará en {minutes} min por inactividad. Lo que no hayas guardado se perderá.",
+    "expired": "Tu sesión se ha cerrado por inactividad. Vuelve a entrar para seguir.",
+    "staySignedIn": "Seguir conectado"
   }
 }

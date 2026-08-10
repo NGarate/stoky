@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { CompactNav } from "@/components/dashboard/CompactNav";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
+import { SessionKeepAlive } from "@/components/session/SessionKeepAlive";
 
 /**
  * The authenticated shell.
@@ -34,6 +35,8 @@ export default async function DashboardLayout({
     <div className="min-h-screen bg-background text-foreground">
       <DashboardNav />
       <CompactNav />
+      {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
+      <SessionKeepAlive expiresAt={session.expires} />
       <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
         {children}
       </main>
