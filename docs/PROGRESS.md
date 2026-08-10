@@ -24,8 +24,9 @@ Rules for this log:
 | 0 — Clean slate | ✅ Complete |
 | 1 — Close the dead routes | ✅ Complete |
 | 2 — One design system | ✅ Complete |
-| 2b — Foundations of use (audit) | ▶ In progress |
-| 3 — Roles | Not started |
+| 2b — Foundations of use (audit) | ✅ Complete except the human screen-reader pass |
+| — Test infrastructure (unplanned) | ✅ Complete |
+| 3 — Roles, and CRITICAL-4 | ▶ Next |
 | 4 — Phone screen, offline | Not started |
 | 5 — Kitchen screen | Not started |
 | 6 — Rating | Not started |
@@ -49,19 +50,33 @@ Rules for this log:
 | Every interactive element raised to the AAA target size | `e6aadea` |
 | A4.2–A4.4 measured in a browser — `e2e/a11y-structure.spec.ts`, 16 routes × 3 tiers | `225bc19` |
 | `check:links` gating CI and `verify:local` | `a0b388a` |
-| UI-5 and I18N-1 closed: the receipts pipeline fits a phone and speaks both languages | (this commit) |
-| UI-2 and UI-4 closed: the location picker is a real listbox and offers the whole tree | (this commit) |
+| UI-5 and I18N-1 closed: the receipts pipeline fits a phone and speaks both languages | `621185d` |
+| UI-2 and UI-4 closed: the location picker is a real listbox and offers the whole tree | `a6b01c2` |
 | A4.5 — the AAA criteria no tool checks, in `e2e/a11y-aaa.spec.ts` | `7c7206f` |
 | Catalogue drift caught by a unit test | `14164d3` |
 | UI-6 closed: the picker opens where it can be seen | `0e74c32` |
 | Two receipts in the seed; the dynamic routes audited by following links | `fe8bbcf`, `ad6cc6b` |
 | Journey states corrected; I18N-5 filed | `e93428b` |
-| A4.6 automatable half — `e2e/screen-reader.spec.ts`; A11Y-2 and UI-7 fixed | (this commit) |
+| A4.6 automatable half — `e2e/screen-reader.spec.ts`; A11Y-2 and UI-7 fixed | `31d5358`, `7139359` |
 
 **Phase 2b is complete except the human screen-reader pass**, which is the one
 piece of this phase that cannot be delegated to a machine or to an agent. Four
 journeys are audited against the accessibility tree; what is left is whether the
 result sounds right to a person using it.
+
+### Test infrastructure — unplanned, and it had become the bottleneck
+
+| Unit | Commit |
+|---|---|
+| Target size decided from CSS instead of from a browser | `f775436` |
+| Every CI test job held to ten minutes, and the guard made to fire | `08a2153` |
+| E2E from 27 minutes to 6; two tests that asserted nothing deleted | `b64eae1` |
+| UI-8 and I18N-7 filed | `4ea3a25` |
+
+Not in the plan, and it should have been: the suite had reached 27 minutes for a
+full matrix, which is long enough that a healthy run and a hung one look
+identical from outside, and long enough that people stop running it. Writing a
+feature took minutes; verifying it took half an hour.
 
 ### Phase 2 — One design system
 
@@ -290,6 +305,33 @@ a `useState(0)` that never moved, so the heading said "4 productos pendientes"
 above four cards all reading "Confirmado". Two definitions of one word, one of
 them wrong — the same shape as D18. It is `isItemReviewed` in
 `src/lib/receipts.ts` now, imported by both.
+
+**D24 — Ten minutes is the budget for all verification, and it is enforced in
+three places.** Not a runner constraint — a product decision. Verification that
+takes longer stops being run, and a suite nobody runs still has to be maintained
+while telling nobody anything. `verify-local.sh` holds the whole ladder to 600
+seconds and every step to its own ceiling; each CI test job is capped at ten
+minutes; Playwright's `globalTimeout` is nine, so it fails first and names the
+test rather than the runner killing the job with no report. The first attempt
+set it at seven, which would have failed CI runs that still met the contract —
+a ceiling that cries wolf only teaches people to raise it.
+
+**D25 — A check belongs in the cheapest tier that can answer it honestly.**
+Three tiers: static facts about source and CSS in Bun; DOM facts in Bun with
+happy-dom; layout and interaction in a browser. The line is not a preference —
+axe itself draws it, running under happy-dom for `button-name`, `heading-order`,
+`label` and `link-name` while returning `color-contrast` as *incomplete*. The
+target-size floor moved to the middle tier via Tailwind's own compiler, which
+resolves a component's class string to the CSS a browser would apply. What
+cannot move is anything about composition: a parent that clips, a sibling that
+shrinks, a fixed bar drawn on top.
+
+**D26 — A test that cannot fail is deleted, not maintained.** Four went: three
+asserted that `page.viewportSize()?.width` equalled the width just passed to
+`setViewportSize`, and one ran a registration, a product creation and a stock
+movement before ending on `// Assertion omitted`. This is the same rule that
+retired 352 tautological component tests in Phase 0, applied to the suite that
+replaced them — the rule does not stop applying once the tests are ours.
 
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather

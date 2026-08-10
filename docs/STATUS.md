@@ -1,310 +1,354 @@
 # Stoky Project Status
 
-Updated: 2026-08-04
+Updated: 2026-08-10
 
-Single source of truth for where the project actually is. Replaces
-`PROJECT_ASSESSMENT.md`, `DEVELOPMENT_ROADMAP.md`, `COMPONENT_AUDIT.md`,
-`COMPONENT_TESTING_SUMMARY.md`, `TESTING_SUMMARY.md` and `TEST_SUMMARY.md`,
-which contradicted each other and overstated completion.
+Single source of truth for where the project actually is.
 
 Rule for this file: **every claim must be reproducible by running a command.**
-If a gate could not be run, say so and say why.
+If a gate could not be run, say so and say why. If a number is a measurement,
+say what measured it.
 
 ---
 
 ## Gate status
 
-Measured on 2026-08-04, with a live PostgreSQL and Valkey.
+Measured on 2026-08-09 against a live PostgreSQL and Valkey, and a dev server on
+port 3101.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `corepack pnpm lint` | ✅ 0 warnings, 0 errors |
+| Lint | `corepack pnpm lint` | ✅ 0 warnings, 0 errors — 142 files, 101 rules |
 | Typecheck | `corepack pnpm typecheck` | ✅ clean |
-| Unit tests | `corepack pnpm test:unit` | ✅ 72 pass / 8 files |
-| Component tests | `corepack pnpm test:components` | ✅ 94 pass / 10 files |
-| Integration tests | `corepack pnpm test:integration` | ✅ 218 pass / 8 files |
-| Build | `corepack pnpm build` | ✅ 16 routes, all server-rendered on demand |
-| Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database (after the pg_trgm fix below) |
-| Seed | `corepack pnpm db:seed` | ✅ verified end-to-end, and idempotent across re-runs |
-| E2E (all 5 browser projects) | `bunx playwright test` | ✅ 60 pass, 20 skipped (`test.fixme`), 0 fail |
+| Internal links | `corepack pnpm check:links` | ✅ 74 links against 24 routes, none broken |
+| Contrast | `corepack pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
+| Unit tests | `corepack pnpm test:unit` | ✅ 96 pass / 12 files |
+| Component tests | `corepack pnpm test:components` | ✅ 155 pass / 13 files |
+| Integration tests | `corepack pnpm test:integration` | ✅ 218 pass / 8 files, 406 assertions |
+| Build | `corepack pnpm build` | ✅ 25 routes, all server-rendered on demand |
+| Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
+| Seed | `corepack pnpm db:seed` | ✅ idempotent across re-runs |
+| E2E | `bunx playwright test` | ✅ 187 pass / 10 skipped / 0 fail, **6.0 min** |
 | Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
 
-### Two traps that made earlier measurements wrong
+`corepack pnpm verify:local` runs the first six — **17s** of a **600s budget**,
+which the script enforces. Every step also has its own ceiling, so a hang fails
+as a hang rather than as a long wait. `verify:ci` adds integration and build.
 
-**1. The migration could never apply to a fresh database.** The initial
-migration creates a GIN index using `gin_trgm_ops` but never created the
-`pg_trgm` extension, so `prisma migrate deploy` failed with
-*operator class "gin_trgm_ops" does not exist*. It went unnoticed because the
-only path anyone ran — `scripts/test-integration-local.sh` — creates the
-extensions manually beforehand, masking the defect. Local bootstrap and
-production deploy were both broken. Fixed by adding the `CREATE EXTENSION`
-statements to the migration itself.
+**Ten minutes is the contract for all verification**, not just the browser
+suite. Every CI test job is capped at ten; Playwright's own `globalTimeout` is
+nine, so it fails first and names the test it was sitting on instead of the
+runner killing the job with no report. The budget exists because verification
+that takes longer stops being run, and a suite nobody runs still has to be
+maintained while telling nobody anything.
 
-**2. Playwright silently tested a different application.** `playwright.config.ts`
-hardcoded port 3000 with `reuseExistingServer`. When an unrelated process holds
-that port, Playwright adopts it and runs the whole suite against that other app,
-producing a wall of meaningless failures. The config now honours
-`PLAYWRIGHT_PORT`. Always confirm the port is free, or set it:
+### End-to-end
 
-```bash
-PLAYWRIGHT_PORT=3177 bunx playwright test e2e/critical-paths.spec.ts
-```
+Seven spec files plus a `setup` project. Five browser projects: chromium,
+firefox, webkit, Mobile Chrome (Pixel 5), Mobile Safari (iPhone 12).
 
-### What the E2E failures turned out to be
+**It ran for 27 minutes and now runs for 6**, with the same routes, themes,
+tiers and browsers. Two structural costs, neither of them a slow test:
 
-All six original failures were investigated. **None was an application bug.**
+- Every signed-in test signed in from scratch — navigate, wait for hydration,
+  fill, submit, wait for the redirect. Five to seven seconds proving nothing the
+  test was about, a few hundred times. The `setup` project signs in once and the
+  signed-in suites reuse the cookies. Declared per suite, so the default stays
+  signed out and the suites that are *about* signing in get nothing.
+- `accessibility.spec.ts` reloaded the page for every theme × tier pair: 90
+  tests over 16 routes. Theme is `emulateMedia` and tier is `setViewportSize`,
+  neither of which needs a navigation. It is 15 tests and 16 loads now, all six
+  combinations still run and all six are collected before it throws so the first
+  failure does not hide the other five.
 
-- **3 were broken tests, now fixed.** The login-error assertions searched for
-  `/incorrect|inválido|error/i` while the app correctly renders *"Credenciales
-  inválidas"* — feminine plural, which that regex misses. The empty-fields test
-  expected an app-rendered error, but both inputs are `required`, so the browser
-  blocks submission and the app is never reached. And the duplicate-email test
-  navigated away while the first registration was still in flight, aborting it,
-  so no user existed and the "duplicate" attempt simply succeeded. Assertions
-  now read the real strings from `messages/es.json`.
-- **1 was test parallelism.** With `fullyParallel` against a single shared
-  database, results moved between runs. The suite is now serial.
-- **4 are blocked on missing routes** and are marked `test.fixme` with the
-  reason inline. See below.
+Files run in parallel at four workers (two in CI); tests within a file stay in
+order. What made `workers: 1` necessary was that every signed-in test also
+*registered* against the shared database — that is gone, so the constraint is
+too. The two suites that still write are kept whole in one worker each.
 
-### Dead links: four routes that are linked but do not exist
+| Spec | What it proves |
+|---|---|
+| `critical-paths.spec.ts` | The stock journeys, login, i18n defaults, three viewports |
+| `accessibility.spec.ts` | axe at WCAG AAA — 16 routes × 2 themes × 3 tiers |
+| `a11y-structure.spec.ts` | Target size, heading order, landmarks — what axe does not decide |
+| `a11y-aaa.spec.ts` | 1.4.8, 2.4.9, 3.3.5 and reduced motion — what no tool decides |
+| `a11y` (all three) | Together, the automated floor. Roughly a third of real problems |
+| `dynamic-routes.spec.ts` | The routes with an id, found by following links rather than from a list |
+| `location-picker.spec.ts` | Keyboard operation and placement of the one custom widget |
+| `screen-reader.spec.ts` | The accessibility tree across four journeys. **Chromium only** |
 
-| Linked from | Target | Exists |
+Two `test.skip`s remain in `critical-paths.spec.ts`, both scoped to phone
+viewports with Phase 4 named as the reason.
+
+Four tests were deleted rather than made faster, because none of them could
+fail: three "Responsive Design" tests asserted that `page.viewportSize()?.width`
+equalled the width just passed to `setViewportSize`, and "should show low stock
+warnings" ran a registration, a product creation and a stock movement before
+ending on `// Assertion omitted - depends on UI implementation`. The last is
+rewritten against the seeded household — the only place the condition exists —
+and asserts both that the three low products carry the badge and that a
+well-stocked one does not. `screen-reader.spec.ts` skips on the
+four non-Chromium projects because `Accessibility.getFullAXTree` is a Chrome
+DevTools Protocol API; without that guard it does not degrade on the others, it
+fails them.
+
+### Which tier answers which question
+
+Three tiers, split by what each can actually decide rather than by habit. The
+rule is that a check belongs in the cheapest tier that can answer it honestly.
+
+| Tier | Runner | Answers |
 |---|---|---|
-| `/products` | `/products/new` | ❌ |
-| `/inventory` | `/inventory/add` | ❌ |
-| `/inventory` | `/inventory/consume` | ❌ |
-| `DashboardNav` | `/settings` | ❌ |
+| Static | Bun, milliseconds | Facts about source and CSS: token contrast, catalogue parity, internal links |
+| Rendered | Bun + happy-dom, seconds | Facts about the DOM: names, roles, labels, ARIA wiring, and — via Tailwind's own compiler — what an element *declares* |
+| Browser | Playwright, minutes | Facts about layout and interaction: contrast as painted, target size as composed, overflow, occlusion, focus, the accessibility tree |
 
-Clicking any of these gives a 404. The last one is in the main navigation of
-every dashboard page. The `inventory` router already implements add, consume,
-adjust and transfer — only the UI is missing, so Journey 1 of
-`docs/SMOKE_JOURNEYS.md` cannot be completed today.
+The middle tier is newer and is where the target-size floor now lives.
+`src/__tests__/setup/tailwind.ts` runs Tailwind's real compiler over the real
+`globals.css` and resolves a component's class string to the CSS a browser would
+apply — `h-10` to 40px, `min-h-[48px]` to 48, `text-sm` to 0.875rem over a 1.5
+line height. 13 checks in under two seconds, covering every button variant
+rather than a sample. Booting a browser to learn how tall a button declares
+itself was never a good trade.
 
-(An earlier revision of this document claimed `/inventory` had no interactive
-controls at all. That was wrong — the controls are `<Link>` elements, and they
-point at routes that were never built.)
+Its limit is the reason the third tier exists: it knows what an element
+declares, not what the layout does. A parent's `overflow`, a sibling's
+`flex-shrink`, a fixed bar drawn on top — the last of which is a defect this
+project shipped (UI-6) — are only visible on a rendered page.
+
+axe was measured in both: it runs under happy-dom and correctly reports
+`button-name`, `heading-order`, `image-alt`, `label` and `link-name`, and
+returns `color-contrast` as **incomplete** rather than passing. That is the
+boundary drawn by the tool rather than by opinion.
+
+### Traps that have made measurements wrong here
+
+These are recorded because each one produced a confident, wrong number.
+
+1. **The migration could not apply to a fresh database.** It built a GIN index
+   with `gin_trgm_ops` without creating the `pg_trgm` extension. Masked because
+   the only path anyone ran created the extensions beforehand. Fixed in the
+   migration itself.
+2. **Playwright silently tested a different application.** The config hardcoded
+   port 3000 with `reuseExistingServer`, so it adopted whatever was listening.
+   It now honours `PLAYWRIGHT_PORT`.
+3. **A wedged dev server looks exactly like a hung test suite.** One at 100% CPU
+   answering nothing swallowed a 30-minute run: Playwright was waiting on its
+   `webServer` and had not started a single test. The tell is zero browser
+   processes. Related: piping a long run through `tail` buffers everything until
+   it ends, so redirect to a file instead.
+4. **`pgrep -f` and `pkill -f` match your own shell.** Both have reported the
+   wrong answer here more than once. `ps -eo pid,args` and an explicit PID work.
+5. **A class name is not a measurement.** happy-dom has no layout engine — every
+   rectangle there is 0×0 — so a component test can only assert that a class is
+   present. That is how every form control in the application sat below the
+   44px accessibility floor since inception. Anything geometric belongs in E2E,
+   or in the CSS resolver above, which measures the declaration itself.
+6. **A guard nobody has watched fire is a comment.** `verify-local.sh`'s
+   per-step ceiling was written as `if ! timeout … then code=$?`, which reads
+   the status of the `!` expression and is always 0 — every ceiling passed
+   silently. Found by setting one to a second and watching the run succeed.
+7. **An unbounded shell wait is not covered by any test timeout.** Three
+   `until … sleep` loops were left spinning on this machine while the suite was
+   being tuned, one for six and a half hours on a log file that was never going
+   to be written. No Playwright setting could have caught them: a shell loop is
+   not a test. Every wait needs its own cap.
+
+---
+
+## What exists
+
+**Backend — substantially complete.** 8 tRPC routers (`auth`, `product`,
+`location`, `inventory`, `receipt`, `store`, `price`, `shopping`) merged in
+`src/server/trpc/router.ts`. 8 Zod validation modules. 4 services: `ocr`,
+`receiptParser`, `productMatcher`, `openFoodFacts`.
+
+**Auth — working.** Real forms wired to Auth.js `signIn()` with Argon2id
+hashing, error mapping and i18n. Still no rate limiting (CRITICAL-4).
+
+**Frontend — 22 pages, and no route is linked that does not exist.** That last
+part is enforced by `check:links` in CI rather than by audit; the manual version
+missed a dead route three times running, twice from routes linked on every row
+of a table.
+
+**Design system — one, and it is in CSS.** 26 tokens under `@theme` in
+`src/app/globals.css`, light and dark, with a three-state System/Light/Dark
+control and a language control on every surface. `src/components/ui/` holds
+`button`, `input`, `ThemeControl`, `LocaleSwitcher`, `PreferencesCluster`.
+Everything else is Tailwind against the tokens — the earlier plan to install
+~23 shadcn primitives was not followed, and no page has needed them.
+
+**Navigation — three renderers by tier.** Bottom bar below `md`, rail from `md`,
+top bar from `lg`, with a focus-trapped sheet for the overflow. Audited by axe
+at all three tiers in both themes.
+
+**i18n — two catalogues that cannot silently diverge.**
+`src/__tests__/unit/messages.test.ts` fails on a key present in one and not the
+other, on an empty value, and on an English string that is a byte-identical copy
+of the Spanish. It cannot see a string that never reached a catalogue at all,
+which is what I18N-5 is.
+
+**Security posture.** Per-request CSP nonce in `src/middleware.ts` with
+`strict-dynamic`. CI pins every action by SHA, scans the image with Trivy before
+pushing it, fails on critical or high findings, and attaches an SBOM and a
+provenance attestation. `SECURITY.md` documents the model for a self-hosted
+deployment.
+
+**Seed — the fixtures the dynamic routes need.** Demo household, 6 products (3
+below minimum), 4 storage locations in two levels, 3 stores, 18 price records, a
+shopping list, and **2 receipts** — one needing review, one confirmed. The
+receipts were added on 2026-08-09; before them `/receipts` was empty on every
+fresh install and in CI, so the review and applied routes were unreachable
+through the interface and were audited by nobody. Login `demo@stoky.local` /
+`Demo1234!`.
+
+---
+
+## Accessibility
+
+The target is **WCAG 2.1 AAA**, decided as a product requirement rather than a
+compliance exercise: the premise is that anyone in a household can use this,
+including people with limited technical confidence.
+
+What is measured, and by what:
+
+| Criterion | Checked by | State |
+|---|---|---|
+| Contrast (1.4.6) | `check:contrast` on the tokens, axe on the rendered page | ✅ both |
+| Target size (2.5.5) | `a11y-structure.spec.ts`, measured in CSS pixels | ✅ floor is 48px, above the required 44 |
+| Headings, landmarks | `a11y-structure.spec.ts` | ✅ |
+| Names and roles | axe, plus the tree walk in `screen-reader.spec.ts` | ✅ zero unnamed interactive nodes |
+| Visual presentation (1.4.8) | `a11y-aaa.spec.ts` | ✅ ≤80 characters, ≥1.5 line spacing |
+| Link purpose (2.4.9) | `a11y-aaa.spec.ts` | ✅ |
+| Help (3.3.5) | `a11y-aaa.spec.ts`, form fields only | ✅ attached, not merely adjacent |
+| Reduced motion (2.3.3) | `a11y-aaa.spec.ts` | ✅ |
+| Reading order | `screen-reader.spec.ts`, tree order vs geometry | ✅ desktop only |
+| Announcements | `screen-reader.spec.ts` | ⚠️ refusals yes, one success no (A11Y-1) |
+
+**Two honest limits.** Automated testing catches roughly a third of real
+accessibility problems, so this is a floor that stops regressions, not a
+certificate. And **the manual screen-reader pass has not happened**. Four
+journeys are audited against the tree; whether the result *sounds* sensible to
+someone using it is the part no tool and no agent can answer.
 
 ---
 
 ## Dependency security
 
-`corepack pnpm audit` → **no known vulnerabilities** (was 57: 4 critical,
-25 high, 24 moderate, 4 low).
+`corepack pnpm audit` → **no known vulnerabilities** (was 57).
 
-Cleared on 2026-08-04 without any source change. Every direct dependency stayed
-within its existing major, so no breaking-change boundary was crossed:
+Cleared without source changes; every direct dependency stayed within its major.
+Four transitive packages had no fixed parent release and use overrides scoped to
+the single parent that pulls them — `recharts>lodash`, not a bare `lodash`.
 
-| Package | From | To | Minimum that patched | Cleared |
-|---|---|---|---|---|
-| `next` | 16.1.6 | 16.3.0 | 16.2.5 | 28 advisories |
-| `next-auth` | 5.0.0-beta.30 | 5.0.0-beta.32 | beta.32 | 4, incl. 2 critical |
-| `@auth/prisma-adapter` | 2.7.4 | 2.11.3 | — | pulls `@auth/core` ≥0.41.3 (3, incl. 1 critical) |
-| `next-intl` | 4.8.2 | 4.13.4 | 4.9.2 | 2, plus transitive `icu-minify` |
-| `postcss` | 8.5.6 | 8.5.25 | 8.5.12 | 4 |
-| `sharp` | 0.33.5 | 0.35.3 | 0.35.0 | 1 |
+**The overrides live in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11
+stopped reading the `pnpm` field in `package.json`; it warns once and ignores
+it. Had they been left there, four advisories would have silently returned on
+the next install. pnpm 11 also refuses lockfile entries published in the last 24
+hours (`minimumReleaseAge`); CI passes `--trust-lockfile`, which is the
+documented case — the lockfile is committed and reviewed, so the age check has
+already done its job at resolution time.
 
-`next` and `next-intl` sit above their minimum patched version because the
-existing `^` ranges resolve to the newest compatible minor. That is the repo's
-convention and it keeps future patches flowing; the lockfile is what pins the
-exact versions. If a future regression is suspected, `~16.2.12` and `~4.9.2`
-are the tighter alternatives that still clear every advisory.
-
-Four transitive packages had no fixed parent release, so they use
-`pnpm.overrides` in `package.json`. Each override is **scoped to the single
-parent that pulls it** — `"recharts>lodash"` rather than a bare `"lodash"` — so
-no unrelated dependant is forced onto a different version, and every bump stays
-within the same major:
-
-| Override | From | To |
-|---|---|---|
-| `@parcel/watcher>picomatch` | 4.0.3 | 4.0.5 |
-| `recharts>lodash` | 4.17.23 | 4.18.1 |
-| `@prisma/config>effect` | 3.18.4 | 3.22.1 |
-| `c12>defu` | 6.1.4 | 6.1.7 |
-
-Verified after the upgrade: lint, typecheck, unit, component, integration,
-build and E2E all pass, `pnpm install --frozen-lockfile` resolves with no peer
-conflicts, sharp round-trips a JPEG through the exact call chain
-`src/server/trpc/routers/receipt.ts` uses, and a real (unmocked) recharts chart
-renders under the overridden lodash.
-
-Re-check with `corepack pnpm audit`. GitHub's Dependabot count is higher than
-pnpm's because it counts one alert per advisory-path pair.
-
-### The overrides live in pnpm-workspace.yaml
-
-pnpm 11 stopped reading the `pnpm` field in `package.json` — it warns once and
-ignores it. During the upgrade to 11.19.0 the overrides above were moved to
-`pnpm-workspace.yaml`, and `onlyBuiltDependencies` became `allowBuilds`, now a
-map rather than a list. Had they been left in `package.json`, the four
-transitive advisories would have silently returned on the next install.
-
-pnpm 11 also refuses lockfile entries published within the last 24 hours
-(`minimumReleaseAge`). This is a good default against a freshly-compromised
-release, but it fails an install of versions resolved hours earlier. CI passes
-`--trust-lockfile`, which is the documented case for it: the lockfile is
-committed and reviewed, so the age check has already served its purpose at
-resolution time.
-
-## What exists
-
-**Backend — substantially complete.**
-8 tRPC routers (`auth`, `product`, `location`, `inventory`, `receipt`, `store`,
-`price`, `shopping`), all merged in `src/server/trpc/router.ts`. 8 Zod
-validation modules in `src/lib/validations/`. 4 services: `ocr`,
-`receiptParser`, `productMatcher`, `openFoodFacts`. Initial migration committed
-(`prisma/migrations/20260213234844`).
-
-**Auth — working.** Login and register are real forms wired to Auth.js
-`signIn()` with Argon2id hashing, error mapping and i18n (commit `7f393ac`).
-
-**Frontend — routes exist, component library does not.**
-16 App Router pages across the dashboard sections (all server-rendered on
-demand — nothing is statically prerendered), 16 domain components, and
-**2 shadcn primitives** (`button`, `input`). See *Phase 2* below.
-
-**i18n — complete for what exists.** `messages/es.json` and `messages/en.json`
-have matching top-level keys. Spanish is primary.
-
-**Seed — verified.** `prisma/seed.ts` creates a demo household, 6 products
-(3 deliberately below minimum stock), 4 storage locations, 3 stores, 18 price
-records and a shopping list. Confirmed against a live database: it produces
-exactly the intended low-stock set (Leche entera 2/6, Aceite 1/2, Café 0/2) and
-re-running leaves the row counts unchanged. Login is `demo@stoky.local` /
-`Demo1234!`.
+GitHub's Dependabot count is higher than pnpm's because it counts one alert per
+advisory-path pair.
 
 ---
 
-## Test suite
+## Versions
 
-| Suite | Files | Tests | Needs a database |
-|---|---|---|---|
-| `src/__tests__/unit` | 8 | 72 | no |
-| `src/__tests__/components` | 10 | 94 | no |
-| `src/__tests__/integration` | 7 | ~240 | **yes** |
+| Package | Version |
+|---|---|
+| next | 16.3.0 |
+| react | 19.2.8 |
+| @trpc/server, @trpc/client | 11.18.0 |
+| prisma, @prisma/client | 6.19.3 |
+| next-auth | 5.0.0-beta.32 |
+| next-intl | 4.13.4 |
+| tailwindcss | 4.3.3 |
+| zod | 3.25.76 |
+| pnpm | 11.19.0 |
 
-The component suite was rewritten on 2026-08-03. The previous one reported
-"352 passing tests, 100% component coverage" but every assertion was a
-tautology of the form:
-
-```ts
-it("should show confirmed state styling", () => {
-  const showsConfirmed = true;
-  expect(showsConfirmed).toBe(true);   // asserts nothing
-});
-```
-
-No component was rendered and `@testing-library/react` was not even a
-dependency. Real component coverage was 0%. The replacement renders each
-component into happy-dom and was validated by mutation testing: four
-deliberately broken components produced eight test failures. See
-`src/__tests__/components/README.md`.
-
-Also removed: `src/__tests__/visual/` (pointed at a `/test/components` route
-that does not exist, and sat outside Playwright's `testDir`, so it never ran)
-and `src/__tests__/e2e/` (a divergent duplicate of `e2e/`).
-
-The integration suite is genuine — it drives `appRouter.createCaller` against
-real Prisma — and now verified: **218 pass, 0 fail, 406 assertions**. It stubs
-`global.fetch` for every Open Food Facts test, so no suite makes real network
-calls; the `OFF API error: 403` lines in its output come from the service
-logging deliberately malformed fixtures.
-
----
-
-## Phase 2: UI component library — not started
-
-2 of ~23 useful shadcn primitives are installed. Everything else is hand-rolled
-Tailwind, which is why the domain components carry their own colour logic.
-
-Installed: `button`, `input`.
-
-Highest value next, roughly in order of how often the existing pages need them:
-
-```bash
-npx shadcn add label card dialog badge select table skeleton
-npx shadcn add form textarea checkbox tabs alert dropdown-menu
-```
-
-Also missing and likely needed later: `sheet`, `accordion`, `separator`,
-`scroll-area`, `avatar`, `tooltip`, `popover`, `toast`/`sonner`, `alert-dialog`,
-`progress`, `command`, `breadcrumb`, `pagination`, `calendar`, `switch`,
-`radio-group`.
-
-There is no `DashboardLayout`, `Sidebar`, `Header` or `MobileNav` component —
-navigation is `DashboardNav` alone.
+`CLAUDE.md` says Prisma 7.x and pnpm 11.x; the repo is on Prisma 6.19.3. tRPC is
+stable 11.18.0, no longer the release candidate `CLAUDE.md` describes. Those two
+lines in `CLAUDE.md` are the remaining spec drift.
 
 ---
 
 ## Known gaps, by severity
 
 **Security**
-- No rate limiting anywhere. `CLAUDE.md` specifies 5 login attempts/15min and
-  3 registrations/hour per IP; there is no implementation and no Valkey client
-  in `src/`. (`ISSUES.md` CRITICAL-4)
-- Password policy is `min(8)` only. (`ISSUES.md` DEBT-1)
+- **No rate limiting anywhere.** `CLAUDE.md` specifies 5 login attempts/15min
+  and 3 registrations/hour per IP. There is no implementation and no Valkey
+  client in `src/`, despite `cache` being defined in compose. This has been the
+  most serious open issue since Phase 0 and is scheduled for Phase 3.
+  (ISSUES CRITICAL-4)
+- Password policy is `min(8)` only. (DEBT-1)
+- No roles. `HouseholdRole` exists in the schema, is never checked, never
+  reaches the JWT, and has no `KITCHEN` value. Phase 3. (SMOKE_JOURNEYS 2)
 
 **Correctness**
-- 7 of 8 routers throw bare `Error` instead of `TRPCError`, so clients receive
-  `INTERNAL_SERVER_ERROR` for what are really auth and not-found conditions.
-  Only `receipt.ts` uses `TRPCError`. (`ISSUES.md` DEBT-4)
+- `getExpiringItems` reports entry quantity rather than net stock, so a fully
+  consumed batch still appears as expiring. (INV-1)
+- An account without a household loads a skeleton forever. (HOUSE-1)
+- 7 of 8 routers throw bare `Error` rather than `TRPCError`, so clients receive
+  `INTERNAL_SERVER_ERROR` for what are auth and not-found conditions. (DEBT-4)
 - `openFoodFacts` caches in a process-local `Map`; multi-instance deployments
-  will diverge. (`ISSUES.md` DEBT-3)
-- The barcode scanner's torch toggle is local state that never reaches the
-  camera. (`ISSUES.md` DEBT-2 — now pinned by a test that documents the
-  behaviour.)
+  diverge. (DEBT-3)
+- The barcode scanner's torch toggle never reaches the camera. (DEBT-2, pinned
+  by a test that documents the behaviour.)
 
-**Coverage**
-- No component tests for `MatchSelector`, `CreateProductInline`, `ReviewCard`,
-  `AutoListPreview`, `StoreSelector`, `ExpiringItems`, `BestPriceIndicator`,
-  `StoreComparison`.
-- No accessibility tooling (no axe run). The old "85/100 accessibility score"
-  was not produced by any tool.
-- No visual regression coverage at all.
-- Coverage percentage is unknown; `bun test --coverage` has not been run.
+**Accessibility and interface**
+- **A failed query leaves four routes on a skeleton forever.** `/inventory`,
+  `/shopping`, `/products` and `/settings/locations` render
+  `if (isLoading || !result)`, so an error shows no message, offers no retry and
+  never resolves. Found under parallel load, which is the same condition as a
+  slow network. (UI-8)
+- Saving a stock movement announces nothing beyond the route name. (A11Y-1,
+  pinned by a test that goes red when it is fixed.)
+- The location picker, the low-stock badge and several wording items are still
+  hardcoded Spanish or inconsistent. (I18N-2 through I18N-7)
 
 **Operational**
-- No error boundaries, no loading skeletons.
-- No PWA configuration.
+- OCR fetches its Tesseract language data from a CDN at first use, so the first
+  scan on a fresh container needs outbound internet and fails on an air-gapped
+  or read-only install. (OCR-1)
+- No error boundaries.
+- No PWA. Deferred deliberately on iOS grounds, not overlooked.
 - No error tracking, monitoring or health-check endpoint.
 - No data export or backup.
+- Coverage percentage is unknown; `bun test --coverage` has not been run.
+- No visual regression coverage.
 
 ---
 
-## Spec drift
+## Where the plan is
 
-`CLAUDE.md` and `docs/REDESIGN_PLAN.md` state versions the repo does not use:
+Execution follows `docs/REDESIGN_PLAN.md`. Live progress and every decision
+taken without asking are in `docs/PROGRESS.md`.
 
-| Claimed | Actual |
+| Phase | State |
 |---|---|
-| Prisma 7.x | 6.19.3 |
+| 0 — Clean slate | ✅ Complete |
+| 1 — Close the dead routes | ✅ Complete |
+| 2 — One design system | ✅ Complete |
+| 2b — Foundations of use | ✅ Complete except the manual screen-reader pass |
+| 3 — Roles, rate limiting | Next |
+| 4 — Phone screen, offline | Not started |
+| 5 — Kitchen screen | Not started |
+| 6 — Product rating | Not started |
+| 7 — Security review | Not started |
 
-tRPC reached stable `11.18.0` in the 2026-08-04 update, closing the other drift.
-Next.js 16, React 19, Tailwind 4 and next-intl 4 match. pnpm is now 11.19.0,
-ahead of the documented 10.x.
+Journey 1 of `docs/SMOKE_JOURNEYS.md` passes. The rest are tagged with the phase
+that makes them passable.
 
----
+### Environment notes
 
-## What to do next
-
-Execution follows `docs/REDESIGN_PLAN.md`, phase by phase. Live progress,
-including decisions taken without asking, is in `docs/PROGRESS.md`.
-
-Phase 0 (clean slate) is complete. Phase 1 closes the four dead routes below,
-which is what unblocks everything else — the scanner already works and already
-redirects to one of them.
-
-Open defects are tracked in `ISSUES.md`; the ones that gate the plan are UI-1
-(dead routes), INV-1 (expiring items report the wrong quantity) and CRITICAL-4
-(no rate limiting, the only critical security gap).
-
-### Environment note
-
-The `docker` group exists and includes this user, but a login session started
-before that change will not have it. Either re-login, or prefix commands with
-`sg docker -c "..."`. Port 3000 is occupied on this machine, so pass
-`PLAYWRIGHT_PORT` when running E2E.
+- The `docker` group includes this user, but a login session started before that
+  change will not have it. Re-login, or prefix with `sg docker -c "..."`.
+- Port 3000 is occupied on this machine. Pass `PLAYWRIGHT_PORT`, and start the
+  dev server on another port.
+- Next refuses a second dev server from the same directory. If message
+  catalogues appear stale, the running server has cached them — `touch
+  next.config.ts` makes it reload.
 
 ---
 
@@ -312,8 +356,12 @@ before that change will not have it. Either re-login, or prefix commands with
 
 | Document | Purpose |
 |---|---|
+| `docs/REDESIGN_PLAN.md` | What is being built, phase by phase |
+| `docs/PROGRESS.md` | What is done, and every decision taken without asking |
+| `docs/DESIGN_AUDIT.md` | The interface audit and its actions |
+| `docs/SMOKE_JOURNEYS.md` | User journeys that must work before calling work done |
 | `docs/LOCAL_BOOTSTRAP.md` | Clone → running app |
 | `docs/VERIFICATION_SEQUENCE.md` | The command ladder and what each gate proves |
-| `docs/SMOKE_JOURNEYS.md` | User journeys that must work before calling work done |
 | `docs/TEST_SETUP.md` | Test database configuration and troubleshooting |
+| `SECURITY.md` | Threat model and hardening for a self-hosted deployment |
 | `ISSUES.md` | Open issues and technical debt, with file references |

@@ -292,7 +292,23 @@ run, both belonging to the chosen design rather than to five prototypes.
 
 Each phase leaves the app usable and verifiable.
 
-### Phase 0 — Clean slate
+| Phase | State |
+|---|---|
+| 0 — Clean slate | ✅ Complete |
+| 1 — Close the dead routes | ✅ Complete |
+| 2 — One design system | ✅ Complete |
+| 2b — Foundations of use | ✅ Complete except the manual screen-reader pass |
+| — Test infrastructure | ✅ Complete, and it was not in this plan |
+| 3 — Roles, and CRITICAL-4 | ▶ Next |
+| 4 — Phone screen, offline | Not started |
+| 5 — Kitchen screen | Not started |
+| 6 — Rating | Not started |
+| 7 — Security review | Not started |
+
+Gate results for each claim above are in `docs/STATUS.md`; the unit-by-unit
+record, with commits, is in `docs/PROGRESS.md`.
+
+### Phase 0 — Clean slate ✅
 
 Nothing new is built. The repository is made to describe the thing we have
 actually decided to build, so later phases start from an honest baseline instead
@@ -330,13 +346,21 @@ imported; no document contradicts this plan or another document; and every
 claim in `docs/STATUS.md` is still reproducible by running the command next to
 it.
 
-### Phase 1 — Close the dead routes
+### Phase 1 — Close the dead routes ✅
 
 `/products/new`, `/inventory/add`, `/inventory/consume`, `/settings`.
 *Done when:* the four `test.fixme` tests in `e2e/critical-paths.spec.ts` pass
 without `fixme`, and Journey 1 of the rewritten `SMOKE_JOURNEYS.md` completes.
 
-### Phase 2 — One design system
+**Done.** The four `test.fixme`s were removed rather than left as a promise, and
+Journey 1 passes. Two more dead routes surfaced while building these —
+`/products/[id]`, linked from every row of two tables, and
+`/receipts/[id]/applied`, the final step of the receipt pipeline — so the count
+was six, not four. All three manual audits had missed them for the same reason:
+the call sites use template literals and the audits compared string literals.
+`scripts/check-links.ts` now does the comparison properly and gates CI.
+
+### Phase 2 — One design system ✅
 
 Merge the Estante and Horizonte tokens, move them into `globals.css`, and fix
 the existing defect: `button.tsx` and `input.tsx` use fourteen theme colour
@@ -345,7 +369,12 @@ button renders with layout but no colour.
 *Done when:* `check:contrast` stays green and no component references a missing
 token.
 
-### Phase 2b — Foundations of use
+**Done.** `.bg-primary` went from zero occurrences in the built CSS to a real
+rule. What the phase did not anticipate: making the primitives theme-aware while
+14 pages stayed hardcoded made dark mode actively worse — the login form rendered
+as black inputs inside a white card — so converting every page became part of it.
+
+### Phase 2b — Foundations of use ✅
 
 Comes out of `docs/DESIGN_AUDIT.md` and sits here because every later phase is
 harder without it, and because two of its items — choosing a theme, choosing a
@@ -365,11 +394,83 @@ language — are things a person can see and use immediately.
 sizes, no route overflows horizontally at 390px, and every destination is
 reachable on a phone.
 
-### Phase 3 — Roles
+**Done, and it grew.** The phase as scoped stopped at A4.4; A4.5 and half of
+A4.6 landed with it because the audit's own wording turned out to be wrong in
+both directions.
+
+- **A4.5** — the criteria the audit listed as unchecked. Two were systemic and
+  fixed once in CSS: Tailwind's `text-sm` and `text-xs` are below the 1.5 line
+  spacing 1.4.8 requires, and no prose had a maximum measure. `prefers-reduced-
+  motion` was honoured nowhere. Six form fields had help that was written,
+  visible and unattached — so `e2e/a11y-aaa.spec.ts` requires attachment, going
+  beyond the criterion's wording, because a hint only a sighted mouse user
+  receives is not help.
+- **A4.6** — the audit said "not automatable, not optional". Half right. A
+  screen reader reads the accessibility tree, and that tree is machine-readable;
+  `e2e/screen-reader.spec.ts` walks four journeys against it. What is still owed
+  is a person deciding whether the result *sounds* sensible, which is the only
+  item of this phase still open.
+
+Two findings were fixed rather than filed, both because the control did not do
+what its label said: the location picker offered no nested locations and opened
+its panel underneath the fixed bottom bar, and confirming a receipt line wrote
+to the database while leaving the page byte-identical.
+
+**A note on scope.** NAV-1 was scheduled for Phase 4 and landed here, because a
+mobile-first sweep cannot be verified on a phone that cannot reach a second
+page. What landed is navigation, not the phone screen.
+
+### Test infrastructure — the phase this plan did not have ✅
+
+Unplanned, and in hindsight it belonged here from the start. The suite reached
+27 minutes for a full matrix, which is long enough that a healthy run and a hung
+one look identical from outside, and long enough that people stop running it.
+Writing a feature took minutes and verifying it took half an hour.
+
+What changed, and the principle behind each:
+
+- **Ten minutes is the budget for all verification**, enforced in three places
+  rather than documented in one: the local ladder holds itself to 600 seconds
+  with a ceiling per step, every CI test job is capped at ten minutes, and
+  Playwright's own `globalTimeout` sits at nine so it fails first and names the
+  test rather than the runner killing the job with no report.
+- **A check belongs in the cheapest tier that can answer it honestly.** Static
+  facts about source and CSS in Bun; DOM facts in Bun with happy-dom; layout and
+  interaction in a browser. axe draws that line itself — it runs under happy-dom
+  and returns `color-contrast` as *incomplete*. The target-size floor moved to
+  the middle tier through Tailwind's own compiler.
+- **A test that cannot fail is deleted, not maintained.** Four went, including
+  three that asserted a viewport width equalled the width just set.
+
+The measured result: 27 minutes to 6, 187 passed, same routes, themes, tiers and
+browser projects. The non-browser gates total 17 seconds.
+
+*Done when:* the whole matrix finishes inside the budget with no failures, and
+the budget fails the run when it does not. Both are true, and both were checked
+by watching the guard fire rather than by reading the config.
+
+### Phase 3 — Roles, and the security gap that has outlived every phase ▶
 
 Enum, session, middleware, capability matrix. Before the screens, because both
 depend on who is looking. *Done when:* a kitchen account is refused a write **by
-the server**, proven by a test, not by a hidden button.
+the server**, proven by a test, not by a hidden button — Journey 2 of
+`SMOKE_JOURNEYS.md`, repeated per procedure rather than sampled.
+
+Three things ride with it, because they are the same layer and the first is the
+most serious defect in the repository:
+
+- **CRITICAL-4 — no rate limiting anywhere.** `CLAUDE.md` specifies 5 login
+  attempts/15min and 3 registrations/hour per IP. There is no implementation and
+  no Valkey client in `src/`, although `cache` has been in compose since the
+  beginning. It has been open since Phase 0 and every phase since has had a
+  better reason to do something else first. It is a login form on the public
+  internet with unlimited password attempts.
+- **HOUSE-1** — an account with no household loads a skeleton forever. Roles and
+  household membership are decided in the same place.
+- **DEBT-4** — 7 of 8 routers throw bare `Error`, so an authorisation refusal
+  arrives at the client as `INTERNAL_SERVER_ERROR`. Phase 3 is the phase that
+  makes authorisation refusals routine, so it is the phase where this stops
+  being cosmetic.
 
 ### Phase 4 — Phone screen, offline from the start
 
