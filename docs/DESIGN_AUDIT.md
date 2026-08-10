@@ -1,6 +1,14 @@
 # Design and accessibility audit — plan of action
 
-Date: 2026-08-09 · **Plan only. Nothing here has been implemented.**
+Date: 2026-08-09 · Actions revised 2026-08-10
+
+**This header said "Plan only. Nothing here has been implemented."** It is kept
+here, corrected, because it was false for a month while every action below
+carried a done marker — and a reader who believed line 3 would have discarded
+all of them. A0 through A4.5 are done and their markers are accurate. A4.6 is
+half done: its automated half is `e2e/screen-reader.spec.ts`, and the human
+screen-reader pass is still owed. In §5, A5.1 and A5.2 are done and were never
+marked; A5.3 and A5.4 are the only actions genuinely still open.
 
 Scope: every route, mobile-first, WCAG **AAA**, with user-chosen theme and
 language.
@@ -23,7 +31,7 @@ has already missed things twice): enumerate every `page.tsx`, extract every
 `href`, `router.push` and `router.replace` target including template literals,
 normalise dynamic segments on both sides, and compare in both directions.
 
-**Result: 21 routes, no orphans.** Every page is reachable from somewhere. No
+**Result at the time: 21 routes, no orphans.** (24 today — `check:links` counts the API handlers as destinations too.) Every page is reachable from somewhere. No
 page should be deleted on grounds of disuse.
 
 **One broken link, and it was a sixth dead route — now closed:**
@@ -101,7 +109,10 @@ instance on one page duplicates the id (this already blocked putting it on
 
 This is the largest finding and it is structural, not cosmetic.
 
-**Evidence**
+**Evidence — the baseline as it stood on 2026-08-09, before any of this landed.**
+Kept in the present tense it was written in, because the actions below are only
+legible against it. Today 17 files use a breakpoint, `md:` appears 96 times, and
+`CompactNav`/`NavSheet` exist.
 
 - **Only five files in the entire codebase use a responsive breakpoint**, and two
   of them are the auth pages. The rest of the app has had no responsive work.
@@ -121,7 +132,8 @@ This is the largest finding and it is structural, not cosmetic.
   NAV-1 and is a precondition for everything else here: an audit finding you
   cannot navigate to is academic.
 - ~~**A3.2**~~ **Done.** Converted the five tables to a responsive pattern: cards on narrow
-  screens, table from `md` up. Cards, not horizontal scrolling — a scrolling
+  screens, table from `lg` up — `md` in this sentence was wrong when written; the
+  code uses `lg`, which is what A3.5 and PROGRESS D14 both specify. Cards, not horizontal scrolling — a scrolling
   table hides the columns that carry the status.
 - ~~**A3.3**~~ **Done** — 0 overflow across 19 routes at 390/820/1280px. Re-audit every route at 390px for horizontal overflow, which is the
   clearest single signal of a broken mobile layout, and treat any overflow as a
@@ -323,8 +335,8 @@ below cannot be machine-checked at all.
 
 ## 5. Design consistency across routes
 
-**In flight.** Converting the dashboard pages from hardcoded palette classes to
-the tokens is running now. It exists because Phase 2 made the primitives
+**Landed in Phase 2b** (`4eafd1c`, `0158b1b`). Converting the dashboard pages
+from hardcoded palette classes to the tokens is done. It exists because Phase 2 made the primitives
 theme-aware while leaving the pages hardcoded, which made dark mode actively
 worse — the login form rendered as black inputs inside a white card. Until it
 lands, per-route colour findings would be stale, so this audit deliberately does
@@ -332,14 +344,23 @@ not enumerate them.
 
 **Actions once it lands**
 
-- **A5.1** Re-run the runtime audit across all 21 routes in both themes and
-  record the result, replacing this section with measurements.
-- **A5.2** `/dashboard` is where every login lands and is an untranslated English
-  placeholder. Being replaced as part of the in-flight work; verify it, do not
-  assume.
-- **A5.3** Adopt `button.tsx` and `input.tsx` in the five Phase 1 routes. They
-  use plain elements because the primitives were unsafe; that reason is now
-  gone.
+- ~~**A5.1**~~ **Done.** The runtime audit is `e2e/accessibility.spec.ts`, every
+  route in both themes at three viewport tiers, gating CI.
+- ~~**A5.2**~~ **Done.** `/dashboard` is a real household overview with 35
+  translated strings. Verified rather than assumed, which is what this action
+  asked for.
+- **A5.3 — still open, and it now has a measurable cost.** None of the five
+  Phase 1 routes imports `button.tsx` or `input.tsx`; they use plain elements
+  because the primitives were unsafe, and that reason went away in Phase 2.
+
+  What has changed is the price of leaving it. The dashboard routes now carry
+  **74 hardcoded `min-h-[48px]` declarations**, each restating a floor the
+  primitives already guarantee. `src/__tests__/components/target-size.test.tsx`
+  resolves that floor through Tailwind's own compiler — but only for `Button`
+  and `Input`, so the guard covers the two places that do not need it and none
+  of the 74 that do. Change the floor and 74 call sites keep the old value,
+  which is precisely the shape of the `h-10` defect that guard exists to
+  prevent.
 - **A5.4** Decide what `/dashboard` becomes once the phone and kitchen screens
   exist (Phases 4 and 5). Three entry points competing for the same job is a
   worse outcome than the placeholder.

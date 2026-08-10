@@ -200,14 +200,24 @@ or the session, and there is no role-aware tRPC middleware — only
 perform any operation on that household's data. A role system is planned
 (`docs/REDESIGN_PLAN.md` §5.2, Phase 3); it does not exist yet.
 
-### No accessibility audit has been run
+### The accessibility audit is automated; the human half is not done
 
-`pnpm check:contrast` enforces WCAG AAA contrast, and that is genuinely
-checked in CI. But there has been **no axe run and no screen-reader pass** —
-neither has ever been executed against this codebase. Any accessibility score
-you may find in an older document was not produced by a tool. This matters for
-security only indirectly, but it is the kind of claim that tends to get
-overstated, so it is stated plainly here.
+This section previously said no axe run and no screen-reader pass had ever been
+executed. That stopped being true in Phase 2b and the section was not updated —
+in the one document whose whole premise is that every claim is checkable against
+a file, which is the worst place for it.
+
+What runs today: `pnpm check:contrast` enforces WCAG AAA on the token pairs, and
+four Playwright suites enforce the rest — axe at the full AAA rule set over
+every route in both themes at three viewport tiers, target size and heading
+order measured in CSS pixels, the criteria no tool decides (1.4.8, 2.4.9, 3.3.5,
+reduced motion), and a walk of the accessibility tree across four journeys.
+
+What is still owed, and is the reason this section survives: **a person using a
+screen reader**. Automated testing catches roughly a third of real accessibility
+problems. The tree can be verified to contain the right information; whether the
+result *sounds* sensible cannot. Any accessibility score in an older document
+was still not produced by a tool.
 
 ### Traefik has the Docker socket, which is root on the host
 

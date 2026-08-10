@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-08-09  
+**Last Updated:** 2026-08-10  
 **Status:** 3 critical issues resolved, 1 open; 5 debt items open.
 The interface findings opened during the Phase 2b design audit are closed except
 A11Y-1 and the wording items.
@@ -193,12 +193,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 ---
 
-### 🟡 CRITICAL-4: Missing rate limiting for authentication endpoints
+### 🔴 CRITICAL-4: Missing rate limiting for authentication endpoints
 
 **Files:**
 
 - `src/lib/auth.ts`
-- `src/app/api/auth/[...nextauth]/route.ts` (missing)
+- `src/app/api/auth/[...nextauth]/route.ts`
 
 **Severity:** MEDIUM-HIGH  
 **Status:** OPEN — re-confirmed 2026-08-03
@@ -239,13 +239,19 @@ if (attempts > 5) {
 
 ---
 
-### 🔴 UI-1: Four linked routes do not exist
+### ✅ UI-1: Four linked routes do not exist
 
 **Files:** `src/app/(dashboard)/products/page.tsx`,
 `src/app/(dashboard)/inventory/page.tsx`,
 `src/components/dashboard/DashboardNav.tsx`  
 **Severity:** HIGH  
-**Status:** OPEN — found 2026-08-04
+**Status:** RESOLVED in Phase 1 — and it was six routes, not four.
+`/products/[id]` and `/receipts/[id]/applied` surfaced while building the first
+four, both missed by three manual audits because their call sites use template
+literals. `corepack pnpm check:links` now gates CI: 74 links against 24 routes,
+none broken. No `test.fixme` remains in `e2e/`.
+
+**Original report follows.**
 
 **Description:**
 The UI links to four routes that have no `page.tsx`. Every one of them 404s:
@@ -423,6 +429,10 @@ elsewhere in the tree.
 
 ### 🟡 UI-3: Validation and accessibility gaps found while building add-stock
 
+**Items 4, 5 and 6 are closed; 1, 2, 3, 7 and 8 remain open.** The three closed
+ones went with UI-4, Phase 2 and the target-size sweep respectively. What is left
+is validation shape and hardcoded Spanish, not accessibility.
+
 **Files:** `src/server/trpc/routers/inventory.ts`,
 `src/components/inventory/LocationPicker.tsx`,
 `src/components/dashboard/DashboardNav.tsx`, `src/components/ui/*`  
@@ -441,10 +451,14 @@ reason that page avoids the shared primitives.
    the server still accepts it.
 3. **`LocationPicker` hardcodes Spanish** — "Cargando ubicaciones..." and "Sin
    ubicación específica" are baked in, so the English UI shows Spanish there.
-4. **`LocationPicker` accessibility**: the trigger has no `aria-expanded` or
+4. ~~**`LocationPicker` accessibility**: the trigger has no `aria-expanded` or
    `aria-haspopup`; the click-away layer is a full-viewport `div` with
    `role="button"` and `tabIndex={0}`, putting an invisible tab stop across the
-   whole page while open; the trigger is under 44px.
+   whole page while open; the trigger is under 44px.~~ **RESOLVED with UI-4**
+   (`a6b01c2`). `LocationPicker.tsx:352-353` carries `aria-expanded` and
+   `aria-haspopup="listbox"`, `:394` the scrim is `aria-hidden` with no role and
+   no tab stop, `:361` the trigger is `min-h-[48px]`. Driven with the keyboard
+   in `e2e/location-picker.spec.ts`.
 5. ~~**`button.tsx` and `input.tsx` are unsafe to use.** They combine
    `focus-visible:outline-none` with an invisible ring built from tokens that
    resolve to nothing — so they remove the focus outline and replace it with
@@ -455,8 +469,10 @@ reason that page avoids the shared primitives.
    rule so the floor cannot be removed by omission. Guarded by
    `src/__tests__/unit/design-tokens.test.ts` and by focus assertions in the
    two component test files.
-6. **Touch targets under 44px** in `DashboardNav` (every dashboard page) and on
-   the back links of the new routes.
+6. ~~**Touch targets under 44px** in `DashboardNav` (every dashboard page) and on
+   the back links of the new routes.~~ **RESOLVED** (`e6aadea`). The floor is 48
+   everywhere (PROGRESS D17), measured in CSS pixels by
+   `e2e/a11y-structure.spec.ts` rather than asserted as a class name.
 7. **`/inventory` has no next-intl at all** — its strings are hardcoded
    Spanish, while the page it links to is bilingual.
 8. **`ProductPicker` hardcodes `useTranslations("inventory.add")`.** On
@@ -561,7 +577,7 @@ the same component.
 
 ---
 
-### 🟡 I18N-1: The receipts routes are hardcoded Spanish
+### ✅ I18N-1: The receipts routes are hardcoded Spanish
 
 **Files:** `src/app/(dashboard)/receipts/page.tsx`,
 `src/app/(dashboard)/receipts/[id]/review/page.tsx`,
@@ -589,7 +605,7 @@ through, which is more visible than it was.
 
 ---
 
-### 🟡 UI-5: The receipt review page overflows horizontally at 390px
+### ✅ UI-5: The receipt review page overflows horizontally at 390px
 
 **File:** `src/app/(dashboard)/receipts/[id]/review/page.tsx`,
 `src/components/receipt/ReceiptStatus.tsx`
@@ -617,7 +633,7 @@ dynamic, so neither enumerates it.
 
 ---
 
-### 🔴 UI-6: The location picker's options open under the bottom bar
+### ✅ UI-6: The location picker's options open under the bottom bar
 
 **File:** `src/components/inventory/LocationPicker.tsx`
 **Severity:** HIGH
@@ -751,17 +767,22 @@ area.
 
 ### 🔴 UI-8: A failed query leaves four routes on a skeleton forever
 
-**Files:** `src/app/(dashboard)/inventory/page.tsx`,
-`src/app/(dashboard)/shopping/page.tsx`, `src/app/(dashboard)/products/page.tsx`,
-`src/app/(dashboard)/settings/locations/page.tsx`
-**Severity:** HIGH
-**Status:** OPEN — found 2026-08-10 while making the E2E suite run in parallel
+**Files:** `src/app/(dashboard)/inventory/page.tsx:35`,
+`src/app/(dashboard)/products/page.tsx:45`
+**Severity:** MEDIUM
+**Status:** OPEN — found 2026-08-10 while making the E2E suite run in parallel;
+**scope corrected 2026-08-10** after an audit checked the other two files
 
-All four render `if (isLoading || !result)` and return a loading state. When the
-query *fails*, `isLoading` goes false and the data stays undefined, so the
-condition holds forever: the skeleton never resolves, no error is shown, and
-there is no retry and no way out but a reload. A tRPC error is not a state any
-of these pages models.
+**Two** routes render `if (isLoading || !result)`. When the query *fails*,
+`isLoading` goes false and the data stays undefined, so the condition holds
+forever: the skeleton never resolves, no error is shown, and there is no retry
+and no way out but a reload. A tRPC error is not a state either page models.
+
+This entry originally named four files and called it HIGH. `/shopping:34` and
+`/settings/locations:46` test `if (isLoading)` alone and fall through on error
+to an empty state — wrong, but recoverable, and a different defect from a
+skeleton that never resolves. I wrote the wider claim from a pattern I had seen
+in two files and did not check the other two.
 
 Found under load rather than by reading: with the suite running at six workers,
 `/inventory` twice never produced its "Añadir stock" link inside a 15 second
@@ -1289,10 +1310,9 @@ Create `docs/setup.md` or expand README with:
 
 ### Blocking everything else
 
-1. **Restore Docker access** (needs sudo — `sudo usermod -aG docker $USER`).
-   Until this works, the integration suite, the E2E suite and the seed cannot
-   be run at all, so TEST-1 stays half-open and nothing database-dependent can
-   be verified.
+Nothing. Docker access — which headed this list and blocked the integration
+suite, the E2E suite and the seed — has been working since 2026-08-04. All three
+run: 218 integration, 187 E2E, and a seed that is idempotent.
 
 ### Before public deployment
 

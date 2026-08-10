@@ -34,7 +34,8 @@ mainly UI work.
 | `shopping.generateFromLowStock` / `getAutoList` | Phone |
 | `product.scanBarcode` / `getByBarcode` / `searchByName` | Phone |
 
-What blocks everything (`ISSUES.md` UI-1): four linked routes that 404 —
+~~What blocks everything (`ISSUES.md` UI-1): four linked routes that 404~~ —
+**closed in Phase 1, and it turned out to be six routes, not four** —
 `/products/new`, `/inventory/add`, `/inventory/consume`, `/settings`. The
 scanner already works and already redirects to the first of them.
 

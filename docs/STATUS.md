@@ -302,11 +302,12 @@ prevent, and it survived because nobody re-read the source it was describing.
   by a test that documents the behaviour.)
 
 **Accessibility and interface**
-- **A failed query leaves four routes on a skeleton forever.** `/inventory`,
-  `/shopping`, `/products` and `/settings/locations` render
-  `if (isLoading || !result)`, so an error shows no message, offers no retry and
-  never resolves. Found under parallel load, which is the same condition as a
-  slow network. (UI-8)
+- **A failed query leaves two routes on a skeleton forever.** `/inventory` and
+  `/products` render `if (isLoading || !result)`, so an error shows no message,
+  offers no retry and never resolves. Found under parallel load, which is the
+  same condition as a slow network. Filed as four routes and corrected to two by
+  an audit — `/shopping` and `/settings/locations` fall through to an empty
+  state, which is wrong but recoverable. (UI-8)
 - Saving a stock movement announces nothing beyond the route name. (A11Y-1,
   pinned by a test that goes red when it is fixed.)
 - The location picker, the low-stock badge and several wording items are still

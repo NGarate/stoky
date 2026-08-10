@@ -1,6 +1,6 @@
 # Stoky Smoke Journeys
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 These are the minimum user-visible journeys that should be proven before closing
 Stoky product work. They are rewritten around the two entry screens defined in
@@ -105,7 +105,7 @@ Proof required:
 - after: Leche entera reads 5 and is still marked as below its minimum; a second
   add of 1 L takes it to 6 and the marking clears
 
-Proven by: `e2e/critical-paths.spec.ts`, 16 passing. The location picker on both
+Proven by: `e2e/critical-paths.spec.ts`, 13 tests, green. The location picker on both
 routes was rebuilt on the way (`ISSUES.md` UI-2, UI-4, UI-6) — until then the
 nested locations five of the six seeded products live in could not be chosen at
 all, so the journey's "where it is stored" half was passing on the roots only.
