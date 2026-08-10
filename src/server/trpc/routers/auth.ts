@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
@@ -12,7 +13,10 @@ export const authRouter = createTRPCRouter({
       });
 
       if (!user) {
-        throw new Error("Invalid credentials");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid credentials",
+        });
       }
 
       const isValidPassword = await argon2.verify(
@@ -21,7 +25,10 @@ export const authRouter = createTRPCRouter({
       );
 
       if (!isValidPassword) {
-        throw new Error("Invalid credentials");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid credentials",
+        });
       }
 
       return {
@@ -45,7 +52,10 @@ export const authRouter = createTRPCRouter({
       });
 
       if (existingUser) {
-        throw new Error("Email already registered");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Email already registered",
+        });
       }
 
       // Hash password with Argon2id
@@ -99,7 +109,10 @@ export const authRouter = createTRPCRouter({
       });
 
       if (!user) {
-        throw new Error("User not found");
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not found",
+        });
       }
 
       return {

@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -63,7 +64,10 @@ export const shoppingRouter = createTRPCRouter({
       });
 
       if (!list) {
-        throw new Error("Shopping list not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Shopping list not found",
+        });
       }
 
       return list;
@@ -137,7 +141,10 @@ export const shoppingRouter = createTRPCRouter({
       });
 
       if (!list) {
-        throw new Error("Shopping list not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Shopping list not found",
+        });
       }
 
       // If productId is provided, verify it belongs to household
@@ -150,7 +157,10 @@ export const shoppingRouter = createTRPCRouter({
         });
 
         if (!product) {
-          throw new Error("Product not found");
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Product not found",
+          });
         }
       }
 

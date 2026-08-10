@@ -23,7 +23,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DEBT-1 | Minimal password validation | 🟡 Open |
 | DEBT-2 | Barcode scanner torch is inert | 🟡 Open (pinned by test) |
 | DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
-| DEBT-4 | Bare `Error` instead of `TRPCError` | 🟡 Open (7 of 8 routers) |
+| DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
+| DEBT-6 | The services layer still throws bare `Error` | 🟡 Open (pinned by test) |
 | DEBT-5 | Missing database indexes | 🟡 Open |
 | TEST-1 | Integration tests need a database | 🟡 Partly addressed |
 | TEST-2 | Mock external API calls | ✅ Resolved |
@@ -1048,11 +1049,37 @@ async getProductByBarcode(barcode: string) {
 
 ---
 
-### 🟡 DEBT-4: tRPC error handling uses generic messages
+### ✅ DEBT-4: tRPC error handling uses generic messages
 
 **Files:** all routers except `src/server/trpc/routers/receipt.ts`  
 **Severity:** LOW  
-**Status:** OPEN — scope measured 2026-08-03
+**Status:** RESOLVED 2026-08-10 (Phase 3)
+
+**Resolution.** All eight routers now throw `TRPCError` and nothing else. 36 of
+the throws disappeared rather than being converted: the repeated
+`"User not in a household"` guard is now one middleware
+(`householdProcedure`), which raises `PRECONDITION_FAILED` — the code HOUSE-1
+needs the client to be able to tell apart from a server fault. The remaining
+30 were converted in place with their messages left byte-identical, so the
+tests that assert on wording still mean what they meant; what changed is the
+code the client receives.
+
+Codes were assigned by what the client can do about the condition: `NOT_FOUND`
+for a missing row, `CONFLICT` for a request that is well-formed but blocked by
+current state (not enough stock, a location with children, a duplicate email),
+`BAD_REQUEST` for a request that is structurally wrong (transferring to the
+same location, making a location its own parent), `UNAUTHORIZED` for bad
+credentials, `FORBIDDEN` for a role that may not.
+
+Pinned in two tiers. `src/__tests__/unit/router-errors.test.ts` fails on any
+`throw new Error` reappearing in a router — the structural half, which exists
+because a behavioural test only covers the conditions someone thought to
+provoke. The integration suite asserts the actual codes; seven assertions that
+checked message text were moved to codes at the same time.
+
+The services layer is **not** covered and is filed as DEBT-6.
+
+**Original report follows.**
 
 **Issue:**
 Many procedures throw generic errors like `"User not in a household"` or `"Product not found"` without proper TRPCError codes.
@@ -1092,6 +1119,33 @@ if (!product) {
 ```
 
 **Priority:** Address during Phase 1 implementation
+
+---
+
+### 🟡 DEBT-6: The services layer still throws bare `Error`
+
+**Files:** `src/server/services/ocr.ts`, `productMatcher.ts`,
+`receiptParser.ts`, `openFoodFacts.ts`  
+**Severity:** LOW  
+**Status:** OPEN — found 2026-08-10 while closing DEBT-4
+
+DEBT-4 was filed and scoped against the routers, and the routers are done. One
+layer down, four services still throw bare `Error` — `"Receipt not found"`,
+`"Receipt item not found"`, `"Empty image file"`, `"OFF API error: 500"` —
+and a procedure that calls one surfaces the whole thing as
+`INTERNAL_SERVER_ERROR`. So `receipt.parseReceipt` against a deleted receipt
+still reports a server fault for what is a missing row, exactly the symptom
+DEBT-4 describes.
+
+Filed rather than fixed in passing (PROGRESS.md D6): the fix is a different
+decision from the routers' one. A service is not a tRPC procedure and should
+arguably not import `TRPCError` at all — the alternative is typed domain
+errors that the routers translate, which keeps the services callable from
+somewhere other than tRPC. That choice deserves its own commit.
+
+Pinned by `src/__tests__/unit/router-errors.test.ts`, which asserts that at
+least one service still contains a bare throw, so whoever fixes this is sent
+back here to close the entry.
 
 ---
 
@@ -1322,8 +1376,10 @@ run: 218 integration, 187 E2E, and a seed that is idempotent.
 
 ### Correctness and scale
 
-4. **DEBT-4:** Convert the seven routers still throwing bare `Error` to
-   `TRPCError` with proper codes.
+4. **DEBT-6:** Decide how the services layer reports failure — typed domain
+   errors the routers translate, most likely — and convert it. The routers are
+   done (DEBT-4); a service error still reaches the client as
+   `INTERNAL_SERVER_ERROR`.
 5. **DEBT-5:** Add the missing indexes on `StockEntry.productId`,
    `PriceRecord.productId`/`storeId`, `Receipt.householdId`/`status` and
    `ReceiptItem.receiptId`.

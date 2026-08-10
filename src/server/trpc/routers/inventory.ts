@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -110,7 +111,10 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       // Verify location if provided
@@ -123,7 +127,10 @@ export const inventoryRouter = createTRPCRouter({
         });
 
         if (!location) {
-          throw new Error("Location not found");
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Location not found",
+          });
         }
       }
 
@@ -190,7 +197,10 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       const totalAvailable = product.stockEntries.reduce(
@@ -199,7 +209,10 @@ export const inventoryRouter = createTRPCRouter({
       );
 
       if (Math.abs(input.quantity) > totalAvailable) {
-        throw new Error("Not enough stock available");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Not enough stock available",
+        });
       }
 
       // Create consumption entry (negative quantity)
@@ -240,7 +253,10 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       const stockEntry = await prisma.stockEntry.create({
@@ -277,7 +293,10 @@ export const inventoryRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       if (input.fromLocationId === input.toLocationId) {
-        throw new Error("Cannot transfer to the same location");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot transfer to the same location",
+        });
       }
 
       // Verify product exists
@@ -297,7 +316,10 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       const availableInSource = product.stockEntries.reduce(
@@ -306,7 +328,10 @@ export const inventoryRouter = createTRPCRouter({
       );
 
       if (input.quantity > availableInSource) {
-        throw new Error("Not enough stock in source location");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Not enough stock in source location",
+        });
       }
 
       // Verify locations exist
@@ -318,7 +343,10 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       if (locations.length !== 2) {
-        throw new Error("One or more locations not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "One or more locations not found",
+        });
       }
 
       // Create transfer entries
@@ -376,7 +404,10 @@ export const inventoryRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       const entries = await prisma.stockEntry.findMany({

@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -19,7 +20,10 @@ export const priceRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       // Verify store belongs to household
@@ -31,7 +35,10 @@ export const priceRouter = createTRPCRouter({
       });
 
       if (!store) {
-        throw new Error("Store not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Store not found",
+        });
       }
 
       const priceRecord = await prisma.priceRecord.create({

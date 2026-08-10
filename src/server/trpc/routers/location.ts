@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -92,7 +93,10 @@ export const locationRouter = createTRPCRouter({
         });
 
         if (!parent) {
-          throw new Error("Parent location not found");
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Parent location not found",
+          });
         }
       }
 
@@ -124,13 +128,19 @@ export const locationRouter = createTRPCRouter({
       });
 
       if (!existingLocation) {
-        throw new Error("Location not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Location not found",
+        });
       }
 
       // Prevent circular reference
       if (data.parentId) {
         if (data.parentId === id) {
-          throw new Error("A location cannot be its own parent");
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A location cannot be its own parent",
+          });
         }
 
         const parent = await prisma.storageLocation.findFirst({
@@ -141,13 +151,19 @@ export const locationRouter = createTRPCRouter({
         });
 
         if (!parent) {
-          throw new Error("Parent location not found");
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Parent location not found",
+          });
         }
 
         // Check if parent is a descendant of this location (would create cycle)
         const isDescendant = await checkIsDescendant(id, data.parentId);
         if (isDescendant) {
-          throw new Error("Cannot move a location to its own descendant");
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Cannot move a location to its own descendant",
+          });
         }
       }
 
@@ -180,15 +196,24 @@ export const locationRouter = createTRPCRouter({
       });
 
       if (!location) {
-        throw new Error("Location not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Location not found",
+        });
       }
 
       if (location.children.length > 0) {
-        throw new Error("Cannot delete location with sub-locations");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Cannot delete location with sub-locations",
+        });
       }
 
       if (location.stockEntries.length > 0) {
-        throw new Error("Cannot delete location with stock entries");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Cannot delete location with stock entries",
+        });
       }
 
       await prisma.storageLocation.delete({

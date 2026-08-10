@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -97,7 +98,10 @@ export const productRouter = createTRPCRouter({
       });
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       const totalStock = product.stockEntries.reduce(
@@ -172,7 +176,10 @@ export const productRouter = createTRPCRouter({
       });
 
       if (!existingProduct) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       const product = await prisma.product.update({
@@ -194,7 +201,10 @@ export const productRouter = createTRPCRouter({
       });
 
       if (!existingProduct) {
-        throw new Error("Product not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       // Delete the product

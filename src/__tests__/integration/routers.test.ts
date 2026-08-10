@@ -338,6 +338,16 @@ describe("tRPC Router Integration Tests", () => {
             password: "TestPassword123!",
           })
         ).rejects.toThrow("Email already registered");
+        // The code, not just the wording: a duplicate email is a conflict the
+        // client can act on, not a server fault (ISSUES.md DEBT-4).
+        await expectCode(
+          caller.auth.register({
+            email: "duplicate@example.com",
+            name: "Another User",
+            password: "TestPassword123!",
+          }),
+          "CONFLICT"
+        );
       });
 
       it("should reject invalid email format", async () => {
@@ -398,6 +408,13 @@ describe("tRPC Router Integration Tests", () => {
             password: "WrongPassword123!",
           })
         ).rejects.toThrow("Invalid credentials");
+        await expectCode(
+          caller.auth.login({
+            email: "nonexistent@example.com",
+            password: "WrongPassword123!",
+          }),
+          "UNAUTHORIZED"
+        );
       });
 
       it("should reject invalid email format", async () => {
@@ -653,6 +670,15 @@ describe("tRPC Router Integration Tests", () => {
           operationType: "CONSUME",
         })
       ).rejects.toThrow("Not enough stock available");
+      await expectCode(
+        caller.inventory.consumeStock({
+          productId: product.id,
+          quantity: 1000,
+          unit: "unit",
+          operationType: "CONSUME",
+        }),
+        "CONFLICT"
+      );
     });
 
     it("should adjust stock", async () => {
