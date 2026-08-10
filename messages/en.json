@@ -551,5 +551,17 @@
     "deleteDescription": "Are you sure you want to delete {item}? This action cannot be undone.",
     "unsavedChanges": "You have unsaved changes",
     "unsavedChangesDescription": "Do you want to save changes before leaving?"
+  },
+  "household": {
+    "noHouseholdTitle": "You do not have a household yet",
+    "noHouseholdBody": "A household is where the inventory, the shopping list and the prices live. Create yours to get started; you can rename it later.",
+    "nameLabel": "Household name",
+    "nameHint": "Whatever you call it at home. \"Home\" works perfectly well.",
+    "createHousehold": "Create household",
+    "creating": "Creating household...",
+    "createFailed": "The household could not be created. Try again.",
+    "loadFailedTitle": "The data could not be loaded",
+    "loadFailedBody": "The request to the server failed. It may be a temporary connection problem.",
+    "retry": "Try again"
   }
 }

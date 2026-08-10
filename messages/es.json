@@ -551,5 +551,17 @@
     "deleteDescription": "¿Estás seguro de que deseas eliminar {item}? Esta acción no se puede deshacer.",
     "unsavedChanges": "Tienes cambios sin guardar",
     "unsavedChangesDescription": "¿Deseas guardar los cambios antes de salir?"
+  },
+  "household": {
+    "noHouseholdTitle": "Todavía no tienes un hogar",
+    "noHouseholdBody": "Un hogar es donde viven el inventario, la lista de la compra y los precios. Crea el tuyo para empezar; podrás cambiarle el nombre más adelante.",
+    "nameLabel": "Nombre del hogar",
+    "nameHint": "Como lo llamáis en casa. \"Casa\" sirve perfectamente.",
+    "createHousehold": "Crear hogar",
+    "creating": "Creando hogar...",
+    "createFailed": "No se ha podido crear el hogar. Inténtalo de nuevo.",
+    "loadFailedTitle": "No se han podido cargar los datos",
+    "loadFailedBody": "La consulta al servidor ha fallado. Puede ser algo temporal de la conexión.",
+    "retry": "Reintentar"
   }
 }

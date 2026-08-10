@@ -36,7 +36,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
-| HOUSE-1 | An account without a household loads a skeleton forever | 🔴 **OPEN** |
+| HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
 | I18N-1 | The receipts routes are hardcoded Spanish | ✅ Resolved (`621185d`) |
 | UI-5 | The receipt review page overflows at 390px | ✅ Resolved (`621185d`) |
@@ -45,7 +45,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
 | I18N-2..7 | Wording and untranslated strings | 🟡 Open |
-| UI-8 | A failed query leaves four routes on a skeleton forever | 🔴 **OPEN** |
+| UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
+| UI-9 | Two routes show an empty state when the query failed | 🟡 Open |
 
 ---
 
@@ -548,12 +549,49 @@ scoped to it and name it as the reason.
 
 ---
 
-### 🔴 HOUSE-1: An account without a household loads a skeleton forever
+### ✅ HOUSE-1: An account without a household loads a skeleton forever
 
-**Files:** `src/app/(dashboard)/products/page.tsx`,
-`src/app/(dashboard)/inventory/page.tsx`, `src/server/trpc/routers/*`  
+**Files:** `src/server/trpc/routers/household.ts` (new),
+`src/components/household/RouteState.tsx` (new),
+`src/app/(dashboard)/products/page.tsx`,
+`src/app/(dashboard)/inventory/page.tsx`  
 **Severity:** HIGH  
-**Status:** OPEN — found 2026-08-09
+**Status:** RESOLVED 2026-08-10 (Phase 3)
+
+**Resolution.** Of the three fixes suggested below, the third: detect the state
+and offer a way out. Requiring a household at registration would break the
+invitation flow Phase 3's neighbours need — someone joining an existing
+household must be able to register without making a second one — and creating
+one implicitly names a household after nothing, which is worse than asking.
+
+Three parts:
+
+- `householdProcedure` raises `PRECONDITION_FAILED`, so the client can tell
+  "you have no household yet" from "the server fell over". Only the first has
+  a way forward.
+- A `household` router on `protectedProcedure` rather than
+  `householdProcedure` — deliberately, since requiring a household would make
+  the way out of the state unreachable from inside it. `current` returns null
+  instead of throwing; `create` makes the household and the membership in one
+  transaction, and refuses an account that already has one.
+- `RouteState` renders three states where the routes had two. Loading is the
+  skeleton as before; `PRECONDITION_FAILED` is a form to create a household;
+  anything else is a message and a retry. That third branch closes UI-8.
+
+One thing found while wiring it, and fixed rather than filed because leaving it
+would have made the fix pointless: TanStack Query retries a failed query three
+times with backoff by default, so the "create your household" screen appeared
+about seven seconds after the page did. The query client no longer retries a
+4xx — the server has already answered definitively — and 5xx and transport
+failures still retry twice.
+
+Verified in a browser with a real household-less account: `/inventory` and
+`/products` both offered the form (1.9s and 0.6s, no retry wait), creating
+"Casa de Prueba" from `/inventory` recovered the route in place with no reload
+and no sign-out, and the counter came back with the household's real empty
+state rather than a skeleton.
+
+**Original report follows.**
 
 Registration treats `householdName` as optional, so an account can be created
 with no household. Every product, stock, shopping and price procedure then
@@ -800,13 +838,27 @@ area.
 
 ---
 
-### 🔴 UI-8: A failed query leaves four routes on a skeleton forever
+### ✅ UI-8: A failed query leaves four routes on a skeleton forever
 
 **Files:** `src/app/(dashboard)/inventory/page.tsx:35`,
 `src/app/(dashboard)/products/page.tsx:45`
 **Severity:** MEDIUM
-**Status:** OPEN — found 2026-08-10 while making the E2E suite run in parallel;
-**scope corrected 2026-08-10** after an audit checked the other two files
+**Status:** RESOLVED 2026-08-10 (Phase 3) — found 2026-08-10 while making the
+E2E suite run in parallel; **scope corrected 2026-08-10** after an audit checked
+the other two files
+
+**Resolution.** Both routes now render three states through
+`src/components/household/RouteState.tsx` rather than two: loading, no
+household, and any other failure with a message and a retry button. Closed
+alongside HOUSE-1 because they are the same four lines — the no-household case
+is one specific reason the query fails, and fixing one without the other would
+have meant writing the error branch twice.
+
+`/shopping` and `/settings/locations` are **not** changed. They fall through to
+an empty state on error, which is wrong but recoverable and is a different
+defect; it is filed as UI-9.
+
+**Original report follows.**
 
 **Two** routes render `if (isLoading || !result)`. When the query *fails*,
 `isLoading` goes false and the data stays undefined, so the condition holds
@@ -1153,6 +1205,31 @@ if (!product) {
 ```
 
 **Priority:** Address during Phase 1 implementation
+
+---
+
+### 🟡 UI-9: Two routes report an empty household when the query failed
+
+**Files:** `src/app/(dashboard)/shopping/page.tsx`,
+`src/app/(dashboard)/settings/locations/page.tsx`  
+**Severity:** LOW  
+**Status:** OPEN — split out of UI-8 on 2026-08-10 when UI-8 was closed
+
+Both test `if (isLoading)` alone, so on a failed query they fall through and
+render the empty state: "no shopping lists", "no locations". That is a lie with
+a plausible shape — someone who has ten locations is told they have none, and
+the only tell is that adding one appears to do nothing.
+
+Less serious than UI-8, which it was filed with, because it is recoverable by
+reloading rather than terminal. Kept separate because the fix is the same
+component (`RouteState`) applied to two routes whose loading branch has a
+different shape, and folding it into UI-8's commit would have made that commit
+touch four routes to fix a defect in two.
+
+Note that an account with no household now reaches these two routes and sees
+the same lie, where before it saw a skeleton. That is not a regression from
+this phase — both behaviours are wrong — but it is the most likely way anyone
+meets this.
 
 ---
 

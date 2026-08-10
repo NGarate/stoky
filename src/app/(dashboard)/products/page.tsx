@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import type { JSX } from "react";
 
 /**
@@ -38,24 +39,21 @@ function stockTone(product: ProductRow): string {
 }
 
 export default function ProductsPage(): JSX.Element {
-  const { data: result, isLoading } = api.product.list.useQuery({
-    limit: 20,
-  });
+  const query = api.product.list.useQuery({ limit: 20 });
+  const result = query.data;
 
-  if (isLoading || !result) {
+  // Three states, not two. `isLoading || !result` left a failed query on
+  // the skeleton for ever, with no message and no way forward — ISSUES.md
+  // UI-8 — and the one failure no amount of waiting fixes is an account
+  // with no household, which is HOUSE-1.
+  if (query.isPending || query.error || !result) {
     return (
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-heading md:text-4xl">
-            Productos
-          </h1>
-        </div>
-        <div className="space-y-4">
-          {['skeleton-1', 'skeleton-2', 'skeleton-3', 'skeleton-4', 'skeleton-5'].map((key) => (
-            <div key={key} className="h-16 bg-muted rounded animate-pulse" />
-          ))}
-        </div>
-      </div>
+      <RouteState
+        error={query.error}
+        isLoading={query.isPending}
+        onRetry={() => void query.refetch()}
+        title="Productos"
+      />
     );
   }
 

@@ -1,5 +1,6 @@
 import { createTRPCRouter } from "./trpc";
 import { authRouter } from "./routers/auth";
+import { householdRouter } from "./routers/household";
 import { productRouter } from "./routers/product";
 import { locationRouter } from "./routers/location";
 import { inventoryRouter } from "./routers/inventory";
@@ -10,6 +11,7 @@ import { shoppingRouter } from "./routers/shopping";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
+  household: householdRouter,
   product: productRouter,
   location: locationRouter,
   inventory: inventoryRouter,

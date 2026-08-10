@@ -1,7 +1,11 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { loggerLink, unstable_httpBatchStreamLink } from "@trpc/client";
+import {
+  TRPCClientError,
+  loggerLink,
+  unstable_httpBatchStreamLink,
+} from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { useState } from "react";
 import SuperJSON from "superjson";
@@ -28,6 +32,28 @@ export function TRPCProvider(
         defaultOptions: {
           queries: {
             staleTime: 30 * 1000,
+            /**
+             * Do not retry what the server has already answered definitively.
+             *
+             * The default is three retries with backoff, which is right for a
+             * dropped connection and wrong for every refusal: an account with
+             * no household would sit on a skeleton for about seven seconds
+             * before being told it can create one, and a KITCHEN account would
+             * spend four requests being refused four times. Retrying a
+             * FORBIDDEN also means a control that cannot work hammers the
+             * server on every render.
+             *
+             * 5xx and transport failures still retry, twice.
+             */
+            retry: (failureCount, error) => {
+              if (error instanceof TRPCClientError) {
+                const status = error.data?.httpStatus;
+                if (typeof status === "number" && status >= 400 && status < 500) {
+                  return false;
+                }
+              }
+              return failureCount < 2;
+            },
           },
         },
       }),

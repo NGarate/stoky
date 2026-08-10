@@ -25,6 +25,13 @@ const EXPECTED: Record<string, Record<string, string>> = {
     me: "protectedProcedure",
     logout: "protectedProcedure",
   },
+  // Reachable by an account with no household, which is the whole reason it
+  // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the
+  // way out of that state unreachable from inside it.
+  "household.ts": {
+    current: "protectedProcedure",
+    create: "protectedProcedure",
+  },
   "inventory.ts": {
     getStockOverview: "householdProcedure",
     getStockHistory: "householdProcedure",
