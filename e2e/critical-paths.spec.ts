@@ -598,7 +598,17 @@ test.describe("Internationalization", () => {
  * the new household cannot see them.
  */
 test.describe("Low stock, as the seeded household", () => {
-  test.use({ storageState: SESSION_FILE });
+  // Desktop width, deliberately. The page renders the same products twice —
+  // a table from `lg` and cards below it — and only one is ever displayed.
+  // `src/app/(dashboard)/inventory/page.tsx` says so at the top of the table:
+  // source order decides which copy a `.first()` selector resolves to, and on a
+  // phone that is the hidden one. The row-based assertions below need the table
+  // to exist at all.
+  //
+  // The card tier's badge is therefore not covered here. That is a real gap and
+  // is filed as TEST-4 rather than papered over with a selector that matches
+  // whichever copy happens to be visible.
+  test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
 
   test("marks the products that are below their minimum", async ({ page }) => {
     await page.goto("/inventory");

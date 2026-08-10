@@ -514,7 +514,7 @@ test.describe("Screen-reader journeys", () => {
       ).not.toEqual([]);
 
       // Now the real thing, through the controls rather than around them.
-      const productId = await firstProductValue(page);
+      const productId = await writableProductValue(page);
       await page.selectOption("select[name=productId]", productId);
       await page.fill("input[name=quantity]", "2");
 
@@ -704,7 +704,31 @@ test.describe("Screen-reader journeys", () => {
   });
 });
 
-/** The first real product in the picker, skipping its "choose one" row. */
+/**
+ * A seeded product this journey may add stock to without breaking anyone else.
+ *
+ * It used to take the first product in the select, which is "Aceite de oliva
+ * virgen extra" — one of the three the seed puts *below* its minimum, and one
+ * that `critical-paths.spec.ts` asserts is marked low. Adding 2 units took it
+ * from 1 of 2 to 3 of 2 and the low-stock test failed on four of five browser
+ * projects, deterministically once the write had happened, because the
+ * pollution outlives the run (ISSUES.md TEST-3).
+ *
+ * "Arroz redondo" is the seed's well-stocked product, at 5 of a minimum of 2,
+ * and `critical-paths.spec.ts` asserts it is *not* marked. Adding to it keeps
+ * that true. Named rather than positional so the coupling is visible: if the
+ * seed drops it, this fails loudly here instead of silently over there.
+ */
+const WRITABLE_PRODUCT = "Arroz redondo";
+
+/**
+ * The first real product in the picker, skipping its "choose one" row.
+ *
+ * Still used by the consume journey, which is safe on the first product for
+ * the opposite reason: consuming can only push a product further below its
+ * minimum, and the assertions elsewhere are that the seed's three low products
+ * are marked low. Adding is what breaks them.
+ */
 async function firstProductValue(page: Page): Promise<string> {
   const values = await page.$$eval("select[name=productId] option", (options) =>
     options.map((option) => option.getAttribute("value") ?? ""),
@@ -712,6 +736,24 @@ async function firstProductValue(page: Page): Promise<string> {
   const value = values.find((candidate) => candidate !== "");
   expect(value, "the product picker offered no products to choose from").toBeTruthy();
   return value as string;
+}
+
+async function writableProductValue(page: Page): Promise<string> {
+  const value = await page.$eval(
+    "select[name=productId]",
+    (select, name) => {
+      const options = Array.from((select as HTMLSelectElement).options);
+      const match = options.find((option) => option.textContent?.includes(name as string));
+      return match?.value ?? "";
+    },
+    WRITABLE_PRODUCT,
+  );
+
+  expect(
+    value,
+    `the product picker did not offer "${WRITABLE_PRODUCT}" — has the seed changed?`,
+  ).toBeTruthy();
+  return value;
 }
 
 /**

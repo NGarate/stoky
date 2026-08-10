@@ -48,7 +48,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | I18N-8 | Both auth pages hardcoded, in the wrong two languages | 🔴 **OPEN** |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-9 | Two routes show an empty state when the query failed | 🟡 Open |
-| TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | 🟡 Open |
+| TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
+| TEST-4 | The low-stock badge is unchecked on the card tier | 🟡 Open |
 
 ---
 
@@ -1275,7 +1276,21 @@ if (!product) {
 **Files:** `e2e/screen-reader.spec.ts` (the "add stock" journey),
 `e2e/critical-paths.spec.ts:603`  
 **Severity:** MEDIUM  
-**Status:** OPEN — found 2026-08-10 running the suite for Phase 3
+**Status:** RESOLVED 2026-08-10 (Phase 3) — the add-stock journey now names
+"Arroz redondo", the seed's well-stocked product, instead of taking whichever
+product sorts first. `critical-paths.spec.ts` asserts Arroz is *not* marked low,
+and adding to it keeps that true. Named rather than positional so the coupling
+is visible: if the seed drops the product, the journey fails there instead of
+silently breaking a test in another file. The consume journey still takes the
+first product, which is safe for the opposite reason — consuming can only push
+a product further below its minimum, and the assertions are that the seed's
+three low products are marked.
+
+Filed rather than fixed at first, per D6; fixed in the same phase because a
+filed defect that keeps a gate red is not a finding with a workaround, it is a
+gate nobody can use (the same reasoning as D22).
+
+**Original report follows.**
 
 `screen-reader.spec.ts › signed in › add stock` submits the add-stock form as
 the seeded demo account, choosing `firstProductValue(page)` — the first product
@@ -1301,6 +1316,30 @@ testing is the accessibility tree, not which product it picks.
 
 Related: `e2e/location-picker.spec.ts` asserts `"Cocina → Despensa (5)"`, a
 count that the same write moves.
+
+---
+
+### 🟡 TEST-4: The low-stock badge is unchecked on the card tier
+
+**File:** `e2e/critical-paths.spec.ts` (Low stock, as the seeded household)  
+**Severity:** LOW  
+**Status:** OPEN — found 2026-08-10 while closing TEST-3
+
+`/inventory` renders the same products twice: a table from `lg`, cards below it,
+with only one ever displayed. The low-stock test asserts through
+`getByRole("row", …)`, which exists only in the table, and its first assertion
+uses `getByText("Stock Bajo").first()` — which on a phone resolves to the
+hidden table copy and fails as "hidden" rather than "missing".
+
+`src/app/(dashboard)/inventory/page.tsx` documents this trap in a comment above
+the table, which is how it was diagnosed. The test is now pinned to a 1280px
+viewport, so it measures the tier its assertions describe.
+
+The consequence is that **the card tier's badge is asserted by nothing**, on the
+two viewports where most people will actually read this page. The fix is a
+second assertion against the card markup rather than a cleverer selector — a
+selector that matches whichever copy is visible would hide the next instance of
+this instead of catching it.
 
 ---
 
