@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 describe("Prisma Client", () => {
@@ -23,6 +24,19 @@ describe("Prisma Client", () => {
     expect(prisma.receiptItem).toBeDefined();
     expect(prisma.shoppingList).toBeDefined();
     expect(prisma.shoppingItem).toBeDefined();
+  });
+
+  it("should carry every household role the capability matrix names", () => {
+    // The matrix in REDESIGN_PLAN.md §5.2 has three columns — Admin, User,
+    // Kitchen — and OWNER/ADMIN share the first. KITCHEN is the value the
+    // kitchen tablet runs under; without it, a tablet that walks out of the
+    // house holds an account that can write.
+    expect(Object.keys($Enums.HouseholdRole).sort()).toEqual([
+      "ADMIN",
+      "KITCHEN",
+      "MEMBER",
+      "OWNER",
+    ]);
   });
 
   it("should maintain singleton instance", () => {
