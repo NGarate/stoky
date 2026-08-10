@@ -305,7 +305,7 @@ class InventoryPage {
  */
 
 test.describe("Onboarding Flow", () => {
-  test("should complete full onboarding journey", async ({ page }) => {
+  test("should complete full onboarding journey", { tag: "@smoke" }, async ({ page }) => {
     const registerPage = new RegisterPage(page);
     const dashboardPage = new DashboardPage(page);
 
@@ -416,7 +416,7 @@ test.describe("Inventory Management Flow", () => {
   // part of that phase — it is the point at which they should start passing.
   test.skip(({ isMobile }) => Boolean(isMobile), "Phone UI is Phase 4");
 
-  test("should add stock to product", async ({ page }) => {
+  test("should add stock to product", { tag: "@smoke" }, async ({ page }) => {
     const registerPage = new RegisterPage(page);
     const dashboardPage = new DashboardPage(page);
     const productsPage = new ProductsPage(page);
@@ -496,7 +496,7 @@ test.describe("Inventory Management Flow", () => {
 });
 
 test.describe("Login Flow", () => {
-  test("should login with valid credentials", async ({ page }) => {
+  test("should login with valid credentials", { tag: "@smoke" }, async ({ page }) => {
     const registerPage = new RegisterPage(page);
     const loginPage = new LoginPage(page);
     const dashboardPage = new DashboardPage(page);
@@ -558,7 +558,7 @@ test.describe("Internationalization", () => {
     expect(html).toBe("es");
   });
 
-  test("should display Spanish content on login page", async ({ page }) => {
+  test("should display Spanish content on login page", { tag: "@smoke" }, async ({ page }) => {
     await page.goto("/login");
     const bodyText = await page.locator("body").textContent();
     // Check for Spanish keywords (adjust based on actual translations)

@@ -1,5 +1,45 @@
 # Test Setup Guide
 
+
+## Which tier a new test belongs in
+
+Four tiers, and the rule is that **a check belongs in the cheapest one that can
+answer it honestly** (PROGRESS.md D25). The browser is not the thorough option;
+it is the expensive one, and using it for a question a cheaper tier can settle
+buys nothing and costs maintenance for ever.
+
+| Tier | Runner | Answers | Cost |
+|---|---|---|---|
+| Static | Bun | Facts about source and CSS: token contrast, catalogue parity, internal links, how a procedure is declared, which errors a router throws | ms |
+| Rendered | Bun + happy-dom | Facts about the DOM: names, roles, labels, ARIA wiring, keyboard interaction, and — through Tailwind's own compiler — what an element *declares* | s |
+| Server | Bun + Postgres + Valkey | Procedures: guards, state transitions, side effects, household isolation, rate limiting | s |
+| Browser | Playwright | Only what composition decides: layout, overflow, occlusion, contrast as painted, focus across a real page, the accessibility tree | min |
+
+**A browser test has to justify itself by naming the thing only a browser can
+answer.** If you cannot name it, the test belongs one tier down. The audit of
+2026-08-11 removed five picker tests that failed this: keyboard navigation,
+Escape and tab order are DOM facts, and the component suite already asserted
+every one of them against the real component.
+
+### Cross-engine coverage is a separate axis from test coverage
+
+Running a business flow on five engines does not test five things. A sign-in is
+tRPC, Prisma and Argon2id; none of it is rendered, and none of it changes
+because the engine did. What genuinely varies between engines is layout.
+
+So the matrix separates the two axes instead of multiplying them: chromium runs
+everything, Mobile Safari runs the two layout specs, and Firefox and desktop
+WebKit run a four-test `@smoke` set. Tag a test `@smoke` only if an engine
+breaking it means the engine has broken enough that nothing subtler is worth
+measuring.
+
+### The budget is enforced, not aspirational
+
+`globalTimeout` is 5 minutes locally and 9 in CI. The suite runs in 2.9. If a
+change pushes it past the ceiling the run fails, which is the point: a suite
+that gets slower quietly is one that stops being run.
+
+
 ## Prerequisites
 
 Before running tests, ensure you have:

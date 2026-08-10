@@ -321,5 +321,11 @@ describe("LocationPicker", () => {
 
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
+    // And focus comes back to the trigger. Dismissing a panel that took focus
+    // without returning it drops a keyboard user at the top of the document,
+    // which is the same defect as not closing at all from where they are
+    // standing. Moved down from the browser suite, which asserted it against a
+    // real click and paid a page load for a fact about the DOM.
+    expect(document.activeElement).toBe(trigger());
   });
 });

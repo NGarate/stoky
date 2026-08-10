@@ -21,10 +21,10 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
  * matrix to 775 tests and roughly an hour and three quarters, which is long
  * enough that a healthy run and a hung one look identical from outside.
  *
- * They run on chromium only. The engine-dependent questions — does the layout
- * hold, does focus behave, does the page overflow — are answered across all
- * five by `critical-paths`, `dynamic-routes` and `location-picker`, which
- * measure geometry and interaction rather than sweeping tiers.
+ * They run on chromium only. The engine-dependent question they would ask a
+ * second engine — does the layout hold at this width — is asked instead by
+ * `dynamic-routes` and `location-picker` on Mobile Safari, which is one
+ * engine's worth of layout coverage rather than four.
  *
  * `screen-reader` is on this list for a harder reason: it reads the tree over
  * the Chrome DevTools Protocol, which does not exist elsewhere.
@@ -34,6 +34,19 @@ const CHROMIUM_ONLY = [
   "**/a11y-aaa.spec.ts",
   "**/a11y-structure.spec.ts",
   "**/screen-reader.spec.ts",
+];
+
+/**
+ * The specs whose subject is layout rather than behaviour.
+ *
+ * These are the only ones a second engine can answer differently: whether a
+ * page overflows sideways, and whether a fixed bar is painted over a control.
+ * Everything else in the browser suite is a business flow, and a business flow
+ * does not change because the engine did.
+ */
+const LAYOUT_SPECS = [
+  "**/dynamic-routes.spec.ts",
+  "**/location-picker.spec.ts",
 ];
 
 /**
@@ -99,20 +112,20 @@ export default defineConfig({
   // short for the web-first assertions that wait on a route change.
   expect: { timeout: 10_000 },
 
-  // Nine minutes, inside the ten every test job in CI is held to. Playwright
-  // fails first and names the test it was sitting on; a job killed by the runner
-  // leaves no report and no trace.
+  // The budget, enforced. A suite that gets slower without anyone noticing is
+  // one that stops being run, so the ceiling is the contract rather than a
+  // safety net: the run fails when it regresses past it.
   //
-  // Seven was the first attempt and it was too tight. The matrix runs in 5.5
-  // minutes on an eight-core machine at four workers; CI has four cores, runs
-  // the dev server on them too, and retries failures twice. Seven leaves that
-  // almost no room, and a ceiling that fails runs which still meet the contract
-  // teaches people to raise the ceiling. Nine holds the contract and only fires
-  // on a suite that has genuinely stopped meeting it.
+  // Five minutes locally, where it takes 2.9 at four workers — enough headroom
+  // for a cold Next compile and a slow machine, tight enough that doubling the
+  // suite fails here instead of in review. Nine in CI, which is not a weaker
+  // contract but a different machine: two workers on four cores that are also
+  // running the dev server, and two retries on any failure. Both stay inside
+  // the ten minutes every CI test job is held to.
   //
-  // The budget is the point: verification this slow stops being run, and the run
-  // fails when it regresses past it rather than quietly getting slower.
-  globalTimeout: 9 * 60_000,
+  // It was nine everywhere when the suite ran 182 tests in 5.6 minutes. It runs
+  // 89 in 2.9 now, and a ceiling three times the measurement is not a ceiling.
+  globalTimeout: (process.env.CI ? 9 : 5) * 60_000,
 
   use: {
     baseURL: BASE_URL,
@@ -124,6 +137,29 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
 
+  /**
+   * One engine runs everything; the others run what only they can answer.
+   *
+   * The suite used to run every spec on five projects, which is 182 tests and
+   * 1,098 seconds of processor time for 26 distinct behaviours. Duplicating a
+   * login flow across five engines does not test five things — the flow is
+   * tRPC and Prisma, and neither is rendered. What genuinely varies between
+   * engines is layout, and what varies between projects is viewport, and those
+   * are two axes the old matrix multiplied instead of separating.
+   *
+   * So: chromium is the reference and runs the lot. Mobile Safari runs the
+   * layout specs, because WebKit at a phone width is the combination where
+   * this project's layout defects have actually appeared — UI-5 was a page
+   * 505px wide at 390, UI-6 was a picker painted under the bottom bar. Desktop
+   * Firefox and WebKit run a four-test smoke set: register, sign in, write
+   * something, and read a page in Spanish. If an engine breaks those, it has
+   * broken enough to be worth knowing before anything subtler.
+   *
+   * Mobile Chrome is gone. It is Blink at 393px, and chromium already visits
+   * every route at that width — the three a11y specs loop the tiers with
+   * `setViewportSize`, and `dynamic-routes` checks overflow at all three. It
+   * was an engine we already run at a width we already test.
+   */
   projects: [
     /**
      * Signs in once and writes the cookies the signed-in suites reuse. Every
@@ -140,27 +176,24 @@ export default defineConfig({
       dependencies: ["setup"],
     },
     {
+      // WebKit at a real phone viewport: the layout specs only.
+      name: "Mobile Safari",
+      use: { ...devices["iPhone 12"] },
+      testMatch: LAYOUT_SPECS,
+      dependencies: ["setup"],
+    },
+    {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
       testIgnore: CHROMIUM_ONLY,
+      grep: /@smoke/,
       dependencies: ["setup"],
     },
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
       testIgnore: CHROMIUM_ONLY,
-      dependencies: ["setup"],
-    },
-    {
-      name: "Mobile Chrome",
-      use: { ...devices["Pixel 5"] },
-      testIgnore: CHROMIUM_ONLY,
-      dependencies: ["setup"],
-    },
-    {
-      name: "Mobile Safari",
-      use: { ...devices["iPhone 12"] },
-      testIgnore: CHROMIUM_ONLY,
+      grep: /@smoke/,
       dependencies: ["setup"],
     },
   ],

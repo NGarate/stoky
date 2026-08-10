@@ -417,6 +417,37 @@ it is a gate nobody can use, and the next person to run the suite would have had
 to rediscover it. The rule stands: file when the fix is separate work, fix when
 leaving it means the project cannot tell whether it is broken.
 
+**D33 — Cross-engine coverage is a separate axis from test coverage, and the
+matrix stopped multiplying them.** The browser suite ran every spec on five
+projects: 182 tests and 1,098 seconds of processor time for 26 distinct
+behaviours. Duplicating a sign-in across five engines does not test five
+things — the flow is tRPC, Prisma and Argon2id, none of it rendered, none of it
+different because the engine is. What does vary by engine is layout. So
+chromium runs everything as the reference, Mobile Safari runs the two layout
+specs because WebKit at a phone width is where this project's layout defects
+have actually appeared (UI-5, UI-6), and Firefox and desktop WebKit run a
+four-test `@smoke` set. Mobile Chrome is gone: Blink at 393px, a width chromium
+already visits on every route through `setViewportSize`. 89 tests, 2.9 minutes.
+
+**D34 — A browser test must name the thing only a browser can answer.**
+The corollary of D25, applied as a rule for adding tests rather than a
+description of the tiers. Five picker tests failed it — keyboard navigation,
+Escape with focus returned, and tab order are facts about the DOM, and
+`LocationPicker.test.tsx` already asserted every one against the real component
+in milliseconds. They cost five tests on five projects and twenty-five page
+loads to re-answer a question that was already answered. The two that stayed
+name their reason: composed target size and whether a fixed bar is painted over
+an option, neither of which happy-dom can decide, because every rectangle in it
+is 0×0.
+
+**D35 — The E2E ceiling is the contract, not a safety net.**
+`globalTimeout` was nine minutes everywhere while the suite measured 5.6. A
+ceiling three times the measurement cannot fail before the suite has already
+become something nobody runs. It is five minutes locally, where the suite takes
+2.9, and nine in CI — not a weaker contract but a different machine: two
+workers on four cores that also run the dev server, with two retries on
+failure.
+
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
 than swept up later, because a translation backlog never gets paid off.

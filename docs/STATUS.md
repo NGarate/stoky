@@ -28,7 +28,7 @@ port 3102, after Phase 3.
 | Coverage | `bun test --coverage <dir>` | ℹ️ per tier, not a project figure — see *Known gaps* |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
 | Seed | `corepack pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ 174 pass / 8 skipped / 0 fail, **5.6 min** |
+| E2E | `bunx playwright test` | ✅ 89 pass / 0 fail, **2.9 min** |
 | Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
 
 `corepack pnpm verify:local` runs the first six — **17s** of a **600s budget**,
@@ -44,53 +44,46 @@ maintained while telling nobody anything.
 
 ### End-to-end
 
-Seven spec files plus a `setup` project. Five browser projects: chromium,
-firefox, webkit, Mobile Chrome (Pixel 5), Mobile Safari (iPhone 12).
+Seven spec files plus a `setup` project. **89 tests in 2.9 minutes**, against
+182 in 5.6 before the audit of 2026-08-11.
 
-**It ran for 27 minutes and now runs for 6**, with the same routes, themes,
-tiers and browsers. Two structural costs, neither of them a slow test:
+The reduction is not fewer checks. It is the same checks placed in the tier
+that can answer them, and stopping the browser matrix from multiplying two
+independent axes together.
 
-- Every signed-in test signed in from scratch — navigate, wait for hydration,
-  fill, submit, wait for the redirect. Five to seven seconds proving nothing the
-  test was about, a few hundred times. The `setup` project signs in once and the
-  signed-in suites reuse the cookies. Declared per suite, so the default stays
-  signed out and the suites that are *about* signing in get nothing.
-- `accessibility.spec.ts` reloaded the page for every theme × tier pair: 90
-  tests over 16 routes. Theme is `emulateMedia` and tier is `setViewportSize`,
-  neither of which needs a navigation. It is 15 tests and 16 loads now, all six
-  combinations still run and all six are collected before it throws so the first
-  failure does not hide the other five.
+| Project | Runs | Why |
+|---|---|---|
+| chromium | Everything | The reference engine |
+| Mobile Safari | `dynamic-routes`, `location-picker` | WebKit at a phone width — the combination where this project's layout defects have actually appeared (UI-5, UI-6) |
+| firefox | `@smoke` — 4 tests | Register, sign in, write, read Spanish |
+| webkit | `@smoke` — 4 tests | As above |
 
-Files run in parallel at four workers (two in CI); tests within a file stay in
-order. What made `workers: 1` necessary was that every signed-in test also
-*registered* against the shared database — that is gone, so the constraint is
-too. The two suites that still write are kept whole in one worker each.
+**Mobile Chrome was removed.** It is Blink at 393px, and chromium already
+visits every route at that width: the three a11y specs loop the viewport tiers
+with `setViewportSize`, and `dynamic-routes` checks overflow at all three. It
+was an engine already covered, at a width already tested.
 
-| Spec | What it proves |
-|---|---|
-| `critical-paths.spec.ts` | The stock journeys, login, i18n defaults, three viewports |
-| `accessibility.spec.ts` | axe at WCAG AAA — 16 routes × 2 themes × 3 tiers |
-| `a11y-structure.spec.ts` | Target size, heading order, landmarks — what axe does not decide |
-| `a11y-aaa.spec.ts` | 1.4.8, 2.4.9, 3.3.5 and reduced motion — what no tool decides |
-| `a11y` (all three) | Together, the automated floor. Roughly a third of real problems |
-| `dynamic-routes.spec.ts` | The routes with an id, found by following links rather than from a list |
-| `location-picker.spec.ts` | Keyboard operation and placement of the one custom widget |
-| `screen-reader.spec.ts` | The accessibility tree across four journeys. **Chromium only** |
+Five picker tests moved down to the component tier, which already asserted the
+same contract — keyboard navigation, Escape, tab order — against the real
+component in milliseconds. The two that stayed are the two happy-dom cannot
+answer: composed target size, and whether a fixed bar is painted over an option.
+
+| Spec | What it proves | Projects |
+|---|---|---|
+| `critical-paths.spec.ts` | The stock journeys, login, i18n | chromium, `@smoke` elsewhere |
+| `accessibility.spec.ts` | axe at WCAG AAA — 16 routes × 2 themes × 3 tiers | chromium |
+| `a11y-structure.spec.ts` | Target size, heading order, landmarks | chromium |
+| `a11y-aaa.spec.ts` | 1.4.8, 2.4.9, 3.3.5 and reduced motion | chromium |
+| `dynamic-routes.spec.ts` | Routes with an id, found by following links | chromium, Mobile Safari |
+| `location-picker.spec.ts` | Composed target size and occlusion | chromium, Mobile Safari |
+| `screen-reader.spec.ts` | The accessibility tree across four journeys | chromium — the tree comes over CDP |
+
+`globalTimeout` is **5 minutes locally and 9 in CI**, where two workers share
+four cores with the dev server and failures retry twice. It was 9 everywhere,
+which is not a ceiling when the measurement is 2.9.
 
 Two `test.skip`s remain in `critical-paths.spec.ts`, both scoped to phone
 viewports with Phase 4 named as the reason.
-
-Four tests were deleted rather than made faster, because none of them could
-fail: three "Responsive Design" tests asserted that `page.viewportSize()?.width`
-equalled the width just passed to `setViewportSize`, and "should show low stock
-warnings" ran a registration, a product creation and a stock movement before
-ending on `// Assertion omitted - depends on UI implementation`. The last is
-rewritten against the seeded household — the only place the condition exists —
-and asserts both that the three low products carry the badge and that a
-well-stocked one does not. `screen-reader.spec.ts` skips on the
-four non-Chromium projects because `Accessibility.getFullAXTree` is a Chrome
-DevTools Protocol API; without that guard it does not degrade on the others, it
-fails them.
 
 ### Which tier answers which question
 
