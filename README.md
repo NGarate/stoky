@@ -9,8 +9,10 @@ there is no external service holding your data.
 **Primary language:** Spanish (`es`), with English (`en`) as secondary.
 **Default currency:** EUR.
 
-> **Status:** MVP in development. The backend, auth, schema and routing are in
-> place; the shared UI component library is not. See
+> **Status:** MVP in development. Backend, auth, schema and routing are in
+> place, and so is the design system — 26 theme tokens in CSS, light and dark,
+> with a WCAG AAA accessibility floor enforced by the test suite. Still missing:
+> roles, rate limiting, the phone and kitchen screens, and offline. See
 > [`docs/STATUS.md`](docs/STATUS.md) for an honest, command-verified breakdown
 > of what works and what does not.
 
@@ -83,7 +85,16 @@ corepack pnpm db:seed
 ```
 
 Creates the household *Hogar Demo* with six products (three deliberately below
-minimum stock), storage locations, three stores and price history.
+minimum stock), storage locations two levels deep, three stores, price history,
+a shopping list, and **two receipts** — one needing review, one confirmed.
+
+The receipts matter more than they look: without them `/receipts/[id]/review`
+and `/receipts/[id]/applied` cannot be reached through the interface at all, so
+nothing tested them. That is how a page 505px wide survived on a 390px phone
+through three responsive sweeps.
+
+**The E2E suite needs this seed.** It signs in once as the demo user, so an
+unseeded database fails the whole matrix at its first step.
 
 Log in as **`demo@stoky.local`** / **`Demo1234!`**.
 
@@ -153,7 +164,8 @@ src/
     services/                 ocr, receiptParser, productMatcher, openFoodFacts
   lib/
     validations/              Zod schemas shared by client and server
-    auth/                     Auth.js configuration
+    auth.ts                   Auth.js configuration (the config is this file)
+    auth/                     Error-message mapping only
   components/
     ui/                       shadcn/ui primitives
     <domain>/                 inventory, receipt, price, shopping, barcode, ...

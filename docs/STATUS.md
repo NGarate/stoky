@@ -267,9 +267,14 @@ advisory-path pair.
 | zod | 3.25.76 |
 | pnpm | 11.19.0 |
 
-`CLAUDE.md` says Prisma 7.x and pnpm 11.x; the repo is on Prisma 6.19.3. tRPC is
-stable 11.18.0, no longer the release candidate `CLAUDE.md` describes. Those two
-lines in `CLAUDE.md` are the remaining spec drift.
+No known drift as of 2026-08-10. `CLAUDE.md`'s stale claims — tRPC as a release
+candidate, a `household` router that never existed, a refresh token that was
+never implemented — were corrected today.
+
+**This paragraph was itself wrong until today**, and it is worth saying how: it
+claimed `CLAUDE.md` says Prisma 7.x. `CLAUDE.md:14` says Prisma 6.x, and always
+did. A drift note that had drifted is the exact failure this file exists to
+prevent, and it survived because nobody re-read the source it was describing.
 
 ---
 

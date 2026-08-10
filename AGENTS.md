@@ -11,8 +11,8 @@ For the current state of the project — which gates pass, what is unverified, a
 ## Tech Stack
 
 - **Frontend:** Next.js 16 (App Router), TypeScript 5.x strict, Tailwind CSS 4.x + shadcn/ui, TanStack Query v5, next-intl v4.x
-- **Backend:** tRPC v11 (currently the `11.0.0-rc.802` release candidate, end-to-end type safety), Node.js 24 LTS, Prisma 6.x
-- **Auth:** Auth.js v5 (credentials provider), Argon2id, JWT (15min access + 7d refresh)
+- **Backend:** tRPC v11 (stable, 11.18.0 — end-to-end type safety), Node.js 24 LTS, Prisma 6.x
+- **Auth:** Auth.js v5 (credentials provider), Argon2id, JWT with a 15-minute `maxAge` and no refresh token — see ISSUES.md before assuming a session survives longer
 - **Database:** PostgreSQL 16 (with pg_trgm for fuzzy search)
 - **Cache:** Valkey 8 (Redis-compatible)
 - **OCR:** Tesseract.js (server-side Worker thread), Sharp (image processing)
@@ -24,9 +24,12 @@ For the current state of the project — which gates pass, what is unverified, a
 # Setup
 pnpm install
 cp .env.example .env
-docker compose up -d db cache
+# The dev compose file, not the default one: `docker-compose.yml` deliberately
+# publishes no ports for db and cache, so `migrate` cannot reach them from the
+# host. `docker-compose.dev.yml` is the file that maps 5432 and 6379.
+docker compose -f docker-compose.dev.yml up -d db cache
 pnpm prisma migrate dev
-pnpm prisma db seed
+pnpm db:seed                # required before E2E: the suite signs in as the seeded demo user
 
 # Development
 pnpm dev                    # Start Next.js dev server (port 3000)
@@ -34,6 +37,8 @@ pnpm dev                    # Start Next.js dev server (port 3000)
 # Quality
 pnpm lint                   # oxlint
 pnpm typecheck              # tsc --noEmit
+pnpm check:links            # every internal link points at a route that exists
+pnpm check:contrast         # every theme token pair meets WCAG AAA
 
 # Testing
 pnpm test                   # Unit + component + integration
@@ -43,8 +48,12 @@ pnpm test:integration       # Brings up its own db + cache
 bunx playwright test        # E2E tests
 bunx playwright test <file> # Single E2E test
 
-pnpm verify:local           # lint + typecheck + unit + components
+pnpm verify:local           # lint + typecheck + links + contrast + unit + components
 pnpm verify:ci              # the above + integration + build
+
+# Both are held to a ten-minute budget and each step to its own ceiling. An exit
+# of 124 means a step was stopped for exceeding its ceiling: it is not slow, it
+# is stuck. Override the total with VERIFY_BUDGET_SECONDS if you must.
 
 # Database
 pnpm prisma migrate dev     # Create/apply migrations
@@ -71,11 +80,12 @@ src/
     trpc/
       trpc.ts                 # tRPC init (context, middleware)
       router.ts               # Root router merging all sub-routers
-      routers/                # Domain routers: auth, product, inventory, receipt, store, price, shopping, household
+      routers/                # Domain routers: auth, product, location, inventory, receipt, store, price, shopping
     services/                 # Business logic: ocr, receiptParser, productMatcher, openFoodFacts
   lib/
     validations/              # Shared Zod schemas (imported by both client and server)
-    auth/                     # Auth.js configuration
+    auth.ts                   # Auth.js configuration (the config is this file)
+    auth/                     # Error-message mapping only
   components/
     ui/                       # shadcn/ui components (Radix + Tailwind, copied into project)
     barcode/                  # Barcode scanner
@@ -184,9 +194,17 @@ bundling them and apologising in the message.
 
 ## CI Pipeline (GitHub Actions)
 
-- **quality** (parallel): `pnpm lint` + `pnpm typecheck`
-- **test** (parallel): `pnpm test:unit && pnpm test:components && pnpm test:integration`
-- **build** (depends on quality + test): Docker multi-stage build
+Five jobs. The first four run in parallel and each is capped at ten minutes —
+the budget is for all verification, not just the browser suite.
+
+- **quality**: `lint`, `typecheck`, `check:contrast`, `check:links`
+- **test**: `test:unit`, `test:components`, `test:integration:only` (the `:only`
+  variant, because the runner supplies its own service containers)
+- **e2e**: Playwright over five browser projects plus a `setup` project that
+  signs in once. Needs a seeded database
+- **audit**: `pnpm audit --audit-level moderate`
+- **image** (needs all four): Docker build, Trivy scan before push, SBOM and
+  provenance attestation
 
 ## Coding Guidelines
 

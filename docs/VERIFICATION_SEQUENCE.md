@@ -1,6 +1,6 @@
 # Stoky Verification Sequence
 
-Updated: 2026-03-23
+Updated: 2026-08-10
 
 Use this as the source of truth for local and CI-style validation.
 
@@ -14,12 +14,24 @@ Runs the checks that should stay cheap enough for most iteration loops:
 corepack pnpm verify:local
 ```
 
-This runs:
+This runs six steps, not four:
 
 - `corepack pnpm lint`
 - `corepack pnpm typecheck`
+- `corepack pnpm check:links` — every internal link points at a route that exists
+- `corepack pnpm check:contrast` — every theme token pair meets WCAG AAA
 - `corepack pnpm test:unit`
 - `corepack pnpm test:components`
+
+**It is held to a budget.** The whole ladder has ten minutes and every step its
+own ceiling. An exit status of **124** means a step was stopped for exceeding
+its ceiling — it is not slow, it is stuck, and the thing to look at is what it
+was waiting for. `VERIFY_BUDGET_SECONDS` overrides the total if you genuinely
+need to.
+
+The budget is a product decision, not a runner constraint: verification that
+takes longer stops being run, and a suite nobody runs still has to be maintained
+while telling nobody anything.
 
 ### 2. CI-parity gate
 
@@ -48,7 +60,16 @@ bunx playwright test e2e/critical-paths.spec.ts
 
 - `verify:local` does not require Docker
 - `verify:ci` requires healthy services from `docker-compose.dev.yml`
-- Playwright smoke requires the app to be reachable on `http://localhost:3000`
+- **Playwright starts its own server** — `playwright.config.ts` declares a
+  `webServer`, so do not start one for it. It adopts an existing one when the
+  port is already in use, which is the trap: port 3000 is occupied on this
+  machine by an unrelated application, and running the suite against that is a
+  wall of meaningless failures rather than a port conflict. Pass
+  `PLAYWRIGHT_PORT` and confirm the port is free.
+- **The E2E suite requires a seeded database.** A `setup` project signs in once
+  as the demo account from `prisma/seed.ts`, and every browser project depends
+  on it, so an unseeded database fails the whole matrix at its first step. Run
+  `corepack pnpm db:seed` first.
 
 ## Evidence to capture
 
@@ -60,17 +81,27 @@ bunx playwright test e2e/critical-paths.spec.ts
 
 ## Current validation notes
 
-Last measured 2026-08-04. See `docs/STATUS.md` for the full table.
+Last measured 2026-08-10. See `docs/STATUS.md` for the full table; if the two
+disagree, STATUS is the one that gets re-measured.
 
 - `corepack pnpm lint` is clean: 0 warnings, 0 errors
 - `corepack pnpm typecheck` is green
-- `corepack pnpm test:unit` — 72 pass across 8 files
-- `corepack pnpm test:components` — 94 pass across 10 files
+- `corepack pnpm check:links` — 74 links against 24 routes, none broken
+- `corepack pnpm check:contrast` — 54 checks over 26 tokens × 2 themes, all AAA
+- `corepack pnpm test:unit` — 96 pass across 12 files
+- `corepack pnpm test:components` — 155 pass across 13 files
 - `corepack pnpm test:integration` — 218 pass across 8 files
-- `corepack pnpm build` succeeds — 16 routes, all server-rendered on demand
-- `bunx playwright test` — 60 pass, 20 skipped (`test.fixme`), 0 fail across all
-  five browser projects: chromium, firefox, webkit, Mobile Chrome, Mobile
-  Safari. That is 12 pass + 4 skipped per project.
+- `corepack pnpm build` succeeds — 25 routes, all server-rendered on demand
+- `bunx playwright test` — 187 pass, 10 skipped, 0 fail in **6.0 minutes**
+- `bash scripts/verify-local.sh` — 17s of its 600s budget
+
+The browser matrix is no longer symmetric, and the old "12 pass + 4 skipped per
+project" no longer describes it. There is a sixth `setup` project that signs in
+once, and the four suites that sweep viewports and themes internally run on
+chromium only — running them on five engines asks the same question five times.
+`screen-reader.spec.ts` is chromium-only for a harder reason: it reads the
+accessibility tree over the Chrome DevTools Protocol, which does not exist
+elsewhere.
 
 ## Playwright browsers on this machine
 

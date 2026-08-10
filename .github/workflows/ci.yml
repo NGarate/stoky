@@ -121,8 +121,8 @@ jobs:
   e2e:
     name: End-to-end
     runs-on: ubuntu-latest
-    # Ten, like every other test job. Playwright's own `globalTimeout` is seven,
-    # which leaves three for install, migrate and seed and means Playwright fails
+    # Ten, like every other test job. Playwright's own `globalTimeout` is nine,
+    # which leaves one for install, migrate and seed and means Playwright fails
     # first and names the test it was sitting on — a job killed by the runner
     # produces no report and no trace.
     #

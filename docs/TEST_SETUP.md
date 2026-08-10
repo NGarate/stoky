@@ -48,9 +48,16 @@ pnpm test:integration
 The runner recreates an isolated PostgreSQL database (`stoky_test`) on every run.
 Tests connect from the host to `localhost:5432` and `localhost:6379`.
 
-### Using Local PostgreSQL
+### Without Docker
 
-For local development without Docker:
+`pnpm test:integration` runs `scripts/test-integration-local.sh`, which brings up
+its own containers **and overwrites `DATABASE_URL`** — so a hand-set value in
+`.env` is ignored and the steps below will appear to do nothing.
+
+To point the integration tests at a database you manage yourself, use
+`pnpm test:integration:only`, which runs the suite directly against whatever
+`DATABASE_URL` is set to. That is also what CI uses, because the runner supplies
+its own service containers.
 
 1. Create a test database:
 ```bash
@@ -106,28 +113,85 @@ bunx playwright test --ui
 bunx playwright test --headed
 ```
 
+**Seed first.** A `setup` project signs in once as the demo account from
+`prisma/seed.ts` and every browser project depends on it, so an unseeded
+database fails the whole matrix at its first step:
+
+```bash
+corepack pnpm db:seed
+```
+
+**Do not start a dev server for it.** `playwright.config.ts` declares its own
+`webServer`. It adopts an existing server when the port is taken, which is the
+trap rather than the convenience: port 3000 is occupied on this machine by an
+unrelated application, and the suite will run against that one and report a wall
+of meaningless failures. Pass `PLAYWRIGHT_PORT` and check the port is free.
+
 ## Test Structure
 
 ```
 src/__tests__/
-├── integration/
-│   ├── auth.flow.test.ts      # Authentication API tests
-│   └── trpc.test.ts           # tRPC infrastructure tests
-├── unit/
+├── integration/               # 8 files — needs a database
+│   ├── auth.flow.test.ts
+│   ├── ocr.pipeline.test.ts
+│   ├── openFoodFacts.comprehensive.test.ts
+│   ├── performance.error.test.ts
+│   ├── productMatcher.comprehensive.test.ts
+│   ├── receiptParser.comprehensive.test.ts
+│   ├── routers.test.ts
+│   └── trpc.test.ts
+├── unit/                      # 12 files — no database
+│   ├── auth.error-messages.test.ts
 │   ├── auth.validation.test.ts
+│   ├── design-tokens.test.ts
 │   ├── household.validation.test.ts
+│   ├── messages.test.ts
+│   ├── navigation.test.ts
 │   ├── ocr.test.ts
 │   ├── openFoodFacts.test.ts
 │   ├── prisma.test.ts
 │   ├── receiptParser.test.ts
+│   ├── theme.test.ts
 │   └── utils.test.ts
+├── components/                # 13 files — happy-dom, no database
+│   ├── CompactNav.test.tsx
+│   ├── DashboardNav.test.tsx
+│   ├── LocaleSwitcher.test.tsx
+│   ├── LocationPicker.test.tsx
+│   ├── PriceChart.test.tsx
+│   ├── ReceiptStatus.test.tsx
+│   ├── Scanner.test.tsx
+│   ├── ShoppingItem.test.tsx
+│   ├── ThemeControl.test.tsx
+│   ├── UploadZone.test.tsx
+│   ├── button.test.tsx
+│   ├── input.test.tsx
+│   └── target-size.test.tsx
+├── setup/                     # preloads and helpers, not tests
+│   ├── matchers.ts
+│   ├── register-dom.ts
+│   └── tailwind.ts
 └── utils/
-    └── test-helpers.ts        # Test utilities and fixtures
+    └── test-helpers.ts
 
-e2e/
-├── auth.spec.ts               # Basic E2E auth tests
-└── critical-paths.spec.ts     # Critical user flow tests
+e2e/                           # Playwright
+├── a11y-aaa.spec.ts
+├── a11y-structure.spec.ts
+├── accessibility.spec.ts
+├── critical-paths.spec.ts
+├── dynamic-routes.spec.ts
+├── location-picker.spec.ts
+├── screen-reader.spec.ts
+├── session.setup.ts
+├── session.ts
+└── settle.ts
 ```
+
+`setup/register-dom.ts` is the preload that gives the component suite a DOM;
+`setup/tailwind.ts` resolves a component's class list through Tailwind's real
+compiler, which is how target size and line spacing are checked without a
+browser. `e2e/session.ts` and `session.setup.ts` are the sign-in-once mechanism;
+`e2e/settle.ts` is the shared wait.
 
 ## Test Data Cleanup
 

@@ -50,7 +50,11 @@ Bootstrap is only considered complete when all of the following are true:
 
 - Integration tests expect PostgreSQL and Valkey from `docker-compose.dev.yml`
 - `test:integration` recreates `stoky_test` on every run
-- E2E tests expect a running app on port `3000`
+- E2E tests need two things this file did not previously mention: a **seeded
+database** — the suite signs in once as the demo account, so an unseeded one
+fails the whole matrix at its first step — and a **free port**. Playwright
+starts its own server and adopts an existing one when the port is taken, so on
+this machine, where port 3000 belongs to something else, pass `PLAYWRIGHT_PORT`
 
 ## If Docker is unreachable
 
