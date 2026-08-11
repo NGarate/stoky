@@ -406,9 +406,9 @@ Each phase leaves the app usable and verifiable.
 | 3 — Roles, and CRITICAL-4 | ✅ Complete |
 | 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
-| 5 — Kitchen screen, and Screen A's layout | ▶ Next |
-| 6 — Rating | Not started |
-| 7 — Security review | Not started |
+| 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
+| 6 — Rating | ✅ Complete against its done-when: no-data and non-food both behave well, both tested |
+| 7 — Security review | The backlog it owned is closed; the review document itself is not written |
 
 Gate results for each claim above are in `docs/STATUS.md`; the unit-by-unit
 record, with commits, is in `docs/PROGRESS.md`.
@@ -801,7 +801,7 @@ unowned below, for the same reason as the iOS pass.
 
 | Item | Why it is here |
 |---|---|
-| The rating itself (§6) | Extend the Open Food Facts fields, compute, display, and behave well with no data and with non-food |
+| ~~The rating itself (§6)~~ | **Done**, three commits: the fields (with a versioned cache so month-old entries are not served as complete), the pure module (honesty rules before arithmetic, worst additive dominates, absence of a verdict is not a clean bill), and the display on the detail screen the scan already lands on. §6's worked example scores 25 — the bottom edge of poor, which is what harmless additives on a grade-e product are worth |
 | ~~DEBT-3~~ | **Done.** Valkey-backed and shared across replicas, failing open — a cache it cannot reach means asking Open Food Facts, which is what a miss already means |
 | ~~OCR-1~~ | **Done.** The model is baked into the image, pinned and checksummed, and `TESSDATA_PATH` points the worker at it — so a scan needs no network. A smaller model than the CDN's default, which is a reasoned trade rather than a measured one: nothing here measures OCR accuracy |
 | T7 — an offline scan resolved later | Journey 5's "never a dead end". Needs local-id resolution, which leaks `local:` ids into the cache and into components |

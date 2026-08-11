@@ -30,7 +30,7 @@ Rules for this log:
 | 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
-| 6 — Rating | Not started |
+| 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 
 ---
@@ -997,3 +997,38 @@ run in seven. Two plausible fixes were tried and *measured* rather than assumed:
 random keys instead of a deterministic generator, and `expectCode` taking a
 thunk. Neither helped, so neither was kept as a fix — the entry records what it
 is not, with the evidence, and the production path is not in doubt.
+
+**D77 — The honesty rules run before the formula, structurally.**
+`computeRating` returns `noData` or `notApplicable` before any arithmetic: no
+Nutri-Score means no number built from the remaining 40%, and OFF's own
+"not-applicable" means non-food is not scored rather than scored low. Breaking
+this inversion fails four tests, which is the point of having written them
+first.
+
+**D78 — The worst additive decides its component, and no verdict is not a clean
+bill.** One azo colourant among ten harmless gums is still an azo colourant, so
+averaging would dilute the exact signal the component carries. An additive not
+in the curated risk table scores `limited`, and an *absent* additive list
+scores `limited` too — only OFF's explicit `additives_n: 0` is a statement of
+none. The display says this out loud ("no additive data, so this part is not
+counted as clean") because the caution is a decision the person deserves to see.
+
+**D79 — The OFF cache prefix is versioned by the shape of what it stores.**
+v1 entries predate the rating fields, parse cleanly — everything is optional —
+and would have presented every previously-scanned product as "no information"
+for up to thirty days. `off:product:v2:` makes them misses; the stale keys
+expire on their own TTL. The version is the cached shape, not the code.
+
+**D80 — Platform features the repo's tier cannot use are gated, not retried.**
+The image job failed for days on SARIF upload and provenance attestation — both
+refused on a user-owned private repository after the build, the scan gate and
+the push had succeeded. Both now run only when the repository is public, with
+the enforcement steps (Trivy's exit-code gate) unconditional. A pipeline that
+is always red trains everyone to stop reading it, which is how a genuine
+component-test failure hid in the same period.
+
+**D81 — npm is removed from the production image.** Every CRITICAL/HIGH the
+scan gate flagged lived in npm's own vendored tree, which goes stale on node's
+release schedule. Nothing at runtime uses it — the entrypoint runs the Prisma
+binary directly — and a shipped container without a package manager is worth
+having regardless.
