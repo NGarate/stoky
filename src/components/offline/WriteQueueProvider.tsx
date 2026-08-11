@@ -98,6 +98,10 @@ export function WriteQueueProvider({
   );
 
   useEffect(() => {
+    // What is on the device is loaded here rather than when the queue is
+    // built: reading storage during render makes the server's empty queue and
+    // the client's restored one disagree, and React throws the tree away.
+    queue.hydrate();
     drain();
 
     const unsubscribe = onlineManager.subscribe((online) => {
@@ -115,20 +119,38 @@ export function WriteQueueProvider({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", drain);
     };
-  }, [drain]);
+  }, [drain, queue]);
 
-  // Armed only while something is waiting, so an idle app holds no timer.
+  /**
+   * The retry timer, armed only while something is waiting.
+   *
+   * It **re-arms itself** rather than depending on the pending count changing.
+   * A failed attempt leaves the count exactly as it was, so an effect keyed on
+   * that fires once and never again — the queue then sits there until
+   * something else happens to trigger a drain, which on a phone left alone is
+   * never. Found in a browser, where a change made against a blocked server
+   * was still unsent thirty seconds later.
+   */
   const pendingCount = state.pending.length;
   const needsSignin = state.status === "needs-signin";
+  const [retryTick, setRetryTick] = useState(0);
   useEffect(() => {
     if (pendingCount === 0 || needsSignin) return;
 
     const delay = queue.nextDelayMs();
     if (delay === null) return;
 
-    const timer = setTimeout(drain, delay);
-    return () => clearTimeout(timer);
-  }, [pendingCount, needsSignin, queue, drain]);
+    // One timer, cleared by the cleanup that created it. Re-arming happens by
+    // bumping `retryTick`, which re-runs this effect — rather than by a
+    // nested `setTimeout` whose cleanup a reader (and a linter) has to reason
+    // about.
+    const id = setTimeout(() => {
+      drain();
+      setRetryTick((tick) => tick + 1);
+    }, Math.max(delay, 250));
+
+    return () => clearTimeout(id);
+  }, [pendingCount, needsSignin, retryTick, queue, drain]);
 
   const value = useMemo<WriteQueueValue>(
     () => ({

@@ -117,6 +117,8 @@ export interface WriteQueueOptions {
 
 export interface WriteQueue {
   store: StoreApi<QueueState>;
+  /** Load what is on the device. Call once, after mount. */
+  hydrate(): void;
   getState(): QueueState;
   subscribe(listener: (state: QueueState) => void): () => void;
   enqueue(op: EnqueueInput): EnqueueResult;
@@ -178,13 +180,16 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     random = Math.random,
   } = options;
 
-  const restored = storage.read(userId);
-  const store = createStore<QueueState>(() => ({
-    ...EMPTY,
-    ...(isPersisted(restored)
-      ? { pending: restored.pending, failed: restored.failed }
-      : {}),
-  }));
+  /**
+   * The store starts **empty**, and storage is read by `hydrate()`.
+   *
+   * Reading at construction is what a first version did, and it produced a
+   * hydration mismatch that only a browser found: the server renders a queue
+   * it cannot see (there is no `localStorage` there) and the client renders
+   * one restored from disk, so React discards the tree and warns. Starting
+   * empty makes the two agree, and the queue fills a tick later.
+   */
+  const store = createStore<QueueState>(() => ({ ...EMPTY }));
 
   function persist(state: QueueState): void {
     storage.write(userId, { pending: state.pending, failed: state.failed });
@@ -214,12 +219,43 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
 
   let draining = false;
 
+  let hydrated = false;
+
+  /**
+   * Load what is on the device, once.
+   *
+   * Called from `enqueue` as well as from the provider's mount effect, and
+   * that is not belt and braces: the first write persists the *whole* state,
+   * so enqueueing before reading would overwrite the stored queue with a
+   * fresh one holding a single change. Reading first makes the order the
+   * caller happens to use irrelevant.
+   */
+  function hydrateOnce(): void {
+    if (hydrated) return;
+    hydrated = true;
+
+    const restored = storage.read(userId);
+    if (!isPersisted(restored)) return;
+
+    // Merged rather than replaced, so a change made in between survives.
+    store.setState(
+      (state) => ({
+        ...state,
+        pending: [...restored.pending, ...state.pending],
+        failed: [...restored.failed, ...state.failed],
+      }),
+      true,
+    );
+  }
+
   return {
     store,
     getState: () => store.getState(),
     subscribe: (listener) => store.subscribe(listener),
+    hydrate: hydrateOnce,
 
     enqueue({ path, input, label }) {
+      hydrateOnce();
       const state = store.getState();
 
       if (state.pending.length >= MAX_PENDING) {

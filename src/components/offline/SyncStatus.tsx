@@ -59,10 +59,14 @@ export function SyncStatus(): JSX.Element {
                   : t("unrepresented");
 
   return (
-    <div className="mb-4">
+    <div className="mb-4" data-testid="sync-status">
       {/* Both regions exist for every state. A region created at the moment it
-          has something to say is a region screen readers may not announce. */}
-      <div aria-live="polite" role="status">
+          has something to say is a region screen readers may not announce.
+
+          The test ids exist because Next mounts its own route announcer with
+          `role="alert"`, so a browser test asking for the alert region by role
+          alone gets two elements and a strict-mode violation. */}
+      <div aria-live="polite" data-testid="sync-calm" role="status">
         {!urgent && summary.state !== "synced" ? (
           <p className="rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground">
             {message}
@@ -70,7 +74,7 @@ export function SyncStatus(): JSX.Element {
         ) : null}
       </div>
 
-      <div aria-live="assertive" role="alert">
+      <div aria-live="assertive" data-testid="sync-urgent" role="alert">
         {urgent ? (
           <div className="rounded-lg border border-warn-foreground bg-warn px-4 py-3 text-sm text-warn-foreground">
             <p>{message}</p>

@@ -266,6 +266,11 @@ describe("what survives a reload", () => {
     const before = first.getState().pending[0] as QueuedOp;
 
     const second = open(async () => {}, { storage });
+    // Empty until asked. Reading storage while the store is being built makes
+    // the server's queue and the client's disagree, and React discards the
+    // tree — a hydration mismatch only a browser finds.
+    expect(second.getState().pending).toHaveLength(0);
+    second.hydrate();
 
     expect(second.getState().pending).toHaveLength(1);
     expect(second.getState().pending[0]?.id).toBe(before.id);
@@ -281,6 +286,7 @@ describe("what survives a reload", () => {
     });
 
     const second = open(async () => {}, { storage });
+    second.hydrate();
     const input = second.getState().pending[0]?.input as {
       expirationDate: unknown;
     };
@@ -302,6 +308,7 @@ describe("what survives a reload", () => {
       send: async () => {},
       storage,
     });
+    theirs.hydrate();
 
     expect(theirs.getState().pending).toHaveLength(0);
     expect(mine.getState().pending).toHaveLength(1);
@@ -364,6 +371,37 @@ describe("dealing with what failed", () => {
 
     expect(queue.getState().pending).toHaveLength(0);
     expect(storage.read(USER)).toBeNull();
+  });
+});
+
+describe("hydrating", () => {
+  it("keeps a change made before storage was read", () => {
+    const storage = createMemoryStorage();
+    const first = open(async () => {}, { storage });
+    first.enqueue({ ...tick(), input: { id: "saved" } });
+
+    const second = open(async () => {}, { storage });
+    // A fast tap on a slow phone: the change is made between mount and the
+    // effect that loads storage. Replacing rather than merging would lose it.
+    second.enqueue({ ...tick(), input: { id: "just-now" } });
+    second.hydrate();
+
+    expect(second.getState().pending.map((op) => op.input.id)).toEqual([
+      "saved",
+      "just-now",
+    ]);
+  });
+
+  it("only reads storage once, however often it is called", () => {
+    const storage = createMemoryStorage();
+    const first = open(async () => {}, { storage });
+    first.enqueue(tick());
+
+    const second = open(async () => {}, { storage });
+    second.hydrate();
+    second.hydrate();
+
+    expect(second.getState().pending).toHaveLength(1);
   });
 });
 
