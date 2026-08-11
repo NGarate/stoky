@@ -828,7 +828,7 @@ These have no phase yet. They are here so that stays visible.
 | **The service worker under a production build** | It registers only when `NODE_ENV` is `production`; the browser suite runs `pnpm dev`, so no test has ever exercised it. Its source shape is checked; its behaviour is not |
 | `public/sw.js`'s 2,500 ms navigation timeout | A guess calibrated on "supermarket lie-fi", not a measurement |
 | Cross-tab drain locking | Absent on purpose: two tabs draining at once is *safe*, because the same key applies once. An efficiency question, not a correctness one |
-| DEBT-6 | The services layer throws bare `Error`, so a missing row surfaces as `INTERNAL_SERVER_ERROR`. Wants typed domain errors, which is a decision |
+| ~~DEBT-6~~ | **Done.** Three domain errors in the services and a translator on the same middleware that handles Prisma's. The decision this was waiting on went to domain errors rather than `TRPCError`, because `processReceiptOcr` runs from a background task with no client to give a status to |
 | I18N-2..6 | Wording and untranslated strings, including the location picker |
 | ~~I18N-8~~ | **Done.** Four headings and four aside strings, and a render helper that takes a locale — a component test in Spanish alone cannot see a string hardcoded in Spanish, which is how the aside panels survived. Both pages are now asserted in both languages |
 | UI-3 | Assorted validation and a11y gaps found building `/inventory/add` |

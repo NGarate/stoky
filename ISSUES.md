@@ -8,7 +8,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Last Updated:** 2026-08-11  
 **Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
 INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-DEBT-3/6, OCR-1, I18N-2..6 and UI-3.
+DEBT-3, OCR-1, I18N-2..6 and UI-3.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -31,7 +31,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DEBT-2 | Barcode scanner torch is inert | ✅ Resolved (Phase 4) |
 | DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
 | DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
-| DEBT-6 | The services layer still throws bare `Error` | 🟡 Open (pinned by test) |
+| DEBT-6 | The services layer still throws bare `Error` | ✅ Resolved (Phase 7 slice) |
 | DEBT-5 | Missing database indexes | ✅ Resolved (Phase 7 slice) |
 | TEST-1 | Integration tests need a database | 🟡 Partly addressed |
 | TEST-2 | Mock external API calls | ✅ Resolved |
@@ -1458,6 +1458,18 @@ provoke. The integration suite asserts the actual codes; seven assertions that
 checked message text were moved to codes at the same time.
 
 The services layer is **not** covered and is filed as DEBT-6.
+
+**DEBT-6 is closed too, in Phase 7's slice.** `src/server/services/errors.ts`
+gives the services three domain errors — not found, unusable input, an outside
+system failed — and `src/server/trpc/service-errors.ts` turns them into
+statuses on the same middleware that translates Prisma's. Domain errors rather
+than `TRPCError` in the services because `processReceiptOcr` runs from a
+background task with no client attached, where a transport error is a category
+mistake.
+
+The stake is the same as the Prisma translator's: the offline queue reads the
+status, 500 means transient, and a receipt a service could not find was retried
+eight times before being called exhausted.
 
 **Original report follows.**
 

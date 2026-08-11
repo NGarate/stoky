@@ -353,10 +353,10 @@ prevent, and it survived because nobody re-read the source it was describing.
 **Correctness**
 - ~~`transferStock`'s availability guard is read-then-write.~~ **Closed.** Both
   halves of INV-2 now guard inside a transaction with the product row held.
-- The services layer (`ocr`, `productMatcher`, `receiptParser`,
-  `openFoodFacts`) still throws bare `Error`, so a procedure that calls one
-  still surfaces `INTERNAL_SERVER_ERROR` for a missing row. The routers no
-  longer do. (DEBT-6)
+- ~~The services layer still throws bare `Error`.~~ **Closed.** Three domain
+  errors and a translator on the same middleware that handles Prisma's, so a
+  missing row from a service reaches the client as `NOT_FOUND` — which the
+  offline queue stops retrying instead of spending eight attempts on.
 - `openFoodFacts` caches in a process-local `Map`; multi-instance deployments
   diverge. (DEBT-3)
 **Accessibility and interface**
@@ -371,6 +371,15 @@ failed query rendering the empty state), TEST-4 (the low-stock badge on the
 card tier), A11Y-1 (a saved stock movement announcing nothing), I18N-7 (the
 hardcoded badge) and I18N-8 (both auth pages). `ISSUES.md` holds the detail;
 where it disagrees with this file, it is right.
+
+**One unattributed test failure**
+- A single integration test failed once, on 2026-08-11, in a run immediately
+  after `pnpm verify:local`. Its name was not captured, and eight subsequent
+  runs — five of the suite alone, two reproducing the exact `verify:local`-then-
+  integration sequence, one confirming — were all green. It is recorded here
+  because a flake nobody wrote down is a flake nobody looks for, and because
+  the suite shares a database and a Valkey with whatever ran before it, which
+  is the obvious place to look if it returns.
 
 **Offline, honestly**
 - **The service worker is not exercised by any test.** It registers only when
