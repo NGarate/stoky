@@ -255,6 +255,29 @@ refused while the window is open, and the counter carries a TTL so the refusal
 expires. The counting itself is proven against a real Valkey in
 `src/__tests__/integration/rate-limit.test.ts`.
 
+### The session signing key cannot be the example one
+
+`NEXTAUTH_SECRET` signs the session JWT, and Auth.js reads it from the
+environment itself without ever inspecting it — so until Phase 7's slice nothing
+in this application had looked at what it was. `.env.example` ships a
+placeholder, and that placeholder is **published in this repository**: an
+instance deployed without changing it signs sessions with a key anybody can
+read, and nothing about the running system looks wrong.
+
+`src/lib/auth/secret.ts` refuses to serve in production if the secret is
+missing, is the example value, or is shorter than 32 characters — with a message
+naming the file and the command that generates a real one, because the person
+reading it is looking at a container that will not start.
+
+- **Production only.** Development and the suites use whatever is to hand;
+  refusing there would trade a risk nobody faces for an obstacle everybody does.
+- **Not during `next build`.** The image is built without a runtime secret and
+  receives one when the container starts, so asserting at build time breaks
+  `docker build` — which the first version of this guard did, and which is a
+  worse outage than the one it prevents.
+
+---
+
 ### The password policy prefers length, and it is not a breach check
 
 `src/lib/validations/password.ts` is the policy, and it is applied wherever a

@@ -7,6 +7,7 @@ import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import { logSecurityEvent } from "@/lib/security-log";
+import { assertUsableSecret } from "@/lib/auth/secret";
 import {
   RateLimitUnavailableError,
   accountIdentifier,
@@ -35,6 +36,13 @@ export class RateLimitedSignin extends CredentialsSignin {
 export class AuthUnavailableSignin extends CredentialsSignin {
   code = "auth_unavailable";
 }
+
+/**
+ * Checked here because this is the module every server path goes through, and
+ * because it must happen before a session is ever signed. See
+ * `@/lib/auth/secret` for what it refuses and why it is fatal.
+ */
+assertUsableSecret();
 
 export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
