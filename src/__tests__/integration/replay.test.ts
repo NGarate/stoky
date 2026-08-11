@@ -217,6 +217,21 @@ describe("a queued mutation arriving more than once", () => {
     expect(second.id).toBe(first.id);
   });
 
+  /**
+   * `retry: 2` on this test and its neighbour, and on no others — TEST-5.
+   *
+   * bun 1.3.14 intermittently abandons a test body at an await whose promise
+   * rejects out of a rolled-back Prisma transaction: the `catch` beside it
+   * never runs, the test's own assertion never executes, and the *expected*
+   * refusal is rendered as the failure. Diagnosed in ISSUES.md TEST-5 with a
+   * reproduction; 1.3.14 is the newest bun, so there is nothing to upgrade to.
+   *
+   * The retry is safe precisely because the scope is two tests with one
+   * diagnosed external cause: a real regression in `withReplay`'s refusal
+   * logic fails deterministically and survives every retry — verified by
+   * breaking the mismatch check and watching all three attempts go red. The
+   * spurious failure is ~15% per run under load; three attempts leave ~0.3%.
+   */
   it("refuses a key reused for a different change, and applies nothing", async () => {
     const api = await caller(A);
     const key = freshKey();
@@ -244,8 +259,9 @@ describe("a queued mutation arriving more than once", () => {
         where: { householdId: A.householdId, name: "Otro sitio" },
       }),
     ).toBe(0);
-  });
+   }, { retry: 2 });
 
+  // See the retry note above — same defect, same scope, TEST-5.
   it("refuses a key reused for a different procedure", async () => {
     const api = await caller(A);
     const key = freshKey();
@@ -260,7 +276,7 @@ describe("a queued mutation arriving more than once", () => {
       api.alwaysRefuses({ idempotencyKey: key, composedByUserId: A.userId }),
       "BAD_REQUEST",
     );
-  });
+  }, { retry: 2 });
 });
 
 describe("a queued mutation the server refuses", () => {
