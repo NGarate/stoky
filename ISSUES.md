@@ -51,7 +51,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-9 | Two routes show an empty state when the query failed | ✅ Resolved (Phase 4) |
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
-| TEST-4 | The low-stock badge is unchecked on the card tier | 🟡 Open |
+| TEST-4 | The low-stock badge is unchecked on the card tier | ✅ Resolved (Phase 4) |
 
 ---
 
@@ -1429,11 +1429,11 @@ count that the same write moves.
 
 ---
 
-### 🟡 TEST-4: The low-stock badge is unchecked on the card tier
+### ✅ TEST-4: The low-stock badge is unchecked on the card tier
 
 **File:** `e2e/critical-paths.spec.ts` (Low stock, as the seeded household)  
 **Severity:** LOW  
-**Status:** OPEN — found 2026-08-10 while closing TEST-3
+**Status:** RESOLVED in Phase 4 — found 2026-08-10 while closing TEST-3
 
 `/inventory` renders the same products twice: a table from `lg`, cards below it,
 with only one ever displayed. The low-stock test asserts through
@@ -1450,6 +1450,21 @@ two viewports where most people will actually read this page. The fix is a
 second assertion against the card markup rather than a cleverer selector — a
 selector that matches whichever copy is visible would hide the next instance of
 this instead of catching it.
+
+**Resolution (Phase 4).** A second `describe` at 390×844 that names the same
+three seeded products through `getByRole("listitem")`, asserts the table is
+hidden first so it cannot be reading the wrong copy, and keeps the negative
+case — Arroz, at 5 of a minimum of 2 — because without it the loop would pass
+just as well if every card carried a badge.
+
+It is a browser test and belongs nowhere cheaper: which copy is visible is
+decided by a CSS media query, and happy-dom has no layout engine, so both
+copies are in its DOM and every rectangle is 0×0 (PROGRESS D34).
+
+Verified it can fail, and precisely: with the badge removed from the card
+markup only, the new test goes red and the table test stays green — which is
+exactly the gap this entry describes. 90 E2E tests in 3.2 minutes, against 89
+before.
 
 ---
 

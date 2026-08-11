@@ -605,9 +605,9 @@ test.describe("Low stock, as the seeded household", () => {
   // phone that is the hidden one. The row-based assertions below need the table
   // to exist at all.
   //
-  // The card tier's badge is therefore not covered here. That is a real gap and
-  // is filed as TEST-4 rather than papered over with a selector that matches
-  // whichever copy happens to be visible.
+  // The card tier gets its own test below, at its own width, rather than a
+  // selector here that matches whichever copy happens to be visible — that
+  // would hide the next instance of this instead of catching it (TEST-4).
   test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
 
   test("marks the products that are below their minimum", async ({ page }) => {
@@ -639,3 +639,50 @@ test.describe("Low stock, as the seeded household", () => {
   });
 });
 
+/**
+ * ISSUES.md TEST-4 — the same products, at the width most people read them.
+ *
+ * `/inventory` renders every product twice and shows one: a table from `lg`,
+ * cards below it. The suite asserted the badge only through
+ * `getByRole("row", …)`, which exists solely in the table, so the card tier —
+ * the phone and the kitchen tablet — was covered by nothing.
+ *
+ * This belongs in a browser and nowhere cheaper. Which copy is visible is
+ * decided by a CSS media query, and happy-dom has no layout engine: both copies
+ * are in its DOM and every rectangle is 0×0, so the rendered tier cannot tell
+ * them apart (PROGRESS D34).
+ */
+test.describe("Low stock on the card tier", () => {
+  test.use({ storageState: SESSION_FILE, viewport: { width: 390, height: 844 } });
+
+  test("marks the same products on a phone", async ({ page }) => {
+    await page.goto("/inventory");
+    await settle(page);
+
+    // The table must be gone, or the assertions below could be reading it.
+    await expect(page.getByRole("table")).toBeHidden();
+
+    for (const product of [
+      "Leche entera",
+      "Aceite de oliva virgen extra",
+      "Café molido natural",
+    ]) {
+      await expect(
+        page
+          .getByRole("listitem")
+          .filter({ hasText: product })
+          .getByText(es.inventory.lowStock),
+        `${product} is below its minimum and should be marked on the card tier`,
+      ).toBeVisible();
+    }
+
+    // Arroz is at 5 of a minimum of 2. Without this the loop above would pass
+    // just as well if every card carried a badge.
+    await expect(
+      page
+        .getByRole("listitem")
+        .filter({ hasText: "Arroz redondo" })
+        .getByText(es.inventory.lowStock),
+    ).toHaveCount(0);
+  });
+});
