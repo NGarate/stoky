@@ -18,6 +18,8 @@ model User {
   role          HouseholdRole @default(MEMBER)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+
+  @@index([householdId])
 }
 
 model Household {
@@ -52,6 +54,7 @@ model Product {
   updatedAt     DateTime  @updatedAt
 
   @@unique([barcode, householdId])
+  @@index([householdId])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
@@ -69,6 +72,9 @@ model StockEntry {
   receiptItemId String?
   createdBy     String
   createdAt     DateTime  @default(now())
+
+  @@index([productId])
+  @@index([locationId])
 }
 
 model StorageLocation {
@@ -80,6 +86,9 @@ model StorageLocation {
   householdId  String
   household    Household @relation(fields: [householdId], references: [id])
   stockEntries StockEntry[]
+
+  @@index([householdId])
+  @@index([parentId])
 }
 
 model Store {
@@ -90,6 +99,8 @@ model Store {
   household    Household @relation(fields: [householdId], references: [id])
   priceRecords PriceRecord[]
   receipts     Receipt[]
+
+  @@index([householdId])
 }
 
 model PriceRecord {
@@ -104,6 +115,9 @@ model PriceRecord {
   quantity    Float     @default(1)
   recordedAt  DateTime  @default(now())
   receiptId   String?
+
+  @@index([productId, recordedAt])
+  @@index([storeId])
 }
 
 model Receipt {
@@ -121,6 +135,9 @@ model Receipt {
   uploadedBy    String
   createdAt     DateTime      @default(now())
   processedAt   DateTime?
+
+  @@index([householdId, createdAt])
+  @@index([storeId])
 }
 
 model ReceiptItem {
@@ -135,6 +152,9 @@ model ReceiptItem {
   matchedProduct  Product?    @relation(fields: [matchedProductId], references: [id])
   matchConfidence Float?
   matchStatus     MatchStatus @default(PENDING)
+
+  @@index([receiptId])
+  @@index([matchedProductId])
 }
 
 model ShoppingList {
@@ -146,6 +166,8 @@ model ShoppingList {
   items       ShoppingItem[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([householdId])
 }
 
 model ShoppingItem {
@@ -159,6 +181,9 @@ model ShoppingItem {
   unit           String?
   isChecked      Boolean   @default(false)
   checkedAt      DateTime?
+
+  @@index([shoppingListId])
+  @@index([productId])
 }
 
 enum ReceiptStatus {

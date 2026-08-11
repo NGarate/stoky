@@ -8,7 +8,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Last Updated:** 2026-08-11  
 **Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
 INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-DEBT-3/5/6, OCR-1, I18N-2..6, I18N-8 and UI-3.
+DEBT-3/6, OCR-1, I18N-2..6, I18N-8 and UI-3.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -32,7 +32,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
 | DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
 | DEBT-6 | The services layer still throws bare `Error` | 🟡 Open (pinned by test) |
-| DEBT-5 | Missing database indexes | 🟡 Open |
+| DEBT-5 | Missing database indexes | ✅ Resolved (Phase 7 slice) |
 | TEST-1 | Integration tests need a database | 🟡 Partly addressed |
 | TEST-2 | Mock external API calls | ✅ Resolved |
 | DOCS-1 | No API documentation | 🟡 Open |
@@ -1649,7 +1649,7 @@ back here to close the entry.
 
 ---
 
-### 🟡 DEBT-5: Missing database indexes
+### ✅ DEBT-5: Missing database indexes
 
 **File:** `prisma/schema.prisma`  
 **Severity:** MEDIUM  
@@ -1693,6 +1693,28 @@ model ReceiptItem {
 ```
 
 **Priority:** Add before Phase 1 if possible, or early in Phase 1
+
+**Resolution.** Sixteen indexes, from a wider criterion than the list above:
+every column a resolver filters or joins on, plus every single-column foreign
+key — PostgreSQL indexes a primary key and a unique constraint automatically
+and a foreign key never, which is the asymmetry this entry is really about.
+Two are composite where the query orders as well as filters
+(`PriceRecord(productId, recordedAt)`, `Receipt(householdId, createdAt)`), and
+`Product.householdId` is added although this entry does not name it — it is the
+filter on nearly every resolver in the application.
+
+**Measured at 12,000 stock entries rather than asserted.** One product's
+ledger — the hottest read there is, since every consume, transfer and expiry
+calculation needs it — went from a 3.6ms sequential scan to a 0.09ms index
+scan, about 40×. A screen-sized batch of 200 products went from 6.8ms to
+1.9ms.
+
+**And an honest half.** The `householdId` indexes do nothing for reads on a
+single-household instance: that household owns the whole table, so the planner
+sequentially scans it whatever exists, which the measurement confirmed. They
+are there for an instance hosting more than one household and for the
+foreign-key checks a delete performs, and `src/__tests__/integration/indexes.test.ts`
+says so where it asserts them.
 
 ---
 
