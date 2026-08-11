@@ -359,20 +359,18 @@ prevent, and it survived because nobody re-read the source it was describing.
   longer do. (DEBT-6)
 - `openFoodFacts` caches in a process-local `Map`; multi-instance deployments
   diverge. (DEBT-3)
-- The barcode scanner's torch toggle never reaches the camera. (DEBT-2, pinned
-  by a test that documents the behaviour.)
-
 **Accessibility and interface**
-- `/shopping` and `/settings/locations` test `if (isLoading)` alone, so a
-  failed query renders the empty state: someone with ten locations is told they
-  have none. `/inventory` and `/products` were the worse half of this and are
-  fixed. (UI-9)
-- The low-stock badge is asserted only on the table tier; the card tier, which
-  is what a phone and the kitchen tablet show, is covered by nothing. (TEST-4)
-- Saving a stock movement announces nothing beyond the route name. (A11Y-1,
-  pinned by a test that goes red when it is fixed.)
-- The location picker, the low-stock badge and several wording items are still
-  hardcoded Spanish or inconsistent. (I18N-2 through I18N-7)
+- The location picker and several wording items are still hardcoded Spanish or
+  inconsistent. (I18N-2 through I18N-6)
+- Assorted validation and accessibility gaps found while building
+  `/inventory/add` are unaddressed. (UI-3)
+
+Closed since this section was written, and listed because a status file that
+only ever grows is one nobody trusts: DEBT-2 (the scanner's torch), UI-9 (a
+failed query rendering the empty state), TEST-4 (the low-stock badge on the
+card tier), A11Y-1 (a saved stock movement announcing nothing), I18N-7 (the
+hardcoded badge) and I18N-8 (both auth pages). `ISSUES.md` holds the detail;
+where it disagrees with this file, it is right.
 
 **Offline, honestly**
 - **The service worker is not exercised by any test.** It registers only when
