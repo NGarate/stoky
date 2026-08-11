@@ -41,6 +41,30 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack pnpm prisma generate
 RUN corepack pnpm build
 
+# The Spanish OCR model, fetched once here rather than at runtime — ISSUES.md
+# OCR-1. `createWorker("spa")` with no `langPath` downloads this from jsdelivr
+# on first use and caches it in the working directory, which in the production
+# stage is a read-only filesystem: two failures on an air-gapped install, and
+# one on every other. Same class of defect as the Prisma CLI that `npx` used to
+# fetch at container start.
+#
+# Pinned to a tag rather than a branch, and checksummed, because this is 3.3 MB
+# of executable model data entering the image from the internet — the project
+# already scans with Trivy and attests provenance, so an unpinned `curl | tee`
+# would be the weakest link in a chain it takes seriously.
+#
+# From `tessdata_fast` (2.3 MB), **not** what tesseract.js downloads by default.
+# Its default is `@tesseract.js-data/spa/4.0.0`, which is 8.3 MB compressed and
+# over 12 MB on disk because it carries the legacy engine's data as well. For
+# printed receipt text the fast LSTM model is the one Tesseract itself
+# recommends, and 12 MB is a tenth of this image for accuracy nothing here
+# measures — see the commit for what that means and does not mean.
+ARG TESSDATA_SPA_SHA256=6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
+RUN mkdir -p /app/tessdata \
+    && wget -q -O /app/tessdata/spa.traineddata \
+       https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/spa.traineddata \
+    && echo "${TESSDATA_SPA_SHA256}  /app/tessdata/spa.traineddata" | sha256sum -c -
+
 # ------------------------------------------------------------ production --
 FROM node:24-alpine AS production
 WORKDIR /app
@@ -55,6 +79,10 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
+# Read by `tessdataPath()` in `src/server/services/ocr.ts`. Without it the OCR
+# worker falls back to `process.cwd()`, finds nothing, and downloads.
+COPY --from=builder /app/tessdata ./tessdata
+ENV TESSDATA_PATH=/app/tessdata
 
 # The entrypoint runs `prisma migrate deploy`. Previously it did so through
 # `npx`, with no prisma package in the image — which meant every container

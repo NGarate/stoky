@@ -2,13 +2,72 @@ import { createWorker, type Worker } from "tesseract.js";
 import { prisma } from "@/lib/prisma";
 import { ReceiptStatus } from "@prisma/client";
 import sharp from "sharp";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";
 
 let worker: Worker | null = null;
 
+/**
+ * Where the Spanish traineddata is read from — ISSUES.md OCR-1.
+ *
+ * `createWorker("spa")` with no `langPath` fetches the model from jsdelivr on
+ * first use and caches it in the working directory. The production image
+ * carries neither the file nor a writable working directory: its root
+ * filesystem is read-only, with only `/tmp` and the Next cache on tmpfs. So the
+ * first receipt scan on a fresh container needed outbound internet *and*
+ * somewhere to write 3 MB — two failures on an air-gapped install, one
+ * everywhere else.
+ *
+ * The same class of defect as the Prisma CLI that `npx` used to fetch at
+ * container start, and missed for the same reason: nothing exercised this path
+ * in a production image.
+ *
+ * A local directory rather than a URL, which is what tesseract.js uses to
+ * decide between reading a file and fetching one.
+ */
+
+/** The directory a baked-in model would be in, or null if there is not one. */
+export function tessdataDirectory(): string | null {
+  const configured = process.env.TESSDATA_PATH ?? process.cwd();
+  return existsSync(join(configured, "spa.traineddata")) ? configured : null;
+}
+
+/**
+ * The options that keep OCR off the network — when there is a model to use.
+ *
+ * **Empty when there is not**, which is the case that keeps development
+ * working. Pointing `langPath` at a directory with no `spa.traineddata` in it
+ * does not make tesseract.js fall back to the CDN; it throws. A developer who
+ * has never run OCR has no file, and turning "downloads 3 MB once" into "OCR is
+ * broken" would be trading a production defect for a local one.
+ *
+ * The image sets `TESSDATA_PATH` and bakes the file in, so there the answer is
+ * always the local path.
+ *
+ * Separated from `getWorker` so it can be asserted without standing up a
+ * worker, which spawns a thread and loads the whole model — not something a
+ * test should do to check a string.
+ */
+export function workerOptions(): { langPath?: string; cachePath?: string; gzip?: boolean } {
+  const directory = tessdataDirectory();
+  if (!directory) return {};
+
+  return {
+    langPath: directory,
+    // Where tesseract.js would *write* a model it downloaded. Pointed at the
+    // same directory so that if it ever does, it does not try to write into a
+    // read-only root and fail silently on every scan.
+    cachePath: directory,
+    // The baked file is uncompressed. Left at its default of `true`,
+    // tesseract.js looks for `spa.traineddata.gz` and finds nothing.
+    gzip: false,
+  };
+}
+
 async function getWorker(): Promise<Worker> {
   if (!worker) {
-    worker = await createWorker("spa");
+    worker = await createWorker("spa", undefined, workerOptions());
   }
   return worker;
 }
