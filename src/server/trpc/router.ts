@@ -8,9 +8,11 @@ import { receiptRouter } from "./routers/receipt";
 import { storeRouter } from "./routers/store";
 import { priceRouter } from "./routers/price";
 import { shoppingRouter } from "./routers/shopping";
+import { dataRouter } from "./routers/data";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
+  data: dataRouter,
   household: householdRouter,
   product: productRouter,
   location: locationRouter,

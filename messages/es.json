@@ -596,7 +596,14 @@
       "preferencesTitle": "Idioma y tema",
       "preferencesDescription": "Elige el idioma de la aplicación y si quieres verla en claro, en oscuro o siguiendo la configuración de tu dispositivo. El tema se guarda en este navegador; el idioma se aplica a toda la aplicación.",
       "pendingTitle": "Todavía no hay más ajustes",
-      "pendingDescription": "El hogar, el perfil y las notificaciones aún no se pueden configurar desde aquí."
+      "pendingDescription": "El hogar, el perfil y las notificaciones aún no se pueden configurar desde aquí.",
+      "exportTitle": "Descargar tus datos",
+      "exportDescription": "Todo lo que tiene este hogar en un archivo: productos, existencias, tickets, precios y listas. Es tuyo y puedes llevártelo cuando quieras.",
+      "exportAction": "Descargar un archivo con todo",
+      "exportWorking": "Preparando el archivo…",
+      "exportDone": "Archivo descargado. Guárdalo en un sitio seguro: contiene los nombres y correos de quienes usan este hogar.",
+      "exportFailed": "No se ha podido preparar el archivo. Inténtalo otra vez dentro de un momento.",
+      "exportImagesNote": "Las fotos de los tickets no van dentro del archivo, solo su ubicación. Si quieres conservarlas, copia también la carpeta de subidas del servidor."
     }
   },
   "errors": {

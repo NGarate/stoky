@@ -101,6 +101,12 @@ const EXPECTED: Record<string, Record<string, string>> = {
     removeItem: "writeProcedure",
     generateFromLowStock: "writeProcedure",
   },
+  // The whole household in one file, including everybody's name and address.
+  // §5.2 already puts "see account data and emails" behind admin; an export is
+  // that, in bulk.
+  "data.ts": {
+    exportHousehold: "adminProcedure",
+  },
   "store.ts": {
     list: "householdProcedure",
     create: "adminProcedure",

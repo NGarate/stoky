@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
+import { ExportButton } from "@/components/settings/ExportButton";
 import { SignOutButton } from "@/components/session/SignOutButton";
 import type { JSX } from "react";
 
@@ -86,6 +87,13 @@ export default function SettingsPage(): JSX.Element {
           </p>
         </li>
       </ul>
+
+      {/* Not in the list above, because it is an action rather than a screen —
+          and above sign-out, because leaving with your data is the step that
+          has to come first. */}
+      <section className="mt-8 rounded border border-border bg-card p-4">
+        <ExportButton />
+      </section>
 
       {/* Last, because it is the one action here that ends the visit — and
           first-class, because on a shared device it is the control that

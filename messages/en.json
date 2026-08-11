@@ -596,7 +596,14 @@
       "preferencesTitle": "Language and theme",
       "preferencesDescription": "Choose the language of the application and whether to see it light, dark or following your device settings. The theme is saved in this browser; the language applies to the whole application.",
       "pendingTitle": "There are no other settings yet",
-      "pendingDescription": "Household, profile and notifications cannot be configured from here yet."
+      "pendingDescription": "Household, profile and notifications cannot be configured from here yet.",
+      "exportTitle": "Download your data",
+      "exportDescription": "Everything this household has, in one file: products, stock, receipts, prices and lists. It is yours and you can take it whenever you like.",
+      "exportAction": "Download a file with everything",
+      "exportWorking": "Preparing the file…",
+      "exportDone": "File downloaded. Keep it somewhere safe: it contains the names and email addresses of everyone who uses this household.",
+      "exportFailed": "The file could not be prepared. Try again in a moment.",
+      "exportImagesNote": "Receipt photographs are not inside the file, only where they live. To keep them, copy the server's uploads folder too."
     }
   },
   "errors": {
