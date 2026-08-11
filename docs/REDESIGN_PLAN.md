@@ -221,6 +221,74 @@ from settings on both screens.
 
 Project documentation stays in English.
 
+### 5.7 Client state — a store, now that there is state React cannot hold
+
+**This reverses a Phase 0 decision, and the reason it changed is Phase 4.**
+
+`zustand` was removed in Phase 0 (`3be8b2e`) and `CLAUDE.md` recorded the rule:
+server state is TanStack Query's, local UI state is React's, and nothing else
+until there is a case React cannot serve. That was right at the time — every
+piece of state in the application was one of those two.
+
+The offline write queue is the third kind, and it has all three properties that
+make component state the wrong home:
+
+- **It is read from everywhere and owned by nowhere.** The sync indicator, the
+  shopping rows, the stepper and the failed-changes list all read the same
+  queue. Lifting it to a common ancestor means lifting it to the dashboard
+  layout and threading it down, or a context whose every consumer re-renders on
+  every change to any entry.
+- **It is written from outside React.** The drain is triggered by the `online`
+  event, by `visibilitychange`, by a backoff timer and by another tab through
+  `storage`. None of those are React events, and each one has to reach in.
+- **It is persisted and it survives the tree.** The queue outlives every
+  component that reads it, including a full unmount on navigation.
+
+That is the case `CLAUDE.md` asked for, so the rule stays and the exception is
+taken deliberately rather than the rule being deleted.
+
+**Scope, stated so it does not creep.** The store holds the offline queue and
+what is derived from it. It does **not** hold server data — that stays in
+TanStack Query, which already does caching, invalidation and request
+deduplication that a store would have to reimplement badly — and it does not
+hold form state, which stays local. A second store is a decision, not a
+convenience.
+
+`zustand@5`, with `useShallow` for multi-field selectors so a component
+re-renders when the fields it reads change and not when the queue does.
+
+### 5.8 The compiler, and a second opinion on the React we write
+
+Two tooling decisions that apply to every remaining phase.
+
+**The React Compiler is on.** `next@16.3` takes `reactCompiler: true` as a
+top-level config key — no longer experimental — and applies
+`babel-plugin-react-compiler` only to files that contain JSX or hooks, chosen
+by an SWC pass, so the build cost is small and localised. It memoises what we
+would otherwise have to remember to memoise. The measured build time is
+recorded in `STATUS.md` before and after, because "small" is a claim and the
+budget is ten minutes.
+
+It is enabled in **full** mode rather than `annotation`. Opt-in memoisation has
+the same failure as manual memoisation: the components that need it are the
+ones nobody thought about.
+
+**`react-doctor` runs as a gate.** It scans for security, correctness,
+performance and accessibility problems that neither `oxlint` nor `tsc` looks
+for. Measured before deciding: 176 files in 90ms, so it costs nothing against
+the ten-minute budget, and on the first run it found a real defect — an
+unauthenticated `"use server"` action writing an unvalidated string into a
+cookie that `src/i18n/request.ts` interpolates into a dynamic `import()` path.
+
+**The gate is on errors, not on the score.** The score is 59 with 54 warnings,
+and a gate that demands a number nobody has agreed to either blocks every
+commit or gets raised until it means nothing. Errors are specific and few.
+Warnings are read, and the ones worth acting on become their own commits.
+
+Noted honestly: `react-doctor` is at `0.9.x`. A pre-1.0 gate can change its
+mind about what an error is, so it is pinned exactly, like every other gate
+this project depends on.
+
 ---
 
 ## 6. Rating — research for Phase 6
@@ -302,6 +370,7 @@ Each phase leaves the app usable and verifiable.
 | — Test infrastructure | ✅ Complete, and it was not in this plan |
 | 3 — Roles, and CRITICAL-4 | ▶ Next |
 | 4 — Phone screen, offline | Not started |
+| 4b — Client state, the compiler, a React gate | Not started |
 | 5 — Kitchen screen | Not started |
 | 6 — Rating | Not started |
 | 7 — Security review | Not started |
@@ -523,6 +592,29 @@ most serious defect in the repository:
 Shopping list, tick off, ± stepper, scan, plus the service worker and write
 queue. *Done when:* a full shop can be done in aeroplane mode and syncs
 correctly on reconnect.
+
+### Phase 4b — Client state, the compiler, and a React gate
+
+Three pieces of engineering hygiene that apply to every phase after this one.
+Deliberately *after* Phase 4's queue rather than before it: the queue is the
+state that justifies a store (§5.7), so building the store first would be
+choosing a tool before the problem exists.
+
+1. **The React Compiler.** `babel-plugin-react-compiler` as a dev dependency
+   and `reactCompiler: true` in `next.config.ts`. *Done when:* the build passes
+   with it on, every suite is still green, and `STATUS.md` records the build
+   time before and after rather than asserting the cost is small.
+2. **`react-doctor` as a gate**, in `verify:local`, `verify:ci` and the
+   `quality` CI job. *Done when:* it fails on an error and passes on warnings,
+   the baseline is recorded, and the error it already found is closed.
+3. **The write queue moves into a `zustand` store.** *Done when:* the queue's
+   consumers subscribe to what they read rather than to the whole queue, the
+   drain writes to the store from outside React without a ref dance, and the
+   queue's existing tests pass unchanged — the store is a change of home, not
+   of behaviour.
+
+**Not in scope:** moving server data out of TanStack Query, or a second store.
+§5.7 says why.
 
 ### Phase 5 — Kitchen screen
 

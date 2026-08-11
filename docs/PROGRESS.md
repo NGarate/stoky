@@ -506,3 +506,36 @@ running, so signing fails. Checked before assuming: `git log --format=%G?` says
 `N` for every commit in the history, so unsigned matches what this repository
 actually does rather than departing from it. The configuration is left alone —
 it is the operator's to fix, by loading the key into an agent.
+
+**D40 — Zustand comes back, and Phase 0's reason for removing it is why.**
+Phase 0 removed `zustand` (`3be8b2e`) and `CLAUDE.md` recorded the rule: server
+state is TanStack Query's, local UI state is React's, and nothing else *without
+a case React cannot serve*. Asked to reintroduce it, the honest move was not to
+delete the rule but to find the case — and Phase 4 had produced one. The
+offline write queue is read by four unrelated surfaces, written from outside
+React by the `online` event, a backoff timer and another tab's `storage` event,
+and it outlives every component that reads it. A context would re-render every
+consumer on every change to any entry; lifting it means threading it from the
+dashboard layout. So the rule stands and the exception is taken deliberately.
+Scope is stated in `REDESIGN_PLAN.md` §5.7 so it does not creep: the store
+holds the queue and what derives from it, never server data and never form
+state. A second store is a decision, not a convenience.
+
+**D41 — The React Compiler is on in full mode, not annotation mode.**
+`next@16.3` takes `reactCompiler: true` as a top-level key and applies the
+Babel plugin only to files with JSX or hooks, chosen by an SWC pass. Full
+rather than opt-in because opt-in memoisation fails the same way manual
+memoisation does: the components that need it are the ones nobody thought
+about. The build time is measured into `STATUS.md` before and after rather than
+described as small, because the ten-minute budget is a contract.
+
+**D42 — `react-doctor` gates on errors, not on the score.**
+Run before deciding anything: 176 files in 90ms, so it costs nothing against
+the budget, and the first run found a real defect rather than a style
+complaint — an unauthenticated `"use server"` action writing an unvalidated
+string into a cookie that `src/i18n/request.ts` interpolates into a dynamic
+`import()` path. The score is 59 with 54 warnings, and a gate on a number
+either blocks every commit or gets raised until it means nothing; errors are
+few and specific. Warnings are read, and the ones worth acting on become their
+own commits. Pinned exactly, because a pre-1.0 gate can change its mind about
+what counts as an error.

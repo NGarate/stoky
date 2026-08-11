@@ -21,7 +21,7 @@ For the current state of the project — which gates pass, what is unverified, a
 - **Database:** PostgreSQL 16 (with pg_trgm for fuzzy search)
 - **Cache:** Valkey 8 (Redis-compatible)
 - **OCR:** Tesseract.js (server-side Worker thread), Sharp (image processing)
-- **Dev Tooling:** pnpm 11.x, oxlint, Bun test runner, Playwright
+- **Dev Tooling:** pnpm 11.x, oxlint, `react-doctor`, Bun test runner, Playwright, React Compiler (`reactCompiler: true`)
 
 ## Build & Development Commands
 
@@ -42,6 +42,7 @@ pnpm dev                    # Start Next.js dev server (port 3000)
 # Quality
 pnpm lint                   # oxlint
 pnpm typecheck              # tsc --noEmit
+pnpm doctor                 # react-doctor — fails on errors, reports warnings
 pnpm check:links            # every internal link points at a route that exists
 pnpm check:contrast         # every theme token pair meets WCAG AAA
 
@@ -112,7 +113,7 @@ messages/
 - **tRPC as API layer:** Shared types between client/server via tRPC v11 with Superjson serialization. Every procedure requires a Zod input schema
 - **Zod schemas in `src/lib/validations/`:** Single source of truth for validation, shared between client and server
 - **Server Components for data fetching, Client Components for interactivity** (explicit `"use client"` boundaries)
-- **Server state via TanStack Query.** There is no separate client-state library: local UI state is React's. Do not reach for one without a case that React cannot serve
+- **Server state via TanStack Query. Client state that React cannot hold lives in a `zustand` store.** Local UI state is still React's, and server data is still TanStack Query's — a store is neither of those and must not become either. The one taken so far is Phase 4's offline write queue, which is read from everywhere, written from outside React (the `online` event, a backoff timer, another tab) and outlives the components that read it. `REDESIGN_PLAN.md` §5.7 states the case and the scope; a second store is a decision, not a convenience
 - **Receipt scanning pipeline:** Upload → OCR (Tesseract.js Worker) → Parser (regex) → Matcher (pg_trgm) → Review UI → Apply (creates StockEntry + PriceRecord). Uses `ReceiptStatus` enum as a state machine with strict phase progression
 - **Product matching:** PostgreSQL `pg_trgm` similarity — auto-match >0.7, candidates 0.3–0.7, no match <0.3
 
@@ -202,7 +203,7 @@ bundling them and apologising in the message.
 Five jobs. The first four run in parallel and each is capped at ten minutes —
 the budget is for all verification, not just the browser suite.
 
-- **quality**: `lint`, `typecheck`, `check:contrast`, `check:links`
+- **quality**: `lint`, `typecheck`, `doctor`, `check:contrast`, `check:links`
 - **test**: `test:unit`, `test:components`, `test:integration:only` (the `:only`
   variant, because the runner supplies its own service containers)
 - **e2e**: Playwright over five browser projects plus a `setup` project that
@@ -215,7 +216,7 @@ the budget is for all verification, not just the browser suite.
 
 When working with this codebase:
 
-1. **Always run lint and typecheck** after making changes
+1. **Always run lint, typecheck and `pnpm doctor`** after making changes
 2. **Check existing patterns** in similar files before implementing new features
 3. **Follow the domain-driven structure** — add code to the appropriate domain folder
 4. **Update migrations** when changing the Prisma schema
