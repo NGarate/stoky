@@ -4,6 +4,7 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
+import type { PrismaClient } from "@prisma/client";
 import type { Session } from "next-auth";
 import { envelope } from "../utils/test-helpers";
 
@@ -35,7 +36,7 @@ let productId = "";
 let shelfId = "";
 let cupboardId = "";
 
-async function caller() {
+async function caller(db?: PrismaClient) {
   const session: Session = {
     user: {
       id: OWNER.userId,
@@ -46,7 +47,7 @@ async function caller() {
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
   };
-  return appRouter.createCaller(await createTRPCContext({ session }));
+  return appRouter.createCaller(await createTRPCContext({ session, db }));
 }
 
 /** Asserts a call was refused with a particular tRPC code. */
@@ -209,6 +210,86 @@ describe("consumeStock measures what is left", () => {
       }),
       "CONFLICT",
     );
+  });
+});
+
+describe("two people consuming the last of something", () => {
+  it("cannot drive stock negative between them", async () => {
+    // Two real intentions with *different* keys, so idempotency cannot help:
+    // both are genuine and only one can be satisfied. This is the shape a
+    // drained queue produces when it arrives as a single batch, which tRPC
+    // runs under Promise.all (ISSUES.md INV-2).
+    //
+    // The interleaving is forced rather than hoped for. Two calls fired
+    // together happen to serialise in this runtime — verified by removing the
+    // row lock and watching the test still pass three times — so a plain
+    // Promise.all here would be a test that cannot fail. Instead the first
+    // caller is given a client that pauses between reading the stock and
+    // writing the consumption, which is precisely the window the lock exists
+    // to close.
+    const fast = await caller();
+
+    await fast.inventory.addStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 2,
+      unit: "L",
+      operationType: "PURCHASE",
+    });
+
+    let releaseConsume = (): void => {};
+    const consumeGate = new Promise<void>((resolve) => {
+      releaseConsume = resolve;
+    });
+    const pausingConsumeClient = prisma.$extends({
+      query: {
+        stockEntry: {
+          async create({ args, query }) {
+            await consumeGate;
+            return query(args);
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
+    const slowConsumer = await caller(pausingConsumeClient);
+
+    const first = slowConsumer.inventory.consumeStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 2,
+      unit: "L",
+      operationType: "CONSUME",
+    });
+
+    // Let the first call reach its paused write, holding the lock.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const second = fast.inventory.consumeStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 2,
+      unit: "L",
+      operationType: "CONSUME",
+    });
+
+    // Give the second call time to block on the lock rather than sail past it.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    releaseConsume();
+
+    const results = await Promise.allSettled([first, second]);
+    const rejected = results.filter((r) => r.status === "rejected");
+
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      TRPCError,
+    );
+    expect(
+      ((rejected[0] as PromiseRejectedResult).reason as TRPCError).code,
+    ).toBe("CONFLICT");
+
+    // Without the row lock the second call reads 2 while the first is still
+    // paused, passes the guard, and this is -2.
+    expect(await netStock()).toBe(0);
   });
 });
 

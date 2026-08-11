@@ -320,10 +320,25 @@ export const inventoryRouter = createTRPCRouter({
         procedure: "inventory.consumeStock",
         input,
         apply: async (tx) => {
-          // The guard and the write are in one transaction now. That is not
-          // yet enough to make the guard hold — two calls can still read the
-          // same figure under READ COMMITTED, which is ISSUES.md INV-2 — but
-          // it is the boundary the lock will go inside.
+          /**
+           * Hold the product for the length of the transaction.
+           *
+           * The guard and the write being in one transaction is not enough on
+           * its own: under READ COMMITTED two calls read the same figure, both
+           * pass, and both write. Idempotency does not help — they carry
+           * *different* keys, because they are two real intentions. That is
+           * ISSUES.md INV-2, and a queue draining as one batch is exactly how
+           * sequential taps by one person become concurrent calls.
+           *
+           * Locking the product row rather than the entries means the lock
+           * exists whether or not there are any entries yet, and every
+           * consumption of the same product serialises behind it.
+           *
+           * A tagged template, so the id is a bound parameter and never
+           * concatenated into SQL (CLAUDE.md, Security Constraints).
+           */
+          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
+
           const product = await tx.product.findFirst({
             where: {
               id: input.productId,

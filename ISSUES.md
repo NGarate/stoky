@@ -33,7 +33,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
 | INV-1 | Expiring items report entry quantity, not net stock | ✅ Resolved (Phase 4) |
-| INV-2 | The availability guards are read-then-write, no transaction | 🔴 **OPEN** |
+| INV-2 | The availability guards are read-then-write, no transaction | 🟠 `consumeStock` fixed (Phase 4); `transferStock` open |
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
@@ -551,8 +551,25 @@ arrive as several consumptions of the same product in a single request.
 Sequential taps by one person become concurrent calls on the server. This is
 the exact shape that turns a latent race into a routine one.
 
-**Suggested fix:** take it with the idempotency work, which already needs a
-transaction around "check whether this key was seen, then apply".
+**✅ `consumeStock` is fixed** (Phase 4). It runs inside the transaction
+`withReplay` supplies, and takes `SELECT id FROM "Product" … FOR UPDATE` before
+reading — the product row rather than the entries, so the lock exists whether or
+not there are any entries yet and every consumption of the same product
+serialises behind it.
+
+Pinned by "two people consuming the last of something" in
+`inventory.net-stock.test.ts`. **The first version of that test could not
+fail**: two calls fired under `Promise.all` happen to serialise in this
+runtime, and it passed three times in a row with the lock removed. It now
+forces the interleaving — the first caller gets a client that pauses between
+reading the stock and writing the consumption, which is exactly the window the
+lock closes — and goes red without the lock, twice in a row.
+
+**🟡 `transferStock` still has it.** Its guard sits outside its `$transaction`,
+which covers only the two writes, so fixing it means restructuring the
+procedure into an interactive transaction. It is not on Phase 4's path —
+`transferStock` is deliberately not replayable and never reaches the queue —
+so it is left open rather than done in passing.
 
 ---
 
