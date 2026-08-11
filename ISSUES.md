@@ -9,11 +9,9 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: TEST-5 and TEST-1.** TEST-5 is an undiagnosed intermittent failure in
-the suite that guards the offline queue, found by chasing the unattributed
-failure `STATUS.md` records. TEST-1 — "integration tests need a database" — was
-never a defect so much as a property of testing a database application; the
-runner addressed the part that was a cost.
+**Open: TEST-5**, an undiagnosed intermittent failure in the suite that guards
+the offline queue, found by chasing the unattributed failure `STATUS.md`
+records. It is the only entry in this file that is not closed.
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
@@ -41,7 +39,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
 | DEBT-6 | The services layer still throws bare `Error` | ✅ Resolved (Phase 7 slice) |
 | DEBT-5 | Missing database indexes | ✅ Resolved (Phase 7 slice) |
-| TEST-1 | Integration tests need a database | 🟡 Partly addressed |
+| TEST-1 | Integration tests need a database | ✅ Resolved (Phase 7 slice) |
 | TEST-2 | Mock external API calls | ✅ Resolved |
 | DOCS-1 | No API documentation | ✅ Resolved (Phase 7 slice) |
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
@@ -1993,7 +1991,7 @@ says so where it asserts them.
 
 ## Testing Gaps
 
-### 🟡 TEST-1: Database-dependent tests need setup
+### ✅ TEST-1: Database-dependent tests need setup
 
 **Location:** `src/__tests__/integration/`  
 **Severity:** MEDIUM  
@@ -2004,8 +2002,23 @@ says so where it asserts them.
 services and recreates an isolated `stoky_test` database on every run. See
 `docs/TEST_SETUP.md`.
 
-**Still open:** the harness depends on a working Docker daemon, which is
-currently unavailable on this machine, so the integration suite is unverified.
+**Closed 2026-08-11, and the "still open" note above was hiding a real defect.**
+It said the harness was unverified because Docker was unavailable on this
+machine. Docker has been available for some time — the same session that closed
+this built a production image and ran containers — and running the harness found
+it broken for a different reason entirely: it built its own connection string
+from `POSTGRES_PASSWORD`, which `.env` carries alongside a working
+`DATABASE_URL` with nothing keeping the two in step. Sourcing `.env`, which the
+documented workflow does, made it fail with a bare Prisma `P1000`.
+
+The script now derives from `DATABASE_URL` and swaps only the database name, so
+the credentials are whatever already works. 395 integration tests run through
+`pnpm test:integration` as documented.
+
+**The lesson is the stale blocker rather than the fix.** "Unverified because the
+environment is wrong" is a note that stops anybody looking, and it outlived the
+condition it described. A blocker recorded against an environment needs a date
+and a way to re-check it, or it becomes a place for defects to hide.
 
 **Original report follows.**
 

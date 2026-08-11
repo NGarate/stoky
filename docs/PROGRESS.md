@@ -29,13 +29,55 @@ Rules for this log:
 | 3 — Roles, and CRITICAL-4 | ✅ Complete |
 | 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
-| 5 — Kitchen screen, and Screen A's layout | ▶ Next |
+| 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Rating | Not started |
-| 7 — Security review | Not started |
+| 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 
 ---
 
 ## Done
+
+### Phase 7's slice of the backlog — every filed defect but one
+
+Fifty-two commits closing `§10 Carried forward`. What is left in `ISSUES.md` is
+TEST-5, and it is undiagnosed rather than untouched.
+
+**Security — rate limiting's four gaps, one commit each.**
+
+| Unit | Commit |
+|---|---|
+| Sign-in counted per account as well as per address, on a hashed key (NIST SP 800-63B §5.2.2) | `4c3e2f8` |
+| `receipt.upload` metered before the file is decoded (ASVS V11.1.4) | `1bd7745` |
+| `Retry-After` on a 429, read off the refusal (RFC 9110 §10.2.3) | `f25f6e5` |
+| Refusals logged as JSON from a tRPC middleware (ASVS V7.1.3) | `64a5b58` |
+
+**Correctness and debt.**
+
+| Unit | Commit |
+|---|---|
+| INV-2's second half: `transferStock` guards inside its transaction | `dbb1748` |
+| DEBT-5 — sixteen indexes, measured at 12,000 rows | `1841758` |
+| DEBT-6 — services throw domain errors, translated at the boundary | `15c1a23` |
+| DEBT-3 — the Open Food Facts cache moved to Valkey, failing *open* | `83faab9` |
+| OCR-1 — the language model baked into the image, pinned and checksummed | `0bc399f` |
+| UI-3's last three items | `4d05c60`, `fa61a86` |
+| PROD-1 and SHOP-1, both found while writing DOCS-1 | `13061e3`, `e0f496b` |
+
+**Language.** I18N-2 through I18N-6 and I18N-8, one commit each — `7acd8fa`,
+`e65a2ff`, `2e4bb4d`, `497775b`, `f8807ed`, `b834163`.
+
+**Documentation.** DOCS-1: 58 of 58 procedures, one commit per router.
+
+**Built rather than fixed.** Error boundaries (`c66086c`), `/api/health` with a
+container healthcheck (`ec7b0b4`, `f238312`), and data export (`073abe8`).
+
+**The suite.** The service worker now runs under a real production build
+(`39fe0e9`); the browser suite re-seeds the fixture it spends (`6faf0cd`); the
+integration harness builds its connection from credentials that work
+(`46f767d`), which is what TEST-1 had been waiting on behind a stale note about
+Docker.
+
+---
 
 ### Phase 4 — Phone screen, offline from the start
 
@@ -859,3 +901,99 @@ The policy governs a password being *set*, never one being *checked*. A
 verifier that refused a stored password because the rule changed would lock
 people out of their own household — so sign-in keeps only the maximum, and a
 test asserts a short legacy password still gets in.
+
+**D64 — Rate limiting counts accounts on a hash, not on an address.**
+NIST SP 800-63B §5.2.2 asks for consecutive failed attempts to be limited
+against *an account*, which a per-IP limit does not do: a hundred addresses buy
+a hundred budgets against one password. Ten per fifteen minutes rather than
+five, because the counter cannot tell a household's phone from its tablet.
+Keyed on a SHA-256 of the normalised address, because a counter named after the
+email turns `KEYS rl:login:acct:*` — reachable by anything on the Docker
+network — into a list of who has tried to sign in.
+
+**D65 — The product cache fails open; the rate limiter fails closed.**
+Two caches in the same Valkey with opposite policies, and the difference is the
+point. An attempt the limiter cannot count is an unlimited attempt, so it
+refuses. The fallback for a product cache it cannot reach is to ask Open Food
+Facts, which is what a miss already means — refusing would break scanning to
+protect an optimisation.
+
+**D66 — The image carries a smaller OCR model than the CDN serves.**
+tesseract.js defaults to a model that is over 12 MB on disk because it carries
+the legacy engine's data. The image bakes in `tessdata_fast` at 2.3 MB, which
+Tesseract recommends for printed text. **Nothing here measures OCR accuracy** —
+the parser tests run against fixed strings, not OCR output — so this is reasoned
+rather than measured, and is the first thing to look at if receipt parsing
+degrades.
+
+**D67 — "Ticket" beat "recibo", which was the larger change.**
+The catalogue used both for the same piece of paper. §3 writes for somebody
+standing in a supermarket and rules out system vocabulary: a Spanish supermarket
+hands you a ticket, and a recibo is what a bank sends. Twenty-three strings
+changed rather than nine — the direction the argument pointed rather than the
+direction the smaller diff did.
+
+**D68 — `formatDate` was deleted rather than given a locale argument.**
+I18N-3 suggested parameterising it. It had no call sites at all; the only
+mention anywhere was a comment in the receipts route explaining why that route
+*could not* use it. A locale-pinning helper on the shelf is a trap for whoever
+reaches for it next, so it went, and a unit-tier sweep now refuses a literal
+language tag anywhere under `src/`.
+
+**D69 — The browser suite re-seeds rather than each test creating its state.**
+TEST-3's class for the third time. The two previous answers were local — make
+*this* test create its own — and that does not transfer to the receipt journey,
+because producing a receipt with parsed lines means an upload and an OCR pass.
+So the fixture is restored before every run instead. The seed deletes only the
+demo household's rows, which is what makes that safe.
+
+**D70 — `global-error.tsx` is bilingual and inline-styled, on purpose.**
+It replaces the root layout rather than rendering inside it, so it has no intl
+provider and no stylesheet: `useTranslations` would throw inside the boundary
+meant to catch things, and a Tailwind class would have no rules behind it.
+Reading `navigator.language` would put a branch in the one component that must
+not have bugs. Two short sentences in two languages fit.
+
+**D71 — The health endpoint is not rate limited, which is a deliberate
+exception.** The limiter lives in Valkey and fails closed, so metering
+`/api/health` would make it stop answering in precisely the situation it exists
+to report. Its body says nothing the status code does not, because it is
+reachable through Traefik and "database: unreachable" tells an attacker which
+half to push on.
+
+**D72 — A refused delete explains itself; the rule it enforces is unchanged.**
+PROD-1. Cascading would take the price history the price screens exist to show,
+so `product.delete` and `store.delete` still refuse — they now count the
+references first and name them, instead of leaving a foreign key to report it as
+"That refers to something that does not exist", which describes the opposite of
+what happened.
+
+**D73 — The export is JSON with named columns, and admin-only.**
+CSV flattens a household into one table and loses which entry belongs to which
+product. Every query names its columns rather than using `include`, so a column
+added to the schema later cannot arrive in an export by default — the first one
+it would have taken is `passwordHash`. Admin, because it is the whole household
+including everybody's address, which §5.2 already puts behind admin.
+
+**D74 — Error tracking is a decision, not a backlog item.**
+Every option ships a household's errors to somebody else's server, which is the
+opposite of what this product is for. "Absent" may be the correct permanent
+answer, and it is recorded in the plan as one rather than sitting there implying
+it is owed.
+
+**D75 — Documenting the procedures was worth it for what it found, not for the
+docblocks.** DOCS-1's own example — "Search for products by name" over
+`searchByName` — restates the identifier. Each docblock says what the signature
+cannot: what the procedure refuses, what it writes, which role may call it.
+Establishing those found four assumptions about this codebase that were false:
+`auth.me` has no callers, `addStock` verifies the store *before* its transaction
+rather than inside it, `product.delete` refuses rather than cascades, and a
+shopping item with no name at all was accepted. The last two became PROD-1 and
+SHOP-1.
+
+**D76 — TEST-5 is filed undiagnosed, with six ruled-out causes.**
+An intermittent failure in the suite that guards the offline queue, about one
+run in seven. Two plausible fixes were tried and *measured* rather than assumed:
+random keys instead of a deterministic generator, and `expectCode` taking a
+thunk. Neither helped, so neither was kept as a fix — the entry records what it
+is not, with the evidence, and the production path is not in doubt.
