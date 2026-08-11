@@ -162,6 +162,16 @@ export default defineConfig({
    */
   projects: [
     /**
+     * Restores the demo household before anything reads it. The suite writes —
+     * confirming receipt lines, ticking items, consuming stock — and the
+     * fixture is finite, so without this the suite works once and then reports
+     * defects that are not there. See `e2e/seed.setup.ts`.
+     */
+    {
+      name: "seed",
+      testMatch: /seed\.setup\.ts/,
+    },
+    /**
      * Signs in once and writes the cookies the signed-in suites reuse. Every
      * browser project depends on it, so it runs first and its failure stops the
      * matrix rather than being reported five times as "not signed in".
@@ -169,6 +179,7 @@ export default defineConfig({
     {
       name: "setup",
       testMatch: /session\.setup\.ts/,
+      dependencies: ["seed"],
     },
     {
       name: "chromium",

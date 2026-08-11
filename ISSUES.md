@@ -1593,6 +1593,22 @@ testing is the accessibility tree, not which product it picks.
 Related: `e2e/location-picker.spec.ts` asserts `"Cocina → Despensa (5)"`, a
 count that the same write moves.
 
+**A third occurrence, 2026-08-11, and a different answer.** The screen-reader
+receipt journey confirms a line, which is a write against a fixture holding
+three confirmable lines — so a later run failed with "no receipt in the list
+still has an item to confirm", which is a suite that works once and then reports
+a defect that is not there. It happened twice in one afternoon.
+
+The two previous answers were local: make *this* test create its own state. That
+does not work here, because producing a receipt with parsed lines means an
+upload and an OCR pass — minutes, and a language download (OCR-1). So the
+fixture is restored instead: `e2e/seed.setup.ts` is a project that the sign-in
+setup depends on, and it re-seeds before anything reads. The seed deletes only
+the demo household's rows, so it resets what the suite owns and touches nothing
+else in the same database.
+
+Proven by running the journey three times with no manual seeding between, which
+is the sequence that used to fail on the third.
 ---
 
 ### ✅ TEST-4: The low-stock badge is unchecked on the card tier
