@@ -38,7 +38,7 @@ describe("what it keeps", () => {
     // second replica is.
     await valkeyProductCache.set("8480000123456", '{"code":"8480000123456"}');
 
-    expect(await inspector.get("off:product:8480000123456")).toBe(
+    expect(await inspector.get("off:product:v2:8480000123456")).toBe(
       '{"code":"8480000123456"}',
     );
   });
@@ -49,7 +49,7 @@ describe("what it keeps", () => {
     // first upstream correction.
     await valkeyProductCache.set("8480000123456", "{}");
 
-    const ttl = await inspector.ttl("off:product:8480000123456");
+    const ttl = await inspector.ttl("off:product:v2:8480000123456");
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(PRODUCT_CACHE_TTL_SECONDS);
   });
@@ -63,7 +63,7 @@ describe("what it keeps", () => {
 
     await valkeyProductCache.clear();
 
-    expect(await inspector.get("off:product:8480000123456")).toBeNull();
+    expect(await inspector.get("off:product:v2:8480000123456")).toBeNull();
     expect(await inspector.get("rl:login:10.0.0.7")).toBe("3");
 
     await inspector.del("rl:login:10.0.0.7");
@@ -136,7 +136,7 @@ describe("what it refuses to hand back", () => {
     // The cache is shared and outlives a deploy, so an entry written by an
     // older shape of the schema is a real possibility. Trusting it would hand a
     // caller a "product" with fields missing; this refetches instead.
-    await inspector.set("off:product:8480000123456", '{"nonsense":true}');
+    await inspector.set("off:product:v2:8480000123456", '{"nonsense":true}');
 
     const realFetch = globalThis.fetch;
     let fetched = false;

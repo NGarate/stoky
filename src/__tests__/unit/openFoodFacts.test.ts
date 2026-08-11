@@ -58,6 +58,16 @@ describe("OpenFoodFacts Service", () => {
               product_name: "Leche entera",
               brands: "Hacendado",
               quantity: "1L",
+              // The rating's inputs ride the same fetch — Phase 6. Asserted
+              // below to survive the round trip, because a field the schema
+              // silently dropped would surface as "no information on this
+              // product" for everything ever scanned.
+              nutriscore_grade: "c",
+              nova_group: 3,
+              additives_n: 1,
+              additives_tags: ["en:e322"],
+              nutrient_levels: { fat: "high", sugars: "moderate" },
+              labels_tags: ["en:organic"],
             },
           }),
         };
@@ -65,6 +75,45 @@ describe("OpenFoodFacts Service", () => {
 
       return { calls, restore: () => { global.fetch = originalFetch; } };
     }
+
+    it("carries the rating fields through the schema", async () => {
+      // Every field §6's formula reads. One dropped by the Zod schema comes out
+      // as undefined, and the rating honestly reports "no data" — a silent hole
+      // no other test would see.
+      const { restore } = stubFetch();
+      try {
+        const product = await client.getProductByBarcode(barcode);
+
+        expect(product?.nutriscore_grade).toBe("c");
+        expect(product?.nova_group).toBe(3);
+        expect(product?.additives_tags).toEqual(["en:e322"]);
+        expect(product?.nutrient_levels?.fat).toBe("high");
+        expect(product?.labels_tags).toEqual(["en:organic"]);
+      } finally {
+        restore();
+      }
+    });
+
+    it("asks Open Food Facts for them", async () => {
+      // The schema passing them through means nothing if the request never
+      // names them: OFF returns only the fields asked for.
+      const { calls, restore } = stubFetch();
+      try {
+        await client.getProductByBarcode(barcode);
+
+        for (const field of [
+          "nutriscore_grade",
+          "nova_group",
+          "additives_tags",
+          "nutrient_levels",
+          "labels_tags",
+        ]) {
+          expect(calls[0]).toContain(field);
+        }
+      } finally {
+        restore();
+      }
+    });
 
     it("serves a repeated barcode from cache instead of refetching", async () => {
       const { calls, restore } = stubFetch();

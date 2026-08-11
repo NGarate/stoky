@@ -25,6 +25,28 @@ const offProductSchema = z.object({
     .optional(),
   ingredients_text: z.string().optional(),
   allergens: z.string().optional(),
+
+  // The rating's inputs — Phase 6. All optional, because their absence is a
+  // *state the interface shows* ("we don't have information on this product"),
+  // never an error. Verified shapes against the live API in REDESIGN_PLAN §6.
+  //
+  // `nutriscore_grade` is a|b|c|d|e, or the literal strings "unknown" /
+  // "not-applicable" — left as z.string() rather than an enum so an OFF
+  // vocabulary change degrades to "no data" instead of failing the parse and
+  // discarding the whole product.
+  nutriscore_grade: z.string().optional(),
+  nova_group: z.number().optional(),
+  additives_n: z.number().optional(),
+  additives_tags: z.array(z.string()).optional(),
+  nutrient_levels: z
+    .object({
+      fat: z.string().optional(),
+      salt: z.string().optional(),
+      sugars: z.string().optional(),
+      "saturated-fat": z.string().optional(),
+    })
+    .optional(),
+  labels_tags: z.array(z.string()).optional(),
 });
 
 const offResponseSchema = z.object({
@@ -65,7 +87,7 @@ export class OpenFoodFactsClient {
 
     try {
       const response = await fetch(
-        `${OFF_API_BASE}/product/${barcode}.json?fields=code,product_name,brands,categories,image_url,image_front_url,quantity,serving_quantity,nutriments,ingredients_text,allergens`,
+        `${OFF_API_BASE}/product/${barcode}.json?fields=code,product_name,brands,categories,image_url,image_front_url,quantity,serving_quantity,nutriments,ingredients_text,allergens,nutriscore_grade,nova_group,additives_n,additives_tags,nutrient_levels,labels_tags`,
         {
           headers: {
             "User-Agent": OFF_USER_AGENT,

@@ -26,7 +26,12 @@ import { valkey } from "@/lib/valkey";
 /** Thirty days. Product records change rarely and a stale name is not harmful. */
 export const PRODUCT_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-const PREFIX = "off:product:";
+// `v2`: the version is the shape of what is cached. v1 entries were written
+// before the rating fields existed, parse cleanly — everything is optional —
+// and would present a product as "no information" for up to thirty days after
+// deploy. Bumping the prefix makes them misses; the stale keys expire on their
+// own TTL.
+const PREFIX = "off:product:v2:";
 
 export interface ProductCache {
   get(barcode: string): Promise<string | null>;
