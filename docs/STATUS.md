@@ -360,8 +360,8 @@ prevent, and it survived because nobody re-read the source it was describing.
 - `openFoodFacts` caches in a process-local `Map`; multi-instance deployments
   diverge. (DEBT-3)
 **Accessibility and interface**
-- The location picker and several wording items are still hardcoded Spanish or
-  inconsistent. (I18N-2 through I18N-6)
+- ~~The location picker and several wording items are still hardcoded Spanish or
+  inconsistent.~~ **Closed**, I18N-2 through I18N-6, one commit each.
 - Assorted validation and accessibility gaps found while building
   `/inventory/add` are unaddressed. (UI-3)
 

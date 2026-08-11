@@ -8,7 +8,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Last Updated:** 2026-08-11  
 **Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
 INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-DEBT-3, OCR-1, I18N-2..6 and UI-3.
+DEBT-3, OCR-1 and UI-3.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -53,7 +53,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | A11Y-2 | Confirming a receipt line changes nothing on screen | ✅ Resolved |
 | UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
-| I18N-2..6 | Wording and untranslated strings | 🟡 Open |
+| I18N-2..6 | Wording and untranslated strings | ✅ Resolved (Phase 7 slice) |
 | I18N-7 | The low-stock badge is hardcoded | ✅ Resolved (Phase 4) |
 | I18N-8 | Both auth pages hardcoded, in the wrong two languages | ✅ Resolved (Phase 7 slice) |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
@@ -943,7 +943,7 @@ it in state. There is no state here that the query does not already have.
 
 ---
 
-### 🟡 I18N-2: The catalogue calls the same thing a receipt and a ticket
+### ✅ I18N-2: The catalogue calls the same thing a receipt and a ticket
 
 **Files:** `messages/es.json`
 **Severity:** LOW
@@ -962,9 +962,17 @@ inside a larger change would have buried it.
 **Suggested fix:** pick one. "Ticket" is what the paper is called in a Spanish
 supermarket; "recibo" is the more formal word and the one the navigation uses.
 
+**Resolution — "ticket" won.** `REDESIGN_PLAN.md` §3 writes for somebody
+standing in a supermarket and rules out system vocabulary; a Spanish supermarket
+hands you a ticket, and a recibo is what a bank sends. Twenty-three strings
+changed rather than nine, which is the direction the argument pointed rather
+than the direction the smaller diff did. English needed nothing. The catalogue
+test now bans the retired word outright, and carries its own proof that the
+pattern still matches.
+
 ---
 
-### 🟡 I18N-3: `formatDate` is hardcoded to `es-ES`
+### ✅ I18N-3: `formatDate` is hardcoded to `es-ES`
 
 **File:** `src/lib/utils.ts`
 **Severity:** LOW
@@ -978,9 +986,16 @@ has the old behaviour.
 **Suggested fix:** take the locale as an argument, so the pinning has to be
 written down at each call site that really wants it.
 
+**Resolution — deleted rather than parameterised.** The helper had no call
+sites at all; the only mention of it anywhere was a comment in the receipts route
+explaining why that route could not use it. A locale-pinning helper on the shelf
+is a trap for whoever reaches for it next. What replaces it is a unit-tier sweep:
+no file under `src/` passes a literal language tag to a date, number or collation
+formatter.
+
 ---
 
-### 🟡 I18N-5: The location picker is hardcoded Spanish
+### ✅ I18N-5: The location picker is hardcoded Spanish
 
 **File:** `src/components/inventory/LocationPicker.tsx`
 **Severity:** LOW
@@ -1001,6 +1016,13 @@ visible text to fall back on.
 
 **Suggested fix:** take it with I18N-2, since both are catalogue work on the same
 area.
+
+**Resolution.** All five strings now come from `inventory.location*`, and the
+`placeholder` prop became a fallback rather than a default argument, because a
+default argument cannot call a hook — a caller that passes its own wording still
+wins, and there is a test for that. The component's tests render through the
+provider now, and four of them run in English, because Spanish is the language in
+which a hardcoded Spanish string looks correct.
 
 ---
 
@@ -1139,7 +1161,7 @@ capital-B disagreement would have gone on passing indefinitely.)
 
 ---
 
-### 🟡 I18N-6: "Confirmar todos" is not what that button does
+### ✅ I18N-6: "Confirmar todos" is not what that button does
 
 **Files:** `messages/es.json`, `messages/en.json`
 **Severity:** LOW
@@ -1158,9 +1180,15 @@ inside the fix for UI-7 would have buried it in a commit about state derivation.
 which is the same catalogue and the same question of what the interface calls
 things.
 
+**Resolution.** "Terminar revisión" / "Finish review". Asserted in the browser
+suite rather than against the catalogue: the claim is about a button in a
+particular state, and the screen-reader receipt journey is already standing in
+front of one — it opens a receipt with lines still to decide, so the finalise
+button must be visible, named, and disabled.
+
 ---
 
-### 🟡 I18N-4: "Procesado" and "Procesando" are a letter apart
+### ✅ I18N-4: "Procesado" and "Procesando" are a letter apart
 
 **File:** `messages/es.json`
 **Severity:** LOW
@@ -1176,6 +1204,11 @@ of its own hardcoded strings.
 
 **Suggested fix:** name the phases by what the reader is waiting for — "Leyendo
 el ticket" and "Datos extraídos" — rather than by the internal state.
+
+**Resolution.** "Leyendo el ticket" and "Datos extraídos" — what the reader
+is waiting for rather than what the state machine is called. The test asserts the
+property rather than the strings: the two labels must differ and must not share a
+prefix long enough that the difference falls off the end of a glance.
 
 ---
 

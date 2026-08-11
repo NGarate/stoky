@@ -829,7 +829,7 @@ These have no phase yet. They are here so that stays visible.
 | `public/sw.js`'s 2,500 ms navigation timeout | A guess calibrated on "supermarket lie-fi", not a measurement |
 | Cross-tab drain locking | Absent on purpose: two tabs draining at once is *safe*, because the same key applies once. An efficiency question, not a correctness one |
 | ~~DEBT-6~~ | **Done.** Three domain errors in the services and a translator on the same middleware that handles Prisma's. The decision this was waiting on went to domain errors rather than `TRPCError`, because `processReceiptOcr` runs from a background task with no client to give a status to |
-| I18N-2..6 | Wording and untranslated strings, including the location picker |
+| ~~I18N-2..6~~ | **Done**, one commit each. The picker's five strings (the `aria-label` was the one that mattered — only ever announced, with no visible text behind it); `formatDate` deleted rather than parameterised, since nothing called it; "recibo" and "ticket" unified on the word a Spanish supermarket uses; two status labels that were one letter apart renamed to what the reader is waiting for; and the button that ends a review no longer promises a bulk action it cannot do |
 | ~~I18N-8~~ | **Done.** Four headings and four aside strings, and a render helper that takes a locale — a component test in Spanish alone cannot see a string hardcoded in Spanish, which is how the aside panels survived. Both pages are now asserted in both languages |
 | UI-3 | Assorted validation and a11y gaps found building `/inventory/add` |
 | DOCS-1 | No JSDoc on the tRPC procedures |
