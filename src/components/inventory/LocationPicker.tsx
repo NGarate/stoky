@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/lib/trpc/client";
+import { useTranslations } from "next-intl";
 
 interface LocationPickerProps {
   value?: string;
@@ -124,10 +125,11 @@ function optionLabel(option: LocationOption): string {
 export function LocationPicker({
   value,
   onChange,
-  placeholder = "Seleccionar ubicación",
+  placeholder,
   allowRoot = true,
   labelledBy,
 }: LocationPickerProps) {
+  const t = useTranslations("inventory");
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [placement, setPlacement] = useState({
@@ -137,6 +139,9 @@ export function LocationPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const listboxId = useId();
+  // A default argument cannot call a hook, so the fallback moves here. Callers
+  // that pass their own wording still win.
+  const prompt = placeholder ?? t("locationPlaceholder");
   const { data: locations, isLoading } = api.location.list.useQuery();
 
   const options = useMemo<LocationOption[]>(() => {
@@ -147,7 +152,7 @@ export function LocationPicker({
       flattened.unshift({
         key: "__none__",
         locationId: undefined,
-        name: "Sin ubicación específica",
+        name: t("locationNone"),
         ancestors: [],
         selectable: true,
       });
@@ -159,14 +164,14 @@ export function LocationPicker({
       flattened.push({
         key: "__empty__",
         locationId: undefined,
-        name: "No hay ubicaciones",
+        name: t("locationEmpty"),
         ancestors: [],
         selectable: false,
       });
     }
 
     return flattened;
-  }, [locations, allowRoot]);
+  }, [locations, allowRoot, t]);
 
   const selectedIndex = useMemo(
     () => options.findIndex((option) => option.locationId === value),
@@ -329,7 +334,7 @@ export function LocationPicker({
   if (isLoading) {
     return (
       <div className="w-full rounded border border-border bg-muted p-2 text-muted-foreground">
-        Cargando ubicaciones...
+        {t("locationLoading")}
       </div>
     );
   }
@@ -355,7 +360,7 @@ export function LocationPicker({
         aria-labelledby={labelledBy}
         // Callers that name the control pass `labelledBy`; the fallback keeps a
         // stand-alone picker from being an unnamed field.
-        aria-label={labelledBy ? undefined : "Ubicación"}
+        aria-label={labelledBy ? undefined : t("locationLabel")}
         onClick={() => (isOpen ? close() : open(selectedIndex >= 0 ? selectedIndex : 0))}
         onKeyDown={handleTriggerKeyDown}
         className="flex min-h-[48px] w-full items-center rounded border border-input bg-card px-3 py-2 pr-8 text-left text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -363,7 +368,7 @@ export function LocationPicker({
         {selectedOption ? (
           <span>{optionLabel(selectedOption)}</span>
         ) : (
-          <span className="text-muted-foreground">{placeholder}</span>
+          <span className="text-muted-foreground">{prompt}</span>
         )}
         <svg
           className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform ${
@@ -398,7 +403,7 @@ export function LocationPicker({
           <div
             id={listboxId}
             role="listbox"
-            aria-label={placeholder}
+            aria-label={prompt}
             // Keeps the trigger focused through a mouse selection, so the
             // keyboard still works afterwards and Escape has somewhere to go.
             onMouseDown={(event) => event.preventDefault()}

@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { render, screen, cleanup } from "@testing-library/react";
+import { screen, cleanup } from "@testing-library/react";
+import { renderWithIntl } from "../utils/render";
 import userEvent from "@testing-library/user-event";
 
 type Location = {
@@ -58,26 +59,26 @@ function activeOption(): HTMLElement | null {
 describe("LocationPicker", () => {
   it("shows a loading state while locations are fetching", () => {
     queryResult = { data: undefined, isLoading: true };
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
-    expect(screen.getByText("Cargando ubicaciones...")).toBeInTheDocument();
+    expect(screen.getByText("Cargando ubicaciones…")).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 
   it("shows the placeholder when nothing is selected", () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     expect(screen.getByText("Seleccionar ubicación")).toBeInTheDocument();
   });
 
   it("accepts a custom placeholder", () => {
-    render(<LocationPicker onChange={() => {}} placeholder="¿Dónde?" />);
+    renderWithIntl(<LocationPicker onChange={() => {}} placeholder="¿Dónde?" />);
 
     expect(screen.getByText("¿Dónde?")).toBeInTheDocument();
   });
 
   it("shows the selected location with its ancestors", () => {
-    render(<LocationPicker value="freezer" onChange={() => {}} />);
+    renderWithIntl(<LocationPicker value="freezer" onChange={() => {}} />);
 
     expect(
       screen.getByText("Cocina → Nevera → Congelador (2)"),
@@ -86,7 +87,7 @@ describe("LocationPicker", () => {
   });
 
   it("keeps the dropdown closed until the trigger is clicked", () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(screen.queryByText("Cocina")).toBeNull();
@@ -95,7 +96,7 @@ describe("LocationPicker", () => {
   // ---------------------------------------------------------------- UI-2 ---
 
   it("lists every location, not only the roots", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     await userEvent.click(trigger());
 
@@ -113,7 +114,7 @@ describe("LocationPicker", () => {
   });
 
   it("names a child option after its ancestors, so two 'Nevera' are distinct", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     await userEvent.click(trigger());
 
@@ -125,7 +126,7 @@ describe("LocationPicker", () => {
   });
 
   it("indents deeper options further than their parents", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     await userEvent.click(trigger());
 
@@ -139,7 +140,7 @@ describe("LocationPicker", () => {
 
   it("emits a nested location's id when it is chosen", async () => {
     const onChange = mock((_id: string | undefined) => {});
-    render(<LocationPicker onChange={onChange} />);
+    renderWithIntl(<LocationPicker onChange={onChange} />);
 
     await userEvent.click(trigger());
     await userEvent.click(
@@ -151,7 +152,7 @@ describe("LocationPicker", () => {
   });
 
   it("appends a non-zero stock count to the location name", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     await userEvent.click(trigger());
 
@@ -162,7 +163,7 @@ describe("LocationPicker", () => {
 
   it("offers a clear option that emits undefined", async () => {
     const onChange = mock((_id: string | undefined) => {});
-    render(<LocationPicker value="kitchen" onChange={onChange} />);
+    renderWithIntl(<LocationPicker value="kitchen" onChange={onChange} />);
 
     await userEvent.click(trigger());
     await userEvent.click(
@@ -173,7 +174,7 @@ describe("LocationPicker", () => {
   });
 
   it("hides the clear option when allowRoot is false", async () => {
-    render(<LocationPicker onChange={() => {}} allowRoot={false} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} allowRoot={false} />);
 
     await userEvent.click(trigger());
 
@@ -182,7 +183,7 @@ describe("LocationPicker", () => {
 
   it("renders without crashing when the query returns nothing", () => {
     queryResult = { data: undefined, isLoading: false };
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     expect(screen.getByText("Seleccionar ubicación")).toBeInTheDocument();
   });
@@ -190,7 +191,7 @@ describe("LocationPicker", () => {
   // ---------------------------------------------------------------- UI-4 ---
 
   it("pairs a combobox trigger with a listbox of options", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     expect(trigger()).toHaveAttribute("aria-expanded", "false");
     expect(trigger()).toHaveAttribute("aria-haspopup", "listbox");
@@ -204,7 +205,7 @@ describe("LocationPicker", () => {
   });
 
   it("is named by the element the caller points at", () => {
-    render(
+    renderWithIntl(
       <>
         <span id="loc-label">Ubicación (opcional)</span>
         <LocationPicker onChange={() => {}} labelledBy="loc-label" />
@@ -217,7 +218,7 @@ describe("LocationPicker", () => {
   });
 
   it("opens on ArrowDown with the selected option active", async () => {
-    render(<LocationPicker value="fridge" onChange={() => {}} />);
+    renderWithIntl(<LocationPicker value="fridge" onChange={() => {}} />);
 
     trigger().focus();
     await userEvent.keyboard("{ArrowDown}");
@@ -227,7 +228,7 @@ describe("LocationPicker", () => {
   });
 
   it("moves the active option with Up, Down, Home and End", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     trigger().focus();
     await userEvent.keyboard("{ArrowDown}");
@@ -248,7 +249,7 @@ describe("LocationPicker", () => {
 
   it("chooses the active option with Enter", async () => {
     const onChange = mock((_id: string | undefined) => {});
-    render(<LocationPicker onChange={onChange} />);
+    renderWithIntl(<LocationPicker onChange={onChange} />);
 
     trigger().focus();
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}");
@@ -262,7 +263,7 @@ describe("LocationPicker", () => {
 
   it("chooses the active option with Space", async () => {
     const onChange = mock((_id: string | undefined) => {});
-    render(<LocationPicker onChange={onChange} />);
+    renderWithIntl(<LocationPicker onChange={onChange} />);
 
     trigger().focus();
     await userEvent.keyboard("{ArrowDown}{ArrowDown}");
@@ -273,7 +274,7 @@ describe("LocationPicker", () => {
 
   it("dismisses on Escape and leaves focus on the trigger", async () => {
     const onChange = mock((_id: string | undefined) => {});
-    render(<LocationPicker onChange={onChange} />);
+    renderWithIntl(<LocationPicker onChange={onChange} />);
 
     trigger().focus();
     await userEvent.keyboard("{ArrowDown}");
@@ -291,7 +292,7 @@ describe("LocationPicker", () => {
   });
 
   it("puts no second focusable control in the tab order while open", async () => {
-    render(<LocationPicker onChange={() => {}} />);
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     await userEvent.click(trigger());
 
@@ -312,7 +313,7 @@ describe("LocationPicker", () => {
 
   it("closes on a click outside without choosing anything", async () => {
     const onChange = mock((_id: string | undefined) => {});
-    render(<LocationPicker onChange={onChange} />);
+    renderWithIntl(<LocationPicker onChange={onChange} />);
 
     await userEvent.click(trigger());
     const scrim = document.querySelector('[aria-hidden="true"].fixed');
@@ -327,5 +328,50 @@ describe("LocationPicker", () => {
     // standing. Moved down from the browser suite, which asserted it against a
     // real click and paid a page load for a fact about the DOM.
     expect(document.activeElement).toBe(trigger());
+  });
+});
+
+/**
+ * ISSUES.md I18N-5 — the four strings that were written into the component.
+ *
+ * The `aria-label` matters more than the other three: it is what a screen
+ * reader announces, and there is no visible text to fall back on, so an
+ * English-speaking user met a Spanish control name with nothing to correct it.
+ * The rest are visible and at least look like a bug.
+ *
+ * Asserted in English, because that is the only language that can tell a
+ * translated string from a hardcoded one here.
+ */
+describe("in English", () => {
+  it("names the control in the reader's language", () => {
+    renderWithIntl(<LocationPicker onChange={() => {}} />, { locale: "en" });
+
+    expect(screen.getByRole("combobox", { name: "Location" })).toBeInTheDocument();
+  });
+
+  it("prompts in the reader's language", () => {
+    renderWithIntl(<LocationPicker onChange={() => {}} />, { locale: "en" });
+
+    expect(screen.getByText("Choose a location")).toBeInTheDocument();
+  });
+
+  it("offers the no-location row in the reader's language", async () => {
+    renderWithIntl(<LocationPicker onChange={() => {}} />, { locale: "en" });
+
+    await userEvent.click(screen.getByRole("combobox"));
+
+    expect(
+      screen.getByRole("option", { name: "No particular location" }),
+    ).toBeInTheDocument();
+  });
+
+  it("still lets a caller supply its own prompt", () => {
+    // The prop was a default argument and is now a fallback; a caller that
+    // passes wording must still win, or two forms lose their labels.
+    renderWithIntl(<LocationPicker onChange={() => {}} placeholder="Where?" />, {
+      locale: "en",
+    });
+
+    expect(screen.getByText("Where?")).toBeInTheDocument();
   });
 });
