@@ -5,6 +5,8 @@ import type { Session } from "next-auth";
 import type { HouseholdRole, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { translatePrismaError, underlying } from "./prisma-errors";
+import { logSecurityEvent } from "@/lib/security-log";
+import { rateLimitIdentifier } from "@/lib/rate-limit";
 
 export const createTRPCContext = cache(
   async (opts: {
@@ -66,7 +68,48 @@ const prismaErrors = t.middleware(async ({ next }) => {
   return result;
 });
 
-export const publicProcedure = t.procedure.use(prismaErrors);
+/**
+ * Write a line whenever a request is refused for a security reason — ASVS
+ * V7.1.3.
+ *
+ * **On every procedure, for the same reason `prismaErrors` is.** An
+ * access-control failure is thrown from three middlewares and from a dozen
+ * resolvers checking `householdId`, and the one that gets forgotten is the one
+ * that matters: a resolver reaching another household's row is exactly the
+ * event an owner would want to have been recorded. Catching the refusal
+ * centrally means a new router cannot forget to be audited.
+ *
+ * Only the three codes that mean *refused*. Logging every error would bury
+ * them in NOT_FOUNDs and turn the log into something nobody greps.
+ */
+const securityEvents = t.middleware(async ({ ctx, next, path }) => {
+  const result = await next();
+
+  if (!result.ok) {
+    const code = result.error.code;
+
+    if (code === "UNAUTHORIZED" || code === "FORBIDDEN") {
+      logSecurityEvent("access.denied", {
+        path,
+        code,
+        userId: ctx.session?.user?.id,
+        address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+      });
+    } else if (code === "TOO_MANY_REQUESTS") {
+      logSecurityEvent("request.throttled", {
+        path,
+        userId: ctx.session?.user?.id,
+        address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+      });
+    }
+  }
+
+  return result;
+});
+
+// Outside `prismaErrors`, so what gets logged is the code the caller actually
+// received rather than the one the resolver happened to throw first.
+export const publicProcedure = t.procedure.use(securityEvents).use(prismaErrors);
 
 /**
  * The capability matrix of `docs/REDESIGN_PLAN.md` §5.2, as roles.

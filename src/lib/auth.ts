@@ -6,6 +6,7 @@ import * as argon2 from "argon2";
 import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
+import { logSecurityEvent } from "@/lib/security-log";
 import {
   RateLimitUnavailableError,
   accountIdentifier,
@@ -53,15 +54,20 @@ export const authConfig: NextAuthConfig = {
         try {
           const { allowed, retryAfterSeconds } = await consumeRateLimit(limit, identifier);
           if (!allowed) {
-            console.warn(
-              `[auth] sign-in refused: rate limit reached for ${identifier}, ${retryAfterSeconds}s remaining`,
-            );
+            logSecurityEvent("auth.signin.throttled", {
+              address: identifier,
+              code: `retry-after=${retryAfterSeconds}`,
+            });
             throw new RateLimitedSignin();
           }
         } catch (error) {
           if (error instanceof RateLimitUnavailableError) {
             // Fails closed. See `src/lib/rate-limit.ts` for why, and for what
             // it costs when Valkey is down.
+            // Both: the structured line so the event is greppable alongside
+            // the refusals, and the prose so an operator reading the container
+            // output is told what to check rather than left with a code.
+            logSecurityEvent("auth.unavailable", { address: identifier });
             console.error(
               "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
               error.cause,
@@ -72,7 +78,13 @@ export const authConfig: NextAuthConfig = {
         }
 
         const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+        if (!parsed.success) {
+          logSecurityEvent("auth.signin.failed", {
+            address: identifier,
+            code: "malformed",
+          });
+          return null;
+        }
 
         /**
          * The second limit, and the one NIST SP 800-63B §5.2.2 actually asks
@@ -96,13 +108,19 @@ export const authConfig: NextAuthConfig = {
             account,
           );
           if (!allowed) {
-            console.warn(
-              `[auth] sign-in refused: too many attempts on this account, ${retryAfterSeconds}s remaining`,
-            );
+            logSecurityEvent("auth.signin.throttled", {
+              address: identifier,
+              email: parsed.data.email,
+              code: `account retry-after=${retryAfterSeconds}`,
+            });
             throw new RateLimitedSignin();
           }
         } catch (error) {
           if (error instanceof RateLimitUnavailableError) {
+            // Both: the structured line so the event is greppable alongside
+            // the refusals, and the prose so an operator reading the container
+            // output is told what to check rather than left with a code.
+            logSecurityEvent("auth.unavailable", { address: identifier });
             console.error(
               "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
               error.cause,
@@ -116,10 +134,27 @@ export const authConfig: NextAuthConfig = {
           where: { email: parsed.data.email },
         });
 
-        if (!user) return null;
+        // Both branches log the same event with the same fields. The
+        // distinction between "no such account" and "wrong password" is
+        // exactly what the flattened error message refuses to tell the
+        // browser, and writing it into the log would put it back — the log is
+        // readable by anyone who can read the container's output.
+        if (!user) {
+          logSecurityEvent("auth.signin.failed", {
+            address: identifier,
+            email: parsed.data.email,
+          });
+          return null;
+        }
 
         const isValid = await argon2.verify(user.passwordHash, parsed.data.password);
-        if (!isValid) return null;
+        if (!isValid) {
+          logSecurityEvent("auth.signin.failed", {
+            address: identifier,
+            email: parsed.data.email,
+          });
+          return null;
+        }
 
         // Both counters, for the reason D30 gives: the specification counts
         // attempts rather than failures, and a household signing in from three

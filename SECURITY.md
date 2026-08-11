@@ -220,6 +220,35 @@ What is still open, and worth knowing before publishing an instance:
   and a unit test asserts the shipped defaults with the environment unset so
   that override cannot become the product's behaviour.
 
+### Refusals are recorded
+
+OWASP ASVS **V7.1.3** asks that security-relevant events be logged, and until
+Phase 7's slice of the backlog almost none were: a refused sign-in returned
+`null` and said nothing, and a request for another household's receipt threw
+`FORBIDDEN` at the caller and left no trace on the server. The one question an
+owner will actually ask — "has anybody been trying to get into my instance?" —
+had no answer anywhere.
+
+`src/lib/security-log.ts` writes one JSON object per event to stderr, which
+Docker already collects and rotates: `docker compose logs app | jq 'select(.event
+== "access.denied")'` works with nothing installed. The events are
+`auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
+`access.denied` and `request.throttled`.
+
+- **The access-control events come from a tRPC middleware, not from the
+  resolvers.** A refusal is thrown from three middlewares and from a dozen
+  resolvers comparing `householdId`; catching it centrally is what stops a new
+  router from forgetting to be audited. Only UNAUTHORIZED, FORBIDDEN and
+  TOO_MANY_REQUESTS — logging every error would bury the refusals in
+  NOT_FOUNDs and produce a log nobody greps.
+- **A failed sign-in logs the same line whether or not the account exists.**
+  Recording which of the two it was would put back, in a file, exactly the
+  distinction the flattened error message refuses to tell the browser.
+- **No password, hash, token, cookie or request body ever reaches a line**, and
+  the writer drops those keys defensively rather than relying on its own type
+  to have no field for them. A credential in a log is a credential in every
+  copy, rotation and backup of that log.
+
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still
 refused while the window is open, and the counter carries a TTL so the refusal
