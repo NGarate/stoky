@@ -8,7 +8,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Last Updated:** 2026-08-11  
 **Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
 INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-DEBT-3/6, OCR-1, I18N-2..6, I18N-8 and UI-3.
+DEBT-3/6, OCR-1, I18N-2..6 and UI-3.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -55,7 +55,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
 | I18N-2..6 | Wording and untranslated strings | 🟡 Open |
 | I18N-7 | The low-stock badge is hardcoded | ✅ Resolved (Phase 4) |
-| I18N-8 | Both auth pages hardcoded, in the wrong two languages | 🔴 **OPEN** |
+| I18N-8 | Both auth pages hardcoded, in the wrong two languages | ✅ Resolved (Phase 7 slice) |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-9 | Two routes show an empty state when the query failed | ✅ Resolved (Phase 4) |
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
@@ -1052,12 +1052,12 @@ no household loads a skeleton forever.
 
 ---
 
-### 🔴 I18N-8: Both auth pages are hardcoded, and in the wrong two languages
+### ✅ I18N-8: Both auth pages are hardcoded, and in the wrong two languages
 
 **Files:** `src/app/(auth)/login/page.tsx:81,103,88-93`,
 `src/app/(auth)/register/page.tsx:89,111,96-101`
 **Severity:** MEDIUM-HIGH
-**Status:** OPEN — found 2026-08-10
+**Status:** RESOLVED in Phase 7's slice of the backlog — found 2026-08-10
 
 The first two screens anyone sees get this wrong in both directions at once.
 
@@ -1085,6 +1085,24 @@ Same blind spot as I18N-1 and I18N-5.
 **Suggested fix:** use `t("login")`/`t("register")` for the headings and move the
 four aside strings into `auth.*`. Take it with I18N-5, which is the same kind of
 work.
+
+**Resolution.** Exactly that: the four headings — two per page, because each
+renders one for the wide panel and one for narrow screens — now read
+`t("login")` / `t("register")`, and four new keys carry the aside panels in
+both catalogues.
+
+**The test is the part worth recording.** Component tests here render against
+the Spanish catalogue, and a string hardcoded in Spanish *looks correct* under
+one — which is precisely how the aside panels survived. So the render helper
+now takes a locale and `src/__tests__/components/auth-pages.test.tsx` asserts
+both pages in both languages: that every `<h1>` is translated, that no known
+Spanish string appears under English, and that no raw `auth.` key reaches the
+screen, which is what next-intl renders for a typo instead of throwing.
+
+Asserting that *a* heading is translated was the first version and it was
+wrong: it passed with one of the two still hardcoded, which is the bug still
+shipping to half the viewports. Caught by reintroducing the bug and watching
+the test stay green.
 
 ---
 

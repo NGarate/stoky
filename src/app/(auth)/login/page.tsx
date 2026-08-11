@@ -89,17 +89,16 @@ export default function LoginPage(): JSX.Element {
                 Stoky
               </p>
               <h1 className="max-w-sm text-4xl font-semibold leading-tight">
-                Login
+                {t("login")}
               </h1>
               <p className="max-w-md text-sm leading-6 text-primary-foreground">
                 {t("loginSubtitle")}
               </p>
             </div>
             <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground">
-              <p className="font-medium text-primary-foreground">Hogar compartido</p>
+              <p className="font-medium text-primary-foreground">{t("loginAsideTitle")}</p>
               <p className="mt-2 leading-6 text-primary-foreground">
-                Inventario, tickets y precios quedan vinculados a la misma
-                sesión del hogar para mantener el estado sincronizado.
+                {t("loginAsideBody")}
               </p>
             </div>
           </section>
@@ -111,7 +110,7 @@ export default function LoginPage(): JSX.Element {
                   Stoky
                 </p>
                 <h1 className="text-3xl font-semibold text-heading lg:hidden">
-                  Login
+                  {t("login")}
                 </h1>
                 <p className="text-sm leading-6 text-muted-foreground lg:hidden">
                   {t("loginSubtitle")}

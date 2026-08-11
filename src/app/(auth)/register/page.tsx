@@ -92,17 +92,16 @@ export default function RegisterPage(): JSX.Element {
                 Stoky
               </p>
               <h1 className="max-w-sm text-4xl font-semibold leading-tight">
-                Register
+                {t("register")}
               </h1>
               <p className="max-w-md text-sm leading-6 text-primary-foreground">
                 {t("registerSubtitle")}
               </p>
             </div>
             <div className="rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 p-5 text-sm text-primary-foreground">
-              <p className="font-medium text-primary-foreground">Primer hogar</p>
+              <p className="font-medium text-primary-foreground">{t("registerAsideTitle")}</p>
               <p className="mt-2 leading-6 text-primary-foreground">
-                Puedes crear el hogar inicial ahora o dejarlo para después si
-                solo quieres validar la entrada a la app.
+                {t("registerAsideBody")}
               </p>
             </div>
           </section>
@@ -114,7 +113,7 @@ export default function RegisterPage(): JSX.Element {
                   Stoky
                 </p>
                 <h1 className="text-3xl font-semibold text-heading lg:hidden">
-                  Register
+                  {t("register")}
                 </h1>
                 <p className="text-sm leading-6 text-muted-foreground lg:hidden">
                   {t("registerSubtitle")}

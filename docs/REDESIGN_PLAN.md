@@ -830,7 +830,7 @@ These have no phase yet. They are here so that stays visible.
 | Cross-tab drain locking | Absent on purpose: two tabs draining at once is *safe*, because the same key applies once. An efficiency question, not a correctness one |
 | DEBT-6 | The services layer throws bare `Error`, so a missing row surfaces as `INTERNAL_SERVER_ERROR`. Wants typed domain errors, which is a decision |
 | I18N-2..6 | Wording and untranslated strings, including the location picker |
-| I18N-8 | Both auth pages hardcoded, in the wrong two languages |
+| ~~I18N-8~~ | **Done.** Four headings and four aside strings, and a render helper that takes a locale — a component test in Spanish alone cannot see a string hardcoded in Spanish, which is how the aside panels survived. Both pages are now asserted in both languages |
 | UI-3 | Assorted validation and a11y gaps found building `/inventory/add` |
 | DOCS-1 | No JSDoc on the tRPC procedures |
 | TEST-1 | Integration tests need a database; partly addressed by the runner |
