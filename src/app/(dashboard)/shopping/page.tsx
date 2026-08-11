@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import { AutoListPreview } from "@/components/shopping/AutoListPreview";
 
 export default function ShoppingListsPage() {
@@ -11,9 +12,10 @@ export default function ShoppingListsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState("");
 
-  const { data: lists, isLoading } = api.shopping.list.useQuery({
+  const listsQuery = api.shopping.list.useQuery({
     includeCompleted: false,
   });
+  const lists = listsQuery.data;
 
   const createMutation = api.shopping.create.useMutation({
     onSuccess: () => {
@@ -31,8 +33,19 @@ export default function ShoppingListsPage() {
     }
   };
 
-  if (isLoading) {
-    return <div className="p-8">{t("common.loading")}</div>;
+  // Three states, not two. `if (isLoading)` alone falls through on a failed
+  // query and renders the empty state below, so someone with four lists is
+  // told they have none and the only tell is that creating one appears to do
+  // nothing (ISSUES.md UI-9).
+  if (listsQuery.isPending || listsQuery.error || !lists) {
+    return (
+      <RouteState
+        error={listsQuery.error}
+        isLoading={listsQuery.isPending}
+        onRetry={() => void listsQuery.refetch()}
+        title={t("shopping.title")}
+      />
+    );
   }
 
   return (
@@ -93,13 +106,13 @@ export default function ShoppingListsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {lists?.length === 0 ? (
+        {lists.length === 0 ? (
           <div className="col-span-full rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
             <p>{t("shopping.noLists")}</p>
             <p className="mt-2 text-sm">{t("shopping.createFirst")}</p>
           </div>
         ) : (
-          lists?.map((list) => {
+          lists.map((list) => {
             const totalItems = list.items.length;
             const checkedItems = list.items.filter((item) => item.isChecked).length;
             const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;

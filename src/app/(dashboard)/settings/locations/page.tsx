@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 
 interface LocationNode {
   id: string;
@@ -40,26 +41,30 @@ function LocationTree({
   );
 }
 
-export default function LocationsPage() {
-  const { data: locations, isLoading } = api.location.getTree.useQuery();
+const TITLE = "Ubicaciones de Almacenamiento";
 
-  if (isLoading) {
+export default function LocationsPage() {
+  const locationsQuery = api.location.getTree.useQuery();
+  const locations = locationsQuery.data;
+
+  // Three states, not two. `if (isLoading)` alone falls through on a failed
+  // query and renders the empty state below, so someone with ten locations is
+  // told they have none (ISSUES.md UI-9).
+  if (locationsQuery.isPending || locationsQuery.error || !locations) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6 text-heading">Ubicaciones de Almacenamiento</h1>
-        <div className="space-y-4">
-          {['skeleton-1', 'skeleton-2', 'skeleton-3'].map((key) => (
-            <div key={key} className="h-12 bg-muted rounded animate-pulse" />
-          ))}
-        </div>
-      </div>
+      <RouteState
+        error={locationsQuery.error}
+        isLoading={locationsQuery.isPending}
+        onRetry={() => void locationsQuery.refetch()}
+        title={TITLE}
+      />
     );
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">Ubicaciones de Almacenamiento</h1>
+        <h1 className="text-2xl font-bold text-heading">{TITLE}</h1>
         <Link
           href="/settings"
           className="inline-flex min-h-[48px] items-center text-primary hover:underline"
@@ -76,7 +81,7 @@ export default function LocationsPage() {
         </p>
       </div>
 
-      {!locations || locations.length === 0 ? (
+      {locations.length === 0 ? (
         <div className="text-center p-8 bg-muted rounded-lg">
           <p className="text-foreground mb-4">
             No hay ubicaciones configuradas.

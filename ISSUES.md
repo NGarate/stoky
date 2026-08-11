@@ -47,7 +47,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | I18N-2..7 | Wording and untranslated strings | 🟡 Open |
 | I18N-8 | Both auth pages hardcoded, in the wrong two languages | 🔴 **OPEN** |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
-| UI-9 | Two routes show an empty state when the query failed | 🟡 Open |
+| UI-9 | Two routes show an empty state when the query failed | ✅ Resolved (Phase 4) |
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
 | TEST-4 | The low-stock badge is unchecked on the card tier | 🟡 Open |
 
@@ -1343,12 +1343,13 @@ this instead of catching it.
 
 ---
 
-### 🟡 UI-9: Two routes report an empty household when the query failed
+### ✅ UI-9: Two routes report an empty household when the query failed
 
 **Files:** `src/app/(dashboard)/shopping/page.tsx`,
 `src/app/(dashboard)/settings/locations/page.tsx`  
 **Severity:** LOW  
-**Status:** OPEN — split out of UI-8 on 2026-08-10 when UI-8 was closed
+**Status:** RESOLVED in Phase 4 — split out of UI-8 on 2026-08-10 when UI-8 was
+closed
 
 Both test `if (isLoading)` alone, so on a failed query they fall through and
 render the empty state: "no shopping lists", "no locations". That is a lie with
@@ -1365,6 +1366,16 @@ Note that an account with no household now reaches these two routes and sees
 the same lie, where before it saw a skeleton. That is not a regression from
 this phase — both behaviours are wrong — but it is the most likely way anyone
 meets this.
+
+**Resolution.** Both routes now take the same three-state branch as
+`/inventory` and `/products`: `isPending || error || !data` hands off to
+`RouteState`, which tells a missing household apart from any other failure.
+
+Pinned by `src/__tests__/components/route-query-failure.test.tsx`, six tests
+over the two routes. The assertion is deliberately a *pair* — the failure copy
+present **and** the empty-state copy absent — because checking only the first
+would still pass on a route that rendered both, which is a third wrong screen.
+Verified failing before the fix: 4 of the 6 went red with the pages reverted.
 
 ---
 
