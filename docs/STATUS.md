@@ -385,16 +385,14 @@ where it disagrees with this file, it is right.
   (SHOP-1). Exactly one of the two, whitespace not counting as a name; no
   existing row was in either state.
 
-**One intermittent test failure, now named**
-- ~~A single integration test failed once and its name was not captured.~~ It
-  has a name: `refuses a key reused for a different procedure` in
-  `src/__tests__/integration/replay.test.ts`, about one run in seven. Filed as
-  **TEST-5** with a reproduction and the measurements that narrow it. **Not
-  diagnosed, but no longer unbounded:** the pair fails 4 times in 20 runs of the
-  file and **0 times in 20 when run alone**, so it is interference between tests
-  in that file rather than a defect in the test or in `withReplay`. It is also
-  present at the commit that first created the file, which rules out everything
-  built afterwards. The production path is not in doubt.
+**One intermittent test failure — diagnosed, and not ours**
+- Two tests in `src/__tests__/integration/replay.test.ts` are reported as failed
+  about one run in seven **while passing**: each records its own completion as
+  its last statement, and across seven failing runs the test bun blamed had
+  completed and passed every assertion every time. It is a runner defect on bun
+  1.3.14, not a defect in the tests or in `withReplay`, and TEST-5 carries the
+  nine measurements that got there. Nobody should keep hunting the application
+  code; it wants an upstream report.
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**

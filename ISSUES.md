@@ -52,7 +52,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
-| TEST-5 | A replay test fails intermittently, and it is not the test | 🟡 Open |
+| TEST-5 | bun reports a passing test as failed (runner defect, diagnosed) | 🟡 Open upstream |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -690,7 +690,7 @@ checking whether any existing row is already in this state before adding it.
 
 ---
 
-### 🟡 TEST-5: A replay test fails intermittently, and it is not the test
+### 🟡 TEST-5: bun reports a passing test as failed, about one run in seven
 
 **File:** `src/__tests__/integration/replay.test.ts`
 **Severity:** MEDIUM — a test defect, but an undiagnosed one in the suite that
@@ -738,37 +738,54 @@ test a moment before the `catch` claims it.
 interleaves it with result lines — the ordering may be an artifact rather than
 real time. It is the strongest hint available and it is not proof.
 
-## It is interference between tests in this file, not the code under test
+## Diagnosed: the test passes, and bun says it failed
 
-Four measurements, each 20 runs of the file:
+The failing test **completes its body and passes every assertion.** Each test
+now adds its name to a set as its last statement, and an `afterAll` prints the
+set. Across seven failing runs out of twenty, the test bun reported as failed
+was in that set every time:
+
+```
+(fail) … refuses a key reused for a different procedure
+COMPLETED BODIES: ["different change","different procedure"]
+```
+
+An assertion failure would have thrown before that line ran. So the body reached
+the end with nothing thrown, and bun reported it as a failure anyway. This is a
+**runner defect, not a defect in the test or in `withReplay`**, on bun 1.3.14.
+
+What it is reporting is almost certainly the `TRPCError` the test deliberately
+provokes and catches — the two affected tests are the two whose expected outcome
+is a rejection travelling through the tRPC caller.
+
+## The measurements that got there
+
+Each 20 runs of the file:
 
 | Condition | Failures in 20 |
 |---|---|
 | As it stands | 4 |
-| Without the `securityEvents` middleware | 3 |
+| Running only the two tests, via `-t` | **0** |
 | At `eb401be`, the commit that created the file | 4 |
-| **Running only the two tests, via `-t "refuses a key reused"`** | **0** |
-| With both earlier tests in the describe skipped | 1 |
+| Without the `securityEvents` middleware | 3 |
+| Both earlier tests in the describe skipped | 1 |
+| Skipping only the concurrent-replay test | 4 |
+| Skipping only the same-key test | 3 |
+| `expectCode` taking a thunk | 2 |
+| `expectCode` attaching `.catch()` synchronously | 4 |
 
-The fourth row is the finding. The pair never fails alone; it fails only with
-the rest of the file present, which makes this interference rather than a defect
-in either the test or `withReplay`. The fifth row narrows it further — the two
-tests that precede it in the same describe, both of which exercise the
-same-key replay path, account for most but not all of the rate.
+The pair never fails alone, and no single predecessor accounts for it: the rate
+scales with how much else is running, which is what a timing-sensitive
+misattribution looks like rather than leftover state. Neither reshaping of
+`expectCode` helped, which is why neither was kept.
 
-The third row rules out everything built after the file: the rate is identical
-at the commit that introduced it, so nothing in the session that followed —
-`securityEvents`, `domainErrors`, the random keys — is responsible.
+## What to do about it
 
-## Where to look next
-
-Which predecessor is required, by bisecting *within* the file rather than
-around it: skip tests from the top until the rate goes to zero. The two
-same-key tests are the obvious suspects and are not the whole story, so the
-later describes deserve the same treatment even though they run afterwards —
-which would itself be worth knowing, since a later test cannot affect an
-earlier one unless the runner is attributing an asynchronous error across the
-boundary.
+Nothing in this repository. It wants a minimal reproduction and an upstream
+report against bun; a version pin would be the workaround if it becomes
+disruptive. **Nobody should keep hunting the application code** — that is what
+this entry now exists to prevent, having already cost two investigations before
+the question "did the test actually fail?" was asked.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
