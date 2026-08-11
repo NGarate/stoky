@@ -834,3 +834,28 @@ What is left of the phase is a week on a real tablet and a pass on a real iOS
 device — both unowned in `REDESIGN_PLAN.md` §10, and both things no suite can
 answer. Naming them as unowned rather than closing the phase over them is the
 same rule D49 set when Phase 4 closed against its done-when.
+
+**D63 — DEBT-1 was answered against the standard, not against its own
+suggestion.**
+The entry proposed four composition regexes — uppercase, lowercase, digit,
+symbol. NIST SP 800-63B §5.1.1.2 advises against exactly that: composition
+rules push people toward `Password1!`, which is more predictable than a longer
+passphrase, and they are why passwords get written down. This project already
+cites SP 800-63B for rate limiting; applying it there and ignoring it here
+would have been picking the easy half. Twelve characters, no composition rules,
+a common-password check and a refusal to contain the account's own name.
+
+Twelve rather than the standard's floor of eight, because that floor assumes
+the verifier also checks against breached lists at scale — which a self-hosted
+install with no outbound network cannot do.
+
+**The larger finding was the one DEBT-1 did not mention.** There was no maximum
+length anywhere, so `argon2.hash` and `argon2.verify` took unbounded input on
+`register` and `authorize`, both reachable without an account, with Argon2id
+configured at 64 MB per call. The rate limiter bounds how often, not how much.
+Capped at 128.
+
+The policy governs a password being *set*, never one being *checked*. A
+verifier that refused a stored password because the rule changed would lock
+people out of their own household — so sign-in keeps only the maximum, and a
+test asserts a short legacy password still gets in.

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { newPasswordSchema } from "./password";
 
 export const householdSchema = z.object({
   name: z.string().trim().min(1),
@@ -29,8 +30,9 @@ export const householdMemberSchema = z.object({
 export const addMemberSchema = z.object({
   name: z.string().trim().min(1),
   email: z.string().trim().toLowerCase().email(),
-  // Matches registration. DEBT-1 — `min(8)` and nothing else — applies to both.
-  password: z.string().min(8),
+  // The same policy as registration: an account an admin creates is an account
+  // somebody signs in with, and a weaker rule here would be the way round it.
+  password: newPasswordSchema,
   role: z.enum(["MEMBER", "KITCHEN"]),
 });
 

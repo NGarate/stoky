@@ -23,7 +23,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | CRITICAL-2 | Auth pages were placeholders | ✅ Resolved (commit `7f393ac`) |
 | CRITICAL-3 | Missing database migrations | ✅ Resolved (`20260213234844`) |
 | CRITICAL-4 | No rate limiting on auth | ✅ Resolved (Phase 3) |
-| DEBT-1 | Minimal password validation | 🟡 Open |
+| DEBT-1 | Minimal password validation | ✅ Resolved (Phase 7 slice) |
 | DEBT-2 | Barcode scanner torch is inert | ✅ Resolved (Phase 4) |
 | DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
 | DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
@@ -1245,11 +1245,11 @@ removed again.
 
 ## Technical Debt
 
-### 🟡 DEBT-1: Minimal password validation rules
+### ✅ DEBT-1: Minimal password validation rules
 
 **File:** `src/lib/validations/auth.ts`  
 **Severity:** MEDIUM  
-**Status:** OPEN
+**Status:** RESOLVED in Phase 7's slice of the backlog
 
 **Current Rule:**
 
@@ -1272,6 +1272,34 @@ password: z.string()
 ```
 
 **Priority:** Address in Phase 1
+
+**Resolution — and the suggestion above was not followed.** NIST SP 800-63B
+§5.1.1.2 advises *against* composition rules: they push people toward
+`Password1!`, which is more predictable than a longer passphrase, and they are
+why passwords get written down. This project already cites SP 800-63B for rate
+limiting, so applying it there and ignoring it here would have been choosing
+the easy half.
+
+`src/lib/validations/password.ts` instead sets a **twelve**-character minimum
+with no composition rules, refuses the passwords at the top of every leak,
+refuses one containing the account's own name or address, and reports every
+problem at once rather than one per attempt.
+
+Twelve rather than the standard's floor of eight because that floor assumes the
+verifier also checks against breached lists at scale, which a self-hosted box
+with no outbound network cannot do.
+
+**A second finding, larger than DEBT-1 itself:** there was no *maximum*
+anywhere, so `argon2.hash` and `argon2.verify` took unbounded input on two
+endpoints reachable without an account — with Argon2id configured at 64 MB per
+call. The rate limiter bounds how often, not how much. Capped at 128, which is
+well past the 64 the standard asks a verifier to accept.
+
+The policy governs a password being **set**, never one being checked. A
+verifier that refused a stored password because the rule changed would lock
+people out of their own household; sign-in keeps only the maximum. Two existing
+tests asserted the old behaviour and now assert the new one, including that a
+short legacy password still signs in.
 
 ---
 
@@ -1367,7 +1395,35 @@ async getProductByBarcode(barcode: string) {
 }
 ```
 
-**Priority:** Address in Phase 1 when implementing F5 (Barcode scanning)
+**Priority:** Address in Phase 1
+
+**Resolution — and the suggestion above was not followed.** NIST SP 800-63B
+§5.1.1.2 advises *against* composition rules: they push people toward
+`Password1!`, which is more predictable than a longer passphrase, and they are
+why passwords get written down. This project already cites SP 800-63B for rate
+limiting, so applying it there and ignoring it here would have been choosing
+the easy half.
+
+`src/lib/validations/password.ts` instead sets a **twelve**-character minimum
+with no composition rules, refuses the passwords at the top of every leak,
+refuses one containing the account's own name or address, and reports every
+problem at once rather than one per attempt.
+
+Twelve rather than the standard's floor of eight because that floor assumes the
+verifier also checks against breached lists at scale, which a self-hosted box
+with no outbound network cannot do.
+
+**A second finding, larger than DEBT-1 itself:** there was no *maximum*
+anywhere, so `argon2.hash` and `argon2.verify` took unbounded input on two
+endpoints reachable without an account — with Argon2id configured at 64 MB per
+call. The rate limiter bounds how often, not how much. Capped at 128, which is
+well past the 64 the standard asks a verifier to accept.
+
+The policy governs a password being **set**, never one being checked. A
+verifier that refused a stored password because the rule changed would lock
+people out of their own household; sign-in keeps only the maximum. Two existing
+tests asserted the old behaviour and now assert the new one, including that a
+short legacy password still signs in. when implementing F5 (Barcode scanning)
 
 ---
 

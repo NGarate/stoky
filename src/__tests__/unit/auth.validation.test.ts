@@ -32,13 +32,27 @@ describe("Authentication Validation Schemas", () => {
       expect(result.success).toBe(false);
     });
 
-    it("should reject password shorter than 8 characters", () => {
-      const invalidInput = {
+    it("accepts a password shorter than the current policy", () => {
+      // Deliberate, and the opposite of what this test used to assert. The
+      // policy governs a password being *set*; refusing one at sign-in because
+      // the rule changed locks people out of their own household. See
+      // `validations/password.ts` and ISSUES.md DEBT-1.
+      const result = loginSchema.safeParse({
         email: "user@example.com",
         password: "short",
-      };
+      });
 
-      const result = loginSchema.safeParse(invalidInput);
+      expect(result.success).toBe(true);
+    });
+
+    it("still refuses a password long enough to be an attack", () => {
+      // The one bound that is not about the person: Argon2id here is 64 MB per
+      // call, on an endpoint reachable without an account.
+      const result = loginSchema.safeParse({
+        email: "user@example.com",
+        password: "a".repeat(129),
+      });
+
       expect(result.success).toBe(false);
     });
 
@@ -128,11 +142,23 @@ describe("Authentication Validation Schemas", () => {
       const minimalInput: RegisterInput = {
         email: "a@b.co",
         name: "A",
-        password: "12345678",
+        // Twelve characters, no composition rules — DEBT-1 answered against
+        // NIST SP 800-63B §5.1.1.2 rather than against its own suggestion.
+        password: "nevera cocina",
       };
 
       const result = registerSchema.safeParse(minimalInput);
       expect(result.success).toBe(true);
+    });
+
+    it("refuses a password that is only long enough for the old rule", () => {
+      const result = registerSchema.safeParse({
+        email: "a@b.co",
+        name: "A",
+        password: "12345678",
+      });
+
+      expect(result.success).toBe(false);
     });
   });
 });

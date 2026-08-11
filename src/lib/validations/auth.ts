@@ -1,14 +1,18 @@
 import { z } from "zod";
+import { existingPasswordSchema, newPasswordSchema } from "./password";
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  // Bounded, not policed. An account created before the policy existed must
+  // still be able to sign in; what the cap stops is an unauthenticated caller
+  // handing Argon2id a few megabytes to verify.
+  password: existingPasswordSchema,
 });
 
 export const registerSchema = z.object({
   email: z.string().email(),
   name: z.string().trim().min(1),
-  password: z.string().min(8),
+  password: newPasswordSchema,
   householdName: z.string().trim().min(1).optional(),
 });
 

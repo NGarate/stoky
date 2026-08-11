@@ -323,8 +323,10 @@ prevent, and it survived because nobody re-read the source it was describing.
 ## Known gaps, by severity
 
 **Security**
-- Password policy is `min(8)` only, and with CRITICAL-4 closed this is the
-  largest remaining gap in the auth surface. (DEBT-1)
+- ~~Password policy is `min(8)` only.~~ **Closed.** Twelve characters, no
+  composition rules, common-password and identity checks, and a maximum — the
+  last of which was missing entirely, leaving Argon2id at 64 MB per call taking
+  unbounded input on two endpoints reachable without an account.
 - ~~There is no sign-out control.~~ **Built.** `/settings` ends the session,
   purges the queue and tells the worker to forget the cached shell. It asks
   before discarding unsent changes and offers to send them first.
