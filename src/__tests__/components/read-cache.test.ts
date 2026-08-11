@@ -89,10 +89,13 @@ describe("what comes back on the next visit", () => {
     // Plain JSON turns this into a string, and the kitchen screen calls
     // `.getTime()` on it — a crash that appears only after a reload and only
     // for products with an expiry.
-    expect(restored[0]?.expiresAt).toBeInstanceOf(Date);
-    expect((restored[0]?.expiresAt as Date).toISOString()).toBe(
-      EXPIRY.toISOString(),
-    );
+    // Read out first, so an empty array fails the assertion below rather than
+    // throwing a TypeError from `.toISOString()` on `undefined` — which reports
+    // as a crash in the test rather than as the cache having restored nothing.
+    const expiresAt = restored[0]?.expiresAt;
+
+    expect(expiresAt).toBeInstanceOf(Date);
+    expect((expiresAt as Date).toISOString()).toBe(EXPIRY.toISOString());
   });
 
   it("writes under a key naming the account", async () => {
