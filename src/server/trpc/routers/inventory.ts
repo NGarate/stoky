@@ -86,7 +86,28 @@ async function datedBatchesInWindow(
   );
 }
 
+/**
+ * Stock: what is in the house, what goes in, what comes out.
+ *
+ * **Stock is a ledger, not a number.** There is no "current quantity" column
+ * anywhere; a `StockEntry` is one movement, positive for a purchase and
+ * negative for a consumption, and what is on the shelf is their sum. Every
+ * surprise in this file follows from that — why an availability check has to
+ * read a product's whole history, why `consumeStock` writes a negative row
+ * rather than editing a positive one, and why INV-1 was possible at all
+ * (both guards summed only the positive rows and so measured gross purchases).
+ *
+ * **Two of these are replayable** — `addStock` and `consumeStock`, the two a
+ * shop composes — because Phase 4's offline queue may send the same write twice — see `src/server/trpc/replay.ts`. Those carry an
+ * `idempotencyKey` and run inside one transaction with the product row held.
+ */
 export const inventoryRouter = createTRPCRouter({
+  /**
+   * Everything in the household, with each product's net stock.
+   *
+   * The list screens' single query. `lowStock` filters to products under their
+   * `minStock`, which is what the phone screen's "to buy" section is.
+   */
   getStockOverview: householdProcedure
     .input(
       z.object({
@@ -173,6 +194,19 @@ export const inventoryRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * Records something brought into the house.
+   *
+   * Optionally records what it cost, which is the only way a `PriceRecord` is
+   * created outside the receipt pipeline — and the reason this procedure had a
+   * cross-household hole (SEC-1): it wrote the price against whatever `storeId`
+   * it was given, without checking the store belonged to the caller's
+   * household, while `price.recordPrice` verified the identical write. The
+   * store is now checked alongside the product and the location, before
+   * anything is written.
+   *
+   * Replayable. A shop composed in a supermarket basement may arrive twice.
+   */
   addStock: writeProcedure
     .input(
       addStockSchema
@@ -307,6 +341,23 @@ export const inventoryRouter = createTRPCRouter({
       });
     }),
 
+  /**
+   * Records something used up, as a negative entry.
+   *
+   * `householdProcedure`, not `writeProcedure`, and that is the capability
+   * matrix rather than an oversight: a KITCHEN account may look and use one up,
+   * and nothing else (REDESIGN_PLAN §5.2). It is the one write a kitchen tablet
+   * can make.
+   *
+   * Refuses to take stock below zero — CONFLICT, checked against *net* stock
+   * inside a transaction with the product row held (`SELECT … FOR UPDATE`), so
+   * two people consuming the last unit at once cannot both succeed. The offline
+   * queue treats that CONFLICT as reconcilable rather than as a failure: it
+   * asks the person what is actually on the shelf, because the alternative is
+   * discarding something they really did use.
+   *
+   * Replayable.
+   */
   consumeStock: householdProcedure
     .input(
       consumeStockSchema
@@ -416,6 +467,18 @@ export const inventoryRouter = createTRPCRouter({
       });
     }),
 
+  /**
+   * Corrects the ledger to match the shelf.
+   *
+   * The only one of these that takes a **signed** quantity: `ReconcileDialog`
+   * sends `actual - netStock`, which is negative whenever the count is lower
+   * than the ledger — the ordinary case. Zero is refused, since an adjustment
+   * of nothing records a change that did not happen.
+   *
+   * Deliberately **not** replayable. It is absolute in intent rather than
+   * incremental, and replaying it would apply the same correction twice; the
+   * dialog that sends it is a person answering a question, not a queued write.
+   */
   adjustStock: writeProcedure
     .input(adjustStockSchema)
     .mutation(async ({ ctx, input }) => {
@@ -455,6 +518,15 @@ export const inventoryRouter = createTRPCRouter({
       return stockEntry;
     }),
 
+  /**
+   * Moves stock between locations, as two entries rather than an edit.
+   *
+   * A negative row at the origin and a positive one at the destination, in one
+   * transaction — the ledger has no notion of a row moving. The availability
+   * guard holds the product row for the same reason `consumeStock` does
+   * (INV-2): read-then-write let two concurrent transfers each see the same
+   * four litres and move eight.
+   */
   transferStock: writeProcedure
     .input(
       z.object({
@@ -578,6 +650,12 @@ export const inventoryRouter = createTRPCRouter({
       );
     }),
 
+  /**
+   * One product's movements, newest first, cursor-paginated.
+   *
+   * The ledger made visible: this is the only screen that shows *why* the
+   * number is what it is, which matters when somebody disagrees with it.
+   */
   getStockHistory: householdProcedure
     .input(
       z.object({
@@ -628,7 +706,19 @@ export const inventoryRouter = createTRPCRouter({
       };
     }),
 
-  // F19: Expiration Tracking
+  /**
+   * Batches that will expire within `days`, soonest first.
+   *
+   * The kitchen screen's whole reason to exist. Reports each batch's
+   * **remaining** quantity, not the quantity it was bought with: consumption is
+   * a separate negative row with no expiry date of its own, so drawing it down
+   * across dated batches is arithmetic this file does rather than something the
+   * database can answer (`remainingByBatch`). Getting that wrong was INV-1 —
+   * six litres bought and four drunk read as six expiring.
+   *
+   * `isExpiringSoon` at three days is the threshold the kitchen screen uses to
+   * decide what takes space.
+   */
   getExpiringItems: householdProcedure
     .input(
       z.object({
@@ -659,6 +749,14 @@ export const inventoryRouter = createTRPCRouter({
       });
     }),
 
+  /**
+   * Batches whose date has already passed, with something still in them.
+   *
+   * The same arithmetic as `getExpiringItems` over the other side of today.
+   * Separate rather than a negative `days`, because the two answer different
+   * questions — one is "cook this", the other is "throw this away" — and the
+   * kitchen screen shows them differently.
+   */
   getExpiredItems: householdProcedure
     .input(
       z.object({
