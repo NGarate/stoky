@@ -9,9 +9,11 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: PROD-1, TEST-1 and DOCS-1.** PROD-1 was found while writing DOCS-1's
-docblocks — documenting a procedure honestly means establishing what it does,
-and this one does not do what it looks like. The other two were never defects. TEST-1
+**Open: PROD-1, SHOP-1, TEST-1 and DOCS-1.** The first two were found while
+writing DOCS-1's docblocks, which is the argument for writing them: documenting
+a procedure honestly means establishing what it does, and four routers in, four
+of my own assumptions about this code had been wrong. The other two were never
+defects. TEST-1
 is "integration tests need a database", which is a property of testing a
 database application rather than something to fix; the runner addressed the part
 that was a cost. DOCS-1 is "no JSDoc on the tRPC procedures".
@@ -51,6 +53,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | 🟡 Open |
+| SHOP-1 | A shopping item with no name at all is accepted | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -660,6 +663,31 @@ picker, including the new `/inventory/add`.
 Render recursively with indentation, and give each option an accessible name
 that includes its parent, so "Nevera" is distinguishable from another "Nevera"
 elsewhere in the tree.
+
+---
+
+### 🟡 SHOP-1: A shopping item with no name at all is accepted
+
+**Files:** `src/lib/validations/shopping.ts`, `src/server/trpc/routers/shopping.ts`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-11 while documenting the router for DOCS-1
+
+A `ShoppingItem` is meant to reference a `Product` **or** carry a `customName`.
+`shoppingItemSchema` declares both as plain optionals with no refinement, and
+`addItem` checks only that a `productId`, if given, belongs to the household. So
+an item with neither is accepted.
+
+It reaches the phone screen as an empty row: `getBuyList` computes the name as
+`product?.name ?? item.customName ?? ""`, and that final `""` is the only thing
+standing between this and a crash. A row with no name, which can still be
+ticked, is not something a person can act on or even identify.
+
+Verified by calling `shopping.addItem` against a real database with neither
+field and reading `getBuyList` back — the name came out as `""`.
+
+**Suggested fix:** a `.refine` on `shoppingItemSchema` requiring exactly one of
+the two, so it is refused at the edge rather than rendered as nothing. Worth
+checking whether any existing row is already in this state before adding it.
 
 ---
 
