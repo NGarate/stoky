@@ -6,10 +6,15 @@ import { renderWithIntl } from "../utils/render";
 
 let pathname = "/dashboard";
 
+// Complete, per D50 — a partial mock of a shared module deletes exports for
+// every file that runs after it.
 mock.module("next/navigation", () => ({
   usePathname: () => pathname,
   // The locale switcher applies its choice with a router refresh.
-  useRouter: () => ({ refresh: () => {} }),
+  useRouter: () => ({ refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
 }));
 
 // `next/link` needs an App Router context that does not exist in a unit test;

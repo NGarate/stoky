@@ -28,6 +28,8 @@ mock.module("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
   usePathname: () => "/login",
   useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
 }));
 
 /**

@@ -12,7 +12,18 @@ mock.module("@/lib/i18n/cookies", () => ({ setLocaleCookie }));
 // The switcher now applies the locale with a router refresh instead of a full
 // page reload, so the router is what the test has to observe.
 const refresh = mock(() => {});
-mock.module("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+// Complete, per D50: `mock.module` is process-global, so a partial mock here
+// deletes exports for every file that runs after it. This exact mock, carrying
+// only `useRouter`, is what made `DashboardNav` and `CompactNav` fail in CI
+// with "Export named 'usePathname' not found" while passing locally — the file
+// order differs, and locally the landmine happened to sit behind the walker.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ refresh, push: () => {} }),
+  usePathname: () => "/settings",
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+  redirect: () => {},
+}));
 
 const reload = mock(() => {});
 Object.defineProperty(window.location, "reload", {
