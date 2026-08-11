@@ -14,8 +14,45 @@ import { enforceRateLimit } from "../throttle";
 const VALID_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+/**
+ * Receipt scanning: a photograph in, stock and prices out.
+ *
+ * **A state machine, and the order is enforced rather than assumed.**
+ * `ReceiptStatus` runs UPLOADING → PROCESSING → PARSED → NEEDS_REVIEW →
+ * CONFIRMED → APPLIED, with FAILED reachable from the middle. Each procedure
+ * below acts on one edge and refuses if the receipt is not on it, which is what
+ * stops a half-parsed receipt being applied to the inventory.
+ *
+ * **A person sits in the middle on purpose.** OCR misreads receipts and fuzzy
+ * matching picks the wrong tin; between PARSED and CONFIRMED a human looks at
+ * every line. Nothing here writes stock until they have.
+ *
+ * The pipeline's expensive half — OCR, parsing, matching — is
+ * `src/server/services/`; this router is the guards, the transitions and the
+ * one write that matters (`applyReceipt`).
+ *
+ * This is the largest router in the project and was for a long time the least
+ * covered: 28.6% of its functions against 90% for the tier as a whole. Its
+ * services were well tested and the browser suite walked the screens, so what
+ * was missing was exactly this layer.
+ */
 export const receiptRouter = createTRPCRouter({
-  // F8: Upload receipt image
+  /**
+   * Takes the photograph. The only procedure here that accepts arbitrary bytes.
+   *
+   * Every check `CLAUDE.md` requires is on this path and in this order: MIME
+   * type, size, magic bytes, then a re-encode through Sharp that strips EXIF
+   * and normalises the format — so what lands on disk is an image this server
+   * produced rather than a file a caller supplied. The name is a UUID, in a
+   * per-household directory, served only through an authenticated query.
+   *
+   * Metered at 30 per account per hour, counted *before* the base64 is decoded
+   * (ASVS V11.1.4): one call is up to 10 MB decoded, a Sharp re-encode, a file,
+   * and then Tesseract. A refused upload still spends budget, or sending
+   * rubbish would be the cheap way in.
+   *
+   * Returns as soon as the file is written; OCR runs after the response.
+   */
   upload: writeProcedure
     .input(
       z.object({
@@ -111,6 +148,12 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F8: Get receipt processing status
+  /**
+   * Where a receipt has got to. What the upload screen polls.
+   *
+   * The status is the whole answer: OCR happens after the upload responds, so
+   * this is how the interface learns that PROCESSING became PARSED — or FAILED.
+   */
   getStatus: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -159,6 +202,13 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F9: Parse receipt (internal, triggered after OCR)
+  /**
+   * Turns the OCR text into lines — the PROCESSING → PARSED edge.
+   *
+   * Regex over `rawOcrText`, which is why it is cheap enough to re-run and why
+   * it produces `ReceiptItem` rows rather than products: a line is what the
+   * paper said, not what it means.
+   */
   parseReceipt: writeProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -195,6 +245,14 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F10: Match items to products
+  /**
+   * Guesses which product each line is — the PARSED → NEEDS_REVIEW edge.
+   *
+   * `pg_trgm` similarity, with the thresholds `CLAUDE.md` sets: above 0.7 is
+   * matched outright, 0.3–0.7 becomes candidates for a person to choose
+   * between, below 0.3 is treated as no match at all. The middle band is the
+   * reason the review screen exists.
+   */
   matchItems: writeProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -228,6 +286,12 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F11: Get receipt with items and candidates
+  /**
+   * A receipt with its lines and each line's candidates — the review screen.
+   *
+   * The one read here that assembles rather than fetches: candidates come from
+   * a similarity query per unmatched line.
+   */
   getReceiptWithItems: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -279,6 +343,14 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F11: Confirm match for single item
+  /**
+   * Settles one line, and refetches the page that shows it.
+   *
+   * It used to write and change nothing on screen — no invalidation, so the
+   * card kept its button and the pending count kept its number. The reasonable
+   * response to a button that does nothing is to press it again, so the defect
+   * cost a second write every time (ISSUES.md A11Y-2, UI-7).
+   */
   confirmItem: writeProcedure
     .input(
       z.object({
@@ -343,6 +415,16 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F11: Confirm all items at once
+  /**
+   * Settles the remaining lines at once — the NEEDS_REVIEW → CONFIRMED edge.
+   *
+   * Despite the name it does not confirm blindly: it takes a decision per line
+   * — MATCH an existing product, CREATE a new one, or SKIP — so it is the
+   * *submission* of a review rather than a way to avoid one. The button that
+   * calls it is named "Terminar revisión" for that reason, having once been
+   * called "Confirmar todos" (I18N-6), and is disabled until every line has
+   * been looked at.
+   */
   confirmAll: writeProcedure
     .input(
       z.object({
@@ -416,6 +498,18 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F12: Apply receipt to inventory
+  /**
+   * The one that touches the inventory — the CONFIRMED → APPLIED edge.
+   *
+   * Everything above this is bookkeeping about a photograph. This writes a
+   * `StockEntry` per confirmed line and a `PriceRecord` where there is a store,
+   * in one transaction, and moves the receipt to APPLIED so it cannot be
+   * applied twice.
+   *
+   * **No store means no prices**, silently as far as the data is concerned —
+   * a `PriceRecord` with nowhere attached says nothing — so the applied summary
+   * tells the person that in words rather than leaving them to notice.
+   */
   applyReceipt: writeProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -510,6 +604,14 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // F12: Get applied summary
+  /**
+   * What a receipt changed, after the fact.
+   *
+   * Reads the entries `applyReceipt` wrote rather than recomputing from the
+   * lines, so it says what *happened* — including lines that were skipped and
+   * prices that were not recorded, which is the half a person is most likely to
+   * want to check.
+   */
   getAppliedSummary: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -585,6 +687,7 @@ export const receiptRouter = createTRPCRouter({
     }),
 
   // List receipts for household
+  /** The household's receipts, newest first. */
   list: householdProcedure
     .input(
       z.object({
