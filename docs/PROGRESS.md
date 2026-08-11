@@ -27,7 +27,7 @@ Rules for this log:
 | 2b — Foundations of use (audit) | ✅ Complete except the human screen-reader pass |
 | — Test infrastructure (unplanned) | ✅ Complete |
 | 3 — Roles, and CRITICAL-4 | ✅ Complete |
-| 4 — Phone screen, offline | ▶ Next |
+| 4 — Phone screen, offline | ▶ In flight — groundwork done, offline layer next |
 | 5 — Kitchen screen | Not started |
 | 6 — Rating | Not started |
 | 7 — Security review | Not started |
@@ -35,6 +35,20 @@ Rules for this log:
 ---
 
 ## Done
+
+### Phase 4 — Phone screen, offline from the start
+
+**Groundwork.** Three defects were closed before the offline layer was written
+rather than after, because each one is load-bearing for it.
+
+| Unit | Commit |
+|---|---|
+| UI-9 closed — a failed query no longer claims the household is empty | `6214efe` |
+| The availability guards measure net stock, not gross purchases | `a6f1d49` |
+| INV-1 closed — the expiry views report what is left of a batch | `8961376` |
+
+Filed in passing: INV-2, the read-then-write race the availability guards still
+have. It goes with the idempotency work, which needs the same transaction.
 
 ### Phase 3 — Roles, and the security gap that outlived every phase
 
@@ -463,3 +477,32 @@ Accessibility Insights are documented as the manual procedure in
 **D4 — Strings go into both catalogues in the same commit.**
 `REDESIGN_PLAN.md` §5.6 requires Spanish and English. Enforced per commit rather
 than swept up later, because a translation backlog never gets paid off.
+
+**D37 — Phase 4's prerequisites were fixed first, not filed and worked around.**
+Three defects stood directly under the offline layer. `ISSUES.md` INV-1 said so
+in as many words — "Phase 4 must not build replay on top of this" — because the
+availability guards measured gross purchases and would have let a replayed
+consumption drive stock negative. UI-9 sat on `/shopping`, the route the phone
+screen is built on, and `REDESIGN_PLAN.md` §7 rule 5 is "never an empty, silent
+screen": a new screen standing on a route that lies about being empty inherits
+the lie. This is D32's rule, not an exception to D6 — file when the fix is
+separate work, fix when leaving it means the next thing built is wrong.
+
+**D38 — The drawdown rule is stated in a module, not assumed in a router.**
+Stock is an append-only ledger with no link between a purchase and the
+consumption that drew it down, so "how much of this batch is left" has to be
+derived, and the derivation needs a rule for which batch a consumption came out
+of. Soonest-expiry-first, with undated batches last. It is an assumption and it
+is written down as one, in `src/lib/inventory/batches.ts`, because the
+alternative — attributing each consumption to a batch at write time — is a
+schema change `ISSUES.md` has twice declined to make as a side effect. Putting
+it in a named module also put it at the tier that can test it: 19 tests in
+35ms, against a browser or a database for the same arithmetic.
+
+**D39 — Commits are unsigned, because every commit in this repository is.**
+`commit.gpgsign` is `true` and `user.signingkey` points at
+`~/.ssh/git-signing-key`, but the key is passphrase-protected with no agent
+running, so signing fails. Checked before assuming: `git log --format=%G?` says
+`N` for every commit in the history, so unsigned matches what this repository
+actually does rather than departing from it. The configuration is left alone —
+it is the operator's to fix, by loading the key into an agent.
