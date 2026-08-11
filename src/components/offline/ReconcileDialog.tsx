@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "@/lib/trpc/client";
-import { useWriteQueue } from "./WriteQueueProvider";
+import { useWriteQueue } from "./queue-context";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
 

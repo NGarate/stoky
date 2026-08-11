@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useWriteQueue } from "@/components/offline/WriteQueueProvider";
+import { useWriteQueue } from "@/components/offline/queue-context";
 
 interface ShoppingItemProps {
   item: {

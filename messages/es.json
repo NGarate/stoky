@@ -592,7 +592,16 @@
   "session": {
     "expiringIn": "Tu sesión se cerrará en {minutes} min por inactividad. Lo que no hayas guardado se perderá.",
     "expired": "Tu sesión se ha cerrado por inactividad. Vuelve a entrar para seguir.",
-    "staySignedIn": "Seguir conectado"
+    "staySignedIn": "Seguir conectado",
+    "signOut": "Cerrar sesión",
+    "signOutTitle": "¿Cerrar sesión?",
+    "signOutClean": "Se cerrará la sesión en este dispositivo. No hay nada sin enviar.",
+    "signOutPending": "{count, plural, one {Queda # cambio sin enviar} other {Quedan # cambios sin enviar}}. Si cierras sesión ahora se perderán.",
+    "signOutSendFirst": "Enviar y cerrar sesión",
+    "signOutDiscard": "Cerrar sesión y descartarlos",
+    "signOutCancel": "Seguir aquí",
+    "signOutWorking": "Cerrando sesión...",
+    "signOutShared": "Cierra la sesión al terminar si este dispositivo lo usa más gente."
   },
   "offline": {
     "nothingSavedTitle": "Aquí todavía no hay nada guardado",

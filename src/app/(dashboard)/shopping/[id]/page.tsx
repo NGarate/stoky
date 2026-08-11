@@ -7,7 +7,7 @@ import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 import { useEnvelope } from "@/components/offline/Composer";
-import { useWriteQueue } from "@/components/offline/WriteQueueProvider";
+import { useWriteQueue } from "@/components/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 
 interface ShoppingListPageProps {

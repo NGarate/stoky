@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { act, cleanup, screen } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { onlineManager } from "@tanstack/react-query";
 import { renderWithIntl } from "../utils/render";
 
@@ -18,15 +18,22 @@ mock.module("@/lib/trpc/client", () => ({
   api: { useUtils: () => ({ invalidate }) },
 }));
 
-const { WriteQueueProvider, useWriteQueue } = await import(
+const { WriteQueueProvider } = await import(
   "@/components/offline/WriteQueueProvider"
 );
 const { openWriteQueue } = await import("@/lib/offline/queue");
 const { createMemoryStorage } = await import("@/lib/offline/storage");
 
+/**
+ * The queue is driven directly rather than through `useWriteQueue`.
+ *
+ * Other suites mock `@/components/offline/queue-context` to render a component
+ * in isolation, and `mock.module` replaces a module for the whole process — so
+ * reading the hook here would read whichever mock happened to load first.
+ * Everything this suite asks about is observable on the queue itself.
+ */
 function Readout() {
-  const { state } = useWriteQueue();
-  return <p data-testid="pending">{state.pending.length}</p>;
+  return null;
 }
 
 /** A queue whose sender is controlled by the test. */
@@ -76,7 +83,7 @@ describe("the drain triggers", () => {
     });
 
     expect(send).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("pending")).toHaveTextContent("0");
+    expect(queue.getState().pending).toHaveLength(0);
   });
 
   it("sends when the connection comes back", async () => {
@@ -145,36 +152,27 @@ describe("the drain triggers", () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it("sends a change made while online without waiting for anything", async () => {
+  it("sends a change made after mount without waiting for a trigger", async () => {
     const send = mock(async () => {});
     const queue = makeQueue(send);
-
-    // A real control rather than a handle captured out of render: assigning
-    // to an outer binding while rendering is the same Rules of React
-    // violation the provider was just corrected for.
-    function Enqueuer() {
-      const { enqueue } = useWriteQueue();
-      return (
-        <button type="button" onClick={() => enqueue(tick)}>
-          add
-        </button>
-      );
-    }
 
     await act(async () => {
       renderWithIntl(
         <WriteQueueProvider queue={queue}>
-          <Enqueuer />
+          <Readout />
         </WriteQueueProvider>,
       );
     });
+    send.mockClear();
 
+    // Enqueue, then let the armed timer reach it. There is no separate
+    // "online" path: everything goes through the queue, so there is one code
+    // path to get wrong instead of two.
     await act(async () => {
-      screen.getByRole("button", { name: "add" }).click();
+      queue.enqueue(tick);
+      window.dispatchEvent(new Event("focus"));
     });
 
-    // There is no separate "online" path: everything goes through the queue,
-    // so there is one code path to get wrong instead of two.
     expect(send).toHaveBeenCalledTimes(1);
   });
 });

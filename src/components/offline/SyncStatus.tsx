@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { syncStatus, isUrgent } from "@/lib/offline/status";
-import { useWriteQueue } from "./WriteQueueProvider";
+import { useWriteQueue } from "./queue-context";
 import { ReconcileDialog } from "./ReconcileDialog";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { JSX } from "react";

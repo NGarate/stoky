@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
 
@@ -30,7 +31,12 @@ let productQuery: unknown = {
   error: null,
 };
 
-mock.module("@/components/offline/WriteQueueProvider", () => ({
+mock.module("@/components/offline/queue-context", () => ({
+  // A real context as well as the hook. `mock.module` replaces the module for
+  // the whole process, and `WriteQueueProvider` renders
+  // `WriteQueueContext.Provider` — so a mock that omits it turns the provider
+  // into a syntax error in whichever suite renders the real one.
+  WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: queueState,
     enqueue: () => ({ ok: true, id: "x" }),

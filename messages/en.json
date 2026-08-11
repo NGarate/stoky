@@ -592,7 +592,16 @@
   "session": {
     "expiringIn": "Your session will close in {minutes} min after being idle. Anything unsaved will be lost.",
     "expired": "Your session closed after being idle. Sign in again to carry on.",
-    "staySignedIn": "Stay signed in"
+    "staySignedIn": "Stay signed in",
+    "signOut": "Sign out",
+    "signOutTitle": "Sign out?",
+    "signOutClean": "This will sign you out on this device. Nothing is waiting to be sent.",
+    "signOutPending": "{count, plural, one {# change is still unsent} other {# changes are still unsent}}. Signing out now will lose them.",
+    "signOutSendFirst": "Send them and sign out",
+    "signOutDiscard": "Sign out and discard them",
+    "signOutCancel": "Stay here",
+    "signOutWorking": "Signing out...",
+    "signOutShared": "Sign out when you are done if other people use this device."
   },
   "offline": {
     "nothingSavedTitle": "Nothing saved here yet",

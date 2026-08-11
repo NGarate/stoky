@@ -325,12 +325,9 @@ prevent, and it survived because nobody re-read the source it was describing.
 **Security**
 - Password policy is `min(8)` only, and with CRITICAL-4 closed this is the
   largest remaining gap in the auth surface. (DEBT-1)
-- **There is no sign-out control anywhere in this application.** `signOut` is
-  exported from `src/lib/auth.ts` and called nowhere. Phase 4 built
-  `queue.purgeAll` and a shell-cache purge that only a sign-out can fire, so
-  both are currently dead code — a security control nothing can trigger. The
-  cache is purged on reaching `/login`, which is the only end-of-session signal
-  that exists. Phase 5 owns this, and it is uncomfortable there.
+- ~~There is no sign-out control.~~ **Built.** `/settings` ends the session,
+  purges the queue and tells the worker to forget the cached shell. It asks
+  before discarding unsent changes and offers to send them first.
 - Rate limiting covers the two auth endpoints and nothing else, and is per IP
   rather than per account — NIST SP 800-63B §5.2.2 asks for the latter, and a
   per-IP limit alone is defeated by a distributed guess. `receipt.upload` runs

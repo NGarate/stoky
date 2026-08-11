@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
+import { SignOutButton } from "@/components/session/SignOutButton";
 import type { JSX } from "react";
 
 /**
@@ -57,6 +58,13 @@ export default function SettingsPage(): JSX.Element {
           <p className="mt-1 text-muted-foreground">{t("storesDescription")}</p>
         </li>
       </ul>
+
+      {/* Last, because it is the one action here that ends the visit — and
+          first-class, because on a shared device it is the control that
+          matters most. */}
+      <section className="mt-8 rounded border border-border bg-card p-4">
+        <SignOutButton />
+      </section>
 
       <h2 className="mt-8 text-lg font-semibold text-heading">
         {t("preferencesTitle")}

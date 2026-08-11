@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
+import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -30,7 +31,12 @@ let queryStub: QueryStub;
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
 
-mock.module("@/components/offline/WriteQueueProvider", () => ({
+mock.module("@/components/offline/queue-context", () => ({
+  // A real context as well as the hook. `mock.module` replaces the module for
+  // the whole process, and `WriteQueueProvider` renders
+  // `WriteQueueContext.Provider` — so a mock that omits it turns the provider
+  // into a syntax error in whichever suite renders the real one.
+  WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },
     enqueue: () => ({ ok: true as const, id: "op-1" }),

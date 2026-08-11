@@ -1,11 +1,12 @@
 "use client";
 
 import { onlineManager } from "@tanstack/react-query";
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { api } from "@/lib/trpc/client";
 import { useComposer } from "./Composer";
-import { openWriteQueue, type EnqueueInput, type EnqueueResult, type QueueState, type WriteQueue } from "@/lib/offline/queue";
+import { WriteQueueContext, type WriteQueueValue } from "./queue-context";
+import { openWriteQueue, type WriteQueue } from "@/lib/offline/queue";
 import { createOperationSender } from "@/lib/offline/sender";
 import type { JSX, ReactNode } from "react";
 
@@ -33,16 +34,6 @@ import type { JSX, ReactNode } from "react";
  * The query cache is invalidated **once per settled drain**, not once per
  * operation. Forty queued changes should cost one refetch, not forty.
  */
-
-interface WriteQueueValue {
-  state: QueueState;
-  enqueue: (op: EnqueueInput) => EnqueueResult;
-  drain: () => void;
-  retry: (id: string) => void;
-  discard: (id: string) => void;
-}
-
-const WriteQueueContext = createContext<WriteQueueValue | null>(null);
 
 export function WriteQueueProvider({
   children,
@@ -166,6 +157,8 @@ export function WriteQueueProvider({
         drain();
       },
       discard: (id) => queue.discard(id),
+      flush: () => queue.drain(),
+      purgeAll: () => queue.purgeAll(),
     }),
     [state, queue, drain],
   );
@@ -175,15 +168,4 @@ export function WriteQueueProvider({
       {children}
     </WriteQueueContext.Provider>
   );
-}
-
-/** Throws rather than returning null: a write outside the shell is a bug. */
-export function useWriteQueue(): WriteQueueValue {
-  const value = useContext(WriteQueueContext);
-  if (!value) {
-    throw new Error(
-      "useWriteQueue must be used inside WriteQueueProvider — see (dashboard)/layout.tsx",
-    );
-  }
-  return value;
 }

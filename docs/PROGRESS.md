@@ -691,3 +691,35 @@ second is proven; Screen A's layout is not built and moves to Phase 5. Closing
 against the done-when and naming the gap is honest; closing against the title
 would require either building the layout or quietly redefining what was
 promised, and the second is how a plan stops being worth reading.
+
+**D50 — A `mock.module` replaces that module for every suite in the process.**
+Bun's module mocks are not file-scoped. Three consequences bit in one commit:
+a mock that omitted an export turned that export into `undefined` elsewhere; a
+*complete* mock of `@/lib/sw/register` then replaced the real module in the
+suite that tests it; and mocking `queue-context` made
+`WriteQueueProvider.test.tsx` read a stubbed hook instead of the provider's own
+value. All three passed until a new test file changed the load order, which is
+the worst way to find it.
+
+Two rules, in order:
+
+1. **Never mock a module another suite tests for real.** Stub the browser
+   instead — `SignOutButton.test.tsx` now asserts the `postMessage` the worker
+   receives rather than that `forgetCachedShell` was called, which is both
+   safer and a stronger claim.
+2. **A suite that renders a real component must not read a hook other suites
+   mock.** `WriteQueueProvider.test.tsx` drives the queue directly; everything
+   it asks about is observable there.
+
+The structural half: `useWriteQueue` moved out of `WriteQueueProvider.tsx` into
+`queue-context.ts`, so mocking the hook cannot reach the provider. That is the
+shape it should have had anyway — a consumer needing the hook has no business
+importing the provider.
+
+**D51 — Sign-out asks only when there is something to lose.**
+A queue with unsent changes is somebody's shopping, and signing out silently
+would delete it — so the control offers three answers: send them first, discard
+them, or stay. With nothing pending it says so and gets on with it, which keeps
+§7 rule 3 (undo rather than confirm) for the case that is actually routine.
+"Send first" is offered even with no signal, where it will not succeed; the
+attempt is what tells the person the changes are still there rather than gone.
