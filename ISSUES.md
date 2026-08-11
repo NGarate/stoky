@@ -9,7 +9,9 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: TEST-5**, an undiagnosed intermittent failure in the suite that guards
+**Open: OCR-2**, a headline feature that does not work in the production image,
+found by driving a receipt through the image itself. And **TEST-5**, an
+intermittent failure in the suite that guards
 the offline queue, found by chasing the unattributed failure `STATUS.md`
 records. It is the only entry in this file that is not closed.
 
@@ -52,6 +54,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
+| OCR-2 | Receipt scanning does not work in the production image | 🔴 **OPEN** |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
@@ -687,6 +690,67 @@ field and reading `getBuyList` back — the name came out as `""`.
 **Suggested fix:** a `.refine` on `shoppingItemSchema` requiring exactly one of
 the two, so it is refused at the edge rather than rendered as nothing. Worth
 checking whether any existing row is already in this state before adding it.
+
+---
+
+### 🔴 OCR-2: receipt scanning does not work in the production image
+
+**Files:** `next.config.ts`, `src/server/services/ocr.ts`
+**Severity:** HIGH — a headline feature is completely non-functional when deployed
+**Status:** OPEN — found 2026-08-11 by scanning a receipt inside the image
+
+Upload a receipt to the production image and it sits at `PROCESSING` for ever.
+The server throws an **uncaught exception** each time:
+
+```
+Error: Cannot find module '..'
+  - /app/node_modules/.pnpm/tesseract.js@6.0.1/node_modules/tesseract.js/src/worker-script/node/index.js
+```
+
+`tesseract.js` starts its worker by spawning `src/worker-script/node/index.js`
+as a thread, and that file does `require('..')` — which resolves to
+`src/worker-script/index.js`. Next's output tracing copies the thread entry
+point and not the sibling it immediately asks for, because nothing imports it by
+name. The image has `src/worker-script/node/` and nothing else in that
+directory.
+
+**Half of it is fixed.** `serverExternalPackages: ["tesseract.js"]` was the
+first defect: bundled, the worker path was baked in as `/ROOT/node_modules/...`,
+a build-time placeholder that does not exist at runtime. That is committed and
+the path is now correct. The missing file is what remains.
+
+**What did not work:** `outputFileTracingIncludes` for
+`/api/trpc/[trpc]`, with both `./node_modules/tesseract.js/**` and the resolved
+`.pnpm` path. The directory in the image was unchanged after both. Reverted
+rather than left in place doing nothing.
+
+**Where to go next:** copy the package in the Dockerfile instead of asking the
+tracer for it — `COPY --from=builder /app/node_modules/.pnpm/tesseract.js@*
+...` — which sidesteps tracing entirely and matches how the traineddata already
+gets in. Verify with the recipe below before believing any of it.
+
+## How to reproduce, and why it was not found sooner
+
+```bash
+docker build --target production -t stoky-check .
+docker network create --internal stoky-airgap
+docker network connect stoky-airgap stoky-db-1
+docker network connect stoky-airgap stoky-cache-1
+docker run -d --name app --network stoky-airgap --read-only \
+  --tmpfs /tmp --tmpfs /app/.next/cache -v uploads:/app/uploads \
+  -e NODE_ENV=production -e DATABASE_URL=... -e VALKEY_URL=... \
+  -e NEXTAUTH_SECRET=<a real one> stoky-check
+# then sign in over HTTP and POST a PNG to /api/trpc/receipt.upload
+```
+
+An `--internal` network is the point: it proves the model is read from the image
+rather than fetched, which is what OCR-1 claimed.
+
+**OCR-1 was closed on a caveat that turned out to matter.** Its entry says "a
+receipt has *not* been scanned inside the image — what stays unproven is that
+tesseract.js's bundled copy honours these options the same way the source does."
+It does not. The model being present and correctly pointed at, which is all
+OCR-1 verified, is necessary and not sufficient.
 
 ---
 

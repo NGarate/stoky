@@ -33,6 +33,29 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
 
+  /**
+   * Packages Next must not bundle into the server chunks.
+   *
+   * `tesseract.js` spawns a worker thread by absolute path. Bundled, that path
+   * is resolved at build time and baked in as `/ROOT/node_modules/...` — a
+   * placeholder that does not exist at runtime, so the first receipt scan in the
+   * production image died with `Cannot find module` and took the OCR pass with
+   * it. The file is in the image; only the path Next wrote down was wrong.
+   *
+   * Left external, it resolves from `node_modules` the ordinary way.
+   *
+   * **This is necessary and not sufficient.** With it the path is right and the
+   * worker is found; the worker then fails its own `require('..')`, because
+   * tracing copied `src/worker-script/node/` without `src/worker-script/index.js`.
+   * Receipt scanning is still broken in the image — ISSUES.md OCR-2.
+   *
+   * Found by scanning a receipt inside the image, which is the one thing OCR-1
+   * was closed without doing. The entry said so at the time; this is what that
+   * caveat was hiding.
+   */
+  serverExternalPackages: ["tesseract.js"],
+
+
   // The React Compiler memoises what we would otherwise have to remember to
   // memoise. On in full mode rather than `annotation`, because opt-in
   // memoisation fails the same way manual memoisation does: the components

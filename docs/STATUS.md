@@ -468,12 +468,18 @@ Two things that sequence surfaced, both operational rather than defects:
   correctness one.
 
 **Operational**
+- **Receipt scanning does not work in the production image at all** — OCR-2,
+  and the most serious thing open. A receipt uploaded to the image sits at
+  `PROCESSING` for ever while the server throws an uncaught
+  `Cannot find module '..'`: Next's tracing copies tesseract.js's worker thread
+  entry point without the sibling it immediately requires. Half fixed
+  (`serverExternalPackages` corrected a bogus `/ROOT/...` path); the missing
+  file remains. Found by driving a receipt through an air-gapped container,
+  which is the one thing OCR-1 was closed without doing.
 - ~~OCR fetches its Tesseract language data from a CDN at first use.~~
-  **Closed.** The model is baked into the image, pinned and checksummed, and
-  `TESSDATA_PATH` points the worker at it, so a scan needs no network. It is a
-  *smaller* model than the CDN's default — a reasoned trade rather than a
-  measured one, since nothing here measures OCR accuracy, and the first thing to
-  look at if receipt parsing degrades.
+  **Closed**, and still true as far as it goes: the model is baked in, pinned
+  and checksummed, and `TESSDATA_PATH` points at it. That was necessary and, as
+  OCR-2 shows, not sufficient.
 - ~~No error boundaries.~~ **Closed**, one inside the intl provider and one
   outside every provider.
 - ~~No health-check endpoint.~~ **Closed.** `/api/health` checks Postgres and
