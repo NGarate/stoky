@@ -221,13 +221,17 @@ export const productRouter = createTRPCRouter({
    * There is no `deletedAt` column in the schema (the search query once
    * filtered on one that did not exist, which was CRITICAL-1), so this is a
    * real delete. No relation declares `onDelete`, which means Prisma's default
-   * applies: the database *refuses* rather than cascading. A product with a
-   * single stock entry, price record or receipt line cannot be deleted, and the
-   * P2003 that comes back is translated to BAD_REQUEST — "That refers to
-   * something that does not exist", which is true of nothing the caller did.
+   * applies and the database *refuses* rather than cascading: a product with a
+   * single stock entry, price record, receipt line or shopping item cannot go.
    *
-   * Verified by probing it against the database rather than reasoned from
-   * Prisma's defaults. Filed as ISSUES.md PROD-1.
+   * That rule is deliberate — cascading would take the price history the price
+   * screens exist to show — but it used to arrive as a foreign-key error
+   * translated to "That refers to something that does not exist", a sentence
+   * about the opposite of what happened: too many rows refer to *this* one, not
+   * too few to that one. ISSUES.md PROD-1.
+   *
+   * So the references are counted first and the refusal names what is in the
+   * way, which is the shape `location.delete` already had.
    */
   delete: writeProcedure
     .input(z.object({ id: z.string() }))
@@ -246,7 +250,30 @@ export const productRouter = createTRPCRouter({
         });
       }
 
-      // Delete the product
+      // Counted rather than fetched: the answer is "is there any", and the
+      // number is what makes the message useful.
+      const [stockEntries, priceRecords, receiptItems, shoppingItems] =
+        await Promise.all([
+          prisma.stockEntry.count({ where: { productId: input.id } }),
+          prisma.priceRecord.count({ where: { productId: input.id } }),
+          prisma.receiptItem.count({ where: { matchedProductId: input.id } }),
+          prisma.shoppingItem.count({ where: { productId: input.id } }),
+        ]);
+
+      const blocking = [
+        stockEntries > 0 ? `${stockEntries} stock entries` : null,
+        priceRecords > 0 ? `${priceRecords} price records` : null,
+        receiptItems > 0 ? `${receiptItems} receipt lines` : null,
+        shoppingItems > 0 ? `${shoppingItems} shopping items` : null,
+      ].filter((part): part is string => part !== null);
+
+      if (blocking.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `This product still has ${blocking.join(", ")}. Remove those first, or keep the product.`,
+        });
+      }
+
       await prisma.product.delete({
         where: { id: input.id },
       });

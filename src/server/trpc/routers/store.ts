@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -72,22 +73,57 @@ export const storeRouter = createTRPCRouter({
     }),
 
   /**
-   * Removes a shop.
+   * Removes a shop, if no price or receipt points at it.
    *
-   * Note that this does *not* check for price records first, so a store with
-   * price history behind it fails on the foreign key rather than with a
-   * sentence — the same defect as PROD-1, and unlike `location.delete` next
-   * door, which checks and says which.
+   * The same rule and the same reason as `product.delete`: nothing declares
+   * `onDelete`, so the database refuses rather than cascading, and cascading
+   * would be wrong anyway — a price sighting with nowhere attached says
+   * nothing at all, so deleting a shop would silently gut the price history
+   * rather than tidy it.
+   *
+   * It used to leave that to the foreign key, which reported it as "That refers
+   * to something that does not exist" (ISSUES.md PROD-1's second instance).
+   *
+   * It also used to rely on `where: { id, householdId }` to scope the delete,
+   * which does refuse another household's store — but as a "not found" with no
+   * distinction between "not yours" and "not there". The row is read first now,
+   * so the two are different answers.
    */
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await prisma.store.delete({
+      const store = await prisma.store.findFirst({
         where: {
           id: input.id,
           householdId: ctx.householdId,
         },
       });
+
+      if (!store) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Store not found",
+        });
+      }
+
+      const [priceRecords, receipts] = await Promise.all([
+        prisma.priceRecord.count({ where: { storeId: input.id } }),
+        prisma.receipt.count({ where: { storeId: input.id } }),
+      ]);
+
+      const blocking = [
+        priceRecords > 0 ? `${priceRecords} price records` : null,
+        receipts > 0 ? `${receipts} receipts` : null,
+      ].filter((part): part is string => part !== null);
+
+      if (blocking.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `This shop still has ${blocking.join(" and ")}. Those would lose their meaning without it.`,
+        });
+      }
+
+      await prisma.store.delete({ where: { id: input.id } });
 
       return { success: true };
     }),
