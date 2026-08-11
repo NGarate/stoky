@@ -116,3 +116,8 @@ public/worker-*.js
 # directory on first OCR run, so it is a build artefact, not a source asset.
 # A 3.3 MB binary does not belong in the history.
 *.traineddata
+
+# Ralph-loop session state. Per-session and per-machine — it carries a session
+# id and an iteration counter, so committing it means the next checkout inherits
+# somebody else's half-finished loop.
+.claude/ralph-loop.local.md
