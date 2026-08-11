@@ -272,7 +272,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The SARIF pair below is reporting, not enforcement — the gate that
+      # fails the build on findings is the separate Trivy step underneath, and
+      # it runs unconditionally. These two run only where GitHub will accept
+      # the upload: code scanning on a **private** repository needs Advanced
+      # Security, and without it the API answers 403 "Code scanning is not
+      # enabled" — which kept this job red for days while the build, the scan
+      # gate and the push all succeeded. If this repository goes public, the
+      # condition becomes true and the Security tab lights up on its own; a
+      # private repository that gains Advanced Security should drop the
+      # condition instead.
       - name: Scan image
+        if: github.event.repository.private == false
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           image-ref: stoky:scan
@@ -283,7 +294,7 @@ jobs:
 
       - name: Upload scan results
         uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
-        if: always()
+        if: github.event.repository.private == false && always()
         with:
           sarif_file: trivy.sarif
           category: trivy
