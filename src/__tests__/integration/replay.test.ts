@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -95,11 +96,26 @@ async function caller(account: { userId: string; householdId: string }) {
   return testRouter.createCaller(await createTRPCContext({ session }));
 }
 
-/** A fresh key per test, so nothing leaks between them. */
-let nextKey = 0;
+/**
+ * A fresh key per call, so nothing leaks between tests — or between runs.
+ *
+ * This was a counter formatted into a UUID, which produced the *same* sequence
+ * on every run against a database the suite shares. `MutationReplay` is keyed
+ * on `[userId, key]` and the users here are new each run, so it should have
+ * been safe, and mostly was.
+ *
+ * It was not always. Two tests in this file failed on 2026-08-11 with their
+ * *first* call rejected — a record for that (user, key) already existing under
+ * a different procedure, which the `beforeEach` deletes. The mechanism was
+ * never established: the lookup is scoped by user, the users are fresh, and the
+ * failure would not reproduce for six runs and then did.
+ *
+ * So this removes the class rather than fixing a diagnosis. A random key cannot
+ * collide with anything, and the determinism bought nothing — no test asserts a
+ * key's value or its order.
+ */
 function freshKey(): string {
-  nextKey += 1;
-  return `00000000-0000-4000-8000-${String(nextKey).padStart(12, "0")}`;
+  return randomUUID();
 }
 
 async function expectCode(call: Promise<unknown>, code: TRPCError["code"]) {

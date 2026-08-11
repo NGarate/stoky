@@ -9,14 +9,14 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: PROD-1, SHOP-1 and TEST-1.** The first two were found while writing
-DOCS-1's docblocks, which is the argument for having written them. TEST-1 —
-"integration tests need a database" — was never a defect so much as a property
-of testing a database application; the runner addressed the part that was a
-cost. TEST-1
-is "integration tests need a database", which is a property of testing a
-database application rather than something to fix; the runner addressed the part
-that was a cost. DOCS-1 is "no JSDoc on the tRPC procedures".
+**Open: TEST-5 and TEST-1.** TEST-5 is an undiagnosed intermittent failure in
+the suite that guards the offline queue, found by chasing the unattributed
+failure `STATUS.md` records. TEST-1 — "integration tests need a database" — was
+never a defect so much as a property of testing a database application; the
+runner addressed the part that was a cost.
+
+PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
+argument for having written them, and are closed.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -52,8 +52,9 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
-| PROD-1 | Deleting a used product fails, and says something else | 🟡 Open |
-| SHOP-1 | A shopping item with no name at all is accepted | 🟡 Open |
+| PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
+| SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
+| TEST-5 | Two replay tests fail together, about one run in seven | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -688,6 +689,49 @@ field and reading `getBuyList` back — the name came out as `""`.
 **Suggested fix:** a `.refine` on `shoppingItemSchema` requiring exactly one of
 the two, so it is refused at the edge rather than rendered as nothing. Worth
 checking whether any existing row is already in this state before adding it.
+
+---
+
+### 🟡 TEST-5: Two replay tests fail together, about one run in seven
+
+**File:** `src/__tests__/integration/replay.test.ts`
+**Severity:** MEDIUM — it is a test defect, but an undiagnosed one in the suite
+that guards the offline queue
+**Status:** OPEN — found 2026-08-11
+
+`refuses a key reused for a different change, and applies nothing` and
+`refuses a key reused for a different procedure` fail **together**,
+intermittently, both with the same error out of `answerFromRecord`:
+`TRPCError: This key was already used for a different change`.
+
+**Reproduction:** run the file in a loop. It fails within about ten runs — 1 of
+9, then 1 of 5, then 1 of 12 in the attempts made so far. A single run tells you
+nothing.
+
+**What has been ruled out.** The key generator was a counter formatted into a
+UUID, producing the same sequence every run against a shared database; that was
+the obvious suspect and it is not the cause — the failure reproduces with
+`randomUUID()`. It is not stale rows from an earlier run either: the lookup in
+`withReplay` is scoped by `[userId, key]` and the test users are created fresh
+per run.
+
+**What is known.** Instrumenting the failing test to dump
+`mutationReplay.findMany({ userId })` immediately before its first call prints
+`[]` — no rows for that user at all — and the very next statement fails as
+though a record existed under a different procedure. So either a record appears
+between those two statements, or the error surfacing there was raised somewhere
+else and attributed to this test: the second half is plausible, because the
+BAD_REQUEST is exactly what the *other* failing test legitimately expects, and
+both fail in the same runs.
+
+**Where to look next:** whether an expected rejection in one test is escaping as
+an unhandled rejection and being attributed to whichever test is running. That
+would explain the pairing, the intermittency, and why the printed error is one
+the suite is supposed to produce.
+
+**Almost certainly the failure recorded in `STATUS.md`** as one unattributed
+integration test on this date, which was seen before this file was under
+suspicion.
 
 ---
 

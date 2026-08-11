@@ -376,26 +376,22 @@ card tier), A11Y-1 (a saved stock movement announcing nothing), I18N-7 (the
 hardcoded badge) and I18N-8 (both auth pages). `ISSUES.md` holds the detail;
 where it disagrees with this file, it is right.
 
-**Found while documenting, not yet fixed**
-- `product.delete` refuses to delete a product anything references — which is
-  defensible — but the P2003 reaches the caller as "That refers to something
-  that does not exist", a sentence about the opposite of what happened.
-  (PROD-1)
-- A shopping item with neither a product nor a custom name is accepted, and
-  arrives on the phone screen as an empty row that can still be ticked.
-  (SHOP-1)
-- `store.delete` has the same shape as PROD-1: no reference check, so a store
-  with price history fails on a foreign key rather than with a sentence.
-  `location.delete` one file away does check, and says which.
+**Found while documenting, and fixed**
+- ~~`product.delete` and `store.delete` fail on a foreign key and blame the
+  caller.~~ **Closed** (PROD-1). Both count references first and refuse with
+  CONFLICT naming them; the rule that a used product cannot be deleted is
+  unchanged, and asserted.
+- ~~A shopping item with neither a product nor a name is accepted.~~ **Closed**
+  (SHOP-1). Exactly one of the two, whitespace not counting as a name; no
+  existing row was in either state.
 
-**One unattributed test failure**
-- A single integration test failed once, on 2026-08-11, in a run immediately
-  after `pnpm verify:local`. Its name was not captured, and eight subsequent
-  runs — five of the suite alone, two reproducing the exact `verify:local`-then-
-  integration sequence, one confirming — were all green. It is recorded here
-  because a flake nobody wrote down is a flake nobody looks for, and because
-  the suite shares a database and a Valkey with whatever ran before it, which
-  is the obvious place to look if it returns.
+**One intermittent test failure, now named**
+- ~~A single integration test failed once and its name was not captured.~~ It
+  has a name: two tests in `src/__tests__/integration/replay.test.ts` fail
+  *together*, about one run in seven, both out of `answerFromRecord`. Filed as
+  **TEST-5** with a reproduction (run the file in a loop), what has been ruled
+  out — the deterministic key generator, which was the obvious suspect and is
+  not the cause — and where to look next. Not diagnosed.
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**
