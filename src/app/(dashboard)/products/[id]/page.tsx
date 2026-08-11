@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
 
@@ -133,6 +133,16 @@ export default function ProductDetailPage({
    * so the negative entries are excluded rather than shown as batches expiring
    * in the past.
    */
+  /**
+   * One instant for the whole render, captured once per mount.
+   *
+   * `Date.now()` reached from JSX is an impure call during render: it stops
+   * the React Compiler memoising this list, and two batches compared against
+   * two different "now"s can disagree. A lazy `useState` initialiser runs once
+   * and React owns the memoisation of it.
+   */
+  const [now] = useState(() => Date.now());
+
   const batches = useMemo<Batch[]>(() => {
     if (!product) return [];
 
@@ -288,7 +298,7 @@ export default function ProductDetailPage({
               <li key={batch.id} className="px-4 py-3">
                 <p className="font-medium text-foreground">
                   {dateFormat.format(batch.expiresAt)}
-                  {batch.expiresAt.getTime() < Date.now() ? (
+                  {batch.expiresAt.getTime() < now ? (
                     <span className="ml-2 font-semibold text-danger-foreground">
                       {t("expiryExpired")}
                     </span>
