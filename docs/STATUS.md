@@ -385,6 +385,28 @@ where it disagrees with this file, it is right.
   (SHOP-1). Exactly one of the two, whitespace not counting as a name; no
   existing row was in either state.
 
+**Verified end to end on 2026-08-11**, at `2b148a2`, every gate in one sequence:
+
+| Gate | Result |
+|---|---|
+| `pnpm verify:ci` — lint, typecheck, react-doctor, links, contrast, unit, components, integration, build | 436 unit, 342 component, 395 integration, build ✅ |
+| `bunx playwright test` | 108 passed, 3.8 min |
+| `pnpm test:e2e:sw` — the standalone artefact the image runs | 5 passed |
+| `pnpm lint` | 0 warnings, 0 errors |
+
+Two things that sequence surfaced, both operational rather than defects:
+
+- **`verify:ci` fails roughly one run in seven, on TEST-5.** It took three
+  attempts to get a clean one. The failure is always the same test, always out
+  of `answerFromRecord`, and it is the diagnosed bun defect below — not a
+  regression. Re-run before investigating. This is the concrete cost of that
+  entry: the gate `CLAUDE.md` requires before every commit is the gate it
+  breaks.
+- **`verify:ci` stops the `db` and `cache` containers when it finishes**, unless
+  `KEEP_TEST_SERVICES=1`. The browser suite then fails at its `seed` step with
+  107 tests unrun, which reads as a catastrophe and is a stopped container.
+  Bring them back with `docker compose -f docker-compose.dev.yml up -d db cache`.
+
 **One intermittent failure, diagnosed and upstream**
 - bun 1.3.14 intermittently **abandons a test body at a rejecting `await`**: the
   `catch` beside it never runs, the test's own assertion never executes (one

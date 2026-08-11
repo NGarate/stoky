@@ -789,6 +789,21 @@ Two earlier readings in this entry were wrong and are worth keeping visible:
 Each was corrected by an experiment rather than by more reasoning, and each
 looked convincing until the next measurement.
 
+## What it costs, which is more than a rerun
+
+**`pnpm verify:ci` fails roughly one run in seven because of this**, and that is
+the gate `CLAUDE.md` requires to pass before every commit. Getting a clean full
+run on 2026-08-11 took three attempts. CI's `test` job will do the same, and the
+failure will look like a defect in the replay layer to anybody who has not read
+this entry — which is the cost worth counting, rather than the seconds spent
+re-running.
+
+No mitigation has been found that does not also hide real failures. Retrying the
+job masks everything; the two reshapings of the assertion that seemed likely —
+a thunk, and `.catch()` attached synchronously — were measured and did not help.
+So the entry stands as the mitigation: recognise the signature, re-run, do not
+investigate.
+
 ## What to do about it
 
 Nothing in this repository — `withReplay` is correct and its tests are correct.
