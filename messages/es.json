@@ -392,8 +392,8 @@
     "confirm": "Confirmar ticket",
     "status": {
       "uploading": "Subiendo",
-      "processing": "Procesando",
-      "parsed": "Procesado",
+      "processing": "Leyendo el ticket",
+      "parsed": "Datos extraídos",
       "needs_review": "Necesita revisión",
       "confirmed": "Confirmado",
       "applied": "Aplicado",

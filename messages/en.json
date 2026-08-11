@@ -392,8 +392,8 @@
     "confirm": "Confirm receipt",
     "status": {
       "uploading": "Uploading",
-      "processing": "Processing",
-      "parsed": "Parsed",
+      "processing": "Reading the receipt",
+      "parsed": "Details extracted",
       "needs_review": "Needs review",
       "confirmed": "Confirmed",
       "applied": "Applied",
