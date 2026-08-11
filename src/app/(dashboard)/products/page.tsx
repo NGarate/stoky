@@ -46,10 +46,11 @@ export default function ProductsPage(): JSX.Element {
   // the skeleton for ever, with no message and no way forward — ISSUES.md
   // UI-8 — and the one failure no amount of waiting fixes is an account
   // with no household, which is HOUSE-1.
-  if (query.isPending || query.error || !result) {
+  if (!result) {
     return (
       <RouteState
         error={query.error}
+        fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
         title="Productos"

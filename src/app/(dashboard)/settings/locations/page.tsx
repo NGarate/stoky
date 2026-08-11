@@ -50,10 +50,11 @@ export default function LocationsPage() {
   // Three states, not two. `if (isLoading)` alone falls through on a failed
   // query and renders the empty state below, so someone with ten locations is
   // told they have none (ISSUES.md UI-9).
-  if (locationsQuery.isPending || locationsQuery.error || !locations) {
+  if (!locations) {
     return (
       <RouteState
         error={locationsQuery.error}
+        fetchStatus={locationsQuery.fetchStatus}
         isLoading={locationsQuery.isPending}
         onRetry={() => void locationsQuery.refetch()}
         title={TITLE}

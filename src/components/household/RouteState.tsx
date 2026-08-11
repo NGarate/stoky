@@ -19,11 +19,22 @@ import type { FormEvent, JSX } from "react";
  * every household-scoped procedure refuses and no amount of waiting fixes
  * (HOUSE-1).
  *
+ * - **Nothing saved** — offline, with nothing cached for this screen. TanStack
+ *   Query calls this `fetchStatus: "paused"`, and it is not a failure: no
+ *   request was made, so there is nothing to retry until there is signal.
  * - **Loading** — the skeleton, as before.
  * - **No household** — a form to create one. The account is fine; it is
  *   missing a precondition it can supply itself, which is why the server says
  *   PRECONDITION_FAILED rather than FORBIDDEN.
  * - **Anything else** — what happened, and a button to try again.
+ *
+ * The paused branch comes first because a paused query is *also* `isPending`,
+ * so a skeleton would win and someone with no signal would watch it for ever —
+ * which is UI-8 again, arrived at from the other direction.
+ *
+ * `fetchStatus` is required rather than defaulted. A default would silently
+ * give every existing caller the old behaviour, which is the bug; the compiler
+ * is what makes each route decide.
  */
 
 interface RouteStateProps {
@@ -31,6 +42,8 @@ interface RouteStateProps {
   /** The failing query, so this component can retry it. */
   isLoading: boolean;
   error: unknown;
+  /** `query.fetchStatus` — `"paused"` means offline with no request in flight. */
+  fetchStatus: "fetching" | "paused" | "idle";
   onRetry: () => void;
 }
 
@@ -42,13 +55,41 @@ export function isNoHouseholdError(error: unknown): boolean {
   );
 }
 
+/** True when the server said the thing being asked for does not exist. */
+export function isNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof TRPCClientError && error.data?.code === "NOT_FOUND"
+  );
+}
+
 export function RouteState({
   title,
   isLoading,
   error,
+  fetchStatus,
   onRetry,
 }: RouteStateProps): JSX.Element {
   const t = useTranslations("household");
+  const offline = useTranslations("offline");
+
+  if (fetchStatus === "paused") {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <h1 className="mb-6 text-2xl font-bold text-heading md:text-4xl">{title}</h1>
+        <div className="rounded-xl border border-input bg-card p-6">
+          <h2 className="text-lg font-semibold text-heading">
+            {offline("nothingSavedTitle")}
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {offline("nothingSavedBody")}
+          </p>
+          <Button className="mt-4" onClick={onRetry} type="button">
+            {offline("refresh")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

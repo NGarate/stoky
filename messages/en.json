@@ -592,5 +592,10 @@
     "expiringIn": "Your session will close in {minutes} min after being idle. Anything unsaved will be lost.",
     "expired": "Your session closed after being idle. Sign in again to carry on.",
     "staySignedIn": "Stay signed in"
+  },
+  "offline": {
+    "nothingSavedTitle": "Nothing saved here yet",
+    "nothingSavedBody": "You are offline and this screen had not been saved on the phone. Try again once you have signal.",
+    "refresh": "Try again"
   }
 }

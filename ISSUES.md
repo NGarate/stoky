@@ -1529,6 +1529,21 @@ meets this.
 `/inventory` and `/products`: `isPending || error || !data` hands off to
 `RouteState`, which tells a missing household apart from any other failure.
 
+**A third route had it, found 2026-08-11 while designing the offline layer.**
+`/shopping/[id]` read `if (isLoading)` and then `if (!list) return
+errors.notFound`. TanStack Query's `isLoading` is `isPending && isFetching`,
+and a query paused for want of a connection is pending but *not* fetching — so
+with no signal the guard was false and the page told someone standing in a
+supermarket that the list in their hand does not exist. A genuinely deleted
+list must still say so, so the two are now told apart by the error code rather
+than by the absence of data.
+
+**And the guard itself was the wrong shape on all five.** `isPending || error
+|| !data` replaces a working page with a failure panel the moment a background
+refetch fails — the data on screen is still true, only the refresh failed. The
+condition is now `!data`: render what is loaded whenever there is anything
+loaded, and choose between the four no-data screens only when there is not.
+
 Pinned by `src/__tests__/components/route-query-failure.test.tsx`, six tests
 over the two routes. The assertion is deliberately a *pair* — the failure copy
 present **and** the empty-state copy absent — because checking only the first

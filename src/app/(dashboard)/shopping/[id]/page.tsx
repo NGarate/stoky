@@ -5,14 +5,28 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
+import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 
 interface ShoppingListPageProps {
   params: Promise<{ id: string }>;
 }
 
+/**
+ * The route, which exists only to unwrap its params.
+ *
+ * The screen is a separate component taking a plain `id`, because
+ * `React.use(promise)` never resumes under the component tier's runtime —
+ * Suspense holds its fallback for ever — and a screen that can only be
+ * exercised by a browser is a screen whose states go unchecked. The split
+ * costs one component and buys the four tests below it.
+ */
 export default function ShoppingListPage({ params }: ShoppingListPageProps) {
-  const t = useTranslations();
   const { id } = React.use(params);
+  return <ShoppingListView id={id} />;
+}
+
+export function ShoppingListView({ id }: { id: string }) {
+  const t = useTranslations();
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     customName: "",
@@ -20,7 +34,8 @@ export default function ShoppingListPage({ params }: ShoppingListPageProps) {
     unit: "unit",
   });
 
-  const { data: list, isLoading } = api.shopping.getById.useQuery({ id });
+  const listQuery = api.shopping.getById.useQuery({ id });
+  const list = listQuery.data;
 
   const addItemMutation = api.shopping.addItem.useMutation({
     onSuccess: () => {
@@ -47,12 +62,23 @@ export default function ShoppingListPage({ params }: ShoppingListPageProps) {
     }
   };
 
-  if (isLoading) {
-    return <div className="p-8">{t("common.loading")}</div>;
-  }
-
+  // Data first. `isLoading` is `isPending && isFetching`, which is *false*
+  // for a paused query — so with no signal this fell straight through to
+  // "not found" and told someone standing in a shop that the list they were
+  // shopping from does not exist (ISSUES.md UI-9).
   if (!list) {
-    return <div className="p-8">{t("errors.notFound")}</div>;
+    if (isNotFoundError(listQuery.error)) {
+      return <div className="p-8">{t("errors.notFound")}</div>;
+    }
+    return (
+      <RouteState
+        error={listQuery.error}
+        fetchStatus={listQuery.fetchStatus}
+        isLoading={listQuery.isPending}
+        onRetry={() => void listQuery.refetch()}
+        title={t("shopping.title")}
+      />
+    );
   }
 
   const totalItems = list.items.length;

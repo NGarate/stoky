@@ -37,7 +37,7 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
-const { RouteState, isNoHouseholdError } = await import(
+const { RouteState, isNoHouseholdError, isNotFoundError } = await import(
   "@/components/household/RouteState"
 );
 
@@ -69,10 +69,98 @@ describe("isNoHouseholdError", () => {
   });
 });
 
+describe("isNotFoundError", () => {
+  it("recognises only NOT_FOUND", () => {
+    expect(isNotFoundError(trpcError("NOT_FOUND"))).toBe(true);
+    expect(isNotFoundError(trpcError("PRECONDITION_FAILED"))).toBe(false);
+    expect(isNotFoundError(new Error("nope"))).toBe(false);
+    expect(isNotFoundError(null)).toBe(false);
+  });
+});
+
+describe("RouteState with no signal", () => {
+  it("says nothing is saved rather than showing a skeleton for ever", () => {
+    // A paused query is *also* `isPending`, so without an explicit branch the
+    // skeleton wins and someone with no signal watches it indefinitely.
+    renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="paused"
+        isLoading
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+    );
+
+    expect(
+      screen.getByText("Aquí todavía no hay nada guardado"),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[aria-busy]")).toBeNull();
+  });
+
+  it("does not call it a failure, because nothing was attempted", () => {
+    renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="paused"
+        isLoading
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+    );
+
+    expect(
+      screen.queryByText("No se han podido cargar los datos"),
+    ).toBeNull();
+  });
+
+  it("offers a way to ask again once there is signal", async () => {
+    const onRetry = mock(() => {});
+    renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="paused"
+        isLoading
+        onRetry={onRetry}
+        title="Inventario"
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Volver a intentarlo" }),
+    );
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("still offers the household form when that is the reason, not the signal", () => {
+    // Paused wins over everything else, but an idle query carrying a refusal
+    // must not be swallowed by it.
+    renderWithIntl(
+      <RouteState
+        error={trpcError("PRECONDITION_FAILED")}
+        fetchStatus="idle"
+        isLoading={false}
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+    );
+
+    expect(screen.getByText("Todavía no tienes un hogar")).toBeInTheDocument();
+    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeNull();
+  });
+});
+
 describe("RouteState", () => {
   it("shows the skeleton while loading, and no error and no form", () => {
     renderWithIntl(
-      <RouteState error={null} isLoading onRetry={() => {}} title="Inventario" />,
+      <RouteState
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Inventario"
+      />,
     );
 
     expect(screen.getByRole("heading", { name: "Inventario" })).toBeInTheDocument();
@@ -83,6 +171,7 @@ describe("RouteState", () => {
   it("offers a way to create a household when that is what is missing", () => {
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("PRECONDITION_FAILED")}
         isLoading={false}
         onRetry={() => {}}
@@ -101,6 +190,7 @@ describe("RouteState", () => {
     const onRetry = mock(() => {});
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("INTERNAL_SERVER_ERROR")}
         isLoading={false}
         onRetry={onRetry}
@@ -116,6 +206,7 @@ describe("RouteState", () => {
     const onRetry = mock(() => {});
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("INTERNAL_SERVER_ERROR")}
         isLoading={false}
         onRetry={onRetry}
@@ -131,6 +222,7 @@ describe("RouteState", () => {
   it("sends the trimmed name to the server", async () => {
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("PRECONDITION_FAILED")}
         isLoading={false}
         onRetry={() => {}}
@@ -147,6 +239,7 @@ describe("RouteState", () => {
   it("will not submit a name that is only whitespace", async () => {
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("PRECONDITION_FAILED")}
         isLoading={false}
         onRetry={() => {}}
@@ -167,6 +260,7 @@ describe("RouteState", () => {
     // household, so all of them are stale, not just the one that failed last.
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("PRECONDITION_FAILED")}
         isLoading={false}
         onRetry={() => {}}
@@ -182,6 +276,7 @@ describe("RouteState", () => {
   it("says so when creating the household fails", async () => {
     renderWithIntl(
       <RouteState
+        fetchStatus="idle"
         error={trpcError("PRECONDITION_FAILED")}
         isLoading={false}
         onRetry={() => {}}

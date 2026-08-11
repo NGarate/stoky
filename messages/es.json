@@ -592,5 +592,10 @@
     "expiringIn": "Tu sesión se cerrará en {minutes} min por inactividad. Lo que no hayas guardado se perderá.",
     "expired": "Tu sesión se ha cerrado por inactividad. Vuelve a entrar para seguir.",
     "staySignedIn": "Seguir conectado"
+  },
+  "offline": {
+    "nothingSavedTitle": "Aquí todavía no hay nada guardado",
+    "nothingSavedBody": "No tienes conexión y esta pantalla no se había guardado en el móvil. Vuelve a intentarlo cuando tengas señal.",
+    "refresh": "Volver a intentarlo"
   }
 }

@@ -37,10 +37,11 @@ export default function ShoppingListsPage() {
   // query and renders the empty state below, so someone with four lists is
   // told they have none and the only tell is that creating one appears to do
   // nothing (ISSUES.md UI-9).
-  if (listsQuery.isPending || listsQuery.error || !lists) {
+  if (!lists) {
     return (
       <RouteState
         error={listsQuery.error}
+        fetchStatus={listsQuery.fetchStatus}
         isLoading={listsQuery.isPending}
         onRetry={() => void listsQuery.refetch()}
         title={t("shopping.title")}
