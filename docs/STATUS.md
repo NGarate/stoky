@@ -468,14 +468,13 @@ Two things that sequence surfaced, both operational rather than defects:
   correctness one.
 
 **Operational**
-- **Receipt scanning does not work in the production image at all** — OCR-2,
-  and the most serious thing open. A receipt uploaded to the image sits at
-  `PROCESSING` for ever while the server throws an uncaught
-  `Cannot find module '..'`: Next's tracing copies tesseract.js's worker thread
-  entry point without the sibling it immediately requires. Half fixed
-  (`serverExternalPackages` corrected a bogus `/ROOT/...` path); the missing
-  file remains. Found by driving a receipt through an air-gapped container,
-  which is the one thing OCR-1 was closed without doing.
+- ~~**Receipt scanning does not work in the production image.**~~ **Closed**
+  (OCR-2). The Dockerfile stages tesseract.js whole — tracing had copied three
+  of its ten dependency entries, the WASM engine among the missing — with
+  build-time assertions on the two files whose absence broke scanning. Verified
+  air-gapped: a real upload reached NEEDS_REVIEW in under three seconds and the
+  lines read back character-perfect, which also puts data behind OCR-1's
+  smaller-model trade.
 - ~~OCR fetches its Tesseract language data from a CDN at first use.~~
   **Closed**, and still true as far as it goes: the model is baked in, pinned
   and checksummed, and `TESSDATA_PATH` points at it. That was necessary and, as

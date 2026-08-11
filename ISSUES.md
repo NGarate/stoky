@@ -9,9 +9,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: OCR-2**, a headline feature that does not work in the production image,
-found by driving a receipt through the image itself. And **TEST-5**, an
-intermittent failure in the suite that guards
+**Open: TEST-5**, an intermittent failure in the suite that guards
 the offline queue, found by chasing the unattributed failure `STATUS.md`
 records. It is the only entry in this file that is not closed.
 
@@ -54,7 +52,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
-| OCR-2 | Receipt scanning does not work in the production image | 🔴 **OPEN** |
+| OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
@@ -693,7 +691,7 @@ checking whether any existing row is already in this state before adding it.
 
 ---
 
-### 🔴 OCR-2: receipt scanning does not work in the production image
+### ✅ OCR-2: receipt scanning does not work in the production image
 
 **Files:** `next.config.ts`, `src/server/services/ocr.ts`
 **Severity:** HIGH — a headline feature is completely non-functional when deployed
@@ -724,10 +722,24 @@ the path is now correct. The missing file is what remains.
 `.pnpm` path. The directory in the image was unchanged after both. Reverted
 rather than left in place doing nothing.
 
-**Where to go next:** copy the package in the Dockerfile instead of asking the
-tracer for it — `COPY --from=builder /app/node_modules/.pnpm/tesseract.js@*
-...` — which sidesteps tracing entirely and matches how the traineddata already
-gets in. Verify with the recipe below before believing any of it.
+**Resolution — the suggested fix, and it was bigger than the missing file.**
+The package has ten dependency entries and the traced image carried three;
+among the missing was `tesseract.js-core`, the WASM engine itself, loaded by
+path at runtime exactly like the worker. The Dockerfile now stages the whole
+`.pnpm` directory dereferenced (`cp -rL`) in the builder and lands it where the
+standalone output's symlinks already point, removing the traced partial copy
+first — it holds symlinks where the staged tree has directories, and COPY
+refuses to overwrite one with the other.
+
+Two build-time assertions pin the worker's `require('..')` target and the core
+engine, so a wrong path fails `docker build` rather than the first scan of a
+deployed household.
+
+**Verified with the recipe below**: air-gapped, read-only, a real upload as the
+seeded demo user — UPLOADING → NEEDS_REVIEW in under three seconds, and the
+lines read back character-perfect: "LECHE ENTERA 1,19" parsed to name and
+price. Which also puts data behind OCR-1's model trade: the 2.3 MB fast model
+reads printed receipt text exactly.
 
 ## How to reproduce, and why it was not found sooner
 
