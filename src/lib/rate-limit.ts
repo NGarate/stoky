@@ -188,6 +188,18 @@ function getClient(): Redis {
   return client;
 }
 
+/**
+ * Is the cache answering?
+ *
+ * Here rather than in the health route because the connection is here: a second
+ * client opened for the health check would prove that *a* connection works
+ * rather than that the one sign-in depends on does, and would hold a second
+ * socket open for the life of the process.
+ */
+export async function pingCache(): Promise<void> {
+  await getClient().ping();
+}
+
 /** Test seam: drops the cached connection so a suite can exit cleanly. */
 export async function closeRateLimiter(): Promise<void> {
   if (client) {

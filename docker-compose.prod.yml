@@ -86,6 +86,21 @@ services:
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
     volumes:
       - uploads:/app/uploads
+    # The one service that had no healthcheck, though it is the one that can
+    # wedge: a Next process that has stopped answering is still "running", so
+    # `restart: unless-stopped` never fires without this. `/api/health` also
+    # checks that db and cache are reachable, because an app that answers HTTP
+    # but cannot sign anybody in is not healthy in any sense that matters.
+    #
+    # `wget` rather than `curl`: the production image is `node:24-alpine`,
+    # where BusyBox provides wget and curl is not installed. `start_period`
+    # covers the first boot, when Prisma is still connecting.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - stoky
       - traefik
