@@ -755,6 +755,13 @@ translated into codes a caller can act on (`P2025` → `NOT_FOUND`, `P2002` →
 as one middleware on every procedure. It was the highest-value item the Phase 4
 design left, because it is what makes `classify.ts`'s table *true*.
 
+**Also done:** provisioning. `/settings/people` lists the household and creates
+an account with a role, which is what makes `KITCHEN` reachable at all — it has
+been enforced on the server since Phase 3 and creatable only by a database
+write ever since. Three defects on `/shopping` came out of testing it: a
+newly-created list was hidden by a filter meant for completed ones, creating a
+list did not refresh the page, and adding an item did not either.
+
 **Also done:** a sign-out control, on `/settings`. There was none anywhere, so
 `queue.purgeAll` and the cached shell's purge were security controls nothing
 could fire. It asks before discarding unsent changes and offers to send them
@@ -763,7 +770,6 @@ first.
 | Item | Why it is here |
 |---|---|
 | **Screen A's layout** (§3) | Deferred from Phase 4. Shares vocabulary with the kitchen screen, so building them together is cheaper |
-| **Provisioning a KITCHEN account** | The role is enforced and unprovisionable; only a database write creates one. Inherited from Phase 3 |
 | **Read persistence** | Three `@tanstack/*` packages, so opening with no signal shows the last data seen rather than "nothing saved yet" |
 | **A place to see what did not save** | `/settings/unsaved`. The indicator names failures inline; a review route is better |
 | A11Y-1 | Saving a stock movement announces nothing. Pinned by a test that goes red when it is fixed |

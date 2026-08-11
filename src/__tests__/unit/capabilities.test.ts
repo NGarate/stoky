@@ -14,7 +14,7 @@ import { CAPABILITY_ROLES } from "@/server/trpc/trpc";
  * It cannot see whether the middleware actually refuses anything — that is
  * `src/__tests__/integration/capabilities.test.ts`, which calls the procedures
  * as a kitchen account. What it *can* see, and the behavioural suite cannot
- * without calling all 44, is a procedure added later that quietly takes the
+ * without calling all of them, is a procedure added later that quietly takes the
  * wrong tier. A new procedure not listed here fails this test, which is the
  * point: adding one is a decision about who may call it.
  */
@@ -33,6 +33,11 @@ const EXPECTED: Record<string, Record<string, string>> = {
   "household.ts": {
     current: "protectedProcedure",
     create: "protectedProcedure",
+    // The other two are admin: the matrix puts "invite people" and "see
+    // account data and emails" there, and a kitchen tablet left on a counter
+    // must not list the household's email addresses to whoever picks it up.
+    members: "adminProcedure",
+    addMember: "adminProcedure",
   },
   "inventory.ts": {
     getStockOverview: "householdProcedure",

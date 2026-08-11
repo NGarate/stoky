@@ -723,3 +723,21 @@ them, or stay. With nothing pending it says so and gets on with it, which keeps
 §7 rule 3 (undo rather than confirm) for the case that is actually routine.
 "Send first" is offered even with no signal, where it will not succeed; the
 attempt is what tells the person the changes are still there rather than gone.
+
+**D52 — "Not completed" is not "has something unticked".**
+`/shopping` filtered on `items: { some: { isChecked: false } }`, which also hid
+every list with **no items at all** — so creating one made it vanish. Combined
+with two missing cache invalidations (creating a list, and adding an item), the
+whole flow looked broken in three independent ways at once, and none of them
+had a test. All three were found by writing a browser test that needed to
+create its own list, which is the second time this phase that making a test
+independent of the seed found real defects.
+
+**D53 — A test that shares seeded state is a test that will fail later.**
+`offline-shop.spec.ts` opened the seeded list. It passed alone and failed in a
+full run, because another journey ticks that list's items and `/shopping` hides
+a completed one. It creates its own list now — four extra actions, and
+independence from the seed, from the order specs run in, and from each other.
+`ISSUES.md` TEST-3 is the same lesson; this is its third appearance, so the
+rule is worth stating plainly: **a browser test that reads seeded state must
+either create what it reads or assert nothing about its shape.**

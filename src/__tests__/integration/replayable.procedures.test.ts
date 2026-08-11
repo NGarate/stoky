@@ -131,6 +131,55 @@ function shoppingItemCount() {
   return prisma.shoppingItem.count({ where: { shoppingListId: OWNER.listId } });
 }
 
+describe("what /shopping shows", () => {
+  it("shows a list that has just been created and has nothing in it", async () => {
+    const api = await caller();
+    const empty = await api.shopping.create({ name: "Recién creada" });
+
+    const lists = await api.shopping.list({ includeCompleted: false });
+
+    // The filter was `items: { some: { isChecked: false } }`, which also hid
+    // every list with no items — so creating one made it disappear and the
+    // button looked broken.
+    expect(lists.map((list) => list.id)).toContain(empty.id);
+  });
+
+  it("still hides a list whose items are all ticked", async () => {
+    const api = await caller();
+    const item = await api.shopping.addItem({
+      ...envelope(),
+      shoppingListId: OWNER.listId,
+      customName: "Pan",
+      quantity: 1,
+      unit: "unit",
+    });
+    await api.shopping.updateItem({
+      ...envelope(),
+      id: item.id,
+      isChecked: true,
+    });
+
+    const lists = await api.shopping.list({ includeCompleted: false });
+
+    expect(lists.map((list) => list.id)).not.toContain(OWNER.listId);
+  });
+
+  it("shows a list with something still to buy", async () => {
+    const api = await caller();
+    await api.shopping.addItem({
+      ...envelope(),
+      shoppingListId: OWNER.listId,
+      customName: "Pan",
+      quantity: 1,
+      unit: "unit",
+    });
+
+    const lists = await api.shopping.list({ includeCompleted: false });
+
+    expect(lists.map((list) => list.id)).toContain(OWNER.listId);
+  });
+});
+
 describe("shopping.addItem", () => {
   it("adds one item however many times it arrives", async () => {
     const api = await caller();

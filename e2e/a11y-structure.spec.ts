@@ -56,6 +56,7 @@ const TIERS = [
 const PUBLIC_ROUTES = ["/login", "/register", "/offline"];
 
 const PRIVATE_ROUTES = [
+  "/settings/people",
   "/dashboard",
   "/inventory",
   "/inventory/add",

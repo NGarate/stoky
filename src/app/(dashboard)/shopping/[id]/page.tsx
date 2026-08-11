@@ -6,7 +6,6 @@ import Link from "next/link";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
-import { useEnvelope } from "@/components/offline/Composer";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 
@@ -30,8 +29,6 @@ export default function ShoppingListPage({ params }: ShoppingListPageProps) {
 
 export function ShoppingListView({ id }: { id: string }) {
   const t = useTranslations();
-  const envelope = useEnvelope();
-  const { state: queue } = useWriteQueue();
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     customName: "",
@@ -42,12 +39,7 @@ export function ShoppingListView({ id }: { id: string }) {
   const listQuery = api.shopping.getById.useQuery({ id });
   const list = listQuery.data;
 
-  const addItemMutation = api.shopping.addItem.useMutation({
-    onSuccess: () => {
-      setIsAdding(false);
-      setNewItem({ customName: "", quantity: 1, unit: "unit" });
-    },
-  });
+  const { state: queueState, enqueue } = useWriteQueue();
 
   const deleteListMutation = api.shopping.delete.useMutation({
     onSuccess: () => {
@@ -58,13 +50,25 @@ export function ShoppingListView({ id }: { id: string }) {
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (newItem.customName.trim()) {
-      addItemMutation.mutate({
-        ...envelope(),
-        shoppingListId: id,
-        customName: newItem.customName.trim(),
-        quantity: newItem.quantity,
-        unit: newItem.unit,
+      // Enqueued like the tick-off and the removal: all three writes on this
+      // screen go the same way, so there is one path to get wrong. It also
+      // means adding something works with no signal, and shows immediately
+      // through the projection rather than after a round trip.
+      enqueue({
+        path: "shopping.addItem",
+        input: {
+          shoppingListId: id,
+          customName: newItem.customName.trim(),
+          quantity: newItem.quantity,
+          unit: newItem.unit,
+        },
+        label: {
+          key: "offline.addedItem",
+          values: { name: newItem.customName.trim() },
+        },
       });
+      setIsAdding(false);
+      setNewItem({ customName: "", quantity: 1, unit: "unit" });
     }
   };
 
@@ -91,7 +95,7 @@ export function ShoppingListView({ id }: { id: string }) {
   // tab discarded mid-shop reopens showing the ticks undone, and every one of
   // them gets tapped again — with a *new* key each time, which is a double
   // count no idempotency can catch.
-  const items = projectShoppingItems(list.items, queue.pending, id);
+  const items = projectShoppingItems(list.items, queueState.pending, id);
 
   const totalItems = items.length;
   const checkedItems = items.filter((item) => item.isChecked).length;
@@ -195,7 +199,6 @@ export function ShoppingListView({ id }: { id: string }) {
             />
             <button
               type="submit"
-              disabled={addItemMutation.isPending}
               className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {t("common.add")}

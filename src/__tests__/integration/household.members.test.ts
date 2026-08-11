@@ -1,0 +1,208 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { appRouter } from "@/server/trpc/router";
+import { createTRPCContext } from "@/server/trpc/trpc";
+import { prisma } from "@/lib/prisma";
+import { TRPCError } from "@trpc/server";
+import * as argon2 from "argon2";
+import type { HouseholdRole } from "@prisma/client";
+import type { Session } from "next-auth";
+
+/**
+ * Making the KITCHEN role reachable.
+ *
+ * It has been enforced on the server since Phase 3 and unprovisionable ever
+ * since: the value was in the enum and in the middleware, and the only way to
+ * get one was a database write. Phase 5's kitchen screen cannot be tested
+ * honestly without this — a week-long run on a tablet under an *owner's*
+ * account proves nothing about what a kitchen account can reach.
+ */
+
+const HOUSEHOLD = { id: "", ownerId: "", memberId: "" };
+const OTHER = { id: "", adminId: "" };
+
+async function callerFor(userId: string, householdId: string) {
+  const session: Session = {
+    user: {
+      id: userId,
+      email: `${userId}@example.com`,
+      name: "Someone",
+      householdId,
+      role: "OWNER",
+    },
+    expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+  };
+  return appRouter.createCaller(await createTRPCContext({ session }));
+}
+
+async function makeUser(
+  householdId: string,
+  role: HouseholdRole,
+  label: string,
+) {
+  return prisma.user.create({
+    data: {
+      email: `people-${label}-${Date.now()}-${Math.round(performance.now())}@example.com`,
+      name: `People ${label}`,
+      passwordHash: await argon2.hash("TestPassword123!", {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+      }),
+      householdId,
+      role,
+    },
+  });
+}
+
+async function codeOf(call: Promise<unknown>): Promise<string> {
+  try {
+    await call;
+    return "no error";
+  } catch (error) {
+    return error instanceof TRPCError ? error.code : `not TRPCError: ${error}`;
+  }
+}
+
+beforeAll(async () => {
+  const household = await prisma.household.create({ data: { name: "People A" } });
+  const other = await prisma.household.create({ data: { name: "People B" } });
+  HOUSEHOLD.id = household.id;
+  OTHER.id = other.id;
+
+  HOUSEHOLD.ownerId = (await makeUser(household.id, "OWNER", "owner")).id;
+  HOUSEHOLD.memberId = (await makeUser(household.id, "MEMBER", "member")).id;
+  OTHER.adminId = (await makeUser(other.id, "ADMIN", "otheradmin")).id;
+});
+
+beforeEach(async () => {
+  await prisma.user.deleteMany({
+    where: { householdId: HOUSEHOLD.id, email: { contains: "created-" } },
+  });
+});
+
+afterAll(async () => {
+  await prisma.user.deleteMany({
+    where: { householdId: { in: [HOUSEHOLD.id, OTHER.id] } },
+  });
+  await prisma.household.deleteMany({
+    where: { id: { in: [HOUSEHOLD.id, OTHER.id] } },
+  });
+  await prisma.$disconnect();
+});
+
+function newAccount(role: "MEMBER" | "KITCHEN") {
+  return {
+    name: role === "KITCHEN" ? "Tablet de la cocina" : "Alguien",
+    email: `created-${role.toLowerCase()}-${Date.now()}-${Math.round(performance.now())}@example.com`,
+    password: "TabletPassword123!",
+    role,
+  };
+}
+
+describe("creating a kitchen account", () => {
+  it("puts it in the caller's household with the KITCHEN role", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+
+    const created = await api.household.addMember(newAccount("KITCHEN"));
+
+    expect(created.role).toBe("KITCHEN");
+    const stored = await prisma.user.findUnique({ where: { id: created.id } });
+    expect(stored?.householdId).toBe(HOUSEHOLD.id);
+  });
+
+  it("gives it a password it can actually sign in with", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+    const account = newAccount("KITCHEN");
+
+    const created = await api.household.addMember(account);
+    const stored = await prisma.user.findUnique({ where: { id: created.id } });
+
+    // Argon2id, the same as registration. A row with an unusable hash would
+    // look created and be a locked-out tablet.
+    expect(stored?.passwordHash).toStartWith("$argon2id$");
+    expect(
+      await argon2.verify(stored?.passwordHash ?? "", account.password),
+    ).toBe(true);
+  });
+
+  it("never returns the hash", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+
+    const created = await api.household.addMember(newAccount("KITCHEN"));
+
+    expect(JSON.stringify(created)).not.toContain("argon2");
+    expect(created).not.toHaveProperty("passwordHash");
+  });
+
+  it("refuses an address that already has an account", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+    const account = newAccount("KITCHEN");
+    await api.household.addMember(account);
+
+    // The database's own unique constraint, translated. Checking first and
+    // then inserting would race with itself.
+    expect(await codeOf(api.household.addMember(account))).toBe("CONFLICT");
+  });
+});
+
+describe("what an admin may not create", () => {
+  it("refuses to mint another OWNER or ADMIN", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+
+    for (const role of ["OWNER", "ADMIN"]) {
+      const attempt = api.household.addMember({
+        ...newAccount("MEMBER"),
+        role: role as "MEMBER",
+      });
+      // Letting an admin mint an admin is a privilege escalation with no undo
+      // in a schema where `User.householdId` is a single column.
+      expect(await codeOf(attempt)).toBe("BAD_REQUEST");
+    }
+  });
+});
+
+describe("who may do any of this", () => {
+  it("refuses a MEMBER", async () => {
+    const api = await callerFor(HOUSEHOLD.memberId, HOUSEHOLD.id);
+
+    expect(await codeOf(api.household.members())).toBe("FORBIDDEN");
+    expect(await codeOf(api.household.addMember(newAccount("KITCHEN")))).toBe(
+      "FORBIDDEN",
+    );
+  });
+
+  it("writes nothing when it refuses", async () => {
+    const api = await callerFor(HOUSEHOLD.memberId, HOUSEHOLD.id);
+    const before = await prisma.user.count({
+      where: { householdId: HOUSEHOLD.id },
+    });
+
+    await api.household.addMember(newAccount("KITCHEN")).catch(() => undefined);
+
+    expect(
+      await prisma.user.count({ where: { householdId: HOUSEHOLD.id } }),
+    ).toBe(before);
+  });
+});
+
+describe("listing who is in the household", () => {
+  it("shows this household and no other", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+
+    const members = await api.household.members();
+    const ids = members.map((member) => member.id);
+
+    expect(ids).toContain(HOUSEHOLD.ownerId);
+    expect(ids).toContain(HOUSEHOLD.memberId);
+    // The failure that would be invisible in single-household testing.
+    expect(ids).not.toContain(OTHER.adminId);
+  });
+
+  it("does not hand out password hashes", async () => {
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+
+    const members = await api.household.members();
+
+    expect(JSON.stringify(members)).not.toContain("argon2");
+  });
+});

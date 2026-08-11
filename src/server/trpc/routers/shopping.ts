@@ -19,11 +19,15 @@ export const shoppingRouter = createTRPCRouter({
         where: {
           householdId: ctx.householdId,
           ...(!input.includeCompleted && {
-            items: {
-              some: {
-                isChecked: false,
-              },
-            },
+            // "Not completed" is not the same as "has something unticked".
+            // The filter used to be `items: { some: { isChecked: false } }`,
+            // which also hid every list with **no items at all** — so
+            // creating one made it vanish, and "Crear lista" looked like it
+            // did nothing. A list nobody has added to is new, not finished.
+            OR: [
+              { items: { none: {} } },
+              { items: { some: { isChecked: false } } },
+            ],
           }),
         },
         include: {

@@ -17,14 +17,25 @@ export default function ShoppingListsPage() {
   });
   const lists = listsQuery.data;
 
+  const utils = api.useUtils();
+
+  // Both of these add a list, and neither refreshed the list they added it to.
+  // Combined with the filter that hid an empty list, "Crear lista" looked like
+  // it did nothing at all — twice over.
   const createMutation = api.shopping.create.useMutation({
     onSuccess: () => {
       setIsCreating(false);
       setNewListName("");
+      void utils.shopping.list.invalidate();
     },
   });
 
-  const generateMutation = api.shopping.generateFromLowStock.useMutation();
+  const generateMutation = api.shopping.generateFromLowStock.useMutation({
+    onSuccess: () => {
+      void utils.shopping.list.invalidate();
+      void utils.shopping.getAutoList.invalidate();
+    },
+  });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();

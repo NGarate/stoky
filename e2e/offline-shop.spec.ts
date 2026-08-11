@@ -20,47 +20,72 @@ import es from "../messages/es.json";
 test.describe("A shop with no signal", () => {
   test.use({ storageState: SESSION_FILE });
 
-  /**
-   * Serial, and each test leaves the seed as it found it.
-   *
-   * `/shopping` hides a list whose items are all ticked — `shopping.list`
-   * filters on `items: { some: { isChecked: false } }` — so a test that
-   * completes the seeded list makes the next one unable to find it. That is
-   * `ISSUES.md` TEST-3 exactly: one journey writing the state another asserts.
-   */
-  test.describe.configure({ mode: "serial" });
-
   /** The two regions, addressed by test id: Next's route announcer is also an alert. */
   const calm = (page: Page) => page.getByTestId("sync-calm");
   const urgent = (page: Page) => page.getByTestId("sync-urgent");
 
-  /** The seeded list is a cuid, so it is discovered rather than hardcoded. */
-  async function openSeededList(page: Page): Promise<string> {
+  /**
+   * A list of this test's own, with its own items.
+   *
+   * It used to open the seeded list, and that made every test here depend on
+   * what every other journey had done to it: `/shopping` hides a list whose
+   * items are all ticked, and "generate from low stock" adds a newer one that
+   * sorts first. It passed alone and failed in a full run, which is
+   * `ISSUES.md` TEST-3 wearing a different hat.
+   *
+   * Creating one costs four actions and buys independence from the seed, from
+   * the order specs run in, and from each other.
+   */
+  async function openOwnList(page: Page, items: number): Promise<void> {
+    const name = `Offline ${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+
     await page.goto("/shopping");
     await settle(page);
 
-    // By href rather than by name: the card is the link, its accessible name
-    // is the whole card's text, and the auto-generated list may or may not
-    // exist depending on what earlier journeys did.
-    const firstList = page.locator('a[href^="/shopping/"]').first();
-    await expect(firstList).toBeVisible();
-    await firstList.click();
+    await page.getByRole("button", { name: es.shopping.create }).click();
+    await page.getByPlaceholder(es.shopping.listName).fill(name);
+    await page
+      .getByRole("button", { name: es.common.create, exact: true })
+      .click();
+
+    const link = page.getByRole("link", { name: new RegExp(name) });
+    await expect(link).toBeVisible({ timeout: 15_000 });
+    await link.click();
     await page.waitForURL(/\/shopping\/[a-z0-9]+/);
     await settle(page);
 
-    return page.url().split("/").pop() as string;
+    for (let i = 0; i < items; i += 1) {
+      await page.getByRole("button", { name: es.shopping.addItem }).click();
+      await page.getByPlaceholder(es.shopping.itemName).fill(`Cosa ${i + 1}`);
+      await page
+        .getByRole("button", { name: es.common.add, exact: true })
+        .click();
+      await expect(page.getByText(`Cosa ${i + 1}`)).toBeVisible({
+        timeout: 15_000,
+      });
+    }
+
+    // Wait for the queue to empty and then re-read from the server.
+    //
+    // Adding goes through the queue too, so an item is visible via the
+    // projection before the server has it. Cutting the network at that moment
+    // leaves the cached list one item behind — which is correct behaviour and
+    // a useless starting point for a test about ticking things off.
+    await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
+    await page.reload();
+    await settle(page);
   }
 
   test("is composed offline, shown as done, and applied once on reconnect", async ({
     page,
     context,
   }) => {
-    await openSeededList(page);
+    await openOwnList(page, 2);
 
-    // The seed leaves one item already ticked, so the two to tick are found by
-    // reading the current state once and then addressed by position. A locator
-    // filtered on `:not(:checked)` stops matching the moment it is clicked,
-    // which makes the assertion that follows it fail on correct code.
+    // The two to tick are found by reading the current state once and then
+    // addressed by position. A locator filtered on `:not(:checked)` stops
+    // matching the moment it is clicked, which makes the assertion that
+    // follows it fail on correct code.
     const all = page.getByRole("checkbox");
     const checked = await all.evaluateAll((nodes) =>
       nodes.map((node) => (node as HTMLInputElement).checked),
@@ -96,24 +121,20 @@ test.describe("A shop with no signal", () => {
 
     // The server agrees, and a reload proves it rather than the projection:
     // after a reload the queue is empty, so what is on screen came back from
-    // the database.
+    // the database. Both items were ticked, so nothing is left unticked.
     await page.reload();
     await settle(page);
     await expect(
       page.getByRole("checkbox").and(page.locator(":not(:checked)")),
     ).toHaveCount(0);
 
-    // Put the list back the way it was found, so the next test can still see
-    // it on /shopping.
-    await first.click();
-    await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
   });
 
   test("sends the same key when the first attempt is lost", async ({
     page,
     context,
   }) => {
-    await openSeededList(page);
+    await openOwnList(page, 2);
 
     const keys: string[] = [];
     let failedOnce = false;
@@ -147,20 +168,10 @@ test.describe("A shop with no signal", () => {
     // cannot catch, because the two would not look like the same request.
     expect(new Set(keys).size).toBe(1);
 
-    await page.unroute("**/api/trpc/**");
-    // Restore.
-    await page.reload();
-    await settle(page);
-    const restore = page.getByRole("checkbox");
-    const nowChecked = await restore.evaluateAll((nodes) =>
-      nodes.map((node) => (node as HTMLInputElement).checked),
-    );
-    await restore.nth(nowChecked.findIndex(Boolean)).click();
-    await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
   });
 
   test("keeps unsent changes across a reload", async ({ page }) => {
-    await openSeededList(page);
+    await openOwnList(page, 2);
 
     // The server is made unreachable at the application level rather than the
     // browser level, so the *page* still loads on reload. Cutting the browser
@@ -195,15 +206,6 @@ test.describe("A shop with no signal", () => {
     blocked = false;
     await expect(calm(page)).toBeEmpty({ timeout: 30_000 });
 
-    // Restore.
-    await page.reload();
-    await settle(page);
-    const restore = page.getByRole("checkbox");
-    const nowChecked = await restore.evaluateAll((nodes) =>
-      nodes.map((node) => (node as HTMLInputElement).checked),
-    );
-    await restore.nth(nowChecked.findIndex(Boolean)).click();
-    await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
   });
 });
 
