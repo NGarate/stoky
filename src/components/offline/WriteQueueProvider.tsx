@@ -152,6 +152,7 @@ export function WriteQueueProvider({
         return result;
       },
       drain,
+      cancel: (id) => queue.cancel(id),
       retry: (id) => {
         queue.retry(id);
         drain();

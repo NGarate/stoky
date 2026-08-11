@@ -37,6 +37,7 @@ export const PRIMARY_DESTINATIONS: readonly Destination[] = [
 
 /** Everything the "Más" sheet holds, in the order it is read. */
 export const SECONDARY_DESTINATIONS: readonly Destination[] = [
+  { href: "/kitchen", labelKey: "kitchen" },
   { href: "/dashboard", labelKey: "dashboard" },
   { href: "/products", labelKey: "products" },
   { href: "/receipts", labelKey: "receipts" },
@@ -46,6 +47,7 @@ export const SECONDARY_DESTINATIONS: readonly Destination[] = [
 
 /** The desktop top bar, which has room for all of them. */
 export const DESKTOP_DESTINATIONS: readonly Destination[] = [
+  { href: "/kitchen", labelKey: "kitchen" },
   { href: "/dashboard", labelKey: "dashboard" },
   { href: "/inventory", labelKey: "inventory" },
   { href: "/products", labelKey: "products" },

@@ -666,6 +666,12 @@ choosing a tool before the problem exists.
 Expiries, one-tap use, useful data. *Done when:* it runs for a week on a tablet
 untouched except for using things up.
 
+**Screen B is built** — `/kitchen`, §4's three sections, one button per card,
+type sized for a metre. **The done-when is not met and cannot be met by a
+test:** a week on a real tablet is a week on a real tablet. What exists is the
+screen and its refresh; what is owed is the week, and it is listed as unowned
+below alongside the iOS pass for the same reason.
+
 **Inherited from Phase 4:**
 
 - **Screen A's layout** (§3), which Phase 4 deferred. The two screens share
@@ -804,6 +810,7 @@ These have no phase yet. They are here so that stays visible.
 | Item | Note |
 |---|---|
 | **The manual screen-reader pass** | Phase 2b's one incomplete item. Four journeys are audited against the tree; whether it *sounds* sensible is what no tool answers |
+| **A week on a real tablet** | Phase 5's own done-when for the kitchen screen. The screen and its five-minute refresh exist; whether it is still useful and still correct after seven untouched days is not something a suite can answer |
 | **iOS Safari on a real device** | Playwright's WebKit is not iOS Safari, and §5.4 defers installability on iOS grounds specifically. The queue, `localStorage` and the worker all need a pass, dated in `STATUS.md` |
 | **The service worker under a production build** | It registers only when `NODE_ENV` is `production`; the browser suite runs `pnpm dev`, so no test has ever exercised it. Its source shape is checked; its behaviour is not |
 | `public/sw.js`'s 2,500 ms navigation timeout | A guess calibrated on "supermarket lie-fi", not a measurement |

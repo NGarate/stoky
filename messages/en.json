@@ -46,7 +46,8 @@
     "mainLabel": "Main navigation",
     "moreTitle": "More sections",
     "moreContainsCurrent": "the current page is in here",
-    "preferencesTitle": "Language and theme"
+    "preferencesTitle": "Language and theme",
+    "kitchen": "Kitchen"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -677,5 +678,27 @@
     "heading": "There is no connection right now",
     "body": "We could not load this screen and it was not saved on the phone. Anything you did offline is still here and will be sent on its own once you have signal again.",
     "back": "Back to the app"
+  },
+  "kitchen": {
+    "title": "Kitchen",
+    "useNow": "Use now",
+    "thisWeek": "This week",
+    "runningOut": "Running out",
+    "useOne": "Used one",
+    "useOneOf": "Used one {unit} of {name}",
+    "undo": "Undo",
+    "undoOf": "Undo: {name}",
+    "expiresToday": "Goes off today",
+    "expiresTomorrow": "Goes off tomorrow",
+    "expiresInDays": "{days} days left",
+    "expired": "Past its date",
+    "noLocation": "No place set",
+    "nothingUrgent": "Nothing is about to go off",
+    "nothingUrgentHint": "Everything in the house lasts more than three days.",
+    "nothingThisWeek": "Nothing else goes off this week",
+    "nothingRunningOut": "Nothing is running low",
+    "leftOf": "{stock} of {minimum} {unit} left",
+    "noneLeft": "None left",
+    "updated": "Updated at {time}"
   }
 }

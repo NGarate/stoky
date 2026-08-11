@@ -67,6 +67,7 @@ const AAA_TAGS = [
 const PUBLIC_ROUTES = ["/login", "/register", "/offline"];
 
 const PRIVATE_ROUTES = [
+  "/kitchen",
   "/settings/people",
   "/dashboard",
   "/inventory",

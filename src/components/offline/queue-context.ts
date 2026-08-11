@@ -24,6 +24,8 @@ export interface WriteQueueValue {
   state: QueueState;
   enqueue: (op: EnqueueInput) => EnqueueResult;
   drain: () => void;
+  /** Take back a change that has not been sent. False when it is too late. */
+  cancel: (id: string) => boolean;
   retry: (id: string) => void;
   discard: (id: string) => void;
   /** Send everything now and resolve when the queue has settled. */

@@ -34,6 +34,7 @@ test.describe.configure({ mode: "parallel" });
 const PUBLIC_ROUTES = ["/login", "/register"];
 
 const PRIVATE_ROUTES = [
+  "/kitchen",
   "/dashboard",
   "/inventory",
   "/inventory/add",

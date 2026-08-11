@@ -46,7 +46,8 @@
     "mainLabel": "Navegación principal",
     "moreTitle": "Más secciones",
     "moreContainsCurrent": "aquí está la página actual",
-    "preferencesTitle": "Idioma y tema"
+    "preferencesTitle": "Idioma y tema",
+    "kitchen": "Cocina"
   },
   "dashboard": {
     "title": "Panel",
@@ -677,5 +678,27 @@
     "heading": "Ahora mismo no hay conexión",
     "body": "No hemos podido cargar esta pantalla y no la teníamos guardada en el móvil. Lo que hayas hecho sin conexión sigue aquí y se enviará solo cuando vuelvas a tener señal.",
     "back": "Volver a la aplicación"
+  },
+  "kitchen": {
+    "title": "Cocina",
+    "useNow": "Usar ya",
+    "thisWeek": "Esta semana",
+    "runningOut": "Se está acabando",
+    "useOne": "He usado uno",
+    "useOneOf": "He usado un {unit} de {name}",
+    "undo": "Deshacer",
+    "undoOf": "Deshacer: {name}",
+    "expiresToday": "Caduca hoy",
+    "expiresTomorrow": "Caduca mañana",
+    "expiresInDays": "Quedan {days} días",
+    "expired": "Caducado",
+    "noLocation": "Sin sitio",
+    "nothingUrgent": "No hay nada a punto de caducar",
+    "nothingUrgentHint": "Todo lo que hay en casa aguanta más de tres días.",
+    "nothingThisWeek": "Nada más caduca esta semana",
+    "nothingRunningOut": "No falta nada",
+    "leftOf": "Queda {stock} de {minimum} {unit}",
+    "noneLeft": "No queda nada",
+    "updated": "Actualizado a las {time}"
   }
 }

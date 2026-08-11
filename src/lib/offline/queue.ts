@@ -123,6 +123,20 @@ export interface WriteQueue {
   subscribe(listener: (state: QueueState) => void): () => void;
   enqueue(op: EnqueueInput): EnqueueResult;
   drain(): Promise<void>;
+  /**
+   * Take back a change that has not been sent yet.
+   *
+   * This is what undo means for a stock movement. Writing a compensating
+   * `addStock` would record that the household *acquired* something it never
+   * did — a fabricated event indistinguishable from a real one to everything
+   * downstream. Removing the queued row leaves no trace because nothing
+   * happened.
+   *
+   * Returns false when it is too late: the change has already been sent, or is
+   * being sent right now.
+   */
+  cancel(id: string): boolean;
+
   /** Put a failed change back at the tail, with its strikes cleared. */
   retry(id: string): void;
   /** Give up on a failed change deliberately. */
@@ -218,6 +232,8 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   }
 
   let draining = false;
+  /** The operation currently in flight, which cannot be taken back. */
+  let inFlightId: string | null = null;
 
   let hydrated = false;
 
@@ -309,12 +325,15 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
           }
 
           try {
+            inFlightId = op.id;
             await send(op);
+            inFlightId = null;
             commit((state) => ({
               ...state,
               pending: state.pending.filter((entry) => entry.id !== op.id),
             }));
           } catch (error) {
+            inFlightId = null;
             if (classifyMutationError(error, op.path) === "auth") {
               // Keep everything. This is the likeliest end of a real shop.
               commit((state) => ({ ...state, status: "needs-signin" }));
@@ -346,11 +365,26 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         }
       } finally {
         draining = false;
+        inFlightId = null;
         commit((state) => ({
           ...state,
           status: state.status === "sending" ? "idle" : state.status,
         }));
       }
+    },
+
+    cancel(id) {
+      if (id === inFlightId) return false;
+      const present = store
+        .getState()
+        .pending.some((entry) => entry.id === id);
+      if (!present) return false;
+
+      commit((state) => ({
+        ...state,
+        pending: state.pending.filter((entry) => entry.id !== id),
+      }));
+      return true;
     },
 
     retry(id) {

@@ -766,3 +766,27 @@ household with the product's stock and minimum already attached, because
 standing in an aisle "how much is at home" is the question and a round trip per
 row to answer it is not available on a supermarket connection. Filing stays on
 `/shopping/lists`.
+
+**D57 — Undo on the kitchen screen cancels the queued change; it never writes a
+compensating one.**
+§4 asks for a ten-second undo after "he usado uno". Implemented as removing the
+still-queued `consumeStock`, not as an `addStock` that reverses it. A
+compensating write would record that the household *acquired* something it
+never did, and every downstream reader — the expiry view, the price history, a
+future report — would see a fabricated event indistinguishable from a real one.
+
+The affordance is therefore offered exactly while the change is still in the
+queue and disappears when it can no longer work, which is *more* honest than a
+countdown: a ten-second timer offers undo for ten seconds whether or not
+pressing it would do anything. `queue.cancel` refuses the operation currently
+in flight for the same reason — taking one back after it left would keep the
+server's copy and lose ours, the one outcome worse than not offering undo.
+
+**D58 — A failing component test can look exactly like a hung one.**
+Proving a kitchen test could fail timed out at 120s: the assertion failed
+quickly, and the *reporting* did not. `DEBUG_PRINT_LIMIT` is now capped, which
+did not fix it — so the cost is elsewhere, most likely `getAllByRole`
+computing accessible names across a larger tree. Recorded with what was
+measured rather than what was assumed, and worked around by proving the same
+property through a mock-call assertion instead of a DOM query. STATUS.md trap 3
+is the same shape one tier up.

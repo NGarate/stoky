@@ -329,6 +329,56 @@ describe("what survives a reload", () => {
   });
 });
 
+describe("taking a change back", () => {
+  it("removes it, so nothing was ever recorded", () => {
+    const queue = open(async () => {});
+    const added = queue.enqueue(tick());
+
+    // Undo for a stock movement. A compensating write would record that the
+    // household acquired something it never did — a fabricated event that
+    // everything downstream would read as real.
+    expect(added.ok && queue.cancel(added.id)).toBe(true);
+    expect(queue.getState().pending).toHaveLength(0);
+  });
+
+  it("refuses once the change has been sent", async () => {
+    const queue = open(async () => {});
+    const added = queue.enqueue(tick());
+    await queue.drain();
+
+    expect(added.ok && queue.cancel(added.id)).toBe(false);
+  });
+
+  it("refuses the one being sent right now", async () => {
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let cancelledMidFlight: boolean | undefined;
+
+    const queue = open(async () => {
+      // Called while this very operation is in flight.
+      cancelledMidFlight = queue.cancel(queue.getState().pending[0]?.id ?? "");
+      await gate;
+    });
+    queue.enqueue(tick());
+
+    const draining = queue.drain();
+    release();
+    await draining;
+
+    // Taking it back after it left would leave the server's copy and lose
+    // ours, which is the one outcome worse than not offering undo at all.
+    expect(cancelledMidFlight ?? true).toBe(false);
+  });
+
+  it("says no to a change it does not have", () => {
+    const queue = open(async () => {});
+
+    expect(queue.cancel("never-existed")).toBe(false);
+  });
+});
+
 describe("dealing with what failed", () => {
   it("puts a retried change back at the tail with its strikes cleared", async () => {
     let fail = true;
