@@ -779,13 +779,33 @@ scales with how much else is running, which is what a timing-sensitive
 misattribution looks like rather than leftover state. Neither reshaping of
 `expectCode` helped, which is why neither was kept.
 
+## A minimal reproduction was attempted and does not exist yet
+
+Four shapes, thirty runs each, **none of which reproduce it**:
+
+| Shape | Failures in 30 |
+|---|---|
+| A rejection thrown through a nested async wrapper, rethrown as a different error, caught | 0 |
+| The same through a tRPC caller — `TRPCError` out of a procedure, no database | 0 |
+| A `TRPCError` thrown out of a Prisma interactive transaction that then rolls back | 0 |
+| `withReplay`'s exact sequence: unique violation caught inside the transaction, sentinel rethrown, rollback, a second read on the same client, then a fresh `TRPCError` | 0 |
+
+So the trigger needs something none of those carry. What is left in the real
+file and not in shape D: the tRPC middleware chain that wraps every procedure
+(`domainErrors` and `securityEvents` — the latter separately ruled out by
+removal), superjson, and the number of connections a whole suite holds open.
+That is where a fifth attempt should start.
+
 ## What to do about it
 
-Nothing in this repository. It wants a minimal reproduction and an upstream
-report against bun; a version pin would be the workaround if it becomes
-disruptive. **Nobody should keep hunting the application code** — that is what
-this entry now exists to prevent, having already cost two investigations before
-the question "did the test actually fail?" was asked.
+Nothing in this repository. It wants an upstream report against bun 1.3.14, and
+until the reproduction reduces, that report has to point at the repo and this
+entry rather than at a paste-able file. A version pin is the workaround if it
+becomes disruptive.
+
+**Nobody should keep hunting the application code.** That is what this entry
+exists to prevent, having already cost two investigations before the question
+"did the test actually fail?" was asked — and the answer was no, it passed.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
