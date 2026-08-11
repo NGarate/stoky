@@ -1,0 +1,397 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import * as argon2 from "argon2";
+import type { Session } from "next-auth";
+import { createTRPCRouter, createTRPCContext, writeProcedure } from "@/server/trpc/trpc";
+import { withReplay } from "@/server/trpc/replay";
+import { replayable } from "@/lib/validations/idempotency";
+import { prisma } from "@/lib/prisma";
+
+/**
+ * `withReplay`, against a real PostgreSQL, on a procedure that exists only here.
+ *
+ * The mechanism is tested apart from the five procedures that will use it, so a
+ * failure names the mechanism rather than a resolver. The throwaway procedure
+ * writes a `StorageLocation` — a household-scoped row with a name, which is
+ * enough to tell "applied once" from "applied twice" and enough to prove the
+ * table stores no household data.
+ *
+ * Every interesting property here needs a real database: a unique constraint
+ * arbitrating a race, a transaction rolling back, and a claim released by that
+ * rollback. None of it is expressible against a mock.
+ */
+
+const A = { userId: "", householdId: "" };
+const B = { userId: "", householdId: "" };
+
+/** The name every applied call writes, so counting rows counts applications. */
+const WRITTEN_NAME = "Estante replay";
+
+const throwawayInput = replayable.extend({
+  name: z.string(),
+  // Free text, so a test can check the replay table never keeps it.
+  note: z.string().optional(),
+});
+
+const testRouter = createTRPCRouter({
+  /** Creates one location, replay-protected. */
+  makeLocation: writeProcedure
+    .input(throwawayInput)
+    .mutation(async ({ ctx, input }) =>
+      withReplay(ctx, {
+        key: input.idempotencyKey,
+        composedByUserId: input.composedByUserId,
+        procedure: "test.makeLocation",
+        input,
+        apply: (tx) =>
+          tx.storageLocation.create({
+            data: { name: input.name, householdId: ctx.householdId },
+          }),
+        ids: (location) => [location.id],
+        reread: async (db, ids) => {
+          const location = await db.storageLocation.findUnique({
+            where: { id: ids[0] ?? "" },
+          });
+          if (!location) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Gone" });
+          }
+          return location;
+        },
+      }),
+    ),
+
+  /** Refuses before writing, to prove a resolver's own code survives. */
+  alwaysRefuses: writeProcedure
+    .input(replayable)
+    .mutation(async ({ ctx, input }) =>
+      withReplay(ctx, {
+        key: input.idempotencyKey,
+        composedByUserId: input.composedByUserId,
+        procedure: "test.alwaysRefuses",
+        input,
+        apply: async () => {
+          throw new TRPCError({ code: "CONFLICT", message: "Not enough" });
+        },
+        ids: () => [],
+        reread: async () => {
+          throw new Error("unreachable");
+        },
+      }),
+    ),
+});
+
+async function caller(account: { userId: string; householdId: string }) {
+  const session: Session = {
+    user: {
+      id: account.userId,
+      email: `${account.userId}@example.com`,
+      name: "Replay",
+      householdId: account.householdId,
+      role: "OWNER",
+    },
+    expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+  };
+  return testRouter.createCaller(await createTRPCContext({ session }));
+}
+
+/** A fresh key per test, so nothing leaks between them. */
+let nextKey = 0;
+function freshKey(): string {
+  nextKey += 1;
+  return `00000000-0000-4000-8000-${String(nextKey).padStart(12, "0")}`;
+}
+
+async function expectCode(call: Promise<unknown>, code: TRPCError["code"]) {
+  let thrown: unknown;
+  try {
+    await call;
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toBeInstanceOf(TRPCError);
+  expect((thrown as TRPCError).code).toBe(code);
+}
+
+function locationCount(householdId: string) {
+  return prisma.storageLocation.count({
+    where: { householdId, name: WRITTEN_NAME },
+  });
+}
+
+async function makeHousehold(label: string) {
+  const household = await prisma.household.create({
+    data: { name: `Replay ${label}` },
+  });
+  const user = await prisma.user.create({
+    data: {
+      email: `replay-${label}-${Date.now()}@example.com`,
+      name: `Replay ${label}`,
+      passwordHash: await argon2.hash("TestPassword123!", {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+      }),
+      householdId: household.id,
+      role: "OWNER",
+    },
+  });
+  return { userId: user.id, householdId: household.id };
+}
+
+beforeAll(async () => {
+  Object.assign(A, await makeHousehold("A"));
+  Object.assign(B, await makeHousehold("B"));
+});
+
+beforeEach(async () => {
+  const households = [A.householdId, B.householdId];
+  await prisma.storageLocation.deleteMany({
+    where: { householdId: { in: households } },
+  });
+  await prisma.mutationReplay.deleteMany({
+    where: { userId: { in: [A.userId, B.userId] } },
+  });
+});
+
+afterAll(async () => {
+  const households = [A.householdId, B.householdId];
+  await prisma.storageLocation.deleteMany({
+    where: { householdId: { in: households } },
+  });
+  await prisma.mutationReplay.deleteMany({
+    where: { userId: { in: [A.userId, B.userId] } },
+  });
+  await prisma.user.deleteMany({ where: { id: { in: [A.userId, B.userId] } } });
+  await prisma.household.deleteMany({ where: { id: { in: households } } });
+  await prisma.$disconnect();
+});
+
+describe("a queued mutation arriving more than once", () => {
+  it("applies once when the same key arrives twice", async () => {
+    const api = await caller(A);
+    const call = {
+      idempotencyKey: freshKey(),
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    };
+
+    const first = await api.makeLocation(call);
+    const second = await api.makeLocation(call);
+
+    expect(await locationCount(A.householdId)).toBe(1);
+    expect(second.id).toBe(first.id);
+  });
+
+  it("produces one effect when two replays land at the same instant", async () => {
+    const api = await caller(A);
+    const call = {
+      idempotencyKey: freshKey(),
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    };
+
+    // The primary key is the arbiter. Drop it and this produces two rows.
+    const [first, second] = await Promise.all([
+      api.makeLocation(call),
+      api.makeLocation(call),
+    ]);
+
+    expect(await locationCount(A.householdId)).toBe(1);
+    expect(second.id).toBe(first.id);
+  });
+
+  it("refuses a key reused for a different change, and applies nothing", async () => {
+    const api = await caller(A);
+    const key = freshKey();
+
+    await api.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    });
+
+    await expectCode(
+      api.makeLocation({
+        idempotencyKey: key,
+        composedByUserId: A.userId,
+        name: "Otro sitio",
+      }),
+      "BAD_REQUEST",
+    );
+
+    // Nothing runs and nothing is read out: answering with the first call's
+    // result would make a guessed key a way to read someone's row.
+    expect(await locationCount(A.householdId)).toBe(1);
+    expect(
+      await prisma.storageLocation.count({
+        where: { householdId: A.householdId, name: "Otro sitio" },
+      }),
+    ).toBe(0);
+  });
+
+  it("refuses a key reused for a different procedure", async () => {
+    const api = await caller(A);
+    const key = freshKey();
+
+    await api.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    });
+
+    await expectCode(
+      api.alwaysRefuses({ idempotencyKey: key, composedByUserId: A.userId }),
+      "BAD_REQUEST",
+    );
+  });
+});
+
+describe("a queued mutation the server refuses", () => {
+  it("arrives as the resolver's own code, not as a server fault", async () => {
+    const api = await caller(A);
+
+    // If this became INTERNAL_SERVER_ERROR the queue would call it transient
+    // and spend eight attempts on a refusal that will never change its mind.
+    await expectCode(
+      api.alwaysRefuses({
+        idempotencyKey: freshKey(),
+        composedByUserId: A.userId,
+      }),
+      "CONFLICT",
+    );
+  });
+
+  it("records nothing, so the same key can be sent again", async () => {
+    const api = await caller(A);
+    const key = freshKey();
+
+    await expectCode(
+      api.alwaysRefuses({ idempotencyKey: key, composedByUserId: A.userId }),
+      "CONFLICT",
+    );
+
+    expect(
+      await prisma.mutationReplay.count({ where: { userId: A.userId, key } }),
+    ).toBe(0);
+
+    // The rollback released the claim, so the key is usable — which is what
+    // makes a transient failure recoverable rather than a burned key.
+    const location = await api.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    });
+    expect(location.name).toBe(WRITTEN_NAME);
+  });
+});
+
+describe("a queue that outlived the account that filled it", () => {
+  it("refuses a change composed by someone else, before claiming anything", async () => {
+    const api = await caller(A);
+    const key = freshKey();
+
+    await expectCode(
+      api.makeLocation({
+        idempotencyKey: key,
+        composedByUserId: B.userId,
+        name: WRITTEN_NAME,
+      }),
+      "FORBIDDEN",
+    );
+
+    expect(await locationCount(A.householdId)).toBe(0);
+    expect(await prisma.mutationReplay.count({ where: { key } })).toBe(0);
+  });
+
+  it("keeps one account's keys invisible to another", async () => {
+    const apiA = await caller(A);
+    const apiB = await caller(B);
+    const key = freshKey();
+
+    await apiA.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    });
+
+    // Same key, different account. It is a fresh claim in B's key space, so it
+    // applies normally against B's household — key entropy is not a security
+    // property here, the partition is.
+    await apiB.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: B.userId,
+      name: WRITTEN_NAME,
+    });
+
+    expect(await locationCount(A.householdId)).toBe(1);
+    expect(await locationCount(B.householdId)).toBe(1);
+    expect(await prisma.mutationReplay.count({ where: { key } })).toBe(2);
+  });
+});
+
+describe("what the replay table keeps", () => {
+  it("stores ids and no household data", async () => {
+    const api = await caller(A);
+    const key = freshKey();
+
+    await api.makeLocation({
+      idempotencyKey: key,
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+      note: "para la cena del viernes",
+    });
+
+    const record = await prisma.mutationReplay.findUnique({
+      where: { userId_key: { userId: A.userId, key } },
+    });
+
+    expect(record).not.toBeNull();
+    expect(JSON.stringify(record)).not.toContain("para la cena del viernes");
+    expect(JSON.stringify(record)).not.toContain(WRITTEN_NAME);
+    expect(record?.resultIds).toHaveLength(1);
+  });
+
+  it("answers a replay from the database, so a deleted row is honestly gone", async () => {
+    const api = await caller(A);
+    const call = {
+      idempotencyKey: freshKey(),
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    };
+
+    const created = await api.makeLocation(call);
+    await prisma.storageLocation.delete({ where: { id: created.id } });
+
+    // A stored copy of the result would hand back a row that no longer exists.
+    await expectCode(api.makeLocation(call), "NOT_FOUND");
+  });
+
+  it("clears its own expired rows without a scheduler", async () => {
+    const api = await caller(A);
+
+    await prisma.mutationReplay.create({
+      data: {
+        key: freshKey(),
+        userId: A.userId,
+        householdId: A.householdId,
+        procedure: "test.makeLocation",
+        requestHash: "stale",
+        resultIds: [],
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    });
+
+    await api.makeLocation({
+      idempotencyKey: freshKey(),
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    });
+
+    const remaining = await prisma.mutationReplay.findMany({
+      where: { userId: A.userId },
+    });
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.requestHash).not.toBe("stale");
+  });
+});

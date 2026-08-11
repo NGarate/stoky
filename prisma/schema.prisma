@@ -192,3 +192,38 @@ enum HouseholdRole {
   MEMBER
   KITCHEN
 }
+
+/// One record per mutation a device composed, so replaying it applies once.
+///
+/// A shop composed in aeroplane mode is sent when the signal returns, and the
+/// send can be repeated — the reply was lost, the tab was closed mid-flight,
+/// the queue was drained twice. "Consume one litre of milk" replayed twice must
+/// consume one litre.
+///
+/// The primary key is `[userId, key]`, not `key` alone, and that is the control
+/// rather than an optimisation. In a global key space, someone who guesses a
+/// key can claim it first, suppress the victim's genuine write, and have the
+/// victim answered with their outcome. Partitioned by a server-derived
+/// `userId`, key entropy stops being a security property at all.
+///
+/// `resultIds` holds ids, not the result. A re-read returns rows the caller is
+/// authorised to see *at replay time*, and a row deleted in between yields an
+/// honest NOT_FOUND rather than a ghost — and this table never becomes a second
+/// copy of the household's data, which for a privacy-first application is the
+/// wrong thing to keep.
+///
+/// No foreign key to User: the schema has no cascades, and a cascade would take
+/// a KEY SHARE lock on the user row on every replayable write.
+model MutationReplay {
+  key         String
+  userId      String
+  householdId String
+  procedure   String
+  requestHash String
+  resultIds   String[]
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@id([userId, key])
+  @@index([expiresAt])
+}
