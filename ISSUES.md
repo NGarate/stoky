@@ -738,13 +738,37 @@ test a moment before the `catch` claims it.
 interleaves it with result lines — the ordering may be an artifact rather than
 real time. It is the strongest hint available and it is not proof.
 
+## It is interference between tests in this file, not the code under test
+
+Four measurements, each 20 runs of the file:
+
+| Condition | Failures in 20 |
+|---|---|
+| As it stands | 4 |
+| Without the `securityEvents` middleware | 3 |
+| At `eb401be`, the commit that created the file | 4 |
+| **Running only the two tests, via `-t "refuses a key reused"`** | **0** |
+| With both earlier tests in the describe skipped | 1 |
+
+The fourth row is the finding. The pair never fails alone; it fails only with
+the rest of the file present, which makes this interference rather than a defect
+in either the test or `withReplay`. The fifth row narrows it further — the two
+tests that precede it in the same describe, both of which exercise the
+same-key replay path, account for most but not all of the rate.
+
+The third row rules out everything built after the file: the rate is identical
+at the commit that introduced it, so nothing in the session that followed —
+`securityEvents`, `domainErrors`, the random keys — is responsible.
+
 ## Where to look next
 
-Whether Prisma emits an asynchronous error *after* the interactive transaction
-holding the failed claim has rolled back — an error with no `await` left to
-catch it, arriving while the next statement runs. That would fit the timing, the
-intermittency, and the absence of an `unhandledRejection` (bun may report such
-an error directly rather than through the Node hook).
+Which predecessor is required, by bisecting *within* the file rather than
+around it: skip tests from the top until the rate goes to zero. The two
+same-key tests are the obvious suspects and are not the whole story, so the
+later describes deserve the same treatment even though they run afterwards —
+which would itself be worth knowing, since a later test cannot affect an
+earlier one unless the runner is attributing an asynchronous error across the
+boundary.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
