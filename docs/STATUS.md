@@ -398,6 +398,14 @@ down (Traefik's `Host(...)` rule is what makes trusting the header safe here),
 and `e2e/auth.prod.spec.ts` guards it in the one config that serves the
 standalone artefact. Verified to fail without the fix.
 
+That suite now also **signs in for real** against the production build, and
+asserts no Content-Security-Policy violation reaches the console while it does.
+The production policy is stricter than any other suite exercises — no
+`unsafe-eval`, no websocket origins, `upgrade-insecure-requests` — and a policy
+that blocks the framework's own scripts renders a login form that does nothing,
+which is the same shape as the defect above. It passes: the policy does not
+break the application.
+
 **Verified end to end on 2026-08-11**, at `2b148a2`, every gate in one sequence:
 
 | Gate | Result |

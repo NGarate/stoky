@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./session";
 
 /**
  * Authentication, under a real production build.
@@ -43,4 +44,41 @@ test.describe("a production build's authentication", () => {
 
     await expect(page.locator("form")).toBeVisible();
   });
+});
+
+/**
+ * The journey, rather than the endpoints.
+ *
+ * The three tests above prove Auth.js answers. This proves a person can get in
+ * — against the standalone artefact, under the production Content-Security
+ * Policy, which is a stricter policy than any other suite ever exercises: no
+ * `unsafe-eval`, no websocket origins, and `upgrade-insecure-requests` on top.
+ * A policy that blocks the framework's own scripts produces a login form that
+ * renders and does nothing, which is precisely the failure mode that hid the
+ * `trustHost` defect.
+ */
+test("somebody can actually sign in", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+
+  await page.goto("/login");
+  await page.waitForSelector('input[name="email"]');
+  // Let the client hydrate: a pre-hydration submit falls back to a native POST.
+  await page.waitForTimeout(1500);
+
+  await page.fill('input[name="email"]', DEMO_EMAIL);
+  await page.fill('input[name="password"]', DEMO_PASSWORD);
+  await page.click('button[type="submit"]');
+
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+
+  // A CSP violation surfaces here and nowhere else — the page still renders,
+  // it just stops working. Reported as its own assertion so a policy problem
+  // does not masquerade as a broken login.
+  const violations = consoleErrors.filter((text) =>
+    /content security policy|refused to (execute|load|connect)/i.test(text),
+  );
+  expect(violations).toEqual([]);
 });

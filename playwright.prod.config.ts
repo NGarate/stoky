@@ -21,7 +21,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /.*\.prod\.spec\.ts/,
+  testMatch: /(.*\.prod\.spec\.ts|seed\.setup\.ts)/,
 
   // One worker. A service worker is per origin, and two tests installing,
   // claiming and clearing caches on the same origin at once would be testing
@@ -51,9 +51,25 @@ export default defineConfig({
   },
 
   projects: [
+    /**
+     * The demo household, because one of these tests signs in as it.
+     *
+     * Its own project rather than a `beforeAll` for the same reason as in the
+     * ordinary config: a failure here reads as "seeding failed" instead of
+     * "sign-in failed", which is a much shorter walk to the cause.
+     */
+    {
+      name: "seed",
+      testMatch: /seed\.setup\.ts/,
+    },
     {
       name: "chromium",
+      // The suites, and not the seed step — which the top-level `testMatch` has
+      // to admit for the project above, and which this project would otherwise
+      // collect and run a second time.
+      testMatch: /.*\.prod\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
+      dependencies: ["seed"],
     },
   ],
 
