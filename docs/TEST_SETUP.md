@@ -153,13 +153,15 @@ bunx playwright test --ui
 bunx playwright test --headed
 ```
 
-**Seed first.** A `setup` project signs in once as the demo account from
-`prisma/seed.ts` and every browser project depends on it, so an unseeded
-database fails the whole matrix at its first step:
+**It seeds itself.** A `seed` project runs `pnpm db:seed` and a `setup` project
+signs in as the demo account from `prisma/seed.ts`; every browser project
+depends on both, so there is nothing to run first.
 
-```bash
-corepack pnpm db:seed
-```
+It re-seeds on *every* invocation rather than once, because the suite spends the
+fixture as it goes — confirming a receipt line is a write, and the fixture holds
+three confirmable lines, so without this the third run of the day fails with a
+message about a defect that is not there. The seed deletes only the demo
+household's rows, so nothing else in the same database is touched.
 
 **Do not start a dev server for it.** `playwright.config.ts` declares its own
 `webServer`. It adopts an existing server when the port is taken, which is the

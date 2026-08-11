@@ -34,7 +34,7 @@ cp .env.example .env
 # host. `docker-compose.dev.yml` is the file that maps 5432 and 6379.
 docker compose -f docker-compose.dev.yml up -d db cache
 pnpm prisma migrate dev
-pnpm db:seed                # required before E2E: the suite signs in as the seeded demo user
+pnpm db:seed                # demo data. The E2E suite now seeds itself first, so this is for `pnpm dev`
 
 # Development
 pnpm dev                    # Start Next.js dev server (port 3000)

@@ -66,10 +66,11 @@ bunx playwright test e2e/critical-paths.spec.ts
   machine by an unrelated application, and running the suite against that is a
   wall of meaningless failures rather than a port conflict. Pass
   `PLAYWRIGHT_PORT` and confirm the port is free.
-- **The E2E suite requires a seeded database.** A `setup` project signs in once
-  as the demo account from `prisma/seed.ts`, and every browser project depends
-  on it, so an unseeded database fails the whole matrix at its first step. Run
-  `corepack pnpm db:seed` first.
+- **The E2E suite seeds itself.** A `seed` project runs `pnpm db:seed`, a
+  `setup` project signs in as the demo account, and every browser project
+  depends on both — so seeding by hand first is no longer needed and no longer
+  helps. It runs on every invocation because the suite *spends* the fixture:
+  confirming a receipt line is a write, and there are three of them.
 
 ## Evidence to capture
 
