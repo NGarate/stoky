@@ -58,6 +58,7 @@ const PUBLIC_ROUTES = ["/login", "/register", "/offline"];
 const PRIVATE_ROUTES = [
   "/kitchen",
   "/settings/people",
+  "/settings/unsaved",
   "/dashboard",
   "/inventory",
   "/inventory/add",

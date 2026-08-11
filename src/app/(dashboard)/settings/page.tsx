@@ -28,6 +28,7 @@ import type { JSX } from "react";
 export default function SettingsPage(): JSX.Element {
   const t = useTranslations("settings.hub");
   const tHousehold = useTranslations("household");
+  const tOffline = useTranslations("offline");
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -69,6 +70,19 @@ export default function SettingsPage(): JSX.Element {
           </h2>
           <p className="mt-1 text-muted-foreground">
             {tHousehold("peopleDescription")}
+          </p>
+        </li>
+        <li className="rounded border border-border bg-card p-4">
+          <h2 className="text-lg font-semibold text-heading">
+            <Link
+              href="/settings/unsaved"
+              className="inline-flex min-h-[48px] items-center text-primary underline"
+            >
+              {tOffline("unsavedTitle")}
+            </Link>
+          </h2>
+          <p className="mt-1 text-muted-foreground">
+            {tOffline("unsavedDescription")}
           </p>
         </li>
       </ul>

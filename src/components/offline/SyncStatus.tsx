@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { syncStatus, isUrgent } from "@/lib/offline/status";
@@ -122,6 +123,17 @@ export function SyncStatus(): JSX.Element {
                   </li>
                 ))}
               </ul>
+            ) : null}
+
+            {/* Where the same changes can be found deliberately, with when
+                each one was made — which a banner cannot say. */}
+            {state.failed.length > 0 ? (
+              <Link
+                className="mt-3 mr-2 inline-flex min-h-[48px] items-center rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+                href="/settings/unsaved"
+              >
+                {t("seeUnsaved")}
+              </Link>
             ) : null}
 
             {/* The only honest answer to a captive portal, which reports

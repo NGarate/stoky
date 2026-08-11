@@ -681,7 +681,21 @@
     "removedItem": "Quitaste «{name}» de la lista",
     "usedUp": "Usaste {quantity} {unit} de «{name}»",
     "addedStock": "Añadiste {quantity} {unit} de «{name}»",
-    "addedItem": "Añadiste «{name}» a la lista"
+    "addedItem": "Añadiste «{name}» a la lista",
+    "unsavedTitle": "Cambios sin guardar",
+    "unsavedDescription": "Lo que no se pudo guardar, y qué hacer con ello.",
+    "unsavedIntro": "Aquí está todo lo que apuntaste y el servidor no aceptó. Nada se ha perdido: puedes volver a intentarlo o descartarlo tú.",
+    "unsavedEmpty": "No hay nada pendiente",
+    "unsavedEmptyHint": "Todo lo que has apuntado se ha guardado.",
+    "unsavedWhen": "Apuntado el {date}",
+    "reasonNeedsReconciliation": "Ya no quedaba tanto. Hay que comprobar cuánto hay en casa.",
+    "reasonWrongHousehold": "Se apuntó en otro hogar.",
+    "reasonRefused": "El servidor no lo aceptó.",
+    "reasonGone": "Eso ya no existe.",
+    "reasonInvalid": "Faltaban datos o no eran válidos.",
+    "reasonExhausted": "Se intentó varias veces y no hubo manera.",
+    "backToSettings": "← Volver a configuración",
+    "seeUnsaved": "Ver los cambios sin guardar"
   },
   "offlinePage": {
     "title": "Sin conexión",

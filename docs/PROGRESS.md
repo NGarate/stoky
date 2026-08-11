@@ -818,3 +818,19 @@ is injectable and set to zero in tests, with a single bounded macrotask flush
 to let the timer fire. A second in the browser, because a screen settling fires
 several cache changes and each one serialises the whole allowlist on the main
 thread.
+
+**D62 — A banner and a page are not the same control twice.**
+The sync indicator names failures where you are; `/settings/unsaved` is where
+they can be found on purpose. The reason both exist is not redundancy but
+*time*: an hour after a shop, the banner is on whatever screen you happen to
+be on, and it cannot say when anything was recorded. The page is the only
+surface that answers "was this the milk from Tuesday?", which is the question
+somebody actually has by then. Retry, discard and the reconciliation are the
+queue's and the dialog's — nothing is reimplemented.
+
+**Phase 5's actionable work is complete.** Screen A, Screen B, provisioning,
+sign-out, `P2025` translation, A11Y-1, read persistence and `/settings/unsaved`.
+What is left of the phase is a week on a real tablet and a pass on a real iOS
+device — both unowned in `REDESIGN_PLAN.md` §10, and both things no suite can
+answer. Naming them as unowned rather than closing the phase over them is the
+same rule D49 set when Phase 4 closed against its done-when.

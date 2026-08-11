@@ -753,13 +753,21 @@ The rule for this list: **an item leaves it by being done or by being
 deliberately dropped, and a drop is written down.** Nothing leaves by being
 forgotten.
 
-### Phase 5 — the next phase
+### Phase 5 — actionable work complete
+
+**Everything Phase 5 could do without a human and a device is done.** What
+remains of it is the week-long tablet run and the iOS pass, both listed as
+unowned below, and both things no suite can answer.
 
 **Done since this list was compiled:** the database's own complaints are
 translated into codes a caller can act on (`P2025` → `NOT_FOUND`, `P2002` →
 `CONFLICT`, `P2003` → `BAD_REQUEST`, pool and transaction failures → `TIMEOUT`),
 as one middleware on every procedure. It was the highest-value item the Phase 4
 design left, because it is what makes `classify.ts`'s table *true*.
+
+**Also done:** `/settings/unsaved` — what did not save, found deliberately
+rather than caught on a banner, and the only place that says *when* each
+change was made.
 
 **Also done:** read persistence. Six allowlisted queries are kept per account
 for 24 hours, so opening with no signal shows what was last seen instead of
@@ -785,9 +793,9 @@ list did not refresh the page, and adding an item did not either.
 could fire. It asks before discarding unsent changes and offers to send them
 first.
 
-| Item | Why it is here |
-|---|---|
-| **A place to see what did not save** | `/settings/unsaved`. The indicator names failures inline; a review route is better |
+**Also built, and not on this list when it was compiled:** Screen B, the
+kitchen (§4) at `/kitchen`. Its *done-when* — a week on a real tablet — is
+unowned below, for the same reason as the iOS pass.
 
 ### Phase 6 — rating
 
