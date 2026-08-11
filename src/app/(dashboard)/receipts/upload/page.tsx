@@ -35,6 +35,12 @@ export default function UploadPage() {
 
   const handleUpload = async (file: File) => {
     setIsUploading(true);
+    // The React Compiler cannot yet memoise a component containing this
+    // `try`/`catch` around an await, so it declines to optimise the whole
+    // component. A tool limitation rather than a defect: the handler is
+    // correct, and the cost is a missed memoisation on a screen that renders a
+    // form. Revisit when babel-plugin-react-compiler supports it.
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       const reader = new FileReader();
       reader.onloadend = async () => {

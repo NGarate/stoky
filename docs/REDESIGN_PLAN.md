@@ -604,8 +604,10 @@ choosing a tool before the problem exists.
    and `reactCompiler: true` in `next.config.ts`. *Done when:* the build passes
    with it on, every suite is still green, and `STATUS.md` records the build
    time before and after rather than asserting the cost is small.
-2. **`react-doctor` as a gate**, in `verify:local`, `verify:ci` and the
-   `quality` CI job. *Done when:* it fails on an error and passes on warnings,
+2. **`react-doctor` as a gate** — `pnpm check:react`, in `verify:local`,
+   `verify:ci` and the `quality` CI job. Not `pnpm doctor`: pnpm has a
+   built-in command of that name, and it wins, so the script never runs and
+   the gate passes on everything. *Done when:* it fails on an error and passes on warnings,
    the baseline is recorded, and the error it already found is closed.
 3. **The write queue moves into a `zustand` store.** *Done when:* the queue's
    consumers subscribe to what they read rather than to the whole queue, the

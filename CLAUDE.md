@@ -42,7 +42,7 @@ pnpm dev                    # Start Next.js dev server (port 3000)
 # Quality
 pnpm lint                   # oxlint
 pnpm typecheck              # tsc --noEmit
-pnpm doctor                 # react-doctor — fails on errors, reports warnings
+pnpm check:react            # react-doctor — fails on errors (not on the score)
 pnpm check:links            # every internal link points at a route that exists
 pnpm check:contrast         # every theme token pair meets WCAG AAA
 
@@ -203,7 +203,7 @@ bundling them and apologising in the message.
 Five jobs. The first four run in parallel and each is capped at ten minutes —
 the budget is for all verification, not just the browser suite.
 
-- **quality**: `lint`, `typecheck`, `doctor`, `check:contrast`, `check:links`
+- **quality**: `lint`, `typecheck`, `check:react`, `check:contrast`, `check:links`
 - **test**: `test:unit`, `test:components`, `test:integration:only` (the `:only`
   variant, because the runner supplies its own service containers)
 - **e2e**: Playwright over five browser projects plus a `setup` project that
@@ -216,7 +216,7 @@ the budget is for all verification, not just the browser suite.
 
 When working with this codebase:
 
-1. **Always run lint, typecheck and `pnpm doctor`** after making changes
+1. **Always run lint, typecheck and `pnpm check:react`** after making changes
 2. **Check existing patterns** in similar files before implementing new features
 3. **Follow the domain-driven structure** — add code to the appropriate domain folder
 4. **Update migrations** when changing the Prisma schema

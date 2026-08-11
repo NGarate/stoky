@@ -34,6 +34,12 @@ export default function RegisterPage(): JSX.Element {
     const password = String(formData.get("password") ?? "");
     const householdName = String(formData.get("householdName") ?? "").trim();
 
+    // The React Compiler cannot yet memoise a component containing this
+    // `try`/`catch` around an await, so it declines to optimise the whole
+    // component. A tool limitation rather than a defect: the handler is
+    // correct, and the cost is a missed memoisation on a screen that renders a
+    // form. Revisit when babel-plugin-react-compiler supports it.
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       await registerMutation.mutateAsync({
         email,

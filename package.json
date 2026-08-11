@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
+    "check:react": "react-doctor . --no-telemetry --no-warnings --blocking error --max-duration 120",
     "check:contrast": "bun scripts/check-contrast.ts",
     "check:links": "bun scripts/check-links.ts",
     "test": "pnpm test:unit && pnpm test:components && pnpm test:integration",
@@ -82,6 +83,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
-    "playwright": "^1.62.1"
+    "playwright": "^1.62.1",
+    "react-doctor": "0.9.11"
   }
 }

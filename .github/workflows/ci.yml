@@ -56,6 +56,16 @@ jobs:
 
       - run: pnpm lint
       - run: pnpm typecheck
+
+      # Security, correctness, performance and accessibility rules that neither
+      # oxlint nor tsc looks for. Gates on errors only: the score is a number
+      # nobody has agreed to, and a gate on one either blocks every commit or
+      # gets raised until it means nothing. `--no-telemetry` because this
+      # project does not send its source health to a third party to satisfy a
+      # gate.
+      - name: React doctor
+        run: pnpm check:react
+
       - name: WCAG AAA contrast
         run: pnpm check:contrast
 

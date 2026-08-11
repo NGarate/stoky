@@ -100,6 +100,7 @@ report_budget() {
 
 run_step "Lint" 120 "${PNPM_CMD[@]}" lint
 run_step "Typecheck" 180 "${PNPM_CMD[@]}" typecheck
+run_step "React doctor" 120 "${PNPM_CMD[@]}" check:react
 run_step "Internal links" 120 "${PNPM_CMD[@]}" check:links
 run_step "Contrast" 120 "${PNPM_CMD[@]}" check:contrast
 run_step "Unit tests" 120 "${PNPM_CMD[@]}" test:unit

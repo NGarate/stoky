@@ -68,6 +68,10 @@ export function SessionKeepAlive({
   const refresh = useCallback(async (): Promise<void> => {
     if (refreshing.current) return;
     refreshing.current = true;
+    // Same compiler limitation as the auth forms: a `try`/`catch` around an
+    // await inside this callback stops the component being memoised. The catch
+    // stays, because a failed session refresh must not take the timer with it.
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       const request = fetcher ?? fetch;
       const response = await request("/api/auth/session", { cache: "no-store" });
