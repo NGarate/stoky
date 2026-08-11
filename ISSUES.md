@@ -6,9 +6,13 @@ This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
 **Last Updated:** 2026-08-11  
-**Status:** after Phase 4. 3 critical issues resolved; SEC-1 found and closed;
-INV-1, UI-9, DEBT-2, I18N-7 and TEST-4 closed. Open: INV-2's `transferStock`
-half, DEBT-1/3/5/6, OCR-1, A11Y-1, I18N-2..6 and I18N-8.
+**Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
+INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
+DEBT-3/5/6, OCR-1, I18N-2..6, I18N-8 and UI-3.
+
+The individual entries below are authoritative; this line is a summary and has
+twice been the last thing updated. If it disagrees with an entry, the entry is
+right.
 
 Phase 4 also filed nothing new that it did not also close, except INV-2 — which
 it then closed by half.
@@ -1403,35 +1407,7 @@ async getProductByBarcode(barcode: string) {
 }
 ```
 
-**Priority:** Address in Phase 1
-
-**Resolution — and the suggestion above was not followed.** NIST SP 800-63B
-§5.1.1.2 advises *against* composition rules: they push people toward
-`Password1!`, which is more predictable than a longer passphrase, and they are
-why passwords get written down. This project already cites SP 800-63B for rate
-limiting, so applying it there and ignoring it here would have been choosing
-the easy half.
-
-`src/lib/validations/password.ts` instead sets a **twelve**-character minimum
-with no composition rules, refuses the passwords at the top of every leak,
-refuses one containing the account's own name or address, and reports every
-problem at once rather than one per attempt.
-
-Twelve rather than the standard's floor of eight because that floor assumes the
-verifier also checks against breached lists at scale, which a self-hosted box
-with no outbound network cannot do.
-
-**A second finding, larger than DEBT-1 itself:** there was no *maximum*
-anywhere, so `argon2.hash` and `argon2.verify` took unbounded input on two
-endpoints reachable without an account — with Argon2id configured at 64 MB per
-call. The rate limiter bounds how often, not how much. Capped at 128, which is
-well past the 64 the standard asks a verifier to accept.
-
-The policy governs a password being **set**, never one being checked. A
-verifier that refused a stored password because the rule changed would lock
-people out of their own household; sign-in keeps only the maximum. Two existing
-tests asserted the old behaviour and now assert the new one, including that a
-short legacy password still signs in. when implementing F5 (Barcode scanning)
+**Priority:** Address in Phase 1 when implementing F5 (Barcode scanning)
 
 ---
 
