@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { replayable } from "./idempotency";
 
 export const shoppingListSchema = z.object({
   name: z.string().min(1),
@@ -9,13 +10,61 @@ export const updateShoppingListSchema = shoppingListSchema.partial().extend({
   id: z.string(),
 });
 
-export const shoppingItemSchema = z.object({
+/**
+ * A line on a shopping list — ISSUES.md SHOP-1.
+ *
+ * **Exactly one of `productId` and `customName`.** Free text is the whole point
+ * of a shopping list: nobody wants to create a product record to remember to
+ * buy stamps. But both fields were plain optionals with nothing joining them,
+ * so an item with *neither* was accepted and arrived on the phone screen as an
+ * empty row that could still be ticked — `getBuyList` computes
+ * `product?.name ?? item.customName ?? ""`, and that last empty string was the
+ * only thing between this and a crash.
+ *
+ * Both is refused too, and that is the stricter half. `getBuyList` shows the
+ * product's name and ignores the custom one, so an item with both stores a
+ * string nobody will ever see. If naming a product differently on a list is
+ * ever wanted, it wants a field of its own rather than an overloaded pair.
+ *
+ * Checked against the database before this went in: no existing row was in
+ * either state, so nothing already saved becomes unreadable.
+ */
+const shoppingItemFields = z.object({
   shoppingListId: z.string(),
   productId: z.string().optional(),
   customName: z.string().optional(),
   quantity: z.number().default(1),
   unit: z.string().optional(),
 });
+
+/**
+ * Exactly one of the two, as a value rather than a call.
+ *
+ * `.refine` produces a `ZodEffects`, which cannot be `.merge`d — so the rule has
+ * to be applied *after* the replay envelope goes on. Keeping the predicate and
+ * its message here means the two schemas below cannot drift apart, which is the
+ * failure this shape is guarding against.
+ */
+const ONE_NAME = {
+  // An empty string is not a name. Without the trim, a form submitting its
+  // untouched text field passes and the row is nameless anyway.
+  check: (item: { productId?: string; customName?: string }) =>
+    Boolean(item.productId) !== Boolean(item.customName?.trim()),
+  options: {
+    message: "An item needs either a product or a name of its own, not both",
+    path: ["customName"],
+  },
+};
+
+export const shoppingItemSchema = shoppingItemFields.refine(
+  ONE_NAME.check,
+  ONE_NAME.options,
+);
+
+/** What `shopping.addItem` takes: the same rule, with the replay envelope. */
+export const addShoppingItemSchema = shoppingItemFields
+  .merge(replayable)
+  .refine(ONE_NAME.check, ONE_NAME.options);
 
 export const updateShoppingItemSchema = z.object({
   id: z.string(),

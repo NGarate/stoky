@@ -4,7 +4,7 @@ import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   shoppingListSchema,
   updateShoppingListSchema,
-  shoppingItemSchema,
+  addShoppingItemSchema,
   updateShoppingItemSchema,
   shoppingListQuerySchema,
 } from "@/lib/validations/shopping";
@@ -25,11 +25,11 @@ import { withReplay } from "../replay";
  * may send each of them twice, so they carry an `idempotencyKey` and apply once
  * (`src/server/trpc/replay.ts`).
  *
- * An item is meant to reference a `Product` **or** carry a `customName`. Free
- * text is what a shopping list is for — nobody wants to create a product record
- * to remember to buy stamps. Note that nothing enforces the "or":
- * `shoppingItemSchema` has both as plain optionals, so an item with neither is
- * accepted and renders as an empty row (ISSUES.md SHOP-1).
+ * An item references a `Product` **or** carries a `customName`, exactly one.
+ * Free text is what a shopping list is for — nobody wants to create a product
+ * record to remember to buy stamps. The "exactly" is enforced by
+ * `addShoppingItemSchema`; it was not, and an item with neither used to arrive
+ * on the phone screen as an empty row that could still be ticked (SHOP-1).
  */
 export const shoppingRouter = createTRPCRouter({
   /** The household's lists, with a count of what is still unticked. */
@@ -171,7 +171,7 @@ export const shoppingRouter = createTRPCRouter({
    * shelf that reminded them.
    */
   addItem: writeProcedure
-    .input(shoppingItemSchema.merge(replayable))
+    .input(addShoppingItemSchema)
     .mutation(async ({ ctx, input }) => {
       // Verify list belongs to household
       const list = await ctx.db.shoppingList.findFirst({
