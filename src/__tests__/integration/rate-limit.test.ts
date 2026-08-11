@@ -216,7 +216,7 @@ describe("the per-account limit, through authorize", () => {
     // spend a limit that exists to stop someone guessing.
     const email = generateTestEmail("resets");
     const password = "cocina despensa nevera";
-    const household = await createTestHousehold({ name: "Test Household" });
+    const household = await createTestHousehold({ name: `Rate Limit Household ${process.pid}` });
     await createTestUser({ email, name: generateTestName("Resets"), password, householdId: household.id });
 
     try {
@@ -231,7 +231,7 @@ describe("the per-account limit, through authorize", () => {
       expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
     } finally {
       await cleanupTestUsers(email);
-      await cleanupTestHouseholds("Test Household");
+      await cleanupTestHouseholds(`Rate Limit Household ${process.pid}`);
     }
   });
 });

@@ -14,8 +14,24 @@ import {
 import * as argon2 from "argon2";
 import { signInWith } from "../utils/authorize";
 
+/**
+ * Everything this file creates carries this run's own marker, and cleanup
+ * deletes by it — **never** by a pattern another suite could match.
+ *
+ * The `afterEach` here used to delete every user containing `"@example.com"`
+ * and every household containing `"Test Household"`, after every one of these
+ * tests. Run serially that was invisible: each file's `beforeAll` recreates its
+ * rows. Run alongside another suite on the same database — two developers, a
+ * watch mode, or TEST-5's load reproduction — it deleted the *other* process's
+ * users mid-test, which surfaced as `UNAUTHORIZED "This account no longer
+ * exists"` from whichever procedure looked up membership next. That is how it
+ * contaminated TEST-5's evidence: some of the failures attributed to the
+ * runner were this file reaching across and shooting the replay suite's users.
+ */
+const RUN_MARKER = `authflow-${Date.now().toString(36)}`;
+const runEmail = (prefix: string) => generateTestEmail(`${RUN_MARKER}-${prefix}`);
+
 describe("Authentication Flow Integration Tests", () => {
-  const testEmailPattern = "@example.com";
   let caller: ReturnType<typeof appRouter.createCaller>;
 
   beforeEach(async () => {
@@ -25,17 +41,17 @@ describe("Authentication Flow Integration Tests", () => {
   });
 
   afterEach(async () => {
-    // Clean up test users and households
-    await cleanupTestUsers(testEmailPattern);
-    await cleanupTestHouseholds("Test Household");
+    // Only what this run made. The marker is in every email and household name.
+    await cleanupTestUsers(RUN_MARKER);
+    await cleanupTestHouseholds(RUN_MARKER);
   });
 
   describe("User Registration", () => {
     it("should register a new user with valid data", async () => {
-      const email = generateTestEmail("register");
+      const email = runEmail("register");
       const name = generateTestName("Register User");
       const password = "SecurePassword123!";
-      const householdName = "My Test Household";
+      const householdName = `My Test Household ${RUN_MARKER}`;
 
       const result = await caller.auth.register({
         email,
@@ -64,7 +80,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should register a new user without household", async () => {
-      const email = generateTestEmail("no-household");
+      const email = runEmail("no-household");
       const name = generateTestName("No Household User");
       const password = "SecurePassword123!";
 
@@ -88,7 +104,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should fail to register with duplicate email", async () => {
-      const email = generateTestEmail("duplicate");
+      const email = runEmail("duplicate");
       const name = generateTestName("Duplicate User");
       const password = "SecurePassword123!";
 
@@ -134,7 +150,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should fail to register with short password", async () => {
-      const email = generateTestEmail("short-password");
+      const email = runEmail("short-password");
       const name = generateTestName("Short Password User");
 
       let error: Error | null = null;
@@ -152,7 +168,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should fail to register with empty name", async () => {
-      const email = generateTestEmail("empty-name");
+      const email = runEmail("empty-name");
       const password = "SecurePassword123!";
 
       let error: Error | null = null;
@@ -177,7 +193,7 @@ describe("Authentication Flow Integration Tests", () => {
     // form uses.
 
     it("should accept valid credentials", async () => {
-      const email = generateTestEmail("login");
+      const email = runEmail("login");
       const name = generateTestName("Login User");
       const password = "ValidPassword123!";
 
@@ -190,7 +206,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should refuse an invalid password", async () => {
-      const email = generateTestEmail("invalid-password");
+      const email = runEmail("invalid-password");
       const name = generateTestName("Invalid Password User");
       const password = "CorrectPassword123!";
 
@@ -203,7 +219,7 @@ describe("Authentication Flow Integration Tests", () => {
 
     it("should refuse a non-existent email the same way", async () => {
       const result = await signInWith({
-        email: generateTestEmail("non-existent"),
+        email: runEmail("non-existent"),
         password: "AnyPassword123!",
       });
 
@@ -221,7 +237,7 @@ describe("Authentication Flow Integration Tests", () => {
 
   describe("Get Current User (Me)", () => {
     it("should return current user when authenticated", async () => {
-      const email = generateTestEmail("me-auth");
+      const email = runEmail("me-auth");
       const name = generateTestName("Me Auth User");
       const password = "SecurePassword123!";
       const householdName = "My Household";
@@ -266,7 +282,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should return user without household when user has no household", async () => {
-      const email = generateTestEmail("no-household-me");
+      const email = runEmail("no-household-me");
       const name = generateTestName("No Household Me User");
       const password = "SecurePassword123!";
 
@@ -289,7 +305,7 @@ describe("Authentication Flow Integration Tests", () => {
 
   describe("User Logout", () => {
     it("should logout successfully when authenticated", async () => {
-      const email = generateTestEmail("logout");
+      const email = runEmail("logout");
       const name = generateTestName("Logout User");
       const password = "SecurePassword123!";
 
@@ -322,7 +338,7 @@ describe("Authentication Flow Integration Tests", () => {
 
   describe("Password Security", () => {
     it("should store password as Argon2id hash", async () => {
-      const email = generateTestEmail("password-hash");
+      const email = runEmail("password-hash");
       const name = generateTestName("Password Hash User");
       const password = "MySecurePassword123!";
 
@@ -348,7 +364,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should reject weak passwords during registration", async () => {
-      const email = generateTestEmail("weak-password");
+      const email = runEmail("weak-password");
       const name = generateTestName("Weak Password User");
 
       let error: Error | null = null;
@@ -368,7 +384,7 @@ describe("Authentication Flow Integration Tests", () => {
 
   describe("Registration with Household", () => {
     it("should create user as OWNER when household is provided", async () => {
-      const email = generateTestEmail("owner-role");
+      const email = runEmail("owner-role");
       const name = generateTestName("Owner User");
       const password = "SecurePassword123!";
       const householdName = "Owner Household";
@@ -389,7 +405,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("should create user as MEMBER when no household is provided", async () => {
-      const email = generateTestEmail("member-role");
+      const email = runEmail("member-role");
       const name = generateTestName("Member User");
       const password = "SecurePassword123!";
 
