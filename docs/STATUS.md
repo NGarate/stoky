@@ -432,7 +432,12 @@ where it disagrees with this file, it is right.
 - ~~No health-check endpoint.~~ **Closed.** `/api/health` checks Postgres and
   Valkey; the image and Compose both use it.
 - No PWA. Deferred deliberately on iOS grounds, not overlooked.
-- No error tracking or monitoring beyond the container's own healthcheck.
+- ~~No data export.~~ **Closed.** `/settings` downloads the household as JSON;
+  password hashes are never in it, and a test proves that by breaking the query
+  that keeps them out.
+- No error tracking or monitoring beyond the container's own healthcheck — and
+  worth a decision rather than a ticket, since every option sends a household's
+  errors to somebody else's server.
 - No data export or backup.
 - Coverage is measured now, but **per tier, and the denominators differ**: each
   report counts only the files that tier loads, so the three numbers do not
