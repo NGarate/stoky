@@ -834,4 +834,6 @@ These have no phase yet. They are here so that stays visible.
 | ~~UI-3~~ | **Done.** The last three: the stock procedures' inputs described a database row rather than what each one does — a required `operationType` every handler ignored, and a `quantity` whose sign `Math.abs` laundered, so `-5` booked `+5`. And `ProductPicker` read one page's namespace on both, telling `/inventory/consume` to pick the product it wanted to *add* stock to |
 | DOCS-1 | No JSDoc on the tRPC procedures |
 | TEST-1 | Integration tests need a database; partly addressed by the runner |
-| Error boundaries, error tracking, a health endpoint, data export, PWA install | None exist. The PWA half is deferred deliberately on iOS grounds (§5.4); the rest are not deferred, only absent |
+| ~~Error boundaries~~ | **Done.** `(dashboard)/error.tsx` inside the intl provider, `global-error.tsx` outside every provider — hardcoded bilingual and inline-styled, because it replaces the root layout that would have supplied both |
+| ~~A health endpoint~~ | **Done.** `/api/health` checks Postgres and Valkey, and `docker-compose.prod.yml` now gives the app the healthcheck its two dependencies already had. Verified by stopping the cache container |
+| Error tracking, data export, PWA install | Still absent. The PWA half is deferred deliberately on iOS grounds (§5.4); the other two are not deferred, only absent |
