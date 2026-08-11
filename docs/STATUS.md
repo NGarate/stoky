@@ -396,8 +396,12 @@ where it disagrees with this file, it is right.
   refused, a write queued in a supermarket could be refused on its first
   attempt, and the offline queue treats BAD_REQUEST as permanent — it would
   discard it. That is the failure Phase 4 exists to prevent. Not observed
-  outside the test loop; the rate under normal use is unknown. **TEST-5, and it
-  is the one open entry in `ISSUES.md`.**
+  outside the test loop; the rate under normal use is unknown.
+- **It then stopped reproducing**: 0 failures in 90 runs later the same day, on
+  the same machine, including 30 with the file restored exactly as it was. So
+  the trigger is environmental and unidentified, and **a green run proves
+  nothing** — which is the trap to know about before running it. **TEST-5, the
+  one open entry in `ISSUES.md`.**
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**

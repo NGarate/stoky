@@ -18,9 +18,16 @@ import type { Session } from "next-auth";
  * for i in $(seq 1 30); do bunx bun test docs/reproductions/test-5.test.ts; done
  * ```
  *
- * It fails about 3 times in 30. The last statement of the failing test adds its
- * name to `completed`, and an `afterAll` prints the set — so a failing run that
- * prints `COMPLETED: []` is one where the body did not reach the end.
+ * It failed about 3 times in 30 when it was written — and 0 times in 90 later
+ * the same day, on the same machine, with the file untouched. **A green run
+ * proves nothing.** Whatever brings it back is environmental and not yet
+ * identified; see ISSUES.md TEST-5 before drawing conclusions from a quiet
+ * loop.
+ *
+ * The last statement of the failing test adds its name to `completed`, and an
+ * `afterAll` prints the set — so a failing run that prints `COMPLETED: []` is
+ * one where the body did not reach the end, which is how the throw was located
+ * on the *first* call rather than the second.
  *
  * **What it took to reproduce.** Four smaller shapes do not: a rejection through
  * a nested async wrapper; the same through a tRPC caller with no database; a

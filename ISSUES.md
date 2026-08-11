@@ -792,14 +792,36 @@ Each 20 runs of `replay.test.ts`:
 | Both earlier tests in the describe skipped | 1 |
 | `expectCode` as a thunk, or with `.catch()` attached synchronously | 2, 4 |
 
+## It stopped reproducing, and that is the most useful thing to know about it
+
+The reproduction failed 3 times in 30 and 1 in 12 when it was written. Later the
+same day, on the same machine and the same command, it failed **0 times in 90** —
+60 with `withReplay` instrumented, and then 30 with the file restored to exactly
+what it had been. The control matters: it rules out the instrumentation, which
+was the obvious explanation and would have been a satisfying one.
+
+So the trigger is something environmental — machine load, accumulated rows in a
+shared database, or whatever else differs between an afternoon of running suites
+and a quiet hour. **A green run proves nothing.** Anybody picking this up should
+know that before they run it thirty times, see nothing, and conclude it is
+fixed. That is exactly the mistake this entry now exists to prevent, and it is a
+different mistake from the one it was preventing an hour ago.
+
+An attempt to force it by loading the machine was cut short by the tooling
+rather than by a result, so it is untested rather than ruled out — the first
+thing worth retrying.
+
 ## What to do next
 
-Instrument `withReplay` in the reproduction — it is small enough to add printf
-debugging to without drowning — and answer the one question that has resisted
-five attempts: how a `findUnique` on `[userId, freshKey]` returns a record whose
-`requestHash` belongs to another call. Both the key it asked for and the key on
-the record it got back have already been printed and matched, in the real suite,
-which is what makes this worth someone's afternoon.
+Reproduce it *first*, under whatever conditions bring it back, and only then
+instrument. Working the other way round is what produced ninety green runs and
+no information.
+
+The question still unanswered: how a `findUnique` on `[userId, freshKey]`
+returns a record whose `requestHash` belongs to another call. In the real suite
+both the key asked for and the key on the record returned were printed and
+matched each other, which is what makes this worth an afternoon rather than a
+shrug.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
