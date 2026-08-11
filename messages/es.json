@@ -322,7 +322,12 @@
       "errorProductNotFound": "Ese producto ya no existe. Vuelve a elegir uno de la lista.",
       "errorLocationNotFound": "Esa ubicación ya no existe. Elige otra o déjalo sin ubicación.",
       "errorNoHousehold": "Tu cuenta todavía no pertenece a ningún hogar. Crea un hogar o pide que te inviten antes de añadir stock.",
-      "errorGeneric": "No hemos podido guardarlo. Revisa los datos e inténtalo otra vez; si sigue fallando, prueba dentro de unos minutos."
+      "errorGeneric": "No hemos podido guardarlo. Revisa los datos e inténtalo otra vez; si sigue fallando, prueba dentro de unos minutos.",
+      "successTitle": "Stock añadido",
+      "successBody": "Has añadido {quantity} {unit} de «{name}».",
+      "successNextTitle": "¿Qué quieres hacer ahora?",
+      "successAddMore": "Añadir más stock",
+      "successViewInventory": "Ver el inventario"
     },
     "consume": {
       "title": "Consumir stock",
@@ -354,7 +359,12 @@
       "errorNotEnoughStockServer": "Ya no queda suficiente de este producto: alguien de tu hogar lo ha consumido mientras rellenabas el formulario. Vuelve al inventario para ver cuánto queda e inténtalo con menos cantidad.",
       "errorProductNotFound": "Ese producto ya no existe. Vuelve a elegir uno de la lista.",
       "errorNoHousehold": "Tu cuenta todavía no pertenece a ningún hogar. Crea un hogar o pide que te inviten antes de consumir stock.",
-      "errorGeneric": "No hemos podido guardarlo. Revisa los datos e inténtalo otra vez; si sigue fallando, prueba dentro de unos minutos."
+      "errorGeneric": "No hemos podido guardarlo. Revisa los datos e inténtalo otra vez; si sigue fallando, prueba dentro de unos minutos.",
+      "successTitle": "Consumo apuntado",
+      "successBody": "Has apuntado {quantity} {unit} de «{name}». Quedan {left} {unit}.",
+      "successNextTitle": "¿Qué quieres hacer ahora?",
+      "successConsumeMore": "Apuntar otro consumo",
+      "successViewInventory": "Ver el inventario"
     }
   },
   "receipts": {

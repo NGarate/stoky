@@ -45,7 +45,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
 | I18N-1 | The receipts routes are hardcoded Spanish | ✅ Resolved (`621185d`) |
 | UI-5 | The receipt review page overflows at 390px | ✅ Resolved (`621185d`) |
-| A11Y-1 | A saved stock movement is never announced | 🟡 Open (pinned by test) |
+| A11Y-1 | A saved stock movement is never announced | ✅ Resolved (Phase 5) |
 | A11Y-2 | Confirming a receipt line changes nothing on screen | ✅ Resolved |
 | UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
@@ -1149,13 +1149,13 @@ el ticket" and "Datos extraídos" — rather than by the internal state.
 
 ---
 
-### 🟡 A11Y-1: A saved stock movement is never announced
+### ✅ A11Y-1: A saved stock movement is never announced
 
 **Files:** `src/app/(dashboard)/inventory/add/page.tsx`,
 `src/app/(dashboard)/inventory/consume/page.tsx`
 **Severity:** MEDIUM
-**Status:** OPEN — found 2026-08-09 building `e2e/screen-reader.spec.ts`
-(DESIGN_AUDIT A4.6), pinned by that suite
+**Status:** RESOLVED in Phase 5 — found 2026-08-09 building
+`e2e/screen-reader.spec.ts` (DESIGN_AUDIT A4.6), pinned by that suite
 
 Both stock forms announce their *refusals* well — the error summary is a focused
 `role="alert"` and it names the number the household actually has. Success says
@@ -1187,9 +1187,19 @@ redirecting and let the form report what it wrote, which is what `/products/new`
 already does and why D8 exists. The second also answers "how much, where"
 without a table scan.
 
-`e2e/screen-reader.spec.ts` pins the current behaviour with
-`expect(spoken(saved)).toEqual([])`. It goes red the moment the outcome is
-announced — flip the assertion then.
+**Resolution (Phase 5).** The second candidate: both forms stop redirecting
+and report what they wrote, in a focused `role="status"` — the same shape
+`/products/new` uses, which is why PROGRESS.md D8 exists. It answers *how much*
+and *of what* without walking the table, and the consume form answers *how much
+is left*, which is the question somebody consuming stock has next.
+
+The pinning assertion is flipped, as this entry instructed: it now requires a
+new announcement after a save **and** requires it to name the product. Verified
+it can fail — restoring the redirect turns it red.
+
+One consequence in the browser suite: a journey that added stock and then
+clicked through to `/inventory/consume` was relying on the redirect. The page
+object navigates directly when it is not already there, and says why.
 
 ---
 

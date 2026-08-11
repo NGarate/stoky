@@ -59,6 +59,13 @@ export default function ConsumeStockPage(): JSX.Element {
   // Bumped on every failed submit so the summary is re-focused each time, even
   // when the same errors come back twice in a row.
   const [errorSignal, setErrorSignal] = useState(0);
+  const successRef = useRef<HTMLDivElement | null>(null);
+  const [saved, setSaved] = useState<{
+    name: string;
+    quantity: number;
+    unit: string;
+    left: number;
+  } | null>(null);
 
   const availableId = useId();
   const quantityId = useId();
@@ -97,12 +104,27 @@ export default function ConsumeStockPage(): JSX.Element {
           });
 
   const consumeStock = api.inventory.consumeStock.useMutation({
+    /**
+     * Report what was written, rather than redirecting in silence.
+     *
+     * The redirect's only confirmation was Next's route announcer reading
+     * "Inventario", which is what it reads when somebody navigates there and
+     * saves nothing — it answers "where am I", never "did that work"
+     * (ISSUES.md A11Y-1). Saying it here also answers *how much is left*,
+     * which is the question somebody consuming stock actually has next.
+     */
     onSuccess: async (_data, variables) => {
+      const used = Math.abs(variables.quantity);
+      setSaved({
+        name: product?.name ?? "",
+        quantity: used,
+        unit: variables.unit,
+        left: Math.round(((availableStock ?? used) - used) * 100) / 100,
+      });
       await utils.inventory.getStockOverview.invalidate();
       // The figure above is read from this query, and consuming twice in a row
       // is an ordinary thing to do, so it must not be served from cache.
       await utils.product.getById.invalidate({ id: variables.productId });
-      router.push("/inventory");
       router.refresh();
     },
     onError: (error) => {
@@ -123,6 +145,11 @@ export default function ConsumeStockPage(): JSX.Element {
       summaryRef.current?.focus();
     }
   }, [errorSignal]);
+
+  // Focus moves to the confirmation, so a reader hears it without hunting.
+  useEffect(() => {
+    if (saved) successRef.current?.focus();
+  }, [saved]);
 
   function handleProductChange(selected: PickedProduct | null): void {
     setProduct(selected);
@@ -189,6 +216,59 @@ export default function ConsumeStockPage(): JSX.Element {
       ...(locationId ? { locationId } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
     });
+  }
+
+  if (saved) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Link
+          className="inline-flex min-h-[48px] items-center text-primary underline"
+          href="/inventory"
+        >
+          {t("backToInventory")}
+        </Link>
+
+        <div
+          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
+          ref={successRef}
+          role="status"
+          tabIndex={-1}
+        >
+          <h1 className="text-2xl font-bold">{t("successTitle")}</h1>
+          <p className="mt-2">
+            {t("successBody", {
+              quantity: saved.quantity,
+              unit: saved.unit,
+              name: saved.name,
+              left: saved.left,
+            })}
+          </p>
+        </div>
+
+        <h2 className="mt-6 text-lg font-semibold text-heading">
+          {t("successNextTitle")}
+        </h2>
+        <ul className="mt-2 space-y-2">
+          <li>
+            <button
+              className="inline-flex min-h-[48px] items-center text-primary underline"
+              onClick={() => setSaved(null)}
+              type="button"
+            >
+              {t("successConsumeMore")}
+            </button>
+          </li>
+          <li>
+            <Link
+              className="inline-flex min-h-[48px] items-center text-primary underline"
+              href="/inventory"
+            >
+              {t("successViewInventory")}
+            </Link>
+          </li>
+        </ul>
+      </div>
+    );
   }
 
   return (

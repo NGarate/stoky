@@ -69,11 +69,35 @@ export default function AddStockPage(): JSX.Element {
   const noteHintId = useId();
 
   const summaryRef = useRef<HTMLDivElement | null>(null);
+  const successRef = useRef<HTMLDivElement | null>(null);
+  const [saved, setSaved] = useState<{
+    name: string;
+    quantity: number;
+    unit: string;
+  } | null>(null);
 
   const addStock = api.inventory.addStock.useMutation({
-    onSuccess: async () => {
+    /**
+     * Report what was written, rather than redirecting in silence.
+     *
+     * This used to `router.push("/inventory")`, and the destination has no
+     * live region — so the entire confirmation a screen-reader user received
+     * was Next's route announcer reading "Inventario". That is the same word
+     * it reads when somebody clicks Inventario in the navigation and saves
+     * nothing: it answers "where am I", never "did that work" (ISSUES.md
+     * A11Y-1).
+     *
+     * Saying it here also answers *how much* and *of what* without walking the
+     * table, which the redirect could never do. Same shape as
+     * `/products/new`, which is why PROGRESS.md D8 exists.
+     */
+    onSuccess: async (_data, variables) => {
+      setSaved({
+        name: product?.name ?? "",
+        quantity: Math.abs(variables.quantity),
+        unit: variables.unit,
+      });
       await utils.inventory.getStockOverview.invalidate();
-      router.push("/inventory");
       router.refresh();
     },
     onError: (error) => {
@@ -95,6 +119,12 @@ export default function AddStockPage(): JSX.Element {
       summaryRef.current?.focus();
     }
   }, [errorSignal]);
+
+  // Focus moves to the confirmation, so a reader hears it without hunting and
+  // a keyboard user is already where the next choices are.
+  useEffect(() => {
+    if (saved) successRef.current?.focus();
+  }, [saved]);
 
   function handleProductChange(selected: PickedProduct | null): void {
     setProduct(selected);
@@ -155,6 +185,58 @@ export default function AddStockPage(): JSX.Element {
       ...(locationId ? { locationId } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
     });
+  }
+
+  if (saved) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Link
+          className="inline-flex min-h-[48px] items-center text-primary underline"
+          href="/inventory"
+        >
+          {t("backToInventory")}
+        </Link>
+
+        <div
+          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
+          ref={successRef}
+          role="status"
+          tabIndex={-1}
+        >
+          <h1 className="text-2xl font-bold">{t("successTitle")}</h1>
+          <p className="mt-2">
+            {t("successBody", {
+              quantity: saved.quantity,
+              unit: saved.unit,
+              name: saved.name,
+            })}
+          </p>
+        </div>
+
+        <h2 className="mt-6 text-lg font-semibold text-heading">
+          {t("successNextTitle")}
+        </h2>
+        <ul className="mt-2 space-y-2">
+          <li>
+            <button
+              className="inline-flex min-h-[48px] items-center text-primary underline"
+              onClick={() => setSaved(null)}
+              type="button"
+            >
+              {t("successAddMore")}
+            </button>
+          </li>
+          <li>
+            <Link
+              className="inline-flex min-h-[48px] items-center text-primary underline"
+              href="/inventory"
+            >
+              {t("successViewInventory")}
+            </Link>
+          </li>
+        </ul>
+      </div>
+    );
   }
 
   return (

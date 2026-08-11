@@ -761,6 +761,9 @@ translated into codes a caller can act on (`P2025` → `NOT_FOUND`, `P2002` →
 as one middleware on every procedure. It was the highest-value item the Phase 4
 design left, because it is what makes `classify.ts`'s table *true*.
 
+**Also done:** A11Y-1. Both stock forms report what they wrote instead of
+redirecting into silence, and the pinned assertion is flipped.
+
 **Also done:** Screen A (§3). `/shopping` is the shop screen — Scan on top, TO
 BUY with the minimum notch, IN THE TROLLEY folded away — and the list manager
 moved to `/shopping/lists`. Undo is the trolley rather than a timed toast; the
@@ -782,7 +785,6 @@ first.
 |---|---|
 | **Read persistence** | Three `@tanstack/*` packages, so opening with no signal shows the last data seen rather than "nothing saved yet" |
 | **A place to see what did not save** | `/settings/unsaved`. The indicator names failures inline; a review route is better |
-| A11Y-1 | Saving a stock movement announces nothing. Pinned by a test that goes red when it is fixed |
 
 ### Phase 6 — rating
 

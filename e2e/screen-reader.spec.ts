@@ -1,6 +1,7 @@
 import { type CDPSession, type Page, expect, test } from "@playwright/test";
 import { DEMO_EMAIL, DEMO_PASSWORD, SESSION_FILE } from "./session";
 import { settle } from "./settle";
+import es from "../messages/es.json";
 
 /**
  * The half of a screen-reader pass that is not a judgement call.
@@ -27,11 +28,11 @@ import { settle } from "./settle";
  * 3. **Outcomes are announced.** After an action, some live region must appear
  *    or change — a page that silently succeeds tells a reader nothing. The
  *    refusals all do, and so does confirming a receipt line, once its count was
- *    made to move. Saving a stock movement still does not: it redirects to a
- *    route with no live region, so the whole confirmation is the route
+ *    made to move. Saving a stock movement used to not: it redirected to a
+ *    route with no live region, so the whole confirmation was the route
  *    announcer reading "Inventario" — the same word it says if you just click
- *    the nav link. Rather than bolt an announcement onto every route, that one
- *    assertion is pinned to the current behaviour and filed as ISSUES A11Y-1.
+ *    the nav link. Closed: both stock forms now report what they wrote instead
+ *    of redirecting, so the announcement names the product and the amount.
  *    It goes red the day someone fixes it, which is the only way a pin is
  *    honest.
  * 4. **Reading order matches visual order.** Tree order against bounding boxes.
@@ -528,28 +529,35 @@ test.describe("Screen-reader journeys", () => {
       await page.locator('[role="option"]').nth(1).click();
       await page.waitForTimeout(300);
 
+      const beforeSave = await snapshot(page);
+
       await page.click("form button[type=submit]");
-      await page.waitForURL(/\/inventory$/, { timeout: 30_000 });
+      // No redirect any more: the form reports what it wrote (A11Y-1). Waited
+      // for by its heading rather than by `role="status"` — the shell's sync
+      // indicator and the form's own hints are status regions too.
+      await expect(
+        page.getByRole("heading", { name: es.inventory.add.successTitle }),
+      ).toBeVisible({ timeout: 30_000 });
       await settle(page);
 
       const saved = await snapshot(page);
-      assertTree(saved, "/inventory after a save");
+      assertTree(saved, "/inventory/add after a save");
 
-      // PINNED TO A DEFECT (ISSUES A11Y-1), not to the behaviour we want.
-      //
-      // The save succeeds, the router pushes to /inventory, and the only thing
-      // that speaks is Next's route announcer saying "Inventario" — which it
-      // says for any navigation, including one nobody meant to be a
-      // confirmation. Nothing states that anything was written, or how much, or
-      // where. Filed rather than fixed here: the fix is a decision about how
-      // these screens confirm work, not a live region sprinkled on one route.
-      //
-      // When A11Y-1 closes this goes red. That is the point: flip it to
-      // `.not.toEqual([])` then, and delete this comment.
+      // A11Y-1, flipped. It used to redirect to /inventory, whose only voice
+      // was Next's route announcer saying "Inventario" — the same word it says
+      // for a navigation nobody meant as a confirmation.
+      const confirmation = newlySpoken(spoken(beforeSave), spoken(saved));
       expect(
-        spoken(saved),
-        "A11Y-1 appears to be fixed — /inventory now announces something after a save. Flip this assertion.",
-      ).toEqual([]);
+        confirmation,
+        report(
+          "/inventory/add after a save",
+          "new live-region announcement(s) — a save that announces nothing tells a reader only where they are",
+          confirmation,
+        ),
+      ).not.toEqual([]);
+
+      // And it says *what*, not merely that something happened.
+      expect(confirmation.join(" ")).toMatch(/Arroz redondo/);
     });
 
     test("consume stock", async ({ page }) => {

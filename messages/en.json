@@ -322,7 +322,12 @@
       "errorProductNotFound": "That product no longer exists. Pick another one from the list.",
       "errorLocationNotFound": "That location no longer exists. Choose another one, or leave it without a location.",
       "errorNoHousehold": "Your account does not belong to a household yet. Create one or ask to be invited before adding stock.",
-      "errorGeneric": "We could not save it. Check the details and try again; if it keeps failing, try again in a few minutes."
+      "errorGeneric": "We could not save it. Check the details and try again; if it keeps failing, try again in a few minutes.",
+      "successTitle": "Stock added",
+      "successBody": "You added {quantity} {unit} of “{name}”.",
+      "successNextTitle": "What next?",
+      "successAddMore": "Add more stock",
+      "successViewInventory": "See the inventory"
     },
     "consume": {
       "title": "Consume stock",
@@ -354,7 +359,12 @@
       "errorNotEnoughStockServer": "There is no longer enough of this product: someone in your household used it while you were filling in the form. Go back to the inventory to see what is left, then try a smaller amount.",
       "errorProductNotFound": "That product no longer exists. Pick another one from the list.",
       "errorNoHousehold": "Your account does not belong to a household yet. Create one or ask to be invited before consuming stock.",
-      "errorGeneric": "We could not save it. Check the details and try again; if it keeps failing, try again in a few minutes."
+      "errorGeneric": "We could not save it. Check the details and try again; if it keeps failing, try again in a few minutes.",
+      "successTitle": "Use recorded",
+      "successBody": "You recorded {quantity} {unit} of “{name}”. {left} {unit} left.",
+      "successNextTitle": "What next?",
+      "successConsumeMore": "Record another use",
+      "successViewInventory": "See the inventory"
     }
   },
   "receipts": {

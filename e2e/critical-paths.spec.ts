@@ -281,7 +281,12 @@ class InventoryPage {
   }
 
   async clickConsumeStock() {
-    await this.page.click('a[href="/inventory/consume"]');
+    // The stock forms report what they wrote instead of redirecting to
+    // /inventory (ISSUES.md A11Y-1), so this may be called from the
+    // confirmation panel, which has no navigation of its own.
+    if (!this.page.url().includes("/inventory/consume")) {
+      await this.page.goto("/inventory/consume");
+    }
     await this.page.waitForURL(/\/inventory\/consume/);
   }
 
