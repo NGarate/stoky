@@ -625,5 +625,11 @@
     "usedUp": "You used {quantity} {unit} of “{name}”",
     "addedStock": "You added {quantity} {unit} of “{name}”",
     "addedItem": "You added “{name}” to the list"
+  },
+  "offlinePage": {
+    "title": "Offline",
+    "heading": "There is no connection right now",
+    "body": "We could not load this screen and it was not saved on the phone. Anything you did offline is still here and will be sent on its own once you have signal again.",
+    "back": "Back to the app"
   }
 }

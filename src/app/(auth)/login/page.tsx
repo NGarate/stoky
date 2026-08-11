@@ -1,5 +1,6 @@
 "use client";
 
+import { ShellCacheGuard } from "@/components/session/ShellCacheGuard";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -65,7 +66,11 @@ export default function LoginPage(): JSX.Element {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-background px-4 py-10">
+    <>
+      {/* The only end-of-session signal this application has: there is no
+          sign-out control anywhere in it. */}
+      <ShellCacheGuard userId={null} />
+      <main className="flex min-h-screen flex-col bg-background px-4 py-10">
       {/* Theme and language before sign-in: someone whose system is light but
           who needs dark for a visual reason must not have to log in first
           (DESIGN_AUDIT A1.3, A2.2). */}
@@ -191,6 +196,7 @@ export default function LoginPage(): JSX.Element {
           </section>
         </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }

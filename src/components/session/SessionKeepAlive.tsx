@@ -1,5 +1,6 @@
 "use client";
 
+import { useOnline } from "@/lib/useOnline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ export function SessionKeepAlive({
   fetcher,
 }: SessionKeepAliveProps): JSX.Element | null {
   const t = useTranslations("session");
+  const online = useOnline();
   const [expiry, setExpiry] = useState(() => new Date(expiresAt).getTime());
   const [remainingMs, setRemainingMs] = useState(
     () => new Date(expiresAt).getTime() - Date.now(),
@@ -113,6 +115,21 @@ export function SessionKeepAlive({
       window.removeEventListener("keydown", onActivity);
     };
   }, [refresh]);
+
+  /**
+   * Say nothing when there is no network.
+   *
+   * A shell restored from the service worker's cache carries a stale
+   * `session.expires`, rendered as a prop by the dashboard layout. Offline,
+   * `/api/auth/session` is passed through and fails, so the session cannot be
+   * refreshed — and greeting someone with a countdown they can do nothing
+   * about is an interruption with no action attached, which is the failure
+   * §7 rule 3 is about.
+   *
+   * The hook is read before the early return so it is called unconditionally,
+   * which the rules of hooks require.
+   */
+  if (!online) return null;
 
   if (remainingMs > WARN_BEFORE_MS) return null;
 

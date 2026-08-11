@@ -53,7 +53,7 @@ const TIERS = [
   { name: "desktop", width: 1280, height: 900, minTarget: 44 },
 ] as const;
 
-const PUBLIC_ROUTES = ["/login", "/register"];
+const PUBLIC_ROUTES = ["/login", "/register", "/offline"];
 
 const PRIVATE_ROUTES = [
   "/dashboard",

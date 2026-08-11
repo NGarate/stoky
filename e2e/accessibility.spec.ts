@@ -64,7 +64,7 @@ const AAA_TAGS = [
   "wcag21aaa",
 ];
 
-const PUBLIC_ROUTES = ["/login", "/register"];
+const PUBLIC_ROUTES = ["/login", "/register", "/offline"];
 
 const PRIVATE_ROUTES = [
   "/dashboard",

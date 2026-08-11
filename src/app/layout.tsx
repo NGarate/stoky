@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { TRPCProvider } from "@/components/providers/TRPCProvider";
+import { ServiceWorkerProvider } from "@/components/providers/ServiceWorkerProvider";
 import { THEME_NO_FLASH_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -52,6 +53,7 @@ export default async function RootLayout({
       >
         <TRPCProvider>
           <NextIntlClientProvider messages={messages}>
+            <ServiceWorkerProvider />
             {children}
           </NextIntlClientProvider>
         </TRPCProvider>

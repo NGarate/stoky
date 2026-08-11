@@ -625,5 +625,11 @@
     "usedUp": "Usaste {quantity} {unit} de «{name}»",
     "addedStock": "Añadiste {quantity} {unit} de «{name}»",
     "addedItem": "Añadiste «{name}» a la lista"
+  },
+  "offlinePage": {
+    "title": "Sin conexión",
+    "heading": "Ahora mismo no hay conexión",
+    "body": "No hemos podido cargar esta pantalla y no la teníamos guardada en el móvil. Lo que hayas hecho sin conexión sigue aquí y se enviará solo cuando vuelvas a tener señal.",
+    "back": "Volver a la aplicación"
   }
 }
