@@ -59,6 +59,20 @@ RUN corepack pnpm build
 # printed receipt text the fast LSTM model is the one Tesseract itself
 # recommends, and 12 MB is a tenth of this image for accuracy nothing here
 # measures — see the commit for what that means and does not mean.
+# The whole of tesseract.js, staged with its dependencies made real — ISSUES.md
+# OCR-2. Next's output tracing copies only what static analysis can see, and
+# this package's runtime is invisible to it: the worker is spawned as a thread
+# by path, that thread `require`s its way to files nothing imports by name, and
+# the WASM engine (`tesseract.js-core`) is loaded the same way. The traced
+# image carried 3 of the package's 10 dependency entries, so every scan died
+# with `Cannot find module` — receipt scanning simply did not work when
+# deployed. `outputFileTracingIncludes` was tried and did not take.
+#
+# `cp -rL` dereferences the pnpm symlinks, so the staged tree is self-contained;
+# the directory name keeps its version so the production COPY below lands it
+# exactly where the standalone output's symlinks already point.
+RUN mkdir -p /opt/ocr && cp -rL /app/node_modules/.pnpm/tesseract.js@*/ /opt/ocr/
+
 ARG TESSDATA_SPA_SHA256=6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
 RUN mkdir -p /app/tessdata \
     && wget -q -O /app/tessdata/spa.traineddata \
@@ -83,6 +97,20 @@ COPY --from=builder /app/package.json ./package.json
 # worker falls back to `process.cwd()`, finds nothing, and downloads.
 COPY --from=builder /app/tessdata ./tessdata
 ENV TESSDATA_PATH=/app/tessdata
+
+# The complete tesseract.js staged above, replacing the partial copy tracing
+# produced (OCR-2). The traced tree has to go first: it holds *symlinks* where
+# the staged tree has real directories, and COPY cannot overwrite one with the
+# other — the build fails with "cannot copy to non-directory".
+RUN rm -rf /app/node_modules/.pnpm/tesseract.js@*
+# Into `.pnpm/`, so the version-named directory inside `/opt/ocr` lands where
+# the standalone output's own symlinks already point.
+COPY --from=builder /opt/ocr/ ./node_modules/.pnpm/
+# Build-time assertions on the two files whose absence broke scanning: the
+# worker's own `require('..')` target, and the WASM engine. A wrong path here
+# must fail the build, not the first scan of a deployed household.
+RUN test -f /app/node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js/src/worker-script/index.js \
+    && test -d /app/node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js-core
 
 # The entrypoint runs `prisma migrate deploy`. Previously it did so through
 # `npx`, with no prisma package in the image — which meant every container
