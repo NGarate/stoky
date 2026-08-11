@@ -420,7 +420,7 @@
     "pendingItems": "{count, plural, one {# item left to review} other {# items left to review}}",
     "applyToInventory": "Apply to inventory",
     "applying": "Applying...",
-    "confirmAll": "Confirm all",
+    "confirmAll": "Finish review",
     "stepsLabel": "Receipt progress",
     "stepSummary": "Step {current} of {total} · {label}",
     "stepFailed": "Processing never finished",

@@ -676,6 +676,18 @@ test.describe("Screen-reader journeys", () => {
       await page.goto(reviewable as string);
       await settle(page);
 
+      // ISSUES.md I18N-6. This receipt still has lines to decide, so the button
+      // that ends the review must say so and must be unusable: it finalises the
+      // receipt *after* the work rather than instead of it. It used to be called
+      // "Confirmar todos", which promises a bulk action that skips the reviewing
+      // — the one thing it cannot do — and a name that offers what the disabled
+      // state then refuses is worse than an unclear one.
+      const finishReview = page.getByRole("button", {
+        name: /^(terminar revisión|finish review)$/i,
+      });
+      await expect(finishReview).toBeVisible();
+      await expect(finishReview).toBeDisabled();
+
       const count = page.getByRole("status").first();
       const wasSaying = ((await count.textContent()) ?? "").trim();
       const before = spoken(await snapshot(page));
@@ -766,10 +778,10 @@ async function writableProductValue(page: Page): Promise<string> {
 
 /**
  * The per-line confirm button, anchored so it cannot also match "Confirmar
- * todos" above the list. Both catalogues, because the account's language is a
- * stored preference and a suite that only knows one of them fails as a language
- * change rather than as a finding (PROGRESS D10 makes the same argument for
- * hrefs over link text).
+ * ticket" or the button that ends the review. Both catalogues, because the
+ * account's language is a stored preference and a suite that only knows one of
+ * them fails as a language change rather than as a finding (PROGRESS D10 makes
+ * the same argument for hrefs over link text).
  */
 function confirmItemButton(page: Page) {
   return page.getByRole("button", { name: /^(confirmar|confirm)$/i });

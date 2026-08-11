@@ -420,7 +420,7 @@
     "pendingItems": "{count, plural, one {# producto pendiente de revisión} other {# productos pendientes de revisión}}",
     "applyToInventory": "Aplicar al inventario",
     "applying": "Aplicando...",
-    "confirmAll": "Confirmar todos",
+    "confirmAll": "Terminar revisión",
     "stepsLabel": "Progreso del ticket",
     "stepSummary": "Paso {current} de {total} · {label}",
     "stepFailed": "El procesamiento no llegó a completarse",
