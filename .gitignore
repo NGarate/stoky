@@ -92,7 +92,14 @@ next-env.d.ts
 storybook-static/
 
 # PWA
-public/sw.js
+#
+# `public/sw.js` is NOT ignored. It is hand-written and committed — see
+# REDESIGN_PLAN §5.4. It used to be listed here, left over from a next-pwa
+# template, which meant `git add public/sw.js` silently no-opped: CI and the
+# Docker image would have shipped an application whose /sw.js 404s, with every
+# test green. The two lines below are for generated files this project does not
+# produce, and are kept only so a future plugin cannot commit its output by
+# accident.
 public/workbox-*.js
 public/worker-*.js
 

@@ -45,7 +45,28 @@ const nextConfig: NextConfig = {
 
   // Applied to every route, including API and tRPC responses.
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      {
+        // The service worker's own policy and cache rules.
+        //
+        // `no-cache` rather than a max-age: a worker that outlives a deploy
+        // serves a stale shell with no error, which is one of the worse
+        // failures available here — the user sees an old application and
+        // nothing tells them.
+        //
+        // No `Service-Worker-Allowed`: a script served from `/sw.js` already
+        // has scope `/`. Stated because its absence looks like an oversight.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache" },
+          {
+            key: "Content-Security-Policy",
+            value: "default-src 'none'; script-src 'self'; connect-src 'self'",
+          },
+        ],
+      },
+    ];
   },
 
   // The version banner tells an attacker which advisories to try.
