@@ -210,3 +210,14 @@ Learned here, mostly the expensive way. They are stated in full in
 - **Both catalogues in the same commit** (D4). A translation backlog never gets
   paid off. `src/__tests__/unit/messages.test.ts` enforces it.
 - **Do not trust an agent's report** — including this one. Re-run the command.
+
+## Where the unfinished work lives
+
+`docs/REDESIGN_PLAN.md` §10, **Carried forward** — every known-unfinished item
+in one table, each with the phase that owns it, plus an explicitly unowned
+section for the ones that have no phase yet. Compiled when Phase 4 closed,
+because a backlog spread across four files is a backlog nobody reads.
+
+The rule for that list: an item leaves it by being done or by being
+deliberately dropped, and a drop is written down. Nothing leaves by being
+forgotten.

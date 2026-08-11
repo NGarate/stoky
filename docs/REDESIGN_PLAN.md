@@ -734,3 +734,65 @@ one-off audit that decays the moment it is finished.
 **Cross-cutting:** login rate limiting (`ISSUES.md` CRITICAL-4) is the only
 critical security gap today and should not wait for Phase 7. It lands with
 Phase 3, since both touch auth; Phase 7 verifies it rather than introduces it.
+
+---
+
+## 10. Carried forward
+
+Everything known to be unfinished, in one place, each with the phase that owns
+it. Compiled when Phase 4 closed, because "it is in ISSUES.md somewhere" is not
+a plan and a backlog spread across four files is a backlog nobody reads.
+
+The rule for this list: **an item leaves it by being done or by being
+deliberately dropped, and a drop is written down.** Nothing leaves by being
+forgotten.
+
+### Phase 5 — the next phase
+
+| Item | Why it is here |
+|---|---|
+| **Screen A's layout** (§3) | Deferred from Phase 4. Shares vocabulary with the kitchen screen, so building them together is cheaper |
+| **A sign-out control** | There is none. `queue.purgeAll` and the shell-cache purge are security controls nothing can fire, and this phase's premise is a *shared tablet* |
+| **Provisioning a KITCHEN account** | The role is enforced and unprovisionable; only a database write creates one. Inherited from Phase 3 |
+| **Read persistence** | Three `@tanstack/*` packages, so opening with no signal shows the last data seen rather than "nothing saved yet" |
+| **T1 — map P2025 and P2002 in the routers** | The highest-value item the Phase 4 design left: a tick-off whose row is gone is a 500 today, which the queue classifies as transient and retries eight times |
+| **A place to see what did not save** | `/settings/unsaved`. The indicator names failures inline; a review route is better |
+| A11Y-1 | Saving a stock movement announces nothing. Pinned by a test that goes red when it is fixed |
+
+### Phase 6 — rating
+
+| Item | Why it is here |
+|---|---|
+| The rating itself (§6) | Extend the Open Food Facts fields, compute, display, and behave well with no data and with non-food |
+| DEBT-3 | The OFF cache is a process-local `Map`; multi-instance deployments diverge |
+| OCR-1 | Tesseract fetches language data from a CDN at first use, so the first scan on an air-gapped install fails |
+| T7 — an offline scan resolved later | Journey 5's "never a dead end". Needs local-id resolution, which leaks `local:` ids into the cache and into components |
+
+### Phase 7 — security review
+
+| Item | Why it is here |
+|---|---|
+| The review itself (§ below) | Authorisation per procedure, household isolation, rate limiting verified, the offline queue as an attack surface, uploads, sessions, dependencies, headers in production |
+| INV-2's `transferStock` half | Its guard sits outside its transaction. Not replayable and not on any queue path, which is why it was left |
+| DEBT-1 | Password policy is `min(8)`. Assigned to Phase 3 and not done there |
+| DEBT-5 | Missing indexes on `StockEntry.productId`, `PriceRecord.productId`, `Receipt.householdId`, `ReceiptItem.receiptId` |
+| Rate limiting's four gaps | Per IP and never per account (NIST SP 800-63B §5.2.2), `receipt.upload` unthrottled (ASVS V11.1.4), no `Retry-After` (RFC 9110 §10.2.3), refusals logged nowhere (ASVS V7.1.3) |
+
+### Unowned, and honest about it
+
+These have no phase yet. They are here so that stays visible.
+
+| Item | Note |
+|---|---|
+| **The manual screen-reader pass** | Phase 2b's one incomplete item. Four journeys are audited against the tree; whether it *sounds* sensible is what no tool answers |
+| **iOS Safari on a real device** | Playwright's WebKit is not iOS Safari, and §5.4 defers installability on iOS grounds specifically. The queue, `localStorage` and the worker all need a pass, dated in `STATUS.md` |
+| **The service worker under a production build** | It registers only when `NODE_ENV` is `production`; the browser suite runs `pnpm dev`, so no test has ever exercised it. Its source shape is checked; its behaviour is not |
+| `public/sw.js`'s 2,500 ms navigation timeout | A guess calibrated on "supermarket lie-fi", not a measurement |
+| Cross-tab drain locking | Absent on purpose: two tabs draining at once is *safe*, because the same key applies once. An efficiency question, not a correctness one |
+| DEBT-6 | The services layer throws bare `Error`, so a missing row surfaces as `INTERNAL_SERVER_ERROR`. Wants typed domain errors, which is a decision |
+| I18N-2..6 | Wording and untranslated strings, including the location picker |
+| I18N-8 | Both auth pages hardcoded, in the wrong two languages |
+| UI-3 | Assorted validation and a11y gaps found building `/inventory/add` |
+| DOCS-1 | No JSDoc on the tRPC procedures |
+| TEST-1 | Integration tests need a database; partly addressed by the runner |
+| Error boundaries, error tracking, a health endpoint, data export, PWA install | None exist. The PWA half is deferred deliberately on iOS grounds (§5.4); the rest are not deferred, only absent |
