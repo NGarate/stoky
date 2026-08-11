@@ -761,6 +761,10 @@ translated into codes a caller can act on (`P2025` → `NOT_FOUND`, `P2002` →
 as one middleware on every procedure. It was the highest-value item the Phase 4
 design left, because it is what makes `classify.ts`'s table *true*.
 
+**Also done:** read persistence. Six allowlisted queries are kept per account
+for 24 hours, so opening with no signal shows what was last seen instead of
+"nothing saved yet". Mutations are never persisted — see D59.
+
 **Also done:** A11Y-1. Both stock forms report what they wrote instead of
 redirecting into silence, and the pinned assertion is flipped.
 
@@ -783,7 +787,6 @@ first.
 
 | Item | Why it is here |
 |---|---|
-| **Read persistence** | Three `@tanstack/*` packages, so opening with no signal shows the last data seen rather than "nothing saved yet" |
 | **A place to see what did not save** | `/settings/unsaved`. The indicator names failures inline; a review route is better |
 
 ### Phase 6 — rating

@@ -7,6 +7,7 @@ import { ComposerProvider } from "@/components/offline/Composer";
 import { WriteQueueProvider } from "@/components/offline/WriteQueueProvider";
 import { SyncStatus } from "@/components/offline/SyncStatus";
 import { ShellCacheGuard } from "@/components/session/ShellCacheGuard";
+import { ReadCache } from "@/components/offline/ReadCache";
 
 /**
  * The authenticated shell.
@@ -53,6 +54,9 @@ export default async function DashboardLayout({
           <SessionKeepAlive expiresAt={session.expires} />
         {/* The cached shell belongs to this account and no other. */}
         <ShellCacheGuard userId={session.user.id} />
+        {/* The last answer each screen showed, so opening without a signal
+            shows real data rather than the paused panel. */}
+        <ReadCache />
           <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
             {/* Above the content, because what it says sometimes needs doing
                 before what is below it can be trusted. */}

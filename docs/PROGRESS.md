@@ -790,3 +790,31 @@ computing accessible names across a larger tree. Recorded with what was
 measured rather than what was assumed, and worked around by proving the same
 property through a mock-call assertion instead of a DOM query. STATUS.md trap 3
 is the same shape one tier up.
+
+**D59 — A paused mutation must never be persisted.**
+query-core's default `shouldDehydrateMutation` is `mutation.state.isPaused`,
+and `networkMode` is `"online"` — so a write made with no signal is *paused*,
+not failed, and the default would persist it and let `resumePausedMutations`
+replay it on the next visit. That is a second, uncontrolled path to the server
+racing the queue's drain. The idempotency key would contain the damage, but the
+path would be untested and nothing on screen would know it existed. Set to
+`() => false`, with a test that goes red if it is ever relaxed.
+
+**D60 — The read cache is scoped to the account, and that costs a flash.**
+Persistence is set up inside the dashboard rather than in the root provider,
+because the root has never known who is signed in and a shared tablet must not
+restore one person's household under the next person's session. The
+consequence is that restoration happens *after* the first render, so a screen
+opened with no signal shows the "nothing saved" panel for a moment before the
+cache arrives. Stated in `STATUS.md` rather than left for someone to discover:
+the alternative — gating the first render on restoration — means persisting at
+the root, keyed by nobody.
+
+**D61 — Throttled writes need a seam, not a sleep.**
+`createSyncStoragePersister` batches writes through a `setTimeout`, so a test
+that awaits the save's own promise observes nothing — and one that sleeps
+"long enough" is the unbounded wait STATUS.md trap 7 is about. `throttleTime`
+is injectable and set to zero in tests, with a single bounded macrotask flush
+to let the timer fire. A second in the browser, because a screen settling fires
+several cache changes and each one serialises the whole allowlist on the main
+thread.

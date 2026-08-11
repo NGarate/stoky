@@ -5,6 +5,8 @@ import { useId, useState } from "react";
 import { signOutAction } from "@/lib/auth/actions";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { forgetCachedShell } from "@/lib/sw/register";
+import { forgetPersistedReads } from "@/lib/offline/persist";
+import { useComposer } from "@/components/offline/Composer";
 import type { JSX } from "react";
 
 /**
@@ -29,6 +31,7 @@ import type { JSX } from "react";
 export function SignOutButton(): JSX.Element {
   const t = useTranslations("session");
   const { state, flush, purgeAll } = useWriteQueue();
+  const { userId } = useComposer();
   const [asking, setAsking] = useState(false);
   const [working, setWorking] = useState(false);
   const titleId = useId();
@@ -40,6 +43,7 @@ export function SignOutButton(): JSX.Element {
     // The queue and the cached shell belong to this account. Both go before
     // the redirect, because after it this component no longer exists.
     purgeAll();
+    forgetPersistedReads(userId);
     forgetCachedShell();
     await signOutAction();
   }
