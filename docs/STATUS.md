@@ -385,14 +385,19 @@ where it disagrees with this file, it is right.
   (SHOP-1). Exactly one of the two, whitespace not counting as a name; no
   existing row was in either state.
 
-**One intermittent test failure — diagnosed, and not ours**
-- Two tests in `src/__tests__/integration/replay.test.ts` are reported as failed
-  about one run in seven **while passing**: each records its own completion as
-  its last statement, and across seven failing runs the test bun blamed had
-  completed and passed every assertion every time. It is a runner defect on bun
-  1.3.14, not a defect in the tests or in `withReplay`, and TEST-5 carries the
-  nine measurements that got there. Nobody should keep hunting the application
-  code; it wants an upstream report.
+**One intermittent failure, with a reproduction and a worrying reading**
+- `docs/reproductions/test-5.test.ts` fails about 3 times in 30, self-contained.
+  On a failing run the test's *first* call — with a freshly generated key — is
+  refused as "already used for a different change". A first-time key reported as
+  reused is a defect in `withReplay` rather than in a test runner, which
+  supersedes this file's earlier claim that the tests merely passed and bun
+  misreported them.
+- **Why it matters beyond a red suite:** if a first call with a fresh key can be
+  refused, a write queued in a supermarket could be refused on its first
+  attempt, and the offline queue treats BAD_REQUEST as permanent — it would
+  discard it. That is the failure Phase 4 exists to prevent. Not observed
+  outside the test loop; the rate under normal use is unknown. **TEST-5, and it
+  is the one open entry in `ISSUES.md`.**
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**

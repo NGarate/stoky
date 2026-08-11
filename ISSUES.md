@@ -52,7 +52,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
-| TEST-5 | bun reports a passing test as failed (runner defect, diagnosed) | 🟡 Open upstream |
+| TEST-5 | A fresh idempotency key is intermittently reported as reused | 🔴 **OPEN** — reproduction in `docs/reproductions/` |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -690,7 +690,7 @@ checking whether any existing row is already in this state before adding it.
 
 ---
 
-### 🟡 TEST-5: bun reports a passing test as failed, about one run in seven
+### 🟡 TEST-5: a fresh idempotency key is intermittently reported as reused
 
 **File:** `src/__tests__/integration/replay.test.ts`
 **Severity:** MEDIUM — a test defect, but an undiagnosed one in the suite that
@@ -738,74 +738,68 @@ test a moment before the `catch` claims it.
 interleaves it with result lines — the ordering may be an artifact rather than
 real time. It is the strongest hint available and it is not proof.
 
-## Diagnosed: the test passes, and bun says it failed
+## There is a reproduction now, and it points at `withReplay`
 
-The failing test **completes its body and passes every assertion.** Each test
-now adds its name to a set as its last statement, and an `afterAll` prints the
-set. Across seven failing runs out of twenty, the test bun reported as failed
-was in that set every time:
+`docs/reproductions/test-5.test.ts` is self-contained — one file, no seed data,
+its own household — and fails about **3 times in 30**, the same rate as the real
+suite. Run it in a loop; it is collected by nothing.
 
-```
-(fail) … refuses a key reused for a different procedure
-COMPLETED BODIES: ["different change","different procedure"]
-```
+**It changes what this entry concluded.** In the real file, instrumenting each
+test to record its own completion showed the reported test finishing its body
+and passing every assertion, which said "the test passes and bun misreports it".
+In the reproduction the same instrumentation prints `COMPLETED: []` on a failing
+run: the body does **not** reach the end. The throw happens on the test's
+*first* call — a fresh `randomUUID()` key — which `answerFromRecord` reports as
+"already used for a different change".
 
-An assertion failure would have thrown before that line ran. So the body reached
-the end with nothing thrown, and bun reported it as a failure anyway. This is a
-**runner defect, not a defect in the test or in `withReplay`**, on bun 1.3.14.
+A first-time key reported as reused is a defect in `withReplay`, not in a test
+runner. The earlier reading is therefore in doubt rather than confirmed, and
+this entry no longer claims bun is at fault. What is certain is the reproduction
+and its rate.
 
-What it is reporting is almost certainly the `TRPCError` the test deliberately
-provokes and catches — the two affected tests are the two whose expected outcome
-is a rejection travelling through the tRPC caller.
+**Why it matters more than a flake.** If a first call with a fresh key can be
+refused, then a queued write from a supermarket can be refused on its first
+attempt, and the offline queue would classify a BAD_REQUEST as permanent and
+discard it. That is the failure mode Phase 4 exists to prevent. It has not been
+observed outside the test loop, and the rate under normal use is unknown.
 
-## The measurements that got there
+## What it took to reproduce
 
-Each 20 runs of the file:
+Five shapes do **not** reproduce it, thirty runs each:
+
+| Shape | Failures in 30 |
+|---|---|
+| A rejection through a nested async wrapper, rethrown as a different error | 0 |
+| The same through a tRPC caller, no database | 0 |
+| A `TRPCError` out of a Prisma transaction that rolls back | 0 |
+| `withReplay`'s exact sequence, without tRPC | 0 |
+| The application's own middleware chain and superjson, around a plain throw | 0 |
+| **The middleware chain *and* `withReplay`, with calls before it** | **3** |
+
+So it needs both halves together. That is the sharpest fact available about
+where to look.
+
+## Measurements from the real suite
+
+Each 20 runs of `replay.test.ts`:
 
 | Condition | Failures in 20 |
 |---|---|
 | As it stands | 4 |
-| Running only the two tests, via `-t` | **0** |
+| Running only the two tests, via `-t` | 0 |
 | At `eb401be`, the commit that created the file | 4 |
 | Without the `securityEvents` middleware | 3 |
 | Both earlier tests in the describe skipped | 1 |
-| Skipping only the concurrent-replay test | 4 |
-| Skipping only the same-key test | 3 |
-| `expectCode` taking a thunk | 2 |
-| `expectCode` attaching `.catch()` synchronously | 4 |
+| `expectCode` as a thunk, or with `.catch()` attached synchronously | 2, 4 |
 
-The pair never fails alone, and no single predecessor accounts for it: the rate
-scales with how much else is running, which is what a timing-sensitive
-misattribution looks like rather than leftover state. Neither reshaping of
-`expectCode` helped, which is why neither was kept.
+## What to do next
 
-## A minimal reproduction was attempted and does not exist yet
-
-Four shapes, thirty runs each, **none of which reproduce it**:
-
-| Shape | Failures in 30 |
-|---|---|
-| A rejection thrown through a nested async wrapper, rethrown as a different error, caught | 0 |
-| The same through a tRPC caller — `TRPCError` out of a procedure, no database | 0 |
-| A `TRPCError` thrown out of a Prisma interactive transaction that then rolls back | 0 |
-| `withReplay`'s exact sequence: unique violation caught inside the transaction, sentinel rethrown, rollback, a second read on the same client, then a fresh `TRPCError` | 0 |
-
-So the trigger needs something none of those carry. What is left in the real
-file and not in shape D: the tRPC middleware chain that wraps every procedure
-(`domainErrors` and `securityEvents` — the latter separately ruled out by
-removal), superjson, and the number of connections a whole suite holds open.
-That is where a fifth attempt should start.
-
-## What to do about it
-
-Nothing in this repository. It wants an upstream report against bun 1.3.14, and
-until the reproduction reduces, that report has to point at the repo and this
-entry rather than at a paste-able file. A version pin is the workaround if it
-becomes disruptive.
-
-**Nobody should keep hunting the application code.** That is what this entry
-exists to prevent, having already cost two investigations before the question
-"did the test actually fail?" was asked — and the answer was no, it passed.
+Instrument `withReplay` in the reproduction — it is small enough to add printf
+debugging to without drowning — and answer the one question that has resisted
+five attempts: how a `findUnique` on `[userId, freshKey]` returns a record whose
+`requestHash` belongs to another call. Both the key it asked for and the key on
+the record it got back have already been printed and matched, in the real suite,
+which is what makes this worth someone's afternoon.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
