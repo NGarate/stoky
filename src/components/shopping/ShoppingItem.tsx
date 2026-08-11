@@ -1,8 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { api } from "@/lib/trpc/client";
-import { useEnvelope } from "@/components/offline/Composer";
+import { useWriteQueue } from "@/components/offline/WriteQueueProvider";
 
 interface ShoppingItemProps {
   item: {
@@ -14,27 +13,23 @@ interface ShoppingItemProps {
     unit: string | null;
     isChecked: boolean;
   };
-  listId: string;
 }
 
-export function ShoppingItem({ item, listId }: ShoppingItemProps) {
+/**
+ * A row on the shopping list.
+ *
+ * **It enqueues; it never mutates directly.** That is the whole of ticking a
+ * list off in a supermarket basement: the change is recorded on the device,
+ * shown as done immediately, and sent when there is a signal. A `useMutation`
+ * here would fail with no connection and the tap would be lost — and having
+ * *both* paths would mean two ways to get the same thing wrong.
+ *
+ * The envelope is added by the sender rather than here, so a change that waits
+ * two hours still carries the key it was minted with.
+ */
+export function ShoppingItem({ item }: ShoppingItemProps) {
   const t = useTranslations("shopping");
-  const envelope = useEnvelope();
-  const utils = api.useUtils();
-
-  const toggleMutation = api.shopping.updateItem.useMutation({
-    onSuccess: () => {
-      utils.shopping.getById.invalidate({ id: listId });
-      utils.shopping.list.invalidate();
-    },
-  });
-
-  const deleteMutation = api.shopping.removeItem.useMutation({
-    onSuccess: () => {
-      utils.shopping.getById.invalidate({ id: listId });
-      utils.shopping.list.invalidate();
-    },
-  });
+  const { enqueue } = useWriteQueue();
 
   const name = item.product?.name || item.customName || t("itemName");
 
@@ -49,10 +44,13 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
           type="checkbox"
           checked={item.isChecked}
           onChange={() =>
-            toggleMutation.mutate({
-              ...envelope(),
-              id: item.id,
-              isChecked: !item.isChecked,
+            enqueue({
+              path: "shopping.updateItem",
+              input: { id: item.id, isChecked: !item.isChecked },
+              label: {
+                key: item.isChecked ? "offline.untickedOff" : "offline.tickedOff",
+                values: { name },
+              },
             })
           }
           className="h-5 w-5 rounded border-input accent-primary"
@@ -73,8 +71,13 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
 
       <button
         type="button"
-        onClick={() => deleteMutation.mutate({ ...envelope(), id: item.id })}
-        disabled={deleteMutation.isPending}
+        onClick={() =>
+          enqueue({
+            path: "shopping.removeItem",
+            input: { id: item.id },
+            label: { key: "offline.removedItem", values: { name } },
+          })
+        }
         className="rounded-md p-2 text-destructive hover:bg-danger disabled:opacity-50"
         aria-label={t("removeItem")}
       >

@@ -30,6 +30,16 @@ let queryStub: QueryStub;
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
 
+mock.module("@/components/offline/WriteQueueProvider", () => ({
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true as const, id: "op-1" }),
+    drain: noop,
+    retry: noop,
+    discard: noop,
+  }),
+}));
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({

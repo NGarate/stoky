@@ -7,6 +7,8 @@ import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 import { useEnvelope } from "@/components/offline/Composer";
+import { useWriteQueue } from "@/components/offline/WriteQueueProvider";
+import { projectShoppingItems } from "@/lib/offline/project";
 
 interface ShoppingListPageProps {
   params: Promise<{ id: string }>;
@@ -29,6 +31,7 @@ export default function ShoppingListPage({ params }: ShoppingListPageProps) {
 export function ShoppingListView({ id }: { id: string }) {
   const t = useTranslations();
   const envelope = useEnvelope();
+  const { state: queue } = useWriteQueue();
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     customName: "",
@@ -84,8 +87,14 @@ export function ShoppingListView({ id }: { id: string }) {
     );
   }
 
-  const totalItems = list.items.length;
-  const checkedItems = list.items.filter((item) => item.isChecked).length;
+  // The server's rows with the unsent changes folded on top. Without this, a
+  // tab discarded mid-shop reopens showing the ticks undone, and every one of
+  // them gets tapped again — with a *new* key each time, which is a double
+  // count no idempotency can catch.
+  const items = projectShoppingItems(list.items, queue.pending, id);
+
+  const totalItems = items.length;
+  const checkedItems = items.filter((item) => item.isChecked).length;
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   return (
@@ -206,14 +215,14 @@ export function ShoppingListView({ id }: { id: string }) {
       )}
 
       <div className="space-y-2">
-        {list.items.length === 0 ? (
+        {items.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
             <p>{t("shopping.emptyList")}</p>
             <p className="mt-2 text-sm">{t("shopping.addItems")}</p>
           </div>
         ) : (
-          list.items.map((item) => (
-            <ShoppingItem key={item.id} item={item} listId={id} />
+          items.map((item) => (
+            <ShoppingItem key={item.id} item={item} />
           ))
         )}
       </div>

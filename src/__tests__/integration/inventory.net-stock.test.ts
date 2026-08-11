@@ -241,16 +241,33 @@ describe("two people consuming the last of something", () => {
     const consumeGate = new Promise<void>((resolve) => {
       releaseConsume = resolve;
     });
+    // Observable rather than guessed. A fixed sleep here is a flake waiting
+    // for a loaded machine: the test must know the first call is *actually*
+    // holding the lock, not assume it after 150ms.
+    let holdingTheLock = false;
     const pausingConsumeClient = prisma.$extends({
       query: {
         stockEntry: {
           async create({ args, query }) {
+            holdingTheLock = true;
             await consumeGate;
             return query(args);
           },
         },
       },
     }) as unknown as PrismaClient;
+
+    /** Wait for a condition, with a ceiling — an unbounded wait is not a test. */
+    async function until(
+      condition: () => boolean,
+      what: string,
+    ): Promise<void> {
+      for (let i = 0; i < 200; i += 1) {
+        if (condition()) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error(`timed out waiting for ${what}`);
+    }
     const slowConsumer = await caller(pausingConsumeClient);
 
     const first = slowConsumer.inventory.consumeStock({
@@ -261,8 +278,8 @@ describe("two people consuming the last of something", () => {
       operationType: "CONSUME",
     });
 
-    // Let the first call reach its paused write, holding the lock.
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // The first call has read the stock and is holding the product row.
+    await until(() => holdingTheLock, "the first consume to hold the lock");
 
     const second = fast.inventory.consumeStock({
       ...envelope(OWNER.userId),
@@ -272,8 +289,10 @@ describe("two people consuming the last of something", () => {
       operationType: "CONSUME",
     });
 
-    // Give the second call time to block on the lock rather than sail past it.
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // The second call is either blocked on the lock or has already sailed
+    // past it. One tick is enough for the latter to have written; the
+    // assertions below tell the two apart.
+    await new Promise((resolve) => setTimeout(resolve, 50));
     releaseConsume();
 
     const results = await Promise.allSettled([first, second]);

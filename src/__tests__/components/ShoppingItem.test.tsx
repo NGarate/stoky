@@ -2,41 +2,18 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderWithIntl, TEST_COMPOSER } from "../utils/render";
+import { renderWithIntl } from "../utils/render";
 
-const updateItemMutate = mock((_input: unknown) => {});
-const removeItemMutate = mock((_input: unknown) => {});
-const getByIdInvalidate = mock((_input: unknown) => {});
-const listInvalidate = mock(() => {});
+const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 
-let removeItemPending = false;
-
-// Captured so a test can drive the onSuccess callback the component registers.
-let updateItemOptions: { onSuccess?: () => void } = {};
-
-mock.module("@/lib/trpc/client", () => ({
-  api: {
-    useUtils: () => ({
-      shopping: {
-        getById: { invalidate: getByIdInvalidate },
-        list: { invalidate: listInvalidate },
-      },
-    }),
-    shopping: {
-      updateItem: {
-        useMutation: (options: { onSuccess?: () => void } = {}) => {
-          updateItemOptions = options;
-          return { mutate: updateItemMutate, isPending: false };
-        },
-      },
-      removeItem: {
-        useMutation: () => ({
-          mutate: removeItemMutate,
-          isPending: removeItemPending,
-        }),
-      },
-    },
-  },
+mock.module("@/components/offline/WriteQueueProvider", () => ({
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue,
+    drain: () => {},
+    retry: () => {},
+    discard: () => {},
+  }),
 }));
 
 const { ShoppingItem } = await import("@/components/shopping/ShoppingItem");
@@ -52,33 +29,20 @@ const baseItem = {
 };
 
 beforeEach(() => {
-  updateItemMutate.mockClear();
-  removeItemMutate.mockClear();
-  getByIdInvalidate.mockClear();
-  listInvalidate.mockClear();
-  removeItemPending = false;
-  updateItemOptions = {};
+  enqueue.mockClear();
 });
 
 afterEach(cleanup);
 
 
-/**
- * Every write this component makes is one a queue may replay, so each carries a
- * fresh key and the account that composed it. Asserted rather than ignored: a
- * mutate that reached the server without them would be refused by Zod, and a
- * shared key would make two taps into one change.
- */
-function expectEnvelope(call: Record<string, unknown>): void {
-  expect(call.idempotencyKey).toMatch(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-  );
-  expect(call.composedByUserId).toBe(TEST_COMPOSER.userId);
+/** The queued change this component asked for. */
+function lastEnqueued(): Record<string, unknown> {
+  return enqueue.mock.calls[0]?.[0] as Record<string, unknown>;
 }
 
 describe("ShoppingItem", () => {
   it("shows the linked product name and quantity", () => {
-    renderWithIntl(<ShoppingItem item={baseItem} listId="list-1" />);
+    renderWithIntl(<ShoppingItem item={baseItem} />);
 
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
     expect(screen.getByText("2 L")).toBeInTheDocument();
@@ -93,7 +57,6 @@ describe("ShoppingItem", () => {
           product: null,
           customName: "Bombillas",
         }}
-        listId="list-1"
       />,
     );
 
@@ -104,7 +67,6 @@ describe("ShoppingItem", () => {
     renderWithIntl(
       <ShoppingItem
         item={{ ...baseItem, productId: null, product: null, customName: null }}
-        listId="list-1"
       />,
     );
 
@@ -114,7 +76,7 @@ describe("ShoppingItem", () => {
 
   it("reflects the checked state in the checkbox", () => {
     renderWithIntl(
-      <ShoppingItem item={{ ...baseItem, isChecked: true }} listId="list-1" />,
+      <ShoppingItem item={{ ...baseItem, isChecked: true }} />,
     );
 
     expect(screen.getByRole("checkbox")).toBeChecked();
@@ -122,62 +84,79 @@ describe("ShoppingItem", () => {
 
   it("strikes through the name once checked", () => {
     renderWithIntl(
-      <ShoppingItem item={{ ...baseItem, isChecked: true }} listId="list-1" />,
+      <ShoppingItem item={{ ...baseItem, isChecked: true }} />,
     );
 
     expect(screen.getByText("Leche entera")).toHaveClass("line-through");
   });
 
   it("toggles an unchecked item to checked", async () => {
-    renderWithIntl(<ShoppingItem item={baseItem} listId="list-1" />);
+    renderWithIntl(<ShoppingItem item={baseItem} />);
 
     await userEvent.click(screen.getByRole("checkbox"));
 
-    const call = updateItemMutate.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(call).toMatchObject({ id: "item-1", isChecked: true });
-    expectEnvelope(call);
+    // Enqueued, not mutated. With no signal a mutation fails and the tap is
+    // lost; the queue is the whole point of ticking a list off in a basement.
+    expect(lastEnqueued()).toMatchObject({
+      path: "shopping.updateItem",
+      input: { id: "item-1", isChecked: true },
+      label: { key: "offline.tickedOff", values: { name: "Leche entera" } },
+    });
   });
 
   it("toggles a checked item back to unchecked", async () => {
     renderWithIntl(
-      <ShoppingItem item={{ ...baseItem, isChecked: true }} listId="list-1" />,
+      <ShoppingItem item={{ ...baseItem, isChecked: true }} />,
     );
 
     await userEvent.click(screen.getByRole("checkbox"));
 
-    const call = updateItemMutate.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(call).toMatchObject({ id: "item-1", isChecked: false });
-    expectEnvelope(call);
+    expect(lastEnqueued()).toMatchObject({
+      path: "shopping.updateItem",
+      input: { id: "item-1", isChecked: false },
+      label: { key: "offline.untickedOff" },
+    });
   });
 
   it("removes the item via the labelled delete control", async () => {
-    renderWithIntl(<ShoppingItem item={baseItem} listId="list-1" />);
+    renderWithIntl(<ShoppingItem item={baseItem} />);
 
     // shopping.removeItem in messages/es.json
     await userEvent.click(
       screen.getByRole("button", { name: "Eliminar artículo" }),
     );
 
-    const call = removeItemMutate.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(call).toMatchObject({ id: "item-1" });
-    expectEnvelope(call);
+    expect(lastEnqueued()).toMatchObject({
+      path: "shopping.removeItem",
+      input: { id: "item-1" },
+      label: { key: "offline.removedItem", values: { name: "Leche entera" } },
+    });
   });
 
-  it("disables the delete control while the removal is in flight", () => {
-    removeItemPending = true;
-    renderWithIntl(<ShoppingItem item={baseItem} listId="list-1" />);
+  it("never blocks the next tap on the last one", async () => {
+    // This replaces "disables the delete control while the removal is in
+    // flight". There is no flight any more: enqueueing is synchronous, which
+    // is the point — someone walking down an aisle should not wait on a
+    // round trip between two items.
+    renderWithIntl(<ShoppingItem item={baseItem} />);
 
-    expect(
-      screen.getByRole("button", { name: "Eliminar artículo" }),
-    ).toBeDisabled();
+    const remove = screen.getByRole("button", { name: "Eliminar artículo" });
+    expect(remove).not.toBeDisabled();
+
+    await userEvent.click(remove);
+
+    expect(remove).not.toBeDisabled();
   });
 
-  it("invalidates the list caches after a successful toggle", () => {
-    renderWithIntl(<ShoppingItem item={baseItem} listId="list-1" />);
+  it("does not reach for the tRPC client at all", async () => {
+    // This replaces "invalidates the list caches after a successful toggle".
+    // Refreshing the cache is now the drain's job, once per settled drain
+    // rather than once per tap — asserted in WriteQueueProvider.test.tsx. What
+    // is left to check here is that this component has no second path to the
+    // server, because two paths is two things to get wrong.
+    renderWithIntl(<ShoppingItem item={baseItem} />);
+    await userEvent.click(screen.getByRole("checkbox"));
 
-    updateItemOptions.onSuccess?.();
-
-    expect(getByIdInvalidate).toHaveBeenCalledWith({ id: "list-1" });
-    expect(listInvalidate).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledTimes(1);
   });
 });

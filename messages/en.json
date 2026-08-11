@@ -618,6 +618,12 @@
     "reconcileFailed": "That could not be adjusted. Try again.",
     "reconcileKitchen": "This account can look and use things up, but not adjust the stock. Tell somebody who manages the household.",
     "discard": "Discard",
-    "retry": "Retry"
+    "retry": "Retry",
+    "tickedOff": "You ticked off “{name}”",
+    "untickedOff": "You unticked “{name}”",
+    "removedItem": "You removed “{name}” from the list",
+    "usedUp": "You used {quantity} {unit} of “{name}”",
+    "addedStock": "You added {quantity} {unit} of “{name}”",
+    "addedItem": "You added “{name}” to the list"
   }
 }

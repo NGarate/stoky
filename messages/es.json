@@ -618,6 +618,12 @@
     "reconcileFailed": "No se ha podido ajustar. Inténtalo otra vez.",
     "reconcileKitchen": "Esta cuenta puede mirar y consumir, pero no ajustar el stock. Díselo a alguien que administre el hogar.",
     "discard": "Descartar",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "tickedOff": "Marcaste «{name}»",
+    "untickedOff": "Desmarcaste «{name}»",
+    "removedItem": "Quitaste «{name}» de la lista",
+    "usedUp": "Usaste {quantity} {unit} de «{name}»",
+    "addedStock": "Añadiste {quantity} {unit} de «{name}»",
+    "addedItem": "Añadiste «{name}» a la lista"
   }
 }
