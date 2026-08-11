@@ -121,12 +121,30 @@ RUN test -f /app/node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js/src
 # Installed into its own prefix rather than /app: installing alongside the
 # application's package.json makes npm resolve the entire dependency tree,
 # peer conflicts and all, which fails.
+# The overrides are security floors on this install's *transitive* tree. They
+# were added while chasing scan findings that turned out to live in the base
+# image's npm, not here — a fresh install of this tree does not even contain
+# the flagged packages — but they stay, for the trap they do close: this RUN's
+# text is its cache key, so the node_modules it produces in one month is still
+# being shipped the next, and a CVE fixed upstream stays in the image until
+# something changes this line. Floors, not pins: fresh resolves may go higher,
+# never back below.
 RUN PRISMA_VERSION="$(node -p "require('/app/package.json').dependencies.prisma.replace(/[^0-9.]/g,'')")" \
     && mkdir -p /opt/prisma \
     && cd /opt/prisma \
     && npm init -y > /dev/null \
+    && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.overrides={tar:'>=7.5.19',undici:'>=6.27.0','ip-address':'>=10.3.1','brace-expansion':'>=5.0.9'};fs.writeFileSync('package.json',JSON.stringify(p,null,2))" \
     && npm install --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
-    && npm cache clean --force
+    && npm cache clean --force \
+    # npm's job in this image ends on the line above. The base image bundles it
+    # with its own vendored dependency tree, and that tree is where every
+    # CRITICAL/HIGH the scan gate has flagged actually lived — npm ships pinned
+    # copies of tar, undici and friends that go stale on node's release
+    # schedule, not this project's. Nothing at runtime uses it: the entrypoint
+    # runs the Prisma binary directly and then `node server.js`. Removing it
+    # deletes the findings at their source and takes a package manager out of a
+    # shipped container, which is worth having on its own.
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Receipt uploads are written by the app at runtime. The directory used to be
 # created as root and then handed to an unprivileged user, so the first upload
