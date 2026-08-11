@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/trpc/client";
+import { useEnvelope } from "@/components/offline/Composer";
 
 interface ShoppingItemProps {
   item: {
@@ -18,6 +19,7 @@ interface ShoppingItemProps {
 
 export function ShoppingItem({ item, listId }: ShoppingItemProps) {
   const t = useTranslations("shopping");
+  const envelope = useEnvelope();
   const utils = api.useUtils();
 
   const toggleMutation = api.shopping.updateItem.useMutation({
@@ -48,6 +50,7 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
           checked={item.isChecked}
           onChange={() =>
             toggleMutation.mutate({
+              ...envelope(),
               id: item.id,
               isChecked: !item.isChecked,
             })
@@ -70,7 +73,7 @@ export function ShoppingItem({ item, listId }: ShoppingItemProps) {
 
       <button
         type="button"
-        onClick={() => deleteMutation.mutate({ id: item.id })}
+        onClick={() => deleteMutation.mutate({ ...envelope(), id: item.id })}
         disabled={deleteMutation.isPending}
         className="rounded-md p-2 text-destructive hover:bg-danger disabled:opacity-50"
         aria-label={t("removeItem")}

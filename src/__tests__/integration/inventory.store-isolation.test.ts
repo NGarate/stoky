@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
+import { envelope } from "../utils/test-helpers";
 
 /**
  * Household isolation on `inventory.addStock`'s price record.
@@ -94,6 +95,7 @@ describe("addStock and another household's store", () => {
     let thrown: unknown;
     try {
       await api.inventory.addStock({
+      ...envelope(A.userId),
         productId: A.productId,
         quantity: 1,
         unit: "L",
@@ -118,6 +120,7 @@ describe("addStock and another household's store", () => {
 
     await api.inventory
       .addStock({
+      ...envelope(A.userId),
         productId: A.productId,
         quantity: 3,
         unit: "L",
@@ -141,6 +144,7 @@ describe("addStock and another household's store", () => {
     const api = await callerFor(A);
 
     await api.inventory.addStock({
+      ...envelope(A.userId),
       productId: A.productId,
       quantity: 2,
       unit: "L",
@@ -158,6 +162,7 @@ describe("addStock and another household's store", () => {
     const api = await callerFor(A);
 
     const entry = await api.inventory.addStock({
+      ...envelope(A.userId),
       productId: A.productId,
       quantity: 1,
       unit: "L",

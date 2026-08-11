@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
+import { useEnvelope } from "@/components/offline/Composer";
 
 interface ShoppingListPageProps {
   params: Promise<{ id: string }>;
@@ -27,6 +28,7 @@ export default function ShoppingListPage({ params }: ShoppingListPageProps) {
 
 export function ShoppingListView({ id }: { id: string }) {
   const t = useTranslations();
+  const envelope = useEnvelope();
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     customName: "",
@@ -54,6 +56,7 @@ export function ShoppingListView({ id }: { id: string }) {
     e.preventDefault();
     if (newItem.customName.trim()) {
       addItemMutation.mutate({
+        ...envelope(),
         shoppingListId: id,
         customName: newItem.customName.trim(),
         quantity: newItem.quantity,

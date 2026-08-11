@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { stockEntrySchema } from "@/lib/validations/inventory";
 import { daysBetween, remainingByBatch } from "@/lib/inventory/batches";
+import { replayable } from "@/lib/validations/idempotency";
+import { withReplay } from "../replay";
 import type { Prisma, StockOperation } from "@prisma/client";
 
 /** Half-open bounds on an expiry date, in the shape Prisma words them. */
@@ -169,10 +171,12 @@ export const inventoryRouter = createTRPCRouter({
 
   addStock: writeProcedure
     .input(
-      stockEntrySchema.extend({
-        price: z.number().optional(),
-        storeId: z.string().optional(),
-      })
+      stockEntrySchema
+        .extend({
+          price: z.number().optional(),
+          storeId: z.string().optional(),
+        })
+        .merge(replayable)
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -244,8 +248,12 @@ export const inventoryRouter = createTRPCRouter({
        * drains a queued shop through here on reconnect, and a default that was
        * chosen for one interactive request is the wrong ceiling for a burst.
        */
-      const stockEntry = await ctx.db.$transaction(
-        async (tx) => {
+      return withReplay(ctx, {
+        key: input.idempotencyKey,
+        composedByUserId: input.composedByUserId,
+        procedure: "inventory.addStock",
+        input,
+        apply: async (tx) => {
           const entry = await tx.stockEntry.create({
             data: {
               productId: input.productId,
@@ -278,80 +286,115 @@ export const inventoryRouter = createTRPCRouter({
 
           return entry;
         },
-        { maxWait: 5_000, timeout: 10_000 },
-      );
-
-      return stockEntry;
+        ids: (entry) => [entry.id],
+        reread: async (db, ids) => {
+          const entry = await db.stockEntry.findUnique({
+            where: { id: ids[0] ?? "" },
+            include: { product: true, location: true },
+          });
+          if (!entry) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Stock entry not found",
+            });
+          }
+          return entry;
+        },
+      });
     }),
 
   consumeStock: householdProcedure
     .input(
-      stockEntrySchema.extend({
-        consumeFromLocationId: z.string().optional(),
-      })
+      stockEntrySchema
+        .extend({
+          consumeFromLocationId: z.string().optional(),
+        })
+        .merge(replayable)
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      // Verify product exists and belongs to household
-      const product = await ctx.db.product.findFirst({
-        where: {
-          id: input.productId,
-          householdId: ctx.householdId,
+      return withReplay(ctx, {
+        key: input.idempotencyKey,
+        composedByUserId: input.composedByUserId,
+        procedure: "inventory.consumeStock",
+        input,
+        apply: async (tx) => {
+          // The guard and the write are in one transaction now. That is not
+          // yet enough to make the guard hold — two calls can still read the
+          // same figure under READ COMMITTED, which is ISSUES.md INV-2 — but
+          // it is the boundary the lock will go inside.
+          const product = await tx.product.findFirst({
+            where: {
+              id: input.productId,
+              householdId: ctx.householdId,
+            },
+            include: {
+              stockEntries: {
+                // Every entry, not just the positive ones. Consumption is
+                // recorded as a *separate* row with a negative quantity, so
+                // `gt: 0` here measured gross purchases and ignored everything
+                // ever used: six litres bought and four drunk read as six
+                // available, and the server would accept a consumption of five
+                // and drive stock to minus two (ISSUES.md INV-1).
+                where: input.consumeFromLocationId
+                  ? { locationId: input.consumeFromLocationId }
+                  : undefined,
+                orderBy: { expirationDate: "asc" },
+              },
+            },
+          });
+
+          if (!product) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Product not found",
+            });
+          }
+
+          const totalAvailable = product.stockEntries.reduce(
+            (sum, entry) => sum + entry.quantity,
+            0
+          );
+
+          if (Math.abs(input.quantity) > totalAvailable) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Not enough stock available",
+            });
+          }
+
+          return tx.stockEntry.create({
+            data: {
+              productId: input.productId,
+              quantity: -Math.abs(input.quantity),
+              unit: input.unit,
+              locationId: input.consumeFromLocationId || input.locationId,
+              operationType: "CONSUME" as StockOperation,
+              note: input.note,
+              createdBy: userId,
+            },
+            include: {
+              product: true,
+              location: true,
+            },
+          });
         },
-        include: {
-          stockEntries: {
-            // Every entry, not just the positive ones. Consumption is recorded
-            // as a *separate* row with a negative quantity, so `gt: 0` here
-            // measured gross purchases and ignored everything ever used: six
-            // litres bought and four drunk read as six available, and the
-            // server would accept a consumption of five and drive stock to
-            // minus two (ISSUES.md INV-1).
-            where: input.consumeFromLocationId
-              ? { locationId: input.consumeFromLocationId }
-              : undefined,
-            orderBy: { expirationDate: "asc" },
-          },
+        ids: (entry) => [entry.id],
+        reread: async (db, ids) => {
+          const entry = await db.stockEntry.findUnique({
+            where: { id: ids[0] ?? "" },
+            include: { product: true, location: true },
+          });
+          if (!entry) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Stock entry not found",
+            });
+          }
+          return entry;
         },
       });
-
-      if (!product) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Product not found",
-        });
-      }
-
-      const totalAvailable = product.stockEntries.reduce(
-        (sum, entry) => sum + entry.quantity,
-        0
-      );
-
-      if (Math.abs(input.quantity) > totalAvailable) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Not enough stock available",
-        });
-      }
-
-      // Create consumption entry (negative quantity)
-      const stockEntry = await ctx.db.stockEntry.create({
-        data: {
-          productId: input.productId,
-          quantity: -Math.abs(input.quantity),
-          unit: input.unit,
-          locationId: input.consumeFromLocationId || input.locationId,
-          operationType: "CONSUME" as StockOperation,
-          note: input.note,
-          createdBy: userId,
-        },
-        include: {
-          product: true,
-          location: true,
-        },
-      });
-
-      return stockEntry;
     }),
 
   adjustStock: writeProcedure

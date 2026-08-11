@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import type { PrismaClient } from "@prisma/client";
 import type { Session } from "next-auth";
+import { envelope } from "../utils/test-helpers";
 
 /**
  * A purchase is one event told in two rows.
@@ -122,6 +123,7 @@ describe("addStock writes the entry and its price together", () => {
     let thrown: unknown;
     try {
       await api.inventory.addStock({
+      ...envelope(OWNER.userId),
         ...purchase,
         productId: OWNER.productId,
         storeId: OWNER.storeId,
@@ -146,6 +148,7 @@ describe("addStock writes the entry and its price together", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       ...purchase,
       productId: OWNER.productId,
       storeId: OWNER.storeId,
@@ -163,6 +166,7 @@ describe("addStock writes the entry and its price together", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
@@ -184,6 +188,7 @@ describe("addStock writes the entry and its price together", () => {
     // that cannot perform it — which is what makes the first test's failure
     // attributable to the price record rather than to the injection itself.
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId: OWNER.productId,
       quantity: 1,
       unit: "L",
@@ -191,6 +196,7 @@ describe("addStock writes the entry and its price together", () => {
       price: 1.19,
     });
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId: OWNER.productId,
       quantity: 1,
       unit: "L",

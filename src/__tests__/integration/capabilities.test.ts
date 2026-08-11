@@ -11,6 +11,7 @@ import {
   createTestStockEntry,
   createMockSession,
   generateTestEmail,
+  envelope,
 } from "../utils/test-helpers";
 
 /**
@@ -40,6 +41,8 @@ let kitchen: Caller;
 let member: Caller;
 let admin: Caller;
 let orphan: Caller;
+/** The kitchen account's own id, for the replay envelope the writes carry. */
+let kitchenUserId: string;
 
 async function callerFor(role: HouseholdRole, withHousehold = true): Promise<Caller> {
   const user = await createTestUser({
@@ -48,6 +51,7 @@ async function callerFor(role: HouseholdRole, withHousehold = true): Promise<Cal
     householdId: withHousehold ? householdId : undefined,
     role,
   });
+  if (role === "KITCHEN") kitchenUserId = user.id;
   const ctx = await createTRPCContext({ session: createMockSession(user) });
   return appRouter.createCaller(ctx);
 }
@@ -135,6 +139,7 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
     // The one write the matrix grants it. If this ever starts failing, the
     // tablet has become a picture frame.
     const entry = await kitchen.inventory.consumeStock({
+      ...envelope(kitchenUserId),
       productId,
       quantity: 1,
       unit: "L",
@@ -153,6 +158,7 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
 
     await expectRefused("inventory.addStock", () =>
       kitchen.inventory.addStock({
+        ...envelope(kitchenUserId),
         productId,
         quantity: 5,
         unit: "L",
@@ -160,7 +166,11 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
       }),
     );
     await expectRefused("shopping.updateItem", () =>
-      kitchen.shopping.updateItem({ id: shoppingItemId, isChecked: true }),
+      kitchen.shopping.updateItem({
+        ...envelope(kitchenUserId),
+        id: shoppingItemId,
+        isChecked: true,
+      }),
     );
     await expectRefused("shopping.generateFromLowStock", () =>
       kitchen.shopping.generateFromLowStock(),

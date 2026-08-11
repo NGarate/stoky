@@ -53,6 +53,8 @@ async function createTestContext(
 ): Promise<{
   ctx: Awaited<ReturnType<typeof createTRPCContext>>;
   caller: ReturnType<typeof appRouter.createCaller>;
+  /** A fresh replay envelope for this account. See validations/idempotency. */
+  envelope: () => { idempotencyKey: string; composedByUserId: string };
 }> {
   const session: Session | null =
     userId === "anon"
@@ -71,7 +73,14 @@ async function createTestContext(
   const ctx = await createTRPCContext({ session });
   const caller = appRouter.createCaller(ctx);
 
-  return { ctx, caller };
+  return {
+    ctx,
+    caller,
+    envelope: () => ({
+      idempotencyKey: crypto.randomUUID(),
+      composedByUserId: userId,
+    }),
+  };
 }
 
 // Helper to create a test user with household (always returns householdId)
@@ -649,9 +658,10 @@ describe("tRPC Router Integration Tests", () => {
       );
       const product = await createTestProduct(householdId);
       const location = await createTestLocation(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       const result = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 10,
         unit: "unit",
@@ -672,10 +682,11 @@ describe("tRPC Router Integration Tests", () => {
       );
       const product = await createTestProduct(householdId);
       const location = await createTestLocation(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       // First add stock
       const addResult = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 10,
         unit: "unit",
@@ -686,6 +697,7 @@ describe("tRPC Router Integration Tests", () => {
 
       // Then consume
       const consumeResult = await caller.inventory.consumeStock({
+        ...envelope(),
         productId: product.id,
         quantity: 5,
         unit: "unit",
@@ -703,10 +715,11 @@ describe("tRPC Router Integration Tests", () => {
         "Inventory Household 3"
       );
       const product = await createTestProduct(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       await expect(
         caller.inventory.consumeStock({
+        ...envelope(),
           productId: product.id,
           quantity: 100,
           unit: "unit",
@@ -715,6 +728,7 @@ describe("tRPC Router Integration Tests", () => {
       ).rejects.toThrow("Not enough stock available");
       await expectCode(
         caller.inventory.consumeStock({
+        ...envelope(),
           productId: product.id,
           quantity: 1000,
           unit: "unit",
@@ -753,10 +767,11 @@ describe("tRPC Router Integration Tests", () => {
         "Inventory Household 5"
       );
       const product = await createTestProduct(householdId, { minStock: 10 });
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       // Add some stock first
       const entry = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 5,
         unit: "unit",
@@ -779,10 +794,11 @@ describe("tRPC Router Integration Tests", () => {
         "Inventory Household 6"
       );
       const product = await createTestProduct(householdId, { minStock: 10 });
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       // Add low stock
       const entry = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 3,
         unit: "unit",
@@ -809,10 +825,11 @@ describe("tRPC Router Integration Tests", () => {
       const product = await createTestProduct(householdId);
       const location1 = await createTestLocation(householdId, { name: "Location 1" });
       const location2 = await createTestLocation(householdId, { name: "Location 2" });
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       // Add stock to location 1 first
       const entry = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 20,
         unit: "unit",
@@ -1330,9 +1347,10 @@ describe("tRPC Router Integration Tests", () => {
       );
       const list = await createTestShoppingList(householdId);
       const product = await createTestProduct(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       const result = await caller.shopping.addItem({
+        ...envelope(),
         shoppingListId: list.id,
         productId: product.id,
         quantity: 3,
@@ -1351,9 +1369,10 @@ describe("tRPC Router Integration Tests", () => {
         "Shopping Household 5"
       );
       const list = await createTestShoppingList(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       const result = await caller.shopping.addItem({
+        ...envelope(),
         shoppingListId: list.id,
         customName: "Custom Item",
         quantity: 2,
@@ -1372,10 +1391,11 @@ describe("tRPC Router Integration Tests", () => {
       );
       const list = await createTestShoppingList(householdId);
       const product = await createTestProduct(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       // Add item
       const item = await caller.shopping.addItem({
+        ...envelope(),
         shoppingListId: list.id,
         productId: product.id,
         quantity: 1,
@@ -1383,6 +1403,7 @@ describe("tRPC Router Integration Tests", () => {
 
       // Check item
       const checkedResult = await caller.shopping.updateItem({
+        ...envelope(),
         id: item.id,
         isChecked: true,
       });
@@ -1392,6 +1413,7 @@ describe("tRPC Router Integration Tests", () => {
 
       // Uncheck item
       const uncheckedResult = await caller.shopping.updateItem({
+        ...envelope(),
         id: item.id,
         isChecked: false,
       });
@@ -1407,15 +1429,17 @@ describe("tRPC Router Integration Tests", () => {
       );
       const list = await createTestShoppingList(householdId);
       const product = await createTestProduct(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       const item = await caller.shopping.addItem({
+        ...envelope(),
         shoppingListId: list.id,
         productId: product.id,
         quantity: 1,
       });
 
-      const result = await caller.shopping.removeItem({ id: item.id });
+      const result = await caller.shopping.removeItem({
+        ...envelope(), id: item.id });
 
       expect(result.success).toBe(true);
     });
@@ -1464,8 +1488,9 @@ describe("tRPC Router Integration Tests", () => {
       });
 
       // Add some low stock
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
       const entry = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 3,
         unit: "unit",
@@ -1512,10 +1537,11 @@ describe("tRPC Router Integration Tests", () => {
         "Shopping Household 12"
       );
       const product = await createTestProduct(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       await expect(
         caller.shopping.addItem({
+        ...envelope(),
           shoppingListId: "invalid-list-id",
           productId: product.id,
           quantity: 1,
@@ -1538,10 +1564,11 @@ describe("tRPC Router Integration Tests", () => {
       const list = await createTestShoppingList(household1);
       const product = await createTestProduct(household2, { name: "Private Product" });
 
-      const { caller } = await createTestContext(user1.id, household1);
+      const { caller, envelope } = await createTestContext(user1.id, household1);
 
       await expect(
         caller.shopping.addItem({
+        ...envelope(),
           shoppingListId: list.id,
           productId: product.id,
           quantity: 1,
@@ -1655,9 +1682,10 @@ describe("tRPC Router Integration Tests", () => {
         "Edge Household 3"
       );
       const product = await createTestProduct(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
+      const { caller, envelope } = await createTestContext(user.id, householdId);
 
       const result = await caller.inventory.addStock({
+        ...envelope(),
         productId: product.id,
         quantity: 999999,
         unit: "unit",

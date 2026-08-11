@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { api } from "@/lib/trpc/client";
+import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
 
@@ -34,6 +35,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function AddStockPage(): JSX.Element {
   const t = useTranslations("inventory.add");
+  const envelope = useEnvelope();
   const router = useRouter();
   const utils = api.useUtils();
 
@@ -142,6 +144,7 @@ export default function AddStockPage(): JSX.Element {
     }
 
     addStock.mutate({
+      ...envelope(),
       productId: product.id,
       quantity: parsedQuantity,
       unit: unit.trim(),

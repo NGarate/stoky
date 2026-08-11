@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
+import { envelope } from "../utils/test-helpers";
 
 /**
  * ISSUES.md INV-1, the half that guards writes.
@@ -128,14 +129,17 @@ describe("consumeStock measures what is left", () => {
   it("refuses to consume more than the net, after an earlier consumption", async () => {
     const api = await caller();
 
-    await api.inventory.addStock({ productId, quantity: 6, unit: "L", operationType: "PURCHASE" });
-    await api.inventory.consumeStock({ productId, quantity: 4, unit: "L", operationType: "CONSUME" });
+    await api.inventory.addStock({
+      ...envelope(OWNER.userId), productId, quantity: 6, unit: "L", operationType: "PURCHASE" });
+    await api.inventory.consumeStock({
+      ...envelope(OWNER.userId), productId, quantity: 4, unit: "L", operationType: "CONSUME" });
 
     expect(await netStock()).toBe(2);
 
     // Gross purchases are 6, net stock is 2. The guard used to read 6.
     await expectCode(
-      api.inventory.consumeStock({ productId, quantity: 5, unit: "L", operationType: "CONSUME" }),
+      api.inventory.consumeStock({
+      ...envelope(OWNER.userId), productId, quantity: 5, unit: "L", operationType: "CONSUME" }),
       "CONFLICT",
     );
 
@@ -145,9 +149,12 @@ describe("consumeStock measures what is left", () => {
   it("still allows a consumption the net supports", async () => {
     const api = await caller();
 
-    await api.inventory.addStock({ productId, quantity: 6, unit: "L", operationType: "PURCHASE" });
-    await api.inventory.consumeStock({ productId, quantity: 4, unit: "L", operationType: "CONSUME" });
-    await api.inventory.consumeStock({ productId, quantity: 2, unit: "L", operationType: "CONSUME" });
+    await api.inventory.addStock({
+      ...envelope(OWNER.userId), productId, quantity: 6, unit: "L", operationType: "PURCHASE" });
+    await api.inventory.consumeStock({
+      ...envelope(OWNER.userId), productId, quantity: 4, unit: "L", operationType: "CONSUME" });
+    await api.inventory.consumeStock({
+      ...envelope(OWNER.userId), productId, quantity: 2, unit: "L", operationType: "CONSUME" });
 
     expect(await netStock()).toBe(0);
   });
@@ -155,11 +162,14 @@ describe("consumeStock measures what is left", () => {
   it("never lets stock go negative, however many times it is asked", async () => {
     const api = await caller();
 
-    await api.inventory.addStock({ productId, quantity: 3, unit: "L", operationType: "PURCHASE" });
-    await api.inventory.consumeStock({ productId, quantity: 3, unit: "L", operationType: "CONSUME" });
+    await api.inventory.addStock({
+      ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", operationType: "PURCHASE" });
+    await api.inventory.consumeStock({
+      ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", operationType: "CONSUME" });
 
     await expectCode(
-      api.inventory.consumeStock({ productId, quantity: 1, unit: "L", operationType: "CONSUME" }),
+      api.inventory.consumeStock({
+      ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", operationType: "CONSUME" }),
       "CONFLICT",
     );
 
@@ -170,6 +180,7 @@ describe("consumeStock measures what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 5,
       unit: "L",
@@ -177,6 +188,7 @@ describe("consumeStock measures what is left", () => {
       operationType: "PURCHASE",
     });
     await api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 4,
       unit: "L",
@@ -188,6 +200,7 @@ describe("consumeStock measures what is left", () => {
 
     await expectCode(
       api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
         productId,
         quantity: 2,
         unit: "L",
@@ -211,6 +224,7 @@ describe("the expiry views report what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -218,6 +232,7 @@ describe("the expiry views report what is left", () => {
       expirationDate: inDays(3),
     });
     await api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -233,6 +248,7 @@ describe("the expiry views report what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -240,6 +256,7 @@ describe("the expiry views report what is left", () => {
       expirationDate: inDays(3),
     });
     await api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 4,
       unit: "L",
@@ -259,6 +276,7 @@ describe("the expiry views report what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -266,6 +284,7 @@ describe("the expiry views report what is left", () => {
       expirationDate: inDays(2),
     });
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -273,6 +292,7 @@ describe("the expiry views report what is left", () => {
       expirationDate: inDays(20),
     });
     await api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -294,6 +314,7 @@ describe("the expiry views report what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 2,
       unit: "L",
@@ -301,6 +322,7 @@ describe("the expiry views report what is left", () => {
       expirationDate: inDays(-4),
     });
     await api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 2,
       unit: "L",
@@ -314,6 +336,7 @@ describe("the expiry views report what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 2,
       unit: "L",
@@ -334,6 +357,7 @@ describe("transferStock measures what is left at the source", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 6,
       unit: "L",
@@ -341,6 +365,7 @@ describe("transferStock measures what is left at the source", () => {
       operationType: "PURCHASE",
     });
     await api.inventory.consumeStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 4,
       unit: "L",
@@ -369,6 +394,7 @@ describe("transferStock measures what is left at the source", () => {
     const api = await caller();
 
     await api.inventory.addStock({
+      ...envelope(OWNER.userId),
       productId,
       quantity: 4,
       unit: "L",

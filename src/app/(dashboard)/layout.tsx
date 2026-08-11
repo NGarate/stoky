@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CompactNav } from "@/components/dashboard/CompactNav";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { SessionKeepAlive } from "@/components/session/SessionKeepAlive";
+import { ComposerProvider } from "@/components/offline/Composer";
 
 /**
  * The authenticated shell.
@@ -32,14 +33,24 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <DashboardNav />
-      <CompactNav />
-      {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
-      <SessionKeepAlive expiresAt={session.expires} />
-      <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
-        {children}
-      </main>
-    </div>
+    // The only place that has awaited `auth()`. Every change composed below
+    // here carries the account and the household it was composed under, and
+    // the server refuses a mismatch — so this is where they enter the client.
+    <ComposerProvider
+      composer={{
+        userId: session.user.id,
+        householdId: session.user.householdId ?? null,
+      }}
+    >
+      <div className="min-h-screen bg-background text-foreground">
+        <DashboardNav />
+        <CompactNav />
+        {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
+        <SessionKeepAlive expiresAt={session.expires} />
+        <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
+          {children}
+        </main>
+      </div>
+    </ComposerProvider>
   );
 }

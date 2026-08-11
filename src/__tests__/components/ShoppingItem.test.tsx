@@ -2,7 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderWithIntl } from "../utils/render";
+import { renderWithIntl, TEST_COMPOSER } from "../utils/render";
 
 const updateItemMutate = mock((_input: unknown) => {});
 const removeItemMutate = mock((_input: unknown) => {});
@@ -62,6 +62,20 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+
+/**
+ * Every write this component makes is one a queue may replay, so each carries a
+ * fresh key and the account that composed it. Asserted rather than ignored: a
+ * mutate that reached the server without them would be refused by Zod, and a
+ * shared key would make two taps into one change.
+ */
+function expectEnvelope(call: Record<string, unknown>): void {
+  expect(call.idempotencyKey).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
+  expect(call.composedByUserId).toBe(TEST_COMPOSER.userId);
+}
+
 describe("ShoppingItem", () => {
   it("shows the linked product name and quantity", () => {
     renderWithIntl(<ShoppingItem item={baseItem} listId="list-1" />);
@@ -119,10 +133,9 @@ describe("ShoppingItem", () => {
 
     await userEvent.click(screen.getByRole("checkbox"));
 
-    expect(updateItemMutate).toHaveBeenCalledWith({
-      id: "item-1",
-      isChecked: true,
-    });
+    const call = updateItemMutate.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toMatchObject({ id: "item-1", isChecked: true });
+    expectEnvelope(call);
   });
 
   it("toggles a checked item back to unchecked", async () => {
@@ -132,10 +145,9 @@ describe("ShoppingItem", () => {
 
     await userEvent.click(screen.getByRole("checkbox"));
 
-    expect(updateItemMutate).toHaveBeenCalledWith({
-      id: "item-1",
-      isChecked: false,
-    });
+    const call = updateItemMutate.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toMatchObject({ id: "item-1", isChecked: false });
+    expectEnvelope(call);
   });
 
   it("removes the item via the labelled delete control", async () => {
@@ -146,7 +158,9 @@ describe("ShoppingItem", () => {
       screen.getByRole("button", { name: "Eliminar artículo" }),
     );
 
-    expect(removeItemMutate).toHaveBeenCalledWith({ id: "item-1" });
+    const call = removeItemMutate.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call).toMatchObject({ id: "item-1" });
+    expectEnvelope(call);
   });
 
   it("disables the delete control while the removal is in flight", () => {

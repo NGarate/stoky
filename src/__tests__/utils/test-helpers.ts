@@ -271,3 +271,17 @@ export function createMockSession(user: User & { household?: Household | null })
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
   };
 }
+
+/**
+ * The envelope every replayable mutation carries.
+ *
+ * A fresh key per call, because reusing one is what the replay mechanism is
+ * *for* — a test that accidentally shared a key would get the first call's
+ * result back and pass while proving nothing.
+ */
+export function envelope(userId: string): {
+  idempotencyKey: string;
+  composedByUserId: string;
+} {
+  return { idempotencyKey: crypto.randomUUID(), composedByUserId: userId };
+}

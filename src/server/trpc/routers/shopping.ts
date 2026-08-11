@@ -8,6 +8,8 @@ import {
   updateShoppingItemSchema,
   shoppingListQuerySchema,
 } from "@/lib/validations/shopping";
+import { replayable } from "@/lib/validations/idempotency";
+import { withReplay } from "../replay";
 
 export const shoppingRouter = createTRPCRouter({
   list: householdProcedure
@@ -129,7 +131,7 @@ export const shoppingRouter = createTRPCRouter({
     }),
 
   addItem: writeProcedure
-    .input(shoppingItemSchema)
+    .input(shoppingItemSchema.merge(replayable))
     .mutation(async ({ ctx, input }) => {
       // Verify list belongs to household
       const list = await ctx.db.shoppingList.findFirst({
@@ -163,56 +165,104 @@ export const shoppingRouter = createTRPCRouter({
         }
       }
 
-      const item = await ctx.db.shoppingItem.create({
-        data: input,
-        include: {
-          product: true,
+      // The envelope is named out rather than spread. This resolver wrote
+      // `data: input`, so merging anything into the schema would have reached
+      // Prisma as `Unknown argument 'idempotencyKey'` — at runtime, with
+      // nothing for the compiler to catch.
+      const { idempotencyKey, composedByUserId, ...fields } = input;
+
+      return withReplay(ctx, {
+        key: idempotencyKey,
+        composedByUserId,
+        procedure: "shopping.addItem",
+        input,
+        apply: (tx) =>
+          tx.shoppingItem.create({
+            data: fields,
+            include: { product: true },
+          }),
+        ids: (item) => [item.id],
+        reread: async (db, ids) => {
+          const item = await db.shoppingItem.findUnique({
+            where: { id: ids[0] ?? "" },
+            include: { product: true },
+          });
+          if (!item) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Shopping item not found",
+            });
+          }
+          return item;
         },
       });
-
-      return item;
     }),
 
   updateItem: writeProcedure
-    .input(updateShoppingItemSchema)
+    .input(updateShoppingItemSchema.merge(replayable))
     .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
+      // Same trap as `addItem`: this spread everything but `id` into Prisma.
+      const { id, idempotencyKey, composedByUserId, ...data } = input;
 
-      const item = await ctx.db.shoppingItem.update({
-        where: {
-          id,
-          shoppingList: {
-            householdId: ctx.householdId,
-          },
-        },
-        data: {
-          ...data,
-          ...(data.isChecked !== undefined && {
-            checkedAt: data.isChecked ? new Date() : null,
+      return withReplay(ctx, {
+        key: idempotencyKey,
+        composedByUserId,
+        procedure: "shopping.updateItem",
+        input,
+        apply: (tx) =>
+          tx.shoppingItem.update({
+            where: {
+              id,
+              shoppingList: { householdId: ctx.householdId },
+            },
+            data: {
+              ...data,
+              ...(data.isChecked !== undefined && {
+                checkedAt: data.isChecked ? new Date() : null,
+              }),
+            },
+            include: { product: true },
           }),
-        },
-        include: {
-          product: true,
+        ids: (item) => [item.id],
+        reread: async (db, ids) => {
+          const item = await db.shoppingItem.findUnique({
+            where: { id: ids[0] ?? "" },
+            include: { product: true },
+          });
+          if (!item) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Shopping item not found",
+            });
+          }
+          return item;
         },
       });
-
-      return item;
     }),
 
   removeItem: writeProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      await ctx.db.shoppingItem.delete({
-        where: {
-          id: input.id,
-          shoppingList: {
-            householdId: ctx.householdId,
-          },
+    .input(z.object({ id: z.string() }).merge(replayable))
+    .mutation(async ({ ctx, input }) =>
+      withReplay(ctx, {
+        key: input.idempotencyKey,
+        composedByUserId: input.composedByUserId,
+        procedure: "shopping.removeItem",
+        input,
+        apply: async (tx) => {
+          await tx.shoppingItem.delete({
+            where: {
+              id: input.id,
+              shoppingList: { householdId: ctx.householdId },
+            },
+          });
+          return { success: true as const };
         },
-      });
-
-      return { success: true };
-    }),
+        // A delete leaves nothing to point at, and a replay of one is
+        // answered by saying so again rather than by looking for the row.
+        ids: () => [],
+        reread: async () => ({ success: true as const }),
+      }),
+    ),
 
   generateFromLowStock: writeProcedure.mutation(async ({ ctx }) => {
     // Get or create auto-generated list
