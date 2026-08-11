@@ -18,16 +18,22 @@ import type { Session } from "next-auth";
  * for i in $(seq 1 30); do bunx bun test docs/reproductions/test-5.test.ts; done
  * ```
  *
- * It failed about 3 times in 30 when it was written — and 0 times in 90 later
- * the same day, on the same machine, with the file untouched. **A green run
- * proves nothing.** Whatever brings it back is environmental and not yet
- * identified; see ISSUES.md TEST-5 before drawing conclusions from a quiet
- * loop.
+ * **It only reproduces under load.** 0 failures in 90 runs on a quiet machine;
+ * 3 in 24 with another suite running against the same database:
+ *
+ * ```bash
+ * bunx bun test src/__tests__/integration      # in one shell
+ * for i in $(seq 1 24); do bunx bun test docs/reproductions/test-5.test.ts; done
+ * ```
+ *
+ * A green loop proves nothing without that.
  *
  * The last statement of the failing test adds its name to `completed`, and an
- * `afterAll` prints the set — so a failing run that prints `COMPLETED: []` is
- * one where the body did not reach the end, which is how the throw was located
- * on the *first* call rather than the second.
+ * `afterAll` prints the set. On a failing run it prints `COMPLETED: []` *and*
+ * bun reports one fewer `expect()` call than on a passing run — the test's own
+ * assertion never executes. That is the evidence that bun abandons the body at
+ * the rejecting `await`, before the `catch` beside it runs, rather than the
+ * application misbehaving.
  *
  * **What it took to reproduce.** Four smaller shapes do not: a rejection through
  * a nested async wrapper; the same through a tRPC caller with no database; a

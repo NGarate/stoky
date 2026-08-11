@@ -52,7 +52,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
-| TEST-5 | A fresh idempotency key is intermittently reported as reused | 🔴 **OPEN** — reproduction in `docs/reproductions/` |
+| TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -690,7 +690,7 @@ checking whether any existing row is already in this state before adding it.
 
 ---
 
-### 🟡 TEST-5: a fresh idempotency key is intermittently reported as reused
+### 🟡 TEST-5: bun abandons a test body at a rejecting `await`
 
 **File:** `src/__tests__/integration/replay.test.ts`
 **Severity:** MEDIUM — a test defect, but an undiagnosed one in the suite that
@@ -738,90 +738,63 @@ test a moment before the `catch` claims it.
 interleaves it with result lines — the ordering may be an artifact rather than
 real time. It is the strongest hint available and it is not proof.
 
-## There is a reproduction now, and it points at `withReplay`
+## Diagnosed: bun abandons the test body at a rejecting `await`
 
-`docs/reproductions/test-5.test.ts` is self-contained — one file, no seed data,
-its own household — and fails about **3 times in 30**, the same rate as the real
-suite. Run it in a loop; it is collected by nothing.
+Reproduced under load with `withReplay` instrumented, and the data settles it.
 
-**It changes what this entry concluded.** In the real file, instrumenting each
-test to record its own completion showed the reported test finishing its body
-and passing every assertion, which said "the test passes and bun misreports it".
-In the reproduction the same instrumentation prints `COMPLETED: []` on a failing
-run: the body does **not** reach the end. The throw happens on the test's
-*first* call — a fresh `randomUUID()` key — which `answerFromRecord` reports as
-"already used for a different change".
+**The application is behaving correctly.** At the mismatch, the record found has
+the same key, the same user and the same procedure as the call asking for it;
+only the `requestHash` differs, which is precisely the condition the procedure
+exists to refuse. The hash pair is *identical* on passing and failing runs — so
+this is the test's own deliberate second call with a changed body, not a fresh
+key being wrongly rejected.
 
-A first-time key reported as reused is a defect in `withReplay`, not in a test
-runner. The earlier reading is therefore in doubt rather than confirmed, and
-this entry no longer claims bun is at fault. What is certain is the reproduction
-and its rate.
+**bun abandons the test.** The failing test wraps that call in `try`/`catch` and
+asserts afterwards. On a failing run:
 
-**Why it matters more than a flake.** If a first call with a fresh key can be
-refused, then a queued write from a supermarket can be refused on its first
-attempt, and the offline queue would classify a BAD_REQUEST as permanent and
-discard it. That is the failure mode Phase 4 exists to prevent. It has not been
-observed outside the test loop, and the rate under normal use is unknown.
+- `COMPLETED: []` — the marker on the test's last line never runs.
+- **12 `expect()` calls, against 13 on a passing run.** The failing test contains
+  exactly one assertion, and it never executed.
 
-## What it took to reproduce
+So execution stopped *at the rejecting `await`*: the `catch` did not run, the
+assertion did not run, and bun reported the test as failed with the error
+rendered at its origin in `replay.ts`. That is a runner defect on bun 1.3.14,
+and it is a race — which is why it is intermittent and why load brings it out.
 
-Five shapes do **not** reproduce it, thirty runs each:
+## The recipe
 
-| Shape | Failures in 30 |
-|---|---|
-| A rejection through a nested async wrapper, rethrown as a different error | 0 |
-| The same through a tRPC caller, no database | 0 |
-| A `TRPCError` out of a Prisma transaction that rolls back | 0 |
-| `withReplay`'s exact sequence, without tRPC | 0 |
-| The application's own middleware chain and superjson, around a plain throw | 0 |
-| **The middleware chain *and* `withReplay`, with calls before it** | **3** |
+Run another suite against the same database while looping the reproduction:
 
-So it needs both halves together. That is the sharpest fact available about
-where to look.
+```bash
+# in one shell
+bunx bun test src/__tests__/integration
+# in another
+for i in $(seq 1 24); do bunx bun test docs/reproductions/test-5.test.ts; done
+```
 
-## Measurements from the real suite
+3 failures in 24 under that load; **0 in 90 on a quiet machine.** A green loop
+proves nothing, which cost an hour before the load was added.
 
-Each 20 runs of `replay.test.ts`:
+## What this corrects
 
-| Condition | Failures in 20 |
-|---|---|
-| As it stands | 4 |
-| Running only the two tests, via `-t` | 0 |
-| At `eb401be`, the commit that created the file | 4 |
-| Without the `securityEvents` middleware | 3 |
-| Both earlier tests in the describe skipped | 1 |
-| `expectCode` as a thunk, or with `.catch()` attached synchronously | 2, 4 |
+Two earlier readings in this entry were wrong and are worth keeping visible:
 
-## It stopped reproducing, and that is the most useful thing to know about it
+- "A fresh idempotency key is intermittently reported as reused" — **no.** The
+  key is the one the test deliberately reuses; the probe shows the identity
+  fields all matching and only the hash differing, as designed.
+- Before that, "the test passes and bun misreports it" — right about the
+  culprit, wrong about the mechanism. The test does not pass; it is *abandoned*
+  partway, which is why its assertion count is short.
 
-The reproduction failed 3 times in 30 and 1 in 12 when it was written. Later the
-same day, on the same machine and the same command, it failed **0 times in 90** —
-60 with `withReplay` instrumented, and then 30 with the file restored to exactly
-what it had been. The control matters: it rules out the instrumentation, which
-was the obvious explanation and would have been a satisfying one.
+Each was corrected by an experiment rather than by more reasoning, and each
+looked convincing until the next measurement.
 
-So the trigger is something environmental — machine load, accumulated rows in a
-shared database, or whatever else differs between an afternoon of running suites
-and a quiet hour. **A green run proves nothing.** Anybody picking this up should
-know that before they run it thirty times, see nothing, and conclude it is
-fixed. That is exactly the mistake this entry now exists to prevent, and it is a
-different mistake from the one it was preventing an hour ago.
+## What to do about it
 
-An attempt to force it by loading the machine was cut short by the tooling
-rather than by a result, so it is untested rather than ruled out — the first
-thing worth retrying.
-
-## What to do next
-
-Reproduce it *first*, under whatever conditions bring it back, and only then
-instrument. Working the other way round is what produced ninety green runs and
-no information.
-
-The question still unanswered: how a `findUnique` on `[userId, freshKey]`
-returns a record whose `requestHash` belongs to another call. In the real suite
-both the key asked for and the key on the record returned were printed and
-matched each other, which is what makes this worth an afternoon rather than a
-shrug.
+Nothing in this repository — `withReplay` is correct and its tests are correct.
+It wants an upstream report against bun 1.3.14, and the reproduction plus the
+load recipe above are enough to write one. A version pin is the workaround if it
+starts costing more than a rerun.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.

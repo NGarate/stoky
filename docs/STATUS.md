@@ -385,23 +385,17 @@ where it disagrees with this file, it is right.
   (SHOP-1). Exactly one of the two, whitespace not counting as a name; no
   existing row was in either state.
 
-**One intermittent failure, with a reproduction and a worrying reading**
-- `docs/reproductions/test-5.test.ts` fails about 3 times in 30, self-contained.
-  On a failing run the test's *first* call — with a freshly generated key — is
-  refused as "already used for a different change". A first-time key reported as
-  reused is a defect in `withReplay` rather than in a test runner, which
-  supersedes this file's earlier claim that the tests merely passed and bun
-  misreported them.
-- **Why it matters beyond a red suite:** if a first call with a fresh key can be
-  refused, a write queued in a supermarket could be refused on its first
-  attempt, and the offline queue treats BAD_REQUEST as permanent — it would
-  discard it. That is the failure Phase 4 exists to prevent. Not observed
-  outside the test loop; the rate under normal use is unknown.
-- **It then stopped reproducing**: 0 failures in 90 runs later the same day, on
-  the same machine, including 30 with the file restored exactly as it was. So
-  the trigger is environmental and unidentified, and **a green run proves
-  nothing** — which is the trap to know about before running it. **TEST-5, the
-  one open entry in `ISSUES.md`.**
+**One intermittent failure, diagnosed and upstream**
+- bun 1.3.14 intermittently **abandons a test body at a rejecting `await`**: the
+  `catch` beside it never runs, the test's own assertion never executes (one
+  fewer `expect()` than a passing run), and the test is reported as failed with
+  the error rendered at its origin. `withReplay` and its tests are both correct
+  — the record it refuses matches on key, user and procedure, and differs only
+  in the request hash, which is the condition it exists to refuse.
+- It reproduces **only under load**: 3 failures in 24 with another suite running
+  against the same database, 0 in 90 on a quiet machine. `docs/reproductions/`
+  carries a self-contained file and the recipe. **TEST-5**, the one open entry
+  in `ISSUES.md`, and it wants an upstream report rather than work here.
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**
