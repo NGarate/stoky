@@ -11,7 +11,22 @@ import {
   productPaginationSchema,
 } from "@/lib/validations/product";
 
+/**
+ * The catalogue: what this household *can* have, as distinct from what it has.
+ *
+ * A `Product` is the thing on the label; a `StockEntry` is a tin of it in the
+ * cupboard. They are separate because the same tin arrives repeatedly and the
+ * label does not change, and because prices belong to the product rather than
+ * to any one purchase.
+ *
+ * **Products are per household**, which is why `barcode` is unique against
+ * `householdId` rather than on its own: two households scanning the same tin
+ * each get their own row, with their own minimum and their own name for it.
+ * Sharing them would mean one household's rename showing up in another's
+ * kitchen.
+ */
 export const productRouter = createTRPCRouter({
+  /** The catalogue, paginated, newest first. */
   list: householdProcedure
     .input(productPaginationSchema)
     .query(async ({ ctx, input }) => {
@@ -72,6 +87,7 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
+  /** One product with its stock entries, for the detail screen. */
   getById: householdProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -115,6 +131,13 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * One product by its barcode, or null — a lookup, not a scan.
+   *
+   * `scanBarcode` below is the one that reaches Open Food Facts and creates a
+   * row. This only ever answers about what is already here, which is what the
+   * scanner needs before deciding whether to ask anybody anything.
+   */
   getByBarcode: householdProcedure
     .input(productByBarcodeSchema)
     .query(async ({ ctx, input }) => {
@@ -150,6 +173,7 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
+  /** Adds a product by hand, for the things that have no barcode. */
   create: writeProcedure
     .input(productSchema)
     .mutation(async ({ ctx, input }) => {
@@ -163,6 +187,7 @@ export const productRouter = createTRPCRouter({
       return product;
     }),
 
+  /** Edits a product. The name, the unit, and the minimum that drives "to buy". */
   update: writeProcedure
     .input(updateProductSchema)
     .mutation(async ({ ctx, input }) => {
@@ -190,6 +215,20 @@ export const productRouter = createTRPCRouter({
       return product;
     }),
 
+  /**
+   * Removes a product — **only one that has never been used.**
+   *
+   * There is no `deletedAt` column in the schema (the search query once
+   * filtered on one that did not exist, which was CRITICAL-1), so this is a
+   * real delete. No relation declares `onDelete`, which means Prisma's default
+   * applies: the database *refuses* rather than cascading. A product with a
+   * single stock entry, price record or receipt line cannot be deleted, and the
+   * P2003 that comes back is translated to BAD_REQUEST — "That refers to
+   * something that does not exist", which is true of nothing the caller did.
+   *
+   * Verified by probing it against the database rather than reasoned from
+   * Prisma's defaults. Filed as ISSUES.md PROD-1.
+   */
   delete: writeProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -215,6 +254,18 @@ export const productRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  /**
+   * Fuzzy name search, ranked by similarity.
+   *
+   * PostgreSQL's `pg_trgm`: `%` is the similarity operator and the GIN index on
+   * `Product.name` is what makes it cheap. It matches misspellings and partial
+   * words, which is the point — somebody typing "leche entra" on a phone in a
+   * supermarket should still find the milk.
+   *
+   * Raw SQL because Prisma has no `similarity()`, and a tagged template so the
+   * query is parameterised — the household id and the search term both come
+   * from the caller.
+   */
   searchByName: householdProcedure
     .input(productSearchSchema)
     .query(async ({ ctx, input }) => {
@@ -242,6 +293,22 @@ export const productRouter = createTRPCRouter({
       }>;
     }),
 
+  /**
+   * Scanning a barcode, which is a lookup that may also create.
+   *
+   * Three outcomes, and the `source` field says which: `local` when the
+   * household already has the product, `open_food_facts` when that service knew it and a
+   * row was created from what it said, `not_found` when nobody knew it — and
+   * that is not a failure, it is the scanner handing over to the manual
+   * creation form.
+   *
+   * A mutation rather than a query because of the middle case: it writes. That
+   * also makes it `writeProcedure`, so a KITCHEN account cannot scan, which
+   * matches the capability matrix — a kitchen tablet looks and uses up.
+   *
+   * The Open Food Facts call is cached in Valkey for thirty days and fails
+   * open, so a cache outage makes this slower rather than broken (DEBT-3).
+   */
   scanBarcode: writeProcedure
     .input(productByBarcodeSchema)
     .mutation(async ({ ctx, input }) => {
