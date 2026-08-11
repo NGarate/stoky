@@ -194,18 +194,53 @@ What it implies:
 2. **A write queue.** Ticking off, consuming and adding go into a local queue and
    replay when the connection returns. The interface confirms immediately —
    pending is a state, not an error.
-3. **Conflict resolution.** Two people shopping at once, one offline. Stock
-   movements are *deltas*, not absolute values, so they merge without a fight —
-   this is why `addStock`/`consumeStock` are the right primitives and setting a
-   quantity directly is not.
+3. **Conflict resolution — allow and reconcile, never discard.** Two people
+   shopping at once, one offline. Deltas merge without a fight *in one
+   direction only*: adding always merges, because there is no ceiling on how
+   much a household can own. **Consuming has a floor.** Stock may never go
+   negative, so two people who each use the last unit cannot both be right, and
+   the second one to reach the server is refused.
+
+   The refusal is where the design was wrong, and this corrects it. Telling
+   someone "that did not save" and dropping the change discards a real event —
+   they *did* take the milk. So a refused consumption is not a failure to
+   report, it is **a question only a person can answer**: the count and the
+   house disagree, and only someone who can see the shelf knows which is right.
+
+   The interface therefore names it and offers the fix — how much is actually
+   there — and writes that as an `adjustStock`, which is exactly the primitive
+   for "the count is wrong and here is the truth". Nothing is applied behind
+   anyone's back and nothing is thrown away.
+
+   **Not a modal at the moment it happens.** A conflict is discovered on
+   *reconnect*, which may be minutes after the shop with the phone in a pocket
+   — a dialog thrown at that moment interrupts someone who is not looking at
+   the item and cannot answer. §7 rule 3 says undo rather than confirm for the
+   same reason: interruptions wear people down. Instead the sync indicator
+   carries it as something needing attention, in words, and opens the
+   reconciliation when the person chooses to deal with it. That also makes it
+   survive being ignored for an hour, which is the realistic case.
+
+   **A kitchen account cannot reconcile.** `adjustStock` is a `writeProcedure`
+   and the capability matrix (§5.2) gives KITCHEN looking and consuming only.
+   So on the tablet the conflict is reported and says who can fix it, rather
+   than offering a control that would be refused by the server. Hiding a button
+   is not a control, and offering one that cannot work is worse.
 4. **Honest state.** A visible, calm indicator: "3 changes waiting to sync". Not
    an error, not hidden.
 5. **Scanning offline.** The barcode is stored and enriched later from Open Food
    Facts. The user is never blocked.
 
-The pieces: a service worker for assets and reads, IndexedDB for the queue,
-TanStack Query persistence (already a dependency), and idempotency keys on
+The pieces: a service worker for assets and reads, `localStorage` for the queue
+(§5.7 says why it is not IndexedDB, and states what would reverse that), a
+`zustand` store as the queue's home in the client, and idempotency keys on
 mutations so a replay cannot double-count.
+
+Two claims in the original of this section were wrong and are corrected here
+rather than quietly dropped. TanStack Query persistence was described as
+"already a dependency" — it is not; `@tanstack/react-query` is installed and
+the persist packages are separate, and read persistence has been moved to the
+droppable tail because a shop that *starts* online works without it.
 
 **Honest assessment:** this is the single largest technical item in the plan,
 larger than either screen. It should be built into the phone screen from the

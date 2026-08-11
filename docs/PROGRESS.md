@@ -539,3 +539,35 @@ either blocks every commit or gets raised until it means nothing; errors are
 few and specific. Warnings are read, and the ones worth acting on become their
 own commits. Pinned exactly, because a pre-1.0 gate can change its mind about
 what counts as an error.
+
+**D43 — Stock has a floor, and a refused consumption becomes a question.**
+Decided by the plan's owner, against the open question the Phase 4 design
+raised. Stock may never go negative, so two people who each use the last unit
+cannot both be right and the second is refused — that part was already built
+and stays.
+
+What changes is what happens next. Discarding the refused change would throw
+away a real event: they *did* take the milk. So the refusal is surfaced as the
+question only a person can answer — the count and the house disagree, and only
+someone who can see the shelf knows which is true — and the answer is written
+as an `adjustStock`, which is precisely the primitive for "the count is wrong
+and here is the truth". Allow and reconcile, never discard.
+
+`REDESIGN_PLAN.md` §5.5.3 also corrects the claim that made this a surprise:
+deltas merge "without a fight" in one direction only. Adding always merges,
+because a household has no ceiling. Consuming has a floor.
+
+**D44 — The reconciliation is not a modal at the moment of conflict.**
+The owner asked for "a modal that asks for it, or other best suited for UX", so
+this is the second half. A conflict is discovered on *reconnect*, which may be
+minutes after the shop with the phone in a pocket: a dialog thrown then
+interrupts someone who is not looking at the item and cannot answer it. §7 rule
+3 rejects interruptions for the same reason. So the sync indicator carries it
+as something needing attention, in words, and opens the reconciliation when the
+person chooses to deal with it — which also makes it survive being ignored for
+an hour, the realistic case.
+
+A KITCHEN account cannot reconcile: `adjustStock` is a `writeProcedure` and the
+matrix gives that role looking and consuming only. On the tablet the conflict
+is reported and names who can fix it, rather than offering a control the server
+would refuse. Offering a control that cannot work is worse than hiding one.
