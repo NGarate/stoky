@@ -187,12 +187,30 @@ describe("what the breakdown carries", () => {
       points: 15,
       max: 60,
     });
-    expect(rating.breakdown.additives.tags).toEqual(["e102", "e330"]);
+    expect(rating.breakdown.additives.tags).toEqual([
+      { tag: "e102", risk: "high" },
+      { tag: "e330", risk: "none" },
+    ]);
     expect(rating.breakdown.organic.isOrganic).toBe(false);
   });
 });
 
 describe("tag normalisation", () => {
+  it("collapses sub-variants of one additive into one entry", () => {
+    // `en:e322` and `en:e322i` are both lecithins; the breakdown listing them
+    // twice double-counts nothing arithmetically — the worst still decides —
+    // but shows a shopper two additives where there is one.
+    const rating = computeRating({
+      nutriscore_grade: "a",
+      additives_tags: ["en:e322", "en:e322i"],
+    });
+
+    expect(
+      (rating as Extract<Rating, { kind: "rated" }>).breakdown.additives.tags,
+    ).toEqual([{ tag: "e322", risk: "none" }]);
+  });
+
+
   it("strips the language prefix and sub-variant suffix", () => {
     expect(normaliseAdditiveTag("en:e322i")).toBe("e322");
     expect(normaliseAdditiveTag("en:E250")).toBe("e250");

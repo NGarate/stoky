@@ -37,11 +37,18 @@ export type RatingWord = "excellent" | "good" | "poor" | "bad";
 
 export type AdditiveRisk = "none" | "limited" | "moderate" | "high";
 
+export interface RatedAdditive {
+  /** Normalised E-number: `e322`. */
+  tag: string;
+  risk: AdditiveRisk;
+}
+
 export interface RatingBreakdown {
   nutritional: { grade: string; points: number; max: 60 };
   additives: {
-    /** Normalised E-numbers found, worst first. */
-    tags: string[];
+    /** Each additive with its class, worst first — the interface lists these
+     * verbatim, so the module stays the only authority on what a tag means. */
+    tags: RatedAdditive[];
     worst: AdditiveRisk | null;
     points: number;
     max: 30;
@@ -131,20 +138,30 @@ export function computeRating(input: RatingInput): Rating {
 
   const nutritionalPoints = NUTRISCORE_POINTS[grade];
 
-  const tags = (input.additives_tags ?? [])
-    .map(normaliseAdditiveTag)
-    .filter((tag): tag is string => tag !== null);
+  // De-duplicated after normalisation: OFF lists sub-variants separately
+  // (`en:e322`, `en:e322i`), and to a shopper two forms of lecithin are one
+  // additive. Without this the breakdown listed it twice — caught by the
+  // display test through React's duplicate-key warning.
+  const tags = [
+    ...new Set(
+      (input.additives_tags ?? [])
+        .map(normaliseAdditiveTag)
+        .filter((tag): tag is string => tag !== null),
+    ),
+  ];
 
   // `additives_tags` absent does not mean additive-free — OFF omits fields it
   // has no data for. `additives_n === 0` is an actual statement of none;
   // absence of both statements scores the component cautiously as `limited`,
   // for the same reason unknown additives do: no verdict is not a clean bill.
+  const ratedTags = tags
+    .map((tag) => ({ tag, risk: ADDITIVE_RISK[tag] ?? "limited" }))
+    .sort((a, b) => RISK_ORDER.indexOf(b.risk) - RISK_ORDER.indexOf(a.risk));
+
   let worst: AdditiveRisk | null = null;
   let additivePoints: number;
-  if (tags.length > 0) {
-    worst = tags
-      .map((tag) => ADDITIVE_RISK[tag] ?? "limited")
-      .reduce((a, b) => (RISK_ORDER.indexOf(b) > RISK_ORDER.indexOf(a) ? b : a));
+  if (ratedTags.length > 0) {
+    worst = ratedTags[0].risk;
     additivePoints = ADDITIVE_POINTS[worst];
   } else if (input.additives_n === 0) {
     additivePoints = 30;
@@ -168,11 +185,7 @@ export function computeRating(input: RatingInput): Rating {
     breakdown: {
       nutritional: { grade, points: nutritionalPoints, max: 60 },
       additives: {
-        tags: [...tags].sort(
-          (a, b) =>
-            RISK_ORDER.indexOf(ADDITIVE_RISK[b] ?? "limited") -
-            RISK_ORDER.indexOf(ADDITIVE_RISK[a] ?? "limited"),
-        ),
+        tags: ratedTags,
         worst,
         points: additivePoints,
         max: 30,

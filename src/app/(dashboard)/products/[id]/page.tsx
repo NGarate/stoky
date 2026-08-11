@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo, useState } from "react";
 import { api } from "@/lib/trpc/client";
+import { ProductRating } from "@/components/products/ProductRating";
 import type { JSX } from "react";
 
 interface ProductDetailPageProps {
@@ -260,6 +261,14 @@ export default function ProductDetailPage({
           })}
         </p>
       ) : null}
+
+      {/* §3: scanning a known product lands here, and the rating is what the
+          scan journey exists to show. Above locations because "is this a good
+          buy" is the standing-in-the-shop question; where it lives at home is
+          the after-the-shop one. */}
+      <div className="mt-8">
+        <ProductRating barcode={product.barcode} snapshot={product.openFoodFactsData} />
+      </div>
 
       <h2 className="mt-8 text-lg font-semibold text-heading">{t("locationsTitle")}</h2>
       {stockByLocation.length === 0 ? (

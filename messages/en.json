@@ -260,6 +260,30 @@
       "torchOn": "Turn the torch on",
       "torchOff": "Turn the torch off",
       "torchFailed": "The torch would not turn on. Another app may be using the camera — close it and try again."
+    },
+    "rating": {
+      "title": "Quality",
+      "wordExcellent": "Excellent",
+      "wordGood": "Good",
+      "wordPoor": "Poor",
+      "wordBad": "Bad",
+      "scoreOutOf": "{score} of 100",
+      "showWhy": "See why",
+      "nutritional": "Nutrition — Nutri-Score {grade}",
+      "additives": "Additives",
+      "additivesNone": "No additives declared",
+      "additivesUnknown": "No additive data, so this part is not counted as clean",
+      "points": "{points} of {max} points",
+      "riskNone": "no known risk",
+      "riskLimited": "limited risk",
+      "riskModerate": "moderate risk",
+      "riskHigh": "high risk",
+      "organicYes": "Certified organic",
+      "organicNo": "No organic certification",
+      "noData": "We do not have enough information to rate this product.",
+      "noDataContribute": "Add its details on Open Food Facts",
+      "notApplicable": "Not rated: this is not a food.",
+      "attribution": "Data from Open Food Facts, ODbL licence"
     }
   },
   "inventory": {
