@@ -814,7 +814,7 @@ unowned below, for the same reason as the iOS pass.
 | ~~DEBT-1~~ | **Done.** Twelve characters, no composition rules, common-password and identity checks — NIST SP 800-63B §5.1.1.2 rather than the four regexes ISSUES.md proposed. And a maximum, which was missing entirely: Argon2id at 64 MB per call was taking unbounded input on two unauthenticated endpoints |
 | The review itself (§ below) | Authorisation per procedure, household isolation, rate limiting verified, the offline queue as an attack surface, uploads, sessions, dependencies, headers in production |
 | DEBT-5 | Missing indexes on `StockEntry.productId`, `PriceRecord.productId`, `Receipt.householdId`, `ReceiptItem.receiptId` |
-| Rate limiting's four gaps | Per IP and never per account (NIST SP 800-63B §5.2.2), `receipt.upload` unthrottled (ASVS V11.1.4), no `Retry-After` (RFC 9110 §10.2.3), refusals logged nowhere (ASVS V7.1.3) |
+| ~~Rate limiting's four gaps~~ | **Done**, one commit each. Sign-in is counted per account as well as per address, at 10/15min on a hashed key (NIST SP 800-63B §5.2.2); `receipt.upload` is metered at 30/hour per account, counted before the file is decoded (ASVS V11.1.4); a 429 carries `Retry-After`, read off the refusal so it cannot drift from the message (RFC 9110 §10.2.3); and refusals are logged as JSON from a tRPC middleware, so a resolver cannot forget to be audited (ASVS V7.1.3). Two things deliberately carry no `Retry-After`: the 503 from a dead Valkey, and sign-in, which answers with a redirect rather than a status |
 
 ### Unowned, and honest about it
 

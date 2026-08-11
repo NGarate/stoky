@@ -330,16 +330,21 @@ prevent, and it survived because nobody re-read the source it was describing.
 - ~~There is no sign-out control.~~ **Built.** `/settings` ends the session,
   purges the queue and tells the worker to forget the cached shell. It asks
   before discarding unsent changes and offers to send them first.
-- Rate limiting covers the two auth endpoints and nothing else, and is per IP
-  rather than per account — NIST SP 800-63B §5.2.2 asks for the latter, and a
-  per-IP limit alone is defeated by a distributed guess. `receipt.upload` runs
-  OCR on an authenticated request with no limit (OWASP ASVS V11.1.4), and a
-  refusal carries no `Retry-After` header (RFC 9110 §10.2.3). It also **fails
-  closed**, which makes Valkey a hard dependency of signing in. The full table,
-  with the phase that owns each, is in `REDESIGN_PLAN.md` under Phase 3.
-  (SECURITY.md)
-- An authorisation refusal is logged nowhere (OWASP ASVS V7.1.3), so an account
-  probing what it may write leaves no trace. Phase 7.
+- ~~Rate limiting is per IP only, `receipt.upload` is unthrottled, and a refusal
+  carries no `Retry-After`.~~ **Closed**, one commit each. Sign-in is counted
+  per account as well as per address (NIST SP 800-63B §5.2.2), on a hashed key
+  so the cache is not a list of who has tried to sign in. `receipt.upload` is
+  metered at 30/hour per account, counted *before* the file is decoded, so
+  sending rubbish and being refused is not the cheap way in (ASVS V11.1.4). A
+  429 carries `Retry-After`, read off the refusal rather than recomputed (RFC
+  9110 §10.2.3); the 503 from a dead Valkey and the sign-in redirect
+  deliberately do not, and SECURITY.md says why. It still **fails closed**,
+  which makes Valkey a hard dependency of signing in.
+- ~~An authorisation refusal is logged nowhere (OWASP ASVS V7.1.3).~~
+  **Closed.** One JSON object per event on stderr, written by a tRPC middleware
+  rather than by the resolvers, so a new router cannot forget to be audited.
+  Only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS — logging everything would
+  bury the refusals in NOT_FOUNDs.
 - Roles are enforced on the server per procedure, but **no interface creates a
   KITCHEN account** — the value exists in the enum and in the middleware, and
   the only way to get one today is a database write. Phase 5, with the kitchen
