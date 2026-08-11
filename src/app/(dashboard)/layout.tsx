@@ -4,6 +4,7 @@ import { CompactNav } from "@/components/dashboard/CompactNav";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { SessionKeepAlive } from "@/components/session/SessionKeepAlive";
 import { ComposerProvider } from "@/components/offline/Composer";
+import { WriteQueueProvider } from "@/components/offline/WriteQueueProvider";
 
 /**
  * The authenticated shell.
@@ -42,15 +43,17 @@ export default async function DashboardLayout({
         householdId: session.user.householdId ?? null,
       }}
     >
-      <div className="min-h-screen bg-background text-foreground">
-        <DashboardNav />
-        <CompactNav />
-        {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
-        <SessionKeepAlive expiresAt={session.expires} />
-        <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
-          {children}
-        </main>
-      </div>
+      <WriteQueueProvider>
+        <div className="min-h-screen bg-background text-foreground">
+          <DashboardNav />
+          <CompactNav />
+          {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
+          <SessionKeepAlive expiresAt={session.expires} />
+          <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
+            {children}
+          </main>
+        </div>
+      </WriteQueueProvider>
     </ComposerProvider>
   );
 }
