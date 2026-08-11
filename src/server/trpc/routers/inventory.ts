@@ -3,7 +3,82 @@ import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import { stockEntrySchema } from "@/lib/validations/inventory";
+import { daysBetween, remainingByBatch } from "@/lib/inventory/batches";
 import type { StockOperation } from "@prisma/client";
+
+/** Half-open bounds on an expiry date, in the shape Prisma words them. */
+interface ExpiryWindow {
+  gte?: Date;
+  lte?: Date;
+  lt?: Date;
+}
+
+/**
+ * Dated batches with something still in them, whose date falls in `window`.
+ *
+ * Both expiry views used to ask the database for stock entries with
+ * `quantity: { gt: 0 }` and report each row's own quantity. Consumption is a
+ * separate negative entry with no expiry date, so it was filtered out and
+ * never subtracted: the figure returned was the size of the original purchase,
+ * and a batch drunk weeks ago still appeared as about to spoil (ISSUES.md
+ * INV-1).
+ *
+ * The query is therefore per *product* rather than per entry — a batch's
+ * remaining quantity cannot be known without the rest of that product's
+ * ledger — and `remainingByBatch` states the drawdown rule.
+ */
+async function datedBatchesInWindow(
+  householdId: string,
+  locationId: string | undefined,
+  window: ExpiryWindow,
+) {
+  const products = await prisma.product.findMany({
+    where: {
+      householdId,
+      stockEntries: { some: { expirationDate: { not: null } } },
+    },
+    include: {
+      stockEntries: {
+        // Consumption recorded against a location draws down that location's
+        // batches. Scoping here rather than after the fact keeps stock used in
+        // the kitchen from erasing a batch in the garage.
+        where: locationId ? { locationId } : undefined,
+        include: { location: true },
+      },
+    },
+  });
+
+  const batches = [];
+
+  for (const { stockEntries, ...product } of products) {
+    const remaining = remainingByBatch(stockEntries);
+
+    for (const entry of stockEntries) {
+      const expirationDate = entry.expirationDate;
+      if (expirationDate === null) continue;
+
+      const left = remaining.get(entry.id) ?? 0;
+      if (left <= 0) continue;
+
+      if (window.gte && expirationDate < window.gte) continue;
+      if (window.lte && expirationDate > window.lte) continue;
+      if (window.lt && expirationDate >= window.lt) continue;
+
+      batches.push({
+        ...entry,
+        // What is left of this batch, not what was bought. The field keeps its
+        // name because that is what every caller already means by it.
+        quantity: left,
+        expirationDate,
+        product,
+      });
+    }
+  }
+
+  return batches.sort(
+    (a, b) => a.expirationDate.getTime() - b.expirationDate.getTime(),
+  );
+}
 
 export const inventoryRouter = createTRPCRouter({
   getStockOverview: householdProcedure
@@ -449,44 +524,24 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const expiryThreshold = new Date();
+      const now = new Date();
+      const expiryThreshold = new Date(now);
       expiryThreshold.setDate(expiryThreshold.getDate() + input.days);
 
-      const expiringItems = await prisma.stockEntry.findMany({
-        where: {
-          product: {
-            householdId: ctx.householdId,
-          },
-          expirationDate: {
-            lte: expiryThreshold,
-            gte: new Date(),
-          },
-          quantity: { gt: 0 },
-          ...(input.locationId && { locationId: input.locationId }),
-        },
-        orderBy: {
-          expirationDate: "asc",
-        },
-        include: {
-          product: true,
-          location: true,
-        },
+      const batches = await datedBatchesInWindow(ctx.householdId, input.locationId, {
+        gte: now,
+        lte: expiryThreshold,
       });
 
-      return expiringItems
-        .filter((item): item is typeof item & { expirationDate: Date } => item.expirationDate !== null)
-        .map((item) => {
-          const daysUntilExpiry = Math.ceil(
-            (item.expirationDate.getTime() - new Date().getTime()) /
-              (1000 * 60 * 60 * 24)
-          );
+      return batches.map((batch) => {
+        const daysUntilExpiry = daysBetween(now, batch.expirationDate);
 
-          return {
-            ...item,
-            daysUntilExpiry,
-            isExpiringSoon: daysUntilExpiry <= 3,
-          };
-        });
+        return {
+          ...batch,
+          daysUntilExpiry,
+          isExpiringSoon: daysUntilExpiry <= 3,
+        };
+      });
     }),
 
   getExpiredItems: householdProcedure
@@ -496,36 +551,22 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const expiredItems = await prisma.stockEntry.findMany({
-        where: {
-          product: {
-            householdId: ctx.householdId,
-          },
-          expirationDate: {
-            lt: new Date(),
-          },
-          quantity: { gt: 0 },
-          ...(input.locationId && { locationId: input.locationId }),
-        },
-        orderBy: {
-          expirationDate: "desc",
-        },
-        include: {
-          product: true,
-          location: true,
-        },
+      const now = new Date();
+
+      const batches = await datedBatchesInWindow(ctx.householdId, input.locationId, {
+        lt: now,
       });
 
-      return expiredItems
-        .filter((item): item is typeof item & { expirationDate: Date } =>
-          item.expirationDate !== null
-        )
-        .map((item) => ({
-          ...item,
-          daysExpired: Math.ceil(
-            (new Date().getTime() - item.expirationDate.getTime()) /
-              (1000 * 60 * 60 * 24)
-          ),
-        }));
+      return batches
+        .map((batch) => ({
+          ...batch,
+          // One measurement, negated — not a second one in the other
+          // direction. Rounding elapsed time *up*, which is what this did
+          // before, reported a carton four days and one second gone as five
+          // days gone. Days remaining and days elapsed are the same distance.
+          daysExpired: -daysBetween(now, batch.expirationDate),
+        }))
+        // Newest first, matching the previous `expirationDate: "desc"`.
+        .reverse();
     }),
 });

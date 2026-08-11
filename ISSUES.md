@@ -32,7 +32,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
 | UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
-| INV-1 | Expiring items report entry quantity, not net stock | 🟠 Write guards fixed (Phase 4); read half open |
+| INV-1 | Expiring items report entry quantity, not net stock | ✅ Resolved (Phase 4) |
 | INV-2 | The availability guards are read-then-write, no transaction | 🔴 **OPEN** |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
@@ -393,11 +393,11 @@ nothing about this issue.
 
 ---
 
-### 🔴 INV-1: Expiring items report entry quantity, not net stock
+### ✅ INV-1: Expiring items report entry quantity, not net stock
 
 **File:** `src/server/trpc/routers/inventory.ts` (`getExpiringItems`)  
 **Severity:** HIGH  
-**Status:** OPEN — found 2026-08-09
+**Status:** RESOLVED in Phase 4 — found 2026-08-09
 
 **Description:**
 `getExpiringItems` selects `StockEntry` rows with `quantity: { gt: 0 }` and
@@ -451,7 +451,7 @@ real PostgreSQL because the defect lived in a Prisma `where` clause and a
 mocked client would have returned whatever the test pretended. Verified failing
 first: 5 of the 6 go red with the router reverted.
 
-**Still open: the read half**, `getExpiringItems`, below.
+The read half followed in the next commit, below.
 
 **Suggested fix:**
 Report net stock per product alongside the soonest expiry date, rather than
@@ -459,6 +459,33 @@ per-entry quantities, and make `consumeStock` guard against net rather than
 gross. If per-batch detail is wanted later, consumption has to be
 attributed to a batch, which is a larger modelling change and should be a
 deliberate decision rather than a side effect.
+
+**✅ The read half is fixed** (Phase 4). Both expiry views now ask per
+*product* rather than per entry, because a batch's remaining quantity cannot be
+known without the rest of that product's ledger, and report what is left of
+each batch instead of what was bought. A batch drawn down to nothing does not
+appear at all, which was the visible half of this: the component never showed
+the quantity, so what a reader actually saw was a carton drunk weeks ago listed
+as about to spoil.
+
+**The drawdown rule is soonest-expiry-first**, stated in
+`src/lib/inventory/batches.ts` rather than assumed silently in a router.
+Someone taking milk out of the fridge reaches for the carton that has to go
+first. Undated batches are drawn down last, because a batch with no expiry has
+no urgency and putting it first would make dated batches look fuller than they
+are. Per-batch attribution at write time remains the larger modelling change
+described above, and is still not taken.
+
+Also corrected in passing, because the same test found it: `daysExpired`
+rounded elapsed time *up*, reporting a carton four days and one second gone as
+five days gone. Days remaining and days elapsed are now one measurement with
+two signs.
+
+Pinned by `src/__tests__/unit/batches.test.ts` (19 tests, 35ms — the rule is
+arithmetic over an array and needs neither a database nor a DOM) and five
+tests in `src/__tests__/integration/inventory.net-stock.test.ts` that prove the
+router calls it. Verified failing first: all five go red with the router
+reverted.
 
 **Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
 until the number means what the screen says it means.
@@ -1713,7 +1740,8 @@ For which phase closes each item, see `docs/REDESIGN_PLAN.md` §9, and
 | Item | Closed by |
 |---|---|
 | UI-1 dead routes | Phase 1 |
-| INV-1 expiring quantity | Phase 5 (kitchen screen depends on it) |
+| INV-1 expiring quantity | Phase 4 (the replay queue could not sit on it) |
+| INV-2 read-then-write guards | Phase 4, with the idempotency work |
 | CRITICAL-4 rate limiting | Phase 3, verified in Phase 7 |
 | DEBT-1 password policy | Phase 3 |
 | DEBT-4 bare `Error` in routers | Phase 3 |

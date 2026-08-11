@@ -199,6 +199,136 @@ describe("consumeStock measures what is left", () => {
   });
 });
 
+describe("the expiry views report what is left", () => {
+  /** A date `days` from now, which the window bounds are relative to. */
+  function inDays(days: number): Date {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date;
+  }
+
+  it("does not list a batch that has already been finished", async () => {
+    const api = await caller();
+
+    await api.inventory.addStock({
+      productId,
+      quantity: 6,
+      unit: "L",
+      operationType: "PURCHASE",
+      expirationDate: inDays(3),
+    });
+    await api.inventory.consumeStock({
+      productId,
+      quantity: 6,
+      unit: "L",
+      operationType: "CONSUME",
+    });
+
+    const expiring = await api.inventory.getExpiringItems({ days: 7 });
+
+    expect(expiring).toHaveLength(0);
+  });
+
+  it("reports what is left of a partly consumed batch, not what was bought", async () => {
+    const api = await caller();
+
+    await api.inventory.addStock({
+      productId,
+      quantity: 6,
+      unit: "L",
+      operationType: "PURCHASE",
+      expirationDate: inDays(3),
+    });
+    await api.inventory.consumeStock({
+      productId,
+      quantity: 4,
+      unit: "L",
+      operationType: "CONSUME",
+    });
+
+    const expiring = await api.inventory.getExpiringItems({ days: 7 });
+
+    expect(expiring).toHaveLength(1);
+    // The exact figure ISSUES.md measured: 6 L reported against 2 L in stock.
+    expect(expiring[0]?.quantity).toBe(2);
+    expect(expiring[0]?.quantity).toBe(await netStock());
+    expect(expiring[0]?.product.name).toBe("Leche entera");
+  });
+
+  it("charges consumption to the batch that has to go first", async () => {
+    const api = await caller();
+
+    await api.inventory.addStock({
+      productId,
+      quantity: 6,
+      unit: "L",
+      operationType: "PURCHASE",
+      expirationDate: inDays(2),
+    });
+    await api.inventory.addStock({
+      productId,
+      quantity: 6,
+      unit: "L",
+      operationType: "PURCHASE",
+      expirationDate: inDays(20),
+    });
+    await api.inventory.consumeStock({
+      productId,
+      quantity: 6,
+      unit: "L",
+      operationType: "CONSUME",
+    });
+
+    const expiring = await api.inventory.getExpiringItems({ days: 7 });
+
+    // The urgent carton is the one that was drunk, so nothing is spoiling
+    // inside the week — the far batch is outside the window entirely.
+    expect(expiring).toHaveLength(0);
+
+    const monthAhead = await api.inventory.getExpiringItems({ days: 30 });
+    expect(monthAhead).toHaveLength(1);
+    expect(monthAhead[0]?.quantity).toBe(6);
+  });
+
+  it("does not list an expired batch that was finished before it turned", async () => {
+    const api = await caller();
+
+    await api.inventory.addStock({
+      productId,
+      quantity: 2,
+      unit: "L",
+      operationType: "PURCHASE",
+      expirationDate: inDays(-4),
+    });
+    await api.inventory.consumeStock({
+      productId,
+      quantity: 2,
+      unit: "L",
+      operationType: "CONSUME",
+    });
+
+    expect(await api.inventory.getExpiredItems({})).toHaveLength(0);
+  });
+
+  it("still lists an expired batch nobody got to", async () => {
+    const api = await caller();
+
+    await api.inventory.addStock({
+      productId,
+      quantity: 2,
+      unit: "L",
+      operationType: "PURCHASE",
+      expirationDate: inDays(-4),
+    });
+
+    const expired = await api.inventory.getExpiredItems({});
+
+    expect(expired).toHaveLength(1);
+    expect(expired[0]?.quantity).toBe(2);
+    expect(expired[0]?.daysExpired).toBe(4);
+  });
+});
+
 describe("transferStock measures what is left at the source", () => {
   it("refuses to move more than the source holds after a consumption", async () => {
     const api = await caller();
