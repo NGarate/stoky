@@ -52,7 +52,7 @@ describe("DashboardNav", () => {
       ["Panel", "/dashboard"],
       ["Inventario", "/inventory"],
       ["Productos", "/products"],
-      ["Recibos", "/receipts"],
+      ["Tickets", "/receipts"],
       ["Lista de compras", "/shopping"],
       ["Precios", "/prices"],
       ["Configuración", "/settings"],
@@ -87,7 +87,7 @@ describe("DashboardNav", () => {
     pathname = "/receipts/abc123/review";
     renderWithIntl(<DashboardNav />);
 
-    expect(activeLink()?.textContent).toBe("Recibos");
+    expect(activeLink()?.textContent).toBe("Tickets");
   });
 
   it("highlights exactly one section at a time", () => {

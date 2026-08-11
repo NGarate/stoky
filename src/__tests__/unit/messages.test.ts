@@ -91,3 +91,44 @@ describe("message catalogues", () => {
     expect(copied).toEqual([]);
   });
 });
+
+/**
+ * ISSUES.md I18N-2 — one word for one thing.
+ *
+ * The catalogue called the same piece of paper a *recibo* in `receipts.*` and a
+ * *ticket* in `receipts.applied.*`, so the pipeline changed vocabulary at its
+ * last step — the same class of seam as I18N-1, only subtler because both words
+ * are Spanish and neither looks wrong on its own.
+ *
+ * "Ticket" won because `REDESIGN_PLAN.md` §3 says no system vocabulary and
+ * writes for somebody standing in a supermarket: a Spanish supermarket hands
+ * you a ticket, while a recibo is what a bank sends. It was the *larger* change
+ * — twenty-three strings against nine — which is the direction the argument
+ * pointed rather than the direction the diff did.
+ */
+describe("one word for one thing", () => {
+  /** Terms that were split, and the word that won. */
+  const RETIRED: [RegExp, string][] = [[/\brecibos?\b/i, "ticket"]];
+
+  test("never uses a word the catalogue retired", () => {
+    const offenders = spanish.filter((key) => {
+      const value = key
+        .split(".")
+        .reduce<unknown>((node, part) => (node as Catalogue)?.[part], es);
+      return (
+        typeof value === "string" &&
+        RETIRED.some(([pattern]) => pattern.test(value))
+      );
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  test("would notice one", () => {
+    // Without this the check above passes for ever if `flatten` or the pattern
+    // stops working, and a vocabulary test that cannot see the word it bans is
+    // just a comment.
+    expect(RETIRED[0][0].test("Subir recibo")).toBe(true);
+    expect(RETIRED[0][0].test("Subir ticket")).toBe(false);
+  });
+});

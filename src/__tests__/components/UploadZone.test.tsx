@@ -23,7 +23,7 @@ describe("UploadZone", () => {
 
     expect(
       screen.getByText(
-        "Arrastra una foto del recibo o haz clic para seleccionar",
+        "Arrastra una foto del ticket o haz clic para seleccionar",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("JPG, PNG o WebP (máx. 10 MB)")).toBeInTheDocument();
@@ -55,12 +55,12 @@ describe("UploadZone", () => {
 
     await userEvent.upload(fileInput(container), jpeg());
 
-    const preview = await screen.findByAltText("Vista previa del recibo");
+    const preview = await screen.findByAltText("Vista previa del ticket");
     expect(preview).toBeInTheDocument();
     // The dropzone prompt is replaced by the preview.
     expect(
       screen.queryByText(
-        "Arrastra una foto del recibo o haz clic para seleccionar",
+        "Arrastra una foto del ticket o haz clic para seleccionar",
       ),
     ).toBeNull();
   });
@@ -69,7 +69,7 @@ describe("UploadZone", () => {
     const { container } = renderWithIntl(<UploadZone onUpload={() => {}} />);
 
     await userEvent.upload(fileInput(container), jpeg());
-    await screen.findByAltText("Vista previa del recibo");
+    await screen.findByAltText("Vista previa del ticket");
 
     // The clear control is the only button besides the camera action.
     const clear = screen
@@ -77,9 +77,9 @@ describe("UploadZone", () => {
       .find((button) => button.className.includes("bg-destructive"));
     await userEvent.click(clear as HTMLElement);
 
-    expect(screen.queryByAltText("Vista previa del recibo")).toBeNull();
+    expect(screen.queryByAltText("Vista previa del ticket")).toBeNull();
     expect(
-      screen.getByText("Arrastra una foto del recibo o haz clic para seleccionar"),
+      screen.getByText("Arrastra una foto del ticket o haz clic para seleccionar"),
     ).toBeInTheDocument();
   });
 

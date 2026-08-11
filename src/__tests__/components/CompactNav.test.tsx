@@ -136,7 +136,7 @@ describe("CompactNav", () => {
     renderWithIntl(<CompactNav />);
 
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Recibos" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Tickets" })).toBeNull();
     expect(
       within(bars()[0]).getByRole("button", { name: /Más/ }),
     ).toHaveAttribute("aria-expanded", "false");
@@ -154,7 +154,7 @@ describe("CompactNav", () => {
     const expected = [
       ["Panel", "/dashboard"],
       ["Productos", "/products"],
-      ["Recibos", "/receipts"],
+      ["Tickets", "/receipts"],
       ["Precios", "/prices"],
       ["Configuración", "/settings"],
     ];
