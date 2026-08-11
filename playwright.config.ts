@@ -217,6 +217,11 @@ export default defineConfig({
       // override cannot quietly become the product's behaviour.
       RATE_LIMIT_LOGIN_ATTEMPTS: "10000",
       RATE_LIMIT_REGISTER_ATTEMPTS: "10000",
+      // And the per-account one, for a sharper reason than the two above: the
+      // whole suite signs in as the *same* seeded demo user, so every worker
+      // shares one account counter however many addresses they come from —
+      // which is precisely what that limit is for.
+      RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS: "10000",
     },
     // A cold `next dev` compile is slow; a wedged one never answers at all. Two
     // minutes tells the two apart and reports the port instead of hanging.

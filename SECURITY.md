@@ -164,6 +164,21 @@ specifies — 5 sign-ins per 15 minutes, 3 registrations per hour. A successful
 sign-in clears its counter, so a household signing in from several devices is
 not locked out by a limit meant for someone guessing.
 
+**Sign-in is also counted per account**, at 10 attempts per 15 minutes. NIST
+SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
+*an account*, and a per-IP limit does not do that: an attacker with a hundred
+addresses gets the per-IP budget from each of them, which is five hundred
+attempts against one password. With both limits in force, a hundred addresses
+buy ten. The number is higher than the per-IP one because this counter cannot
+tell a household's phone from its tablet, and a successful sign-in clears both.
+
+The counter is keyed on a SHA-256 of the normalised address rather than the
+address, so a `KEYS rl:login:acct:*` on Valkey — available to anything on the
+Docker network — does not come back as a list of who has tried to sign in. It
+counts attempts on addresses that are not registered too, so the difference
+between "refused" and "rejected" cannot be used to discover which addresses
+exist.
+
 What is still open, and worth knowing before publishing an instance:
 
 - **Only the two auth endpoints are limited.** Every other tRPC procedure is
@@ -173,8 +188,8 @@ What is still open, and worth knowing before publishing an instance:
 - **The identifier is an IP address**, read from the last hop of
   `X-Forwarded-For` (the entry the proxy in front of the app writes, and the
   only one a client cannot forge). Everyone behind one NAT therefore shares a
-  bucket, and an attacker with a range of addresses gets one bucket per
-  address. Per-account limiting is the complement and is not implemented.
+  bucket. An attacker with a range of addresses gets one bucket per address,
+  which is what the per-account limit above exists to bound.
 - **It fails closed.** If Valkey is unreachable, nobody can sign in. That is
   deliberate — failing open would hand an unlimited auth endpoint to anyone who
   can take the cache down — but it makes Valkey a hard dependency of signing
@@ -182,7 +197,8 @@ What is still open, and worth knowing before publishing an instance:
   when it happens, and the browser is told the service is unavailable rather
   than that the password was wrong.
 - **The limits are configurable** through `RATE_LIMIT_LOGIN_ATTEMPTS`,
-  `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS` and
+  `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS`,
+  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS` and
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`. Raising them raises the exposure; the
   browser suite raises them because it registers dozens of accounts per run,
   and a unit test asserts the shipped defaults with the environment unset so

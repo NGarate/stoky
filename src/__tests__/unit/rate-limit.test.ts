@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import {
+  accountIdentifier,
+  loginAccountRateLimit,
   loginRateLimit,
   rateLimitIdentifier,
   registerRateLimit,
@@ -56,6 +58,41 @@ describe("rateLimitIdentifier", () => {
   });
 });
 
+describe("accountIdentifier", () => {
+  it("does not put the address in the key", () => {
+    // The property worth having: a `KEYS rl:login:acct:*` on Valkey — which in
+    // a self-hosted deployment is available to anything on the Docker network
+    // — must not come back as a list of who has tried to sign in.
+    const identifier = accountIdentifier("noel@example.com");
+
+    expect(identifier).not.toContain("noel");
+    expect(identifier).not.toContain("example.com");
+    expect(identifier).not.toContain("@");
+  });
+
+  it("counts one account as one bucket however it was typed", () => {
+    // Without normalisation, alternating the case gives an attacker a fresh
+    // ten attempts per spelling — and there are a great many spellings.
+    const canonical = accountIdentifier("noel@example.com");
+
+    expect(accountIdentifier("Noel@Example.COM")).toBe(canonical);
+    expect(accountIdentifier("  noel@example.com  ")).toBe(canonical);
+  });
+
+  it("keeps two accounts apart", () => {
+    expect(accountIdentifier("a@example.com")).not.toBe(
+      accountIdentifier("b@example.com"),
+    );
+  });
+
+  it("is the same length whatever it was given", () => {
+    // A key whose length tracked the address would leak the address's length.
+    expect(accountIdentifier("a@b.co")).toHaveLength(
+      accountIdentifier("a-very-long-address@a-very-long-domain.example").length,
+    );
+  });
+});
+
 describe("the configured limits", () => {
   it("defaults to the specification when nothing overrides it", () => {
     // CLAUDE.md, Security Constraints: 5 login attempts/15min per IP, 3
@@ -94,5 +131,27 @@ describe("the configured limits", () => {
 
   it("keeps the two limits on separate counters", () => {
     expect(loginRateLimit().prefix).not.toBe(registerRateLimit().prefix);
+  });
+
+  it("bounds a distributed guess at ten attempts per account", () => {
+    // NIST SP 800-63B §5.2.2 asks for a limit on consecutive failed attempts
+    // against *an account*. Ten rather than five because this counter cannot
+    // tell a household's phone, tablet and laptop apart, and they are three
+    // attempts before anybody has mistyped anything.
+    delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS;
+
+    expect(loginAccountRateLimit()).toEqual({
+      prefix: "rl:login:acct",
+      attempts: 10,
+      windowSeconds: 900,
+    });
+  });
+
+  it("counts the account separately from the address", () => {
+    // Sharing a prefix would make five wrong passwords from one address spend
+    // the account's budget too, and the two limits would stop being two.
+    expect(loginAccountRateLimit().prefix).not.toBe(loginRateLimit().prefix);
+    expect(loginAccountRateLimit().prefix).not.toBe(registerRateLimit().prefix);
   });
 });

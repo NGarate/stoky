@@ -8,7 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import {
   RateLimitUnavailableError,
+  accountIdentifier,
   consumeRateLimit,
+  loginAccountRateLimit,
   loginRateLimit,
   rateLimitIdentifier,
   resetRateLimit,
@@ -72,6 +74,44 @@ export const authConfig: NextAuthConfig = {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
+        /**
+         * The second limit, and the one NIST SP 800-63B §5.2.2 actually asks
+         * for: consecutive failed attempts *on a single account*.
+         *
+         * The per-IP limit above does not do that. An attacker with a hundred
+         * addresses gets five attempts from each — five hundred against one
+         * password. With both in force, a hundred addresses buy ten.
+         *
+         * Counted on the submitted address whether or not an account exists,
+         * so a difference in behaviour cannot be used to learn which addresses
+         * are registered. Counted before Argon2id, for the same reason as the
+         * limit above.
+         */
+        const accountLimit = loginAccountRateLimit();
+        const account = accountIdentifier(parsed.data.email);
+
+        try {
+          const { allowed, retryAfterSeconds } = await consumeRateLimit(
+            accountLimit,
+            account,
+          );
+          if (!allowed) {
+            console.warn(
+              `[auth] sign-in refused: too many attempts on this account, ${retryAfterSeconds}s remaining`,
+            );
+            throw new RateLimitedSignin();
+          }
+        } catch (error) {
+          if (error instanceof RateLimitUnavailableError) {
+            console.error(
+              "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
+              error.cause,
+            );
+            throw new AuthUnavailableSignin();
+          }
+          throw error;
+        }
+
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
         });
@@ -81,7 +121,11 @@ export const authConfig: NextAuthConfig = {
         const isValid = await argon2.verify(user.passwordHash, parsed.data.password);
         if (!isValid) return null;
 
+        // Both counters, for the reason D30 gives: the specification counts
+        // attempts rather than failures, and a household signing in from three
+        // devices is three attempts before anybody has mistyped anything.
         await resetRateLimit(limit, identifier);
+        await resetRateLimit(accountLimit, account);
 
         return {
           id: user.id,

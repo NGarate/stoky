@@ -2,11 +2,23 @@ import { describe, it, expect, afterAll, beforeEach } from "bun:test";
 import Redis from "ioredis";
 import {
   RateLimitUnavailableError,
+  accountIdentifier,
   closeRateLimiter,
+  loginAccountRateLimit,
   consumeRateLimit,
   resetRateLimit,
   type RateLimit,
 } from "@/lib/rate-limit";
+import { RateLimitedSignin } from "@/lib/auth";
+import { signInWith } from "../utils/authorize";
+import {
+  cleanupTestHouseholds,
+  cleanupTestUsers,
+  createTestHousehold,
+  createTestUser,
+  generateTestEmail,
+  generateTestName,
+} from "../utils/test-helpers";
 
 /**
  * ISSUES.md CRITICAL-4, against a real Valkey.
@@ -131,6 +143,95 @@ describe("consumeRateLimit", () => {
       await closeRateLimiter();
       if (original === undefined) delete process.env.VALKEY_URL;
       else process.env.VALKEY_URL = original;
+    }
+  });
+});
+
+/**
+ * NIST SP 800-63B §5.2.2, through the only sign-in path the application has.
+ *
+ * Asserting this against `consumeRateLimit` with an account-shaped key would
+ * prove nothing: it would pass just as well with the limit never wired into
+ * `authorize` at all. The property is that *sign-in* stops, so sign-in is what
+ * this drives.
+ */
+describe("the per-account limit, through authorize", () => {
+  const ATTEMPTS = 3;
+  const original = process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+
+  beforeEach(async () => {
+    process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = String(ATTEMPTS);
+    const keys = await inspector.keys(`${loginAccountRateLimit().prefix}:*`);
+    if (keys.length > 0) await inspector.del(...keys);
+  });
+
+  afterAll(() => {
+    if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
+  });
+
+  it("stops a guess spread across a different address every time", async () => {
+    // The per-IP limit alone does not do this: a hundred addresses buy a
+    // hundred budgets against one password. `freshTestAddress()` per call is
+    // what makes this test about the account counter rather than the IP one.
+    const email = generateTestEmail("distributed");
+
+    for (let i = 0; i < ATTEMPTS; i++) {
+      // Wrong password, no such account — both irrelevant, because the count
+      // happens before either is looked at.
+      expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
+    }
+
+    let thrown: unknown;
+    try {
+      await signInWith({ email, password: "wrong password here" });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(RateLimitedSignin);
+  });
+
+  it("counts an address that does not exist, so it cannot be used to find one that does", async () => {
+    // If only real accounts were counted, the difference between "refused for
+    // rate limiting" and "rejected" would answer "is this address registered?"
+    // — which is the enumeration oracle the flattened error messages exist to
+    // close.
+    const unknown = generateTestEmail("never-registered");
+
+    for (let i = 0; i <= ATTEMPTS; i++) {
+      try {
+        await signInWith({ email: unknown, password: "wrong password here" });
+      } catch {
+        // The refusal on the last iteration is the point.
+      }
+    }
+
+    const key = `${loginAccountRateLimit().prefix}:${accountIdentifier(unknown)}`;
+    expect(await inspector.get(key)).toBe(String(ATTEMPTS + 1));
+  });
+
+  it("gives a household its budget back when somebody actually signs in", async () => {
+    // Otherwise a phone, a tablet and a laptop signing in through the morning
+    // spend a limit that exists to stop someone guessing.
+    const email = generateTestEmail("resets");
+    const password = "cocina despensa nevera";
+    const household = await createTestHousehold({ name: "Test Household" });
+    await createTestUser({ email, name: generateTestName("Resets"), password, householdId: household.id });
+
+    try {
+      for (let i = 0; i < ATTEMPTS - 1; i++) {
+        expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
+      }
+
+      // The last attempt of the budget, and it is correct.
+      expect(await signInWith({ email, password })).not.toBeNull();
+
+      // Which means the next one is not refused.
+      expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
+    } finally {
+      await cleanupTestUsers(email);
+      await cleanupTestHouseholds("Test Household");
     }
   });
 });

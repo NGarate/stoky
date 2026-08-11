@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import Redis from "ioredis";
 
 /**
@@ -62,6 +63,31 @@ export function loginRateLimit(): RateLimit {
     "RATE_LIMIT_LOGIN_ATTEMPTS",
     "RATE_LIMIT_LOGIN_WINDOW_SECONDS",
     5,
+    15 * 60,
+  );
+}
+
+/**
+ * Sign-in attempts against **one account**, however many addresses they come
+ * from.
+ *
+ * NIST SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts
+ * *on a single account*, and the per-IP limit above does not do that: an
+ * attacker with a hundred addresses gets five attempts from each, which is
+ * five hundred against one password. This is the limit that makes a
+ * distributed guess cost something.
+ *
+ * Ten rather than five, because a household legitimately signs in from several
+ * addresses — a phone on mobile data, a laptop on the wifi, a tablet — and
+ * this counter cannot tell them apart. With both limits in force, a hundred
+ * addresses buy ten attempts per fifteen minutes, not five hundred.
+ */
+export function loginAccountRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:login:acct",
+    "RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS",
+    "RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS",
+    10,
     15 * 60,
   );
 }
@@ -241,4 +267,21 @@ export function rateLimitIdentifier(headers: Headers): string {
   if (real) return real;
 
   return "unknown";
+}
+
+/**
+ * The identifier an account limit is counted against.
+ *
+ * **Hashed, not the address itself.** A counter keyed on the raw email turns
+ * the cache into a list of which addresses have tried to sign in — readable by
+ * anyone who can run `KEYS` on Valkey, which in a self-hosted deployment is
+ * anyone on the Docker network. The count is the only thing this needs to
+ * know, and a hash counts just as well.
+ *
+ * Normalised first, so `Noel@Example.com ` and `noel@example.com` are one
+ * account rather than two buckets an attacker can alternate between.
+ */
+export function accountIdentifier(email: string): string {
+  const normalised = email.trim().toLowerCase();
+  return createHash("sha256").update(normalised).digest("hex").slice(0, 32);
 }
