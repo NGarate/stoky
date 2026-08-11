@@ -6,7 +6,33 @@ import * as argon2 from "argon2";
 import { registerSchema } from "@/lib/validations/auth";
 import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
 
+/**
+ * Accounts, as far as tRPC is concerned.
+ *
+ * **Signing in is not here.** It is the credentials provider in
+ * `src/lib/auth.ts`, and it used to be here too — an `auth.login` procedure on
+ * the public router, unmetered and unused by the interface, which was a second
+ * way to verify a password with none of the protections the real one has. It
+ * was removed; `src/__tests__/utils/authorize.ts` drives the real path instead.
+ *
+ * So what is left is the parts Auth.js has no opinion about: creating an
+ * account, reading the current one, and a `logout` that exists for shape.
+ */
 export const authRouter = createTRPCRouter({
+  /**
+   * Creates an account, and optionally the household to go with it.
+   *
+   * `publicProcedure`, necessarily — there is nobody to authenticate yet — which
+   * makes it one of the two endpoints reachable from the internet by anyone.
+   * That is why it is rate limited before it reads anything and why the
+   * password has a maximum length: Argon2id here is 64 MB per call, so an
+   * unbounded body would make this a memory amplifier (ISSUES.md CRITICAL-4,
+   * DEBT-1).
+   *
+   * The household is optional. An account can exist without one, and
+   * `householdRouter` is what such an account uses to get out of that state
+   * (HOUSE-1).
+   */
   register: publicProcedure
     .input(registerSchema)
     .mutation(async ({ ctx, input }) => {
@@ -82,6 +108,21 @@ export const authRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * The signed-in account, read from the database rather than from the token.
+   *
+   * **Nothing calls it today**, which is worth knowing before relying on it.
+   * The screens read what they need from the session, and the freshness
+   * argument this would otherwise make — that a role change takes effect on the
+   * next request rather than when the token is re-issued — is already handled
+   * where it matters, in `householdProcedure`, which re-reads membership on
+   * every request.
+   *
+   * Kept because it is the obvious shape of an endpoint a client will
+   * eventually want, and because it costs one query. Throws UNAUTHORIZED rather
+   * than returning null when the row is gone: a session for a deleted account
+   * is not a missing resource, it is a session that should end.
+   */
   me: protectedProcedure
     .query(async ({ ctx }) => {
       const userId = ctx.session.user.id;
@@ -110,6 +151,23 @@ export const authRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * Does nothing, on purpose, and is not how anybody signs out.
+   *
+   * The session is a JWT with no server-side record, so there is nothing here
+   * to invalidate. Ending a session is `signOutAction` in
+   * `src/lib/auth/actions.ts` — a server action, so it can clear the cookie —
+   * called by `SignOutButton`, which first purges the offline queue and tells
+   * the service worker to forget the cached shell. Those two are the reason
+   * signing out is a component's job rather than an endpoint's.
+   *
+   * This is kept so that a caller who goes looking for `auth.logout` finds this
+   * paragraph instead of concluding that signing out is unimplemented, which is
+   * what its previous silence invited.
+   *
+   * Either way a stolen token stays valid until it expires, which is what the
+   * 15-minute `maxAge` in `src/lib/auth.ts` is for.
+   */
   logout: protectedProcedure
     .mutation(async () => {
       return { success: true };
