@@ -41,14 +41,66 @@ Rules for this log:
 **Groundwork.** Three defects were closed before the offline layer was written
 rather than after, because each one is load-bearing for it.
 
+**Groundwork** — three defects closed before the offline layer, because each
+one is load-bearing for it.
+
 | Unit | Commit |
 |---|---|
 | UI-9 closed — a failed query no longer claims the household is empty | `6214efe` |
 | The availability guards measure net stock, not gross purchases | `a6f1d49` |
 | INV-1 closed — the expiry views report what is left of a batch | `8961376` |
 
-Filed in passing: INV-2, the read-then-write race the availability guards still
-have. It goes with the idempotency work, which needs the same transaction.
+**Paid down while the offline design was being pressure-tested.** A workflow of
+eleven agents read the repository and produced the build order the units below
+follow; it found SEC-1 and three stale claims in this plan on the way.
+
+| Unit | Commit |
+|---|---|
+| The scan flow speaks from the catalogue | `a3dbfa6` |
+| DEBT-2 closed — the torch toggle reaches the camera | `9af0345` |
+| I18N-7 closed — the stock overview speaks from the catalogue | `faec173` |
+| TEST-4 closed — the low-stock badge checked where a phone sees it | `1a6561b` |
+
+**The server half of offline.**
+
+| Unit | Commit |
+|---|---|
+| SEC-1 closed — a price record can no longer name another household's store | `7c0190c` |
+| The database client comes from the context | `ed7bb0f` |
+| A purchase writes its entry and its price together, or neither | `33246a4` |
+| Data first: a failed refetch no longer replaces a working page | `b28a9a5` |
+| `withReplay` — a queued mutation applies once, however often it arrives | `eb401be` |
+| An identifier mintable without a secure context | `ecdd8e1` |
+| The five writes a shop composes are replay-safe | `5e31c5c` |
+| INV-2's consume half closed — the product is held while the guard decides | `910e941` |
+
+**Asked for mid-phase**, and two of the three reverse recorded decisions, so the
+plan was amended before anything was built (`017eea3`).
+
+| Unit | Commit |
+|---|---|
+| The React Compiler, measured before and after | `d4a6d13` |
+| The locale is validated before it reaches a dynamic import | `22a768c` |
+| One instant per render on the product page | `27452bf` |
+| `react-doctor` gates on errors, not on its score | `f75f321` |
+
+**The client half of offline.**
+
+| Unit | Commit |
+|---|---|
+| A refusal, a retry and a disagreement told apart | `5bca67f` |
+| The queue, in a `zustand` store | `0e84c91` |
+| The query client starts knowing whether there is a signal | `6292ce5` |
+| A queued change shows as done before it is sent | `d7a6f40` |
+| The drain, its triggers, and the shell that mounts them | `9994d40` |
+
+Filed in passing: INV-2's `transferStock` half, still open — its guard sits
+outside its transaction, and it is deliberately not replayable, so it never
+reaches the queue.
+
+**Still to come in this phase:** the sync indicator with the reconciliation
+prompt, ticking off without a signal, the service worker and its CSP, the
+`/offline` page, and the aeroplane-mode browser test.
 
 ### Phase 3 — Roles, and the security gap that outlived every phase
 
@@ -571,3 +623,20 @@ A KITCHEN account cannot reconcile: `adjustStock` is a `writeProcedure` and the
 matrix gives that role looking and consuming only. On the tablet the conflict
 is reported and names who can fix it, rather than offering a control the server
 would refuse. Offering a control that cannot work is worse than hiding one.
+
+**D45 — Two guards for one property is one guard too many.**
+The drain had a single-flight check in the queue *and* in the provider that
+mounts it. Breaking the provider's changed nothing, because the queue already
+owned the property — so it was a second thing to keep in step, and the copy is
+what rots. Removed, and the test that covers it now names where the guard
+actually lives rather than implying it is in the component. Recorded because
+the tell was a test that would not go red, which is the same signal as D42's
+gate that would not fire.
+
+**D46 — The React gate caught the commit that added it, twice over.**
+`react-doctor` landed four commits before the drain, and the drain's first
+version failed it: a ref assigned during render, which is wrong under a
+re-render React throws away and stops the compiler optimising the component.
+The same rule then caught the test file capturing a handle out of render.
+Both were mine, both were invisible to `tsc` and `oxlint`, and neither would
+have failed a test. That is the argument for the gate, made by the gate.
