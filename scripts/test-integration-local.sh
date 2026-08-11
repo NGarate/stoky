@@ -70,8 +70,26 @@ if [ ! -f "$COMPOSE_FILE" ]; then
   exit 1
 fi
 
+# Whether `db` or `cache` was already running before this script touched
+# anything.
+#
+# `cleanup` runs `docker compose down`, which removes the containers and the
+# network — and it used to do that whatever the state was when it started. So a
+# developer with services up, running the integration suite, got them taken away
+# underneath whatever they were doing next: the browser suite that follows fails
+# at its seed step with a hundred tests unrun, which reads as a catastrophe and
+# is a stopped container.
+#
+# Tearing down what this script started is right. Tearing down what it found is
+# not.
+ALREADY_RUNNING=false
+if docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null \
+    | grep -qE '^(db|cache)$'; then
+  ALREADY_RUNNING=true
+fi
+
 cleanup() {
-  if ! $KEEP_SERVICES; then
+  if ! $KEEP_SERVICES && ! $ALREADY_RUNNING; then
     docker compose -f "$COMPOSE_FILE" down >/dev/null 2>&1 || true
   fi
 }
@@ -80,7 +98,11 @@ if ! $KEEP_SERVICES; then
   trap cleanup EXIT
 fi
 
-echo "Starting local test services from $COMPOSE_FILE..."
+if $ALREADY_RUNNING; then
+  echo "Reusing the services already running from $COMPOSE_FILE (they will be left up)."
+else
+  echo "Starting local test services from $COMPOSE_FILE..."
+fi
 docker compose -f "$COMPOSE_FILE" up -d db cache
 
 echo "Waiting for services to be healthy..."

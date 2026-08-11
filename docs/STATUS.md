@@ -402,10 +402,13 @@ Two things that sequence surfaced, both operational rather than defects:
   regression. Re-run before investigating. This is the concrete cost of that
   entry: the gate `CLAUDE.md` requires before every commit is the gate it
   breaks.
-- **`verify:ci` stops the `db` and `cache` containers when it finishes**, unless
-  `KEEP_TEST_SERVICES=1`. The browser suite then fails at its `seed` step with
-  107 tests unrun, which reads as a catastrophe and is a stopped container.
-  Bring them back with `docker compose -f docker-compose.dev.yml up -d db cache`.
+- ~~**`verify:ci` stops the `db` and `cache` containers when it finishes.**~~
+  **Fixed.** It now tears down only what it started: if the services were
+  already running when it began, it leaves them up. Before, running the
+  integration suite took a developer's services away underneath whatever they
+  did next — the browser suite then failed at its `seed` step with 107 tests
+  unrun, which reads as a catastrophe and is a stopped container. Both paths are
+  tested.
 
 **One intermittent failure, diagnosed and upstream**
 - bun 1.3.14 intermittently **abandons a test body at a rejecting `await`**: the
