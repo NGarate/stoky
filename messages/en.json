@@ -279,6 +279,13 @@
     "noStock": "No stock",
     "stockAdded": "Stock added successfully",
     "stockConsumed": "Stock consumed successfully",
+    "productHeader": "Product",
+    "categoryHeader": "Category",
+    "totalStockHeader": "Total stock",
+    "statusHeader": "Status",
+    "noCategory": "No category",
+    "stockOk": "OK",
+    "consumeStock": "Use stock",
     "add": {
       "title": "Add stock",
       "intro": "Record what you have just brought home. Pick the product, say how much it is and, if you like, when it expires and where you put it.",

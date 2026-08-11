@@ -617,7 +617,7 @@ test.describe("Low stock, as the seeded household", () => {
     // The seed guarantees three: Leche entera at 2 of 6, Aceite at 1 of 2,
     // Café at 0 of 2. Named rather than counted — "three badges are showing"
     // passes just as well when they are attached to the wrong products.
-    const lowStock = page.getByText("Stock Bajo", { exact: false });
+    const lowStock = page.getByText(es.inventory.lowStock, { exact: false });
     await expect(lowStock.first()).toBeVisible();
 
     for (const product of [
@@ -626,7 +626,7 @@ test.describe("Low stock, as the seeded household", () => {
       "Café molido natural",
     ]) {
       await expect(
-        page.getByRole("row", { name: new RegExp(product) }).getByText("Stock Bajo"),
+        page.getByRole("row", { name: new RegExp(product) }).getByText(es.inventory.lowStock),
         `${product} is below its minimum in the seed and should be marked`,
       ).toBeVisible();
     }
@@ -634,7 +634,8 @@ test.describe("Low stock, as the seeded household", () => {
     // Arroz is at 5 of a minimum of 2. If everything were marked, the assertions
     // above would pass while meaning nothing.
     await expect(
-      page.getByRole("row", { name: /Arroz redondo/ }).getByText("Stock Bajo"),
+      page.getByRole("row", { name: /Arroz redondo/ }).getByText(es.inventory.lowStock),
     ).toHaveCount(0);
   });
 });
+

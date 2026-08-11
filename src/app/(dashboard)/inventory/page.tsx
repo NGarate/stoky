@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { ExpiringItems } from "@/components/inventory/ExpiringItems";
@@ -29,6 +30,7 @@ interface StockRow {
 }
 
 export default function InventoryPage(): JSX.Element {
+  const t = useTranslations("inventory");
   const query = api.inventory.getStockOverview.useQuery({ limit: 50 });
   const result = query.data;
 
@@ -42,7 +44,7 @@ export default function InventoryPage(): JSX.Element {
         error={query.error}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
-        title="Inventario"
+        title={t("title")}
       />
     );
   }
@@ -53,20 +55,20 @@ export default function InventoryPage(): JSX.Element {
     <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          Inventario
+          {t("title")}
         </h1>
         <div className="flex flex-wrap gap-2">
           <Link
             href="/inventory/add"
             className="inline-flex min-h-[48px] items-center rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:text-lg"
           >
-            Añadir Stock
+            {t("addStock")}
           </Link>
           <Link
             href="/inventory/consume"
             className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted md:text-lg"
           >
-            Consumir Stock
+            {t("consumeStock")}
           </Link>
         </div>
       </div>
@@ -87,10 +89,10 @@ export default function InventoryPage(): JSX.Element {
         <table className="w-full">
           <thead className="bg-muted text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 text-left">Producto</th>
-              <th className="px-4 py-3 text-left">Categoría</th>
-              <th className="px-4 py-3 text-right">Stock Total</th>
-              <th className="px-4 py-3 text-center">Estado</th>
+              <th className="px-4 py-3 text-left">{t("productHeader")}</th>
+              <th className="px-4 py-3 text-left">{t("categoryHeader")}</th>
+              <th className="px-4 py-3 text-right">{t("totalStockHeader")}</th>
+              <th className="px-4 py-3 text-center">{t("statusHeader")}</th>
             </tr>
           </thead>
           <tbody>
@@ -111,7 +113,7 @@ export default function InventoryPage(): JSX.Element {
                 </td>
                 <td className="px-4 py-3">
                   <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-sm">
-                    {product.category || "Sin categoría"}
+                    {product.category || t("noCategory")}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -156,7 +158,7 @@ export default function InventoryPage(): JSX.Element {
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:text-lg">
               <div>
-                <dt className="text-muted-foreground">Stock Total</dt>
+                <dt className="text-muted-foreground">{t("totalStockHeader")}</dt>
                 <dd className="mt-1">
                   <StockAmount
                     defaultUnit={product.defaultUnit}
@@ -166,9 +168,9 @@ export default function InventoryPage(): JSX.Element {
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Categoría</dt>
+                <dt className="text-muted-foreground">{t("categoryHeader")}</dt>
                 <dd className="mt-1 text-foreground">
-                  {product.category || "Sin categoría"}
+                  {product.category || t("noCategory")}
                 </dd>
               </div>
             </dl>
@@ -217,10 +219,12 @@ function StockStatus({
   isLowStock: boolean;
   totalStock: number;
 }): JSX.Element {
+  const t = useTranslations("inventory");
+
   if (isLowStock) {
     return (
       <span className="rounded border border-warn-foreground bg-card px-2 py-1 text-sm font-medium text-warn-foreground">
-        Stock Bajo
+        {t("lowStock")}
       </span>
     );
   }
@@ -228,14 +232,14 @@ function StockStatus({
   if (totalStock <= 0) {
     return (
       <span className="rounded bg-danger px-2 py-1 text-sm text-danger-foreground">
-        Sin Stock
+        {t("noStock")}
       </span>
     );
   }
 
   return (
     <span className="rounded bg-ok px-2 py-1 text-sm text-ok-foreground">
-      OK
+      {t("stockOk")}
     </span>
   );
 }

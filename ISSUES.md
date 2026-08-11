@@ -45,7 +45,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | A11Y-2 | Confirming a receipt line changes nothing on screen | ✅ Resolved |
 | UI-6 | The picker's options open under the bottom bar | ✅ Resolved (`0e74c32`) |
 | UI-7 | The review page's pending count never moves | ✅ Resolved |
-| I18N-2..7 | Wording and untranslated strings | 🟡 Open |
+| I18N-2..6 | Wording and untranslated strings | 🟡 Open |
+| I18N-7 | The low-stock badge is hardcoded | ✅ Resolved (Phase 4) |
 | I18N-8 | Both auth pages hardcoded, in the wrong two languages | 🔴 **OPEN** |
 | UI-8 | A failed query leaves two routes on a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-9 | Two routes show an empty state when the query failed | ✅ Resolved (Phase 4) |
@@ -1022,11 +1023,12 @@ work.
 
 ---
 
-### 🟡 I18N-7: The low-stock badge is hardcoded and disagrees with the catalogue
+### ✅ I18N-7: The low-stock badge is hardcoded and disagrees with the catalogue
 
 **File:** `src/app/(dashboard)/inventory/page.tsx`
 **Severity:** LOW
-**Status:** OPEN — found 2026-08-10 while giving the low-stock test a real assertion
+**Status:** RESOLVED in Phase 4 — found 2026-08-10 while giving the low-stock
+test a real assertion
 
 The badge renders the literal string `"Stock Bajo"`. The catalogue already has
 `inventory.lowStock` — "Stock bajo" / "Low stock" — and nothing reads it. So the
@@ -1037,6 +1039,20 @@ Same class as I18N-1 and I18N-5. Worth noting that `e2e/critical-paths.spec.ts`
 now asserts the literal, so whoever translates this has to update that
 assertion — which is the correct coupling, not an obstacle: the test should
 break when the visible string changes.
+
+**Resolution (Phase 4).** Fixing only the badge would have left the route half
+translated, which needs a second pass and is worse than either end state, so
+the whole of `/inventory` moved: title, actions, the four table headers, the
+card labels, the category fallback and all three status words. `lowStock` and
+`noStock` were already in both catalogues and read by nothing — those are now
+read rather than duplicated. Seven keys were genuinely missing and were added
+to both catalogues in the same commit.
+
+The E2E assertions now read `es.inventory.lowStock` instead of a literal, which
+is the coupling this entry asked for: the catalogue is the single place the
+string lives, and a reworded badge fails the test rather than passing it by
+accident. (Playwright's `getByText` is case-insensitive by default, so the
+capital-B disagreement would have gone on passing indefinitely.)
 
 ---
 

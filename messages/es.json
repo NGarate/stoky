@@ -279,6 +279,13 @@
     "noStock": "Sin stock",
     "stockAdded": "Stock añadido correctamente",
     "stockConsumed": "Stock consumido correctamente",
+    "productHeader": "Producto",
+    "categoryHeader": "Categoría",
+    "totalStockHeader": "Stock total",
+    "statusHeader": "Estado",
+    "noCategory": "Sin categoría",
+    "stockOk": "Correcto",
+    "consumeStock": "Consumir stock",
     "add": {
       "title": "Añadir stock",
       "intro": "Apunta lo que acabas de traer a casa. Elige el producto, di cuánto es y, si quieres, cuándo caduca y dónde lo has guardado.",
