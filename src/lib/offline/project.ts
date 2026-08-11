@@ -1,0 +1,132 @@
+import type { QueuedOp } from "./queue";
+
+/**
+ * What the screen shows: the server's answer with the unsent changes folded on
+ * top.
+ *
+ * **Derived from the queue rather than written into the cache**, and the
+ * difference matters. An optimistic cache write is a second copy of the same
+ * intention that can drift from the queue — roll one back and not the other and
+ * the screen and the queue disagree, with no way to tell which is right.
+ * Folding at render has one source: if it is in the queue it shows, and when it
+ * leaves the queue it stops showing, with nothing to keep in step.
+ *
+ * **This is also what stops a double count**, which is the largest correctness
+ * hole a queue like this has. Without it: someone ticks three items, iOS
+ * discards the tab, they reopen the app, the list renders the server's
+ * untouched rows — so the ticks look lost — and they tick again. The second set
+ * carries *different* keys, because they are genuinely new taps, so idempotency
+ * cannot catch them. Applied to `addStock`/`consumeStock` that is a real double
+ * count of stock.
+ */
+
+/** A shopping row as the server knows it, plus whether a change is in flight. */
+export interface ProjectedItem {
+  id: string;
+  isChecked: boolean;
+  /** True when an unsent change is responsible for the state shown. */
+  pending: boolean;
+}
+
+interface ServerItem {
+  id: string;
+  isChecked: boolean;
+}
+
+/**
+ * Fold the queue over one list's rows.
+ *
+ * Removals drop out, ticks apply, and an addition composed offline appears with
+ * the operation's own id — so it can be shown, but never mistaken for a row the
+ * server knows about.
+ */
+export function projectShoppingItems<T extends ServerItem>(
+  items: readonly T[],
+  pending: readonly QueuedOp[],
+  listId?: string,
+): (T & ProjectedItem)[] {
+  const projected = new Map<string, T & ProjectedItem>(
+    items.map((item) => [item.id, { ...item, pending: false }]),
+  );
+
+  for (const op of pending) {
+    const input = op.input as {
+      id?: unknown;
+      isChecked?: unknown;
+      shoppingListId?: unknown;
+    };
+
+    if (op.path === "shopping.updateItem" && typeof input.id === "string") {
+      const existing = projected.get(input.id);
+      if (existing && typeof input.isChecked === "boolean") {
+        projected.set(input.id, {
+          ...existing,
+          isChecked: input.isChecked,
+          pending: true,
+        });
+      }
+      continue;
+    }
+
+    if (op.path === "shopping.removeItem" && typeof input.id === "string") {
+      projected.delete(input.id);
+      continue;
+    }
+
+    if (op.path === "shopping.addItem") {
+      // Scoped to the list being looked at, or an item added to one list would
+      // appear in every list.
+      if (listId !== undefined && input.shoppingListId !== listId) continue;
+      projected.set(op.id, {
+        ...(op.input as unknown as T),
+        id: op.id,
+        isChecked: false,
+        pending: true,
+      });
+    }
+  }
+
+  return [...projected.values()];
+}
+
+/** Net stock per product id, as the screen should show it. */
+export function projectStockTotals(
+  totals: ReadonlyMap<string, number>,
+  pending: readonly QueuedOp[],
+): Map<string, number> {
+  const projected = new Map(totals);
+
+  for (const op of pending) {
+    const input = op.input as { productId?: unknown; quantity?: unknown };
+    if (typeof input.productId !== "string") continue;
+    if (typeof input.quantity !== "number") continue;
+
+    const current = projected.get(input.productId) ?? 0;
+
+    if (op.path === "inventory.addStock") {
+      projected.set(input.productId, round(current + Math.abs(input.quantity)));
+    } else if (op.path === "inventory.consumeStock") {
+      projected.set(input.productId, round(current - Math.abs(input.quantity)));
+    }
+  }
+
+  return projected;
+}
+
+/** Quantities are entered by people, to two decimals at most. */
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** The product ids a queued change would move, for highlighting a row. */
+export function pendingProductIds(pending: readonly QueuedOp[]): Set<string> {
+  const ids = new Set<string>();
+  for (const op of pending) {
+    if (op.path !== "inventory.addStock" && op.path !== "inventory.consumeStock") {
+      continue;
+    }
+    const productId = (op.input as { productId?: unknown }).productId;
+    if (typeof productId === "string") ids.add(productId);
+  }
+  return ids;
+}
