@@ -385,6 +385,19 @@ where it disagrees with this file, it is right.
   (SHOP-1). Exactly one of the two, whitespace not counting as a name; no
   existing row was in either state.
 
+**Production authentication was broken, and every suite was green.**
+Auth.js v5 defaults `trustHost` to false off Vercel and then refuses any request
+whose Host it cannot vouch for: `/api/auth/session` answered 500 `UntrustedHost`
+on a production build, so a deployed instance could not sign anybody in.
+Setting `NEXTAUTH_URL` correctly does **not** help — verified against a build
+whose value matched the server's own address exactly.
+
+Nothing caught it because `next dev` does not apply the check and every suite
+ran against `next dev`. `trustHost: true` is now set, with the trade written
+down (Traefik's `Host(...)` rule is what makes trusting the header safe here),
+and `e2e/auth.prod.spec.ts` guards it in the one config that serves the
+standalone artefact. Verified to fail without the fix.
+
 **Verified end to end on 2026-08-11**, at `2b148a2`, every gate in one sequence:
 
 | Gate | Result |

@@ -45,6 +45,28 @@ export class AuthUnavailableSignin extends CredentialsSignin {
 assertUsableSecret();
 
 export const authConfig: NextAuthConfig = {
+  /**
+   * Trust the Host header, because a reverse proxy is the only thing in front
+   * of this application.
+   *
+   * Auth.js v5 defaults this to false off Vercel, and then refuses any request
+   * whose Host it cannot vouch for — `UntrustedHost`, a 500 from
+   * `/api/auth/session`, and nobody can sign in. **Setting `NEXTAUTH_URL`
+   * correctly does not help**, which is what makes this worth a comment:
+   * verified against a production build with `NEXTAUTH_URL` matching the
+   * server's own address exactly, and it still refused.
+   *
+   * So a deployed instance could not authenticate anybody at all, while
+   * development and the browser suite — which run through `next dev`, where the
+   * check does not apply — passed throughout.
+   *
+   * The trade is real and acceptable here: trusting the header means a forged
+   * `Host` could steer a callback URL, and `docker-compose.prod.yml` puts
+   * Traefik in front with a `Host(...)` rule, so nothing reaches this process
+   * without matching the configured domain first. A deployment that exposes the
+   * container directly does not have that protection.
+   */
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   providers: [
     Credentials({

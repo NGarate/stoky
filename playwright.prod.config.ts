@@ -89,6 +89,15 @@ export default defineConfig({
     env: {
       NODE_ENV: "production",
       PORT,
+      // A real secret, because `src/lib/auth/secret.ts` refuses to serve in
+      // production with the example one — which is the point of that guard, and
+      // means this suite has to supply a genuine value rather than inherit a
+      // developer's placeholder. Not a secret in any meaningful sense: it signs
+      // sessions for a server that exists for ninety seconds.
+      NEXTAUTH_SECRET: "playwright-production-suite-secret-not-a-real-one-0001",
+      // Must match the address the tests use, or Auth.js compares it against
+      // the Host header and refuses. That comparison is why this suite exists.
+      NEXTAUTH_URL: BASE_URL,
     },
     // A cold `next build` on a slow machine, plus server start.
     timeout: 300_000,
