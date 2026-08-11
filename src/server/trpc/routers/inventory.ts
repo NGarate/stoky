@@ -232,36 +232,54 @@ export const inventoryRouter = createTRPCRouter({
         }
       }
 
-      const stockEntry = await ctx.db.stockEntry.create({
-        data: {
-          productId: input.productId,
-          quantity: Math.abs(input.quantity),
-          unit: input.unit,
-          expirationDate: input.expirationDate,
-          locationId: input.locationId,
-          operationType: "PURCHASE" as StockOperation,
-          note: input.note,
-          createdBy: userId,
-        },
-        include: {
-          product: true,
-          location: true,
-        },
-      });
+      /**
+       * The entry and its price, or neither.
+       *
+       * A purchase is one event told in two rows. Written separately, a failure
+       * between them leaves stock recorded at no price — which is invisible on
+       * the inventory screen and silently wrong on the price history, where the
+       * whole point is knowing what things cost.
+       *
+       * The bounds are explicit rather than Prisma's 2s/5s defaults. Phase 4
+       * drains a queued shop through here on reconnect, and a default that was
+       * chosen for one interactive request is the wrong ceiling for a burst.
+       */
+      const stockEntry = await ctx.db.$transaction(
+        async (tx) => {
+          const entry = await tx.stockEntry.create({
+            data: {
+              productId: input.productId,
+              quantity: Math.abs(input.quantity),
+              unit: input.unit,
+              expirationDate: input.expirationDate,
+              locationId: input.locationId,
+              operationType: "PURCHASE" as StockOperation,
+              note: input.note,
+              createdBy: userId,
+            },
+            include: {
+              product: true,
+              location: true,
+            },
+          });
 
-      // Create price record if price and storeId are provided
-      if (input.price && input.price > 0 && input.storeId) {
-        await ctx.db.priceRecord.create({
-          data: {
-            productId: input.productId,
-            storeId: input.storeId,
-            price: input.price,
-            unit: input.unit,
-            quantity: Math.abs(input.quantity),
-            currency: "EUR",
-          },
-        });
-      }
+          if (input.price && input.price > 0 && input.storeId) {
+            await tx.priceRecord.create({
+              data: {
+                productId: input.productId,
+                storeId: input.storeId,
+                price: input.price,
+                unit: input.unit,
+                quantity: Math.abs(input.quantity),
+                currency: "EUR",
+              },
+            });
+          }
+
+          return entry;
+        },
+        { maxWait: 5_000, timeout: 10_000 },
+      );
 
       return stockEntry;
     }),
