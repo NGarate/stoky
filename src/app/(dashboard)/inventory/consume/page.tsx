@@ -295,6 +295,7 @@ export default function ConsumeStockPage(): JSX.Element {
         ) : null}
 
         <ProductPicker
+          hint={t("productSelectHint")}
           value={product?.id ?? ""}
           onChange={handleProductChange}
           error={fieldErrors.product}

@@ -296,18 +296,20 @@
     "noCategory": "Sin categoría",
     "stockOk": "Correcto",
     "consumeStock": "Consumir stock",
-    "add": {
-      "title": "Añadir stock",
-      "intro": "Apunta lo que acabas de traer a casa. Elige el producto, di cuánto es y, si quieres, cuándo caduca y dónde lo has guardado.",
-      "backToInventory": "← Volver al inventario",
+    "picker": {
       "productSearchLabel": "Buscar producto",
       "productSearchPlaceholder": "Escribe parte del nombre",
       "productLabel": "Producto",
       "productPlaceholder": "Elige un producto",
       "productOption": "{name} — {brand}",
-      "productSelectHint": "Elige el producto al que quieres añadir stock.",
       "loadingProducts": "Cargando productos...",
-      "noProducts": "Ningún producto coincide con la búsqueda. Prueba con otras palabras o crea antes el producto.",
+      "noProducts": "Ningún producto coincide con la búsqueda. Prueba con otras palabras o crea antes el producto."
+    },
+    "add": {
+      "title": "Añadir stock",
+      "intro": "Apunta lo que acabas de traer a casa. Elige el producto, di cuánto es y, si quieres, cuándo caduca y dónde lo has guardado.",
+      "backToInventory": "← Volver al inventario",
+      "productSelectHint": "Elige el producto al que quieres añadir stock.",
       "quantityLabel": "Cantidad",
       "quantityHint": "Cuánto añades, en la unidad de abajo. Por ejemplo: 2.",
       "unitLabel": "Unidad",
@@ -373,7 +375,8 @@
       "successBody": "Has apuntado {quantity} {unit} de «{name}». Quedan {left} {unit}.",
       "successNextTitle": "¿Qué quieres hacer ahora?",
       "successConsumeMore": "Apuntar otro consumo",
-      "successViewInventory": "Ver el inventario"
+      "successViewInventory": "Ver el inventario",
+      "productSelectHint": "Elige el producto que se ha gastado."
     }
   },
   "receipts": {

@@ -296,18 +296,20 @@
     "noCategory": "No category",
     "stockOk": "OK",
     "consumeStock": "Use stock",
-    "add": {
-      "title": "Add stock",
-      "intro": "Record what you have just brought home. Pick the product, say how much it is and, if you like, when it expires and where you put it.",
-      "backToInventory": "← Back to inventory",
+    "picker": {
       "productSearchLabel": "Search for a product",
       "productSearchPlaceholder": "Type part of the name",
       "productLabel": "Product",
       "productPlaceholder": "Choose a product",
       "productOption": "{name} — {brand}",
-      "productSelectHint": "Choose the product you want to add stock to.",
       "loadingProducts": "Loading products...",
-      "noProducts": "No product matches your search. Try different words, or create the product first.",
+      "noProducts": "No product matches your search. Try different words, or create the product first."
+    },
+    "add": {
+      "title": "Add stock",
+      "intro": "Record what you have just brought home. Pick the product, say how much it is and, if you like, when it expires and where you put it.",
+      "backToInventory": "← Back to inventory",
+      "productSelectHint": "Choose the product you want to add stock to.",
       "quantityLabel": "Quantity",
       "quantityHint": "How much you are adding, in the unit below. For example: 2.",
       "unitLabel": "Unit",
@@ -373,7 +375,8 @@
       "successBody": "You recorded {quantity} {unit} of “{name}”. {left} {unit} left.",
       "successNextTitle": "What next?",
       "successConsumeMore": "Record another use",
-      "successViewInventory": "See the inventory"
+      "successViewInventory": "See the inventory",
+      "productSelectHint": "Choose the product that has been used up."
     }
   },
   "receipts": {

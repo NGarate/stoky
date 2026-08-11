@@ -22,6 +22,16 @@ interface ProductPickerProps {
   onChange: (product: PickedProduct | null) => void;
   /** Already-translated error message. Rendered inline and linked via aria-describedby. */
   error?: string;
+  /**
+   * The sentence under the field, already translated, supplied by the page.
+   *
+   * A prop rather than a key, because it is the one string here that depends on
+   * what the page is *for* — ISSUES.md UI-3 item 8. This component read
+   * `inventory.add.*` outright, so `/inventory/consume` told people to "elige
+   * el producto al que quieres **añadir** stock", which is the wrong verb on a
+   * page about using things up. Confirmed in a browser before it was fixed.
+   */
+  hint: string;
 }
 
 /**
@@ -32,8 +42,10 @@ interface ProductPickerProps {
  * and the filter above it keeps the option list short when a household has
  * hundreds of products.
  */
-export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
-  const t = useTranslations("inventory.add");
+export function ProductPicker({ value, onChange, error, hint }: ProductPickerProps) {
+  // The labels are the same wherever this is used, so they live in a namespace
+  // of their own rather than in whichever page happened to be written first.
+  const t = useTranslations("inventory.picker");
   const [search, setSearch] = useState("");
   // Keeps typing responsive: the query re-runs against the settled value.
   const deferredSearch = useDeferredValue(search);
@@ -63,7 +75,7 @@ export function ProductPicker({ value, onChange, error }: ProductPickerProps) {
     ? t("loadingProducts")
     : products.length === 0
       ? t("noProducts")
-      : t("productSelectHint");
+      : hint;
 
   return (
     <div className="space-y-4">
