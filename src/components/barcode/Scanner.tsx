@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { BarcodeScanner as BarcodeScannerComponent } from "@thewirv/react-barcode-scanner";
 
 interface BarcodeScannerProps {
@@ -14,6 +15,7 @@ export function BarcodeScanner({
   onError,
   isScanning = true,
 }: BarcodeScannerProps) {
+  const t = useTranslations("products.scan");
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -27,14 +29,14 @@ export function BarcodeScanner({
 
   const handleError = useCallback(
     (error?: Error) => {
-      const errMsg = error?.message || "Error desconocido";
+      const errMsg = error?.message || t("cameraErrorUnknown");
       console.error("Barcode scanner error:", errMsg);
       setScanError(errMsg);
       if (error) {
         onError?.(error);
       }
     },
-    [onError]
+    [onError, t]
   );
 
   // Check if device has torch capability
@@ -61,7 +63,7 @@ export function BarcodeScanner({
   if (!isScanning) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg bg-muted p-8">
-        <p className="text-muted-foreground">Escáner desactivado</p>
+        <p className="text-muted-foreground">{t("cameraOff")}</p>
       </div>
     );
   }
@@ -95,9 +97,9 @@ export function BarcodeScanner({
             onClick={() => setTorchEnabled(!torchEnabled)}
             className="absolute bottom-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
             aria-label={
-              torchEnabled ? "Apagar linterna" : "Encender linterna"
+              torchEnabled ? t("torchOff") : t("torchOn")
             }
-            title={torchEnabled ? "Apagar linterna" : "Encender linterna"}
+            title={torchEnabled ? t("torchOff") : t("torchOn")}
           >
             {torchEnabled ? (
               <svg
@@ -106,7 +108,7 @@ export function BarcodeScanner({
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <title>Apagar linterna</title>
+                <title>{t("torchOff")}</title>
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -121,7 +123,7 @@ export function BarcodeScanner({
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <title>Encender linterna</title>
+                <title>{t("torchOn")}</title>
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -136,16 +138,14 @@ export function BarcodeScanner({
 
       {scanError && (
         <div className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">
-          <p className="font-medium">Error al acceder a la cámara</p>
+          <p className="font-medium">{t("cameraErrorTitle")}</p>
           <p className="text-sm">{scanError}</p>
-          <p className="text-sm mt-2">
-            Asegúrate de permitir el acceso a la cámara e intenta de nuevo.
-          </p>
+          <p className="text-sm mt-2">{t("cameraErrorHint")}</p>
         </div>
       )}
 
       <p className="mt-4 text-center text-sm text-muted-foreground">
-        Coloca el código de barras dentro del rectángulo verde
+        {t("framingHint")}
       </p>
     </div>
   );

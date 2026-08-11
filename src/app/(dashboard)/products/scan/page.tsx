@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
 import { api } from "@/lib/trpc/client";
 
 export default function ScanPage() {
+  const t = useTranslations("products.scan");
   const router = useRouter();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
@@ -53,19 +55,19 @@ export default function ScanPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">Escanear Código de Barras</h1>
+        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
         <Link
           href="/products"
           className="text-primary hover:underline"
         >
-          ← Volver a productos
+          {t("backToProducts")}
         </Link>
       </div>
 
       {isProcessing ? (
         <div className="p-8 bg-muted rounded-lg text-center">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-lg font-medium">Procesando código...</p>
+          <p className="text-lg font-medium">{t("processing")}</p>
           <p className="text-muted-foreground">{scannedBarcode}</p>
         </div>
       ) : (
@@ -86,13 +88,13 @@ export default function ScanPage() {
                 }}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
               >
-                Escanear otro código
+                {t("scanAgain")}
               </button>
             </div>
           )}
 
           <div className="mt-8 p-4 bg-muted rounded-lg">
-            <h2 className="font-semibold mb-2 text-heading">Código manual</h2>
+            <h2 className="font-semibold mb-2 text-heading">{t("manualTitle")}</h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -108,14 +110,14 @@ export default function ScanPage() {
               <input
                 type="text"
                 name="barcode"
-                placeholder="Introducir código manualmente"
+                placeholder={t("manualPlaceholder")}
                 className="flex-1 px-4 py-2 rounded border border-input bg-card text-foreground"
               />
               <button
                 type="submit"
                 className="px-4 py-2 rounded border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
               >
-                Buscar
+                {t("manualSubmit")}
               </button>
             </form>
           </div>

@@ -238,6 +238,22 @@
       "actionsHint": "Los formularios de stock valen para todo el catálogo: tendrás que elegir «{name}» en la lista de productos.",
       "addStock": "Añadir stock de este producto",
       "consumeStock": "Consumir stock de este producto"
+    },
+    "scan": {
+      "title": "Escanear Código de Barras",
+      "backToProducts": "← Volver a productos",
+      "processing": "Procesando código...",
+      "scanAgain": "Escanear otro código",
+      "manualTitle": "Código manual",
+      "manualPlaceholder": "Introducir código manualmente",
+      "manualSubmit": "Buscar",
+      "cameraOff": "Escáner desactivado",
+      "framingHint": "Coloca el código de barras dentro del rectángulo verde",
+      "cameraErrorTitle": "Error al acceder a la cámara",
+      "cameraErrorUnknown": "Error desconocido",
+      "cameraErrorHint": "Asegúrate de permitir el acceso a la cámara e intenta de nuevo.",
+      "torchOn": "Encender linterna",
+      "torchOff": "Apagar linterna"
     }
   },
   "inventory": {

@@ -238,6 +238,22 @@
       "actionsHint": "The stock forms cover the whole catalogue: you will need to pick “{name}” from the product list.",
       "addStock": "Add stock of this product",
       "consumeStock": "Consume stock of this product"
+    },
+    "scan": {
+      "title": "Scan barcode",
+      "backToProducts": "← Back to products",
+      "processing": "Looking up the code...",
+      "scanAgain": "Scan another code",
+      "manualTitle": "Type the code",
+      "manualPlaceholder": "Enter the code by hand",
+      "manualSubmit": "Search",
+      "cameraOff": "Scanner off",
+      "framingHint": "Hold the barcode inside the green rectangle",
+      "cameraErrorTitle": "The camera could not be reached",
+      "cameraErrorUnknown": "Unknown error",
+      "cameraErrorHint": "Make sure the camera is allowed, then try again.",
+      "torchOn": "Turn the torch on",
+      "torchOff": "Turn the torch off"
     }
   },
   "inventory": {

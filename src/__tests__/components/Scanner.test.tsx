@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock, spyOn } from "bun:test";
-import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
+import { screen, cleanup, waitFor, act } from "@testing-library/react";
+import { renderWithIntl } from "../utils/render";
 import userEvent from "@testing-library/user-event";
 
 type ScannerProps = {
@@ -58,14 +59,14 @@ afterEach(cleanup);
 
 describe("BarcodeScanner", () => {
   it("shows a disabled placeholder when scanning is off", () => {
-    render(<BarcodeScanner onScan={() => {}} isScanning={false} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} isScanning={false} />);
 
     expect(screen.getByText("Escáner desactivado")).toBeInTheDocument();
     expect(screen.queryByTestId("barcode-scanner")).toBeNull();
   });
 
   it("mounts the camera view and framing hint while scanning", () => {
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     expect(screen.getByTestId("barcode-scanner")).toBeInTheDocument();
     expect(
@@ -74,14 +75,14 @@ describe("BarcodeScanner", () => {
   });
 
   it("tells the underlying scanner to scan", () => {
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     expect(lastScannerProps?.doScan).toBe(true);
   });
 
   it("reports a scanned barcode to onScan", () => {
     const onScan = mock((_barcode: string) => {});
-    render(<BarcodeScanner onScan={onScan} />);
+    renderWithIntl(<BarcodeScanner onScan={onScan} />);
 
     act(() => {
       lastScannerProps?.onSuccess("8410000000123");
@@ -93,7 +94,7 @@ describe("BarcodeScanner", () => {
   it("surfaces a camera error and forwards it to onError", () => {
     const onError = mock((_error: Error) => {});
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
-    render(<BarcodeScanner onScan={() => {}} onError={onError} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} onError={onError} />);
 
     const failure = new Error("Permission denied");
     act(() => {
@@ -110,7 +111,7 @@ describe("BarcodeScanner", () => {
   it("shows a fallback message when the error carries no detail", () => {
     const onError = mock((_error: Error) => {});
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
-    render(<BarcodeScanner onScan={() => {}} onError={onError} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} onError={onError} />);
 
     act(() => {
       lastScannerProps?.onError(undefined);
@@ -124,14 +125,14 @@ describe("BarcodeScanner", () => {
   });
 
   it("hides the error panel until something fails", () => {
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     expect(screen.queryByText("Error al acceder a la cámara")).toBeNull();
   });
 
   it("omits the torch control on devices without a torch", async () => {
     stubCamera({ torch: false });
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     await waitFor(() => {
       expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
@@ -141,7 +142,7 @@ describe("BarcodeScanner", () => {
 
   it("omits the torch control when camera access is refused", async () => {
     stubCamera({ reject: true });
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     await waitFor(() => {
       expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
@@ -151,7 +152,7 @@ describe("BarcodeScanner", () => {
 
   it("offers a torch toggle on capable devices", async () => {
     stubCamera({ torch: true });
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     expect(
       await screen.findByRole("button", { name: "Encender linterna" }),
@@ -160,7 +161,7 @@ describe("BarcodeScanner", () => {
 
   it("flips the torch label when toggled", async () => {
     stubCamera({ torch: true });
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     const toggle = await screen.findByRole("button", {
       name: "Encender linterna",
@@ -174,7 +175,7 @@ describe("BarcodeScanner", () => {
 
   it("does not yet drive the camera torch (see ISSUES.md DEBT-2)", async () => {
     stubCamera({ torch: true });
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Encender linterna" }),
@@ -188,7 +189,7 @@ describe("BarcodeScanner", () => {
 
   it("releases the camera track used for the capability probe", async () => {
     const { stop } = stubCamera({ torch: true });
-    render(<BarcodeScanner onScan={() => {}} />);
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
     await waitFor(() => {
       expect(stop).toHaveBeenCalled();
