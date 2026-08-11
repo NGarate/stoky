@@ -32,7 +32,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
 | UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
-| INV-1 | Expiring items report entry quantity, not net stock | 🔴 **OPEN** |
+| INV-1 | Expiring items report entry quantity, not net stock | 🟠 Write guards fixed (Phase 4); read half open |
+| INV-2 | The availability guards are read-then-write, no transaction | 🔴 **OPEN** |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
@@ -437,6 +438,21 @@ anything that is not that page — an API client, or the offline replay queue
 planned for Phase 4 — would corrupt stock. **Phase 4 must not build replay on
 top of this.**
 
+**A third location, found 2026-08-11 while fixing the second:** `transferStock`
+has it too, and this entry did not name it. Its guard filters the source
+location's entries by `quantity: { gt: 0 }`, so it counts what arrived at a
+shelf and not what left it — six in and four out offered six to move.
+
+**✅ The write guards are fixed** (Phase 4). Both `consumeStock` and
+`transferStock` now sum every entry rather than only the positive ones, which
+is the whole fix: the negative rows *are* the consumption. Pinned by
+`src/__tests__/integration/inventory.net-stock.test.ts`, six tests against a
+real PostgreSQL because the defect lived in a Prisma `where` clause and a
+mocked client would have returned whatever the test pretended. Verified failing
+first: 5 of the 6 go red with the router reverted.
+
+**Still open: the read half**, `getExpiringItems`, below.
+
 **Suggested fix:**
 Report net stock per product alongside the soonest expiry date, rather than
 per-entry quantities, and make `consumeStock` guard against net rather than
@@ -446,6 +462,36 @@ deliberate decision rather than a side effect.
 
 **Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
 until the number means what the screen says it means.
+
+---
+
+### 🔴 INV-2: The availability guards are read-then-write, with no transaction
+
+**File:** `src/server/trpc/routers/inventory.ts` (`consumeStock`,
+`transferStock`)  
+**Severity:** MEDIUM  
+**Status:** OPEN — found 2026-08-11 while fixing INV-1's write half
+
+Both procedures read the stock entries, sum them, compare, and *then* create a
+row. Nothing holds between the read and the write. Two calls that arrive
+together each see a net of 2, each pass a guard for 2, and both write: net −2.
+
+INV-1 made the guard measure the right number. It did not make the measurement
+hold, which is a different defect and a different fix — a transaction with the
+product row locked, or a database-level check.
+
+Filed rather than fixed in passing (PROGRESS.md D6): the fix is a transaction
+around a procedure that Phase 4 is about to wrap in idempotency handling
+anyway, and doing both at once would put two changes in one commit.
+
+**Why it matters more now than it did.** Phase 4's offline queue drains on
+reconnect, and the tRPC client batches: a shop composed in aeroplane mode can
+arrive as several consumptions of the same product in a single request.
+Sequential taps by one person become concurrent calls on the server. This is
+the exact shape that turns a latent race into a routine one.
+
+**Suggested fix:** take it with the idempotency work, which already needs a
+transaction around "check whether this key was seen, then apply".
 
 ---
 

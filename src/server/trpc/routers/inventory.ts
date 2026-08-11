@@ -185,12 +185,15 @@ export const inventoryRouter = createTRPCRouter({
         },
         include: {
           stockEntries: {
-            where: {
-              quantity: { gt: 0 },
-              ...(input.consumeFromLocationId && {
-                locationId: input.consumeFromLocationId,
-              }),
-            },
+            // Every entry, not just the positive ones. Consumption is recorded
+            // as a *separate* row with a negative quantity, so `gt: 0` here
+            // measured gross purchases and ignored everything ever used: six
+            // litres bought and four drunk read as six available, and the
+            // server would accept a consumption of five and drive stock to
+            // minus two (ISSUES.md INV-1).
+            where: input.consumeFromLocationId
+              ? { locationId: input.consumeFromLocationId }
+              : undefined,
             orderBy: { expirationDate: "asc" },
           },
         },
@@ -307,10 +310,11 @@ export const inventoryRouter = createTRPCRouter({
         },
         include: {
           stockEntries: {
-            where: {
-              locationId: input.fromLocationId,
-              quantity: { gt: 0 },
-            },
+            // Same defect as `consumeStock`, at a third location ISSUES.md
+            // INV-1 does not name: `gt: 0` counted what arrived at the source
+            // and not what left it, so a shelf with six in and four out
+            // offered six to move.
+            where: { locationId: input.fromLocationId },
           },
         },
       });
