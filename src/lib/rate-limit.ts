@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import Redis from "ioredis";
+import { closeValkey, valkey } from "@/lib/valkey";
 
 /**
  * Rate limiting — ISSUES.md CRITICAL-4, and OWASP ASVS V11.1.4 after it.
@@ -13,7 +13,8 @@ import Redis from "ioredis";
  * The counter lives in Valkey rather than in process memory because the
  * production compose file can run more than one app container, and a limiter
  * each replica keeps to itself multiplies the real limit by the replica count
- * without saying so.
+ * without saying so. The connection itself is `@/lib/valkey` — it used to be
+ * opened here, back when this was the only thing that needed one.
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
  * receipt upload, which is authenticated but expensive enough that an account
@@ -161,33 +162,6 @@ export class RateLimitUnavailableError extends Error {
   }
 }
 
-let client: Redis | null = null;
-
-function getClient(): Redis {
-  if (!client) {
-    const url = process.env.VALKEY_URL ?? "redis://localhost:6379";
-    client = new Redis(url, {
-      // Fail fast rather than hang: a sign-in must not sit waiting on a cache
-      // that is not coming back. `maxRetriesPerRequest` rejects the command
-      // once the connection has been down for that many attempts, and
-      // `commandTimeout` covers the case where the socket is open but nothing
-      // answers.
-      //
-      // The offline queue is deliberately left on. Turning it off rejects any
-      // command issued while the client is reconnecting, which is a normal
-      // transient state — it failed a test here by refusing a sign-in that had
-      // nothing wrong with it.
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-      commandTimeout: 2000,
-    });
-    // ioredis emits `error` on an unreachable server, and an unhandled 'error'
-    // event on an EventEmitter takes the process down.
-    client.on("error", () => {});
-  }
-  return client;
-}
-
 /**
  * Is the cache answering?
  *
@@ -197,16 +171,19 @@ function getClient(): Redis {
  * socket open for the life of the process.
  */
 export async function pingCache(): Promise<void> {
-  await getClient().ping();
+  await valkey().ping();
 }
 
-/** Test seam: drops the cached connection so a suite can exit cleanly. */
+/**
+ * Test seam: drops the cached connection so a suite can exit cleanly.
+ *
+ * Kept as a name of its own rather than pointing callers at `closeValkey`
+ * directly, because what a suite means by it is "let go of whatever the limiter
+ * is holding" — and that is still true if the limiter ever holds something
+ * else.
+ */
 export async function closeRateLimiter(): Promise<void> {
-  if (client) {
-    const closing = client;
-    client = null;
-    await closing.quit().catch(() => {});
-  }
+  await closeValkey();
 }
 
 /**
@@ -226,7 +203,7 @@ export async function consumeRateLimit(
   const key = `${limit.prefix}:${identifier}`;
 
   try {
-    const redis = getClient();
+    const redis = valkey();
     const count = await redis.incr(key);
 
     if (count === 1) {
@@ -269,7 +246,7 @@ export async function resetRateLimit(
   identifier: string,
 ): Promise<void> {
   try {
-    await getClient().del(`${limit.prefix}:${identifier}`);
+    await valkey().del(`${limit.prefix}:${identifier}`);
   } catch {
     // A counter that could not be cleared expires on its own within the
     // window. Failing the sign-in that just succeeded would be worse.
