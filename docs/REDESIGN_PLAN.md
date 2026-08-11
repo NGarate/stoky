@@ -802,7 +802,7 @@ unowned below, for the same reason as the iOS pass.
 | Item | Why it is here |
 |---|---|
 | The rating itself (§6) | Extend the Open Food Facts fields, compute, display, and behave well with no data and with non-food |
-| DEBT-3 | The OFF cache is a process-local `Map`; multi-instance deployments diverge |
+| ~~DEBT-3~~ | **Done.** Valkey-backed and shared across replicas, failing open — a cache it cannot reach means asking Open Food Facts, which is what a miss already means |
 | OCR-1 | Tesseract fetches language data from a CDN at first use, so the first scan on an air-gapped install fails |
 | T7 — an offline scan resolved later | Journey 5's "never a dead end". Needs local-id resolution, which leaks `local:` ids into the cache and into components |
 

@@ -8,7 +8,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Last Updated:** 2026-08-11  
 **Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
 INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-DEBT-3 and OCR-1, both owned by Phase 6.
+OCR-1, owned by Phase 6.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -29,7 +29,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | CRITICAL-4 | No rate limiting on auth | ✅ Resolved (Phase 3) |
 | DEBT-1 | Minimal password validation | ✅ Resolved (Phase 7 slice) |
 | DEBT-2 | Barcode scanner torch is inert | ✅ Resolved (Phase 4) |
-| DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
+| DEBT-3 | OpenFoodFacts in-memory cache | ✅ Resolved (Phase 7 slice) |
 | DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
 | DEBT-6 | The services layer still throws bare `Error` | ✅ Resolved (Phase 7 slice) |
 | DEBT-5 | Missing database indexes | ✅ Resolved (Phase 7 slice) |
@@ -1443,7 +1443,7 @@ would have let every torch assertion pass vacuously. Verified failing first:
 
 ---
 
-### 🟡 DEBT-3: OpenFoodFacts service uses in-memory cache
+### ✅ DEBT-3: OpenFoodFacts service uses in-memory cache
 
 **File:** `src/server/services/openFoodFacts.ts`  
 **Severity:** MEDIUM  
@@ -1477,6 +1477,25 @@ async getProductByBarcode(barcode: string) {
 ```
 
 **Priority:** Address in Phase 1 when implementing F5 (Barcode scanning)
+
+**Resolution.** `src/server/services/product-cache.ts`, backed by Valkey through
+the shared client in `src/lib/valkey.ts` — extracted from the rate limiter in
+its own commit, since two modules calling `new Redis()` would mean two sockets
+and two places to get the options wrong.
+
+Three decisions worth keeping:
+
+- **It fails open**, unlike the rate limiter beside it. The fallback for a cache
+  it cannot reach is to ask Open Food Facts, which is what a miss already means;
+  refusing would break scanning to protect an optimisation.
+- **`SCAN` on the prefix, not `KEYS *`.** It shares Valkey with the limiter, and
+  clearing the product cache must not drop a sign-in counter.
+- **Entries are parsed on the way out.** The cache outlives a deploy, so one
+  written by an older schema is a real possibility; it is discarded and
+  refetched rather than handed over with fields missing.
+
+The cache is injected rather than imported, so the unit tier still needs no
+database.
 
 ---
 

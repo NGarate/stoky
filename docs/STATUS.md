@@ -357,8 +357,10 @@ prevent, and it survived because nobody re-read the source it was describing.
   errors and a translator on the same middleware that handles Prisma's, so a
   missing row from a service reaches the client as `NOT_FOUND` — which the
   offline queue stops retrying instead of spending eight attempts on.
-- `openFoodFacts` caches in a process-local `Map`; multi-instance deployments
-  diverge. (DEBT-3)
+- ~~`openFoodFacts` caches in a process-local `Map`.~~ **Closed.** Valkey-backed
+  and shared across replicas, failing *open* — the opposite of the rate limiter
+  — because the fallback for an unreachable cache is to ask Open Food Facts,
+  which is what a miss already means.
 **Accessibility and interface**
 - ~~The location picker and several wording items are still hardcoded Spanish or
   inconsistent.~~ **Closed**, I18N-2 through I18N-6, one commit each.
