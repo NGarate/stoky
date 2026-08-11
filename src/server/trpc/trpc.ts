@@ -4,6 +4,7 @@ import superjson from "superjson";
 import type { Session } from "next-auth";
 import type { HouseholdRole, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { translatePrismaError, underlying } from "./prisma-errors";
 
 export const createTRPCContext = cache(
   async (opts: {
@@ -42,7 +43,30 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
 });
 
 export const createTRPCRouter = t.router;
-export const publicProcedure = t.procedure;
+
+/**
+ * Turn a database complaint into a code the caller can act on.
+ *
+ * On every procedure, because the alternative is remembering it per resolver
+ * and the one that gets forgotten is the one that matters. A resolver's own
+ * `TRPCError` passes through untouched: only errors Prisma raised and nobody
+ * caught are translated, and only the handful of codes that mean something
+ * specific — see `prisma-errors.ts`.
+ *
+ * It matters more than it did. Phase 4's queue reads the status to decide
+ * whether to retry, so an uncaught `P2025` arriving as a 500 makes the queue
+ * spend eight attempts on a row that no longer exists.
+ */
+const prismaErrors = t.middleware(async ({ next }) => {
+  const result = await next();
+  if (!result.ok) {
+    const translated = translatePrismaError(underlying(result.error));
+    if (translated) throw translated;
+  }
+  return result;
+});
+
+export const publicProcedure = t.procedure.use(prismaErrors);
 
 /**
  * The capability matrix of `docs/REDESIGN_PLAN.md` §5.2, as roles.
@@ -70,7 +94,7 @@ export const CAPABILITY_ROLES: Record<
  * irrelevant — `auth.me` and `auth.logout`. Everything that touches household
  * data wants `householdProcedure` or one of its narrower forms.
  */
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
   if (!ctx.session?.user) {
     throw new TRPCError({
       code: "UNAUTHORIZED",

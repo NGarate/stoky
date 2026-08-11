@@ -749,13 +749,18 @@ forgotten.
 
 ### Phase 5 — the next phase
 
+**Done since this list was compiled:** the database's own complaints are
+translated into codes a caller can act on (`P2025` → `NOT_FOUND`, `P2002` →
+`CONFLICT`, `P2003` → `BAD_REQUEST`, pool and transaction failures → `TIMEOUT`),
+as one middleware on every procedure. It was the highest-value item the Phase 4
+design left, because it is what makes `classify.ts`'s table *true*.
+
 | Item | Why it is here |
 |---|---|
 | **Screen A's layout** (§3) | Deferred from Phase 4. Shares vocabulary with the kitchen screen, so building them together is cheaper |
 | **A sign-out control** | There is none. `queue.purgeAll` and the shell-cache purge are security controls nothing can fire, and this phase's premise is a *shared tablet* |
 | **Provisioning a KITCHEN account** | The role is enforced and unprovisionable; only a database write creates one. Inherited from Phase 3 |
 | **Read persistence** | Three `@tanstack/*` packages, so opening with no signal shows the last data seen rather than "nothing saved yet" |
-| **T1 — map P2025 and P2002 in the routers** | The highest-value item the Phase 4 design left: a tick-off whose row is gone is a 500 today, which the queue classifies as transient and retries eight times |
 | **A place to see what did not save** | `/settings/unsaved`. The indicator names failures inline; a review route is better |
 | A11Y-1 | Saving a stock movement announces nothing. Pinned by a test that goes red when it is fixed |
 
