@@ -6,9 +6,13 @@ This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
 **Last Updated:** 2026-08-11  
-**Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
-INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-OCR-1, owned by Phase 6.
+**Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
+the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
+
+**Open: TEST-1 and DOCS-1**, which are the two that were never defects. TEST-1
+is "integration tests need a database", which is a property of testing a
+database application rather than something to fix; the runner addressed the part
+that was a cost. DOCS-1 is "no JSDoc on the tRPC procedures".
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -38,7 +42,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DOCS-1 | No API documentation | 🟡 Open |
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
 | UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
-| OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
+| OCR-1 | OCR downloads language data at runtime in production | ✅ Resolved (Phase 7 slice) |
 | INV-1 | Expiring items report entry quantity, not net stock | ✅ Resolved (Phase 4) |
 | INV-2 | The availability guards are read-then-write, no transaction | ✅ Resolved |
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
@@ -368,7 +372,7 @@ comm -13 \
 
 ---
 
-### 🟡 OCR-1: OCR downloads its language data at runtime in production
+### ✅ OCR-1: OCR downloads its language data at runtime in production
 
 **Files:** `src/server/services/ocr.ts`, `Dockerfile`  
 **Severity:** MEDIUM  
@@ -399,6 +403,33 @@ Bake the traineddata into the image and point tesseract.js at it with
 binary. It was a cache artefact that landed in git by accident and has been
 untracked; it never reached the production image, so removing it changes
 nothing about this issue.
+
+**Resolution.** The Dockerfile fetches the model once at build time, pinned to a
+tag and checksummed, into `/app/tessdata`; `TESSDATA_PATH` points the worker at
+it. `workerOptions()` in `ocr.ts` supplies `langPath`, `cachePath` and
+`gzip: false` — the last because the baked file is uncompressed and the default
+makes tesseract.js look for `spa.traineddata.gz`, find nothing, and go back to
+the network.
+
+**A different model, deliberately.** tesseract.js defaults to
+`@tesseract.js-data/spa/4.0.0` — over 12 MB on disk, carrying the legacy
+engine's data. This bakes in `tessdata_fast` at 2.3 MB, the LSTM model Tesseract
+recommends for printed text. Nothing here measures OCR accuracy: the parser
+tests run against fixed strings rather than OCR output. The trade is reasoned,
+not measured, and is the first thing to look at if receipt parsing degrades.
+
+**Development is unaffected**: with no model present, `workerOptions()` returns
+nothing and tesseract.js behaves as before. Pointing `langPath` at a directory
+without a model does not fall back to the CDN — it throws — so this had to be a
+lookup rather than a constant.
+
+**Verified, and the limit of that.** The image was built and run with
+`--network none`: the model is present with the pinned checksum, `TESSDATA_PATH`
+is set, and the built server bundle carries both the variable and the filename.
+A receipt has *not* been scanned inside the image — the library's main entry is
+bundled into Next's server chunks and cannot be driven standalone — so what
+stays unproven is that the bundled copy honours these options the same way the
+source does.
 
 ---
 

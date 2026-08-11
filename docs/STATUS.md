@@ -410,12 +410,18 @@ where it disagrees with this file, it is right.
   correctness one.
 
 **Operational**
-- OCR fetches its Tesseract language data from a CDN at first use, so the first
-  scan on a fresh container needs outbound internet and fails on an air-gapped
-  or read-only install. (OCR-1)
-- No error boundaries.
+- ~~OCR fetches its Tesseract language data from a CDN at first use.~~
+  **Closed.** The model is baked into the image, pinned and checksummed, and
+  `TESSDATA_PATH` points the worker at it, so a scan needs no network. It is a
+  *smaller* model than the CDN's default — a reasoned trade rather than a
+  measured one, since nothing here measures OCR accuracy, and the first thing to
+  look at if receipt parsing degrades.
+- ~~No error boundaries.~~ **Closed**, one inside the intl provider and one
+  outside every provider.
+- ~~No health-check endpoint.~~ **Closed.** `/api/health` checks Postgres and
+  Valkey; the image and Compose both use it.
 - No PWA. Deferred deliberately on iOS grounds, not overlooked.
-- No error tracking, monitoring or health-check endpoint.
+- No error tracking or monitoring beyond the container's own healthcheck.
 - No data export or backup.
 - Coverage is measured now, but **per tier, and the denominators differ**: each
   report counts only the files that tier loads, so the three numbers do not
