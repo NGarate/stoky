@@ -181,10 +181,19 @@ exist.
 
 What is still open, and worth knowing before publishing an instance:
 
-- **Only the two auth endpoints are limited.** Every other tRPC procedure is
-  unlimited, so an authenticated account can still make as many calls as it
-  likes. That is a smaller problem — it needs credentials first — but it is not
-  nothing on a shared household instance.
+- **Receipt upload is limited too**, at 30 per account per hour, counted
+  before the file is decoded. OWASP ASVS **V11.1.4** asks for anti-automation
+  on expensive operations, and this is the expensive one: up to 10 MB decoded,
+  re-encoded through Sharp, written to a volume, then handed to Tesseract. It
+  is counted per *account* rather than per address, because the caller is
+  already authenticated and a household behind one NAT would otherwise share a
+  budget for work each member does separately. A refused upload still counts —
+  otherwise sending rubbish and being rejected would be the cheapest way to
+  spend the server's CPU, and it would be outside the limit.
+- **Every other tRPC procedure is unlimited**, so an authenticated account can
+  still make as many ordinary calls as it likes. That is a smaller problem — it
+  needs credentials first, and those calls read rows rather than start OCR —
+  but it is not nothing on a shared household instance.
 - **The identifier is an IP address**, read from the last hop of
   `X-Forwarded-For` (the entry the proxy in front of the app writes, and the
   only one a client cannot forge). Everyone behind one NAT therefore shares a

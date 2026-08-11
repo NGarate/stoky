@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import Redis from "ioredis";
 
 /**
- * Rate limiting for the authentication endpoints — ISSUES.md CRITICAL-4.
+ * Rate limiting — ISSUES.md CRITICAL-4, and OWASP ASVS V11.1.4 after it.
  *
  * `CLAUDE.md` specifies 5 login attempts per 15 minutes and 3 registrations
  * per hour, per IP. Until now there was neither an implementation nor a cache
@@ -14,6 +14,12 @@ import Redis from "ioredis";
  * production compose file can run more than one app container, and a limiter
  * each replica keeps to itself multiplies the real limit by the replica count
  * without saying so.
+ *
+ * It started as auth-only and is no longer: `uploadRateLimit` below meters
+ * receipt upload, which is authenticated but expensive enough that an account
+ * looping on it is its own denial of service. The counting machinery is the
+ * same; what differs per limit is the number, the window, and what the counter
+ * is keyed on.
  */
 
 export interface RateLimit {
@@ -98,6 +104,30 @@ export function registerRateLimit(): RateLimit {
     "RATE_LIMIT_REGISTER_ATTEMPTS",
     "RATE_LIMIT_REGISTER_WINDOW_SECONDS",
     3,
+    60 * 60,
+  );
+}
+
+/**
+ * Receipt uploads, per account.
+ *
+ * OWASP ASVS V11.1.4 asks for anti-automation on expensive operations, and
+ * this is the expensive one: up to 10 MB decoded, re-encoded through Sharp,
+ * written to a volume, then handed to Tesseract. One call is seconds of CPU
+ * and a file on disk.
+ *
+ * Thirty an hour is well past what a person does — a month of receipts caught
+ * up in one sitting is under it, and a weekly shop is three — while capping an
+ * account at a couple of minutes of OCR per hour instead of an afternoon of
+ * it. See `src/server/trpc/throttle.ts` for why it counts accounts rather than
+ * addresses.
+ */
+export function uploadRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:upload",
+    "RATE_LIMIT_UPLOAD_ATTEMPTS",
+    "RATE_LIMIT_UPLOAD_WINDOW_SECONDS",
+    30,
     60 * 60,
   );
 }

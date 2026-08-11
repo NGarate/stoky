@@ -8,6 +8,8 @@ import { randomUUID } from "node:crypto";
 import { processReceiptOcr } from "@/server/services/ocr";
 import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
 import { matchReceiptItems, getItemCandidates } from "@/server/services/productMatcher";
+import { uploadRateLimit } from "@/lib/rate-limit";
+import { enforceRateLimit } from "../throttle";
 
 const VALID_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -26,6 +28,15 @@ export const receiptRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
       const householdId = ctx.householdId;
+
+      // Counted before anything is decoded, for the same reason sign-in counts
+      // before Argon2id: a limit that only counts the work it has already done
+      // is a way to ask for that work. ASVS V11.1.4.
+      await enforceRateLimit(
+        uploadRateLimit(),
+        user.id,
+        "Too many receipts uploaded. Try again in a little while.",
+      );
 
       // Validate MIME type
       if (!VALID_MIME_TYPES.includes(input.mimeType)) {

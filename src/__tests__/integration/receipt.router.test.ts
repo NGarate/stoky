@@ -268,6 +268,73 @@ describe("receipt.upload — what it refuses", () => {
   });
 });
 
+/**
+ * OWASP ASVS V11.1.4 — anti-automation on the expensive operation.
+ *
+ * Everything above refuses a *bad* upload. Nothing refused a good one arriving
+ * a thousand times, and this is the procedure where that matters: up to 10 MB
+ * decoded, re-encoded through Sharp, written to a volume, then handed to
+ * Tesseract. The rest of the router reads rows.
+ */
+describe("receipt.upload — how many", () => {
+  const ATTEMPTS = 3;
+  const original = process.env.RATE_LIMIT_UPLOAD_ATTEMPTS;
+
+  let throttled: Caller;
+  let bystander: Caller;
+
+  beforeAll(async () => {
+    process.env.RATE_LIMIT_UPLOAD_ATTEMPTS = String(ATTEMPTS);
+    // Fresh accounts, so these tests neither spend nor are spent by the budget
+    // the refusal tests above consumed.
+    throttled = (await callerFor(householdId, "OWNER")).caller;
+    bystander = (await callerFor(householdId, "OWNER")).caller;
+  });
+
+  afterAll(() => {
+    if (original === undefined) delete process.env.RATE_LIMIT_UPLOAD_ATTEMPTS;
+    else process.env.RATE_LIMIT_UPLOAD_ATTEMPTS = original;
+  });
+
+  /** Refused for being garbage — which is the point: it is counted anyway. */
+  const upload = (as: Caller) =>
+    as.receipt.upload({
+      fileBase64: Buffer.from("not an image").toString("base64"),
+      mimeType: "image/png",
+    });
+
+  it("stops counting attempts as free once the budget is spent", async () => {
+    // Each of these is refused with BAD_REQUEST *and* counted. Counting after
+    // validation would leave the cheapest way to spend the server's CPU — send
+    // rubbish, get refused, repeat — outside the limit entirely.
+    for (let i = 0; i < ATTEMPTS; i++) {
+      await expectCode(() => upload(throttled), "BAD_REQUEST");
+    }
+
+    await expectCode(() => upload(throttled), "TOO_MANY_REQUESTS");
+  });
+
+  it("answers with a code the write queue retries rather than discards", async () => {
+    // 429, not 403. `src/lib/offline/classify.ts` treats the first as
+    // transient and the second as permanent, so getting this wrong would make
+    // a queued receipt vanish instead of waiting.
+    let thrown: unknown;
+    try {
+      await upload(throttled);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect((thrown as TRPCError).code).toBe("TOO_MANY_REQUESTS");
+  });
+
+  it("leaves another account's budget alone", async () => {
+    // Keyed on the account rather than the address, so a household behind one
+    // NAT does not share a budget for work each member does separately.
+    await expectCode(() => upload(bystander), "BAD_REQUEST");
+  });
+});
+
 describe("receipt.getStatus", () => {
   it("reports progress over the lines that have been decided", async () => {
     const { receipt } = await seedReceipt({});
