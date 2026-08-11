@@ -209,6 +209,29 @@ export const inventoryRouter = createTRPCRouter({
         }
       }
 
+      // Verify the store the same way, and before anything is written.
+      //
+      // The price record below took `storeId` straight from input while
+      // `price.recordPrice` verified the identical write, so any MEMBER could
+      // attach a price record to another household's Store — a cross-household
+      // write with no interface in front of it. The product and the location
+      // above were already checked; the store was the one that was not.
+      if (input.storeId) {
+        const store = await prisma.store.findFirst({
+          where: {
+            id: input.storeId,
+            householdId: ctx.householdId,
+          },
+        });
+
+        if (!store) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Store not found",
+          });
+        }
+      }
+
       const stockEntry = await prisma.stockEntry.create({
         data: {
           productId: input.productId,

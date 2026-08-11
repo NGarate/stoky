@@ -34,6 +34,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
 | INV-1 | Expiring items report entry quantity, not net stock | ✅ Resolved (Phase 4) |
 | INV-2 | The availability guards are read-then-write, no transaction | 🔴 **OPEN** |
+| SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
@@ -490,6 +491,38 @@ reverted.
 
 **Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
 until the number means what the screen says it means.
+
+---
+
+### ✅ SEC-1: `addStock` wrote a price record against any household's store
+
+**File:** `src/server/trpc/routers/inventory.ts` (`addStock`)
+**Severity:** HIGH — cross-household write
+**Status:** RESOLVED in Phase 4 — found 2026-08-11 while designing the offline
+replay queue
+
+`inventory.addStock` optionally writes a `PriceRecord` alongside the stock
+entry, and took `storeId` straight from input. The product and the location in
+the same procedure were both verified against `ctx.householdId`. The store was
+not — and `price.recordPrice` verifies the identical write two files away.
+
+So any MEMBER could attach a price record to another household's `Store`,
+polluting a stranger's price history with prices they never paid. There is no
+interface that does it, which is exactly why nobody noticed: the control that
+was missing is the one a hidden form does not need.
+
+`REDESIGN_PLAN.md` Phase 7 item 2 names this class — "every query is checked
+for a `householdId` filter … it would be invisible in single-household
+testing". Found in Phase 4 rather than Phase 7 because Phase 4 makes this
+procedure replayable from a device-composed queue, so the review of what a
+non-page caller can reach happened early.
+
+**Resolution.** The store is verified the same way the location already was,
+and *before* anything is written — so a refusal leaves no stock entry behind
+either. Pinned by `src/__tests__/integration/inventory.store-isolation.test.ts`,
+four tests over two real households. Verified failing first: two go red with
+the check removed, and the second of them proves the price record really was
+created against the other household's store rather than merely being allowed.
 
 ---
 
