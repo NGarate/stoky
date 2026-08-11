@@ -9,11 +9,11 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: PROD-1, SHOP-1, TEST-1 and DOCS-1.** The first two were found while
-writing DOCS-1's docblocks, which is the argument for writing them: documenting
-a procedure honestly means establishing what it does, and four routers in, four
-of my own assumptions about this code had been wrong. The other two were never
-defects. TEST-1
+**Open: PROD-1, SHOP-1 and TEST-1.** The first two were found while writing
+DOCS-1's docblocks, which is the argument for having written them. TEST-1 —
+"integration tests need a database" — was never a defect so much as a property
+of testing a database application; the runner addressed the part that was a
+cost. TEST-1
 is "integration tests need a database", which is a property of testing a
 database application rather than something to fix; the runner addressed the part
 that was a cost. DOCS-1 is "no JSDoc on the tRPC procedures".
@@ -43,7 +43,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DEBT-5 | Missing database indexes | ✅ Resolved (Phase 7 slice) |
 | TEST-1 | Integration tests need a database | 🟡 Partly addressed |
 | TEST-2 | Mock external API calls | ✅ Resolved |
-| DOCS-1 | No API documentation | 🟡 Open |
+| DOCS-1 | No API documentation | ✅ Resolved (Phase 7 slice) |
 | DOCS-2 | No environment setup instructions | ✅ Resolved |
 | UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
 | OCR-1 | OCR downloads language data at runtime in production | ✅ Resolved (Phase 7 slice) |
@@ -2033,7 +2033,7 @@ beforeEach(() => {
 
 ## Documentation Gaps
 
-### 🟡 DOCS-1: Missing API documentation
+### ✅ DOCS-1: Missing API documentation
 
 **Severity:** LOW  
 **Status:** OPEN
@@ -2057,6 +2057,32 @@ searchByName: protectedProcedure
 ```
 
 **Priority:** Low, can be addressed in Phase 2
+
+**Resolution — 58 of 58, and not in the shape suggested above.** "Search for
+products by name" over `searchByName` restates the identifier and costs a reader
+a line. What each docblock carries instead is what the signature cannot say:
+what the procedure refuses, what it writes, which role may call it and why, and
+what about it will surprise somebody.
+
+Each router also gets a paragraph, which turned out to be where most of the
+value was. `inventory` opens by saying stock is a ledger rather than a number,
+because every oddity in that file follows from it. `receipt` opens with the
+state machine, because its ten procedures are edges of one and make little sense
+read individually. `shopping` says that three of its eleven are not about lists
+at all.
+
+**It found four defects in four routers**, which is the argument for doing it at
+all — documenting a procedure honestly means establishing what it does, and four
+of the assumptions this codebase's own author held were wrong:
+
+- `auth.me` has no callers, so the freshness rationale it would obviously be
+  given is fiction.
+- `addStock` verifies the store *before* its transaction, not inside it.
+- `product.delete` refuses rather than cascades, and blames the caller (PROD-1).
+- A shopping item with neither a product nor a name is accepted (SHOP-1).
+
+Each was checked against the code or a live database rather than against memory.
+A docblock that is confidently wrong is worse than none.
 
 ---
 

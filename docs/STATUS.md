@@ -376,6 +376,18 @@ card tier), A11Y-1 (a saved stock movement announcing nothing), I18N-7 (the
 hardcoded badge) and I18N-8 (both auth pages). `ISSUES.md` holds the detail;
 where it disagrees with this file, it is right.
 
+**Found while documenting, not yet fixed**
+- `product.delete` refuses to delete a product anything references — which is
+  defensible — but the P2003 reaches the caller as "That refers to something
+  that does not exist", a sentence about the opposite of what happened.
+  (PROD-1)
+- A shopping item with neither a product nor a custom name is accepted, and
+  arrives on the phone screen as an empty row that can still be ticked.
+  (SHOP-1)
+- `store.delete` has the same shape as PROD-1: no reference check, so a store
+  with price history fails on a foreign key rather than with a sentence.
+  `location.delete` one file away does check, and says which.
+
 **One unattributed test failure**
 - A single integration test failed once, on 2026-08-11, in a run immediately
   after `pnpm verify:local`. Its name was not captured, and eight subsequent
