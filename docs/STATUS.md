@@ -346,10 +346,8 @@ prevent, and it survived because nobody re-read the source it was describing.
   screen.
 
 **Correctness**
-- `transferStock`'s availability guard is read-then-write with its guard
-  outside its transaction, so two concurrent transfers can both pass it.
-  `consumeStock`'s half is fixed. It is not on any queue path and is not
-  replayable. (INV-2)
+- ~~`transferStock`'s availability guard is read-then-write.~~ **Closed.** Both
+  halves of INV-2 now guard inside a transaction with the product row held.
 - The services layer (`ocr`, `productMatcher`, `receiptParser`,
   `openFoodFacts`) still throws bare `Error`, so a procedure that calls one
   still surfaces `INTERNAL_SERVER_ERROR` for a missing row. The routers no

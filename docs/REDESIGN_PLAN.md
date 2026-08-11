@@ -810,9 +810,9 @@ unowned below, for the same reason as the iOS pass.
 
 | Item | Why it is here |
 |---|---|
+| ~~INV-2~~ | **Done.** `transferStock`'s guard is inside its transaction with the product row held, matching what `consumeStock` got in Phase 4 |
 | ~~DEBT-1~~ | **Done.** Twelve characters, no composition rules, common-password and identity checks — NIST SP 800-63B §5.1.1.2 rather than the four regexes ISSUES.md proposed. And a maximum, which was missing entirely: Argon2id at 64 MB per call was taking unbounded input on two unauthenticated endpoints |
 | The review itself (§ below) | Authorisation per procedure, household isolation, rate limiting verified, the offline queue as an attack surface, uploads, sessions, dependencies, headers in production |
-| INV-2's `transferStock` half | Its guard sits outside its transaction. Not replayable and not on any queue path, which is why it was left |
 | DEBT-5 | Missing indexes on `StockEntry.productId`, `PriceRecord.productId`, `Receipt.householdId`, `ReceiptItem.receiptId` |
 | Rate limiting's four gaps | Per IP and never per account (NIST SP 800-63B §5.2.2), `receipt.upload` unthrottled (ASVS V11.1.4), no `Retry-After` (RFC 9110 §10.2.3), refusals logged nowhere (ASVS V7.1.3) |
 

@@ -36,7 +36,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-1 | Four linked routes do not exist (404) | ✅ Resolved (Phase 1) |
 | OCR-1 | OCR downloads language data at runtime in production | 🟡 Open |
 | INV-1 | Expiring items report entry quantity, not net stock | ✅ Resolved (Phase 4) |
-| INV-2 | The availability guards are read-then-write, no transaction | 🟠 `consumeStock` fixed (Phase 4); `transferStock` open |
+| INV-2 | The availability guards are read-then-write, no transaction | ✅ Resolved |
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
@@ -529,12 +529,12 @@ created against the other household's store rather than merely being allowed.
 
 ---
 
-### 🔴 INV-2: The availability guards are read-then-write, with no transaction
+### ✅ INV-2: The availability guards are read-then-write, with no transaction
 
 **File:** `src/server/trpc/routers/inventory.ts` (`consumeStock`,
 `transferStock`)  
 **Severity:** MEDIUM  
-**Status:** OPEN — found 2026-08-11 while fixing INV-1's write half
+**Status:** RESOLVED — `consumeStock` in Phase 4, `transferStock` after it
 
 Both procedures read the stock entries, sum them, compare, and *then* create a
 row. Nothing holds between the read and the write. Two calls that arrive
@@ -568,11 +568,19 @@ forces the interleaving — the first caller gets a client that pauses between
 reading the stock and writing the consumption, which is exactly the window the
 lock closes — and goes red without the lock, twice in a row.
 
-**🟡 `transferStock` still has it.** Its guard sits outside its `$transaction`,
-which covers only the two writes, so fixing it means restructuring the
-procedure into an interactive transaction. It is not on Phase 4's path —
-`transferStock` is deliberately not replayable and never reaches the queue —
-so it is left open rather than done in passing.
+**✅ `transferStock` is fixed too.** Its guard sat outside its `$transaction`,
+which covered only the two writes — so two transfers could read the same
+figure, both pass, and both write, emptying a shelf twice. The whole procedure
+is now one interactive transaction that takes the same `FOR UPDATE` on the
+product row before reading. Locking the product rather than its entries matters
+more here than for a consumption: a transfer touches two locations, and every
+movement of that product now serialises whichever way it is going.
+
+Pinned by "cannot be emptied twice by two transfers at once", which forces the
+interleaving the same way the consume test does — a client that pauses between
+reading the stock and writing the movement. Verified failing twice in a row
+with that one lock removed and the consume lock left in place, so the test is
+pinned to its own subject.
 
 ---
 

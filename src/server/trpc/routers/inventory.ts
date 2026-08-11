@@ -476,92 +476,106 @@ export const inventoryRouter = createTRPCRouter({
         });
       }
 
-      // Verify product exists
-      const product = await ctx.db.product.findFirst({
-        where: {
-          id: input.productId,
-          householdId: ctx.householdId,
-        },
-        include: {
-          stockEntries: {
-            // Same defect as `consumeStock`, at a third location ISSUES.md
-            // INV-1 does not name: `gt: 0` counted what arrived at the source
-            // and not what left it, so a shelf with six in and four out
-            // offered six to move.
-            where: { locationId: input.fromLocationId },
-          },
-        },
-      });
+      /**
+       * Guard and write in one transaction, with the product held.
+       *
+       * The guard used to sit outside the `$transaction`, which covered only
+       * the two writes — so two transfers of the same stock could both read
+       * the same figure, both pass, and both write, emptying a shelf twice
+       * (ISSUES.md INV-2). `consumeStock`'s half was closed in Phase 4; this
+       * is the other, and it is the same lock on the same row for the same
+       * reason.
+       *
+       * Locking the product rather than its entries means every movement of
+       * that product serialises, whichever location it is going between —
+       * which is what a transfer needs, since it touches two.
+       */
+      return ctx.db.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
 
-      if (!product) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Product not found",
-        });
-      }
+          const product = await tx.product.findFirst({
+            where: {
+              id: input.productId,
+              householdId: ctx.householdId,
+            },
+            include: {
+              stockEntries: {
+                // Every entry, not only the positive ones: `gt: 0` counted
+                // what arrived at the source and not what left it, so a shelf
+                // with six in and four out offered six to move (INV-1).
+                where: { locationId: input.fromLocationId },
+              },
+            },
+          });
 
-      const availableInSource = product.stockEntries.reduce(
-        (sum, entry) => sum + entry.quantity,
-        0
+          if (!product) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Product not found",
+            });
+          }
+
+          const availableInSource = product.stockEntries.reduce(
+            (sum, entry) => sum + entry.quantity,
+            0,
+          );
+
+          if (input.quantity > availableInSource) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Not enough stock in source location",
+            });
+          }
+
+          const locations = await tx.storageLocation.findMany({
+            where: {
+              id: { in: [input.fromLocationId, input.toLocationId] },
+              householdId: ctx.householdId,
+            },
+          });
+
+          if (locations.length !== 2) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "One or more locations not found",
+            });
+          }
+
+          const fromEntry = await tx.stockEntry.create({
+            data: {
+              productId: input.productId,
+              quantity: -input.quantity,
+              unit: input.unit,
+              locationId: input.fromLocationId,
+              operationType: "TRANSFER" as StockOperation,
+              note:
+                input.note ||
+                `Transfer to ${locations.find((l) => l.id === input.toLocationId)?.name}`,
+              createdBy: userId,
+            },
+            include: { product: true, location: true },
+          });
+
+          const toEntry = await tx.stockEntry.create({
+            data: {
+              productId: input.productId,
+              quantity: input.quantity,
+              unit: input.unit,
+              locationId: input.toLocationId,
+              operationType: "TRANSFER" as StockOperation,
+              note:
+                input.note ||
+                `Transfer from ${locations.find((l) => l.id === input.fromLocationId)?.name}`,
+              createdBy: userId,
+            },
+            include: { product: true, location: true },
+          });
+
+          return { fromEntry, toEntry };
+        },
+        { maxWait: 5_000, timeout: 10_000 },
       );
-
-      if (input.quantity > availableInSource) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Not enough stock in source location",
-        });
-      }
-
-      // Verify locations exist
-      const locations = await ctx.db.storageLocation.findMany({
-        where: {
-          id: { in: [input.fromLocationId, input.toLocationId] },
-          householdId: ctx.householdId,
-        },
-      });
-
-      if (locations.length !== 2) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "One or more locations not found",
-        });
-      }
-
-      // Create transfer entries
-      const [fromEntry, toEntry] = await ctx.db.$transaction([
-        ctx.db.stockEntry.create({
-          data: {
-            productId: input.productId,
-            quantity: -input.quantity,
-            unit: input.unit,
-            locationId: input.fromLocationId,
-            operationType: "TRANSFER" as StockOperation,
-            note: input.note || `Transfer to ${locations.find((l) => l.id === input.toLocationId)?.name}`,
-            createdBy: userId,
-          },
-          include: {
-            product: true,
-            location: true,
-          },
-        }),
-        ctx.db.stockEntry.create({
-          data: {
-            productId: input.productId,
-            quantity: input.quantity,
-            unit: input.unit,
-            locationId: input.toLocationId,
-            operationType: "TRANSFER" as StockOperation,
-            note: input.note || `Transfer from ${locations.find((l) => l.id === input.fromLocationId)?.name}`,
-            createdBy: userId,
-          },
-          include: {
-            product: true,
-            location: true,
-          },
-        }),
-      ]);
-
-      return { fromEntry, toEntry };
     }),
 
   getStockHistory: householdProcedure

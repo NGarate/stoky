@@ -490,6 +490,85 @@ describe("transferStock measures what is left at the source", () => {
     expect(await netStock(cupboardId)).toBe(0);
   });
 
+  it("cannot be emptied twice by two transfers at once", async () => {
+    // INV-2's other half. The guard used to sit outside the transaction that
+    // covered the writes, so two transfers could read the same figure, both
+    // pass, and both write. Idempotency cannot help: they carry different
+    // keys because they are two real intentions.
+    const fast = await caller();
+
+    await fast.inventory.addStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 2,
+      unit: "L",
+      locationId: shelfId,
+      operationType: "PURCHASE",
+    });
+
+    // The interleaving is forced rather than hoped for, the same way the
+    // consume test does it: a client that pauses between reading the stock
+    // and writing the movement, which is exactly the window the lock closes.
+    let releaseTransfer = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseTransfer = resolve;
+    });
+    let holdingTheLock = false;
+    const pausing = prisma.$extends({
+      query: {
+        stockEntry: {
+          async create({ args, query }) {
+            holdingTheLock = true;
+            await gate;
+            return query(args);
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
+    const slow = await caller(pausing);
+
+    async function until(condition: () => boolean, what: string): Promise<void> {
+      for (let i = 0; i < 200; i += 1) {
+        if (condition()) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error(`timed out waiting for ${what}`);
+    }
+
+    const first = slow.inventory.transferStock({
+      productId,
+      quantity: 2,
+      unit: "L",
+      fromLocationId: shelfId,
+      toLocationId: cupboardId,
+    });
+
+    await until(() => holdingTheLock, "the first transfer to hold the lock");
+
+    const second = fast.inventory.transferStock({
+      productId,
+      quantity: 2,
+      unit: "L",
+      fromLocationId: shelfId,
+      toLocationId: cupboardId,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    releaseTransfer();
+
+    const results = await Promise.allSettled([first, second]);
+    const rejected = results.filter((r) => r.status === "rejected");
+
+    expect(rejected).toHaveLength(1);
+    expect(
+      ((rejected[0] as PromiseRejectedResult).reason as TRPCError).code,
+    ).toBe("CONFLICT");
+
+    // Without the lock both read 2, both pass the guard, and the shelf is -2.
+    expect(await netStock(shelfId)).toBe(0);
+    expect(await netStock(cupboardId)).toBe(2);
+  });
+
   it("refuses to move the same stock out twice", async () => {
     const api = await caller();
 
