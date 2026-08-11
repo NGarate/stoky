@@ -403,10 +403,10 @@ Each phase leaves the app usable and verifiable.
 | 2 — One design system | ✅ Complete |
 | 2b — Foundations of use | ✅ Complete except the manual screen-reader pass |
 | — Test infrastructure | ✅ Complete, and it was not in this plan |
-| 3 — Roles, and CRITICAL-4 | ▶ Next |
-| 4 — Phone screen, offline | Not started |
-| 4b — Client state, the compiler, a React gate | Not started |
-| 5 — Kitchen screen | Not started |
+| 3 — Roles, and CRITICAL-4 | ✅ Complete |
+| 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
+| 4b — Client state, the compiler, a React gate | ✅ Complete |
+| 5 — Kitchen screen, and Screen A's layout | ▶ Next |
 | 6 — Rating | Not started |
 | 7 — Security review | Not started |
 
@@ -622,11 +622,19 @@ most serious defect in the repository:
   makes authorisation refusals routine, so it is the phase where this stops
   being cosmetic.
 
-### Phase 4 — Phone screen, offline from the start
+### Phase 4 — Offline, and a shop that survives it ✅
 
-Shopping list, tick off, ± stepper, scan, plus the service worker and write
-queue. *Done when:* a full shop can be done in aeroplane mode and syncs
-correctly on reconnect.
+Shopping list, tick off, scan, plus the service worker and write queue.
+*Done when:* a full shop can be done in aeroplane mode and syncs correctly on
+reconnect. **Met**, and proven by `e2e/offline-shop.spec.ts`.
+
+**Screen A's layout moved to Phase 5.** This phase's title said "phone screen";
+its done-when said "a full shop in aeroplane mode". The second is what was
+built: a shop today is the existing `/shopping/[id]`, offline-capable. The
+layout — Scan on top, TO BUY, IN THE TROLLEY, the ± stepper — is a UX change
+that would have ridden on a correctness phase, and it belongs next to the
+kitchen screen it shares vocabulary with. Named here rather than counted as
+done.
 
 ### Phase 4b — Client state, the compiler, and a React gate
 
@@ -653,10 +661,21 @@ choosing a tool before the problem exists.
 **Not in scope:** moving server data out of TanStack Query, or a second store.
 §5.7 says why.
 
-### Phase 5 — Kitchen screen
+### Phase 5 — Kitchen screen, and Screen A's layout
 
 Expiries, one-tap use, useful data. *Done when:* it runs for a week on a tablet
 untouched except for using things up.
+
+**Inherited from Phase 4:**
+
+- **Screen A's layout** (§3), which Phase 4 deferred. The two screens share
+  vocabulary, so building them together is cheaper than building them apart.
+- **A sign-out control**, which does not exist anywhere in this application.
+  `queue.purgeAll` and the shell-cache purge are security controls nothing can
+  currently fire. This phase's premise is a *shared kitchen tablet*, which is
+  precisely where that matters.
+- **Read persistence** (the three `@tanstack/*` packages), so opening the app
+  with no signal shows the last data seen rather than "nothing saved yet".
 
 **Inherited from Phase 3:** the KITCHEN role is enforced but unprovisionable —
 nothing in the interface creates such an account. This phase owns that, and the

@@ -27,8 +27,9 @@ Rules for this log:
 | 2b — Foundations of use (audit) | ✅ Complete except the human screen-reader pass |
 | — Test infrastructure (unplanned) | ✅ Complete |
 | 3 — Roles, and CRITICAL-4 | ✅ Complete |
-| 4 — Phone screen, offline | ▶ In flight — groundwork done, offline layer next |
-| 5 — Kitchen screen | Not started |
+| 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
+| 4b — Client state, the compiler, a React gate | ✅ Complete |
+| 5 — Kitchen screen, and Screen A's layout | ▶ Next |
 | 6 — Rating | Not started |
 | 7 — Security review | Not started |
 
@@ -98,9 +99,33 @@ Filed in passing: INV-2's `transferStock` half, still open — its guard sits
 outside its transaction, and it is deliberately not replayable, so it never
 reaches the queue.
 
-**Still to come in this phase:** the sync indicator with the reconciliation
-prompt, ticking off without a signal, the service worker and its CSP, the
-`/offline` page, and the aeroplane-mode browser test.
+**The interface, and the proof.**
+
+| Unit | Commit |
+|---|---|
+| The sync indicator, and the reconciliation prompt | `2d3c42c` |
+| Ticking an item off without a signal | `928ae8c` |
+| The service worker, its CSP, and the gitignore that hid it | `8363f17` |
+| Registering it, and `/offline` to fall back to | `f7ca71c` |
+| A shop composed in aeroplane mode, applied once | `079d097` |
+
+**Phase 4 is complete against its done-when.** `e2e/offline-shop.spec.ts`
+composes a shop with the network off, shows it as done, reconnects, and proves
+the server applied it exactly once — including across a lost reply, where both
+attempts carry the same key.
+
+**Screen A's layout is not built**, and that is stated rather than counted.
+Phase 4's title said "phone screen"; its done-when said "a full shop in
+aeroplane mode". The second is met and the first is not: a shop today is the
+existing `/shopping/[id]`, which now works offline. The design that preceded
+the phase marked the layout as its droppable tail — a UX change riding on a
+correctness phase — and it moves to Phase 5, next to the kitchen screen it
+shares vocabulary with.
+
+Also moved to Phase 5, and uncomfortably: **a sign-out control**. There is none
+anywhere in this application, so `queue.purgeAll` and the shell-cache purge are
+security controls nothing can fire. The cache is purged on reaching `/login`,
+which is the only end-of-session signal that exists today.
 
 ### Phase 3 — Roles, and the security gap that outlived every phase
 
@@ -640,3 +665,29 @@ re-render React throws away and stops the compiler optimising the component.
 The same rule then caught the test file capturing a handle out of render.
 Both were mine, both were invisible to `tsc` and `oxlint`, and neither would
 have failed a test. That is the argument for the gate, made by the gate.
+
+**D47 — The browser found four defects every cheaper tier had passed, and that
+is the argument for keeping it.**
+A hydration mismatch (the queue read storage while its store was being built);
+a stored queue destroyed by enqueueing before hydrating; a retry timer keyed on
+a count that a failure does not change, so it fired once and never again; and
+`t("shopping.items")` against a catalogue with no such key. None of them could
+be seen by the 906 tests below the browser tier — the first three because they
+need a real page lifecycle, the fourth because `messages.test.ts` compares the
+two catalogues only with each other. The fourth is now caught in milliseconds
+by `message-usage.test.ts`, which scans every `t("…")` in the source. The first
+three are why five browser tests exist.
+
+**D48 — A locator that filters on state stops matching when the state changes.**
+`getByRole("checkbox").and(locator(":not(:checked)"))` resolves to nothing the
+instant it is clicked, so the assertion after the click fails on *correct*
+code. Read the state once, then address elements by position. Recorded because
+it is indistinguishable from a real failure and cost a full run to diagnose.
+
+**D49 — Phase 4 is closed against its done-when, not its title.**
+The title said "phone screen, offline from the start". The done-when said "a
+full shop can be done in aeroplane mode and syncs correctly on reconnect". The
+second is proven; Screen A's layout is not built and moves to Phase 5. Closing
+against the done-when and naming the gap is honest; closing against the title
+would require either building the layout or quietly redefining what was
+promised, and the second is how a plan stops being worth reading.

@@ -5,10 +5,13 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-08-10  
-**Status:** 3 critical issues resolved, 1 open; 5 debt items open.
-The interface findings opened during the Phase 2b design audit are closed except
-A11Y-1 and the wording items.
+**Last Updated:** 2026-08-11  
+**Status:** after Phase 4. 3 critical issues resolved; SEC-1 found and closed;
+INV-1, UI-9, DEBT-2, I18N-7 and TEST-4 closed. Open: INV-2's `transferStock`
+half, DEBT-1/3/5/6, OCR-1, A11Y-1, I18N-2..6 and I18N-8.
+
+Phase 4 also filed nothing new that it did not also close, except INV-2 — which
+it then closed by half.
 
 For overall project state and gate results, see `docs/STATUS.md`.
 

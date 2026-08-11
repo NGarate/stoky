@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-10
+Updated: 2026-08-11
 
 Single source of truth for where the project actually is.
 
@@ -12,35 +12,35 @@ say what measured it.
 
 ## Gate status
 
-Measured on 2026-08-10 against a live PostgreSQL and Valkey, and a dev server on
-port 3102, after Phase 3.
+Measured on 2026-08-11 against a live PostgreSQL and Valkey, and a dev server on
+port 3102, after Phase 4.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `corepack pnpm lint` | ✅ 0 warnings, 0 errors — 142 files, 101 rules |
-| Typecheck | `corepack pnpm typecheck` | ✅ clean |
-| Internal links | `corepack pnpm check:links` | ✅ 74 links against 24 routes, none broken |
-| Contrast | `corepack pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
-| Unit tests | `corepack pnpm test:unit` | ✅ 134 pass / 16 files |
-| Component tests | `corepack pnpm test:components` | ✅ 164 pass / 14 files |
-| Integration tests | `corepack pnpm test:integration` | ✅ 281 pass / 12 files |
-| Build | `pnpm build` | ✅ 25 routes, all server-rendered on demand — **45.8s cold** with the React Compiler on, 39.8s with it off |
-| Coverage | `bun test --coverage <dir>` | ℹ️ per tier, not a project figure — see *Known gaps* |
-| Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
-| Seed | `corepack pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ 89 pass / 0 fail, **2.9 min** |
-| Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
+| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — 208 files, 101 rules |
+| Typecheck | `pnpm typecheck` | ✅ clean |
+| React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
+| Internal links | `pnpm check:links` | ✅ 74 links against 25 routes, none broken |
+| Contrast | `pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
+| Unit tests | `pnpm test:unit` | ✅ 335 pass / 27 files |
+| Component tests | `pnpm test:components` | ✅ 252 pass / 22 files |
+| Integration tests | `pnpm test:integration` | ✅ 319 pass / 19 files |
+| Build | `pnpm build` | ✅ 26 routes — **45.8s cold** with the React Compiler on, 39.8s with it off |
+| Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all three |
+| Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
+| E2E | `bunx playwright test` | ✅ 96 pass / 0 fail, **3.3 min** |
+| Dependency audit | `pnpm audit` | ✅ no known vulnerabilities |
 
-**The React Compiler is on** (`reactCompiler: true`, `next@16.3`,
-`babel-plugin-react-compiler@1.0.0`, full mode). Its cost was measured rather
-than assumed: a cold build goes from **39.8s to 45.8s**, +15%, against a
-per-step ceiling of 300s. The browser suite is green with it on — which is the
-tier that matters, because the compiler changes what the built application
-does and no Bun-tier test sees it at all.
+**Use `pnpm`, not `corepack pnpm`.** On this machine corepack resolves 11.20.0
+against the `packageManager` pin of 11.19.0 and refuses to run; the plain
+binary is the pinned one. `verify-local.sh` already prefers `pnpm` and falls
+back to corepack, so the scripts are unaffected — only the commands in earlier
+versions of this file were wrong.
 
-`corepack pnpm verify:local` runs the first six — **17s** of a **600s budget**,
-which the script enforces. Every step also has its own ceiling, so a hang fails
-as a hang rather than as a long wait. `verify:ci` adds integration and build.
+`pnpm verify:local` runs the first seven — **17s** of a **600s budget**,
+which the script enforces — **31s** after Phase 4 added a React gate and 83
+tests. Every step also has its own ceiling, so a hang fails as a hang rather
+than as a long wait. `verify:ci` adds integration and build, and runs in 80s.
 
 **Ten minutes is the contract for all verification**, not just the browser
 suite. Every CI test job is capped at ten; Playwright's own `globalTimeout` is
@@ -51,8 +51,8 @@ maintained while telling nobody anything.
 
 ### End-to-end
 
-Seven spec files plus a `setup` project. **89 tests in 2.9 minutes**, against
-182 in 5.6 before the audit of 2026-08-11.
+Eight spec files plus a `setup` project. **96 tests in 3.3 minutes**. It was 89
+in 2.9 before Phase 4, and 182 in 5.6 before the audit that preceded it.
 
 The reduction is not fewer checks. It is the same checks placed in the tier
 that can answer them, and stopping the browser matrix from multiplying two
@@ -84,6 +84,7 @@ answer: composed target size, and whether a fixed bar is painted over an option.
 | `dynamic-routes.spec.ts` | Routes with an id, found by following links | chromium, Mobile Safari |
 | `location-picker.spec.ts` | Composed target size and occlusion | chromium, Mobile Safari |
 | `screen-reader.spec.ts` | The accessibility tree across four journeys | chromium — the tree comes over CDP |
+| `offline-shop.spec.ts` | A shop composed in aeroplane mode, applied once | chromium |
 
 `globalTimeout` is **5 minutes locally and 9 in CI**, where two workers share
 four cores with the dev server and failures retry twice. It was 9 everywhere,
@@ -158,10 +159,21 @@ These are recorded because each one produced a confident, wrong number.
 
 ## What exists
 
-**Backend — substantially complete.** 8 tRPC routers (`auth`, `product`,
-`location`, `inventory`, `receipt`, `store`, `price`, `shopping`) merged in
-`src/server/trpc/router.ts`. 8 Zod validation modules. 4 services: `ocr`,
-`receiptParser`, `productMatcher`, `openFoodFacts`.
+**Backend — substantially complete.** 9 tRPC routers (`auth`, `household`,
+`product`, `location`, `inventory`, `receipt`, `store`, `price`, `shopping`)
+merged in `src/server/trpc/router.ts`, **55 procedures** — earlier versions of
+this file said 45 and `capabilities.test.ts` said 44; both were counted before
+Phase 3 finished. 9 Zod validation modules. 4 services: `ocr`, `receiptParser`,
+`productMatcher`, `openFoodFacts`.
+
+**Offline — a shop works with no signal, and applies once.** Five writes carry
+an idempotency envelope and go through `withReplay`, which claims the key and
+applies the effect in one transaction, so "key claimed, effect missing" is
+unrepresentable. Changes made without a connection go into a `zustand` store
+persisted to `localStorage` through SuperJSON, are folded onto the screen so
+they show as done, and drain one at a time on reconnect. A refused consumption
+is not a failure but a question — see *Reconciliation* below. Proven by
+`e2e/offline-shop.spec.ts`, which is the phase's done-when.
 
 **Auth — working.** Real forms wired to Auth.js `signIn()` with Argon2id
 hashing, error mapping and i18n. Rate-limited per IP in Valkey since Phase 3 —
@@ -198,8 +210,18 @@ token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
 of every procedure against the matrix; the integration suite proves the
 refusals by calling the router as a kitchen account.
 
+**Reconciliation, not silent loss.** Stock has a floor: two people who each use
+the last unit cannot both be right, and the second to reach the server is
+refused. That refusal is surfaced as the question only a person can answer —
+how much is actually on the shelf — and the answer is written as an
+`adjustStock`. It does not interrupt: a conflict is discovered on reconnect,
+possibly with the phone in a pocket, so the sync indicator carries it and the
+dialog opens when the person chooses. A KITCHEN account is told who can fix it
+rather than shown a control the server would refuse. `REDESIGN_PLAN.md` §5.5.3.
+
 **Security posture.** Per-request CSP nonce in `src/middleware.ts` with
-`strict-dynamic`. CI pins every action by SHA, scans the image with Trivy before
+`strict-dynamic`, `worker-src` and `child-src` named explicitly, and `/sw.js`
+excluded from the matcher so the page policy does not become the worker's. CI pins every action by SHA, scans the image with Trivy before
 pushing it, fails on critical or high findings, and attaches an SBOM and a
 provenance attestation. `SECURITY.md` documents the model for a self-hosted
 deployment.
@@ -303,6 +325,12 @@ prevent, and it survived because nobody re-read the source it was describing.
 **Security**
 - Password policy is `min(8)` only, and with CRITICAL-4 closed this is the
   largest remaining gap in the auth surface. (DEBT-1)
+- **There is no sign-out control anywhere in this application.** `signOut` is
+  exported from `src/lib/auth.ts` and called nowhere. Phase 4 built
+  `queue.purgeAll` and a shell-cache purge that only a sign-out can fire, so
+  both are currently dead code — a security control nothing can trigger. The
+  cache is purged on reaching `/login`, which is the only end-of-session signal
+  that exists. Phase 5 owns this, and it is uncomfortable there.
 - Rate limiting covers the two auth endpoints and nothing else, and is per IP
   rather than per account — NIST SP 800-63B §5.2.2 asks for the latter, and a
   per-IP limit alone is defeated by a distributed guess. `receipt.upload` runs
@@ -319,8 +347,10 @@ prevent, and it survived because nobody re-read the source it was describing.
   screen.
 
 **Correctness**
-- `getExpiringItems` reports entry quantity rather than net stock, so a fully
-  consumed batch still appears as expiring. (INV-1)
+- `transferStock`'s availability guard is read-then-write with its guard
+  outside its transaction, so two concurrent transfers can both pass it.
+  `consumeStock`'s half is fixed. It is not on any queue path and is not
+  replayable. (INV-2)
 - The services layer (`ocr`, `productMatcher`, `receiptParser`,
   `openFoodFacts`) still throws bare `Error`, so a procedure that calls one
   still surfaces `INTERNAL_SERVER_ERROR` for a missing row. The routers no
@@ -341,6 +371,26 @@ prevent, and it survived because nobody re-read the source it was describing.
   pinned by a test that goes red when it is fixed.)
 - The location picker, the low-stock badge and several wording items are still
   hardcoded Spanish or inconsistent. (I18N-2 through I18N-7)
+
+**Offline, honestly**
+- **The service worker is not exercised by any test.** It registers only when
+  `NODE_ENV` is `production`, and the browser suite runs against `pnpm dev`. Its
+  classifier, its write barrier and its gitignore status are checked as source
+  facts; that a real `install` populates a real cache is not checked anywhere.
+  A production build driven by Playwright would close this and is not done.
+- **iOS Safari is unverified.** Playwright's WebKit is not iOS Safari, and §5.4
+  defers installability on iOS grounds specifically. The queue, the storage and
+  the worker all need a pass on a real device, and that pass must be dated here
+  rather than implied by a green suite.
+- The 2,500 ms navigation timeout in `public/sw.js` is a guess calibrated on
+  "supermarket lie-fi", not a measurement.
+- Read persistence is **not** implemented: opening the app with no signal shows
+  "nothing saved yet" rather than the last data seen. A shop that *starts*
+  online works without it, which is why it was dropped from this phase's must
+  list. It needs three `@tanstack/*` packages.
+- Cross-tab locking is absent. Two tabs draining at once is *safe* because the
+  same key applies once, so it is an efficiency question rather than a
+  correctness one.
 
 **Operational**
 - OCR fetches its Tesseract language data from a CDN at first use, so the first
@@ -373,15 +423,34 @@ taken without asking are in `docs/PROGRESS.md`.
 | 2 — One design system | ✅ Complete |
 | 2b — Foundations of use | ✅ Complete except the manual screen-reader pass |
 | 3 — Roles, rate limiting | ✅ Complete |
-| 4 — Phone screen, offline | Next |
-| 5 — Kitchen screen | Not started |
+| 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
+| 4b — Client state, the compiler, a React gate | ✅ Complete |
+| 5 — Kitchen screen, and Screen A's layout | Next |
 | 6 — Product rating | Not started |
 | 7 — Security review | Not started |
+
+**What "complete against its done-when" means here, exactly.** Phase 4's test
+was "a full shop can be done in aeroplane mode and syncs correctly on
+reconnect", and `e2e/offline-shop.spec.ts` proves it. Its *title* also said
+"phone screen", and Screen A's layout — Scan on top, TO BUY, IN THE TROLLEY —
+is **not** built: a shop today is the existing `/shopping/[id]`, which now
+works offline. The design that preceded this phase marked the layout as the
+droppable tail on the grounds that it is a UX change riding on a correctness
+phase, and it moves to Phase 5, where it sits next to the kitchen screen it
+shares vocabulary with. Named rather than quietly counted as done.
 
 Journey 1 of `docs/SMOKE_JOURNEYS.md` passes. The rest are tagged with the phase
 that makes them passable.
 
 ### Environment notes
+
+- Use `pnpm`, not `corepack pnpm`: corepack resolves 11.20.0 here against a
+  pin of 11.19.0 and refuses to run.
+- `pnpm prisma` commands need `DATABASE_URL` exported. Prisma 6 with a
+  `prisma.config.ts` no longer loads `.env` itself and says so. `set -a; . ./.env; set +a`.
+- `scripts/test-integration-local.sh` stops the compose services when it
+  finishes unless `KEEP_TEST_SERVICES=1`. Running it and then `db:seed` fails
+  with "can't reach database" for that reason and no other.
 
 - The `docker` group includes this user, but a login session started before that
   change will not have it. Re-login, or prefix with `sg docker -c "..."`.
