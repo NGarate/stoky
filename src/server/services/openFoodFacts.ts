@@ -1,17 +1,10 @@
 import { z } from "zod";
 import { UpstreamError } from "./errors";
+import { valkeyProductCache, type ProductCache } from "./product-cache";
 
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
 const OFF_USER_AGENT = "Stoky/1.0 (contact@stoky.app)";
 
-// Cache TTL: 30 days for product data
-const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-// In-memory cache for development (should use Valkey/Redis in production)
-const cache = new Map<
-  string,
-  { data: OpenFoodFactsProduct; timestamp: number }
->();
 
 const offProductSchema = z.object({
   code: z.string(),
@@ -46,16 +39,28 @@ export type OpenFoodFactsResponse = z.infer<typeof offResponseSchema>;
 
 export class OpenFoodFactsClient {
   /**
+   * Where lookups are remembered — ISSUES.md DEBT-3.
+   *
+   * Valkey by default, so replicas share one answer instead of each fetching
+   * the same barcode and disagreeing after an upstream edit. Injectable because
+   * the unit tier must not need a service running; see `product-cache.ts`.
+   */
+  constructor(private readonly cache: ProductCache = valkeyProductCache) {}
+
+  /**
    * Fetch product by barcode from Open Food Facts API
    */
   async getProductByBarcode(
     barcode: string
   ): Promise<OpenFoodFactsProduct | null> {
-    // Check cache first
-    const cacheKey = `off:${barcode}`;
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return cached.data;
+    const cached = await this.cache.get(barcode);
+    if (cached !== null) {
+      // Parsed rather than trusted. The cache is shared and outlives a deploy,
+      // so an entry written by an older shape of this schema would otherwise
+      // reach a caller as a valid product with fields missing.
+      const revived = offProductSchema.safeParse(JSON.parse(cached));
+      if (revived.success) return revived.data;
+      await this.cache.delete(barcode);
     }
 
     try {
@@ -79,11 +84,7 @@ export class OpenFoodFactsClient {
         return null;
       }
 
-      // Cache the result
-      cache.set(cacheKey, {
-        data: parsed.product,
-        timestamp: Date.now(),
-      });
+      await this.cache.set(barcode, JSON.stringify(parsed.product));
 
       return parsed.product;
     } catch (error) {
@@ -167,18 +168,14 @@ export class OpenFoodFactsClient {
     return "unit";
   }
 
-  /**
-   * Clear cache for a specific barcode
-   */
-  clearCache(barcode: string): void {
-    cache.delete(`off:${barcode}`);
+  /** Forget one barcode. */
+  async clearCache(barcode: string): Promise<void> {
+    await this.cache.delete(barcode);
   }
 
-  /**
-   * Clear all cache
-   */
-  clearAllCache(): void {
-    cache.clear();
+  /** Forget every barcode this application cached. */
+  async clearAllCache(): Promise<void> {
+    await this.cache.clear();
   }
 }
 

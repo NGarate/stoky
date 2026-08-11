@@ -13,9 +13,12 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
   let client: OpenFoodFactsClient;
   const fetchSpy = mock<typeof fetch>();
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // The real Valkey-backed cache, which is what makes this the integration
+    // tier: DEBT-3 moved the cache out of process memory precisely so replicas
+    // share it, and a double here would test the double.
     client = new OpenFoodFactsClient();
-    client.clearAllCache();
+    await client.clearAllCache();
     fetchSpy.mockClear();
     Object.defineProperty(fetchSpy, 'preconnect', {
       value: () => Promise.resolve(),
@@ -117,7 +120,11 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       const firstResult = await client.getProductByBarcode("1234567890123");
       const secondResult = await client.getProductByBarcode("1234567890123");
 
-      expect(firstResult).toBe(secondResult);
+      // `toEqual`, not `toBe`. The old in-memory cache handed every caller the
+      // same object, so identity held by accident; the Valkey one serialises,
+      // so each read is a fresh copy. That is the better behaviour — see the
+      // test below — and asserting identity was asserting the implementation.
+      expect(firstResult).toEqual(secondResult);
     });
 
     it("should handle API errors gracefully", async () => {
@@ -372,7 +379,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       );
 
       await client.getProductByBarcode("1234567890123");
-      client.clearCache("1234567890123");
+      await client.clearCache("1234567890123");
 
       fetchSpy.mockClear();
 
@@ -388,6 +395,28 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
+    it("does not let one caller's edits reach the next", async () => {
+      // DEBT-3's quiet improvement. The `Map` handed out a shared reference, so
+      // a caller that mutated the product it got — to normalise a unit, say —
+      // changed what every later caller saw, for thirty days, on that replica
+      // only. Serialising through the cache makes that impossible.
+      fetchSpy.mockResolvedValue(
+        createMockResponse({
+          code: "1234567890123",
+          product: { code: "1234567890123", product_name: "Leche entera" },
+          status: 1,
+          status_verbose: "product found",
+        })
+      );
+
+      const first = await client.getProductByBarcode("1234567890123");
+      (first as { product_name?: string }).product_name = "mutated";
+
+      const second = await client.getProductByBarcode("1234567890123");
+
+      expect(second?.product_name).toBe("Leche entera");
+    });
+
     it("should clear all cache", async () => {
       fetchSpy.mockResolvedValue(
         createMockResponse({
@@ -398,7 +427,7 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       );
 
       await client.getProductByBarcode("1234567890123");
-      client.clearAllCache();
+      await client.clearAllCache();
 
       fetchSpy.mockClear();
 

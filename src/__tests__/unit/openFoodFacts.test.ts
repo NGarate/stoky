@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { OpenFoodFactsClient, openFoodFacts } from "@/server/services/openFoodFacts";
+import { memoryProductCache } from "@/server/services/product-cache";
 
 describe("OpenFoodFacts Service", () => {
   let client: OpenFoodFactsClient;
 
   beforeEach(() => {
-    client = new OpenFoodFactsClient();
-    client.clearAllCache();
+    // The in-memory double, not Valkey. DEBT-3 moved the real cache into
+    // Valkey, and `CLAUDE.md` defines this tier as needing no database — a
+    // client that reached for one here would either fail on a clean machine or,
+    // worse, pass while quietly depending on a service being up.
+    client = new OpenFoodFactsClient(memoryProductCache());
   });
 
   describe("extractUnit", () => {
@@ -80,7 +84,7 @@ describe("OpenFoodFacts Service", () => {
       const { calls, restore } = stubFetch();
       try {
         await client.getProductByBarcode(barcode);
-        client.clearCache(barcode);
+        await client.clearCache(barcode);
         await client.getProductByBarcode(barcode);
 
         expect(calls).toHaveLength(2);
@@ -93,7 +97,7 @@ describe("OpenFoodFacts Service", () => {
       const { calls, restore } = stubFetch();
       try {
         await client.getProductByBarcode(barcode);
-        client.clearAllCache();
+        await client.clearAllCache();
         await client.getProductByBarcode(barcode);
 
         expect(calls).toHaveLength(2);
