@@ -8,7 +8,7 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Last Updated:** 2026-08-11  
 **Status:** after Phase 5. 3 critical issues resolved; SEC-1 found and closed;
 INV-1, INV-2, UI-9, DEBT-1, DEBT-2, I18N-7, TEST-4 and A11Y-1 closed. Open:
-DEBT-3, OCR-1 and UI-3.
+DEBT-3 and OCR-1, both owned by Phase 6.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -43,7 +43,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | INV-2 | The availability guards are read-then-write, no transaction | ✅ Resolved |
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
-| UI-3 | Assorted validation and a11y gaps found building the add-stock route | 🟡 Open |
+| UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -629,11 +629,14 @@ elsewhere in the tree.
 
 ---
 
-### 🟡 UI-3: Validation and accessibility gaps found while building add-stock
+### ✅ UI-3: Validation and accessibility gaps found while building add-stock
 
-**Items 4, 5 and 6 are closed; 1, 2, 3, 7 and 8 remain open.** The three closed
-ones went with UI-4, Phase 2 and the target-size sweep respectively. What is left
-is validation shape and hardcoded Spanish, not accessibility.
+**All eight are closed.** 4, 5 and 6 went with UI-4, Phase 2 and the target-size
+sweep; 3 and 7 with Phase 4 and I18N-5; 1, 2 and 8 in Phase 7's slice.
+
+This header disagreed with the footer for a while — it listed item 7 as open
+while "Closed by" already credited it to Phase 4 — which is what a numbered
+list maintained in two places does.
 
 **Files:** `src/server/trpc/routers/inventory.ts`,
 `src/components/inventory/LocationPicker.tsx`,
@@ -682,7 +685,22 @@ reason that page avoids the shared primitives.
    quieres **añadir** stock" — the wrong verb. Confirmed in a browser. The
    namespace should be a prop.
 
-**Closed by:** Phase 2 (items 5, 6), Phase 3 (items 1, 2), Phase 4 (3, 4, 7).
+**Closed by:** Phase 2 (items 5, 6), Phase 4 (items 4, 7), I18N-5 (item 3),
+Phase 7's slice (items 1, 2, 8).
+
+**Items 1 and 2, resolved together**, because they were one defect: a single
+`stockEntrySchema` describing a database row rather than what each procedure is
+asked to do. It required an `operationType` every handler ignored — two call
+sites carried comments saying so — and its `quantity` was a bare `z.number()`
+laundered by `Math.abs`, so `-5` on `addStock` booked `+5`. Three schemas now:
+`addStock` and `consumeStock` take a magnitude, `adjustStock` takes a signed
+delta because `ReconcileDialog` sends `actual - netStock`. `Math.abs` went with
+them, or the new guard would never have been exercised.
+
+**Item 8, resolved differently from the suggestion.** A `namespace` prop would
+have meant seven duplicate keys per page to vary one of them. The seven shared
+labels moved to `inventory.picker`; the one sentence that depends on what the
+page is for is a prop the page passes already translated.
 
 ---
 

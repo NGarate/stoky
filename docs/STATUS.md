@@ -362,8 +362,10 @@ prevent, and it survived because nobody re-read the source it was describing.
 **Accessibility and interface**
 - ~~The location picker and several wording items are still hardcoded Spanish or
   inconsistent.~~ **Closed**, I18N-2 through I18N-6, one commit each.
-- Assorted validation and accessibility gaps found while building
-  `/inventory/add` are unaddressed. (UI-3)
+- ~~Assorted validation and accessibility gaps found while building
+  `/inventory/add`.~~ **Closed.** The last of the eight: the stock procedures'
+  inputs described a database row rather than what each one does, and
+  `ProductPicker` read one page's namespace on both stock screens.
 
 Closed since this section was written, and listed because a status file that
 only ever grows is one nobody trusts: DEBT-2 (the scanner's torch), UI-9 (a
