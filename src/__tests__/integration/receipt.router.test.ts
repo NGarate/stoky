@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@prisma/client";
 import { appRouter } from "@/server/trpc/router";
+import { ThrottledError } from "@/server/trpc/throttle";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import {
@@ -326,6 +327,23 @@ describe("receipt.upload — how many", () => {
     }
 
     expect((thrown as TRPCError).code).toBe("TOO_MANY_REQUESTS");
+  });
+
+  it("carries how long to wait, not only that it is too many", async () => {
+    // RFC 9110 §10.2.3. The route handler reads this off the error to set
+    // `Retry-After` — see `src/server/trpc/throttle.ts`. Without the cause the
+    // header would silently stop appearing, and nothing about the refusal
+    // itself would look different.
+    let thrown: unknown;
+    try {
+      await upload(throttled);
+    } catch (error) {
+      thrown = error;
+    }
+
+    const cause = (thrown as TRPCError).cause;
+    expect(cause).toBeInstanceOf(ThrottledError);
+    expect((cause as ThrottledError).retryAfterSeconds).toBeGreaterThan(0);
   });
 
   it("leaves another account's budget alone", async () => {

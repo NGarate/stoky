@@ -77,3 +77,33 @@ export async function enforceRateLimit(
     });
   }
 }
+
+/**
+ * The `Retry-After` value for a response, or null if nothing was throttled.
+ *
+ * RFC 9110 §10.2.3: a 429 may carry `Retry-After`. Ours knew the answer and
+ * threw it away — the limiter computes the remaining TTL, and only a person
+ * reading the sentence could act on it. A caller left to guess either hammers
+ * the endpoint or waits far longer than it needs to, and the first is what the
+ * limit exists to stop.
+ *
+ * Read off the error rather than recomputed, so the number in the header and
+ * the number the limiter decided cannot drift apart.
+ *
+ * The SERVICE_UNAVAILABLE that a dead Valkey produces gets no header, though
+ * §10.2.3 says a 503 *should* have one: nothing here knows when the cache is
+ * coming back, and a number invented for the sake of the header would be worse
+ * than none.
+ */
+export function retryAfterSeconds(
+  errors: readonly { cause?: unknown }[],
+): number | null {
+  for (const error of errors) {
+    if (error.cause instanceof ThrottledError) {
+      // At least one second. `Retry-After: 0` reads as "go ahead now", which
+      // is the opposite of what a refusal with a sub-second TTL left means.
+      return Math.max(1, Math.ceil(error.cause.retryAfterSeconds));
+    }
+  }
+  return null;
+}

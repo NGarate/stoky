@@ -199,6 +199,13 @@ What is still open, and worth knowing before publishing an instance:
   only one a client cannot forge). Everyone behind one NAT therefore shares a
   bucket. An attacker with a range of addresses gets one bucket per address,
   which is what the per-account limit above exists to bound.
+- **A refusal says how long to wait.** A 429 from tRPC carries `Retry-After`,
+  read off the refusal rather than recomputed, so the header and the message
+  cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
+  the 503 a dead Valkey produces, because nothing knows when the cache is
+  coming back and an invented number would be worse than none; and sign-in,
+  which never produces a 429 at all, since Auth.js answers a refused
+  credentials callback with a redirect to `/login?error=…`.
 - **It fails closed.** If Valkey is unreachable, nobody can sign in. That is
   deliberate — failing open would hand an unlimited auth endpoint to anyone who
   can take the cache down — but it makes Valkey a hard dependency of signing
