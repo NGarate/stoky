@@ -741,3 +741,28 @@ independence from the seed, from the order specs run in, and from each other.
 `ISSUES.md` TEST-3 is the same lesson; this is its third appearance, so the
 rule is worth stating plainly: **a browser test that reads seeded state must
 either create what it reads or assert nothing about its shape.**
+
+**D54 — The trolley is the undo, not a toast.**
+§7 rule 3 asks for undo instead of confirm, and the obvious reading is a
+ten-second "Deshacer" toast after each tick. Rejected: an undo that expires is
+one you miss while reaching for the next shelf, and the mistake it exists for —
+ticking the wrong row — is usually noticed at the till, not within ten seconds.
+The trolley section holds everything ticked and unticks with one tap, so the
+undo is permanent and in a place someone would look for it anyway. It also
+costs no timer, no live region and no state machine.
+
+**D55 — Screen A's row is a button, not a checkbox with a label.**
+A checkbox beside a label is two targets and one of them is thirteen pixels
+(the same defect `a11y-structure` caught on `/settings/people` this week). The
+whole row is one `button` with `aria-pressed`, so the target is 64px tall, the
+accessible name can say what the tap will *do* — "Marcar «Leche entera» como
+comprado" rather than just the product name — and there is nothing to miss with
+a thumb.
+
+**D56 — `getBuyList` is one flat list, not a list of lists.**
+§3's question is "what do I need to buy", and which list something is filed
+under is not part of the answer. The procedure returns every item across the
+household with the product's stock and minimum already attached, because
+standing in an aisle "how much is at home" is the question and a round trip per
+row to answer it is not available on a supermarket connection. Filing stays on
+`/shopping/lists`.

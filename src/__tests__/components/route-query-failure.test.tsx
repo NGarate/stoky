@@ -52,7 +52,7 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { default: ShoppingListsPage } = await import(
-  "@/app/(dashboard)/shopping/page"
+  "@/app/(dashboard)/shopping/lists/page"
 );
 const { default: LocationsPage } = await import(
   "@/app/(dashboard)/settings/locations/page"
@@ -67,7 +67,7 @@ function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
 
 const ROUTES = [
   {
-    name: "/shopping",
+    name: "/shopping/lists",
     Page: ShoppingListsPage,
     /** The lie this route told: "No hay listas de compra". */
     emptyState: /No hay listas de compra/,

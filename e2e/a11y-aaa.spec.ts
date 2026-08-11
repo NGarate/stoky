@@ -43,6 +43,7 @@ const PRIVATE_ROUTES = [
   "/receipts",
   "/receipts/upload",
   "/shopping",
+  "/shopping/lists",
   "/prices",
   "/settings",
   "/settings/locations",

@@ -17,64 +17,65 @@ import es from "../messages/es.json";
  * spec outside that list runs here alone. No `playwright.config.ts` change.
  */
 
+/** The two regions, addressed by test id: Next's route announcer is also an alert. */
+const calm = (page: Page) => page.getByTestId("sync-calm");
+const urgent = (page: Page) => page.getByTestId("sync-urgent");
+
+/**
+ * A list of this test's own, with its own items.
+ *
+ * It used to open the seeded list, and that made every test here depend on
+ * what every other journey had done to it: `/shopping` hides a list whose
+ * items are all ticked, and "generate from low stock" adds a newer one that
+ * sorts first. It passed alone and failed in a full run, which is
+ * `ISSUES.md` TEST-3 wearing a different hat.
+ *
+ * Creating one costs four actions and buys independence from the seed, from
+ * the order specs run in, and from each other.
+ */
+async function openOwnList(page: Page, items: number): Promise<void> {
+  const name = `Offline ${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+
+  // The manager, not the shop screen: `/shopping` is Screen A now.
+  await page.goto("/shopping/lists");
+  await settle(page);
+
+  await page.getByRole("button", { name: es.shopping.create }).click();
+  await page.getByPlaceholder(es.shopping.listName).fill(name);
+  await page
+    .getByRole("button", { name: es.common.create, exact: true })
+    .click();
+
+  const link = page.getByRole("link", { name: new RegExp(name) });
+  await expect(link).toBeVisible({ timeout: 15_000 });
+  await link.click();
+  await page.waitForURL(/\/shopping\/[a-z0-9]+/);
+  await settle(page);
+
+  for (let i = 0; i < items; i += 1) {
+    await page.getByRole("button", { name: es.shopping.addItem }).click();
+    await page.getByPlaceholder(es.shopping.itemName).fill(`Cosa ${i + 1}`);
+    await page
+      .getByRole("button", { name: es.common.add, exact: true })
+      .click();
+    await expect(page.getByText(`Cosa ${i + 1}`)).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+
+  // Wait for the queue to empty and then re-read from the server.
+  //
+  // Adding goes through the queue too, so an item is visible via the
+  // projection before the server has it. Cutting the network at that moment
+  // leaves the cached list one item behind — which is correct behaviour and
+  // a useless starting point for a test about ticking things off.
+  await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
+  await page.reload();
+  await settle(page);
+}
+
 test.describe("A shop with no signal", () => {
   test.use({ storageState: SESSION_FILE });
-
-  /** The two regions, addressed by test id: Next's route announcer is also an alert. */
-  const calm = (page: Page) => page.getByTestId("sync-calm");
-  const urgent = (page: Page) => page.getByTestId("sync-urgent");
-
-  /**
-   * A list of this test's own, with its own items.
-   *
-   * It used to open the seeded list, and that made every test here depend on
-   * what every other journey had done to it: `/shopping` hides a list whose
-   * items are all ticked, and "generate from low stock" adds a newer one that
-   * sorts first. It passed alone and failed in a full run, which is
-   * `ISSUES.md` TEST-3 wearing a different hat.
-   *
-   * Creating one costs four actions and buys independence from the seed, from
-   * the order specs run in, and from each other.
-   */
-  async function openOwnList(page: Page, items: number): Promise<void> {
-    const name = `Offline ${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-
-    await page.goto("/shopping");
-    await settle(page);
-
-    await page.getByRole("button", { name: es.shopping.create }).click();
-    await page.getByPlaceholder(es.shopping.listName).fill(name);
-    await page
-      .getByRole("button", { name: es.common.create, exact: true })
-      .click();
-
-    const link = page.getByRole("link", { name: new RegExp(name) });
-    await expect(link).toBeVisible({ timeout: 15_000 });
-    await link.click();
-    await page.waitForURL(/\/shopping\/[a-z0-9]+/);
-    await settle(page);
-
-    for (let i = 0; i < items; i += 1) {
-      await page.getByRole("button", { name: es.shopping.addItem }).click();
-      await page.getByPlaceholder(es.shopping.itemName).fill(`Cosa ${i + 1}`);
-      await page
-        .getByRole("button", { name: es.common.add, exact: true })
-        .click();
-      await expect(page.getByText(`Cosa ${i + 1}`)).toBeVisible({
-        timeout: 15_000,
-      });
-    }
-
-    // Wait for the queue to empty and then re-read from the server.
-    //
-    // Adding goes through the queue too, so an item is visible via the
-    // projection before the server has it. Cutting the network at that moment
-    // leaves the cached list one item behind — which is correct behaviour and
-    // a useless starting point for a test about ticking things off.
-    await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
-    await page.reload();
-    await settle(page);
-  }
 
   test("is composed offline, shown as done, and applied once on reconnect", async ({
     page,
@@ -206,6 +207,45 @@ test.describe("A shop with no signal", () => {
     blocked = false;
     await expect(calm(page)).toBeEmpty({ timeout: 30_000 });
 
+  });
+});
+
+test.describe("Screen A, with no signal", () => {
+  test.use({ storageState: SESSION_FILE });
+
+  test("ticks something off from the shop screen and applies it once", async ({
+    page,
+    context,
+  }) => {
+    // Composed through the manager, shopped on Screen A — which is how it
+    // works in life: somebody fills the list at home and takes the phone out.
+    await openOwnList(page, 2);
+    await page.goto("/shopping");
+    await settle(page);
+
+    const rows = page.getByRole("button", { name: /Marcar/ });
+    await expect(rows.first()).toBeVisible();
+    const before = await rows.count();
+    expect(before).toBeGreaterThan(1);
+
+    await context.setOffline(true);
+
+    await rows.first().click();
+    // Straight into the trolley, before any server has heard about it.
+    await expect(page.getByRole("button", { name: /Marcar/ })).toHaveCount(
+      before - 1,
+    );
+    await expect(page.getByTestId("sync-calm")).toContainText(/sin enviar/i);
+
+    await context.setOffline(false);
+    await expect(page.getByTestId("sync-calm")).toBeEmpty({ timeout: 20_000 });
+
+    // A reload empties the queue, so what is on screen came from the server.
+    await page.reload();
+    await settle(page);
+    await expect(page.getByRole("button", { name: /Marcar/ })).toHaveCount(
+      before - 1,
+    );
   });
 });
 

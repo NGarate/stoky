@@ -91,6 +91,7 @@ const EXPECTED: Record<string, Record<string, string>> = {
   "shopping.ts": {
     list: "householdProcedure",
     getById: "householdProcedure",
+    getBuyList: "householdProcedure",
     getAutoList: "householdProcedure",
     create: "writeProcedure",
     update: "writeProcedure",

@@ -497,7 +497,21 @@
     "removeItem": "Eliminar artículo",
     "days": "días",
     "months": "meses",
-    "year": "año"
+    "year": "año",
+    "shopTitle": "Compra",
+    "scan": "Escanear",
+    "toBuy": "Para comprar",
+    "inTrolley": "En el carro",
+    "nothingToBuy": "No hay nada apuntado",
+    "nothingToBuyHint": "Cuando algo baje del mínimo aparecerá aquí, o añádelo tú desde tus listas.",
+    "manageLists": "Ver mis listas",
+    "stockOf": "En casa: {stock} de {minimum} {unit}",
+    "stockNone": "No queda nada en casa",
+    "stockUnknown": "Sin mínimo fijado",
+    "tickOff": "Marcar «{name}» como comprado",
+    "untick": "Devolver «{name}» a la lista",
+    "trolleyCount": "{count, plural, one {# cosa marcada} other {# cosas marcadas}}",
+    "fromList": "De «{name}»"
   },
   "prices": {
     "title": "Precios",

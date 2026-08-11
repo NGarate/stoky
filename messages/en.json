@@ -497,7 +497,21 @@
     "removeItem": "Remove item",
     "days": "days",
     "months": "months",
-    "year": "year"
+    "year": "year",
+    "shopTitle": "Shopping",
+    "scan": "Scan",
+    "toBuy": "To buy",
+    "inTrolley": "In the trolley",
+    "nothingToBuy": "Nothing is on the list",
+    "nothingToBuyHint": "Anything that drops below its minimum turns up here, or add it yourself from your lists.",
+    "manageLists": "See my lists",
+    "stockOf": "At home: {stock} of {minimum} {unit}",
+    "stockNone": "There is none left at home",
+    "stockUnknown": "No minimum set",
+    "tickOff": "Tick “{name}” off",
+    "untick": "Put “{name}” back on the list",
+    "trolleyCount": "{count, plural, one {# thing ticked off} other {# things ticked off}}",
+    "fromList": "From “{name}”"
   },
   "prices": {
     "title": "Prices",

@@ -71,6 +71,7 @@ const PRIVATE_ROUTES = [
   // still has a heading, a landmark, controls and onward links to check.
   "/receipts/00000000-0000-0000-0000-000000000000/applied",
   "/shopping",
+  "/shopping/lists",
   "/prices",
   "/settings",
   "/settings/locations",

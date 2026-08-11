@@ -345,6 +345,55 @@ export const shoppingRouter = createTRPCRouter({
     });
   }),
 
+  /**
+   * Everything the phone screen needs, in one query.
+   *
+   * `REDESIGN_PLAN.md` §3: the screen answers "what do I need to buy, and is
+   * this thing in my hand a good buy?", so it wants one flat list of what is
+   * outstanding — not a list of lists. Which list an item belongs to is a
+   * filing decision, and filing is what `/shopping/lists` is for.
+   *
+   * Stock and the minimum come with each linked item because §3 shows them on
+   * the row ("2/6 L"): standing in an aisle, "how much is at home" is the
+   * question, and a second round trip per row to answer it is not an option
+   * on a supermarket connection.
+   */
+  getBuyList: householdProcedure.query(async ({ ctx }) => {
+    const items = await ctx.db.shoppingItem.findMany({
+      where: { shoppingList: { householdId: ctx.householdId } },
+      include: {
+        product: { include: { stockEntries: true } },
+        shoppingList: { select: { id: true, name: true } },
+      },
+      orderBy: [{ isChecked: "asc" }, { id: "asc" }],
+    });
+
+    return items.map((item) => {
+      const product = item.product;
+      const stock = product
+        ? Math.round(
+            product.stockEntries.reduce((sum, entry) => sum + entry.quantity, 0) *
+              100,
+          ) / 100
+        : null;
+
+      return {
+        id: item.id,
+        name: product?.name ?? item.customName ?? "",
+        quantity: item.quantity,
+        unit: item.unit ?? product?.defaultUnit ?? null,
+        isChecked: item.isChecked,
+        productId: item.productId,
+        listId: item.shoppingList.id,
+        listName: item.shoppingList.name,
+        // Null when the item is free text or the product has no minimum: the
+        // screen shows a bar only where there is a notch to show it against.
+        stock,
+        minStock: product?.minStock ?? null,
+      };
+    });
+  }),
+
   getAutoList: householdProcedure.query(async ({ ctx }) => {
     const autoList = await ctx.db.shoppingList.findFirst({
       where: {
