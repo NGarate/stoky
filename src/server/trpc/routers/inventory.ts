@@ -1,10 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
-import { prisma } from "@/lib/prisma";
 import { stockEntrySchema } from "@/lib/validations/inventory";
 import { daysBetween, remainingByBatch } from "@/lib/inventory/batches";
-import type { StockOperation } from "@prisma/client";
+import type { Prisma, StockOperation } from "@prisma/client";
 
 /** Half-open bounds on an expiry date, in the shape Prisma words them. */
 interface ExpiryWindow {
@@ -28,11 +27,12 @@ interface ExpiryWindow {
  * ledger — and `remainingByBatch` states the drawdown rule.
  */
 async function datedBatchesInWindow(
+  db: Prisma.TransactionClient,
   householdId: string,
   locationId: string | undefined,
   window: ExpiryWindow,
 ) {
-  const products = await prisma.product.findMany({
+  const products = await db.product.findMany({
     where: {
       householdId,
       stockEntries: { some: { expirationDate: { not: null } } },
@@ -97,7 +97,7 @@ export const inventoryRouter = createTRPCRouter({
         ...(input.category && { category: input.category }),
       };
 
-      const products = await prisma.product.findMany({
+      const products = await ctx.db.product.findMany({
         where,
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
@@ -178,7 +178,7 @@ export const inventoryRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       // Verify product exists and belongs to household
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
           householdId: ctx.householdId,
@@ -194,7 +194,7 @@ export const inventoryRouter = createTRPCRouter({
 
       // Verify location if provided
       if (input.locationId) {
-        const location = await prisma.storageLocation.findFirst({
+        const location = await ctx.db.storageLocation.findFirst({
           where: {
             id: input.locationId,
             householdId: ctx.householdId,
@@ -217,7 +217,7 @@ export const inventoryRouter = createTRPCRouter({
       // write with no interface in front of it. The product and the location
       // above were already checked; the store was the one that was not.
       if (input.storeId) {
-        const store = await prisma.store.findFirst({
+        const store = await ctx.db.store.findFirst({
           where: {
             id: input.storeId,
             householdId: ctx.householdId,
@@ -232,7 +232,7 @@ export const inventoryRouter = createTRPCRouter({
         }
       }
 
-      const stockEntry = await prisma.stockEntry.create({
+      const stockEntry = await ctx.db.stockEntry.create({
         data: {
           productId: input.productId,
           quantity: Math.abs(input.quantity),
@@ -251,7 +251,7 @@ export const inventoryRouter = createTRPCRouter({
 
       // Create price record if price and storeId are provided
       if (input.price && input.price > 0 && input.storeId) {
-        await prisma.priceRecord.create({
+        await ctx.db.priceRecord.create({
           data: {
             productId: input.productId,
             storeId: input.storeId,
@@ -276,7 +276,7 @@ export const inventoryRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       // Verify product exists and belongs to household
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
           householdId: ctx.householdId,
@@ -317,7 +317,7 @@ export const inventoryRouter = createTRPCRouter({
       }
 
       // Create consumption entry (negative quantity)
-      const stockEntry = await prisma.stockEntry.create({
+      const stockEntry = await ctx.db.stockEntry.create({
         data: {
           productId: input.productId,
           quantity: -Math.abs(input.quantity),
@@ -346,7 +346,7 @@ export const inventoryRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       // Verify product exists and belongs to household
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
           householdId: ctx.householdId,
@@ -360,7 +360,7 @@ export const inventoryRouter = createTRPCRouter({
         });
       }
 
-      const stockEntry = await prisma.stockEntry.create({
+      const stockEntry = await ctx.db.stockEntry.create({
         data: {
           productId: input.productId,
           quantity: input.quantity,
@@ -401,7 +401,7 @@ export const inventoryRouter = createTRPCRouter({
       }
 
       // Verify product exists
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
           householdId: ctx.householdId,
@@ -437,7 +437,7 @@ export const inventoryRouter = createTRPCRouter({
       }
 
       // Verify locations exist
-      const locations = await prisma.storageLocation.findMany({
+      const locations = await ctx.db.storageLocation.findMany({
         where: {
           id: { in: [input.fromLocationId, input.toLocationId] },
           householdId: ctx.householdId,
@@ -452,8 +452,8 @@ export const inventoryRouter = createTRPCRouter({
       }
 
       // Create transfer entries
-      const [fromEntry, toEntry] = await prisma.$transaction([
-        prisma.stockEntry.create({
+      const [fromEntry, toEntry] = await ctx.db.$transaction([
+        ctx.db.stockEntry.create({
           data: {
             productId: input.productId,
             quantity: -input.quantity,
@@ -468,7 +468,7 @@ export const inventoryRouter = createTRPCRouter({
             location: true,
           },
         }),
-        prisma.stockEntry.create({
+        ctx.db.stockEntry.create({
           data: {
             productId: input.productId,
             quantity: input.quantity,
@@ -498,7 +498,7 @@ export const inventoryRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       // Verify product exists and belongs to household
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
           householdId: ctx.householdId,
@@ -512,7 +512,7 @@ export const inventoryRouter = createTRPCRouter({
         });
       }
 
-      const entries = await prisma.stockEntry.findMany({
+      const entries = await ctx.db.stockEntry.findMany({
         where: {
           productId: input.productId,
         },
@@ -551,10 +551,12 @@ export const inventoryRouter = createTRPCRouter({
       const expiryThreshold = new Date(now);
       expiryThreshold.setDate(expiryThreshold.getDate() + input.days);
 
-      const batches = await datedBatchesInWindow(ctx.householdId, input.locationId, {
-        gte: now,
-        lte: expiryThreshold,
-      });
+      const batches = await datedBatchesInWindow(
+        ctx.db,
+        ctx.householdId,
+        input.locationId,
+        { gte: now, lte: expiryThreshold },
+      );
 
       return batches.map((batch) => {
         const daysUntilExpiry = daysBetween(now, batch.expirationDate);
@@ -576,9 +578,12 @@ export const inventoryRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const now = new Date();
 
-      const batches = await datedBatchesInWindow(ctx.householdId, input.locationId, {
-        lt: now,
-      });
+      const batches = await datedBatchesInWindow(
+        ctx.db,
+        ctx.householdId,
+        input.locationId,
+        { lt: now },
+      );
 
       return batches
         .map((batch) => ({

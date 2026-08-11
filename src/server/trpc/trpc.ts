@@ -2,17 +2,37 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { cache } from "react";
 import superjson from "superjson";
 import type { Session } from "next-auth";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const createTRPCContext = cache(
-  async (opts: { session: Session | null; headers?: Headers }) => {
+  async (opts: {
+    session: Session | null;
+    headers?: Headers;
+    db?: PrismaClient;
+  }) => {
     return {
       session: opts.session,
       // Optional because the integration suite builds contexts directly, with
       // no HTTP request behind them. Only the public auth procedures read it,
       // and they say what they do when it is absent.
       headers: opts.headers ?? null,
+      /**
+       * The database, from the context rather than from a module import.
+       *
+       * Phase 4 wraps the writes a shop composes in one transaction each, so a
+       * resolver has to be able to run against a transaction client instead of
+       * the singleton. Reaching for the import inside a resolver is how a
+       * write ends up *outside* the transaction that is supposed to contain
+       * it — the worst failure mode of the replay design, and one no type can
+       * catch. Taking it from the context makes that visible in the resolver's
+       * own text.
+       *
+       * It also makes the transaction boundary testable: an integration test
+       * can hand in a client whose second write throws and assert the first
+       * one was rolled back, which is not otherwise expressible.
+       */
+      db: opts.db ?? prisma,
     };
   },
 );
@@ -83,7 +103,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
  * this query, one copy per procedure, to find the household id.
  */
 export const householdProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const membership = await prisma.user.findUnique({
+  const membership = await ctx.db.user.findUnique({
     where: { id: ctx.session.user.id },
     select: { householdId: true, role: true },
   });
