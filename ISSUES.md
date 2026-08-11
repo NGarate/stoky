@@ -21,7 +21,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | CRITICAL-3 | Missing database migrations | ✅ Resolved (`20260213234844`) |
 | CRITICAL-4 | No rate limiting on auth | ✅ Resolved (Phase 3) |
 | DEBT-1 | Minimal password validation | 🟡 Open |
-| DEBT-2 | Barcode scanner torch is inert | 🟡 Open (pinned by test) |
+| DEBT-2 | Barcode scanner torch is inert | ✅ Resolved (Phase 4) |
 | DEBT-3 | OpenFoodFacts in-memory cache | 🟡 Open |
 | DEBT-4 | Bare `Error` instead of `TRPCError` | ✅ Resolved (Phase 3) |
 | DEBT-6 | The services layer still throws bare `Error` | 🟡 Open (pinned by test) |
@@ -1196,11 +1196,11 @@ password: z.string()
 
 ---
 
-### 🟡 DEBT-2: Barcode scanner component has unused torch state
+### ✅ DEBT-2: Barcode scanner component has unused torch state
 
 **File:** `src/components/barcode/Scanner.tsx`  
 **Severity:** LOW  
-**Status:** OPEN — behaviour pinned by test
+**Status:** RESOLVED in Phase 4
 
 **Issue:**
 The `torchEnabled` state is defined but never actually passed to the scanner component to control the torch.
@@ -1223,14 +1223,35 @@ const [torchEnabled, setTorchEnabled] = useState(false);
 />
 ```
 
-**Suggested Fix:**
-Either:
+**Resolution (Phase 4).** None of the three suggestions, because the first is
+impossible and the third answers no: `@thewirv/react-barcode-scanner@3.4.0` has
+no torch prop. It renders `<video ref={...} {...videoProps} />` with the spread
+*after* its own ref, so passing a ref through `videoProps` replaces the one
+decoding depends on and silently stops the scanner reading barcodes.
 
-1. Pass `torchEnabled` to the scanner component if supported
-2. Remove torch functionality if not supported by `@thewirv/react-barcode-scanner`
-3. Check library documentation for correct torch API
+The component now finds the live `<video>` through its own wrapper element,
+takes the `MediaStreamTrack` off its `srcObject`, and calls
+`applyConstraints({ advanced: [{ torch }] })` — the platform API, which
+TypeScript's DOM library still does not type, so `TorchConstraints` widens it
+rather than casting past it.
 
-**Priority:** Fix before barcode scanning feature (F5)
+**The capability probe was the more interesting half.** It opened a *second*
+`getUserMedia` stream at mount purely to read capabilities, and answered from
+that. So the button's existence came from one track while its effect was meant
+for another, and on a device that allows one camera stream at a time the probe
+competed with the scanner's own. Both now come from the same track, which is
+what stops the control lying: it cannot be offered on a camera it could not
+reach.
+
+A refused torch says so and leaves the label alone, rather than flipping to
+"turn it off" over a lamp that never came on. Safari does not implement the
+constraint at all, so the control simply does not appear there.
+
+Pinned by 16 tests in `src/__tests__/components/Scanner.test.tsx`, whose mock
+had to become a real `<video>` with a real `MediaStream` on its `srcObject` —
+happy-dom enforces that type exactly as a browser does, and a bare `<div>`
+would have let every torch assertion pass vacuously. Verified failing first:
+7 of the 16 go red with the component reverted.
 
 ---
 
@@ -1717,8 +1738,8 @@ run: 218 integration, 187 E2E, and a seed that is idempotent.
 
 ### Polish
 
-7. **DEBT-2:** Wire the barcode torch toggle to the camera, and update the test
-   that currently pins the inert behaviour.
+7. ~~**DEBT-2:** Wire the barcode torch toggle to the camera, and update the
+   test that currently pins the inert behaviour.~~ Done in Phase 4.
 8. **DOCS-1:** Add JSDoc to the tRPC procedures.
 
 ---
@@ -1745,7 +1766,7 @@ For which phase closes each item, see `docs/REDESIGN_PLAN.md` §9, and
 | CRITICAL-4 rate limiting | Phase 3, verified in Phase 7 |
 | DEBT-1 password policy | Phase 3 |
 | DEBT-4 bare `Error` in routers | Phase 3 |
-| DEBT-2 scanner torch | Phase 4 |
+| DEBT-2 scanner torch | Phase 4 ✅ |
 | DEBT-3 OpenFoodFacts cache | Phase 6 |
 | OCR-1 runtime language download | Phase 6 |
 | DEBT-5 missing indexes | Phase 7 |

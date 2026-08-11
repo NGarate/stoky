@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner as BarcodeScannerComponent } from "@thewirv/react-barcode-scanner";
 
@@ -8,6 +8,24 @@ interface BarcodeScannerProps {
   onScan: (barcode: string) => void;
   onError?: (error: Error) => void;
   isScanning?: boolean;
+}
+
+/**
+ * `torch` is real and unlisted.
+ *
+ * It is in the MediaStream Image Capture spec as a settable constraint, it
+ * works in Chromium on Android, and TypeScript's DOM library has never carried
+ * it — `MediaTrackConstraintSet` has no `torch`. Widening the type rather than
+ * casting past it keeps the rest of the constraint object checked, and the
+ * widened type is still assignable to `MediaTrackConstraints`, so
+ * `applyConstraints` takes it with no cast at all. Delete this the day lib.dom
+ * grows the field.
+ *
+ * Safari does not implement it, which is why the control is offered only where
+ * the track reports the capability rather than wherever a camera exists.
+ */
+interface TorchConstraints extends MediaTrackConstraints {
+  advanced?: Array<MediaTrackConstraintSet & { torch?: boolean }>;
 }
 
 export function BarcodeScanner({
@@ -18,7 +36,9 @@ export function BarcodeScanner({
   const t = useTranslations("products.scan");
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
+  const [torchFailed, setTorchFailed] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const handleSuccess = useCallback(
     (barcode: string) => {
@@ -39,26 +59,58 @@ export function BarcodeScanner({
     [onError, t]
   );
 
-  // Check if device has torch capability
-  useEffect(() => {
-    const checkTorch = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        const track = stream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        setHasTorch("torch" in capabilities);
-        for (const track of stream.getTracks()) {
-          track.stop();
-        }
-      } catch {
-        setHasTorch(false);
-      }
-    };
-
-    checkTorch();
+  /**
+   * The live camera track the scanner is decoding from, or null.
+   *
+   * Found through this component's own wrapper rather than a ref handed to the
+   * library: it renders `<video ref={...} {...videoProps} />` with the spread
+   * *after* its ref, so a ref passed in `videoProps` silently replaces the one
+   * decoding depends on and the scanner stops reading barcodes.
+   */
+  const cameraTrack = useCallback((): MediaStreamTrack | null => {
+    const video = containerRef.current?.querySelector("video");
+    const stream = video?.srcObject as MediaStream | null | undefined;
+    if (!stream || typeof stream.getVideoTracks !== "function") return null;
+    return stream.getVideoTracks()[0] ?? null;
   }, []);
+
+  /**
+   * Whether this camera has a torch, asked of the track the button will act on.
+   *
+   * This used to open a *second* `getUserMedia` stream at mount purely to read
+   * capabilities, and answer from that. Two problems, and ISSUES.md DEBT-2 is
+   * the second: a device that allows only one camera stream at a time gets a
+   * probe competing with the scanner's own, and the button's existence came
+   * from one track while its effect was meant for another — so it could be
+   * offered on a camera it could never reach. Deriving both from one track is
+   * what stops the control lying.
+   */
+  const handleLoad = useCallback(() => {
+    const track = cameraTrack();
+    const capabilities = track?.getCapabilities?.() ?? {};
+    setHasTorch("torch" in capabilities);
+    // A freshly acquired track always has its torch off, so the label must
+    // agree — otherwise resuming a scan shows "turn it off" over a dark lamp.
+    setTorchEnabled(false);
+    setTorchFailed(false);
+  }, [cameraTrack]);
+
+  const toggleTorch = useCallback(async () => {
+    const track = cameraTrack();
+    if (!track) return;
+
+    const next = !torchEnabled;
+    const constraints: TorchConstraints = { advanced: [{ torch: next }] };
+    try {
+      await track.applyConstraints(constraints);
+      setTorchEnabled(next);
+      setTorchFailed(false);
+    } catch {
+      // Say so rather than flipping the label over a lamp that did not come
+      // on: REDESIGN_PLAN §7 rule 4, errors say what to do next.
+      setTorchFailed(true);
+    }
+  }, [cameraTrack, torchEnabled]);
 
   if (!isScanning) {
     return (
@@ -69,12 +121,13 @@ export function BarcodeScanner({
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div className="relative overflow-hidden rounded-lg aspect-[4/3] bg-black">
         <BarcodeScannerComponent
           doScan={isScanning}
           onSuccess={handleSuccess}
           onError={handleError}
+          onLoad={handleLoad}
         />
 
         {/* Overlay guides. Deliberately outside the token system: these sit
@@ -94,7 +147,8 @@ export function BarcodeScanner({
         {hasTorch && (
           <button
             type="button"
-            onClick={() => setTorchEnabled(!torchEnabled)}
+            onClick={() => void toggleTorch()}
+            aria-pressed={torchEnabled}
             className="absolute bottom-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
             aria-label={
               torchEnabled ? t("torchOff") : t("torchOn")
@@ -135,6 +189,15 @@ export function BarcodeScanner({
           </button>
         )}
       </div>
+
+      {torchFailed && (
+        <p
+          aria-live="polite"
+          className="mt-4 rounded border border-warn-foreground bg-warn p-4 text-sm text-warn-foreground"
+        >
+          {t("torchFailed")}
+        </p>
+      )}
 
       {scanError && (
         <div className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">

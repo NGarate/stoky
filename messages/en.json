@@ -253,7 +253,8 @@
       "cameraErrorUnknown": "Unknown error",
       "cameraErrorHint": "Make sure the camera is allowed, then try again.",
       "torchOn": "Turn the torch on",
-      "torchOff": "Turn the torch off"
+      "torchOff": "Turn the torch off",
+      "torchFailed": "The torch would not turn on. Another app may be using the camera — close it and try again."
     }
   },
   "inventory": {

@@ -1,51 +1,87 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock, spyOn } from "bun:test";
-import { screen, cleanup, waitFor, act } from "@testing-library/react";
-import { renderWithIntl } from "../utils/render";
+import { screen, cleanup, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithIntl } from "../utils/render";
 
 type ScannerProps = {
   doScan: boolean;
   onSuccess: (barcode: string) => void;
   onError: (error?: Error) => void;
+  onLoad?: () => void;
 };
 
 // Handles onto the props the component hands the third-party scanner, so a
-// test can simulate a scan or a camera failure.
+// test can simulate a scan, a camera failure, or the feed becoming ready.
 let lastScannerProps: ScannerProps | undefined;
 
+/** The stream the mocked library hangs off its <video>, as a browser would. */
+let currentStream: unknown;
+
+/**
+ * The library renders `<video ref={...} {...videoProps} />` and hands the
+ * element to zxing, which sets `srcObject`. The component reaches that element
+ * through its own wrapper, so the mock has to be a real <video> carrying a real
+ * `srcObject` — a bare div would let every torch assertion pass vacuously.
+ */
 mock.module("@thewirv/react-barcode-scanner", () => ({
   BarcodeScanner: (props: ScannerProps) => {
     lastScannerProps = props;
-    return <div data-testid="barcode-scanner" />;
+    return (
+      <video
+        data-testid="barcode-scanner"
+        ref={(node: HTMLVideoElement | null) => {
+          if (node) node.srcObject = currentStream as MediaStream;
+        }}
+      >
+        <track kind="captions" />
+      </video>
+    );
   },
 }));
 
-/** Stub `getUserMedia`, optionally reporting torch capability. */
-function stubCamera({ torch, reject }: { torch?: boolean; reject?: boolean }) {
-  const stop = mock(() => {});
+/** A camera track, optionally reporting a torch and optionally refusing it. */
+function stubCamera({
+  torch,
+  applyRejects,
+}: { torch?: boolean; applyRejects?: boolean } = {}) {
+  const applyConstraints = mock(async (_constraints: MediaTrackConstraints) => {
+    if (applyRejects) throw new Error("Torch unavailable");
+  });
   const track = {
     getCapabilities: () => (torch ? { torch: true } : {}),
-    stop,
-  };
-  const stream = {
-    getVideoTracks: () => [track],
-    getTracks: () => [track],
+    applyConstraints,
+    stop: mock(() => {}),
   };
 
-  Object.defineProperty(globalThis.navigator, "mediaDevices", {
-    value: {
-      getUserMedia: reject
-        ? mock(async () => {
-            throw new Error("Permission denied");
-          })
-        : mock(async () => stream),
-    },
+  // A real MediaStream, because happy-dom's <video> refuses an `srcObject`
+  // that is not one — the same check a browser makes. Its track list is
+  // overridden rather than populated, since constructing a live
+  // MediaStreamTrack outside a browser is not possible.
+  const stream = new MediaStream();
+  Object.defineProperty(stream, "getVideoTracks", {
+    value: () => [track],
     configurable: true,
-    writable: true,
   });
+  Object.defineProperty(stream, "getTracks", {
+    value: () => [track],
+    configurable: true,
+  });
+  currentStream = stream;
 
-  return { stop };
+  return { applyConstraints, track };
+}
+
+/** No camera at all — the feed never arrives, so `onLoad` never fires. */
+function stubNoCamera() {
+  currentStream = null;
+}
+
+/** What the library does once the feed has data. */
+function feedReady() {
+  act(() => {
+    lastScannerProps?.onLoad?.();
+  });
 }
 
 const { BarcodeScanner } = await import("@/components/barcode/Scanner");
@@ -130,69 +166,138 @@ describe("BarcodeScanner", () => {
     expect(screen.queryByText("Error al acceder a la cámara")).toBeNull();
   });
 
-  it("omits the torch control on devices without a torch", async () => {
+  it("omits the torch control on a camera that has none", () => {
     stubCamera({ torch: false });
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
 
-    await waitFor(() => {
-      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
-    });
     expect(screen.queryByRole("button", { name: /linterna/ })).toBeNull();
   });
 
-  it("omits the torch control when camera access is refused", async () => {
-    stubCamera({ reject: true });
+  it("omits the torch control when the feed never arrives", () => {
+    stubNoCamera();
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    await waitFor(() => {
-      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
-    });
+    // No camera, so the library never reports a loaded feed and the component
+    // never learns of a torch. The control is absent rather than inert.
     expect(screen.queryByRole("button", { name: /linterna/ })).toBeNull();
   });
 
-  it("offers a torch toggle on capable devices", async () => {
+  it("offers a torch toggle on a camera that has one", () => {
     stubCamera({ torch: true });
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
 
     expect(
-      await screen.findByRole("button", { name: "Encender linterna" }),
+      screen.getByRole("button", { name: "Encender linterna" }),
     ).toBeInTheDocument();
   });
 
-  it("flips the torch label when toggled", async () => {
-    stubCamera({ torch: true });
+  it("turns the torch on at the camera, not just in the label", async () => {
+    const { applyConstraints } = stubCamera({ torch: true });
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
 
-    const toggle = await screen.findByRole("button", {
-      name: "Encender linterna",
+    await userEvent.click(
+      screen.getByRole("button", { name: "Encender linterna" }),
+    );
+
+    // ISSUES.md DEBT-2: the toggle was local state and reached nothing.
+    expect(applyConstraints).toHaveBeenCalledWith({
+      advanced: [{ torch: true }],
     });
-    await userEvent.click(toggle);
-
     expect(
       screen.getByRole("button", { name: "Apagar linterna" }),
     ).toBeInTheDocument();
   });
 
-  it("does not yet drive the camera torch (see ISSUES.md DEBT-2)", async () => {
-    stubCamera({ torch: true });
+  it("turns the torch off again", async () => {
+    const { applyConstraints } = stubCamera({ torch: true });
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "Encender linterna" }),
+      screen.getByRole("button", { name: "Encender linterna" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Apagar linterna" }),
     );
 
-    // Documents current behaviour: the toggle is local state only and is never
-    // passed to the scanner, so the torch never actually turns on.
-    expect(lastScannerProps).not.toHaveProperty("torch");
-    expect(lastScannerProps).not.toHaveProperty("torchEnabled");
+    expect(applyConstraints).toHaveBeenLastCalledWith({
+      advanced: [{ torch: false }],
+    });
   });
 
-  it("releases the camera track used for the capability probe", async () => {
-    const { stop } = stubCamera({ torch: true });
+  it("reports the pressed state, so it is not colour alone", async () => {
+    stubCamera({ torch: true });
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
 
-    await waitFor(() => {
-      expect(stop).toHaveBeenCalled();
+    const toggle = screen.getByRole("button", { name: "Encender linterna" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(toggle);
+
+    expect(
+      screen.getByRole("button", { name: "Apagar linterna" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("says so when the camera refuses the torch, and keeps the label honest", async () => {
+    stubCamera({ torch: true, applyRejects: true });
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Encender linterna" }),
+    );
+
+    expect(
+      screen.getByText(
+        "La linterna no se ha podido encender. Puede que otra aplicación esté usando la cámara: ciérrala y vuelve a intentarlo.",
+      ),
+    ).toBeInTheDocument();
+    // The lamp did not come on, so the button must not claim it can be turned
+    // off. This is the assertion that would catch an optimistic setState.
+    expect(
+      screen.getByRole("button", { name: "Encender linterna" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not open a camera stream of its own", () => {
+    const getUserMedia = mock(async () => currentStream);
+    Object.defineProperty(globalThis.navigator, "mediaDevices", {
+      value: { getUserMedia },
+      configurable: true,
+      writable: true,
     });
+
+    stubCamera({ torch: true });
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
+
+    // The capability probe used to call getUserMedia itself, competing with
+    // the scanner's own stream on devices that allow only one.
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("forgets a lit torch when the feed is re-acquired", async () => {
+    stubCamera({ torch: true });
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Encender linterna" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Apagar linterna" }),
+    ).toBeInTheDocument();
+
+    // A new track always starts dark, so the label has to start there too.
+    feedReady();
+
+    expect(
+      screen.getByRole("button", { name: "Encender linterna" }),
+    ).toBeInTheDocument();
   });
 });
