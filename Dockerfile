@@ -79,8 +79,17 @@ RUN mkdir -p /app/uploads/receipts && chown -R node:node /app/uploads
 
 # Lets Docker and Compose restart a wedged container instead of leaving it
 # listening but broken.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+#
+# `/api/health` rather than `/login`. A 200 from the login page proves the
+# Node process is answering and nothing else — it renders with Postgres down
+# and with Valkey down, and with Valkey down nobody can sign in at all, because
+# the rate limiter fails closed. The health route checks both dependencies, so
+# an instance that cannot do its job stops claiming it can.
+#
+# `start_period` is 30s rather than 20s to match: the first request now waits
+# on Prisma's first connection, which the login page did not.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 EXPOSE 3000
 USER node
