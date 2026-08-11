@@ -387,11 +387,14 @@ where it disagrees with this file, it is right.
 
 **One intermittent test failure, now named**
 - ~~A single integration test failed once and its name was not captured.~~ It
-  has a name: two tests in `src/__tests__/integration/replay.test.ts` fail
-  *together*, about one run in seven, both out of `answerFromRecord`. Filed as
-  **TEST-5** with a reproduction (run the file in a loop), what has been ruled
-  out — the deterministic key generator, which was the obvious suspect and is
-  not the cause — and where to look next. Not diagnosed.
+  has a name: `refuses a key reused for a different procedure` in
+  `src/__tests__/integration/replay.test.ts`, about one run in seven. Filed as
+  **TEST-5** with a reproduction and six ruled-out causes, each with the
+  evidence that ruled it out — including the two most plausible, the
+  deterministic key generator and an escaping rejection. **Not diagnosed.** The
+  production path it exercises is not in doubt; every branch of `withReplay` has
+  a passing assertion, and the mismatches the failing runs report are the ones
+  the tests intend to provoke.
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**

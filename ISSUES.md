@@ -54,7 +54,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
-| TEST-5 | Two replay tests fail together, about one run in seven | 🟡 Open |
+| TEST-5 | A replay test fails intermittently, and it is not the test | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -692,46 +692,64 @@ checking whether any existing row is already in this state before adding it.
 
 ---
 
-### 🟡 TEST-5: Two replay tests fail together, about one run in seven
+### 🟡 TEST-5: A replay test fails intermittently, and it is not the test
 
 **File:** `src/__tests__/integration/replay.test.ts`
-**Severity:** MEDIUM — it is a test defect, but an undiagnosed one in the suite
-that guards the offline queue
-**Status:** OPEN — found 2026-08-11
+**Severity:** MEDIUM — a test defect, but an undiagnosed one in the suite that
+guards the offline queue
+**Status:** OPEN — found 2026-08-11, investigated at length, not solved
 
-`refuses a key reused for a different change, and applies nothing` and
-`refuses a key reused for a different procedure` fail **together**,
-intermittently, both with the same error out of `answerFromRecord`:
+`refuses a key reused for a different procedure` — and sometimes its neighbour
+`refuses a key reused for a different change, and applies nothing` — fails about
+**one run in seven**, with no assertion diff: bun reports the test as *throwing*
 `TRPCError: This key was already used for a different change`.
 
-**Reproduction:** run the file in a loop. It fails within about ten runs — 1 of
-9, then 1 of 5, then 1 of 12 in the attempts made so far. A single run tells you
-nothing.
+**Reproduction:** run the file in a loop. It fails within about ten runs. A
+single run tells you nothing, which is why this went unattributed twice.
 
-**What has been ruled out.** The key generator was a counter formatted into a
-UUID, producing the same sequence every run against a shared database; that was
-the obvious suspect and it is not the cause — the failure reproduces with
-`randomUUID()`. It is not stale rows from an earlier run either: the lookup in
-`withReplay` is scoped by `[userId, key]` and the test users are created fresh
-per run.
+## What has been ruled out, with evidence
 
-**What is known.** Instrumenting the failing test to dump
-`mutationReplay.findMany({ userId })` immediately before its first call prints
-`[]` — no rows for that user at all — and the very next statement fails as
-though a record existed under a different procedure. So either a record appears
-between those two statements, or the error surfacing there was raised somewhere
-else and attributed to this test: the second half is plausible, because the
-BAD_REQUEST is exactly what the *other* failing test legitimately expects, and
-both fail in the same runs.
+- **The deterministic key generator.** `freshKey()` was a counter formatted into
+  a UUID, producing the same sequence every run against a shared database — the
+  obvious suspect. It reproduces with `randomUUID()`. (The keys are random now
+  anyway; a fixed sequence against a shared database is a hazard regardless.)
+- **Stale rows from an earlier run.** The lookup is scoped by `[userId, key]`
+  and the test users are created fresh per run.
+- **The lookup returning the wrong row.** Instrumented: `record.key` always
+  equals the key asked for.
+- **An unhandled rejection.** A `process.on("unhandledRejection")` listener
+  installed in the file never fires on a failing run.
+- **The mismatch being unexpected.** Instrumented to print the input: both
+  mismatches it reports are the ones the tests *intend* to provoke —
+  `{name: "Otro sitio"}` against a record written for `WRITTEN_NAME`, and
+  `alwaysRefuses` against a `makeLocation` record. The production code is doing
+  exactly what it should.
+- **`expectCode` taking a promise rather than a thunk.** Changed so the call is
+  made inside the `try`, removing any instant where a rejection exists outside
+  one: 2 failures in 20 runs afterwards, against ~1 in 7 before. No improvement
+  worth the diff, so it was reverted.
 
-**Where to look next:** whether an expected rejection in one test is escaping as
-an unhandled rejection and being attributed to whichever test is running. That
-would explain the pairing, the intermittency, and why the printed error is one
-the suite is supposed to produce.
+## What is known
 
-**Almost certainly the failure recorded in `STATUS.md`** as one unattributed
-integration test on this date, which was seen before this file was under
-suspicion.
+Markers printed around each statement of the failing test came out as: start →
+first call done → **`(fail)` reported** → `expectCode` returned. That ordering
+suggests bun observes the in-flight rejection and attributes it to the running
+test a moment before the `catch` claims it.
+
+**Treat that with suspicion**, because bun buffers a test's console output and
+interleaves it with result lines — the ordering may be an artifact rather than
+real time. It is the strongest hint available and it is not proof.
+
+## Where to look next
+
+Whether Prisma emits an asynchronous error *after* the interactive transaction
+holding the failed claim has rolled back — an error with no `await` left to
+catch it, arriving while the next statement runs. That would fit the timing, the
+intermittency, and the absence of an `unhandledRejection` (bun may report such
+an error directly rather than through the Node hook).
+
+The production path is not in doubt: `withReplay` refuses a reused key correctly
+and there are passing assertions for every branch of it.
 
 ---
 
