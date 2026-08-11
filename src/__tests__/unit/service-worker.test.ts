@@ -10,10 +10,15 @@ import { join } from "node:path";
  * `self` — so what is checked here is the shape of what it will do, and the
  * one thing that would otherwise ship broken with every test green.
  *
- * The classifier itself is extracted and exercised below by evaluating the
- * module in a stubbed worker global, which is as close to running it as this
- * tier can honestly get. What only a browser can answer — that a real
- * `install` populates a real cache — is left to Playwright and named there.
+ * Most of what follows is a regex over that source, which is honest about what
+ * it is: a check that the shape is right, not that the thing runs. The last
+ * block does better — it evaluates the module against a stubbed worker global
+ * and drives the fetch handler — because the navigation timeout is a *number*,
+ * and no amount of reading the file tells you whether it is wired to anything.
+ *
+ * What only a browser can answer — that a real `install` populates a real cache
+ * — is `e2e/service-worker.prod.spec.ts`, which runs it under an actual
+ * production build.
  */
 
 const ROOT = join(import.meta.dir, "../../..");
@@ -134,5 +139,155 @@ describe("source shape", () => {
   it("forgets everything when the account changes", () => {
     expect(SOURCE).toContain('event.data !== "STOKY_FORGET"');
     expect(SOURCE).toContain('name.startsWith("stoky-")');
+  });
+});
+
+/**
+ * The navigation timeout, driven rather than read.
+ *
+ * `REDESIGN_PLAN.md` §10 lists this constant as "a guess calibrated on
+ * supermarket lie-fi, not a measurement", and half of that is now measurable.
+ * On the production standalone build a shell navigation answers in 14–37ms
+ * warm and 368ms on the first cold hit, so 2,500ms is roughly seventy times a
+ * healthy navigation and seven times the worst first load — nowhere near
+ * firing when the network is merely unremarkable. That is the end this can
+ * settle.
+ *
+ * The other end it cannot: whether 2,500ms is the right moment to give up on a
+ * connection that is present but hopeless is a judgement about how long a
+ * person will stare at a blank screen, and no local measurement produces it.
+ * §10 keeps the entry for that reason.
+ *
+ * What is tested here is the wiring, which is the part that could silently
+ * break: that the fallback is reached *through* the timeout, at the constant
+ * the file declares, and not at some other number or not at all.
+ */
+describe("giving up on the network", () => {
+  interface Harness {
+    fetchHandler: (event: unknown) => void;
+    delays: number[];
+    cachedFor: (url: string) => Response | undefined;
+  }
+
+  /** Evaluate the worker against a stubbed `self` and hand back its listeners. */
+  function load(options: {
+    fetchNeverSettles: boolean;
+    cache: Record<string, string>;
+  }): Harness {
+    const listeners = new Map<string, (event: unknown) => void>();
+    const delays: number[] = [];
+    const store = new Map<string, Response>();
+
+    for (const [url, body] of Object.entries(options.cache)) {
+      store.set(url, new Response(body));
+    }
+
+    const caches = {
+      open: async () => ({
+        put: async () => {},
+        add: async () => {},
+        match: async (request: Request | string) =>
+          store.get(typeof request === "string" ? request : new URL(request.url).pathname),
+      }),
+      keys: async () => [],
+      delete: async () => true,
+      match: async (request: Request | string) =>
+        store.get(typeof request === "string" ? request : new URL(request.url).pathname),
+    };
+
+    const self = {
+      location: { origin: "https://stoky.example" },
+      addEventListener: (type: string, handler: (event: unknown) => void) => {
+        listeners.set(type, handler);
+      },
+      // Fires immediately, but records what it was asked to wait. The delay is
+      // the assertion; waiting 2.5s in a unit test would only prove patience.
+      setTimeout: (fn: () => void, ms: number) => {
+        delays.push(ms);
+        fn();
+        return 0;
+      },
+      fetch: options.fetchNeverSettles
+        ? () => new Promise<Response>(() => {})
+        : async () => new Response("from the network"),
+      caches,
+      Response,
+      skipWaiting: async () => {},
+      clients: { claim: async () => {} },
+    };
+
+    new Function("self", SOURCE)(self);
+
+    const fetchHandler = listeners.get("fetch");
+    if (!fetchHandler) throw new Error("the worker registered no fetch listener");
+
+    return {
+      fetchHandler,
+      delays,
+      cachedFor: (url: string) => store.get(url),
+    };
+  }
+
+  /** Drive one navigation through the handler and return what it answered. */
+  async function navigate(harness: Harness, path: string): Promise<Response> {
+    const request = new Request(`https://stoky.example${path}`, {
+      headers: { accept: "text/html" },
+    });
+    Object.defineProperty(request, "mode", { value: "navigate" });
+
+    let answered: Promise<Response> | null = null;
+    harness.fetchHandler({
+      request,
+      respondWith: (value: Promise<Response>) => {
+        answered = value;
+      },
+    });
+
+    if (!answered) throw new Error("the worker did not answer the navigation");
+    return answered;
+  }
+
+  it("waits the number the file declares, not some other number", () => {
+    const declared = /NAVIGATION_TIMEOUT_MS = (\d+)/.exec(SOURCE)?.[1];
+
+    // Read from the source so the two cannot drift: if somebody tunes the
+    // constant, this test follows them and the assertion below still holds.
+    expect(declared).toBe("2500");
+  });
+
+  it("serves what it kept when the network never answers", async () => {
+    const harness = load({
+      fetchNeverSettles: true,
+      cache: { "/dashboard": "the cached shell" },
+    });
+
+    const response = await navigate(harness, "/dashboard");
+
+    expect(await response.text()).toBe("the cached shell");
+    expect(harness.delays).toContain(2500);
+  });
+
+  it("falls back to the offline page when it kept nothing for that route", async () => {
+    const harness = load({
+      fetchNeverSettles: true,
+      cache: { "/offline": "no connection" },
+    });
+
+    const response = await navigate(harness, "/prices/never-visited");
+
+    expect(await response.text()).toBe("no connection");
+  });
+
+  it("does not wait at all when the network answers", async () => {
+    // The other half: a timeout that fires early would serve stale pages to
+    // somebody with a perfectly good connection.
+    const harness = load({
+      fetchNeverSettles: false,
+      cache: { "/dashboard": "the cached shell" },
+    });
+
+    const response = await navigate(harness, "/dashboard");
+
+    expect(await response.text()).toBe("from the network");
   });
 });

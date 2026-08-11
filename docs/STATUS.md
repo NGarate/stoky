@@ -384,11 +384,13 @@ where it disagrees with this file, it is right.
   is the obvious place to look if it returns.
 
 **Offline, honestly**
-- **The service worker is not exercised by any test.** It registers only when
-  `NODE_ENV` is `production`, and the browser suite runs against `pnpm dev`. Its
-  classifier, its write barrier and its gitignore status are checked as source
-  facts; that a real `install` populates a real cache is not checked anywhere.
-  A production build driven by Playwright would close this and is not done.
+- ~~**The service worker is not exercised by any test.**~~ **Closed.**
+  `pnpm test:e2e:sw` builds and serves the standalone artefact the Docker image
+  runs, then drives a real worker: it registers and claims the page, `install`
+  precaches `/offline`, the static cache holds real hashed chunks, a navigation
+  with the network cut off is served from cache, and an uncached route gets the
+  offline document. Separate from the ordinary suite because a `next build` is a
+  minute the five-minute budget cannot absorb.
 - **iOS Safari is unverified.** Playwright's WebKit is not iOS Safari, and §5.4
   defers installability on iOS grounds specifically. The queue, the storage and
   the worker all need a pass on a real device, and that pass must be dated here
