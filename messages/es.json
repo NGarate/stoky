@@ -596,6 +596,28 @@
   "offline": {
     "nothingSavedTitle": "Aquí todavía no hay nada guardado",
     "nothingSavedBody": "No tienes conexión y esta pantalla no se había guardado en el móvil. Vuelve a intentarlo cuando tengas señal.",
-    "refresh": "Volver a intentarlo"
+    "refresh": "Volver a intentarlo",
+    "synced": "Todo guardado",
+    "pending": "{count, plural, one {# cambio sin enviar} other {# cambios sin enviar}}",
+    "syncing": "Enviando tus cambios...",
+    "needsSignin": "Vuelve a entrar para enviar tus cambios. No se ha perdido ninguno.",
+    "failed": "{count, plural, one {# cambio no se ha guardado} other {# cambios no se han guardado}}",
+    "full": "No caben más cambios sin conexión. Conéctate para enviar los que hay.",
+    "unrepresented": "Algo va mal con tus cambios sin enviar. Conéctate y vuelve a abrir la aplicación.",
+    "needsReconciliation": "{count, plural, one {Hay que comprobar # producto} other {Hay que comprobar # productos}}",
+    "review": "Revisar",
+    "sendNow": "Enviar ahora",
+    "reconcileTitle": "Comprobar el stock",
+    "reconcileBody": "Apuntaste que usabas {quantity} {unit} de «{name}», pero cuando llegó al servidor ya no quedaba tanto. Alguien más lo habrá usado antes.",
+    "reconcileQuestion": "¿Cuánto hay ahora mismo en casa?",
+    "reconcileHint": "Mira en la estantería o en la nevera y escribe lo que veas. Ajustaremos la cuenta a ese número.",
+    "reconcileSubmit": "Guardar la cantidad",
+    "reconcileSaving": "Guardando...",
+    "reconcileDiscard": "Descartar este cambio",
+    "reconcileReason": "Ajuste tras un consumo sin conexión",
+    "reconcileFailed": "No se ha podido ajustar. Inténtalo otra vez.",
+    "reconcileKitchen": "Esta cuenta puede mirar y consumir, pero no ajustar el stock. Díselo a alguien que administre el hogar.",
+    "discard": "Descartar",
+    "retry": "Reintentar"
   }
 }

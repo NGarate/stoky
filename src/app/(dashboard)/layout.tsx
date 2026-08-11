@@ -5,6 +5,7 @@ import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { SessionKeepAlive } from "@/components/session/SessionKeepAlive";
 import { ComposerProvider } from "@/components/offline/Composer";
 import { WriteQueueProvider } from "@/components/offline/WriteQueueProvider";
+import { SyncStatus } from "@/components/offline/SyncStatus";
 
 /**
  * The authenticated shell.
@@ -50,6 +51,9 @@ export default async function DashboardLayout({
           {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
           <SessionKeepAlive expiresAt={session.expires} />
           <main className="mx-auto max-w-7xl p-4 pb-28 md:pb-8 md:pl-36 lg:pb-4 lg:pl-4">
+            {/* Above the content, because what it says sometimes needs doing
+                before what is below it can be trusted. */}
+            <SyncStatus />
             {children}
           </main>
         </div>

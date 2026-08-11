@@ -596,6 +596,28 @@
   "offline": {
     "nothingSavedTitle": "Nothing saved here yet",
     "nothingSavedBody": "You are offline and this screen had not been saved on the phone. Try again once you have signal.",
-    "refresh": "Try again"
+    "refresh": "Try again",
+    "synced": "Everything saved",
+    "pending": "{count, plural, one {# change not sent yet} other {# changes not sent yet}}",
+    "syncing": "Sending your changes...",
+    "needsSignin": "Sign in again to send your changes. None of them are lost.",
+    "failed": "{count, plural, one {# change was not saved} other {# changes were not saved}}",
+    "full": "No room for more offline changes. Get a signal to send the ones you have.",
+    "unrepresented": "Something is wrong with your unsent changes. Get a signal and open the app again.",
+    "needsReconciliation": "{count, plural, one {# product needs checking} other {# products need checking}}",
+    "review": "Review",
+    "sendNow": "Send now",
+    "reconcileTitle": "Check the stock",
+    "reconcileBody": "You recorded using {quantity} {unit} of “{name}”, but by the time it reached the server there was less than that. Somebody else probably used it first.",
+    "reconcileQuestion": "How much is in the house right now?",
+    "reconcileHint": "Look on the shelf or in the fridge and type what you see. We will set the count to that number.",
+    "reconcileSubmit": "Save the amount",
+    "reconcileSaving": "Saving...",
+    "reconcileDiscard": "Discard this change",
+    "reconcileReason": "Adjusted after an offline use",
+    "reconcileFailed": "That could not be adjusted. Try again.",
+    "reconcileKitchen": "This account can look and use things up, but not adjust the stock. Tell somebody who manages the household.",
+    "discard": "Discard",
+    "retry": "Retry"
   }
 }
