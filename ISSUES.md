@@ -9,7 +9,9 @@ This document tracks open issues and technical debt. It started as the Phase 0
 **Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: TEST-1 and DOCS-1**, which are the two that were never defects. TEST-1
+**Open: PROD-1, TEST-1 and DOCS-1.** PROD-1 was found while writing DOCS-1's
+docblocks — documenting a procedure honestly means establishing what it does,
+and this one does not do what it looks like. The other two were never defects. TEST-1
 is "integration tests need a database", which is a property of testing a
 database application rather than something to fix; the runner addressed the part
 that was a cost. DOCS-1 is "no JSDoc on the tRPC procedures".
@@ -48,6 +50,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
+| PROD-1 | Deleting a used product fails, and says something else | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -657,6 +660,39 @@ picker, including the new `/inventory/add`.
 Render recursively with indentation, and give each option an accessible name
 that includes its parent, so "Nevera" is distinguishable from another "Nevera"
 elsewhere in the tree.
+
+---
+
+### 🟡 PROD-1: Deleting a used product fails, and says something else
+
+**File:** `src/server/trpc/routers/product.ts`
+**Severity:** LOW
+**Status:** OPEN — found 2026-08-11 while documenting the router for DOCS-1
+
+No relation in `prisma/schema.prisma` declares `onDelete`, so Prisma's default
+applies and PostgreSQL refuses to delete a row anything references. A product
+with a single stock entry, price record or receipt line therefore cannot be
+deleted — which is a defensible rule and is not the problem.
+
+The problem is what the caller is told. The P2003 reaches `domainErrors`, which
+translates it to `BAD_REQUEST` with "That refers to something that does not
+exist" — a sentence about a request referring to a missing row, when what
+actually happened is the opposite: too many rows refer to *this* one. Somebody
+meeting that in the interface has no way to work out that the answer is "use up
+or remove its stock first".
+
+Established by probing a real database rather than by reasoning about Prisma's
+defaults, because the defaults differ between required and optional relations
+and the answer mattered.
+
+**What is not decided:** whether a used product *should* be deletable at all —
+cascading would take its price history with it, which is the record the price
+screens exist to show. Refusing is probably right; only the wording is
+certainly wrong.
+
+**Suggested fix:** check for references in the procedure and throw `CONFLICT`
+with a message naming what is in the way. That leaves the behaviour as it is
+and only makes it legible, so it does not pre-empt the product decision.
 
 ---
 
