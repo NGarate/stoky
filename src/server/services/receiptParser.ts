@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ReceiptStatus, MatchStatus } from "@prisma/client";
+import { NotFoundError } from "./errors";
 
 interface ParsedItem {
   rawText: string;
@@ -268,7 +269,7 @@ export async function saveParsedItems(
     select: { householdId: true },
   });
   if (!receipt) {
-    throw new Error("Receipt not found");
+    throw new NotFoundError("Receipt not found");
   }
 
   // Update receipt with parsed metadata

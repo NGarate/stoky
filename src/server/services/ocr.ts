@@ -2,6 +2,7 @@ import { createWorker, type Worker } from "tesseract.js";
 import { prisma } from "@/lib/prisma";
 import { ReceiptStatus } from "@prisma/client";
 import sharp from "sharp";
+import { InvalidInputError, NotFoundError } from "./errors";
 
 let worker: Worker | null = null;
 
@@ -18,7 +19,7 @@ export async function processReceiptOcr(receiptId: string): Promise<string> {
   });
 
   if (!receipt) {
-    throw new Error("Receipt not found");
+    throw new NotFoundError("Receipt not found");
   }
 
   try {
@@ -30,7 +31,7 @@ export async function processReceiptOcr(receiptId: string): Promise<string> {
     const fs = await import("node:fs");
     const imageBuffer = await fs.promises.readFile(receipt.imagePath);
     if (imageBuffer.length === 0) {
-      throw new Error("Empty image file");
+      throw new InvalidInputError("Empty image file");
     }
 
     // Validate image before passing it to OCR to avoid worker-level crashes.

@@ -37,21 +37,21 @@ describe("router error types", () => {
     });
   }
 
-  it("pins the services layer as still unconverted, so fixing it goes red here", () => {
-    // Deliberate scope note rather than an oversight: `ocr`, `productMatcher`,
-    // `receiptParser` and `openFoodFacts` still throw bare Errors, and a
-    // procedure that calls one still surfaces INTERNAL_SERVER_ERROR. That is
-    // the same defect one layer down and is filed separately rather than
-    // fixed in passing (PROGRESS.md D6), as ISSUES.md DEBT-6.
+  it("holds the services layer to the same rule", () => {
+    // This used to assert the opposite — that the services were *still*
+    // unconverted — so that fixing DEBT-6 would fail here and send whoever did
+    // it back to close the entry rather than leave a stale claim behind. That
+    // worked: it went red, and this is the other side of it.
     //
-    // Like DEBT-2 and A11Y-1, it is pinned by a test that fails when the
-    // defect is fixed — so whoever fixes it is sent here to close the entry
-    // rather than leaving a stale claim behind.
+    // The services throw the domain errors in `services/errors.ts` rather than
+    // `TRPCError`, because `processReceiptOcr` runs from a background task with
+    // no client attached; `trpc/service-errors.ts` turns them into statuses at
+    // the boundary.
     const servicesDir = join(import.meta.dir, "../../server/services");
     const withBareErrors = readdirSync(servicesDir)
       .filter((f) => f.endsWith(".ts"))
       .filter((f) => /throw new Error\b/.test(readFileSync(join(servicesDir, f), "utf8")));
 
-    expect(withBareErrors.length).toBeGreaterThan(0);
+    expect(withBareErrors).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UpstreamError } from "./errors";
 
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
 const OFF_USER_AGENT = "Stoky/1.0 (contact@stoky.app)";
@@ -68,7 +69,7 @@ export class OpenFoodFactsClient {
       );
 
       if (!response.ok) {
-        throw new Error(`OFF API error: ${response.status}`);
+        throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
       }
 
       const rawData = await response.json();
@@ -111,7 +112,7 @@ export class OpenFoodFactsClient {
       );
 
       if (!response.ok) {
-        throw new Error(`OFF API error: ${response.status}`);
+        throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
       }
 
       const data = await response.json();

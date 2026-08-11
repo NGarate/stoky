@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { MatchStatus, ReceiptStatus } from "@prisma/client";
+import { NotFoundError } from "./errors";
 
 interface ProductMatch {
   productId: string;
@@ -64,7 +65,7 @@ export async function matchReceiptItems(
   });
 
   if (!receipt) {
-    throw new Error("Receipt not found");
+    throw new NotFoundError("Receipt not found");
   }
 
   const results: MatchResult[] = [];
@@ -197,7 +198,7 @@ export async function getItemCandidates(
   });
 
   if (!item) {
-    throw new Error("Receipt item not found");
+    throw new NotFoundError("Receipt item not found");
   }
 
   const parsedName = item.parsedName || item.rawText;

@@ -5,6 +5,7 @@ import type { Session } from "next-auth";
 import type { HouseholdRole, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { translatePrismaError, underlying } from "./prisma-errors";
+import { translateServiceError } from "./service-errors";
 import { logSecurityEvent } from "@/lib/security-log";
 import { rateLimitIdentifier } from "@/lib/rate-limit";
 
@@ -47,22 +48,27 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
 export const createTRPCRouter = t.router;
 
 /**
- * Turn a database complaint into a code the caller can act on.
+ * Turn a complaint from below the router into a code the caller can act on.
  *
  * On every procedure, because the alternative is remembering it per resolver
  * and the one that gets forgotten is the one that matters. A resolver's own
- * `TRPCError` passes through untouched: only errors Prisma raised and nobody
- * caught are translated, and only the handful of codes that mean something
- * specific — see `prisma-errors.ts`.
+ * `TRPCError` passes through untouched: only errors Prisma or a service raised
+ * and nobody caught are translated, and only the handful that mean something
+ * specific — see `prisma-errors.ts` and `service-errors.ts`.
  *
  * It matters more than it did. Phase 4's queue reads the status to decide
  * whether to retry, so an uncaught `P2025` arriving as a 500 makes the queue
  * spend eight attempts on a row that no longer exists.
  */
-const prismaErrors = t.middleware(async ({ next }) => {
+const domainErrors = t.middleware(async ({ next }) => {
   const result = await next();
   if (!result.ok) {
-    const translated = translatePrismaError(underlying(result.error));
+    const cause = underlying(result.error);
+    // Both translators, one unwrap. A service error and a Prisma error are the
+    // same shape of problem — something below the router knows what went wrong
+    // and the transport does not — and they are disjoint, so the order between
+    // them does not matter.
+    const translated = translatePrismaError(cause) ?? translateServiceError(cause);
     if (translated) throw translated;
   }
   return result;
@@ -72,7 +78,7 @@ const prismaErrors = t.middleware(async ({ next }) => {
  * Write a line whenever a request is refused for a security reason — ASVS
  * V7.1.3.
  *
- * **On every procedure, for the same reason `prismaErrors` is.** An
+ * **On every procedure, for the same reason `domainErrors` is.** An
  * access-control failure is thrown from three middlewares and from a dozen
  * resolvers checking `householdId`, and the one that gets forgotten is the one
  * that matters: a resolver reaching another household's row is exactly the
@@ -107,9 +113,9 @@ const securityEvents = t.middleware(async ({ ctx, next, path }) => {
   return result;
 });
 
-// Outside `prismaErrors`, so what gets logged is the code the caller actually
+// Outside `domainErrors`, so what gets logged is the code the caller actually
 // received rather than the one the resolver happened to throw first.
-export const publicProcedure = t.procedure.use(securityEvents).use(prismaErrors);
+export const publicProcedure = t.procedure.use(securityEvents).use(domainErrors);
 
 /**
  * The capability matrix of `docs/REDESIGN_PLAN.md` §5.2, as roles.
