@@ -9,6 +9,7 @@ import {
 import { createTRPCReact } from "@trpc/react-query";
 import { useState } from "react";
 import SuperJSON from "superjson";
+import { seedOnlineManager } from "@/lib/offline/onlineManager";
 import type { AppRouter } from "@/server/trpc/router";
 
 export const api = createTRPCReact<AppRouter>();
@@ -22,6 +23,16 @@ function getUrl() {
         : "http://localhost:3000";
   return `${base}/api/trpc`;
 }
+
+/**
+ * Seeded at module scope, before any query client exists.
+ *
+ * `onlineManager` is a module singleton, so this has to run once and early —
+ * an effect would leave the first render of the first screen answering from a
+ * guess. It is a no-op on the server, which is where module scope would
+ * otherwise be a hazard.
+ */
+seedOnlineManager();
 
 export function TRPCProvider(
   props: Readonly<{ children: React.ReactNode }>,
@@ -54,6 +65,24 @@ export function TRPCProvider(
               }
               return failureCount < 2;
             },
+            /**
+             * Explicit, and the alternative is worse than it looks.
+             *
+             * `"online"` is the default, but stating it here is the difference
+             * between a screen that shows "nothing saved yet" and one that
+             * shows a failure: a paused query reports `fetchStatus: "paused"`,
+             * which `RouteState` has a branch for. `"always"` would fire three
+             * doomed requests per query per mount against the predicate above
+             * and land every screen in `error` instead.
+             */
+            networkMode: "online",
+            refetchOnReconnect: true,
+          },
+          mutations: {
+            // The same, for the same reason. A mutation fired with no signal
+            // must not burn attempts against a server it cannot reach — the
+            // queue owns retrying, and it knows what a refusal means.
+            networkMode: "online",
           },
         },
       }),
