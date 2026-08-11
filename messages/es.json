@@ -606,7 +606,13 @@
     "validation": "Error de validación",
     "serverError": "Error del servidor",
     "networkError": "Error de red",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "boundaryTitle": "Esta pantalla no ha podido cargarse",
+    "boundaryBody": "El fallo está en la aplicación, no en lo que tenías a medias: nada de lo que hayas apuntado se ha perdido. Vuelve a intentarlo y, si sigue igual, ve al inicio y entra de nuevo desde ahí.",
+    "boundaryRetry": "Volver a intentarlo",
+    "boundaryHome": "Ir al inicio",
+    "boundaryReference": "Referencia del fallo: {digest}",
+    "boundaryReferenceHint": "Ese código está también en el registro del servidor, por si quien administra el hogar necesita buscarlo."
   },
   "confirmations": {
     "deleteTitle": "Confirmar eliminación",

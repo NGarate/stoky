@@ -606,7 +606,13 @@
     "validation": "Validation error",
     "serverError": "Server error",
     "networkError": "Network error",
-    "retry": "Retry"
+    "retry": "Retry",
+    "boundaryTitle": "This screen could not load",
+    "boundaryBody": "The fault is in the application, not in what you were part-way through: nothing you noted down has been lost. Try again, and if it keeps happening go to the start and come back from there.",
+    "boundaryRetry": "Try again",
+    "boundaryHome": "Go to the start",
+    "boundaryReference": "Fault reference: {digest}",
+    "boundaryReferenceHint": "That code is in the server log too, in case whoever runs the household needs to look it up."
   },
   "confirmations": {
     "deleteTitle": "Confirm deletion",
