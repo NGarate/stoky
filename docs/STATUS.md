@@ -24,12 +24,19 @@ port 3102, after Phase 3.
 | Unit tests | `corepack pnpm test:unit` | ✅ 134 pass / 16 files |
 | Component tests | `corepack pnpm test:components` | ✅ 164 pass / 14 files |
 | Integration tests | `corepack pnpm test:integration` | ✅ 281 pass / 12 files |
-| Build | `corepack pnpm build` | ✅ 25 routes, all server-rendered on demand |
+| Build | `pnpm build` | ✅ 25 routes, all server-rendered on demand — **45.8s cold** with the React Compiler on, 39.8s with it off |
 | Coverage | `bun test --coverage <dir>` | ℹ️ per tier, not a project figure — see *Known gaps* |
 | Migration | `corepack pnpm prisma migrate deploy` | ✅ on a fresh database |
 | Seed | `corepack pnpm db:seed` | ✅ idempotent across re-runs |
 | E2E | `bunx playwright test` | ✅ 89 pass / 0 fail, **2.9 min** |
 | Dependency audit | `corepack pnpm audit` | ✅ no known vulnerabilities |
+
+**The React Compiler is on** (`reactCompiler: true`, `next@16.3`,
+`babel-plugin-react-compiler@1.0.0`, full mode). Its cost was measured rather
+than assumed: a cold build goes from **39.8s to 45.8s**, +15%, against a
+per-step ceiling of 300s. The browser suite is green with it on — which is the
+tier that matters, because the compiler changes what the built application
+does and no Bun-tier test sees it at all.
 
 `corepack pnpm verify:local` runs the first six — **17s** of a **600s budget**,
 which the script enforces. Every step also has its own ceiling, so a hang fails

@@ -79,6 +79,7 @@
     "@testing-library/user-event": "^14.6.3",
     "@types/bun": "^1.3.14",
     "axe-core": "^4.13.0",
+    "babel-plugin-react-compiler": "1.0.0",
     "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1"

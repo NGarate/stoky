@@ -33,6 +33,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
 
+  // The React Compiler memoises what we would otherwise have to remember to
+  // memoise. On in full mode rather than `annotation`, because opt-in
+  // memoisation fails the same way manual memoisation does: the components
+  // that need it are the ones nobody thought about.
+  //
+  // It runs as a Babel plugin, which is slower than the default Rust pipeline,
+  // but Next uses an SWC pass first to apply it only to files that contain JSX
+  // or hooks. Measured on this project rather than assumed — see STATUS.md.
+  reactCompiler: true,
+
   // Applied to every route, including API and tRPC responses.
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
