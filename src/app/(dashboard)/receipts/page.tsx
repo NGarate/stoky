@@ -46,8 +46,12 @@ export default function ReceiptsPage() {
   const { data, isLoading } = api.receipt.list.useQuery({ limit: 50 });
   const receipts: Receipt[] = data?.items ?? [];
 
-  // `lib/utils`'s `formatDate` is pinned to `es-ES`, so it would keep printing
-  // Spanish dates under an English catalogue.
+  // Formatted here rather than by a shared helper, because a shared one has to
+  // be told the locale and the only thing that knows it is a component. There
+  // used to be a `formatDate` in `lib/utils` with `es-ES` written into it
+  // (ISSUES.md I18N-3); it is gone rather than parameterised, because nothing
+  // called it and a locale-pinning helper on the shelf is a trap for whoever
+  // reaches for it next.
   const dateFormat = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
