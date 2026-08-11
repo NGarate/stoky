@@ -206,9 +206,6 @@ export default function ConsumeStockPage(): JSX.Element {
       productId: product.id,
       quantity: parsedQuantity,
       unit: unit.trim(),
-      // Required by the input schema, then ignored by the procedure, which
-      // always writes CONSUME. Sent so the Zod input validates.
-      operationType: "CONSUME",
       // Deliberately sent as `locationId` and not `consumeFromLocationId`.
       // `consumeFromLocationId` narrows the server's availability check to that
       // one location, which would contradict the household-wide figure shown

@@ -178,9 +178,6 @@ export default function AddStockPage(): JSX.Element {
       productId: product.id,
       quantity: parsedQuantity,
       unit: unit.trim(),
-      // Required by the input schema, then ignored by the procedure, which
-      // always writes PURCHASE. Sent so the Zod input validates.
-      operationType: "PURCHASE",
       ...(expirationDate ? { expirationDate } : {}),
       ...(locationId ? { locationId } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),

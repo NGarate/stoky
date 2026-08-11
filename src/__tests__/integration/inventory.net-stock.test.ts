@@ -131,16 +131,16 @@ describe("consumeStock measures what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
-      ...envelope(OWNER.userId), productId, quantity: 6, unit: "L", operationType: "PURCHASE" });
+      ...envelope(OWNER.userId), productId, quantity: 6, unit: "L" });
     await api.inventory.consumeStock({
-      ...envelope(OWNER.userId), productId, quantity: 4, unit: "L", operationType: "CONSUME" });
+      ...envelope(OWNER.userId), productId, quantity: 4, unit: "L" });
 
     expect(await netStock()).toBe(2);
 
     // Gross purchases are 6, net stock is 2. The guard used to read 6.
     await expectCode(
       api.inventory.consumeStock({
-      ...envelope(OWNER.userId), productId, quantity: 5, unit: "L", operationType: "CONSUME" }),
+      ...envelope(OWNER.userId), productId, quantity: 5, unit: "L" }),
       "CONFLICT",
     );
 
@@ -151,11 +151,11 @@ describe("consumeStock measures what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
-      ...envelope(OWNER.userId), productId, quantity: 6, unit: "L", operationType: "PURCHASE" });
+      ...envelope(OWNER.userId), productId, quantity: 6, unit: "L" });
     await api.inventory.consumeStock({
-      ...envelope(OWNER.userId), productId, quantity: 4, unit: "L", operationType: "CONSUME" });
+      ...envelope(OWNER.userId), productId, quantity: 4, unit: "L" });
     await api.inventory.consumeStock({
-      ...envelope(OWNER.userId), productId, quantity: 2, unit: "L", operationType: "CONSUME" });
+      ...envelope(OWNER.userId), productId, quantity: 2, unit: "L" });
 
     expect(await netStock()).toBe(0);
   });
@@ -164,13 +164,13 @@ describe("consumeStock measures what is left", () => {
     const api = await caller();
 
     await api.inventory.addStock({
-      ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", operationType: "PURCHASE" });
+      ...envelope(OWNER.userId), productId, quantity: 3, unit: "L" });
     await api.inventory.consumeStock({
-      ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", operationType: "CONSUME" });
+      ...envelope(OWNER.userId), productId, quantity: 3, unit: "L" });
 
     await expectCode(
       api.inventory.consumeStock({
-      ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", operationType: "CONSUME" }),
+      ...envelope(OWNER.userId), productId, quantity: 1, unit: "L" }),
       "CONFLICT",
     );
 
@@ -186,7 +186,6 @@ describe("consumeStock measures what is left", () => {
       quantity: 5,
       unit: "L",
       locationId: shelfId,
-      operationType: "PURCHASE",
     });
     await api.inventory.consumeStock({
       ...envelope(OWNER.userId),
@@ -194,7 +193,6 @@ describe("consumeStock measures what is left", () => {
       quantity: 4,
       unit: "L",
       consumeFromLocationId: shelfId,
-      operationType: "CONSUME",
     });
 
     expect(await netStock(shelfId)).toBe(1);
@@ -206,7 +204,7 @@ describe("consumeStock measures what is left", () => {
         quantity: 2,
         unit: "L",
         consumeFromLocationId: shelfId,
-        operationType: "CONSUME",
+
       }),
       "CONFLICT",
     );
@@ -234,7 +232,6 @@ describe("two people consuming the last of something", () => {
       productId,
       quantity: 2,
       unit: "L",
-      operationType: "PURCHASE",
     });
 
     let releaseConsume = (): void => {};
@@ -275,7 +272,6 @@ describe("two people consuming the last of something", () => {
       productId,
       quantity: 2,
       unit: "L",
-      operationType: "CONSUME",
     });
 
     // The first call has read the stock and is holding the product row.
@@ -286,7 +282,6 @@ describe("two people consuming the last of something", () => {
       productId,
       quantity: 2,
       unit: "L",
-      operationType: "CONSUME",
     });
 
     // The second call is either blocked on the lock or has already sailed
@@ -328,7 +323,7 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 6,
       unit: "L",
-      operationType: "PURCHASE",
+
       expirationDate: inDays(3),
     });
     await api.inventory.consumeStock({
@@ -336,7 +331,6 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 6,
       unit: "L",
-      operationType: "CONSUME",
     });
 
     const expiring = await api.inventory.getExpiringItems({ days: 7 });
@@ -352,7 +346,7 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 6,
       unit: "L",
-      operationType: "PURCHASE",
+
       expirationDate: inDays(3),
     });
     await api.inventory.consumeStock({
@@ -360,7 +354,6 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 4,
       unit: "L",
-      operationType: "CONSUME",
     });
 
     const expiring = await api.inventory.getExpiringItems({ days: 7 });
@@ -380,7 +373,7 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 6,
       unit: "L",
-      operationType: "PURCHASE",
+
       expirationDate: inDays(2),
     });
     await api.inventory.addStock({
@@ -388,7 +381,7 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 6,
       unit: "L",
-      operationType: "PURCHASE",
+
       expirationDate: inDays(20),
     });
     await api.inventory.consumeStock({
@@ -396,7 +389,6 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 6,
       unit: "L",
-      operationType: "CONSUME",
     });
 
     const expiring = await api.inventory.getExpiringItems({ days: 7 });
@@ -418,7 +410,7 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 2,
       unit: "L",
-      operationType: "PURCHASE",
+
       expirationDate: inDays(-4),
     });
     await api.inventory.consumeStock({
@@ -426,7 +418,6 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 2,
       unit: "L",
-      operationType: "CONSUME",
     });
 
     expect(await api.inventory.getExpiredItems({})).toHaveLength(0);
@@ -440,7 +431,7 @@ describe("the expiry views report what is left", () => {
       productId,
       quantity: 2,
       unit: "L",
-      operationType: "PURCHASE",
+
       expirationDate: inDays(-4),
     });
 
@@ -462,7 +453,6 @@ describe("transferStock measures what is left at the source", () => {
       quantity: 6,
       unit: "L",
       locationId: shelfId,
-      operationType: "PURCHASE",
     });
     await api.inventory.consumeStock({
       ...envelope(OWNER.userId),
@@ -470,7 +460,6 @@ describe("transferStock measures what is left at the source", () => {
       quantity: 4,
       unit: "L",
       consumeFromLocationId: shelfId,
-      operationType: "CONSUME",
     });
 
     expect(await netStock(shelfId)).toBe(2);
@@ -503,7 +492,6 @@ describe("transferStock measures what is left at the source", () => {
       quantity: 2,
       unit: "L",
       locationId: shelfId,
-      operationType: "PURCHASE",
     });
 
     // The interleaving is forced rather than hoped for, the same way the
@@ -578,7 +566,6 @@ describe("transferStock measures what is left at the source", () => {
       quantity: 4,
       unit: "L",
       locationId: shelfId,
-      operationType: "PURCHASE",
     });
     await api.inventory.transferStock({
       productId,
@@ -603,5 +590,78 @@ describe("transferStock measures what is left at the source", () => {
     );
 
     expect(await netStock(shelfId)).toBe(0);
+  });
+});
+
+/**
+ * ISSUES.md UI-3 item 2, at the layer that matters.
+ *
+ * `src/__tests__/unit/inventory-input.test.ts` proves the schema refuses a
+ * negative quantity. What it cannot prove is that the *procedure* uses that
+ * schema and no longer launders the sign itself: the handler used to call
+ * `Math.abs`, so even a rejected sign would have been quietly corrected if the
+ * two changes had gone in separately.
+ */
+describe("a quantity with the wrong sign", () => {
+  it("is refused rather than flipped", async () => {
+    const api = await caller();
+    const before = await netStock();
+
+    await expectCode(
+      api.inventory.addStock({
+        ...envelope(OWNER.userId),
+        productId,
+        quantity: -5,
+        unit: "L",
+      }),
+      "BAD_REQUEST",
+    );
+
+    // The whole point: it did not become +5.
+    expect(await netStock()).toBe(before);
+  });
+
+  it("is refused for a consumption too", async () => {
+    const api = await caller();
+    const before = await netStock();
+
+    await expectCode(
+      api.inventory.consumeStock({
+        ...envelope(OWNER.userId),
+        productId,
+        quantity: -2,
+        unit: "L",
+      }),
+      "BAD_REQUEST",
+    );
+
+    // A negative consumption ran through `-Math.abs()` and *removed* stock,
+    // which is at least the same direction — but it also skipped the
+    // availability guard's intent by arriving as a different number than sent.
+    expect(await netStock()).toBe(before);
+  });
+
+  it("still lets a reconciliation take stock down", async () => {
+    // The exception that makes the three schemas separate: `adjustStock` is
+    // signed, because `ReconcileDialog` sends `actual - netStock` and a shelf
+    // with less on it than the ledger says is the ordinary case.
+    const api = await caller();
+
+    await api.inventory.addStock({
+      ...envelope(OWNER.userId),
+      productId,
+      quantity: 5,
+      unit: "L",
+    });
+    const before = await netStock();
+
+    await api.inventory.adjustStock({
+      productId,
+      quantity: -2,
+      unit: "L",
+      reason: "Recuento",
+    });
+
+    expect(await netStock()).toBe(before - 2);
   });
 });

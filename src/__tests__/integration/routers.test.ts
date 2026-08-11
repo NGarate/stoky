@@ -666,7 +666,7 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 10,
         unit: "unit",
         locationId: location.id,
-        operationType: "PURCHASE",
+
       });
 
       expect(result.quantity).toBe(10);
@@ -691,7 +691,7 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 10,
         unit: "unit",
         locationId: location.id,
-        operationType: "PURCHASE",
+
       });
       testData.stockEntries.push(addResult.id);
 
@@ -701,7 +701,7 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 5,
         unit: "unit",
-        operationType: "CONSUME",
+
       });
 
       expect(consumeResult.quantity).toBe(-5);
@@ -723,7 +723,7 @@ describe("tRPC Router Integration Tests", () => {
           productId: product.id,
           quantity: 100,
           unit: "unit",
-          operationType: "CONSUME",
+
         })
       ).rejects.toThrow("Not enough stock available");
       await expectCode(
@@ -732,7 +732,7 @@ describe("tRPC Router Integration Tests", () => {
           productId: product.id,
           quantity: 1000,
           unit: "unit",
-          operationType: "CONSUME",
+
         }),
         "CONFLICT"
       );
@@ -751,7 +751,7 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 25,
         unit: "unit",
-        operationType: "ADJUST",
+
         reason: "Inventory correction",
       });
 
@@ -775,7 +775,7 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 5,
         unit: "unit",
-        operationType: "PURCHASE",
+
       });
       testData.stockEntries.push(entry.id);
 
@@ -802,7 +802,7 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 3,
         unit: "unit",
-        operationType: "PURCHASE",
+
       });
       testData.stockEntries.push(entry.id);
 
@@ -834,7 +834,7 @@ describe("tRPC Router Integration Tests", () => {
         quantity: 20,
         unit: "unit",
         locationId: location1.id,
-        operationType: "PURCHASE",
+
       });
       testData.stockEntries.push(entry.id);
 
@@ -1494,7 +1494,7 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 3,
         unit: "unit",
-        operationType: "PURCHASE",
+
       });
       testData.stockEntries.push(entry.id);
 
@@ -1689,7 +1689,7 @@ describe("tRPC Router Integration Tests", () => {
         productId: product.id,
         quantity: 999999,
         unit: "unit",
-        operationType: "PURCHASE",
+
       });
 
       expect(result.quantity).toBe(999999);

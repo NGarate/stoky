@@ -1,7 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
-import { stockEntrySchema } from "@/lib/validations/inventory";
+import {
+  addStockSchema,
+  adjustStockSchema,
+  consumeStockSchema,
+} from "@/lib/validations/inventory";
 import { daysBetween, remainingByBatch } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
 import { withReplay } from "../replay";
@@ -171,7 +175,7 @@ export const inventoryRouter = createTRPCRouter({
 
   addStock: writeProcedure
     .input(
-      stockEntrySchema
+      addStockSchema
         .extend({
           price: z.number().optional(),
           storeId: z.string().optional(),
@@ -257,7 +261,7 @@ export const inventoryRouter = createTRPCRouter({
           const entry = await tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: Math.abs(input.quantity),
+              quantity: input.quantity,
               unit: input.unit,
               expirationDate: input.expirationDate,
               locationId: input.locationId,
@@ -278,7 +282,7 @@ export const inventoryRouter = createTRPCRouter({
                 storeId: input.storeId,
                 price: input.price,
                 unit: input.unit,
-                quantity: Math.abs(input.quantity),
+                quantity: input.quantity,
                 currency: "EUR",
               },
             });
@@ -305,7 +309,7 @@ export const inventoryRouter = createTRPCRouter({
 
   consumeStock: householdProcedure
     .input(
-      stockEntrySchema
+      consumeStockSchema
         .extend({
           consumeFromLocationId: z.string().optional(),
         })
@@ -372,7 +376,7 @@ export const inventoryRouter = createTRPCRouter({
             0
           );
 
-          if (Math.abs(input.quantity) > totalAvailable) {
+          if (input.quantity > totalAvailable) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "Not enough stock available",
@@ -382,7 +386,7 @@ export const inventoryRouter = createTRPCRouter({
           return tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: -Math.abs(input.quantity),
+              quantity: -input.quantity,
               unit: input.unit,
               locationId: input.consumeFromLocationId || input.locationId,
               operationType: "CONSUME" as StockOperation,
@@ -413,11 +417,7 @@ export const inventoryRouter = createTRPCRouter({
     }),
 
   adjustStock: writeProcedure
-    .input(
-      stockEntrySchema.extend({
-        reason: z.string().min(1),
-      })
-    )
+    .input(adjustStockSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 

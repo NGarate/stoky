@@ -89,7 +89,6 @@ export function ReconcileDialog({
       // The delta, computed from what they told us is there.
       quantity: Math.round((actual - netStock) * 100) / 100,
       unit: input.unit ?? product.data?.defaultUnit ?? "unit",
-      operationType: "ADJUST",
       reason: t("reconcileReason"),
     });
   }

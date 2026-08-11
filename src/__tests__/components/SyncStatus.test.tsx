@@ -245,8 +245,12 @@ describe("a refused consumption", () => {
     const call = adjustMutate.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(call.quantity).toBe(2);
     expect(call.productId).toBe("p1");
-    expect(call.operationType).toBe("ADJUST");
     expect(String(call.reason).length).toBeGreaterThan(0);
+    // No `operationType`. It was required by the shared input schema and then
+    // ignored by the procedure, which always writes ADJUST (ISSUES.md UI-3
+    // item 1); the schema no longer asks for it, and sending it again would be
+    // a caller inventing a field the server discards.
+    expect(call).not.toHaveProperty("operationType");
   });
 
   it("lets the change be dropped instead", async () => {

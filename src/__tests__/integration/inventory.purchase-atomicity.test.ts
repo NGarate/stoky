@@ -57,7 +57,6 @@ async function caller(db?: PrismaClient) {
 const purchase = {
   quantity: 2,
   unit: "L",
-  operationType: "PURCHASE" as const,
   price: 1.19,
 };
 
@@ -170,7 +169,7 @@ describe("addStock writes the entry and its price together", () => {
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
-      operationType: "PURCHASE",
+
     });
 
     expect(
@@ -192,7 +191,7 @@ describe("addStock writes the entry and its price together", () => {
       productId: OWNER.productId,
       quantity: 1,
       unit: "L",
-      operationType: "PURCHASE",
+
       price: 1.19,
     });
     await api.inventory.addStock({
@@ -200,7 +199,7 @@ describe("addStock writes the entry and its price together", () => {
       productId: OWNER.productId,
       quantity: 1,
       unit: "L",
-      operationType: "PURCHASE",
+
       storeId: OWNER.storeId,
     });
 

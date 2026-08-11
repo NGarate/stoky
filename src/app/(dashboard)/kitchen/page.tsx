@@ -89,7 +89,6 @@ export default function KitchenPage(): JSX.Element {
         productId: batch.product.id,
         quantity: 1,
         unit: batch.unit,
-        operationType: "CONSUME",
       },
       label: {
         key: "offline.usedUp",

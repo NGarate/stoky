@@ -99,7 +99,7 @@ describe("addStock and another household's store", () => {
         productId: A.productId,
         quantity: 1,
         unit: "L",
-        operationType: "PURCHASE",
+
         price: 1.19,
         storeId: B.storeId,
       });
@@ -124,7 +124,7 @@ describe("addStock and another household's store", () => {
         productId: A.productId,
         quantity: 3,
         unit: "L",
-        operationType: "PURCHASE",
+
         price: 1.19,
         storeId: B.storeId,
       })
@@ -148,7 +148,7 @@ describe("addStock and another household's store", () => {
       productId: A.productId,
       quantity: 2,
       unit: "L",
-      operationType: "PURCHASE",
+
       price: 1.09,
       storeId: A.storeId,
     });
@@ -166,7 +166,7 @@ describe("addStock and another household's store", () => {
       productId: A.productId,
       quantity: 1,
       unit: "L",
-      operationType: "PURCHASE",
+
     });
 
     expect(entry.quantity).toBe(1);

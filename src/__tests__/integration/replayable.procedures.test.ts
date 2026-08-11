@@ -249,7 +249,6 @@ describe("inventory.addStock", () => {
       productId: OWNER.productId,
       quantity: 6,
       unit: "L",
-      operationType: "PURCHASE" as const,
       locationId: OWNER.locationId,
     };
 
@@ -267,7 +266,6 @@ describe("inventory.addStock", () => {
       productId: OWNER.productId,
       quantity: 1,
       unit: "L",
-      operationType: "PURCHASE" as const,
     };
 
     // Two separately-constructed Dates for the same moment. Superjson revives
@@ -296,7 +294,7 @@ describe("inventory.consumeStock", () => {
       productId: OWNER.productId,
       quantity: 6,
       unit: "L",
-      operationType: "PURCHASE",
+
     });
 
     const call = {
@@ -304,7 +302,6 @@ describe("inventory.consumeStock", () => {
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
-      operationType: "CONSUME" as const,
     };
 
     await api.inventory.consumeStock(call);
@@ -327,7 +324,7 @@ describe("inventory.consumeStock", () => {
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
-      operationType: "PURCHASE",
+
     });
 
     const call = {
@@ -335,7 +332,6 @@ describe("inventory.consumeStock", () => {
       productId: OWNER.productId,
       quantity: 2,
       unit: "L",
-      operationType: "CONSUME" as const,
     };
 
     await api.inventory.consumeStock(call);

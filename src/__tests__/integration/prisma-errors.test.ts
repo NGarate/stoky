@@ -212,7 +212,7 @@ describe("what is not translated", () => {
           productId: OWNER.productId,
           quantity: 99,
           unit: "L",
-          operationType: "CONSUME",
+
         }),
       ),
     ).toBe("CONFLICT");

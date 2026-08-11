@@ -99,7 +99,7 @@ beforeAll(async () => {
     productId,
     quantity: 10,
     unit: "L",
-    operationType: "PURCHASE",
+
     createdBy: owner.id,
   });
 
@@ -143,7 +143,7 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
       productId,
       quantity: 1,
       unit: "L",
-      operationType: "CONSUME",
+
     });
 
     expect(entry.quantity).toBe(-1);
@@ -162,7 +162,7 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
         productId,
         quantity: 5,
         unit: "L",
-        operationType: "PURCHASE",
+
       }),
     );
     await expectRefused("shopping.updateItem", () =>
