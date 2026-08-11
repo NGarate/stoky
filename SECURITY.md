@@ -210,12 +210,39 @@ refused while the window is open, and the counter carries a TTL so the refusal
 expires. The counting itself is proven against a real Valkey in
 `src/__tests__/integration/rate-limit.test.ts`.
 
-### The password policy is a length check
+### The password policy prefers length, and it is not a breach check
 
-`src/lib/validations/auth.ts` requires `min(8)` and nothing else — no
-complexity rules, no check against known-breached passwords, no maximum.
-Combined with the absence of rate limiting, weak passwords are the most likely
-way an instance gets broken into. `ISSUES.md` DEBT-1.
+`src/lib/validations/password.ts` is the policy, and it is applied wherever a
+password is *set*: registration, and the accounts an admin creates for a
+household. Twelve characters minimum, a maximum of 128, a refusal of the
+handful of passwords that appear at the top of every leak, and a refusal to
+accept the account's own name or address as its password.
+
+**No composition rules**, which is the opposite of what `ISSUES.md` DEBT-1
+proposed. That entry asked for the familiar four regexes — an uppercase, a
+lowercase, a digit, a symbol. NIST SP 800-63B §5.1.1.2 advises against exactly
+those: they push people toward `Password1!`, which is more predictable than a
+longer passphrase, and they are why passwords get written down. This document
+already cites SP 800-63B for rate limiting; applying it there and ignoring it
+here would be picking the half that was easy. Twelve rather than the
+specification's floor of eight buys back some of what the missing breach check
+gives away.
+
+What is still open:
+
+- **There is no breached-password check.** The real one is against a corpus of
+  hundreds of millions, which needs either a large local file or an outbound
+  call to a service — neither of which belongs in an install expected to work
+  air-gapped. What ships is a short list of the passwords a guessing attempt
+  starts with, which is a floor rather than the control.
+- **The policy is not applied to an existing password at sign-in**, beyond the
+  maximum. A verifier that refused a stored password because the rule changed
+  would lock people out of their own household.
+
+The maximum is not a usability rule at all: `argon2.hash` and `argon2.verify`
+were both taking unbounded input on two endpoints reachable without an account,
+at 64 MB per call. A body of a few megabytes turned registration into a memory
+amplifier — the rate limiter bounds how often, not how much.
 
 ### The services layer still throws bare `Error`
 
