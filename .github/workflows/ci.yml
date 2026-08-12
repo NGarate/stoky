@@ -59,7 +59,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+      # Pinned via .bun-version rather than left to float: unpinned, this
+      # resolves to whatever Bun released last night, which can turn the trunk
+      # red with no commit to blame and no revert that fixes it. The file is
+      # the single place a Bun upgrade happens, deliberately.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       # --trust-lockfile skips re-verifying each entry against minimumReleaseAge.
       # That check belongs to resolution time; CI installs a committed, reviewed
@@ -128,6 +134,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - run: pnpm install --frozen-lockfile --trust-lockfile
       - run: pnpm db:generate
@@ -187,6 +195,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - run: pnpm install --frozen-lockfile --trust-lockfile
       - run: pnpm db:generate
