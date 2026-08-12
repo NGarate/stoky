@@ -278,6 +278,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+          # The whole history, so the before-commit is already here and the
+          # diff needs no network call. The first version of this job fetched
+          # it instead and failed on a private repository the moment the
+          # checkouts stopped persisting a token: `git fetch` had no
+          # credentials, asked for a username, and got "No such device or
+          # address". The fallback below turned that into "build", so nothing
+          # shipped wrongly — but the gate skipped nothing at all, which is a
+          # silent no-op rather than a failure. 291 commits is 3.9 MB and
+          # about a second; not fetching is worth more than that.
+          fetch-depth: 0
       - name: Diff against the previous head
         id: diff
         # Through the environment, never interpolated into the script: an
@@ -286,11 +296,11 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
         run: |
-          # Empty on workflow_dispatch; all zeros on history rewrites; the
-          # fetch fails if the commit is gone. All three mean "cannot know",
-          # and "cannot know" means build.
+          # Empty on workflow_dispatch; all zeros on history rewrites; absent
+          # from the clone if the history was rewritten under it. All three
+          # mean "cannot know", and "cannot know" means build.
           if [ -z "$BEFORE" ] || printf '%s' "$BEFORE" | grep -qE '^0+$' \
-             || ! git fetch -q --depth=1 origin "$BEFORE"; then
+             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
             echo "image=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
