@@ -52,14 +52,20 @@ maintained while telling nobody anything.
 ### The pipeline
 
 Reshaped on 2026-08-12. Measured on runs `31567346179` (the old shape, with
-every other change already in) and `31568215727` (the new one), so the two
-numbers differ in the reshape and nothing else.
+every other change already in), `31568215727` and `31570504804` (the new one),
+so the numbers differ in the reshape and nothing else.
 
 | | Old | New |
 |---|---|---|
-| Green push → published image | **902s (15m02s)** | **~540s (~9m)** |
+| Green push → published image | **902s (15m02s)** | **628s** measured, ~530s when `e2e` runs at its usual pace |
 | When the image build starts | after the slowest test | with the tests |
-| Publishing the image | part of one 411s job | **44s**, from cache |
+| Building and scanning | part of one 411s job | 428s cold, **233s** on a warm layer cache |
+| Publishing the image | — | **44s / 51s**, from that cache |
+
+The remaining wall clock is `e2e` and almost nothing else: on run
+`31570504804` it took 572s of a 628s run, and everything except the 51s publish
+finished inside it. That is why the section below matters more than any further
+work on the image jobs.
 
 The build gated nothing but the publish, yet waited for every test: on run
 `31567346179` the image job started at 05:49:08 and end-to-end had finished at
@@ -78,6 +84,16 @@ both image jobs; anything else builds, as does every case the diff cannot
 resolve (a force push, a `workflow_dispatch`, a before-commit that no longer
 exists). The decision function was checked against real ranges in this history
 and ten representative paths before it shipped.
+
+The gate had one bug worth keeping visible, because it failed silently rather
+than loudly. `changes` originally *fetched* the before-commit, and the same
+push stopped every checkout persisting the workflow token — on a private
+repository that cannot authenticate, so the fetch died with "could not read
+Username". The fallback answered "build", which is the safe direction and shipped
+nothing wrong, but it meant the gate would have skipped nothing, ever, while
+appearing to work. It clones the full history instead now, so the diff is local
+and needs no credential. A gate whose failure mode is "does nothing quietly" has
+to be watched being exercised, which is what the docs-only push is for.
 
 **The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
 (pinned to 1.7.12 and checksummed, like the Dockerfile's tessdata fetch) over
@@ -138,6 +154,38 @@ answer: composed target size, and whether a fixed bar is painted over an option.
 `globalTimeout` is **5 minutes locally and 9 in CI**, where two workers share
 four cores with the dev server and failures retry twice. It was 9 everywhere,
 which is not a ceiling when the measurement is 2.9.
+
+**In CI that nine-minute ceiling cannot fire, and the job's cannot report.**
+Measured on 2026-08-12 from the step timings of run `31569653824`: the `e2e`
+job spends **193s before Playwright starts** — 136s of it `playwright install
+--with-deps`, whose apt half is never cached — so a 600s job ceiling leaves the
+suite **407s**, less than the 540s Playwright believes it has. The workflow's
+comment assumes that setup is about a minute; it is three and a quarter, and
+that arithmetic error is the whole defect. Playwright can therefore never stop
+itself first, and an overrun is killed by the runner instead: no report, no
+trace, no named test — precisely the outcome the comment exists to prevent.
+
+It is not hypothetical. Across the last twelve runs the job took 458–521s
+against the 600s ceiling, and run `31569653824` took **614s and was killed**,
+with the browser suite the only thing that had not finished.
+
+| | Value |
+|---|---|
+| Job ceiling | 600s |
+| Setup before Playwright | 193s (136s of it browser install) |
+| Budget the suite actually gets | **407s** |
+| What Playwright thinks it has | 540s |
+| Typical suite time | 265–328s |
+| Headroom over typical | ~25% |
+
+**Not changed here**, because the ten-minute cap is a stated product decision in
+`CLAUDE.md` rather than a runner constraint, and every honest fix moves it. The
+three on the table: raise the `e2e` job to about 14 minutes and let
+`globalTimeout` be a real ten, which restores the design the comments describe
+and buys headroom; or lower `globalTimeout` to ~390s so a slow run fails as a
+Playwright failure with a report instead of a silent kill, which costs nothing
+and adds no headroom; or attack the 136s install, the single largest lever and
+the only one that makes the run faster rather than merely more honest.
 
 Two `test.skip`s remain in `critical-paths.spec.ts`, both scoped to phone
 viewports with Phase 4 named as the reason.
