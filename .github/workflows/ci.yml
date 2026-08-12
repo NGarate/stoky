@@ -189,6 +189,15 @@ jobs:
     # reads as a broken test rather than a stale tag.
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
+      # Docker gives a container 64 MB of /dev/shm; the runner VM has gigabytes.
+      # Chromium keeps its renderer surfaces there, and when it runs out it
+      # falls back to disk rather than failing, so the symptom is not a crash
+      # but a suite that is quietly slower. That is exactly what the first two
+      # containerised runs measured: setup dropped from 193s to about 90s while
+      # `playwright test` rose from ~290s to 392s and 422s, wiping the saving
+      # out. Every browser here is chromium or chromium-adjacent, so this is
+      # the one knob that reaches all of them.
+      options: --shm-size=2gb
     services:
       postgres:
         image: postgres:16-alpine
