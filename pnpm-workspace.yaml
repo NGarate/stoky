@@ -37,3 +37,14 @@ allowBuilds:
   prisma: true
   sharp: true
   tesseract.js: true
+
+# When `pnpm audit` turns CI red on an advisory that has no fixed release to
+# move to, the exception goes here — scoped to the one CVE, with its reasoning
+# — rather than lowering --audit-level in the workflow or letting master stay
+# red until upstream ships. Same philosophy as `overrides` above: narrow,
+# explained, and reviewed like code. Remove each entry the moment a fixed
+# release exists.
+#
+# auditConfig:
+#   ignoreCves:
+#     - CVE-XXXX-XXXXX  # <parent>package>: why it does not apply here, and the date added
