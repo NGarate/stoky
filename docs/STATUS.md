@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-11
+Updated: 2026-08-12
 
 Single source of truth for where the project actually is.
 
@@ -48,6 +48,55 @@ nine, so it fails first and names the test it was sitting on instead of the
 runner killing the job with no report. The budget exists because verification
 that takes longer stops being run, and a suite nobody runs still has to be
 maintained while telling nobody anything.
+
+### The pipeline
+
+Reshaped on 2026-08-12. Measured on runs `31567346179` (the old shape, with
+every other change already in) and `31568215727` (the new one), so the two
+numbers differ in the reshape and nothing else.
+
+| | Old | New |
+|---|---|---|
+| Green push → published image | **902s (15m02s)** | **~540s (~9m)** |
+| When the image build starts | after the slowest test | with the tests |
+| Publishing the image | part of one 411s job | **44s**, from cache |
+
+The build gated nothing but the publish, yet waited for every test: on run
+`31567346179` the image job started at 05:49:08 and end-to-end had finished at
+05:49:05. It is now two jobs. `image-build` declares no `needs`, so it runs
+beside the tests, and it holds neither `packages: write` nor a push step — a
+run whose tests fail can waste a build but cannot ship one. `image-publish`
+waits for all four test jobs plus the build and rebuilds the same commit from
+the layer cache the first job wrote, which is why it costs 44 seconds rather
+than a second build.
+
+`changes` decides whether the push could have altered the image at all — **5
+seconds**, an explicit diff against `github.event.before` rather than
+`paths-ignore`, because `paths-ignore` would skip the *tests* too and master
+stays verified on every push. A push touching only `docs/**` or `*.md` skips
+both image jobs; anything else builds, as does every case the diff cannot
+resolve (a force push, a `workflow_dispatch`, a before-commit that no longer
+exists). The decision function was checked against real ranges in this history
+and ten representative paths before it shipped.
+
+**The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
+(pinned to 1.7.12 and checksummed, like the Dockerfile's tessdata fetch) over
+the workflow and shellcheck over `scripts/*.sh`, and runs as the first step of
+the `quality` job. It exists because a workflow bug has no suite to fail: it
+surfaces as a red run on a trunk with no PR gate, which is what most of this
+repository's red runs actually were. Verified able to fail in both halves —
+an injected `SC2168` and an `env` context in `runs-on:` were each caught, then
+reverted.
+
+**Bun is pinned** in `.bun-version` (1.3.14), read by CI through
+`bun-version-file`. Unpinned, `setup-bun` resolved to whatever had shipped most
+recently, so a Bun release could turn the trunk red with nothing to revert.
+1.3.14 is what CI was already resolving, so the pin changed no behaviour — it
+made the version reviewable. It is also still the newest Bun as of 2026-08-12,
+which is what TEST-5 below turns on.
+
+No job in the pipeline pushes via git, so no checkout persists the workflow
+token any more.
 
 ### End-to-end
 
@@ -442,6 +491,19 @@ Two things that sequence surfaced, both operational rather than defects:
   against the same database, 0 in 90 on a quiet machine. `docs/reproductions/`
   carries a self-contained file and the recipe. **TEST-5**, the one open entry
   in `ISSUES.md`, and it wants an upstream report rather than work here.
+- **The `retry: 2` mitigation does not make CI green, and this is new.**
+  Measured on run `31568215727`: the retry did its job — the test passed on
+  attempt 2 and the suite reported `395 pass / 0 fail` — but bun also reported
+  `1 error`, because the abandoned attempt's assertion lands after bun has moved
+  on and is counted as an *unhandled error between tests*. `bun test` therefore
+  exits 1 on a run where nothing failed, and the `test` job goes red. Re-running
+  the job cleared it, which is the same signature and the same remedy as before.
+  So the retry fixed the pass/fail tally and not the exit code, and the honest
+  cost of TEST-5 is still roughly one CI run in seven. A version pin was the
+  documented workaround; 1.3.14 is still the newest bun as of 2026-08-12, so
+  there is nothing to pin forward to. Narrowing the exit code without also
+  hiding genuine unhandled rejections across the other 394 tests is a judgement
+  call that has not been made.
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**
