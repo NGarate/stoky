@@ -258,23 +258,29 @@ jobs:
       - name: pnpm audit
         run: pnpm audit --audit-level moderate
 
-  # ----------------------------------------------------------------- image --
-  image:
-    name: Build, scan and publish image
+  # ------------------------------------------------------------ image-build --
+  # Runs alongside the test jobs, not after them: the build takes six minutes
+  # and used to start only when the slowest test finished, which put fifteen
+  # minutes between a push and its image. Nothing here publishes — a failing
+  # test run can waste a build, but it can never ship one. image-publish below
+  # is what waits for green.
+  #
+  # The trade-off: on a red run these minutes are spent for nothing, and on a
+  # private repository they are billed. Accepted, because the runs a person
+  # actually waits on are the green ones. To revert, move this job's steps
+  # back behind `needs: [quality, test, e2e, audit]`.
+  image-build:
+    name: Build and scan image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [quality, test, e2e, audit]
+    timeout-minutes: 20
     permissions:
       contents: read
-      packages: write # push to GHCR
-      id-token: write # provenance attestation
-      attestations: write
       security-events: write
       # `codeql-action/upload-sarif` also GETs the workflow run to annotate the
       # upload, and that call needs `actions: read`. Without it every image job
       # failed at "Upload scan results" with "Resource not accessible by
-      # integration" — after the build, the scan and the push had all succeeded,
-      # so the pipeline reported failure while shipping the image.
+      # integration" — after the build, the scan and the push had all
+      # succeeded, so the pipeline reported failure while shipping the image.
       actions: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -282,17 +288,10 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=sha,format=long
-
       # Built and loaded locally first so it is scanned before anyone can pull
       # it. Publishing an image and scanning it afterwards is the wrong order.
+      # cache-to here is what makes image-publish cheap: it rebuilds this same
+      # commit from these layers.
       - name: Build for scanning
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -341,6 +340,37 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
 
+  # ---------------------------------------------------------- image-publish --
+  # The only job that waits for everything, and the only one that can ship.
+  # It rebuilds the commit image-build just scanned — same context, same
+  # Dockerfile — from the layer cache that build wrote moments ago, so this is
+  # minutes of cache hits plus the push, not a second build. The same
+  # two-build pattern the old single job already used.
+  image-publish:
+    name: Publish image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [quality, test, e2e, audit, image-build]
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
       - name: Log in to the registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -348,6 +378,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # cache-from only: image-build already exported these layers, and
+      # re-exporting identical ones here would spend upload time saying
+      # nothing new.
       - name: Push
         id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
@@ -360,17 +393,16 @@ jobs:
           sbom: true
           provenance: mode=max
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-      # Lets an operator verify the image they are about to self-host really was
-      # built from this repository, by this workflow, from this commit.
+      # Lets an operator verify the image they are about to self-host really
+      # was built from this repository, by this workflow, from this commit.
       #
-      # Public repositories only, like the SARIF upload above and for the same
-      # shape of reason: GitHub answers "Feature not available for user-owned
-      # private repositories", after the build, the scan gate and the push have
-      # all succeeded. If this repository goes public, provenance starts
-      # attesting on its own — which is also when it starts mattering, since it
-      # exists for people who did not build the image themselves.
+      # Public repositories only, like the SARIF upload in image-build and for
+      # the same shape of reason: GitHub answers "Feature not available for
+      # user-owned private repositories" after everything else has succeeded.
+      # If this repository goes public, provenance starts attesting on its
+      # own — which is also when it starts mattering, since it exists for
+      # people who did not build the image themselves.
       - name: Attest provenance
         if: github.event.repository.private == false
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
