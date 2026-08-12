@@ -67,6 +67,15 @@ The remaining wall clock is `e2e` and almost nothing else: on run
 finished inside it. That is why the section below matters more than any further
 work on the image jobs.
 
+`e2e` no longer installs browsers — it runs in `mcr.microsoft.com/playwright`,
+pinned and asserted against `package.json` — which took its setup from 106–193s
+to 84–97s. Three things the image does not carry had to be added back: `unzip`,
+because setup-bun unpacks a .zip and the seed runs through Bun; `HOME=/root`,
+because a container job runs as root while the image owns `/github/home` as
+`pwuser` and Firefox refuses to start there; and the services answer to
+`postgres` and `cache` rather than `localhost`, because the job now shares a
+network with them instead of a host.
+
 The build gated nothing but the publish, yet waited for every test: on run
 `31567346179` the image job started at 05:49:08 and end-to-end had finished at
 05:49:05. It is now two jobs. `image-build` declares no `needs`, so it runs
@@ -156,36 +165,52 @@ four cores with the dev server and failures retry twice. It was 9 everywhere,
 which is not a ceiling when the measurement is 2.9.
 
 **In CI that nine-minute ceiling cannot fire, and the job's cannot report.**
-Measured on 2026-08-12 from the step timings of run `31569653824`: the `e2e`
-job spends **193s before Playwright starts** — 136s of it `playwright install
---with-deps`, whose apt half is never cached — so a 600s job ceiling leaves the
+Found on 2026-08-12 from the step timings of run `31569653824`: the `e2e` job
+spent **193s before Playwright started** — 136s of it `playwright install
+--with-deps`, whose apt half is never cached — so a 600s job ceiling left the
 suite **407s**, less than the 540s Playwright believes it has. The workflow's
-comment assumes that setup is about a minute; it is three and a quarter, and
-that arithmetic error is the whole defect. Playwright can therefore never stop
-itself first, and an overrun is killed by the runner instead: no report, no
-trace, no named test — precisely the outcome the comment exists to prevent.
+comment assumed setup was about a minute; it was three and a quarter, and that
+arithmetic error was the whole defect. Playwright could never stop itself
+first, so an overrun was killed by the runner instead: no report, no trace, no
+named test — precisely the outcome that setting exists to prevent. Run
+`31569653824` took **614s and was killed**, with the browser suite the only
+thing unfinished.
 
-It is not hypothetical. Across the last twelve runs the job took 458–521s
-against the 600s ceiling, and run `31569653824` took **614s and was killed**,
-with the browser suite the only thing that had not finished.
+**The install is gone.** The job runs in `mcr.microsoft.com/playwright`, which
+ships the browsers and their libraries, so setup is now **84–97s** across every
+run since. That is the largest part fixed, and it moves the numbers:
 
-| | Value |
-|---|---|
-| Job ceiling | 600s |
-| Setup before Playwright | 193s (136s of it browser install) |
-| Budget the suite actually gets | **407s** |
-| What Playwright thinks it has | 540s |
-| Typical suite time | 265–328s |
-| Headroom over typical | ~25% |
+| | Before | Now |
+|---|---|---|
+| Setup before Playwright | 106–193s | **84–97s** |
+| Budget the suite actually gets | 407s | **~505s** |
+| What Playwright thinks it has | 540s | 540s |
+| Typical suite time | 265–409s | 385–422s |
 
-**Not changed here**, because the ten-minute cap is a stated product decision in
-`CLAUDE.md` rather than a runner constraint, and every honest fix moves it. The
-three on the table: raise the `e2e` job to about 14 minutes and let
-`globalTimeout` be a real ten, which restores the design the comments describe
-and buys headroom; or lower `globalTimeout` to ~390s so a slow run fails as a
-Playwright failure with a report instead of a silent kill, which costs nothing
-and adds no headroom; or attack the 136s install, the single largest lever and
-the only one that makes the run faster rather than merely more honest.
+Two things are worth keeping visible about how that was measured, because both
+were nearly got wrong.
+
+The install was **136s on one run and 57s on another** — it depends on how fast
+Ubuntu's mirrors feel that day, and the first figure is the one that made the
+case. The container replaces a variable 57–136s with a steady ~42s of image
+pull and `unzip`, so the average saving is modest and the real prize is taking
+apt off the critical path, which is where the variance came from.
+
+And the container looked, for three runs, like it had made the suite 100s
+slower — enough to revert it. It had not. Those runs were compared against
+older ones, and runner throughput drifted over the session by as much as the
+effect. Run `31583973041` put both jobs side by side, same commit, identical
+runners, same moment: **`playwright test` 400s without the container, 405s
+with.** A twin job for one measurement, deleted after. The same trap TEST-5
+records paying an hour for, and the same escape.
+
+**The ceiling itself is still not fixed**, and the remaining gap is now
+smaller but real: 505s of budget against a suite that has run 385–422s, and a
+`globalTimeout` of 540s that still cannot fire before the job's 600s. Raising
+the job to about 13 minutes and letting `globalTimeout` mean a real ten would
+close it, and would restore the design the comments describe — but the
+ten-minute cap is a stated product decision in `CLAUDE.md` rather than a runner
+constraint, so it wants a decision rather than a commit.
 
 Two `test.skip`s remain in `critical-paths.spec.ts`, both scoped to phone
 viewports with Phase 4 named as the reason.
