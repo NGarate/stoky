@@ -166,37 +166,49 @@ jobs:
     # Playwright's own image, which carries the browsers *and* their system
     # libraries already installed.
     #
-    # `playwright install --with-deps` used to run here and cost **136
-    # seconds every run** — measured from the step timings of run
-    # 31569653824, with the browser cache hitting, so none of it was
-    # downloading browsers. It was apt. All 50 packages Chromium and Firefox
-    # need are already on `ubuntu-latest` and reported "already the newest
-    # version"; the time went entirely on WebKit's, which pull **181 new
-    # packages, 114 MB to fetch and 364 MB unpacked** — the GStreamer and
-    # libav multimedia stack. Unpacking that, not fetching it, is the cost,
-    # so caching the archives would not have helped.
+    # `playwright install --with-deps` used to run here, and it was apt, not
+    # browsers: the cache hit every time. All 50 packages Chromium and Firefox
+    # want are already on `ubuntu-latest` and report "already the newest
+    # version". WebKit's pull **181 new packages, 114 MB fetched and 364 MB
+    # unpacked** — the GStreamer and libav multimedia stack — and unpacking,
+    # not fetching, is the cost, so caching the archives would not have helped.
     #
-    # Dropping `--with-deps` instead was not open: the tree is not only
-    # codecs. `libwoff1`, `libharfbuzz-icu0`, `libhyphen0`, `libgles2` and
+    # **It cost 136s on one run and 57s on another.** That spread is the real
+    # argument for this image: the step depends on how fast Ubuntu's mirrors
+    # feel, and it sits on the critical path of the whole pipeline. The image
+    # replaces it with a 949 MB pull that has measured 36s and an `unzip` that
+    # costs 6, so the trade is a variable 57–136s for a steady ~42s.
+    #
+    # Dropping `--with-deps` instead was not open: the tree is not only codecs.
+    # `libwoff1`, `libharfbuzz-icu0`, `libhyphen0`, `libgles2` and
     # `libgstreamer-plugins-base1.0-0` are linked by the WebKit binary, and
-    # without them it does not start — and WebKit is not decoration here, it
-    # is the engine `Mobile Safari` runs the layout specs on, which exist
-    # because UI-5 and UI-6 were both WebKit-at-phone-width defects.
+    # without them it does not start — and WebKit is not decoration here, it is
+    # the engine `Mobile Safari` runs the layout specs on, which exist because
+    # UI-5 and UI-6 were both WebKit-at-phone-width defects.
     #
-    # So the work is skipped rather than made faster. The image is pinned to
-    # the version below and asserted against `package.json` in the first
-    # step, because browsers that do not match the driver fail in a way that
-    # reads as a broken test rather than a stale tag.
+    # **The container does not slow the suite.** Three early runs suggested it
+    # did, and they were wrong: the comparison was against older runs, and
+    # runner throughput drifted by as much as the effect. Run 31583973041 put
+    # both jobs side by side on identical runners from the same commit and
+    # measured `playwright test` at **400s without the container and 405s
+    # with**. Setup was 106s against 97s in that run; across every run since,
+    # this job's setup sits in 84–97s where the old one ranged 106–193s.
+    #
+    # The image is pinned and asserted against `package.json` in a step below,
+    # because browsers that do not match the driver fail in a way that reads as
+    # a broken test rather than a stale tag.
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       # Docker gives a container 64 MB of /dev/shm; the runner VM has gigabytes.
-      # Chromium keeps its renderer surfaces there, and when it runs out it
-      # falls back to disk rather than failing, so the symptom is not a crash
-      # but a suite that is quietly slower. That is exactly what the first two
-      # containerised runs measured: setup dropped from 193s to about 90s while
-      # `playwright test` rose from ~290s to 392s and 422s, wiping the saving
-      # out. Every browser here is chromium or chromium-adjacent, so this is
-      # the one knob that reaches all of them.
+      # Chromium keeps its renderer surfaces there and, when it runs out, falls
+      # back to disk rather than failing — a suite that is quietly slower
+      # instead of a crash.
+      #
+      # Added while chasing a slowdown that turned out not to exist, and it did
+      # not move the number: 397s against 392s and 422s before it. Kept anyway,
+      # because 64 MB is a real cliff for a chromium-heavy suite and this is
+      # the only knob that reaches every project here — but it is prevention,
+      # not a fix, and nothing here has ever been measured falling off it.
       options: --shm-size=2gb
     services:
       postgres:
@@ -280,89 +292,6 @@ jobs:
             exit 1
           fi
           echo "Playwright ${PKG}, browsers from the image at ${PLAYWRIGHT_BROWSERS_PATH:-/ms-playwright}."
-
-      # `--project` is not narrowed here: the projects that skip the tier sweeps
-      # do so in playwright.config.ts, so CI and a local run execute the same
-      # matrix. A flag would let the two drift.
-      - run: pnpm exec playwright test
-        env:
-          PLAYWRIGHT_PORT: "3000"
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
-  # --------------------------------------------------- e2e A/B (temporary) --
-  e2e-baseline:
-    name: End-to-end (temporary A/B baseline)
-    runs-on: ubuntu-latest
-    # Ten, like every other test job. Playwright's own `globalTimeout` is nine,
-    # which leaves one for install, migrate and seed and means Playwright fails
-    # first and names the test it was sitting on — a job killed by the runner
-    # produces no report and no trace.
-    #
-    # 55 was the previous value and it was wrong in the other direction: the
-    # budget belongs to the suite, and a ceiling set above what the suite should
-    # ever take enforces nothing.
-    timeout-minutes: 10
-    # TEMPORARY. Mirrors the pre-container e2e job so the two can be timed
-    # against each other on identical runners in the same run. Delete after.
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: stoky
-          POSTGRES_PASSWORD: stoky_ci
-          POSTGRES_DB: stoky
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U stoky -d stoky"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-      cache:
-        image: valkey/valkey:8-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      # `postgres` and `cache`, not `localhost`: a job that runs in a container
-      # sits on a user-defined network with the services, where each answers to
-      # its own label. `localhost` inside the container is the container. The
-      # published ports the other jobs rely on are gone for the same reason —
-      # nothing here reaches the services through the host.
-      DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky?schema=public
-      VALKEY_URL: redis://localhost:6379
-      NEXTAUTH_SECRET: ci-only-not-a-real-secret
-      # Still localhost: this is the dev server Playwright starts inside this
-      # same container, not a service beside it.
-      NEXTAUTH_URL: http://localhost:3000
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: .bun-version
-
-      # argon2 and sharp both resolve to prebuilt binaries on linux-x64
-      # (argon2 through its `prebuilds/` directory, sharp through
-      # `@img/sharp-linux-x64`), so nothing here compiles and the image needs
-      # no build toolchain.
-      - run: pnpm install --frozen-lockfile --trust-lockfile
-      - run: pnpm db:generate
-      - run: pnpm prisma migrate deploy
-      - run: pnpm db:seed
-
-      - name: Install browsers
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       # `--project` is not narrowed here: the projects that skip the tier sweeps
       # do so in playwright.config.ts, so CI and a local run execute the same
