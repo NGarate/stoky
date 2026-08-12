@@ -218,6 +218,13 @@ jobs:
       NEXTAUTH_URL: http://localhost:3000
       # Kept beside the image tag it has to agree with.
       PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
+      # A container job runs as root, but the default HOME is /github/home,
+      # which the image owns as `pwuser`. Firefox refuses to start in a home
+      # directory somebody else owns — "Running Nightly as root in a regular
+      # user's session is not supported" — and WebKit went with it, so the
+      # first containerised run lost both engines while chromium passed. This
+      # is the fix Playwright's own error message names.
+      HOME: /root
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
