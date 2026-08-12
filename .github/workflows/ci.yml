@@ -258,6 +258,49 @@ jobs:
       - name: pnpm audit
         run: pnpm audit --audit-level moderate
 
+  # ---------------------------------------------------------------- changes --
+  # Whether this push touched anything that can reach the image. A docs-only
+  # push rebuilds a byte-identical image for seven billed minutes; skipping it
+  # is free. The answer is computed from an explicit diff rather than
+  # workflow-level paths-ignore, because paths-ignore would skip the *tests*
+  # too, and master stays verified on every push.
+  #
+  # Every unresolvable case — force push, first push, manual dispatch — says
+  # "build". The expensive mistake here is a skipped image someone needed,
+  # not a spare build.
+  changes:
+    name: What this push touched
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      image: ${{ steps.diff.outputs.image }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Diff against the previous head
+        id: diff
+        # Through the environment, never interpolated into the script: an
+        # expression pasted into shell text is how a workflow gets an
+        # injection, and this one is attacker-influencable in the general case.
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # Empty on workflow_dispatch; all zeros on history rewrites; the
+          # fetch fails if the commit is gone. All three mean "cannot know",
+          # and "cannot know" means build.
+          if [ -z "$BEFORE" ] || printf '%s' "$BEFORE" | grep -qE '^0+$' \
+             || ! git fetch -q --depth=1 origin "$BEFORE"; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Any changed file that is not documentation reaches the image.
+          if git diff --name-only "$BEFORE" HEAD | grep -qvE '^(docs/|.*\.md$)'; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ------------------------------------------------------------ image-build --
   # Runs alongside the test jobs, not after them: the build takes six minutes
   # and used to start only when the slowest test finished, which put fifteen
@@ -273,6 +316,11 @@ jobs:
     name: Build and scan image
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: [changes]
+    # A skipped image-build cascades: image-publish needs it, and a needed
+    # skip skips the dependant unless it opts into always(), which it must
+    # not — that opt-in is how a gate gets silently stepped around.
+    if: needs.changes.outputs.image == 'true'
     permissions:
       contents: read
       security-events: write
