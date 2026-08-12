@@ -163,6 +163,32 @@ jobs:
     # budget belongs to the suite, and a ceiling set above what the suite should
     # ever take enforces nothing.
     timeout-minutes: 10
+    # Playwright's own image, which carries the browsers *and* their system
+    # libraries already installed.
+    #
+    # `playwright install --with-deps` used to run here and cost **136
+    # seconds every run** — measured from the step timings of run
+    # 31569653824, with the browser cache hitting, so none of it was
+    # downloading browsers. It was apt. All 50 packages Chromium and Firefox
+    # need are already on `ubuntu-latest` and reported "already the newest
+    # version"; the time went entirely on WebKit's, which pull **181 new
+    # packages, 114 MB to fetch and 364 MB unpacked** — the GStreamer and
+    # libav multimedia stack. Unpacking that, not fetching it, is the cost,
+    # so caching the archives would not have helped.
+    #
+    # Dropping `--with-deps` instead was not open: the tree is not only
+    # codecs. `libwoff1`, `libharfbuzz-icu0`, `libhyphen0`, `libgles2` and
+    # `libgstreamer-plugins-base1.0-0` are linked by the WebKit binary, and
+    # without them it does not start — and WebKit is not decoration here, it
+    # is the engine `Mobile Safari` runs the layout specs on, which exist
+    # because UI-5 and UI-6 were both WebKit-at-phone-width defects.
+    #
+    # So the work is skipped rather than made faster. The image is pinned to
+    # the version below and asserted against `package.json` in the first
+    # step, because browsers that do not match the driver fail in a way that
+    # reads as a broken test rather than a stale tag.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
     services:
       postgres:
         image: postgres:16-alpine
@@ -170,21 +196,28 @@ jobs:
           POSTGRES_USER: stoky
           POSTGRES_PASSWORD: stoky_ci
           POSTGRES_DB: stoky
-        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U stoky -d stoky"
           --health-interval 5s --health-timeout 5s --health-retries 10
       cache:
         image: valkey/valkey:8-alpine
-        ports: ["6379:6379"]
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky?schema=public
-      VALKEY_URL: redis://localhost:6379
+      # `postgres` and `cache`, not `localhost`: a job that runs in a container
+      # sits on a user-defined network with the services, where each answers to
+      # its own label. `localhost` inside the container is the container. The
+      # published ports the other jobs rely on are gone for the same reason —
+      # nothing here reaches the services through the host.
+      DATABASE_URL: postgresql://stoky:stoky_ci@postgres:5432/stoky?schema=public
+      VALKEY_URL: redis://cache:6379
       NEXTAUTH_SECRET: ci-only-not-a-real-secret
+      # Still localhost: this is the dev server Playwright starts inside this
+      # same container, not a service beside it.
       NEXTAUTH_URL: http://localhost:3000
+      # Kept beside the image tag it has to agree with.
+      PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -203,24 +236,19 @@ jobs:
       - run: pnpm prisma migrate deploy
       - run: pnpm db:seed
 
-      # Cached, because otherwise the download eats the budget the tests are
-      # supposed to be measured against. Keyed on the Playwright version, so a
-      # bump fetches fresh binaries instead of reusing incompatible ones.
-      - name: Playwright version
-        id: pw
-        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
-        id: browser-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-
-      # --with-deps installs the system libraries WebKit needs. Skipping it is
-      # how a suite ends up silently only ever running Chromium. The system
-      # libraries are not in the cache, so that half runs either way.
-      - name: Install browsers
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      # The browsers come from the image, so the one thing that can go wrong is
+      # the image and the driver disagreeing about which browsers those are.
+      # Left to itself that surfaces as "Executable doesn't exist at
+      # /ms-playwright/chromium-####" in the middle of a test run, which reads
+      # like a broken suite. Said plainly here instead, before anything runs.
+      - name: The image and the package must agree on Playwright
+        run: |
+          PKG="$(node -p "require('./node_modules/@playwright/test/package.json').version")"
+          if [ "$PKG" != "$PLAYWRIGHT_IMAGE_VERSION" ]; then
+            echo "::error::@playwright/test is ${PKG}, but this job runs in mcr.microsoft.com/playwright:v${PLAYWRIGHT_IMAGE_VERSION}-noble. Bump the container image and PLAYWRIGHT_IMAGE_VERSION in .github/workflows/ci.yml to ${PKG}, or the browsers will not be the ones this driver expects."
+            exit 1
+          fi
+          echo "Playwright ${PKG}, browsers from the image at ${PLAYWRIGHT_BROWSERS_PATH:-/ms-playwright}."
 
       # `--project` is not narrowed here: the projects that skip the tier sweeps
       # do so in playwright.config.ts, so CI and a local run execute the same
