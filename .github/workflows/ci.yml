@@ -295,6 +295,100 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # --------------------------------------------------- e2e A/B (temporary) --
+  e2e-baseline:
+    name: End-to-end (temporary A/B baseline)
+    runs-on: ubuntu-latest
+    # Ten, like every other test job. Playwright's own `globalTimeout` is nine,
+    # which leaves one for install, migrate and seed and means Playwright fails
+    # first and names the test it was sitting on — a job killed by the runner
+    # produces no report and no trace.
+    #
+    # 55 was the previous value and it was wrong in the other direction: the
+    # budget belongs to the suite, and a ceiling set above what the suite should
+    # ever take enforces nothing.
+    timeout-minutes: 10
+    # TEMPORARY. Mirrors the pre-container e2e job so the two can be timed
+    # against each other on identical runners in the same run. Delete after.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: stoky
+          POSTGRES_PASSWORD: stoky_ci
+          POSTGRES_DB: stoky
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U stoky -d stoky"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      cache:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # `postgres` and `cache`, not `localhost`: a job that runs in a container
+      # sits on a user-defined network with the services, where each answers to
+      # its own label. `localhost` inside the container is the container. The
+      # published ports the other jobs rely on are gone for the same reason —
+      # nothing here reaches the services through the host.
+      DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky?schema=public
+      VALKEY_URL: redis://localhost:6379
+      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+      # Still localhost: this is the dev server Playwright starts inside this
+      # same container, not a service beside it.
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      # The image ships browsers, not a general toolchain, and it has no
+      # `unzip` — which setup-bun needs, because Bun is released as a .zip.
+      # Without it the job died at "Unable to locate executable file: unzip"
+      # before installing anything.
+      #
+      # Bun is not optional here: `prisma.config.ts` seeds through
+      # `bun run prisma/seed.ts`, and the seed is what the browser suite reads.
+      # One package, a couple of seconds, against the 136 the image removes.
+      - name: unzip, which setup-bun needs and the image does not ship
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      # argon2 and sharp both resolve to prebuilt binaries on linux-x64
+      # (argon2 through its `prebuilds/` directory, sharp through
+      # `@img/sharp-linux-x64`), so nothing here compiles and the image needs
+      # no build toolchain.
+      - run: pnpm install --frozen-lockfile --trust-lockfile
+      - run: pnpm db:generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm db:seed
+
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      # `--project` is not narrowed here: the projects that skip the tier sweeps
+      # do so in playwright.config.ts, so CI and a local run execute the same
+      # matrix. A flag would let the two drift.
+      - run: pnpm exec playwright test
+        env:
+          PLAYWRIGHT_PORT: "3000"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   # ----------------------------------------------------------------- audit --
   audit:
     name: Dependency audit
