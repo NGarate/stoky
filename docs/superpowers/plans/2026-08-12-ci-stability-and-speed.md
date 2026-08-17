@@ -1,5 +1,12 @@
 # CI Stability and Speed Implementation Plan
 
+> **EXECUTED — historical record.** All five tasks landed on 2026-08-12
+> (`9bb4b20`, `3f37688`, `5ec7068`, `dc68b21`, `bf14d97`, plus the fixes and
+> the e2e-container work that followed the same day, through `0850942`). The
+> checkboxes below were never ticked during execution; the commit history is
+> the record. Measured results live in `docs/STATUS.md` §The pipeline, which
+> supersedes every estimate here. Do not execute this plan again.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Cut a green push-to-published-image run from ~15 minutes to ~9–10, remove the known sources of CI-only breakage (unpinned Bun, unlinted workflow/scripts), and stop paying ~7 billed minutes of image build for pushes that cannot change the image.

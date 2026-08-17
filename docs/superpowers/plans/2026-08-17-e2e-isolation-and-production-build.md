@@ -1,5 +1,16 @@
 # E2E Isolation and Production Build Implementation Plan
 
+> **EXECUTED — historical record.** All eight tasks landed on 2026-08-17/18
+> (`d5e6f9e` through `f87b48a`); the checkboxes below stay as written and the
+> commit history is the record. Three things the plan could not know, found in
+> execution and worth more than the plan: the production CSP's
+> `upgrade-insecure-requests` was killing WebKit on plain http (a real product
+> defect, fixed in `e8dafd7`); a live service worker makes ordinary tests
+> dishonest under load (blocked suite-wide, allowed in its own spec); and
+> Docker's exported `HOSTNAME` re-binds the standalone server inside container
+> jobs. `PROGRESS.md` D82–D86 carry the decisions; `TEST_SETUP.md` describes
+> the result. Do not execute this plan again.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The browser suite stops touching the developer's database and dev server, and exercises the production artefact a self-hosted user actually runs.
