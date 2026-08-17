@@ -93,9 +93,15 @@ Verified against the files named in each row.
 
 - Content-Security-Policy carries a **per-request nonce** generated in
   `src/middleware.ts`, with `strict-dynamic`, `object-src 'none'`,
-  `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'` and
-  `upgrade-insecure-requests` in production. `'unsafe-eval'` is added in
-  development only, for hot reloading.
+  `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`.
+  `'unsafe-eval'` is added in development only, for hot reloading.
+  `upgrade-insecure-requests` is sent **only when the request itself arrived
+  over https** (Traefik's `x-forwarded-proto`, or the URL's own scheme) — on a
+  plain-http install the directive upgraded every WebKit fetch into a TLS
+  handshake against a server with no TLS, which killed the application on
+  Safari while the page still rendered. Behind TLS termination nothing
+  changed. A client forging the header against an http install only breaks
+  its own requests.
   One honest caveat: `style-src` still includes `'unsafe-inline'`, because Next
   inlines critical CSS that cannot carry a nonce.
 - Static headers set in the app itself, not only at the proxy, because a
