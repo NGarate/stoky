@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-12
+Updated: 2026-08-18
 
 Single source of truth for where the project actually is.
 
@@ -12,24 +12,25 @@ say what measured it.
 
 ## Gate status
 
-Measured on 2026-08-11 against a live PostgreSQL and Valkey, and a dev server on
-port 3102, after Phase 4.
+Measured on 2026-08-17/18 against a live PostgreSQL and Valkey, at `443718d`,
+after Phase 6, the CI campaign, and the browser suite's move to the production
+artefact.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — 208 files, 101 rules |
+| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — ~270 files, 101 rules |
 | Typecheck | `pnpm typecheck` | ✅ clean |
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `pnpm check:links` | ✅ 74 links against 25 routes, none broken |
+| Internal links | `pnpm check:links` | ✅ 89 links against 30 routes, none broken |
 | Contrast | `pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
-| Unit tests | `pnpm test:unit` | ✅ 335 pass / 27 files |
-| Component tests | `pnpm test:components` | ✅ 252 pass / 22 files |
-| Integration tests | `pnpm test:integration` | ✅ 319 pass / 19 files |
-| Build | `pnpm build` | ✅ 26 routes — **45.8s cold** with the React Compiler on, 39.8s with it off |
-| Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all three |
+| Unit tests | `pnpm test:unit` | ✅ 475 pass / 43 files |
+| Component tests | `pnpm test:components` | ✅ 349 pass / 31 files |
+| Integration tests | `pnpm test:integration` | ✅ 395 pass / 25 files |
+| Build | `pnpm build` | ✅ 31 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
+| Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ 96 pass / 0 fail, **3.3 min** |
-| Dependency audit | `pnpm audit` | ✅ no known vulnerabilities |
+| E2E | `bunx playwright test` | ✅ **117 pass / 0 fail, 2.9 min** — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
 
 **Use `pnpm`, not `corepack pnpm`.** On this machine corepack resolves 11.20.0
 against the `packageManager` pin of 11.19.0 and refuses to run; the plain
@@ -37,10 +38,10 @@ binary is the pinned one. `verify-local.sh` already prefers `pnpm` and falls
 back to corepack, so the scripts are unaffected — only the commands in earlier
 versions of this file were wrong.
 
-`pnpm verify:local` runs the first seven — **17s** of a **600s budget**,
-which the script enforces — **31s** after Phase 4 added a React gate and 83
-tests. Every step also has its own ceiling, so a hang fails as a hang rather
-than as a long wait. `verify:ci` adds integration and build, and runs in 80s.
+`pnpm verify:local` runs the first seven — **33s** of a **600s budget**,
+which the script enforces. Every step also has its own ceiling, so a hang
+fails as a hang rather than as a long wait. `verify:ci` adds integration and
+build, and ran in 83–92s across three invocations on 2026-08-17/18.
 
 **Ten minutes is the contract for all verification**, not just the browser
 suite. Every CI test job is capped at ten; Playwright's own `globalTimeout` is
@@ -66,6 +67,13 @@ The remaining wall clock is `e2e` and almost nothing else: on run
 `31570504804` it took 572s of a 628s run, and everything except the 51s publish
 finished inside it. That is why the section below matters more than any further
 work on the image jobs.
+
+Re-measured 2026-08-18 on run `32075663881`, the first green run with the
+standalone-artefact suite: green push → published image **627s** — e2e 563s
+(of which 157s is the post-step pnpm-cache save, and only 313s is Playwright),
+image build 195s warm beside it, publish 59s. The verification inside `e2e`
+got faster; the job's tail grew a cache save. If that tail ever matters, it is
+a workflow knob, not a test problem.
 
 `e2e` no longer installs browsers — it runs in `mcr.microsoft.com/playwright`,
 pinned and asserted against `package.json` — which took its setup from 106–193s
@@ -125,11 +133,35 @@ token any more.
 
 ### End-to-end
 
-Eight spec files plus a `setup` project. **96 tests in 3.3 minutes**. It was 89
-in 2.9 before Phase 4, and 182 in 5.6 before the audit that preceded it.
+**The suite changed shape on 2026-08-17, for three reasons that all bit the
+same day.** It had always run against `pnpm dev` on the developer's own
+database. That meant: it tested a server nobody deploys (which is how broken
+production auth once shipped under green suites); it fought the developer's
+own `pnpm dev` for Next's per-directory single-instance lock (a mid-run suite
+lost its server to exactly that); and its re-seed reset the demo household the
+owner was actively testing with — their words: not acceptable.
 
-The reduction is not fewer checks. It is the same checks placed in the tier
-that can answer them, and stopping the browser matrix from multiplying two
+Now it builds and serves the **standalone production artefact** (the thing the
+Docker image runs) on its **own database and cache** — `stoky_e2e` and Valkey
+db 1, derived in `e2e/db-url.ts` — on `127.0.0.1:3100` by default. The
+developer's dev server and data are out of reach by construction, proven by
+the owner's live session surviving three full runs untouched. The separate
+production config (`test:e2e:sw`) folded in with the move: its reason to exist
+was the dev-server gap.
+
+The parity paid for itself on the second run: nine WebKit-only failures turned
+out to be a real product defect — the production CSP's
+`upgrade-insecure-requests` upgrades every fetch to https even on localhost in
+WebKit, so a Safari user on a plain-http LAN install got a rendered page whose
+every tRPC call died. The directive is now keyed on the request's transport
+(D84), and the suite is why anyone knows.
+
+Ten spec files plus `seed` and `setup` projects. **117 tests in 2.9 minutes,
+including the `next build`** — against 108 in 2.7–2.9 driving `next dev`
+before the move: the production server serves faster than dev compiles, which
+paid for the build. It was 96 after the Phase 4/5 audit, 182 in 5.6 before
+that audit. The reductions are not fewer checks: the same checks placed in the
+tier that can answer them, and the browser matrix no longer multiplying two
 independent axes together.
 
 | Project | Runs | Why |
@@ -159,61 +191,55 @@ answer: composed target size, and whether a fixed bar is painted over an option.
 | `location-picker.spec.ts` | Composed target size and occlusion | chromium, Mobile Safari |
 | `screen-reader.spec.ts` | The accessibility tree across four journeys | chromium — the tree comes over CDP |
 | `offline-shop.spec.ts` | A shop composed in aeroplane mode, applied once | chromium |
+| `auth.prod.spec.ts` | The deployed artefact signs people in: `trustHost`, and the production CSP breaking nothing | chromium |
+| `service-worker.prod.spec.ts` | A real worker registers, precaches, and serves offline — the one file that opts back into `serviceWorkers` | chromium |
 
-`globalTimeout` is **5 minutes locally and 9 in CI**, where two workers share
-four cores with the dev server and failures retry twice. It was 9 everywhere,
-which is not a ceiling when the measurement is 2.9.
+`globalTimeout` is **5 minutes locally and 9 in CI**, and since 2026-08-17 it
+covers the `next build` too, because the build runs inside Playwright's
+`webServer`. Locally that still fits with room: 117 tests in 2.9 minutes,
+build included.
 
-**In CI that nine-minute ceiling cannot fire, and the job's cannot report.**
-Found on 2026-08-12 from the step timings of run `31569653824`: the `e2e` job
-spent **193s before Playwright started** — 136s of it `playwright install
---with-deps`, whose apt half is never cached — so a 600s job ceiling left the
-suite **407s**, less than the 540s Playwright believes it has. The workflow's
-comment assumed setup was about a minute; it was three and a quarter, and that
-arithmetic error was the whole defect. Playwright could never stop itself
-first, so an overrun was killed by the runner instead: no report, no trace, no
-named test — precisely the outcome that setting exists to prevent. Run
-`31569653824` took **614s and was killed**, with the browser suite the only
-thing unfinished.
+**The CI ceiling story, which three pushes rewrote.** On 2026-08-12 the job
+spent 84–193s on setup before a dev-served suite of 385–422s, and the 540s
+`globalTimeout` could not fire before the 600s job ceiling — a gap this file
+said wanted a product decision (raise the job to ~13 minutes) rather than a
+commit. The move to the standalone artefact resolved it the other way:
+**the suite got faster instead.** Measured on run `32075663881` (2026-08-18,
+the first green containerised-standalone run):
 
-**The install is gone.** The job runs in `mcr.microsoft.com/playwright`, which
-ships the browsers and their libraries, so setup is now **84–97s** across every
-run since. That is the largest part fixed, and it moves the numbers:
-
-| | Before | Now |
+| | Dev-served (2026-08-12) | Standalone (2026-08-18) |
 |---|---|---|
-| Setup before Playwright | 106–193s | **84–97s** |
-| Budget the suite actually gets | 407s | **~505s** |
-| What Playwright thinks it has | 540s | 540s |
-| Typical suite time | 265–409s | 385–422s |
+| Setup before Playwright | 84–97s | **87s** |
+| The `playwright test` step | 385–422s | **313s — 56s build + 117 tests in what Playwright reports as 5.2m** |
+| Headroom under the 540s `globalTimeout` | ~120s | **~228s, build included** |
+| Job total | 508–618s | 563s — of which **157s is the post-step pnpm-cache save**, not verification |
 
-Two things are worth keeping visible about how that was measured, because both
-were nearly got wrong.
+The production server serves pre-compiled pages; `next dev` compiled each
+route on first hit under test traffic. That difference more than pays for the
+build, which is why the same 117 tests with a build inside cost 70–110s *less*
+than 108 without one. The largest non-test cost in the job is now the cache
+save after the suite ends.
 
-The install was **136s on one run and 57s on another** — it depends on how fast
-Ubuntu's mirrors feel that day, and the first figure is the one that made the
-case. The container replaces a variable 57–136s with a steady ~42s of image
-pull and `unzip`, so the average saving is modest and the real prize is taking
-apt off the critical path, which is where the variance came from.
+**Getting there cost two container-only failures**, both invisible locally
+and both now guarded in `playwright.config.ts` comments: Docker exports
+`HOSTNAME` as the container id and the standalone server binds it (the piped
+build log showed the server ready on `http://<container-id>:3000` while the
+probe spun against loopback — `HOSTNAME: "0.0.0.0"` is set explicitly now),
+and `localhost` resolving to `::1` (trap 8). The webServer's stdout is piped
+rather than ignored for exactly this class: the first timeout produced no
+evidence at all, the second named the bind address.
 
-And the container looked, for three runs, like it had made the suite 100s
-slower — enough to revert it. It had not. Those runs were compared against
-older ones, and runner throughput drifted over the session by as much as the
-effect. Run `31583973041` put both jobs side by side, same commit, identical
-runners, same moment: **`playwright test` 400s without the container, 405s
-with.** A twin job for one measurement, deleted after. The same trap TEST-5
-records paying an hour for, and the same escape.
+Kept from the container measurements, because both were nearly got wrong: the
+apt-install it replaced was 57–136s *depending on Ubuntu's mirrors*, so the
+prize was variance off the critical path more than the average; and the
+container briefly looked 100s slower against drifting runners until twin jobs
+on the same commit measured 400s vs 405s (`31583973041`).
 
-**The ceiling itself is still not fixed**, and the remaining gap is now
-smaller but real: 505s of budget against a suite that has run 385–422s, and a
-`globalTimeout` of 540s that still cannot fire before the job's 600s. Raising
-the job to about 13 minutes and letting `globalTimeout` mean a real ten would
-close it, and would restore the design the comments describe — but the
-ten-minute cap is a stated product decision in `CLAUDE.md` rather than a runner
-constraint, so it wants a decision rather than a commit.
-
-Two `test.skip`s remain in `critical-paths.spec.ts`, both scoped to phone
-viewports with Phase 4 named as the reason.
+Two `test.skip`s remain in `critical-paths.spec.ts`, scoped to phone viewports
+"because the phone UI is Phase 4" — and both are now **inert**: since the
+matrix stopped multiplying (D33), no mobile project runs that spec at all, so
+the guards can never fire, and the phase they name has closed. Filed as
+TEST-6 rather than deleted in passing.
 
 ### Which tier answers which question
 
@@ -276,17 +302,36 @@ These are recorded because each one produced a confident, wrong number.
    being tuned, one for six and a half hours on a log file that was never going
    to be written. No Playwright setting could have caught them: a shell loop is
    not a test. Every wait needs its own cap.
+8. **`localhost` is two addresses, and stacks disagree about which comes
+   first.** The standalone server binds IPv4; WebKit's fetch resolves
+   `localhost` to `::1` first on this machine, and Node's readiness probe can
+   inside a CI container — so a server that is demonstrably up produces
+   instant `Load failed` / connection-refused, which reads as anything except
+   what it is. The suite names `127.0.0.1` everywhere now (D86). The tell was
+   a 4 ms failure: nothing real fails that fast.
 
 ---
 
 ## What exists
 
-**Backend — substantially complete.** 9 tRPC routers (`auth`, `household`,
-`product`, `location`, `inventory`, `receipt`, `store`, `price`, `shopping`)
-merged in `src/server/trpc/router.ts`, **55 procedures** — earlier versions of
-this file said 45 and `capabilities.test.ts` said 44; both were counted before
-Phase 3 finished. 9 Zod validation modules. 4 services: `ocr`, `receiptParser`,
-`productMatcher`, `openFoodFacts`.
+**Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
+`household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
+`shopping`) merged in `src/server/trpc/router.ts`, **59 procedures** — a count
+that has moved four times (44 → 45 → 55 → 59) as phases closed and the export
+router arrived, which is why `capabilities.test.ts` asserts it structurally
+instead of anyone trusting a document. 10 Zod validation modules. 6 service
+modules: `ocr`, `receiptParser`, `productMatcher`, `openFoodFacts`,
+`product-cache`, `errors` — plus `src/lib/rating.ts`, the pure module behind
+Phase 6.
+
+**The rating — computed, explained, honest (Phase 6).** `computeRating`
+weighs Nutri-Score 60%, additives 30% (the worst one decides its component),
+organic 10% — but the honesty rules run before the arithmetic, structurally:
+no Nutri-Score means "no information" rather than a number built from the
+remaining 40%, and OFF's "not-applicable" means non-food is not scored. Shown
+on the product detail the scan journey lands on, with what lowered it. The OFF
+cache prefix is versioned (`off:product:v2:`) so month-old entries cannot be
+served as complete.
 
 **Offline — a shop works with no signal, and applies once.** Five writes carry
 an idempotency envelope and go through `withReplay`, which claims the key and
@@ -301,10 +346,12 @@ is not a failure but a question — see *Reconciliation* below. Proven by
 hashing, error mapping and i18n. Rate-limited per IP in Valkey since Phase 3 —
 5 sign-ins per 15 minutes, 3 registrations per hour (CRITICAL-4 closed).
 
-**Frontend — 22 pages, and no route is linked that does not exist.** That last
+**Frontend — 27 pages, and no route is linked that does not exist.** That last
 part is enforced by `check:links` in CI rather than by audit; the manual version
 missed a dead route three times running, twice from routes linked on every row
-of a table.
+of a table. The five newest pages are Phase 5's: `/kitchen`, `/shopping` as
+Screen A (the list manager moved to `/shopping/lists`), `/settings/people`,
+and `/settings/unsaved`.
 
 **Design system — one, and it is in CSS.** 26 tokens under `@theme` in
 `src/app/globals.css`, light and dark, with a three-state System/Light/Dark
@@ -325,7 +372,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 45 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 59 procedures assigned. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request rather than whenever the 15-minute
 token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
@@ -377,8 +424,7 @@ What is measured, and by what:
 | Help (3.3.5) | `a11y-aaa.spec.ts`, form fields only | ✅ attached, not merely adjacent |
 | Reduced motion (2.3.3) | `a11y-aaa.spec.ts` | ✅ |
 | Reading order | `screen-reader.spec.ts`, tree order vs geometry | ✅ desktop only |
-| Announcements | `screen-reader.spec.ts` | ⚠️ refusals yes, one success no (A11Y-1) |
-
+| Announcements | `screen-reader.spec.ts` | ✅ refusals and saved movements both announced — A11Y-1 closed in Phase 5, and the pinned assertion flipped |
 | Reading level (3.1.5) | `src/__tests__/unit/readability.test.ts` | ✅ es 69.0 "fácil", en 66.3 |
 | Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, driven in a browser | ✅ slides on activity, warns at T−2min |
 
@@ -398,11 +444,27 @@ a good checklist and a bad gate, so neither tool is in CI.
 
 ## Dependency security
 
-`corepack pnpm audit` → **no known vulnerabilities** (was 57).
+`pnpm audit` → **no known vulnerabilities** — again. It was clean on
+2026-08-12, **2 high** when re-measured on 2026-08-17 (the world moved while
+the repository did not: nanoid <3.3.18 under postcss, GHSA-2v37-7h3g-55p8, and
+deepmerge-ts <8.0.0 under @prisma/config, GHSA-ggr8-5vv4-36mx), and clean
+after two more overrides the same day.
 
-Cleared without source changes; every direct dependency stayed within its major.
-Four transitive packages had no fixed parent release and use overrides scoped to
-the single parent that pulls them — `recharts>lodash`, not a bare `lodash`.
+The deepmerge-ts one is the first override to **cross a major** (7 → 8),
+because that is where the only fix lives. Taken deliberately and verified
+rather than assumed — prisma generate, migrate deploy and the full suites all
+run through 8.0.x — and it needed fixing **twice**: `@prisma/config` pins
+`deepmerge-ts` at exactly 7.1.5, and the image stages its own npm-installed
+prisma under `/opt/prisma` for the entrypoint's `migrate deploy`, where the
+workspace override never reaches. Trivy failed the image on the copy pnpm
+audit could not see; the Dockerfile's own overrides map (the one already
+holding tar and undici) now carries it too. One advisory, two package
+managers, two override maps — worth remembering the next time one of these
+"is fixed".
+
+The original clearing (57 → 0, 2026-08-10) changed no source; every direct
+dependency stayed within its major. Overrides are scoped to the single parent
+that pulls them — `recharts>lodash`, not a bare `lodash`.
 
 **The overrides live in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11
 stopped reading the `pnpm` field in `package.json`; it warns once and ignores
@@ -431,9 +493,10 @@ advisory-path pair.
 | zod | 3.25.76 |
 | pnpm | 11.19.0 |
 
-No known drift as of 2026-08-10. `CLAUDE.md`'s stale claims — tRPC as a release
-candidate, a `household` router that never existed, a refresh token that was
-never implemented — were corrected today.
+No known drift as of 2026-08-18 — package.json re-checked against this table
+today. `CLAUDE.md`'s stale claims — tRPC as a release candidate, a `household`
+router that never existed, a refresh token that was never implemented — were
+corrected on 2026-08-10.
 
 **This paragraph was itself wrong until today**, and it is worth saying how: it
 claimed `CLAUDE.md` says Prisma 7.x. `CLAUDE.md:14` says Prisma 6.x, and always
@@ -467,10 +530,11 @@ prevent, and it survived because nobody re-read the source it was describing.
   rather than by the resolvers, so a new router cannot forget to be audited.
   Only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS — logging everything would
   bury the refusals in NOT_FOUNDs.
-- Roles are enforced on the server per procedure, but **no interface creates a
-  KITCHEN account** — the value exists in the enum and in the middleware, and
-  the only way to get one today is a database write. Phase 5, with the kitchen
-  screen.
+- ~~Roles are enforced on the server per procedure, but no interface creates a
+  KITCHEN account.~~ **Closed in Phase 5.** `/settings/people` lists the
+  household and creates an account with a role, which is what makes `KITCHEN`
+  reachable at all — it had been enforced since Phase 3 and creatable only by
+  a database write ever since.
 
 **Correctness**
 - ~~`transferStock`'s availability guard is read-then-write.~~ **Closed.** Both
@@ -624,8 +688,9 @@ Two things that sequence surfaced, both operational rather than defects:
   that keeps them out.
 - No error tracking or monitoring beyond the container's own healthcheck — and
   worth a decision rather than a ticket, since every option sends a household's
-  errors to somebody else's server.
-- No data export or backup.
+  errors to somebody else's server. (An earlier line here also said "no data
+  export" — stale since the export closed above; a backup story beyond the
+  JSON export is still absent.)
 - Coverage is measured now, but **per tier, and the denominators differ**: each
   report counts only the files that tier loads, so the three numbers do not
   compose into a project figure and must not be added. Integration 90.2% of
@@ -651,22 +716,22 @@ taken without asking are in `docs/PROGRESS.md`.
 | 3 — Roles, rate limiting | ✅ Complete |
 | 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
-| 5 — Kitchen screen, and Screen A's layout | Next |
-| 6 — Product rating | Not started |
-| 7 — Security review | Not started |
+| 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
+| 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
+| 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
 
-**What "complete against its done-when" means here, exactly.** Phase 4's test
-was "a full shop can be done in aeroplane mode and syncs correctly on
-reconnect", and `e2e/offline-shop.spec.ts` proves it. Its *title* also said
-"phone screen", and Screen A's layout — Scan on top, TO BUY, IN THE TROLLEY —
-is **not** built: a shop today is the existing `/shopping/[id]`, which now
-works offline. The design that preceded this phase marked the layout as the
-droppable tail on the grounds that it is a UX change riding on a correctness
-phase, and it moves to Phase 5, where it sits next to the kitchen screen it
-shares vocabulary with. Named rather than quietly counted as done.
+**What remains, in one place.** The review document (Phase 7's actual
+deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
+passes no suite can answer (the manual screen-reader pass, a week on a real
+tablet, iOS Safari on a real device); T7, the offline scan resolution; and two
+§3/§5.1 promises the 2026-08-17 journey re-audit found were never built — the
+± stepper is a component nothing mounts, and nothing remembers the screen
+choice per `(userId, deviceId)`. All of it is in `REDESIGN_PLAN.md` §10, which
+is the list an item may only leave by being done or deliberately dropped.
 
-Journey 1 of `docs/SMOKE_JOURNEYS.md` passes. The rest are tagged with the phase
-that makes them passable.
+Journeys 1, 2, 3, 6, 7 and 9 of `docs/SMOKE_JOURNEYS.md` pass at the tiers a
+suite can answer; 5 is partial (T7); 4 and 8 wait on the two unbuilt promises
+above. The per-journey evidence is in that file.
 
 ### Environment notes
 
@@ -680,11 +745,16 @@ that makes them passable.
 
 - The `docker` group includes this user, but a login session started before that
   change will not have it. Re-login, or prefix with `sg docker -c "..."`.
-- Port 3000 is occupied on this machine. Pass `PLAYWRIGHT_PORT`, and start the
-  dev server on another port.
-- Next refuses a second dev server from the same directory. If message
-  catalogues appear stale, the running server has cached them — `touch
-  next.config.ts` makes it reload.
+- Port 3000 is occupied on this machine by an unrelated application, and 3001
+  is routinely this project's own `pnpm dev`. The browser suite defaults to
+  3100 and no longer conflicts with either — it may be run while a dev server
+  is up, and touches neither its port nor its data.
+- Next refuses a second dev server from the same directory — `next dev` only.
+  The suite's standalone server takes no such lock, which is half of why the
+  suite moved to it; the other half is `stoky_e2e`. Before the move, a suite
+  and a developer's dev server could and did kill each other's.
+- If message catalogues appear stale, the running dev server has cached them —
+  `touch next.config.ts` makes it reload.
 
 ---
 
