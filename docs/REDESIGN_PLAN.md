@@ -1,6 +1,6 @@
 # Redesign plan — two entry screens
 
-Updated: 2026-08-09
+Updated: 2026-08-18
 
 A **plan, not an implementation**. It records what gets built, in what order, and
 what each decision commits us to.
@@ -693,6 +693,12 @@ KITCHEN account rather than an owner's.
 Extend the Open Food Facts fields, compute, display. *Done when:* a product with
 no data and a non-food product both behave well — not just the happy path.
 
+**Done, 2026-08-12, in three commits** — the fields (with a versioned cache so
+month-old entries are not served as complete), the pure module (honesty rules
+before arithmetic, worst additive dominates, absence of a verdict is not a
+clean bill), and the display on the detail screen the scan lands on. Journey
+10 is its measure. T7 — an offline scan resolved later — stays in §10.
+
 ### Phase 7 — Security review
 
 The last phase, and a gate rather than a feature: nothing ships to a public
@@ -753,10 +759,19 @@ The rule for this list: **an item leaves it by being done or by being
 deliberately dropped, and a drop is written down.** Nothing leaves by being
 forgotten.
 
-### Phase 5 — actionable work complete
+### Phase 5 — actionable work complete, with a correction
 
-**Everything Phase 5 could do without a human and a device is done.** What
-remains of it is the week-long tablet run and the iOS pass, both listed as
+**Everything Phase 5 could do without a human and a device is done** — except
+two §3/§5.1 promises that the 2026-08-17 journey re-audit found were never
+built, and which this section previously counted into "Screen A (§3)" without
+checking: the **± stepper** (§3 flow 3 — the component exists, unmounted since
+Phase 0 lifted it out of Bolsillo for exactly this) and the **screen choice
+remembered per `(userId, deviceId)`** (§5.1 — no deviceId is minted, no
+preference stored, no role-based landing). Both are in the unowned table below
+now, because the rule of this list is that nothing leaves it by being
+forgotten — and both had. Journeys 4 and 8 are their measures.
+
+What also remains is the week-long tablet run and the iOS pass, both listed as
 unowned below, and both things no suite can answer.
 
 **Done since this list was compiled:** the database's own complaints are
@@ -822,6 +837,8 @@ These have no phase yet. They are here so that stays visible.
 
 | Item | Note |
 |---|---|
+| **The ± stepper — stock changes without a form (§3 flow 3)** | Journey 4. `QuantityStepper.tsx` has existed since Phase 0 and nothing mounts it; adding stock still means the `/inventory/add` form. Found 2026-08-17, having been silently counted into Phase 5's "Screen A" close |
+| **The screen choice per `(userId, deviceId)` (§5.1)** | Journey 8. Nothing mints a deviceId, stores a preference, or lands a KITCHEN account on `/kitchen` by default. Found the same day, the same way |
 | **The manual screen-reader pass** | Phase 2b's one incomplete item. Four journeys are audited against the tree; whether it *sounds* sensible is what no tool answers |
 | **A week on a real tablet** | Phase 5's own done-when for the kitchen screen. The screen and its five-minute refresh exist; whether it is still useful and still correct after seven untouched days is not something a suite can answer |
 | **iOS Safari on a real device** | Playwright's WebKit is not iOS Safari, and §5.4 defers installability on iOS grounds specifically. The queue, `localStorage` and the worker all need a pass, dated in `STATUS.md` |

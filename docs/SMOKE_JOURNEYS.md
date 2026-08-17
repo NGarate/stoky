@@ -1,6 +1,6 @@
 # Stoky Smoke Journeys
 
-Updated: 2026-08-10
+Updated: 2026-08-18
 
 These are the minimum user-visible journeys that should be proven before closing
 Stoky product work. They are rewritten around the two entry screens defined in
@@ -8,22 +8,26 @@ Stoky product work. They are rewritten around the two entry screens defined in
 The previous four journeys described an information architecture that has been
 replaced.
 
-**Journey 1 passes; the rest do not yet.** Each journey is tagged with the phase
-from `REDESIGN_PLAN.md` §9 that makes it passable. Read the tag as a promise
-about when it can be measured, not as a claim that it works now. A journey that
-cannot yet be run is still useful: it is what the phase is aiming at.
+Each journey is tagged with the phase from `REDESIGN_PLAN.md` §9 that makes it
+passable, and carries a state **re-audited against the code and the suites on
+2026-08-17** — which found that this table had drifted a long way from the
+bodies below it (the table said Journey 2 "not yet" while its own body said
+"passes since Phase 3"), and that two journeys' features were never built at
+all despite the phases that owned them closing. Both are now in §10 of the
+plan rather than silently absorbed.
 
 | # | Journey | Passable from | State |
 |---|---|---|---|
 | 1 | Stock changes through the interface | Phase 1 | ✅ passes |
-| 2 | A kitchen account is refused a write by the server | Phase 3 | not yet |
-| 3 | The phone screen answers "what do I need to buy" | Phase 4 | not yet |
-| 4 | Stock changes without a form | Phase 4 | not yet |
-| 5 | Scanning never dead-ends | Phase 4 | not yet |
-| 6 | A whole shop with no signal | Phase 4 | not yet |
-| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | not yet |
-| 8 | The screen choice is remembered per person and per device | Phase 5 | not yet |
-| 9 | Both languages, everywhere | Phase 1 onwards, then every phase | partial |
+| 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes |
+| 3 | The phone screen answers "what do I need to buy" | Phase 4–5 | ✅ passes |
+| 4 | Stock changes without a form | Phase 4–5 | ❌ not built — the stepper exists as a component nothing mounts (§10) |
+| 5 | Scanning never dead-ends | Phase 4–6 | partial — the connected cases pass; the offline barcode is T7 |
+| 6 | A whole shop with no signal | Phase 4 | ✅ passes, except the T7 bullet |
+| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer; the week on a real tablet is unowned |
+| 8 | The screen choice is remembered per person and per device | Phase 5 | ❌ not built — nothing stores it, nothing routes by role (§10) |
+| 9 | Both languages, everywhere | Phase 1 onwards, then every phase | ✅ against everything measured |
+| 10 | The rating answers "is this a good buy" — honestly | Phase 6 | ✅ passes |
 
 ---
 
@@ -79,8 +83,9 @@ Receipts and price history keep their meaning but no longer have a journey — s
 `ISSUES.md` UI-1 — `/products/new`, `/inventory/add`, `/inventory/consume` and
 `/settings` were linked from the interface and all four 404'd. All of them now
 exist and are driven by `e2e/critical-paths.spec.ts`, whose four `test.fixme`
-tests were removed rather than left as a promise. Two `test.skip`s remain, both
-scoped to phone viewports with Phase 4 named as the reason.
+tests were removed rather than left as a promise. Two `test.skip`s remain in
+that file, citing "Phase 4" — both inert and both stale since the matrix
+stopped running the spec on mobile projects; filed as TEST-6.
 
 This is the bridge journey. It proves the existing routers are reachable by a
 person before either new screen is built, and it is the journey Phase 1 is
@@ -105,7 +110,7 @@ Proof required:
 - after: Leche entera reads 5 and is still marked as below its minimum; a second
   add of 1 L takes it to 6 and the marking clears
 
-Proven by: `e2e/critical-paths.spec.ts`, 13 tests, green. The location picker on both
+Proven by: `e2e/critical-paths.spec.ts`, 16 tests, green on the standalone production build. The location picker on both
 routes was rebuilt on the way (`ISSUES.md` UI-2, UI-4, UI-6) — until then the
 nested locations five of the six seeded products live in could not be chosen at
 all, so the journey's "where it is stored" half was passing on the roots only.
@@ -125,11 +130,11 @@ The per-procedure half the plan asks for is
 procedures is declared and compares it against the matrix, so a procedure added
 later cannot quietly take the wrong tier. Sampling six would have missed that.
 
-**One honest limit.** Nothing in the interface creates a KITCHEN account — the
-enum value and the middleware exist, but the only way to get one today is a
-database write, which is how the test makes them. The journey proves the
-server refuses a kitchen account; it does not prove anyone can make one. That
-arrives with the kitchen screen in Phase 5.
+**The limit this journey used to carry is closed.** Since Phase 5,
+`/settings/people` creates an account with a role, so a KITCHEN account is
+reachable through the interface rather than only through the database write
+the test uses. The per-procedure count in the paragraph above has also grown
+with the routers — `capabilities.test.ts` asserts all 59 as declared today.
 
 A hidden button is not a control. This journey exists specifically to prove the
 restriction holds when the interface is bypassed.
@@ -161,7 +166,13 @@ every procedure in the router.
 
 ## Journey 3. The phone screen answers "what do I need to buy"
 
-**Passable from Phase 4.**
+**✅ Passes since Phase 5**, when `/shopping` became Screen A — Scan on top,
+TO BUY with the minimum notch, IN THE TROLLEY folded away, undo as the trolley
+itself rather than a timed toast (D54). Proven by
+`src/__tests__/components/ShopPage.test.tsx` for the layout contract and by
+`e2e/offline-shop.spec.ts` — "ticks something off from the shop screen and
+applies it once" — in a real browser. `getBuyList` returns one flat list with
+stock and minimum attached (D56).
 
 Trigger:
 Open the phone screen while at least one product is below its minimum.
@@ -185,8 +196,13 @@ Proof required:
 
 ## Journey 4. Stock changes without a form
 
-**Passable from Phase 4.** The ± stepper is lifted out of the Bolsillo prototype
-into a shared component in Phase 0.
+**❌ Not built, and the 2026-08-17 re-audit is what noticed.** The ± stepper
+was lifted out of the Bolsillo prototype into
+`src/components/inventory/QuantityStepper.tsx` in Phase 0 precisely so this
+journey could exist — and nothing has ever mounted it. Adding stock from the
+product detail still goes through the `/inventory/add` form. Phase 5 closed
+"Screen A" without this flow, and §10 of the plan now carries it explicitly,
+because a promise that nothing tracks is a promise that gets forgotten.
 
 Trigger:
 Open a product from the phone screen and change its quantity with the stepper.
@@ -209,9 +225,14 @@ Proof required:
 
 ## Journey 5. Scanning never dead-ends
 
-**Passable from Phase 4.** The scanner component already works and already
-redirects to `/products/new`, which does not exist — so today this journey ends
-in a 404 (`ISSUES.md` UI-1).
+**Partial.** The connected cases pass: a known product opens its detail — with
+the Phase 6 rating on it — and an unknown barcode reaches a creation form
+prefilled from Open Food Facts, or empty with the barcode filled in when OFF
+has nothing (the scan flow speaks from the catalogue since `a3dbfa6`). What is
+**not** built is the no-signal case this journey's title promises: a barcode
+scanned offline is not queued and resolved later. That is **T7** in the plan's
+§10, deferred from Phase 6 because local-id resolution leaks `local:` ids into
+the cache and components.
 
 Trigger:
 Tap Scan on the phone screen and read a barcode.
@@ -239,8 +260,14 @@ Proof required:
 
 ## Journey 6. A whole shop with no signal
 
-**Passable from Phase 4.** This is the largest single technical item in the plan
-(§5.5) and must be built into the phone screen from the start, not retrofitted.
+**✅ Passes since Phase 4** — it was the phase's done-when, and
+`e2e/offline-shop.spec.ts` proves it end to end: a shop composed in aeroplane
+mode, shown as done, applied exactly once on reconnect, including across a
+lost reply where both attempts carry the same idempotency key, and unsent
+changes surviving a reload. **One bullet below is not met**: "a scanned
+barcode is queued and enriched later" is T7, the same gap Journey 5 names.
+The service worker half runs under a real production build in
+`e2e/service-worker.prod.spec.ts`, part of the ordinary suite since 2026-08-17.
 
 Trigger:
 Put the device in aeroplane mode, then do a full shop.
@@ -269,7 +296,14 @@ reconnection the total reflects both deltas. Nothing is silently overwritten.
 
 ## Journey 7. The kitchen screen answers "what should we eat first"
 
-**Passable from Phase 5.**
+**✅ Passes at the tiers a suite can answer, since Phase 5.** `/kitchen` is
+§4's three sections with one control per card, driven by
+`src/__tests__/components/KitchenPage.test.tsx` (including the undo that
+cancels the queued consumption rather than writing a compensating one, D57)
+and swept by the axe and structural suites at all three tiers. **What no
+suite answers is the phase's own done-when** — a week on a real tablet,
+untouched except for using things up — and that is listed as unowned in §10
+rather than implied by the green.
 
 Trigger:
 Look at the kitchen tablet from a metre away, without touching it.
@@ -310,8 +344,13 @@ about which number it is showing, or it will contradict the phone screen.
 
 ## Journey 8. The screen choice is remembered per person and per device
 
-**Passable from Phase 5**, which is when both screens exist to choose between.
-The role-based default arrives with Phase 3.
+**❌ Not built.** Both screens exist to choose between since Phase 5 — and
+nothing chooses. No `deviceId` is minted, no `(userId, deviceId)` preference
+is stored, and a KITCHEN account lands wherever the navigation sends everyone;
+`/kitchen` is simply a destination in the nav. §5.1 of the plan describes the
+mechanism in detail and no code implements any of it — found by the
+2026-08-17 re-audit, carried in §10 now. The role-based *default* half also
+does not exist, despite Phase 3 shipping the roles it would read.
 
 Trigger:
 Log in on a device for the first time.
@@ -335,17 +374,21 @@ Proof required:
 
 ## Journey 9. Both languages, everywhere
 
-**Partly passing, and re-run at the end of every subsequent phase.** The
-switcher exists: `/settings` was built in Phase 1 and `LocaleSwitcher` is in the
-preferences cluster on every surface including `/login`, writing the `locale`
-cookie that `src/i18n/request.ts` reads, with Spanish still the default.
+**✅ Passes against everything measured.** The switcher is in the preferences
+cluster on every surface including `/login`, writing the `locale` cookie that
+`src/i18n/request.ts` reads, Spanish default. Every filed hardcoded string is
+closed — I18N-1 through I18N-8 — and the class itself is now guarded twice:
+`messages.test.ts` fails when the catalogues diverge, and
+`message-usage.test.ts` scans every `t("…")` in the source for keys no
+catalogue holds, which is the gap the old note here said nothing could see.
+A unit-tier sweep also refuses a literal language tag anywhere under `src/`
+(D68).
 
-What is not yet true is "everywhere". The receipt routes were hardcoded Spanish
-until `621185d` (`ISSUES.md` I18N-1) and `LocationPicker` still is (I18N-5).
-`src/__tests__/unit/messages.test.ts` now fails if the two catalogues stop
-matching, which covers the "no key is missing" half of the proof below without
-anyone having to walk the app — but a string that never reached a catalogue at
-all is invisible to it, which is exactly what I18N-1 and I18N-5 are.
+The honest limit: "everywhere" is proven by construction (no string lands
+outside the catalogues, the catalogues match, both auth pages are asserted in
+both languages at the component tier) plus Spanish rendering driven in the
+browser — not by a human walking every screen in English. That walk shares the
+manual pass's fate in §10.
 
 Trigger:
 Switch the language from settings, on either screen.
@@ -364,22 +407,46 @@ Proof required:
   file. Any screen added in a phase adds both languages in the same commit — no
   string lands in a component (§5.6).
 
+## Journey 10. The rating answers "is this a good buy" — honestly
+
+**✅ Passes since Phase 6.** This document promised the rating a journey when
+it was built, and said it would have to cover a product with no data and a
+non-food product, not the happy path. Both are the phase's done-when, and both
+are structural in `src/lib/rating.ts`: the honesty rules run *before* the
+arithmetic (D77), the worst additive decides its component and an absent
+additive list is not a clean bill (D78).
+
+Trigger:
+Open a product's detail — the screen the scan journey lands on.
+
+Visible outcome:
+
+- a product with Nutri-Score data shows a 0–100 score with a word leading and
+  colour following, and tapping it shows what lowered it
+- a product with no data says "no information", with a link to contribute to
+  Open Food Facts — never an invented number
+- a non-food product says "not applicable" — not a low score
+- the Open Food Facts attribution is visible (ODbL requires it)
+
+Proven by: `src/__tests__/unit/rating.test.ts` (the formula and the honesty
+inversions — breaking the ordering fails four tests) and
+`src/__tests__/components/ProductRating.test.tsx` (all three states rendered,
+both languages). §6's worked example scores 25 — the bottom edge of poor,
+which is what harmless additives on a grade-e product are worth.
+
 ---
 
 ## What is deliberately not here
 
-- **The product rating.** Confirmed out of the MVP and scheduled last, as Phase 6
-  (§5.3). It is the most eye-catching part and the least connected to knowing
-  what is in the house. It gets a journey when it is built, and that journey will
-  have to cover a product with no data and a non-food product, not the happy path.
 - **Receipts and price history.** The routers and routes exist
-  (`receipt.upload` through `applyReceipt`, `/prices/[productId]`), but neither
-  belongs to the phone screen or the kitchen screen as designed. They keep no
-  journey until they are given a home in one of the two doors. `ISSUES.md` OCR-1
-  is a separate reason not to claim the receipt path works: the production image
-  fetches its Tesseract language data from a CDN at first use, so the first scan
-  on a fresh container needs outbound internet and will fail on an air-gapped or
-  read-only install.
+  (`receipt.upload` through `applyReceipt`, `/prices/[productId]`), and the
+  pipeline is exercised — the review flow by `screen-reader.spec.ts` and the
+  dynamic-route audits, scanning in the production image verified air-gapped
+  when OCR-2 closed — but neither belongs to the phone screen or the kitchen
+  screen as designed, so they keep no journey until they are given a home in
+  one of the two doors. (An earlier version of this bullet cited OCR-1 — the
+  CDN fetch at first scan — as a reason the receipt path could not be trusted;
+  OCR-1 and OCR-2 are both closed, and the model is baked into the image.)
 - **Installing the app.** Deferred on iOS grounds (§5.4). Note that the service
   worker and request queue Journey 6 depends on are supported by iOS Safari and
   do not wait for this decision.
