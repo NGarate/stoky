@@ -12,7 +12,14 @@ import { e2eDatabaseUrl, e2eValkeyUrl } from "./e2e/db-url";
  * taken too.
  */
 const PORT = process.env.PLAYWRIGHT_PORT ?? "3100";
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
+/**
+ * 127.0.0.1, never `localhost`. The standalone server binds IPv4 (`0.0.0.0`),
+ * and `localhost` resolves to `::1` first in some stacks — WebKit's fetch does
+ * it on this machine, and Node's own readiness probe can do it inside the CI
+ * container — which turns into instant connection refusals against a server
+ * that is up. Naming the address removes the whole class.
+ */
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 
 /**
  * The suites that sweep viewports and themes internally.
@@ -301,7 +308,9 @@ export default defineConfig({
     // A cold `next build` on a slow machine, plus server start. A wedged build
     // never answers at all; five minutes tells the two apart.
     timeout: 300_000,
-    stdout: "ignore",
+    // Piped, not ignored: when the webServer times out in CI, the build's own
+    // output is the only evidence of where those minutes went.
+    stdout: "pipe",
     stderr: "pipe",
   },
 });

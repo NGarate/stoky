@@ -238,9 +238,9 @@ jobs:
       E2E_DATABASE_URL: postgresql://stoky:stoky_ci@postgres:5432/stoky?schema=public
       E2E_VALKEY_URL: redis://cache:6379
       NEXTAUTH_SECRET: ci-only-not-a-real-secret
-      # Still localhost: this is the standalone server Playwright builds and
-      # starts inside this same container, not a service beside it.
-      NEXTAUTH_URL: http://localhost:3000
+      # No NEXTAUTH_URL here: playwright.config.ts sets it on the server it
+      # starts, derived from the same base URL the tests use, so the two can
+      # never disagree about the address.
       # Kept beside the image tag it has to agree with.
       PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
       # A container job runs as root, but the default HOME is /github/home,
