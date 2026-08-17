@@ -1,15 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
+import { e2eDatabaseUrl, e2eValkeyUrl } from "./e2e/db-url";
 
 /**
  * Playwright configuration.
  *
- * The port is configurable because `reuseExistingServer` will happily adopt
- * whatever is already listening. If an unrelated process holds the port, the
- * whole suite runs against that other application and reports a wall of
- * confusing failures rather than a port conflict. Set PLAYWRIGHT_PORT to a free
- * port when 3000 is taken.
+ * The port is configurable, and the default is 3100 rather than 3000 because
+ * 3000 is routinely somebody's dev server. `reuseExistingServer` is off, so a
+ * taken port fails loudly as a port conflict instead of the old failure mode —
+ * silently adopting whatever was listening and reporting a wall of confusing
+ * failures against the wrong application. Set PLAYWRIGHT_PORT when 3100 is
+ * taken too.
  */
-const PORT = process.env.PLAYWRIGHT_PORT ?? "3000";
+const PORT = process.env.PLAYWRIGHT_PORT ?? "3100";
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
 
 /**
@@ -142,6 +144,21 @@ export default defineConfig({
 
   use: {
     baseURL: BASE_URL,
+    /**
+     * The production build registers `public/sw.js`, and a live worker makes
+     * ordinary tests dishonest two ways at once: its 2,500 ms navigation race
+     * serves the cached shell — or `/offline` — whenever a loaded machine is
+     * slow, so an index page arrives with no rows and a test fails against a
+     * fallback it was never meant to see; and its fetch interception unsettles
+     * `networkidle` on WebKit. Measured, not feared: allowing it failed 9 of
+     * 108 on the first standalone run, all in the two shapes above.
+     *
+     * So the ordinary suite blocks registration, which is exactly the state
+     * these tests ran in when the server was `next dev` (the worker declines
+     * to register outside production). The worker's own specs opt back in with
+     * `test.use({ serviceWorkers: "allow" })`.
+     */
+    serviceWorkers: "block",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     // A click or a fill that cannot resolve should fail as itself rather than
@@ -222,11 +239,53 @@ export default defineConfig({
     },
   ],
 
+  /**
+   * A real production build, served the way the image serves it, on the
+   * suite's own data.
+   *
+   * `pnpm dev` sat here until 2026-08-17, and cost three things at once: the
+   * suite tested a server nobody deploys — which is how broken production
+   * auth once shipped under green suites, since `next dev` applies neither
+   * `trustHost` nor the production CSP (docs/STATUS.md) — it fought the
+   * developer's own `pnpm dev` for Next's per-directory single-instance lock,
+   * which took a mid-run suite's server down for real that day, and it read
+   * the developer's database. The standalone server takes no lock, reads
+   * `stoky_e2e`, and is the artefact a self-hosted install actually runs.
+   *
+   * **`node .next/standalone/server.js`, not `next start`** — `next.config.ts`
+   * sets `output: "standalone"` and `next start` refuses it. The two `cp`
+   * lines are what the Dockerfile does with `COPY --from=builder`: standalone
+   * output deliberately excludes `.next/static` and `public/`.
+   *
+   * `reuseExistingServer` is off everywhere now: adopting whatever holds the
+   * port means testing a stale build, or somebody else's server entirely.
+   */
   webServer: {
-    command: `pnpm dev --port ${PORT}`,
+    command:
+      "pnpm build" +
+      " && cp -r .next/static .next/standalone/.next/static" +
+      " && cp -r public .next/standalone/public" +
+      " && node .next/standalone/server.js",
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     env: {
+      NODE_ENV: "production",
+      PORT,
+      // The suite's own database and cache — never the developer's. The
+      // server is pointed here while `e2e/seed.setup.ts` migrates and seeds
+      // the same URL; Prisma connects lazily, so the server can boot before
+      // the database exists on a first run.
+      DATABASE_URL: e2eDatabaseUrl(),
+      VALKEY_URL: e2eValkeyUrl(),
+      // `src/lib/auth/secret.ts` refuses production service with the example
+      // secret — the point of that guard — so this suite supplies a genuine
+      // value. Not a secret in any meaningful sense: it signs sessions for a
+      // server that lives five minutes.
+      NEXTAUTH_SECRET: "playwright-suite-secret-not-a-real-one-0001",
+      // Must match the address the tests use, or Auth.js compares it against
+      // the Host header and refuses — the comparison e2e/auth.prod.spec.ts
+      // exists to keep working.
+      NEXTAUTH_URL: BASE_URL,
       // The auth rate limiter (ISSUES.md CRITICAL-4) counts per IP, and every
       // browser project reaches the dev server without a proxy in front of it,
       // so the whole matrix shares one bucket. At the shipped limits — 5
@@ -247,9 +306,9 @@ export default defineConfig({
       // which is precisely what that limit is for.
       RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS: "10000",
     },
-    // A cold `next dev` compile is slow; a wedged one never answers at all. Two
-    // minutes tells the two apart and reports the port instead of hanging.
-    timeout: 120_000,
+    // A cold `next build` on a slow machine, plus server start. A wedged build
+    // never answers at all; five minutes tells the two apart.
+    timeout: 300_000,
     stdout: "ignore",
     stderr: "pipe",
   },
