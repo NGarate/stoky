@@ -270,6 +270,13 @@ export default defineConfig({
     env: {
       NODE_ENV: "production",
       PORT,
+      // The standalone server binds `process.env.HOSTNAME`. Docker exports
+      // HOSTNAME as the container id inside container jobs, so without this
+      // the server binds the container's own interface and the 127.0.0.1
+      // readiness probe spins against a loopback nothing listens on — which
+      // is exactly how CI died twice while the same suite ran green locally,
+      // where HOSTNAME is a shell variable nobody exports.
+      HOSTNAME: "0.0.0.0",
       // The suite's own database and cache — never the developer's. The
       // server is pointed here while `e2e/seed.setup.ts` migrates and seeds
       // the same URL; Prisma connects lazily, so the server can boot before
