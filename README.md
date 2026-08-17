@@ -9,13 +9,15 @@ there is no external service holding your data.
 **Primary language:** Spanish (`es`), with English (`en`) as secondary.
 **Default currency:** EUR.
 
-> **Status:** MVP in development. Backend, auth, schema and routing are in
-> place, and so is the design system — 26 theme tokens in CSS, light and dark,
-> with a WCAG AAA accessibility floor enforced by the test suite. Still missing:
-> the phone and kitchen screens, and offline. Roles and rate limiting landed in
-> Phase 3. See
-> [`docs/STATUS.md`](docs/STATUS.md) for an honest, command-verified breakdown
-> of what works and what does not.
+> **Status:** MVP feature-complete against its plan, unreviewed for public
+> exposure. Both entry screens exist — `/shopping` for the phone, `/kitchen`
+> for the tablet — a whole shop works in aeroplane mode and applies exactly
+> once on reconnect, receipts scan air-gapped, and the product rating explains
+> itself or honestly declines to exist. The design system is 26 theme tokens
+> in CSS, light and dark, with a WCAG AAA floor enforced by the suites.
+> What remains: the Phase 7 security review document, and the human passes no
+> suite can answer. See [`docs/STATUS.md`](docs/STATUS.md) for the
+> command-verified breakdown of what works and what does not.
 
 ---
 
@@ -203,13 +205,17 @@ Code is organised by **domain**, not by technical layer.
 - Only Traefik exposes ports in production; PostgreSQL and Valkey have none.
 - Raw SQL only through parameterised tagged template literals.
 
-**Rate limiting** on sign-in and registration is in place — 5 sign-ins per 15
-minutes and 3 registrations per hour, per IP, counted in Valkey. It fails
-closed, so signing in needs the cache to be reachable.
+**Rate limiting** is in place and layered — 5 sign-ins per 15 minutes and 3
+registrations per hour per IP, 10 sign-in attempts per account on a hashed
+key, and 30 receipt uploads per account per hour, counted in Valkey before the
+file is decoded. It fails closed, so signing in needs the cache to be
+reachable. Passwords follow NIST SP 800-63B: twelve characters minimum, no
+composition rules, common-password and identity checks, a maximum so Argon2id
+never takes unbounded input.
 
-**Still not hardened enough to publish:** the password policy is a length check
-and Phase 7's security review has not run. Prefer a LAN or a VPN. See
-`SECURITY.md` for what is and is not covered.
+**Still not published-ready:** Phase 7's security review has not been written,
+and that is the gate — nothing ships to a public address until it passes.
+Prefer a LAN or a VPN. See `SECURITY.md` for what is and is not covered.
 
 ---
 
