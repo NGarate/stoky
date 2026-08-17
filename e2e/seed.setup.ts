@@ -1,6 +1,7 @@
 import { test as setup, expect } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { e2eDatabaseUrl } from "./db-url";
 
 const run = promisify(execFile);
 
@@ -20,19 +21,40 @@ const run = promisify(execFile);
  * parsed lines means an upload and an OCR pass, which is minutes and a language
  * download (OCR-1), so this journey has to start from the fixture.
  *
- * So the fixture is restored instead. The seed deletes only the demo
- * household's rows — scoped by `householdId` throughout — so this resets what
- * the suite owns and touches nothing a developer has in the same database.
+ * So the fixture is restored instead. Since 2026-08-17 that restoration — and
+ * everything else the suite does — happens in the suite's **own database**,
+ * `stoky_e2e`, never the one a developer's `pnpm dev` is reading. The seed
+ * used to run against the shared dev database, scoped to the demo household,
+ * and that scoping was not enough: it reset the household the owner was
+ * actively testing with. See `e2e/db-url.ts`.
  *
  * A project of its own rather than three lines at the top of `session.setup.ts`
  * so that a failure reads as "seeding failed" rather than as "sign-in failed",
  * which is a much longer walk to the same conclusion.
  */
 setup("seed the demo household", async () => {
+  // The suite's own database, never the developer's — see e2e/db-url.ts.
+  const env = { ...process.env, DATABASE_URL: e2eDatabaseUrl() };
+
+  // `migrate deploy` creates the database when it does not exist and applies
+  // the committed migrations; on an already-migrated database it is a no-op.
+  // Doing it here rather than in a workflow step means local and CI runs have
+  // one setup path, and a fresh clone needs no manual step.
+  const migrate = await run("pnpm", ["prisma", "migrate", "deploy"], {
+    env,
+    timeout: 120_000,
+  }).catch((error: unknown) => ({ stdout: "", stderr: String(error) }));
+
+  expect(
+    migrate.stdout,
+    `\`prisma migrate deploy\` failed against the suite's database.\n${migrate.stderr}`,
+  ).toMatch(/have been applied|No pending migrations|up to date/);
+
   // No `cwd`: Playwright's loader hands this file to CommonJS, where
   // `import.meta` is a syntax error, and `pnpm` walks up to the nearest
   // package.json on its own — so the inherited working directory is enough.
   const result = await run("pnpm", ["db:seed"], {
+    env,
     // A seed that hangs must not eat the suite's whole budget.
     timeout: 120_000,
   }).catch((error: unknown) => ({ stdout: "", stderr: String(error) }));
