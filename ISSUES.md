@@ -5,13 +5,15 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-08-11  
-**Status:** after Phase 7's slice of the backlog. Every defect entry is closed —
+**Last Updated:** 2026-08-18  
+**Status:** after Phase 7's slice of the backlog, and the browser suite's move
+to isolated data and the production artefact. Every defect entry is closed —
 the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
 
-**Open: TEST-5**, an intermittent failure in the suite that guards
-the offline queue, found by chasing the unattributed failure `STATUS.md`
-records. It is the only entry in this file that is not closed.
+**Open: TEST-5 and TEST-6.** TEST-5 is the intermittent bun failure in the
+suite that guards the offline queue — upstream, diagnosed, reproduction in
+`docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s whose stated
+reason names a phase that closed.
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
@@ -54,6 +56,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
+| TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -2200,6 +2203,32 @@ afterAll(async () => {
 
 ---
 
+### 🟡 TEST-6: Two inert mobile skips cite a phase that closed
+
+**File:** `e2e/critical-paths.spec.ts:370,422`
+**Severity:** LOW — suite hygiene, not a product defect
+**Status:** OPEN — found 2026-08-17 while re-auditing the journeys
+
+Both guards read `test.skip(({ isMobile }) => Boolean(isMobile), "Phone UI is
+Phase 4")` and date from D9, when the dashboard had no mobile navigation and
+the stock forms were desktop-first. Every fact in that justification has since
+changed — the bottom bar landed in Phase 2b, every control was raised to the
+AAA floor, Phases 4 and 5 closed — and D9 said removing the skip was part of
+the phase that closed without removing it.
+
+They are also **inert**: since D33 stopped the matrix multiplying, no project
+with `isMobile` runs `critical-paths.spec.ts` at all (Mobile Safari runs only
+the two layout specs), so the guards cannot fire and have not for weeks. The
+phone-width *rendering* of these routes is covered — the a11y suites sweep
+every route at 390px on chromium — but the interactive flow at a phone
+viewport is not, and that scoping decision now lives implicitly in two dead
+guards citing a dead reason.
+
+**Cost of closing:** delete the two guards and their comment, and either state
+the D33 scoping where the tests are, or run the two describes on a mobile
+project once to see whether anything actually fails. Filed rather than fixed
+in passing (D6).
+
 ### ✅ TEST-2: Mock external API calls in tests
 
 **Files:**
@@ -2337,60 +2366,29 @@ Create `docs/setup.md` or expand README with:
 
 ## What to fix next
 
-### Blocking everything else
+This section once ranked a backlog. Everything it ranked is closed, and the
+detailed entries above are the authority — so it now just names what is open,
+which is short:
 
-Nothing. Docker access — which headed this list and blocked the integration
-suite, the E2E suite and the seed — has been working since 2026-08-04. All three
-run: 218 integration, 187 E2E, and a seed that is idempotent.
-
-### Before public deployment
-
-2. **DEBT-1:** Strengthen the password policy beyond `min(8)`. With CRITICAL-4
-   closed, this is the largest remaining gap in the auth surface.
-
-### Correctness and scale
-
-4. **DEBT-6:** Decide how the services layer reports failure — typed domain
-   errors the routers translate, most likely — and convert it. The routers are
-   done (DEBT-4); a service error still reaches the client as
-   `INTERNAL_SERVER_ERROR`.
-5. **DEBT-5:** Add the missing indexes on `StockEntry.productId`,
-   `PriceRecord.productId`/`storeId`, `Receipt.householdId`/`status` and
-   `ReceiptItem.receiptId`.
-6. **DEBT-3:** Move the OpenFoodFacts cache from the process-local `Map` to
-   Valkey.
-
-### Polish
-
-7. ~~**DEBT-2:** Wire the barcode torch toggle to the camera, and update the
-   test that currently pins the inert behaviour.~~ Done in Phase 4.
-8. **DOCS-1:** Add JSDoc to the tRPC procedures.
+- **TEST-5** — upstream (bun). Wants an issue filed against bun with the
+  reproduction in `docs/reproductions/`, not more work here. Its honest cost:
+  roughly one `verify:ci` or CI `test` job in seven goes red spuriously;
+  re-run before investigating.
+- **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
+- Everything else that remains is *unbuilt or human-shaped, not a defect*, and
+  lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three
+  manual passes, T7, the ± stepper, and the per-device screen choice.
 
 ---
 
 ## Notes
 
-- Backend, auth, schema and migrations are in place; the UI component library
-  (Phase 2) is the largest unstarted body of work.
-- Unit and component suites run without a database and are green. The
-  integration suite is genuine but unverified here — Docker is unavailable.
-- TypeScript strict mode is on and both lint and typecheck are clean.
-- Security foundation is good (Argon2id, JWT, httpOnly cookies) with rate
-  limiting as the notable hole.
+- The tail of this file once carried a status summary ("the UI component
+  library is the largest unstarted body of work", "Docker is unavailable",
+  "rate limiting is the notable hole") that had been false for weeks while the
+  entries above it were kept true — the same lesson as the summary table, one
+  screen lower. Status lives in `docs/STATUS.md`; this file holds defects.
 
 For gate results and overall project state, see `docs/STATUS.md`.
-For which phase closes each item, see `docs/REDESIGN_PLAN.md` §9, and
-`docs/PROGRESS.md` for what is currently in flight.
-
-| Item | Closed by |
-|---|---|
-| UI-1 dead routes | Phase 1 |
-| INV-1 expiring quantity | Phase 4 (the replay queue could not sit on it) |
-| INV-2 read-then-write guards | Phase 4, with the idempotency work |
-| CRITICAL-4 rate limiting | Phase 3, verified in Phase 7 |
-| DEBT-1 password policy | Phase 3 |
-| DEBT-4 bare `Error` in routers | Phase 3 |
-| DEBT-2 scanner torch | Phase 4 ✅ |
-| DEBT-3 OpenFoodFacts cache | Phase 6 |
-| OCR-1 runtime language download | Phase 6 |
-| DEBT-5 missing indexes | Phase 7 |
+For which phase closed each item, the entries above name it; for what remains,
+`docs/REDESIGN_PLAN.md` §10.
