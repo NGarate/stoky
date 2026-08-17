@@ -20,7 +20,6 @@
     "test:components": "bun test --preload ./src/__tests__/setup/register-dom.ts src/__tests__/components",
     "test:integration": "bash scripts/test-integration-local.sh",
     "test:integration:only": "bun test src/__tests__/integration",
-    "test:e2e:sw": "playwright test --config playwright.prod.config.ts",
     "verify:local": "bash scripts/verify-local.sh",
     "verify:ci": "bash scripts/verify-local.sh --ci",
     "db:migrate": "prisma migrate dev",

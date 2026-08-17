@@ -36,6 +36,11 @@ const CHROMIUM_ONLY = [
   "**/a11y-aaa.spec.ts",
   "**/a11y-structure.spec.ts",
   "**/screen-reader.spec.ts",
+  // The two artefact suites, folded in from the deleted prod config now that
+  // the whole suite serves the standalone build. Checks about the deployed
+  // artefact, not about an engine — one engine's answer is the answer.
+  "**/auth.prod.spec.ts",
+  "**/service-worker.prod.spec.ts",
 ];
 
 /**
@@ -71,19 +76,6 @@ const WORKERS = Number(process.env.PLAYWRIGHT_WORKERS) || (process.env.CI ? 2 : 
 
 export default defineConfig({
   testDir: "./e2e",
-  /**
-   * Everything in `e2e/` except the suites that need a production build.
-   *
-   * `service-worker.prod.spec.ts` runs under `playwright.prod.config.ts`, which
-   * serves the standalone artefact. Collected here it runs against `pnpm dev`,
-   * where `registerServiceWorker` declines to register at all — so it waits
-   * thirty seconds for a controller that is never coming and fails, which is
-   * the suite reporting a defect that does not exist.
-   *
-   * It leaked in for two commits because the run still ended "108 passed" and
-   * the failure was a line above it.
-   */
-  testIgnore: /.*\.prod\.spec\.ts/,
   /**
    * Whole files in parallel, tests within a file in order.
    *

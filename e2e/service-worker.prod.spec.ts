@@ -31,7 +31,17 @@ async function waitForController(page: Page): Promise<void> {
   );
 }
 
-test.describe.configure({ mode: "serial" });
+// 90s where the main config's default is 60: an install-and-activate cycle
+// plus an offline navigation is genuinely slower than a page assertion — the
+// old prod config said so explicitly, and folding in must not tighten it
+// silently.
+test.describe.configure({ mode: "serial", timeout: 90_000 });
+
+// The main config blocks service workers — a live worker's navigation
+// fallback makes ordinary tests dishonest under load (see `use` in
+// playwright.config.ts). This suite's *subject* is the worker, so it is the
+// one place that opts back in.
+test.use({ serviceWorkers: "allow" });
 
 test.describe("a production build's service worker", () => {
   test("registers itself and takes control of the page", async ({ page }) => {
