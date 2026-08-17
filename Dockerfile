@@ -133,7 +133,7 @@ RUN PRISMA_VERSION="$(node -p "require('/app/package.json').dependencies.prisma.
     && mkdir -p /opt/prisma \
     && cd /opt/prisma \
     && npm init -y > /dev/null \
-    && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.overrides={tar:'>=7.5.19',undici:'>=6.27.0','ip-address':'>=10.3.1','brace-expansion':'>=5.0.9'};fs.writeFileSync('package.json',JSON.stringify(p,null,2))" \
+    && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.overrides={tar:'>=7.5.19',undici:'>=6.27.0','ip-address':'>=10.3.1','brace-expansion':'>=5.0.9','deepmerge-ts':'>=8.0.0'};fs.writeFileSync('package.json',JSON.stringify(p,null,2))" \
     && npm install --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
     && npm cache clean --force \
     # npm's job in this image ends on the line above. The base image bundles it
