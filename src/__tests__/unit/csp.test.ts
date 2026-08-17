@@ -12,8 +12,34 @@ import { buildCsp } from "@/lib/csp";
  * without the matcher change is overwritten by the middleware.
  */
 
-const DEV = buildCsp("abc123", true);
-const PROD = buildCsp("abc123", false);
+const DEV = buildCsp("abc123", true, false);
+const PROD = buildCsp("abc123", false, true);
+
+describe("upgrade-insecure-requests follows the deployment's transport", () => {
+  it("is present when production is actually served over https", () => {
+    expect(buildCsp("abc123", false, true)).toContain(
+      "upgrade-insecure-requests",
+    );
+  });
+
+  it("is absent on a plain-http production deployment", () => {
+    // WebKit upgrades subresource fetches even on localhost and LAN hosts,
+    // where Blink and Gecko exempt them — so on an http-only install every
+    // tRPC call becomes an https request against a server with no TLS, and
+    // the application dies with "Load failed" while the page itself renders.
+    // Found by the browser suite the day it started driving the standalone
+    // build (2026-08-17); a real Safari on a LAN install hits the same wall.
+    expect(buildCsp("abc123", false, false)).not.toContain(
+      "upgrade-insecure-requests",
+    );
+  });
+
+  it("is never present in development", () => {
+    expect(buildCsp("abc123", true, true)).not.toContain(
+      "upgrade-insecure-requests",
+    );
+  });
+});
 
 describe("the service worker's directives", () => {
   it("names worker-src and child-src in both environments", () => {
@@ -52,7 +78,7 @@ describe("what the worker must not weaken", () => {
   });
 
   it("carries the nonce it was given", () => {
-    expect(buildCsp("deadbeef", false)).toContain("'nonce-deadbeef'");
+    expect(buildCsp("deadbeef", false, true)).toContain("'nonce-deadbeef'");
   });
 });
 

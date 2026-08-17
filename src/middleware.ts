@@ -13,7 +13,15 @@ import { buildCsp } from "@/lib/csp";
 export function middleware(request: NextRequest): NextResponse {
   const isDev = process.env.NODE_ENV !== "production";
   const nonce = crypto.randomUUID().replaceAll("-", "");
-  const csp = buildCsp(nonce, isDev);
+  // `upgrade-insecure-requests` is keyed on how this request actually
+  // travelled: behind Traefik that is the x-forwarded-proto header TLS
+  // termination writes; served directly it is the URL's own scheme. A client
+  // forging the header against a plain-http install only upgrades — and so
+  // breaks — its own requests, which is the harmless direction.
+  const isHttps =
+    request.headers.get("x-forwarded-proto") === "https" ||
+    request.nextUrl.protocol === "https:";
+  const csp = buildCsp(nonce, isDev, isHttps);
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

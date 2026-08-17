@@ -11,7 +11,11 @@
  * Extracted from `src/middleware.ts` so its directives are assertable without
  * standing up a request.
  */
-export function buildCsp(nonce: string, isDev: boolean): string {
+export function buildCsp(
+  nonce: string,
+  isDev: boolean,
+  isHttps: boolean,
+): string {
   return [
     "default-src 'self'",
     // 'strict-dynamic' means modern browsers trust what the nonce'd script
@@ -42,6 +46,13 @@ export function buildCsp(nonce: string, isDev: boolean): string {
     // credentials being posted anywhere but here.
     "form-action 'self'",
     "frame-ancestors 'none'",
-    ...(isDev ? [] : ["upgrade-insecure-requests"]),
+    // Only where https actually exists. The directive rewrites every
+    // subresource request to https://, and WebKit applies that even on
+    // localhost and LAN hosts, where Blink and Gecko exempt them — so on a
+    // plain-http self-hosted install (or the browser suite's standalone
+    // server) every tRPC call became a TLS handshake against a server with
+    // no TLS, and the application died on Safari while the page rendered.
+    // Behind Traefik the request arrives as https and the directive stays.
+    ...(!isDev && isHttps ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }
