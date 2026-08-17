@@ -1,14 +1,15 @@
 # Index of the planning documents
 
-Updated: 2026-08-10
+Updated: 2026-08-18
 
 **If you are an agent or a person picking this project up, start here.**
 
-There are thirteen documents. That is a lot, and it is deliberate: an earlier
-revision had six overlapping status files that contradicted each other, and a
-fake test suite survived five months inside the gap between them. The rule that
-replaced them is **one owner per subject** — every question below has exactly one
-document that answers it, and the others link rather than restate.
+There are thirteen documents, plus two executed implementation plans kept as
+records. That is a lot, and it is deliberate: an earlier revision had six
+overlapping status files that contradicted each other, and a fake test suite
+survived five months inside the gap between them. The rule that replaced them
+is **one owner per subject** — every question below has exactly one document
+that answers it, and the others link rather than restate.
 
 ---
 
@@ -17,7 +18,7 @@ document that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D26 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D86 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.
@@ -54,7 +55,7 @@ document.
 
 ### Living documents — these must be updated as you work
 
-**[`STATUS.md`](STATUS.md)** · 373 lines
+**[`STATUS.md`](STATUS.md)**
 The command-verified state of the project. Gate table, the three testing tiers
 and which questions each can answer, dependency security, versions, known gaps
 by severity, and the phase table.
@@ -70,7 +71,7 @@ run a gate, the file says so and says why, rather than omitting it.
 
 **[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **32 numbered decisions taken
+commits, and — the part worth reading in full — **86 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -84,19 +85,21 @@ one time that rule was deliberately broken (D22).
 - **Write** a row when you finish a unit, and a new D-number whenever you make a
   judgement call the next person could reasonably make differently.
 
-**[`REDESIGN_PLAN.md`](REDESIGN_PLAN.md)** · 533 lines
+**[`REDESIGN_PLAN.md`](REDESIGN_PLAN.md)**
 The plan. Two entry screens (a phone screen for day-to-day use, a kitchen screen
 for a tablet), the decisions that shaped them, and eight phases each with an
 explicit *done when*.
 
-Phases 0 to 3 are complete. **Phase 4 is next: the phone screen, offline from
-the start.**
+Phases 0 through 6 are complete against their done-whens, each with its named
+exceptions. **What remains: Phase 7's review document, three human passes no
+suite can answer, and the §10 list** — including two §3/§5.1 promises found
+unbuilt when the journeys were re-audited on 2026-08-17.
 
 - **Read** to know what you are building and what finishing it means.
 - **Write** when a phase closes — with what it actually did, including where the
   plan turned out to be wrong. Phase 1 said four dead routes; there were six.
 
-**[`ISSUES.md`](ISSUES.md)** · 1365 lines
+**[`ISSUES.md`](ISSUES.md)**
 Every known defect, with a file reference, evidence, and a severity. Resolved
 entries are kept with their resolution rather than deleted, because the same
 defect recurs and the note about why it happened is worth more than the fix.
@@ -109,11 +112,12 @@ watches. It has twice.
 - **Write** whenever you find a defect you are not fixing right now — which,
   per D6, is most of them.
 
-**[`SMOKE_JOURNEYS.md`](SMOKE_JOURNEYS.md)** · 378 lines
-Nine user journeys with a state column, canonical vocabulary for the domain, and
+**[`SMOKE_JOURNEYS.md`](SMOKE_JOURNEYS.md)**
+Ten user journeys with a state column, canonical vocabulary for the domain, and
 per journey: the trigger, the visible outcome, and the before/after evidence
-required. Journey 1 passes; the rest are tagged with the phase that makes them
-passable.
+required. Seven pass at the tiers a suite can answer; one is partial (T7); two
+turned out never to have been built — the state column was re-audited against
+the code on 2026-08-17.
 
 *Its closure rule:* a slice is done only when it names which journey it changes
 and what evidence proves the new state.
@@ -123,17 +127,18 @@ and what evidence proves the new state.
 
 ### Reference — read for a specific task
 
-**[`DESIGN_AUDIT.md`](DESIGN_AUDIT.md)** · 407 lines
+**[`DESIGN_AUDIT.md`](DESIGN_AUDIT.md)**
 The interface and accessibility audit: every route, mobile-first, WCAG **AAA**.
 Numbered actions A0–A5.4 with done markers. Explains the three viewport tiers,
 the two breakpoints, and why tablet is the least dense rather than a small
 desktop.
 
-Still open: **A5.3** (the Phase 1 routes do not use the shared primitives, and
-74 hardcoded copies of the target-size floor are the cost) and **A5.4** (what
-`/dashboard` becomes once the phone and kitchen screens exist).
+Still open: **A5.3** (the routes do not use the shared primitives, and the
+hardcoded copies of the target-size floor have grown from 74 to 100 with the
+Phase 5 pages) and **A5.4** (what `/dashboard` becomes — decidable now that
+both screens exist).
 
-**[`SECURITY.md`](SECURITY.md)** · 367 lines
+**[`SECURITY.md`](SECURITY.md)**
 The threat model for a self-hosted deployment, what is already hardened
 (container, network, CSP, image supply chain), what is *not* — read that part
 first — and operator guidance.
@@ -142,18 +147,19 @@ Written so that every claim is checkable against a file. Hold it to that: it has
 carried a false claim before, and a security document that overstates the
 posture is worse than none.
 
-**[`VERIFICATION_SEQUENCE.md`](VERIFICATION_SEQUENCE.md)** · 151 lines
+**[`VERIFICATION_SEQUENCE.md`](VERIFICATION_SEQUENCE.md)**
 The command ladder, what each gate proves, the environment each needs, and the
 current measurements. **Note the time budgets** — the ladder has ten minutes and
 each step its own ceiling, so an exit status of 124 means a step was *stopped*,
 not that a test failed.
 
-**[`TEST_SETUP.md`](TEST_SETUP.md)** · 275 lines
-How the suites are configured: the database the integration tests need, the
-happy-dom preload the component tests need, the seeded account and free port the
-E2E suite needs, and a map of the test tree.
+**[`TEST_SETUP.md`](TEST_SETUP.md)**
+How the suites are configured: the database the integration tests bring up, the
+happy-dom preload the component tests need, and the browser suite's own world —
+the `stoky_e2e` database it migrates and seeds itself, and the standalone
+production build it drives.
 
-**[`LOCAL_BOOTSTRAP.md`](LOCAL_BOOTSTRAP.md)** · 110 lines
+**[`LOCAL_BOOTSTRAP.md`](LOCAL_BOOTSTRAP.md)**
 Clone to running app, the shortest supported path. Read this before asking why
 something will not start.
 
@@ -164,6 +170,16 @@ A decision record. Five candidate designs were built and four discarded; this
 says what was tried, what was chosen, and why. It describes an exercise that is
 over — useful for understanding why the palette and the stepper look as they do,
 not for planning.
+
+**[`superpowers/plans/2026-08-12-ci-stability-and-speed.md`](superpowers/plans/2026-08-12-ci-stability-and-speed.md)**
+The CI campaign's implementation plan — executed the same day (commits
+`9bb4b20`–`0850942`). Its measured results live in `STATUS.md` §The pipeline,
+which supersedes every estimate in it.
+
+**[`superpowers/plans/2026-08-17-e2e-isolation-and-production-build.md`](superpowers/plans/2026-08-17-e2e-isolation-and-production-build.md)**
+The browser suite's move to isolated data and the production artefact —
+executed 2026-08-17/18. `PROGRESS.md` D82–D86 carry the decisions;
+`TEST_SETUP.md` describes the result.
 
 ---
 
