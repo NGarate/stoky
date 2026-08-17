@@ -403,11 +403,12 @@ rather than a route list — the journeys are where the defects have been:
 
 1. `/login` and `/register` — the only surfaces a signed-out person meets
 2. `/inventory` → `/inventory/add` → back — the picker, and the announcement
-   after a save (A11Y-1 is open here, and Assessment is how it gets confirmed
-   fixed)
+   after a save (A11Y-1 closed in Phase 5; Assessment is how a person confirms
+   the announcement *sounds* right, which no suite decided)
 3. `/receipts/[id]/review` → applied — the longest interaction in the product
-4. The kitchen screen, when Phase 5 exists — at a metre, on the tablet, which
-   is a condition no emulated viewport reproduces
+4. `/kitchen` — at a metre, on the tablet, which is a condition no emulated
+   viewport reproduces. The screen exists since Phase 5; this pass and the
+   week-long run are its outstanding human halves
 
 Record findings in `ISSUES.md` with the criterion number, the same as anything
 else. A finding from a manual pass is not a lesser finding.
@@ -440,17 +441,20 @@ not enumerate them.
   Phase 1 routes imports `button.tsx` or `input.tsx`; they use plain elements
   because the primitives were unsafe, and that reason went away in Phase 2.
 
-  What has changed is the price of leaving it. The dashboard routes now carry
-  **74 hardcoded `min-h-[48px]` declarations**, each restating a floor the
-  primitives already guarantee. `src/__tests__/components/target-size.test.tsx`
+  What has changed is the price of leaving it, and it keeps rising: the routes
+  carried **74 hardcoded `min-h-[48px]` declarations** when this was written
+  and carry **100** after the Phase 5 pages (re-counted 2026-08-17), each
+  restating a floor the primitives already guarantee. `src/__tests__/components/target-size.test.tsx`
   resolves that floor through Tailwind's own compiler — but only for `Button`
   and `Input`, so the guard covers the two places that do not need it and none
   of the 74 that do. Change the floor and 74 call sites keep the old value,
   which is precisely the shape of the `h-10` defect that guard exists to
   prevent.
-- **A5.4** Decide what `/dashboard` becomes once the phone and kitchen screens
-  exist (Phases 4 and 5). Three entry points competing for the same job is a
-  worse outcome than the placeholder.
+- **A5.4 — decidable now.** Both screens exist (Phases 4–5 closed): `/shopping`
+  is Screen A and `/kitchen` is Screen B, and `/dashboard` still sits beside
+  them. Three entry points competing for the same job is a worse outcome than
+  the placeholder; what `/dashboard` becomes is a product decision waiting on
+  its owner, not on any phase.
 
 ---
 
