@@ -231,11 +231,15 @@ jobs:
       # its own label. `localhost` inside the container is the container. The
       # published ports the other jobs rely on are gone for the same reason —
       # nothing here reaches the services through the host.
-      DATABASE_URL: postgresql://stoky:stoky_ci@postgres:5432/stoky?schema=public
-      VALKEY_URL: redis://cache:6379
+      #
+      # E2E_*, not plain DATABASE_URL/VALKEY_URL: e2e/db-url.ts prefers these
+      # verbatim. Explicit rather than derived because the job's services are
+      # already scoped to the job, so a rename inside them buys nothing.
+      E2E_DATABASE_URL: postgresql://stoky:stoky_ci@postgres:5432/stoky?schema=public
+      E2E_VALKEY_URL: redis://cache:6379
       NEXTAUTH_SECRET: ci-only-not-a-real-secret
-      # Still localhost: this is the dev server Playwright starts inside this
-      # same container, not a service beside it.
+      # Still localhost: this is the standalone server Playwright builds and
+      # starts inside this same container, not a service beside it.
       NEXTAUTH_URL: http://localhost:3000
       # Kept beside the image tag it has to agree with.
       PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
@@ -275,9 +279,11 @@ jobs:
       # `@img/sharp-linux-x64`), so nothing here compiles and the image needs
       # no build toolchain.
       - run: pnpm install --frozen-lockfile --trust-lockfile
+      # `pnpm build` inside Playwright's webServer needs the generated client.
+      # Migrate and seed are gone from here: the suite's own `seed` project
+      # does both against its database, so a second copy in the workflow was a
+      # second thing to keep in step.
       - run: pnpm db:generate
-      - run: pnpm prisma migrate deploy
-      - run: pnpm db:seed
 
       # The browsers come from the image, so the one thing that can go wrong is
       # the image and the driver disagreeing about which browsers those are.
