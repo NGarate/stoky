@@ -153,87 +153,65 @@ bunx playwright test --ui
 bunx playwright test --headed
 ```
 
-**It seeds itself.** A `seed` project runs `pnpm db:seed` and a `setup` project
-signs in as the demo account from `prisma/seed.ts`; every browser project
-depends on both, so there is nothing to run first.
+**It owns its data.** The suite runs against its **own database and cache** —
+`stoky_e2e` in the same Postgres, Valkey db index 1 — derived in
+`e2e/db-url.ts` from `DATABASE_URL`/`VALKEY_URL`, or taken verbatim from
+`E2E_DATABASE_URL`/`E2E_VALKEY_URL` (what CI sets). A `seed` project runs
+`prisma migrate deploy` (which creates the database on first contact) and
+`pnpm db:seed` against it; a `setup` project signs in as the demo account;
+every browser project depends on both, so there is nothing to run first.
 
-It re-seeds on *every* invocation rather than once, because the suite spends the
-fixture as it goes — confirming a receipt line is a write, and the fixture holds
-three confirmable lines, so without this the third run of the day fails with a
-message about a defect that is not there. The seed deletes only the demo
-household's rows, so nothing else in the same database is touched.
+It re-seeds on *every* invocation rather than once, because the suite spends
+the fixture as it goes — confirming a receipt line is a write, and the fixture
+holds three confirmable lines. Before 2026-08-17 the seed ran against the
+shared dev database scoped to the demo household, and that scoping was not
+enough: it reset the household the owner was actively testing with. The suite
+can now be run at any time without touching anything a person is using.
 
-**Do not start a dev server for it.** `playwright.config.ts` declares its own
-`webServer`. It adopts an existing server when the port is taken, which is the
-trap rather than the convenience: port 3000 is occupied on this machine by an
-unrelated application, and the suite will run against that one and report a wall
-of meaningless failures. Pass `PLAYWRIGHT_PORT` and check the port is free.
+**It serves the production artefact.** The `webServer` runs `pnpm build` and
+then `node .next/standalone/server.js` — the same thing the Docker image runs —
+on port **3100** by default (`PLAYWRIGHT_PORT` overrides). `next dev` sat there
+until 2026-08-17 and hid an entire defect class: production auth broken under
+green suites, and `upgrade-insecure-requests` killing every fetch on WebKit
+over plain http. The build adds under a minute and the production server serves
+faster than dev compiled, so the suite's wall clock barely moved.
+
+**Do not start a server for it, and do not stop yours.** `reuseExistingServer`
+is off, so the suite never adopts a foreign server — a taken port fails loudly
+instead. Your own `pnpm dev` and the suite coexist: different port, different
+database, and the standalone server takes no `next dev` single-instance lock.
+The environment must be exported first (`set -a; . ./.env; set +a`), or the
+config refuses with a message naming the variables it needs.
 
 ## Test Structure
 
 ```
 src/__tests__/
-├── integration/               # 8 files — needs a database
-│   ├── auth.flow.test.ts
-│   ├── ocr.pipeline.test.ts
-│   ├── openFoodFacts.comprehensive.test.ts
-│   ├── performance.error.test.ts
-│   ├── productMatcher.comprehensive.test.ts
-│   ├── receiptParser.comprehensive.test.ts
-│   ├── routers.test.ts
-│   └── trpc.test.ts
-├── unit/                      # 12 files — no database
-│   ├── auth.error-messages.test.ts
-│   ├── auth.validation.test.ts
-│   ├── design-tokens.test.ts
-│   ├── household.validation.test.ts
-│   ├── messages.test.ts
-│   ├── navigation.test.ts
-│   ├── ocr.test.ts
-│   ├── openFoodFacts.test.ts
-│   ├── prisma.test.ts
-│   ├── receiptParser.test.ts
-│   ├── theme.test.ts
-│   └── utils.test.ts
-├── components/                # 13 files — happy-dom, no database
-│   ├── CompactNav.test.tsx
-│   ├── DashboardNav.test.tsx
-│   ├── LocaleSwitcher.test.tsx
-│   ├── LocationPicker.test.tsx
-│   ├── PriceChart.test.tsx
-│   ├── ReceiptStatus.test.tsx
-│   ├── Scanner.test.tsx
-│   ├── ShoppingItem.test.tsx
-│   ├── ThemeControl.test.tsx
-│   ├── UploadZone.test.tsx
-│   ├── button.test.tsx
-│   ├── input.test.tsx
-│   └── target-size.test.tsx
+├── integration/               # ~25 test files — brings up its own db + cache
+├── unit/                      # ~42 test files — no database
+├── components/                # ~31 test files — happy-dom, no database
 ├── setup/                     # preloads and helpers, not tests
 │   ├── matchers.ts
 │   ├── register-dom.ts
-│   └── tailwind.ts
+│   └── tailwind.ts            # resolves class lists through Tailwind's compiler
 └── utils/
     └── test-helpers.ts
 
-e2e/                           # Playwright
-├── a11y-aaa.spec.ts
-├── a11y-structure.spec.ts
-├── accessibility.spec.ts
-├── critical-paths.spec.ts
-├── dynamic-routes.spec.ts
-├── location-picker.spec.ts
-├── screen-reader.spec.ts
-├── session.setup.ts
-├── session.ts
-└── settle.ts
+e2e/                           # Playwright — ten spec files
+├── *.spec.ts                  # incl. auth.prod and service-worker.prod, which
+│                              #   audit the deployed artefact specifically
+├── db-url.ts                  # the suite's isolated database/cache URLs
+├── seed.setup.ts              # migrate + seed the suite's own database
+├── session.setup.ts           # sign in once; session.ts holds the mechanism
+└── settle.ts                  # the shared wait
 ```
 
-`setup/register-dom.ts` is the preload that gives the component suite a DOM;
-`setup/tailwind.ts` resolves a component's class list through Tailwind's real
-compiler, which is how target size and line spacing are checked without a
-browser. `e2e/session.ts` and `session.setup.ts` are the sign-in-once mechanism;
-`e2e/settle.ts` is the shared wait.
+This listing used to name every test file and drifted within weeks of being
+written — it said 8 integration files while 25 existed. Counts are approximate
+on purpose; `ls` is the authority. `setup/register-dom.ts` is the preload that
+gives the component suite a DOM; `setup/tailwind.ts` resolves a component's
+class list through Tailwind's real compiler, which is how target size and line
+spacing are checked without a browser.
 
 ## Test Data Cleanup
 
@@ -266,13 +244,18 @@ For GitHub Actions, use:
 - Generate client: `pnpm prisma generate`
 
 ### E2E tests fail with connection refused
-- Ensure dev server is running: `pnpm dev`
-- Check that port 3000 is available
-- Wait for server to fully start before running tests
+- The suite starts its own server — do not start one for it, and do not point
+  it at one. A refusal at startup usually means the port is taken: pass
+  `PLAYWRIGHT_PORT` with a free one (default 3100)
+- A run that goes green for a while and then fails every remaining test with
+  `ERR_CONNECTION_REFUSED` means the suite's server died underneath it — look
+  at what else touched the machine, not at the tests
 
 ## Test Coverage
 
-To check test coverage (when configured):
+Measured per tier, and the denominators differ — each report counts only the
+files that tier loads, so the three numbers must never be added into a project
+figure. `docs/STATUS.md` carries the current numbers.
 
 ```bash
 bun test --coverage

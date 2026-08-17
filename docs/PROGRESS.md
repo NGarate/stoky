@@ -32,10 +32,34 @@ Rules for this log:
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
+| — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
 
 ---
 
 ## Done
+
+### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
+
+Triggered live: a suite run reseeded the demo household in the owner's own
+database while they were testing with it, and the suite's `next dev` fought
+their `next dev` for the per-directory lock until one killed the other. Plan:
+`docs/superpowers/plans/2026-08-17-e2e-isolation-and-production-build.md`.
+
+| Unit | Commit |
+|---|---|
+| The two high audit advisories cleared before they turn the trunk red | `d5e6f9e` |
+| `e2e/db-url.ts` — the suite's isolated database and cache, derived once | `262bdf0` |
+| The seed project migrates and seeds `stoky_e2e`, never the dev database | `7a45ddc` |
+| `upgrade-insecure-requests` keyed on transport — found by the new suite | `e8dafd7` |
+| webServer → the standalone production build, on the suite's own data | `8ef124c` |
+| CI's e2e job hands the suite its own URLs, one setup path | `60cb0a4` |
+| The prod config folded in — one suite, one artefact, 117 tests | `d60b1b3` |
+
+Isolation proven the strong way: the owner's dev server and demo data survived
+three full suite runs untouched, mid-session. The suite found a real product
+defect on its second run (WebKit vs `upgrade-insecure-requests` on plain http —
+a live Safari-on-LAN failure, not a test artefact), which is the argument for
+production parity made by the parity.
 
 ### Phase 7's slice of the backlog — every filed defect but one
 
@@ -1032,3 +1056,42 @@ scan gate flagged lived in npm's own vendored tree, which goes stale on node's
 release schedule. Nothing at runtime uses it — the entrypoint runs the Prisma
 binary directly — and a shipped container without a package manager is worth
 having regardless.
+
+**D82 — The browser suite's isolation is a different database, not careful
+scoping.** The seed always deleted only the demo household's rows, and that
+scoping failed the day it mattered: the demo household was exactly what the
+owner was testing with. Scoping protects data nobody is using; a separate
+database (`stoky_e2e`, Valkey db 1) protects all of it, including the part
+someone is in. The derivation lives in one module both the config and the seed
+import, so they cannot disagree.
+
+**D83 — The suite drives the standalone build, and the cost was nothing.** The
+reasons were three (dev-only defect classes, the `next dev` lock, the shared
+database), but the deciding evidence is measured: 117 tests in 2.9 minutes
+*including* the build, against 2.7–2.9 for 108 against `next dev` — the
+production server serves faster than dev compiles. The separate prod config's
+reason to exist died with the move, so its nine tests folded in.
+
+**D84 — `upgrade-insecure-requests` is keyed on the request's transport, not on
+NODE_ENV.** The suite's second production run failed nine WebKit tests with
+data that never arrived: WebKit upgrades subresource fetches to https even on
+localhost, where Blink and Gecko exempt them, so the directive killed every
+tRPC call against a plain-http server — which is what a Safari user on a
+plain-http LAN install would get. Alternatives rejected: dropping the directive
+entirely weakens the Traefik deployment it exists for; stripping it only in the
+suite hides a real defect. `x-forwarded-proto === "https"` (or the URL's own
+scheme) is what actually distinguishes the two deployments.
+
+**D85 — The ordinary suite blocks service workers; the worker's own specs opt
+in.** With the production build the worker registers everywhere, and its
+2,500 ms navigation race serves the cached shell under load — 9 of 108 failed
+as pages that rendered with no data. A worker in every test makes ordinary
+assertions dishonest; no worker anywhere means the worker specs test nothing.
+`serviceWorkers: "block"` in `use`, `test.use({ serviceWorkers: "allow" })` in
+the one file whose subject it is.
+
+**D86 — The suite names 127.0.0.1, never localhost.** The standalone server
+binds IPv4; `localhost` resolves to `::1` first in WebKit's fetch on this
+machine and can for Node's own readiness probe inside the CI container, and a
+refused connection to a server that is up reads as anything but what it is.
+The address in the URL removes the class.
