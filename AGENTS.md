@@ -86,7 +86,7 @@ src/
       trpc.ts                 # tRPC init (context, middleware)
       router.ts               # Root router merging all sub-routers
       routers/                # Domain routers: auth, product, location, inventory, receipt, store, price, shopping
-    services/                 # Business logic: ocr, receiptParser, productMatcher, openFoodFacts
+    services/                 # Business logic: ocr, receiptParser, productMatcher, openFoodFacts, product-cache, errors
   lib/
     validations/              # Shared Zod schemas (imported by both client and server)
     auth.ts                   # Auth.js configuration (the config is this file)
@@ -199,17 +199,30 @@ bundling them and apologising in the message.
 
 ## CI Pipeline (GitHub Actions)
 
-Five jobs. The first four run in parallel and each is capped at ten minutes —
-the budget is for all verification, not just the browser suite.
+Seven jobs. `quality`, `test`, `e2e` and `audit` run in parallel, each capped
+at ten minutes — the budget is for all verification, not just the browser
+suite.
 
-- **quality**: `lint`, `typecheck`, `check:contrast`, `check:links`
+- **quality**: `bash scripts/check-ci.sh` first (actionlint + shellcheck over
+  the pipeline itself), then `lint`, `typecheck`, `check:react`,
+  `check:contrast`, `check:links`
 - **test**: `test:unit`, `test:components`, `test:integration:only` (the `:only`
   variant, because the runner supplies its own service containers)
-- **e2e**: Playwright over five browser projects plus a `setup` project that
-  signs in once. Needs a seeded database
+- **e2e**: Playwright inside the pinned `mcr.microsoft.com/playwright`
+  container — four browser projects (chromium runs everything; Mobile Safari
+  the two layout specs; firefox and webkit a four-test `@smoke` set) plus
+  `seed` and `setup` projects. The suite builds and serves the standalone
+  production artefact and migrates/seeds its own database; the workflow only
+  installs and hands it service URLs
 - **audit**: `pnpm audit --audit-level moderate`
-- **image** (needs all four): Docker build, Trivy scan before push, SBOM and
-  provenance attestation
+- **changes**: decides in ~5s whether the push could have altered the image; a
+  docs-only push skips the two image jobs, never the tests
+- **image-build** (no `needs` — runs beside the tests): Docker build and Trivy
+  scan; holds no push rights, so a failing run can waste a build but cannot
+  ship one
+- **image-publish** (needs the four test jobs, the build and `changes`):
+  rebuilds from the warm layer cache and pushes, with SBOM and provenance
+  attestation where GitHub offers them
 
 ## Coding Guidelines
 
