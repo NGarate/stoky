@@ -126,8 +126,10 @@ export const publicProcedure = t.procedure.use(securityEvents).use(domainErrors)
  * it change the household itself.
  *
  * `read` is every role: a kitchen tablet exists to be looked at. Consuming
- * stock is deliberately a `read`-tier capability rather than a `write` one —
- * it is the one write a kitchen account has, and the matrix says so.
+ * stock, starting a shopping list and adding an item to one are deliberately
+ * `read`-tier capabilities rather than `write` ones — they are the writes a
+ * kitchen account has (the last two since the owner's pass, §5.2 amendment,
+ * D88), and the matrix says so.
  */
 export const CAPABILITY_ROLES: Record<
   "read" | "write" | "admin",

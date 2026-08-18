@@ -360,9 +360,9 @@ export const inventoryRouter = createTRPCRouter({
    * Records something used up, as a negative entry.
    *
    * `householdProcedure`, not `writeProcedure`, and that is the capability
-   * matrix rather than an oversight: a KITCHEN account may look and use one up,
-   * and nothing else (REDESIGN_PLAN §5.2). It is the one write a kitchen tablet
-   * can make.
+   * matrix rather than an oversight: a KITCHEN account may look, use one up
+   * and write down what is needed — nothing else (REDESIGN_PLAN §5.2, amended
+   * by the owner's pass; D88). This was the first of its three writes.
    *
    * Refuses to take stock below zero — CONFLICT, checked against *net* stock
    * inside a transaction with the product row held (`SELECT … FOR UPDATE`), so

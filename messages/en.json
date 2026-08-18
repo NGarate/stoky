@@ -817,6 +817,11 @@
     "nothingRunningOut": "Nothing is running low",
     "leftOf": "{stock} of {minimum} {unit} left",
     "noneLeft": "None left",
-    "updated": "Updated at {time}"
+    "updated": "Updated at {time}",
+    "addToList": "Put on the list",
+    "addToListOf": "Put “{name}” on the shopping list",
+    "undoAddOf": "Take “{name}” off the shopping list",
+    "listName": "Kitchen list",
+    "listCreateFailed": "The list cannot be created right now. Try again when the connection is back."
   }
 }

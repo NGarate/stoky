@@ -149,6 +149,27 @@ describe("Journey 2 — a kitchen account is refused a write by the server", () 
     expect(entry.quantity).toBe(-1);
   });
 
+  it("lets a kitchen account write down what is needed (D88)", async () => {
+    // The 2026-08-18 widening: start a list, add an item to one — and only
+    // that. The rows this leaves behind are the point, not a leak: the
+    // after-check below proves them present, the mirror of Journey 2's
+    // original "and writes nothing".
+    const created = await kitchen.shopping.create({ name: "Kitchen scribble" });
+    expect(created.householdId).toBe(householdId);
+
+    const added = await kitchen.shopping.addItem({
+      ...envelope(kitchenUserId),
+      shoppingListId: created.id,
+      productId,
+      quantity: 1,
+      unit: "L",
+    });
+    expect(added.productId).toBe(productId);
+
+    const row = await prisma.shoppingItem.findUnique({ where: { id: added.id } });
+    expect(row).not.toBeNull();
+  });
+
   it("refuses every other write named by Journey 2, and writes nothing", async () => {
     const stockBefore = await prisma.stockEntry.count({ where: { productId } });
     const itemsBefore = await prisma.shoppingItem.count({

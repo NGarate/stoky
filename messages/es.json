@@ -817,6 +817,11 @@
     "nothingRunningOut": "No falta nada",
     "leftOf": "Queda {stock} de {minimum} {unit}",
     "noneLeft": "No queda nada",
-    "updated": "Actualizado a las {time}"
+    "updated": "Actualizado a las {time}",
+    "addToList": "Apuntar a la compra",
+    "addToListOf": "Apuntar «{name}» a la lista de la compra",
+    "undoAddOf": "Quitar «{name}» de la lista de la compra",
+    "listName": "Lista de la cocina",
+    "listCreateFailed": "Ahora mismo no se puede crear la lista. Prueba cuando vuelva la conexión."
   }
 }

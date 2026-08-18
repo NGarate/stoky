@@ -16,6 +16,21 @@ import type { QueuedOp } from "@/lib/offline/queue";
 
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 const cancel = mock((_id: string) => true);
+const createList = mock(
+  (
+    _input: { name: string },
+    opts?: { onSuccess?: (list: { id: string }) => unknown },
+  ) => {
+    if (createListFails) {
+      createListOpts?.onError?.(new Error("offline"));
+      return;
+    }
+    void opts?.onSuccess?.({ id: "l-new" });
+  },
+);
+let createListOpts: { onError?: (e: unknown) => unknown } | undefined;
+let createListFails = false;
+let listsStub: { data: Array<{ id: string; name: string }> | undefined };
 
 let pending: QueuedOp[] = [];
 let expiringStub: Record<string, unknown>;
@@ -37,13 +52,25 @@ mock.module("@/components/offline/queue-context", () => ({
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
-    useUtils: () => ({ invalidate: () => Promise.resolve() }),
+    useUtils: () => ({
+      invalidate: () => Promise.resolve(),
+      shopping: { list: { invalidate: () => Promise.resolve() } },
+    }),
     household: {
       create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
     },
     inventory: {
       getExpiringItems: { useQuery: () => expiringStub },
       getStockOverview: { useQuery: () => stockStub },
+    },
+    shopping: {
+      list: { useQuery: () => listsStub },
+      create: {
+        useMutation: (opts?: { onError?: (e: unknown) => unknown }) => {
+          createListOpts = opts;
+          return { mutate: createList, isPending: false };
+        },
+      },
     },
   },
 }));
@@ -76,6 +103,9 @@ function consumeOp(productId: string): QueuedOp {
 beforeEach(() => {
   enqueue.mockClear();
   cancel.mockClear();
+  createList.mockClear();
+  createListFails = false;
+  listsStub = { data: [{ id: "l1", name: "Lista" }] };
   pending = [];
   expiringStub = {
     data: [batch()],
@@ -148,12 +178,115 @@ describe("using something up", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers nothing but that one button per card", () => {
+  it("offers one action per row and nothing that opens a form", () => {
+    // §4 as amended by the owner's pass (D88): a card's tap uses one up, a
+    // running-out row's tap writes it on the list. Still no create, edit or
+    // delete of products or stock, and still nothing that needs a form.
+    stockStub = {
+      data: {
+        products: [
+          { id: "p9", name: "Café", totalStock: 0, minStock: 2, defaultUnit: "ud" },
+        ],
+      },
+      isPending: false,
+      error: null,
+    };
     renderWithIntl(<KitchenPage />);
 
-    // §4: no creating, no editing. That is the phone's job.
     const buttons = screen.getAllByRole("button");
-    expect(buttons).toHaveLength(1);
+    expect(buttons).toHaveLength(2);
+    expect(document.querySelector("form")).toBeNull();
+  });
+});
+
+describe("writing it on the list", () => {
+  const cafe = {
+    id: "p9",
+    name: "Café molido",
+    totalStock: 0,
+    minStock: 2,
+    defaultUnit: "paquete",
+  };
+
+  beforeEach(() => {
+    stockStub = {
+      data: { products: [cafe] },
+      isPending: false,
+      error: null,
+    };
+  });
+
+  it("enqueues the product onto the newest list, one tap", async () => {
+    renderWithIntl(<KitchenPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+    );
+
+    expect(createList).not.toHaveBeenCalled();
+    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
+      path: "shopping.addItem",
+      input: {
+        shoppingListId: "l1",
+        productId: "p9",
+        quantity: 1,
+        unit: "paquete",
+      },
+    });
+  });
+
+  it("creates the first list with the first tap, and writes onto it", async () => {
+    listsStub = { data: [] };
+    renderWithIntl(<KitchenPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+    );
+
+    expect(createList.mock.calls[0]?.[0]).toMatchObject({
+      name: "Lista de la cocina",
+    });
+    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
+      path: "shopping.addItem",
+      input: { shoppingListId: "l-new", productId: "p9" },
+    });
+  });
+
+  it("says so when the first list cannot be created", async () => {
+    listsStub = { data: [] };
+    createListFails = true;
+    renderWithIntl(<KitchenPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+    );
+
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/no se puede crear la lista/i),
+    ).toBeInTheDocument();
+  });
+
+  it("offers undo exactly while the add is still queued", async () => {
+    pending = [
+      {
+        id: "op-add",
+        path: "shopping.addItem",
+        input: { shoppingListId: "l1", productId: "p9", quantity: 1, unit: "paquete" },
+        householdId: "h1",
+        label: { key: "offline.addedItem" },
+        createdAt: new Date("2026-08-18T10:00:00.000Z"),
+        attempts: 0,
+      },
+    ];
+    renderWithIntl(<KitchenPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Quitar «Café molido»/ }),
+    );
+
+    expect(cancel).toHaveBeenCalledWith("op-add");
+    expect(enqueue).not.toHaveBeenCalled();
   });
 });
 

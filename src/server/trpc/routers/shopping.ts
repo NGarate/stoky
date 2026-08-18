@@ -100,8 +100,15 @@ export const shoppingRouter = createTRPCRouter({
       return list;
     }),
 
-  /** A new, empty list. Named by the person; the automatic one names itself. */
-  create: writeProcedure
+  /**
+   * A new, empty list. Named by the person; the automatic one names itself.
+   *
+   * `householdProcedure`, not `writeProcedure`, since the owner's pass
+   * (REDESIGN_PLAN §5.2 amendment, D88): a kitchen account may write down
+   * what is needed. Same tier and same reasoning as `consumeStock` — the
+   * capability test asserts the widening is exactly these two procedures.
+   */
+  create: householdProcedure
     .input(shoppingListSchema)
     .mutation(async ({ ctx, input }) => {
       const list = await ctx.db.shoppingList.create({
@@ -169,8 +176,12 @@ export const shoppingRouter = createTRPCRouter({
    *
    * Replayable: this is the one a person does while standing in front of the
    * shelf that reminded them.
+   *
+   * `householdProcedure` since the owner's pass (§5.2 amendment, D88): the
+   * kitchen tablet is exactly where a household notices something needs
+   * buying. Ticking off, renaming, deleting and generating stay refused.
    */
-  addItem: writeProcedure
+  addItem: householdProcedure
     .input(addShoppingItemSchema)
     .mutation(async ({ ctx, input }) => {
       // Verify list belongs to household

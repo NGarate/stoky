@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/components/offline/queue-context";
@@ -18,10 +19,13 @@ import type { JSX } from "react";
  *
  * - **Readable at a metre.** Body text is `text-xl`/`text-2xl` and headings
  *   `text-4xl`+, rather than the dashboard's defaults.
- * - **Nothing urgent below the fold.** "Usar ya" is first and is the only
- *   section with buttons; the two columns below it are for reading.
- * - **One button per card, and nothing else.** No creating, no editing — that
- *   is the phone's job. A tap uses one unit up.
+ * - **Nothing urgent below the fold.** "Usar ya" is first; what follows is
+ *   quieter.
+ * - **One action per row, one tap each.** A card's tap uses one unit up; a
+ *   running-out row's tap writes it on the shopping list — added by the
+ *   owner's pass (§4 amendment, D88), which overruled the original "no
+ *   creating, no editing". Editing products and stock is still the phone's
+ *   job; nothing here opens a form.
  * - **It refreshes itself.** A tablet nobody touches must not show yesterday.
  *
  * **Undo is cancelling the queued change, never a compensating write.** An
@@ -49,6 +53,16 @@ export default function KitchenPage(): JSX.Element {
     { limit: 100, lowStock: true },
     { refetchInterval },
   );
+  // The open lists, newest first — "Apuntar" writes to the newest one, and
+  // when none exists the first tap creates one (D97). `shopping.create` is
+  // not offline-replayable, so that first tap is online-only and says so
+  // rather than failing quietly.
+  const lists = api.shopping.list.useQuery({}, { refetchInterval });
+  const [listError, setListError] = useState(false);
+  const utils = api.useUtils();
+  const createList = api.shopping.create.useMutation({
+    onError: () => setListError(true),
+  });
 
   if (!expiring.data) {
     return (
@@ -80,6 +94,60 @@ export default function KitchenPage(): JSX.Element {
         (entry.input as { productId?: unknown }).productId === productId,
     );
     return op?.id ?? null;
+  }
+
+  /** The queued add for this product, if one is still waiting. */
+  function pendingAdd(productId: string): string | null {
+    const op = queue.pending.find(
+      (entry) =>
+        entry.path === "shopping.addItem" &&
+        (entry.input as { productId?: unknown }).productId === productId,
+    );
+    return op?.id ?? null;
+  }
+
+  function enqueueAdd(
+    listId: string,
+    product: { id: string; name: string; defaultUnit: string },
+  ): void {
+    enqueue({
+      path: "shopping.addItem",
+      input: {
+        shoppingListId: listId,
+        productId: product.id,
+        quantity: 1,
+        unit: product.defaultUnit,
+      },
+      label: {
+        key: "offline.addedItem",
+        values: { name: product.name },
+      },
+    });
+  }
+
+  function addToList(product: {
+    id: string;
+    name: string;
+    defaultUnit: string;
+  }): void {
+    setListError(false);
+    const target = lists.data?.[0];
+    if (target) {
+      enqueueAdd(target.id, product);
+      return;
+    }
+    // No list yet: the tap creates one and writes the first item on it. Two
+    // steps, one gesture — a person at the tablet asked for neither a form
+    // nor a decision about names.
+    createList.mutate(
+      { name: t("listName") },
+      {
+        onSuccess: async (created) => {
+          enqueueAdd(created.id, product);
+          await utils.shopping.list.invalidate();
+        },
+      },
+    );
   }
 
   function useOne(batch: (typeof batches)[number]): void {
@@ -213,6 +281,12 @@ export default function KitchenPage(): JSX.Element {
           >
             {t("runningOut")}
           </h2>
+          {/* Announced politely: the one failure this section can produce is
+              "no connection to create the first list", and a tablet read from
+              a metre away must say it rather than swallow the tap. */}
+          <p aria-live="polite" className={listError ? "mt-3 text-lg text-danger-foreground" : "sr-only"}>
+            {listError ? t("listCreateFailed") : ""}
+          </p>
           {lowStock.length === 0 ? (
             <p className="mt-3 text-xl text-muted-foreground">
               {t("nothingRunningOut")}
@@ -221,21 +295,47 @@ export default function KitchenPage(): JSX.Element {
             <ul className="mt-3 space-y-2">
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
+                const queuedAdd = pendingAdd(product.id);
                 return (
                   <li
                     key={product.id}
-                    className="flex items-baseline justify-between gap-4 border-b border-border py-2 text-xl"
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border py-2 text-xl"
                   >
-                    <span className="text-foreground">{product.name}</span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {left <= 0
-                        ? t("noneLeft")
-                        : t("leftOf", {
-                            stock: left,
-                            minimum: product.minStock ?? 0,
-                            unit: product.defaultUnit,
-                          })}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="block text-foreground">{product.name}</span>
+                      <span className="block text-lg text-muted-foreground">
+                        {left <= 0
+                          ? t("noneLeft")
+                          : t("leftOf", {
+                              stock: left,
+                              minimum: product.minStock ?? 0,
+                              unit: product.defaultUnit,
+                            })}
+                      </span>
+                    </div>
+                    {queuedAdd ? (
+                      <button
+                        className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg text-foreground"
+                        onClick={() => cancel(queuedAdd)}
+                        type="button"
+                      >
+                        <span aria-hidden="true">{t("undo")}</span>
+                        <span className="sr-only">
+                          {t("undoAddOf", { name: product.name })}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => addToList(product)}
+                        type="button"
+                      >
+                        <span aria-hidden="true">{t("addToList")}</span>
+                        <span className="sr-only">
+                          {t("addToListOf", { name: product.name })}
+                        </span>
+                      </button>
+                    )}
                   </li>
                 );
               })}
