@@ -403,6 +403,56 @@ test.describe("Product Creation Flow", () => {
     await productsPage.expectProductInList(productName);
   });
 
+  test("should edit a product and see the change on its detail", async ({ page }) => {
+    const registerPage = new RegisterPage(page);
+    const dashboardPage = new DashboardPage(page);
+    const productsPage = new ProductsPage(page);
+
+    // Its own household and its own product: the seeded products are asserted
+    // by name elsewhere (TEST-3's lesson), so the edit journey brings the state
+    // it mutates.
+    await registerPage.goto();
+    await registerPage.register(
+      generateTestName("E2E Edit User"),
+      generateTestEmail("e2e-edit"),
+      "E2ETestPassword123!",
+      generateTestName("E2E Edit Household"),
+    );
+    await dashboardPage.expectLoaded();
+
+    await dashboardPage.navigateToProducts();
+    await productsPage.expectLoaded();
+
+    const originalName = generateTestName("E2E Editable");
+    await productsPage.createProduct(originalName);
+
+    // Start where a person would: the product's own page, reached by its name.
+    await page.goto("/products");
+    await page.click(`a:has-text("${originalName}")`);
+    await page.waitForURL(/\/products\/[^/]+$/);
+
+    await page.click('a[href$="/edit"]');
+    await page.waitForURL(/\/products\/[^/]+\/edit$/);
+
+    const editedName = `${originalName} (editado)`;
+    await page.fill('input[name="name"]', editedName);
+    await page.fill('input[name="brand"]', "Marca E2E");
+    await page.click('button[type="submit"]');
+
+    // The save announces itself instead of redirecting into silence (A11Y-1).
+    await expect(
+      page.getByText(es.products.edit.saved.replace("{name}", editedName)),
+    ).toBeVisible();
+
+    // And the product's page carries the change.
+    const detailUrl = page.url().replace(/\/edit$/, "");
+    await page.goto(detailUrl);
+    await expect(
+      page.getByRole("heading", { level: 1, name: editedName }),
+    ).toBeVisible();
+    await expect(page.getByText("Marca E2E")).toBeVisible();
+  });
+
   test("should require authentication for product pages", async ({ page }) => {
     // Try to access products without authentication
     await page.goto("/products");

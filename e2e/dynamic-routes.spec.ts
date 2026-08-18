@@ -84,16 +84,35 @@ async function firstDetailLink(
   return found as string;
 }
 
-const DESTINATIONS = [
+interface Destination {
+  name: string;
+  index: string;
+  pattern: RegExp;
+  /** Followed from the index first, when the target is two links deep. */
+  via?: RegExp;
+}
+
+const DESTINATIONS: Destination[] = [
   {
     name: "receipt review",
     index: "/receipts",
     pattern: /^\/receipts\/[^/]+\/review$/,
   },
   {
+    // `(?!new$|scan$)`: /products also links its two static children, and they
+    // sit first in document order — without the exclusion, "product detail"
+    // resolved to /products/scan and this file audited the scanner under a
+    // product's name. Found when the edit hop below inherited the pattern and
+    // asked /products/scan for an edit link it could never have.
     name: "product detail",
     index: "/products",
-    pattern: /^\/products\/[^/]+$/,
+    pattern: /^\/products\/(?!new$|scan$)[^/]+$/,
+  },
+  {
+    name: "product edit",
+    index: "/products",
+    via: /^\/products\/(?!new$|scan$)[^/]+$/,
+    pattern: /^\/products\/[^/]+\/edit$/,
   },
   {
     name: "price detail",
@@ -102,14 +121,25 @@ const DESTINATIONS = [
   },
 ];
 
+/**
+ * Resolves a destination's href, following the `via` hop when it has one —
+ * the edit screen is linked from the product's page, not from the index, and
+ * discovering it the way a person does is the point of this file.
+ */
+async function resolveHref(page: Page, destination: Destination): Promise<string> {
+  const first = await firstDetailLink(
+    page,
+    destination.index,
+    destination.via ?? destination.pattern,
+  );
+  if (!destination.via) return first;
+  return firstDetailLink(page, first, destination.pattern);
+}
+
 test.describe("Routes reached by following a link", () => {
   for (const destination of DESTINATIONS) {
     test(`${destination.name} — fits every tier`, async ({ page }) => {
-      const href = await firstDetailLink(
-        page,
-        destination.index,
-        destination.pattern,
-      );
+      const href = await resolveHref(page, destination);
 
       await page.setViewportSize(VIEWPORTS[0]);
       await page.goto(href);
@@ -149,11 +179,7 @@ test.describe("Routes reached by following a link", () => {
     });
 
     test(`${destination.name} — passes axe at AAA`, async ({ page }) => {
-      const href = await firstDetailLink(
-        page,
-        destination.index,
-        destination.pattern,
-      );
+      const href = await resolveHref(page, destination);
 
       // One tier rather than three: the axe rules that vary by width are already
       // covered across all three in accessibility.spec.ts, and the phone is

@@ -583,6 +583,35 @@ describe("tRPC Router Integration Tests", () => {
       expect(result.name).toBe("Updated Name");
     });
 
+    it("clears an optional field with null, and leaves omitted ones alone", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "product3b@example.com",
+        "Product User 3b",
+        "Product Household 3b"
+      );
+      // The edit screen's clear case: a wrong barcode has to be removable, and
+      // before the schema accepted null there was no way to say so — omitting
+      // the field means "leave it", and "" would land in the unique index.
+      const product = await createTestProduct(householdId, {
+        name: "Clearable",
+        barcode: "8400000000001",
+        brand: "Marca",
+        minStock: 2,
+      });
+      const { caller } = await createTestContext(user.id, householdId);
+
+      const result = await caller.product.update({
+        id: product.id,
+        barcode: null,
+        minStock: null,
+      });
+
+      expect(result.barcode).toBeNull();
+      expect(result.minStock).toBeNull();
+      // Omitted, so untouched — null is a statement, absence is not.
+      expect(result.brand).toBe("Marca");
+    });
+
     it("should delete product", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product4@example.com",
