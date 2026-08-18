@@ -12,13 +12,13 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6, PRICE-1 and UI-11.** TEST-5 is the intermittent bun
+**Open: TEST-5, TEST-6 and UI-11.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s
 whose stated reason names a phase that closed. PRICE-1 came out of the
-owner's first pass on 2026-08-18 and is owned by Phase 8
-(`docs/REDESIGN_PLAN.md` §9); UI-10, filed the same day, closed the same day
-(`d7c178d`).
+owner's first pass on 2026-08-18; UI-10 and PRICE-1, filed the same day,
+closed the same day (`d7c178d`, `4bbb82d`). UI-11 is the open one — found
+verifying the third unit in the browser.
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
@@ -80,7 +80,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-4 | The low-stock badge is unchecked on the card tier | ✅ Resolved (Phase 4) |
 | UI-10 | The auth hero panels are painted with the action colour | ✅ Resolved (`d7c178d`) |
 | UI-11 | A run-out product with a minimum is labelled low, not out | 🟡 Open |
-| PRICE-1 | No UI path can create a price record | 🟡 Open — Phase 8 |
+| PRICE-1 | No UI path can create a price record | ✅ Resolved (`4bbb82d`) |
 
 ---
 
@@ -1717,13 +1717,22 @@ worth checking the card tier and the kitchen screen's vocabulary while there.
 
 ---
 
-### 🟡 PRICE-1: No UI path can create a price record
+### ✅ PRICE-1: No UI path can create a price record
 
 **Files:** `src/app/(dashboard)/inventory/add/page.tsx`,
 `src/app/(dashboard)/receipts/upload/page.tsx`,
 `src/components/store/StoreSelector.tsx`  
 **Severity:** MEDIUM — a headline feature (price intelligence) cannot receive data  
-**Status:** OPEN — found 2026-08-18 while verifying the owner's stock-form observation; owned by Phase 8
+**Status:** RESOLVED (`4bbb82d`, Phase 8) — filed and closed 2026-08-18
+
+**Resolution:** both halves. The add form sends store and price with the
+same `addStock` call (refusing a price without a store at the edge, since
+the server would accept it and silently record nothing), and the receipt
+upload asks which store before the file goes up. The nuance below is closed
+server-side too: `price` grew `.positive()`, watched red without it.
+`StoreSelector` has its first imports.
+
+**Original report follows.**
 
 Three writers of `PriceRecord` exist server-side and no interface reaches any
 of them. `inventory.addStock` has accepted optional `price` + `storeId` and
@@ -2513,7 +2522,6 @@ which is short:
   roughly one `verify:ci` or CI `test` job in seven goes red spuriously;
   re-run before investigating.
 - **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
-- **PRICE-1** — no UI path can create a price record. Owned by Phase 8.
 - **UI-11** — "Stock bajo" on a product that has run out; the Panel says "Sin
   stock" for the same row. One `if` swap, found in passing and filed per D6.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and

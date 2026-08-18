@@ -33,7 +33,7 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
-| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`), product editing (`8114501`) and the Panel's doors (`cf18b52`) closed; three items remain |
+| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`), product editing (`8114501`), the Panel's doors (`cf18b52`) and the stock form (`4bbb82d`) closed; two items remain |
 
 ---
 
@@ -46,6 +46,7 @@ Rules for this log:
 | UI-10 — the auth panels leave `bg-primary` for their own hero surface | `d7c178d` |
 | Product editing — `/products/[id]/edit`, and `product.update`'s first caller | `8114501` |
 | The Panel's cards become doors — `product.count`, `needsRestock`, the loud filter | `cf18b52` |
+| The stock form in two layers — store and price recordable at last, PRICE-1 closed | `4bbb82d` |
 
 ### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
 
@@ -1184,3 +1185,23 @@ and silently changing what an existing consumer sees is the drift the
 capability and journey suites exist to prevent. The third card's door is the
 plain `/inventory`: its alert block renders the same two expiry queries the
 card sums, so the promise holds without a third filter.
+
+**D95 — The stock forms' disclosure is uncontrolled, opened imperatively.**
+A controlled `<details>` (open prop + onToggle) races hydration: a native
+click before React attaches flips it open, and the first post-hydration
+render snaps it shut — found as a coin-toss failure in the browser suite,
+same steps passing in one test and failing in the next. The one programmatic
+need — a refusal about the folded unit must not point into a closed drawer —
+is a `ref.setAttribute("open", "")`, which never fights the person. The
+specs that reach the folded picker open it open-if-closed with a retry, for
+the same reason.
+
+**D96 — The usual location is derived client-side, not a schema column.**
+A `defaultLocationId` on Product would need a migration, a form control to
+set it, and someone to maintain it; the habit is already in the ledger
+`product.getById` returns, and a pure function over it costs no query and no
+schema. Rules: only incoming entries vote (a consumption's location says
+where something was taken from, not where it lives), the most frequent
+wins, ties to the most recent, no history guesses nothing. If deriving ever
+proves too magical, the column is still available — the function's call site
+is one line.

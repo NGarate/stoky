@@ -14,8 +14,8 @@ say what measured it.
 
 Measured on 2026-08-17/18 against a live PostgreSQL and Valkey — at
 `443718d` after Phase 6, the CI campaign and the browser suite's move to the
-production artefact, and re-measured at `cf18b52` for the suites and routes
-Phase 8's first three units changed.
+production artefact, and re-measured at `4bbb82d` for the suites and routes
+Phase 8's first four units changed.
 
 | Gate | Command | Result |
 |---|---|---|
@@ -24,9 +24,9 @@ Phase 8's first three units changed.
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `pnpm check:links` | ✅ 93 links against 31 routes, none broken |
 | Contrast | `pnpm check:contrast` | ✅ 60 checks over 27 tokens × 2 themes, all AAA |
-| Unit tests | `pnpm test:unit` | ✅ 479 pass / 44 files |
-| Component tests | `pnpm test:components` | ✅ 364 pass / 34 files |
-| Integration tests | `pnpm test:integration` | ✅ 398 pass / 25 files |
+| Unit tests | `pnpm test:unit` | ✅ 483 pass / 45 files |
+| Component tests | `pnpm test:components` | ✅ 368 pass / 35 files |
+| Integration tests | `pnpm test:integration` | ✅ 400 pass / 25 files |
 | Build | `pnpm build` | ✅ 32 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
@@ -721,7 +721,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
 | 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
-| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`), product editing (`8114501`) and the Panel's doors (`cf18b52`) closed; three items remain |
+| 8 — The owner's first pass | In progress — four of six closed (`d7c178d`, `8114501`, `cf18b52`, `4bbb82d`); the kitchen screen and the products-list menu remain |
 
 **What remains, in one place.** The review document (Phase 7's actual
 deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
