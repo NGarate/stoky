@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
+import { resolve } from "../setup/tailwind";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -130,6 +131,57 @@ describe("the register page", () => {
 
     expect(container.textContent).toContain("Your first household");
   });
+});
+
+/**
+ * ISSUES.md UI-10 — the hero panel beside the form.
+ *
+ * Both pages painted it `bg-primary`, which made the action colour a
+ * full-height surface: the only place in the application where the colour that
+ * means "press this" was a background rather than a control. The owner's
+ * verdict on seeing it was "un fondo verde horrible", and the failure is
+ * structural rather than a matter of taste — a surface and a button cannot
+ * share a fill and still mean different things.
+ *
+ * The assertion compares two *compiled* fills rather than class names, through
+ * the same Tailwind compiler the target-size guard uses: what is wrong here is
+ * a colour, and `toHaveClass("bg-primary")` would pass just as happily on the
+ * fixed version if someone re-pointed the token.
+ */
+function heroPanel(container: HTMLElement, asideTitle: string): HTMLElement {
+  // Located by the copy only the panel carries — the narrow-screen fallback
+  // repeats the heading and the subtitle, but never the aside block. Finding it
+  // positionally would keep passing against the wrong <section> after a
+  // reorder, which is the shape of bug this whole file exists for.
+  const panel = Array.from(container.querySelectorAll("section")).find((section) =>
+    section.textContent?.includes(asideTitle),
+  );
+  if (!panel) throw new Error(`no <section> carries the aside copy "${asideTitle}"`);
+  return panel;
+}
+
+async function backgroundOf(classNames: string): Promise<string | undefined> {
+  return (await resolve(classNames)).substituted.get("background-color");
+}
+
+describe("the panel beside the form is a surface, not the action colour", () => {
+  const pages = [
+    { name: "login", Page: LoginPage, asideTitle: "Hogar compartido" },
+    { name: "register", Page: RegisterPage, asideTitle: "Primer hogar" },
+  ] as const;
+
+  for (const { name, Page, asideTitle } of pages) {
+    it(`on ${name}`, async () => {
+      const { container } = renderWithIntl(<Page />, { locale: "es" });
+
+      const panelFill = await backgroundOf(heroPanel(container, asideTitle).className);
+      const buttonFill = await backgroundOf("bg-primary");
+
+      expect(buttonFill).toBeDefined();
+      expect(panelFill).toBeDefined();
+      expect(panelFill).not.toBe(buttonFill);
+    });
+  }
 });
 
 describe("neither page renders a raw key", () => {

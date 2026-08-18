@@ -176,6 +176,12 @@ const PAIRS: Pair[] = [
   { fg: "muted-foreground", bg: "card", scale: "body", where: "secondary copy on a card" },
   { fg: "muted-foreground", bg: "muted", scale: "body", where: "secondary copy on the muted surface" },
 
+  // The welcome panel on /login and /register (UI-10). It carries the ordinary
+  // ink on its own surface, so the three pairs below are what it actually
+  // renders — the panel introduces no foreground token of its own.
+  { fg: "foreground", bg: "hero", scale: "body", where: "body copy on the welcome panel" },
+  { fg: "muted-foreground", bg: "hero", scale: "body", where: "the panel's subtitle and wordmark" },
+
   // Controls.
   { fg: "primary-foreground", bg: "primary", scale: "body", where: "label on the primary button" },
   { fg: "secondary-foreground", bg: "secondary", scale: "body", where: "label on the secondary button" },
@@ -193,6 +199,7 @@ const PAIRS: Pair[] = [
   { fg: "heading", bg: "background", scale: "large", where: "page heading" },
   { fg: "heading", bg: "card", scale: "large", where: "card heading" },
   { fg: "heading", bg: "muted", scale: "large", where: "heading on the muted surface" },
+  { fg: "heading", bg: "hero", scale: "large", where: "the welcome panel's heading" },
 
   // Non-text.
   { fg: "input", bg: "background", scale: "nonText", where: "control border on the page" },

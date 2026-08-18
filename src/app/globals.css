@@ -54,6 +54,16 @@
   --primary: #0e4f42;
   --primary-foreground: #ffffff;
 
+  /* The welcome panel on the two pages reachable without an account (UI-10).
+     It is the one large surface in the application that is neither the page,
+     a card nor a control, and it used to be `--primary` — which made the
+     colour that means "press this" into a full-height background. Cream
+     rather than another grey because the panel is the only warm thing here
+     and has to read as a different *kind* of surface, not a lighter card. It
+     carries the ordinary ink (`foreground`, `heading`, `muted-foreground`),
+     so it introduces one token, not a second palette. */
+  --hero: #f1eee1;
+
   /* Destructive action (a button), distinct from `danger` (a state) */
   --destructive: #8a1220;
   --destructive-foreground: #ffffff;
@@ -100,6 +110,11 @@
   --primary: #8ddcc5;
   --primary-foreground: #04211a;
 
+  /* Cream is a light-theme idea. What survives the translation is the warmth,
+     not the value: a deep warm tone beside the green-black card, so the panel
+     is still the other kind of surface at night. */
+  --hero: #201b14;
+
   --destructive: #f5a8a8;
   --destructive-foreground: #3a1b1e;
 
@@ -138,6 +153,8 @@
     --primary: #8ddcc5;
     --primary-foreground: #04211a;
 
+    --hero: #201b14;
+
     --destructive: #f5a8a8;
     --destructive-foreground: #3a1b1e;
 
@@ -174,6 +191,8 @@
 
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+
+  --color-hero: var(--hero);
 
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
