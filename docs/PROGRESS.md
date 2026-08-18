@@ -33,6 +33,7 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
+| 8 — The owner's first pass | Planned 2026-08-18 — six observations from real use, verified against the code and planned the same day; none built |
 
 ---
 
@@ -1095,3 +1096,41 @@ binds IPv4; `localhost` resolves to `::1` first in WebKit's fetch on this
 machine and can for Node's own readiness probe inside the CI container, and a
 refused connection to a server that is up reads as anything but what it is.
 The address in the URL removes the class.
+
+**D87 — The owner's six observations become a phase, not six unowned rows.**
+§10's unowned table is where work goes to stay visible while nobody owns it.
+These arrived owned: they are the owner's own direction, verified against the
+code the day they were given, and they share a theme — the product meeting its
+first real use. A phase gives them what the unowned table cannot: a done-when
+(the owner repeats the pass and nothing reproduces) and a claim on being the
+next work rather than the perpetually visible backlog.
+
+**D88 — The KITCHEN role widens by exactly two capabilities, on the server.**
+The owner asked for a kitchen panel that can consume (it already can), create
+a shopping list, and add to one. The alternative — showing list actions on
+`/kitchen` only to write-capable roles — was rejected: the kitchen tablet runs
+a KITCHEN account by design, so the actions would be missing exactly where
+they were asked for, and §5.5.3 already rules out offering a control the
+server refuses. So `shopping.create` and `shopping.addItem` change tiers, and
+nothing else — no tick-off, no rename, no delete, no generate. This overrules
+§4's "Nothing else" and §5.2's "look and use one up", both amended in place
+with the date and the trade.
+
+**D89 — "El formulario de consumir stock" is read as the add-stock form, and
+both forms get the treatment.** The fields the owner named — expiry date,
+store, price — exist only on the add side; the consume form has no expiry, no
+store, no price. Rather than guess which screen was meant, both get the same
+two layers: the essentials above the fold, the rest behind a disclosure. The
+receipt upload's missing store picker rides with the same item (PRICE-1),
+because the owner's underlying complaint is that prices are never captured,
+and the stock form is only half of why.
+
+**D90 — A referenced product stays undeletable, and price history is why.**
+The owner scoped deletion to products with no stock and no shopping-list use.
+The schema is stricter: no relation declares `onDelete`, so the database
+refuses while any stock entry, price record, receipt line or shopping item
+references the row — and relaxing that for price records would delete the
+record the price screens exist to show. PROD-1 left exactly this question
+open; it closes as: delete is admin-only, confirmed, and possible only when
+nothing references the product at all. The two conditions the owner did not
+name are surfaced in the interface rather than discovered as a CONFLICT.

@@ -19,12 +19,12 @@ plan rather than silently absorbed.
 | # | Journey | Passable from | State |
 |---|---|---|---|
 | 1 | Stock changes through the interface | Phase 1 | ✅ passes |
-| 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes |
+| 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes — widened 2026-08-18: Phase 8 moves two list writes to the allowed side (see the amendment) |
 | 3 | The phone screen answers "what do I need to buy" | Phase 4–5 | ✅ passes |
 | 4 | Stock changes without a form | Phase 4–5 | ❌ not built — the stepper exists as a component nothing mounts (§10) |
 | 5 | Scanning never dead-ends | Phase 4–6 | partial — the connected cases pass; the offline barcode is T7 |
 | 6 | A whole shop with no signal | Phase 4 | ✅ passes, except the T7 bullet |
-| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer; the week on a real tablet is unowned |
+| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer; the week on a real tablet is unowned. Widened 2026-08-18: add-to-list is Phase 8's, not built |
 | 8 | The screen choice is remembered per person and per device | Phase 5 | ❌ not built — nothing stores it, nothing routes by role (§10) |
 | 9 | Both languages, everywhere | Phase 1 onwards, then every phase | ✅ against everything measured |
 | 10 | The rating answers "is this a good buy" — honestly | Phase 6 | ✅ passes |
@@ -63,8 +63,10 @@ They are two doors onto the same data, not two applications.
 
 **People and devices**
 
-- **role**: `admin`, `user` or `kitchen` (§5.2). A kitchen account can do exactly
-  two things — look, and use one up. Least privilege, enforced on the server.
+- **role**: `admin`, `user` or `kitchen` (§5.2). A kitchen account can look,
+  use one up — and, once Phase 8 lands the 2026-08-18 amendment (D88), write
+  down what is needed: start a list, add an item. Least privilege, enforced on
+  the server; until Phase 8, the enforced shape is still look-and-use-one-up.
 - **device**: the screen choice is stored per `(userId, deviceId)`, with the
   `deviceId` generated on first run and kept locally (§5.1).
 - **pending change**: a mutation composed offline and waiting to replay. Pending
@@ -138,6 +140,16 @@ with the routers — `capabilities.test.ts` asserts all 59 as declared today.
 
 A hidden button is not a control. This journey exists specifically to prove the
 restriction holds when the interface is bypassed.
+
+**Amended 2026-08-18 (owner's pass, Phase 8, D88).** `shopping.create` and
+`shopping.addItem` move to the tier a kitchen account may call — those two and
+no others. When Phase 8 lands, this journey's lists change sides for exactly
+that pair: the refused set keeps `addStock`, `shopping.updateItem`,
+`shopping.removeItem`, `shopping.generateFromLowStock`, `product.create`,
+`product.scanBarcode` and the rest of the write tier, and the after-check
+gains its mirror — a `ShoppingList` or `ShoppingItem` row *was* left behind,
+by the kitchen account, correctly. Until that lands, the journey as written
+below is what the code does and the suites hold it.
 
 Trigger:
 Call a write procedure directly, as a kitchen-role account, without going through
@@ -304,6 +316,18 @@ and swept by the axe and structural suites at all three tiers. **What no
 suite answers is the phase's own done-when** — a week on a real tablet,
 untouched except for using things up — and that is listed as unowned in §10
 rather than implied by the green.
+
+**Amended 2026-08-18 (owner's pass, Phase 8, D88).** The bullet below — "the
+only control anywhere on the screen is Use one" — was the design, and the
+owner's first real use overruled it: standing at this screen is exactly when a
+household notices something needs buying. Phase 8 adds a one-tap *add to the
+list* on the running-out rows and a way to start a list when none exists
+(§4's amendment carries the reasoning). The `KitchenPage` test that asserts
+"nothing but that one button per card" — and this journey's own proof bullet,
+the sweep for links that create or edit — both assert the old shape and go red
+the day the new one lands. That is correct: it is the assertion that must
+move, not the feature that must hide. Until then, the screen as built matches
+the outcome as written.
 
 Trigger:
 Look at the kitchen tablet from a metre away, without touching it.

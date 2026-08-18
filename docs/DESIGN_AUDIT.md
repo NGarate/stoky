@@ -456,6 +456,13 @@ not enumerate them.
   the placeholder; what `/dashboard` becomes is a product decision waiting on
   its owner, not on any phase.
 
+  **Owner input, 2026-08-18.** The owner's first pass answered half of this:
+  the Panel stays, and its stat cards become doors — each links to a list
+  pre-filtered to what it counts (`REDESIGN_PLAN.md` Phase 8, item 2). So
+  `/dashboard` is not a placeholder to retire but the overview to make
+  actionable. Whether three entry points remain the right number is the half
+  still open.
+
 ---
 
 ## 7. Suggested order

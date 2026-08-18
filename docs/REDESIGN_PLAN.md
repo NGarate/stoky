@@ -109,8 +109,19 @@ old tablet propped up. Possibly untouched for days.
 ```
 
 **Flows:** one button per card; a tap consumes one unit (`consumeStock`) with a
-10-second undo. **Nothing else.** No creating, no editing — that is the phone's
-job.
+10-second undo.
+
+**Amended 2026-08-18 (owner's pass, D88).** This section used to end "Nothing
+else. No creating, no editing — that is the phone's job", and the owner's
+first real use overruled it: standing at the tablet is exactly when a
+household notices something needs buying, and sending that person off to find
+a phone is a dead end of our own making. The kitchen screen therefore also
+lets anyone at it **put a product on a shopping list** — "Se está acabando" is
+the natural place — and **start a list when none exists**. Still no editing of
+products or stock, still nothing that needs a form or two hands: a control
+here is one tap and legible at a metre, or it belongs on the phone. The
+KITCHEN role's server-side capabilities widen to match; the trade is written
+down in §5.2, the work is Phase 8's.
 
 **Design decisions:** 20–24px body, 40px+ headings; nothing urgent below the
 fold; refreshes itself on a timer; dark theme automatically at night.
@@ -137,16 +148,27 @@ Least privilege, enforced on the server.
 |---|:--:|:--:|:--:|
 | View stock, expiries | ✅ | ✅ | ✅ |
 | Consume stock | ✅ | ✅ | ✅ |
+| Start a shopping list, add an item to one | ✅ | ✅ | ✅ |
 | Add stock, tick off shopping | ✅ | ✅ | — |
 | Create and edit products | ✅ | ✅ | — |
 | Scan | ✅ | ✅ | — |
-| Manage lists | ✅ | ✅ | — |
+| Manage lists (rename, delete, generate) | ✅ | ✅ | — |
 | Invite people, change roles | ✅ | — | — |
 | Household settings, stores, locations | ✅ | — | — |
 | See account data and emails | ✅ | — | — |
 
-A kitchen account can therefore do exactly two things: look, and use one up. If
-the tablet walks out of the house, that is all it can do.
+A kitchen account could originally do exactly two things: look, and use one
+up. **Amended 2026-08-18 (owner's pass, D88):** it can also write down what is
+needed — start a list, add an item to one. That is the whole widening;
+`shopping.create` and `shopping.addItem` change tiers and nothing else moves:
+a kitchen account still cannot tick off, rename, delete or generate a list,
+change stock upward, or see account data. The trade, taken knowingly: a tablet
+that walks out of the house can now also scribble on the shopping list. What
+it writes is visible to everyone and reversible by anyone with a phone —
+unlike reading emails or deleting history, which stay where they were. This
+row exists in the enforced matrix only when Phase 8 lands; until then the
+capability tests hold the old shape, and Journey 2 says which side each
+procedure is on.
 
 **What this actually costs — the current state is thinner than it looks:**
 
@@ -409,6 +431,7 @@ Each phase leaves the app usable and verifiable.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Rating | ✅ Complete against its done-when: no-data and non-food both behave well, both tested |
 | 7 — Security review | The backlog it owned is closed; the review document itself is not written |
+| 8 — The owner's first pass | Planned 2026-08-18, not started |
 
 Gate results for each claim above are in `docs/STATUS.md`; the unit-by-unit
 record, with commits, is in `docs/PROGRESS.md`.
@@ -747,6 +770,115 @@ one-off audit that decays the moment it is finished.
 critical security gap today and should not wait for Phase 7. It lands with
 Phase 3, since both touch auth; Phase 7 verifies it rather than introduces it.
 
+### Phase 8 — The owner's first pass
+
+The owner used the product and came back with six observations, dated
+2026-08-18 — the first feedback this plan has had from its actual user. Each
+was verified against the code the same day before being planned, and the
+pattern §2 predicted still holds: *most of the backend already exists with no
+interface using it.* Five of the six need no new procedure at all.
+
+*Done when:* the owner repeats the pass that produced these observations and
+none of them reproduces — the Panel's cards and the forms on a phone, the
+kitchen items on the tablet.
+
+**1. Product editing.** `product.update` has been implemented, Zod-validated,
+household-scoped and role-guarded since before this plan, and its only callers
+are two integration tests. No screen mounts it: `/products/[id]`'s Acciones
+section offers add-stock and consume and nothing else (the page also links to
+the price history), and `messages/es.json` has carried a dead `products.edit`
+("Editar producto") key the whole time. The
+owner asked whether this was a permissions problem — it is not; the detail
+page reads no role and hides nothing. The work is an edit screen reusing the
+`/products/new` field set, which matches `updateProductSchema` exactly;
+extracting that inline form is the natural move, and the duplicate-barcode
+check must learn to exempt the product's own barcode. Entry points: the detail
+page's Acciones section and item 5's menu.
+
+**2. The Panel's cards become doors.** The three stat cards on `/dashboard`
+("Productos en el catálogo", "Necesitan reposición", "Caducados o que
+caducan") are inert `<li>`s. Each becomes a link to a list already filtered to
+what the card counts. That needs what no list page has: URL-driven filters —
+`/products` and `/inventory` fire hardcoded queries and read no params, and
+the only `searchParams` use in the application is `/products/new?barcode=`.
+The procedures are ahead of the pages (`product.list` takes `search`,
+`getStockOverview` takes `lowStock`/`category`/`locationId`), but two honesty
+rules bind the work. **The card's number and the destination's rows must be
+the same set** — today they would not be: the dashboard's restock definition
+(`totalStock <= 0 || isLowStock`) is deliberately broader than the server's
+`lowStock` filter, which skips zero-stock products with no minimum, so the
+filter widens to match the card rather than the card quietly narrowing to
+match the filter. And the catalogue card counts the first page (≤100), not the
+catalogue; a real count replaces the page length before that number becomes a
+door people trust.
+
+**3. The stock form, in two layers.** `/inventory/add` shows seven controls
+for what is usually a three-answer question. The owner's essentials — product,
+quantity, expiry, **store and price** — stay visible; the rest folds behind a
+disclosure (native `<details>`, the pattern `ProductRating` already uses):
+unit, already prefilled from `defaultUnit`; location, which must learn to
+default to the product's usual one — derivable from the entries
+`product.getById` already returns, or a `defaultLocationId` migration; note.
+Store and price are the striking half: `inventory.addStock` has accepted
+optional `price` + `storeId` and written the `PriceRecord` in the same
+transaction since SEC-1's fix, the store router is ready, and
+`StoreSelector.tsx` exists with zero imports — the form simply never sends any
+of it. The consume form gets the same two layers (product and quantity above
+the fold; it has no expiry, store or price — D89). This item also owns
+**PRICE-1**: no UI path in the application can create a price record today —
+the receipt upload never asks which store either, and "no store means no
+prices" — so the price screens chart a table nothing can populate. The same
+`StoreSelector` on the upload screen closes the other half.
+
+**4. The kitchen screen becomes actionable.** The §4 amendment, made real:
+"Se está acabando" rows gain a one-tap *add to the list*, with a way to start
+a list when none exists. The server moves first — `shopping.create` and
+`shopping.addItem` join `consumeStock` on the tier a KITCHEN account may call
+(§5.2, D88), which means the capability test that asserts every procedure
+against the matrix changes with it, deliberately in the same commit.
+`addItem` is already offline-queueable; `create` is not replayable — either it
+becomes so, or starting a list from the tablet is online-only and says so
+rather than failing quietly. Journeys 2 and 7 both change shape; their
+amendments are in `SMOKE_JOURNEYS.md`. One metre and one tap remain the bar:
+anything that needs a form still lives on the phone.
+
+**5. The products list grows real actions.** The product name is already the
+link on every breakpoint, so "Ver" — a second link to the same URL, which the
+mobile cards already drop on WCAG 2.4.9 grounds — retires, and the column
+becomes a menu: **edit** (item 1's screen), **adjust stock**
+(`inventory.adjustStock`, today called only by the offline ReconcileDialog),
+**stock history**, **price history** (`/prices/[productId]` already exists),
+**delete**. Stock history is the one genuinely new screen:
+`inventory.getStockHistory` is a cursor-paginated signed ledger with zero
+client usage — "the only screen that shows why the number is what it is", per
+its own docblock — and the chart is a running sum over it (recharts is
+installed; `PriceChart` is the template). Delete is owner-directed: admin-only
+(`adminProcedure`, the one-word swap `location.delete` already models) and
+confirmed before it fires — §7's "undo, not confirm" rule meets its exception
+here, because a hard delete has no undo. The guard stays *stricter* than
+asked: the owner named stock and shopping-list references, but no relation
+declares `onDelete`, so the database refuses while **anything** references the
+product — price records and receipt lines included — and PROD-1's open
+question is decided by D90: a referenced product is never deletable, because
+its price history is the record the price screens exist to show. The menu
+also needs what no component has had: the signed-in user's own role,
+client-side — the layout hands down only `userId`/`householdId` — while the
+doctrine stands that hiding the button is courtesy and the middleware is the
+control.
+
+**6. The auth panels leave `bg-primary`.** The login and register hero panels
+(lg+ only, identical but for their i18n keys) are the only large surfaces
+painted with the action colour — `--primary` #0e4f42, the same token as every
+primary button — and the owner's verdict was "un fondo verde horrible". Filed
+as UI-10. The recolor swaps the two sections' classes, never the token (which
+would restyle every button and active-nav state; `--gauge` and `--ring` share
+the hex as separate tokens): either an already-audited
+surface pair — `bg-muted` and its checked foregrounds pass the contrast gate
+with zero changes — or a new pale-cream token, which `check:contrast`
+structurally requires in four places plus a `PAIRS` entry. The nested aside
+card's translucent `bg-primary-foreground/10` goes with it, and the dark theme
+needs its own answer, since pale cream is a light-theme idea.
+
 ---
 
 ## 10. Carried forward
@@ -830,6 +962,21 @@ unowned below, for the same reason as the iOS pass.
 | The review itself (§ below) | Authorisation per procedure, household isolation, rate limiting verified, the offline queue as an attack surface, uploads, sessions, dependencies, headers in production |
 | ~~DEBT-5~~ | **Done.** Sixteen indexes, on a wider criterion than the four ISSUES.md named: every column a resolver filters or joins on, plus every single-column foreign key. Measured at 12,000 stock entries — one product's ledger, the hottest read in the application, went from a 3.6ms sequential scan to a 0.09ms index scan. The `householdId` ones are honestly labelled: on a single-household instance the planner scans the table anyway, and they are there for a shared instance and for the foreign-key checks a delete performs |
 | ~~Rate limiting's four gaps~~ | **Done**, one commit each. Sign-in is counted per account as well as per address, at 10/15min on a hashed key (NIST SP 800-63B §5.2.2); `receipt.upload` is metered at 30/hour per account, counted before the file is decoded (ASVS V11.1.4); a 429 carries `Retry-After`, read off the refusal so it cannot drift from the message (RFC 9110 §10.2.3); and refusals are logged as JSON from a tRPC middleware, so a resolver cannot forget to be audited (ASVS V7.1.3). Two things deliberately carry no `Retry-After`: the 503 from a dead Valkey, and sign-in, which answers with a redirect rather than a status |
+
+### Phase 8 — the owner's first pass (2026-08-18)
+
+Six observations from the owner using the product — this plan's first contact
+with its actual user. Each was verified against the code before being planned;
+the detail lives in the phase itself (§9), the judgement calls in D87–D90.
+
+| Item | Why it is here |
+|---|---|
+| Product editing | `product.update` guarded and tested since before the plan, called by nothing but two integration tests; a dead `products.edit` key in both catalogues. Missing UI, not permissions |
+| The Panel's three cards become doors | Static `<li>`s over counts people act on. Needs URL-driven filters no list page has, a server filter as broad as the card's restock definition, and a real catalogue count instead of a page length |
+| The stock form in two layers | Essentials (product, quantity, expiry, store, price) visible; unit, location and note folded away with real defaults. Store and price have been accepted server-side since SEC-1's fix; closes both halves of PRICE-1 |
+| The kitchen screen acts | Add-to-list and start-a-list from the tablet; `shopping.create`/`addItem` move to the KITCHEN-callable tier. Supersedes §4's "Nothing else" — amendment in §4, trade in §5.2 (D88), journey changes in `SMOKE_JOURNEYS.md` 2 and 7 |
+| The products list grows real actions | "Ver" retires (the name already links everywhere); the column becomes a menu: edit, adjust stock, stock history with a chart (`getStockHistory` has zero client usage), price history, admin-only confirmed delete. Decides PROD-1's open question (D90) |
+| The auth panels leave `bg-primary` | UI-10. The only large surfaces painted with the action colour; recolor the two sections' classes, never the token; the contrast gate names the four places a new token must appear |
 
 ### Unowned, and honest about it
 

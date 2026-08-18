@@ -6,14 +6,18 @@ This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
 **Last Updated:** 2026-08-18  
-**Status:** after Phase 7's slice of the backlog, and the browser suite's move
-to isolated data and the production artefact. Every defect entry is closed —
-the four criticals, SEC-1, all of INV, UI, I18N, A11Y and DEBT.
+**Status:** after Phase 7's slice of the backlog, the browser suite's move
+to isolated data and the production artefact, and the owner's first pass
+(2026-08-18), which filed two new entries. Everything older is closed —
+the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
+UI-9.
 
-**Open: TEST-5 and TEST-6.** TEST-5 is the intermittent bun failure in the
-suite that guards the offline queue — upstream, diagnosed, reproduction in
-`docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s whose stated
-reason names a phase that closed.
+**Open: TEST-5, TEST-6, UI-10 and PRICE-1.** TEST-5 is the intermittent bun
+failure in the suite that guards the offline queue — upstream, diagnosed,
+reproduction in `docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s
+whose stated reason names a phase that closed. UI-10 and PRICE-1 came out of
+the owner's first pass on 2026-08-18 and are owned by Phase 8
+(`docs/REDESIGN_PLAN.md` §9).
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
@@ -73,6 +77,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-9 | Two routes show an empty state when the query failed | ✅ Resolved (Phase 4) |
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
 | TEST-4 | The low-stock badge is unchecked on the card tier | ✅ Resolved (Phase 4) |
+| UI-10 | The auth hero panels are painted with the action colour | 🟡 Open — Phase 8 |
+| PRICE-1 | No UI path can create a price record | 🟡 Open — Phase 8 |
 
 ---
 
@@ -941,6 +947,12 @@ cascading would take its price history with it, which is the record the price
 screens exist to show. Refusing is probably right; only the wording is
 certainly wrong.
 
+**Decided 2026-08-18, with the owner's pass (D90):** refusing is right. A
+referenced product is never deletable — its price history is the record the
+price screens exist to show. What Phase 8 adds is the missing interface:
+delete becomes admin-only, confirmed, and offered only when nothing references
+the product at all.
+
 **Suggested fix:** check for references in the procedure and throw `CONFLICT`
 with a message naming what is in the way. That leaves the behaviour as it is
 and only makes it legible, so it does not pre-empt the product decision.
@@ -1639,6 +1651,68 @@ line that was confirmed. Closing this should close UI-7 with it.
 The assertion in `e2e/screen-reader.spec.ts` is no longer a pin: it now requires
 confirming to announce something new, and goes red if the invalidation is
 removed again.
+
+---
+
+### 🟡 UI-10: The auth hero panels are the only large surface painted with the action colour
+
+**Files:** `src/app/(auth)/login/page.tsx:86`, `src/app/(auth)/register/page.tsx:89`  
+**Severity:** LOW — the owner's own verdict, from their first pass: "un fondo verde horrible"  
+**Status:** OPEN — filed 2026-08-18 from the owner's pass; owned by Phase 8
+
+Both auth pages carry a hero `<section>` at lg+, identical but for four i18n
+keys — `bg-primary text-primary-foreground` — so the panel wears `#0e4f42`,
+the same token as every primary button, as a full-height surface. It is the
+only place in the application where the action colour is a background larger
+than a control, which is exactly why it reads as "a green background" rather
+than as the palette. Below lg the same copy renders on the card background;
+the panel does not exist there, so of axe's three viewport tiers only 1280
+exercises it.
+
+Constraints for whoever fixes it: recolor the two sections' *classes*, never
+the `--primary` token — every primary button and active-nav state follows
+that token, and `--gauge`/`--ring` deliberately carry the same hex as
+separate tokens, so a token change misleads in both directions. The nested
+aside card's translucent
+`bg-primary-foreground/10` goes with it; opacity modifiers at point of use are
+the documented way to break contrast invisibly (`DESIGN_AUDIT.md`). A new
+token must be declared in `:root`, in both dark blocks and in `@theme inline`,
+plus a `PAIRS` entry, or `check:contrast` fails structurally; reusing an
+already-checked surface pair (`bg-muted` with its audited foregrounds) needs
+no gate change at all. The owner asked for pastel or pale cream; the dark
+theme needs its own answer, because pale cream is a light-theme idea.
+
+---
+
+### 🟡 PRICE-1: No UI path can create a price record
+
+**Files:** `src/app/(dashboard)/inventory/add/page.tsx`,
+`src/app/(dashboard)/receipts/upload/page.tsx`,
+`src/components/store/StoreSelector.tsx`  
+**Severity:** MEDIUM — a headline feature (price intelligence) cannot receive data  
+**Status:** OPEN — found 2026-08-18 while verifying the owner's stock-form observation; owned by Phase 8
+
+Three writers of `PriceRecord` exist server-side and no interface reaches any
+of them. `inventory.addStock` has accepted optional `price` + `storeId` and
+written the record in the same transaction since SEC-1's fix — the add form
+never sends either field. `price.recordPrice` has zero client callers. The
+receipt pipeline writes prices only when the receipt has a store — "No store
+means no prices", says `receipt.ts` — and `receipt.upload` accepts a `storeId`
+the upload page never sends, so no receipt ever has one. `StoreSelector.tsx`
+was built for exactly these pickers — `store.list`'s docblock names "the
+receipt and add-stock screens" — and has zero imports.
+
+Net effect: `/prices` and `/prices/[productId]` chart a table that nothing in
+the product can populate. Seeded demo rows are the only price records that
+have ever existed.
+
+One nuance for the fix: `addStock`'s `price` carries no `.positive()` — zero
+and negative values pass validation and silently write no record. Once the
+form starts sending the field, that silence becomes a user-facing bug; refuse
+at the edge instead.
+
+Phase 8's stock-form item owns both halves: store and price on
+`/inventory/add`, and a store picker on the receipt upload.
 
 ---
 
@@ -2406,9 +2480,12 @@ which is short:
   roughly one `verify:ci` or CI `test` job in seven goes red spuriously;
   re-run before investigating.
 - **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
+- **UI-10** — the auth hero panels' recolor. Owned by Phase 8.
+- **PRICE-1** — no UI path can create a price record. Owned by Phase 8.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three
-  manual passes, T7, the ± stepper, and the per-device screen choice.
+  manual passes, T7, the ± stepper, the per-device screen choice — and now
+  Phase 8, the owner's first pass, which owns the two entries above.
 
 ---
 

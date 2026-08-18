@@ -18,7 +18,7 @@ that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D86 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D90 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.
@@ -71,7 +71,7 @@ run a gate, the file says so and says why, rather than omitting it.
 
 **[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **86 numbered decisions taken
+commits, and — the part worth reading in full — **90 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -87,13 +87,14 @@ one time that rule was deliberately broken (D22).
 
 **[`REDESIGN_PLAN.md`](REDESIGN_PLAN.md)**
 The plan. Two entry screens (a phone screen for day-to-day use, a kitchen screen
-for a tablet), the decisions that shaped them, and eight phases each with an
+for a tablet), the decisions that shaped them, and nine phases each with an
 explicit *done when*.
 
 Phases 0 through 6 are complete against their done-whens, each with its named
-exceptions. **What remains: Phase 7's review document, three human passes no
-suite can answer, and the §10 list** — including two §3/§5.1 promises found
-unbuilt when the journeys were re-audited on 2026-08-17.
+exceptions. **What remains: Phase 7's review document, Phase 8 — the owner's
+first pass, six observations from real use planned 2026-08-18 — three human
+passes no suite can answer, and the §10 list**, including two §3/§5.1 promises
+found unbuilt when the journeys were re-audited on 2026-08-17.
 
 - **Read** to know what you are building and what finishing it means.
 - **Write** when a phase closes — with what it actually did, including where the
@@ -117,7 +118,8 @@ Ten user journeys with a state column, canonical vocabulary for the domain, and
 per journey: the trigger, the visible outcome, and the before/after evidence
 required. Seven pass at the tiers a suite can answer; one is partial (T7); two
 turned out never to have been built — the state column was re-audited against
-the code on 2026-08-17.
+the code on 2026-08-17, and journeys 2 and 7 were widened by the owner's pass
+on 2026-08-18 (their green measures the pre-Phase-8 shape).
 
 *Its closure rule:* a slice is done only when it names which journey it changes
 and what evidence proves the new state.
@@ -135,8 +137,9 @@ desktop.
 
 Still open: **A5.3** (the routes do not use the shared primitives, and the
 hardcoded copies of the target-size floor have grown from 74 to 100 with the
-Phase 5 pages) and **A5.4** (what `/dashboard` becomes — decidable now that
-both screens exist).
+Phase 5 pages) and **A5.4** (what `/dashboard` becomes — half-decided
+2026-08-18: the Panel stays and its cards become doors, which is Phase 8's
+work; whether three entry points is the right number is the half still open).
 
 **[`SECURITY.md`](SECURITY.md)**
 The threat model for a self-hosted deployment, what is already hardened

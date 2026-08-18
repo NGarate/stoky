@@ -626,8 +626,9 @@ Two things that sequence surfaced, both operational rather than defects:
   in the request hash, which is the condition it exists to refuse.
 - It reproduces **only under load**: 3 failures in 24 with another suite running
   against the same database, 0 in 90 on a quiet machine. `docs/reproductions/`
-  carries a self-contained file and the recipe. **TEST-5**, the one open entry
-  in `ISSUES.md`, and it wants an upstream report rather than work here.
+  carries a self-contained file and the recipe. **TEST-5** in `ISSUES.md`
+  (open alongside TEST-6 and the owner's-pass pair UI-10/PRICE-1), and it
+  wants an upstream report rather than work here.
 - **The `retry: 2` mitigation does not make CI green, and this is new.**
   Measured on run `31568215727`: the retry did its job — the test passed on
   attempt 2 and the suite reported `395 pass / 0 fail` — but bun also reported
@@ -719,19 +720,25 @@ taken without asking are in `docs/PROGRESS.md`.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
 | 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
+| 8 — The owner's first pass | Planned 2026-08-18, not started |
 
 **What remains, in one place.** The review document (Phase 7's actual
 deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
 passes no suite can answer (the manual screen-reader pass, a week on a real
-tablet, iOS Safari on a real device); T7, the offline scan resolution; and two
+tablet, iOS Safari on a real device); T7, the offline scan resolution; two
 §3/§5.1 promises the 2026-08-17 journey re-audit found were never built — the
 ± stepper is a component nothing mounts, and nothing remembers the screen
-choice per `(userId, deviceId)`. All of it is in `REDESIGN_PLAN.md` §10, which
-is the list an item may only leave by being done or deliberately dropped.
+choice per `(userId, deviceId)`; and **Phase 8, the owner's first pass** — six
+observations from real use, planned 2026-08-18, none built yet, detailed in
+`REDESIGN_PLAN.md` §9 with its items tabled in §10. All of it is in
+`REDESIGN_PLAN.md` §10, which is the list an item may only leave by being done
+or deliberately dropped.
 
-Journeys 1, 2, 3, 6, 7 and 9 of `docs/SMOKE_JOURNEYS.md` pass at the tiers a
-suite can answer; 5 is partial (T7); 4 and 8 wait on the two unbuilt promises
-above. The per-journey evidence is in that file.
+Journeys 1, 2, 3, 6, 7, 9 and 10 of `docs/SMOKE_JOURNEYS.md` pass at the tiers
+a suite can answer; 5 is partial (T7); 4 and 8 wait on the two unbuilt promises
+above. Journeys 2 and 7 pass against their pre-Phase-8 shape — the owner's
+pass widened both on 2026-08-18, and the widened halves are not built. The
+per-journey evidence is in that file.
 
 ### Environment notes
 
