@@ -406,8 +406,9 @@ credit is part of the work. The Yuka name appears nowhere in the interface.
 ## 8. Accessibility
 
 Keeps the level the proposals reached: **WCAG AAA contrast**, enforced by
-`pnpm check:contrast` (54 checks against the tokens in `globals.css` since
-Phase 2; 140 while it measured the five prototypes). Extended with 48px targets, state never by
+`pnpm check:contrast` (60 checks against the tokens in `globals.css` — 54
+from Phase 2 until UI-10 added the hero surface; 140 while it measured the
+five prototypes). Extended with 48px targets, state never by
 colour alone, a real one-metre readability test for the kitchen screen, and
 visible focus throughout. Still outstanding: an axe pass and a screen-reader
 run, both belonging to the chosen design rather than to five prototypes.
@@ -976,7 +977,7 @@ the detail lives in the phase itself (§9), the judgement calls in D87–D90.
 | The stock form in two layers | Essentials (product, quantity, expiry, store, price) visible; unit, location and note folded away with real defaults. Store and price have been accepted server-side since SEC-1's fix; closes both halves of PRICE-1 |
 | The kitchen screen acts | Add-to-list and start-a-list from the tablet; `shopping.create`/`addItem` move to the KITCHEN-callable tier. Supersedes §4's "Nothing else" — amendment in §4, trade in §5.2 (D88), journey changes in `SMOKE_JOURNEYS.md` 2 and 7 |
 | The products list grows real actions | "Ver" retires (the name already links everywhere); the column becomes a menu: edit, adjust stock, stock history with a chart (`getStockHistory` has zero client usage), price history, admin-only confirmed delete. Decides PROD-1's open question (D90) |
-| The auth panels leave `bg-primary` | UI-10. The only large surfaces painted with the action colour; recolor the two sections' classes, never the token; the contrast gate names the four places a new token must appear |
+| ~~The auth panels leave `bg-primary`~~ | **Done** (`d7c178d`), the phase's first unit. One token, `--hero` — cream in light, deep warm in dark — the ordinary ink on top, the aside card solid. The gate grew three pairs (60 checks) and was watched to fire; 117 browser tests green |
 
 ### Unowned, and honest about it
 

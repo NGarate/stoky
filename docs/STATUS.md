@@ -22,7 +22,7 @@ artefact.
 | Typecheck | `pnpm typecheck` | ✅ clean |
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `pnpm check:links` | ✅ 89 links against 30 routes, none broken |
-| Contrast | `pnpm check:contrast` | ✅ 54 checks over 26 tokens × 2 themes, all AAA |
+| Contrast | `pnpm check:contrast` | ✅ 60 checks over 27 tokens × 2 themes, all AAA |
 | Unit tests | `pnpm test:unit` | ✅ 475 pass / 43 files |
 | Component tests | `pnpm test:components` | ✅ 349 pass / 31 files |
 | Integration tests | `pnpm test:integration` | ✅ 395 pass / 25 files |
@@ -627,7 +627,7 @@ Two things that sequence surfaced, both operational rather than defects:
 - It reproduces **only under load**: 3 failures in 24 with another suite running
   against the same database, 0 in 90 on a quiet machine. `docs/reproductions/`
   carries a self-contained file and the recipe. **TEST-5** in `ISSUES.md`
-  (open alongside TEST-6 and the owner's-pass pair UI-10/PRICE-1), and it
+  (open alongside TEST-6 and PRICE-1), and it
   wants an upstream report rather than work here.
 - **The `retry: 2` mitigation does not make CI green, and this is new.**
   Measured on run `31568215727`: the retry did its job — the test passed on
@@ -720,7 +720,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
 | 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
-| 8 — The owner's first pass | Planned 2026-08-18, not started |
+| 8 — The owner's first pass | In progress — UI-10 closed (`d7c178d`); five items remain |
 
 **What remains, in one place.** The review document (Phase 7's actual
 deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
@@ -729,8 +729,8 @@ tablet, iOS Safari on a real device); T7, the offline scan resolution; two
 §3/§5.1 promises the 2026-08-17 journey re-audit found were never built — the
 ± stepper is a component nothing mounts, and nothing remembers the screen
 choice per `(userId, deviceId)`; and **Phase 8, the owner's first pass** — six
-observations from real use, planned 2026-08-18, none built yet, detailed in
-`REDESIGN_PLAN.md` §9 with its items tabled in §10. All of it is in
+observations from real use, planned 2026-08-18; UI-10 is closed and five
+items remain, detailed in `REDESIGN_PLAN.md` §9 with the ledger in §10. All of it is in
 `REDESIGN_PLAN.md` §10, which is the list an item may only leave by being done
 or deliberately dropped.
 

@@ -33,11 +33,17 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
-| 8 — The owner's first pass | Planned 2026-08-18 — six observations from real use, verified against the code and planned the same day; none built |
+| 8 — The owner's first pass | In progress — UI-10 closed (`d7c178d`); five items remain |
 
 ---
 
 ## Done
+
+### Phase 8 — the owner's first pass (started 2026-08-18)
+
+| Unit | Commit |
+|---|---|
+| UI-10 — the auth panels leave `bg-primary` for their own hero surface | `d7c178d` |
 
 ### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
 
@@ -1134,3 +1140,13 @@ record the price screens exist to show. PROD-1 left exactly this question
 open; it closes as: delete is admin-only, confirmed, and possible only when
 nothing references the product at all. The two conditions the owner did not
 name are surfaced in the interface rather than discovered as a CONFLICT.
+
+**D91 — The hero panel got its own token, not `bg-muted`.** Both were
+AAA-clean and muted was cheaper — zero gate changes. But muted is the same
+green-grey family as every other surface, and the owner's complaint was not
+"too dark"; it was the action colour worn as a background. The fix that reads
+as an answer is a different *kind* of surface, which the palette did not
+have: one warm token (`#f1eee1` light, `#201b14` dark), the ordinary ink on
+top, three new audited pairs. The aside card went solid `bg-card` rather than
+keeping its translucent wash, because a point-of-use opacity modifier is the
+one way to break contrast the token audit cannot see.

@@ -95,7 +95,7 @@ table; if the two disagree, STATUS is the one that gets re-measured.
 - `pnpm typecheck` — green
 - `pnpm check:react` — 0 errors
 - `pnpm check:links` — 89 links against 30 routes, none broken
-- `pnpm check:contrast` — 54 checks over 26 tokens × 2 themes, all AAA
+- `pnpm check:contrast` — 60 checks over 27 tokens × 2 themes, all AAA
 - `pnpm test:unit` — 466+ pass across 42+ files
 - `pnpm test:components` — 349 pass across 31 files
 - `pnpm test:integration` — 395 pass across 25 files

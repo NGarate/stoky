@@ -12,12 +12,13 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6, UI-10 and PRICE-1.** TEST-5 is the intermittent bun
+**Open: TEST-5, TEST-6 and PRICE-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s
-whose stated reason names a phase that closed. UI-10 and PRICE-1 came out of
-the owner's first pass on 2026-08-18 and are owned by Phase 8
-(`docs/REDESIGN_PLAN.md` §9).
+whose stated reason names a phase that closed. PRICE-1 came out of the
+owner's first pass on 2026-08-18 and is owned by Phase 8
+(`docs/REDESIGN_PLAN.md` §9); UI-10, filed the same day, closed the same day
+(`d7c178d`).
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
@@ -77,7 +78,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-9 | Two routes show an empty state when the query failed | ✅ Resolved (Phase 4) |
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
 | TEST-4 | The low-stock badge is unchecked on the card tier | ✅ Resolved (Phase 4) |
-| UI-10 | The auth hero panels are painted with the action colour | 🟡 Open — Phase 8 |
+| UI-10 | The auth hero panels are painted with the action colour | ✅ Resolved (`d7c178d`) |
 | PRICE-1 | No UI path can create a price record | 🟡 Open — Phase 8 |
 
 ---
@@ -1654,11 +1655,24 @@ removed again.
 
 ---
 
-### 🟡 UI-10: The auth hero panels are the only large surface painted with the action colour
+### ✅ UI-10: The auth hero panels are the only large surface painted with the action colour
 
 **Files:** `src/app/(auth)/login/page.tsx:86`, `src/app/(auth)/register/page.tsx:89`  
 **Severity:** LOW — the owner's own verdict, from their first pass: "un fondo verde horrible"  
-**Status:** OPEN — filed 2026-08-18 from the owner's pass; owned by Phase 8
+**Status:** RESOLVED (`d7c178d`, Phase 8) — filed and closed 2026-08-18
+
+**Resolution:** one new token, `--hero` — pale cream `#f1eee1` in light, a
+deep warm `#201b14` in dark — declared in the four places the gate requires,
+with three new audited pairs for the text the panel actually renders (60
+checks now, was 54; the guard was broken deliberately and watched to fire).
+Both panels carry the ordinary ink, so the wide and narrow renderings of the
+same copy finally agree; the aside card went solid `bg-card` instead of the
+translucent wash. A component test compares compiled fills through the
+Tailwind resolver — red against `bg-primary`, green now. Verified in
+Chromium on all four page × theme combinations, and the full browser suite
+(117, including axe AAA on both routes) is green.
+
+**Original report follows.**
 
 Both auth pages carry a hero `<section>` at lg+, identical but for four i18n
 keys — `bg-primary text-primary-foreground` — so the panel wears `#0e4f42`,
@@ -2480,7 +2494,6 @@ which is short:
   roughly one `verify:ci` or CI `test` job in seven goes red spuriously;
   re-run before investigating.
 - **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
-- **UI-10** — the auth hero panels' recolor. Owned by Phase 8.
 - **PRICE-1** — no UI path can create a price record. Owned by Phase 8.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three
