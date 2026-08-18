@@ -173,6 +173,19 @@ export const productRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * How many products the household actually has.
+   *
+   * The Panel's catalogue card used to show the length of `list`'s first page,
+   * which is "at least this many" wearing the clothes of a count. A number that
+   * is a door people open has to be the real one (Phase 8 item 2).
+   */
+  count: householdProcedure.query(({ ctx }) => {
+    return prisma.product.count({
+      where: { householdId: ctx.householdId },
+    });
+  }),
+
   /** Adds a product by hand, for the things that have no barcode. */
   create: writeProcedure
     .input(productSchema)

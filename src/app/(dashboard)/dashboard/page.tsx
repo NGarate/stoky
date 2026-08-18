@@ -10,11 +10,12 @@ import type { JSX, ReactNode } from "react";
  * Household overview — the screen every login lands on.
  *
  * It answers three questions and nothing else: what is running out, what is
- * about to go off, and how big the catalogue is. Everything it shows comes from
- * procedures that already exist; no new server work was needed:
+ * about to go off, and how big the catalogue is — and since the owner's pass
+ * (Phase 8 item 2) each answer is a door to the list that shows its set:
  *
- * - `inventory.getStockOverview` — net stock per product plus the `isLowStock`
- *   flag the server derives from `minStock`.
+ * - `product.count` — the catalogue, counted rather than paged.
+ * - `inventory.getStockOverview` with `needsRestock` — the same question
+ *   /inventory?filter=restock asks, so card and list cannot disagree.
  * - `inventory.getExpiringItems` — batches with a date inside the window.
  * - `inventory.getExpiredItems` — batches already past their date.
  *
@@ -27,10 +28,9 @@ import type { JSX, ReactNode } from "react";
 const EXPIRY_WINDOW_DAYS = 7;
 
 /**
- * `getStockOverview` is a cursor-paginated list capped at 100 per page, so the
- * catalogue figure is "at least this many" rather than a true count. Said in
- * words on screen rather than quietly rounded, because a wrong number is worse
- * than an honest bound.
+ * One page of the restock list. `getStockOverview` is cursor-paginated and
+ * capped at 100 per page; past that, the card says so in words rather than
+ * quietly rounding — a wrong number is worse than an honest bound.
  */
 const OVERVIEW_PAGE_SIZE = 100;
 
@@ -40,39 +40,48 @@ const MAX_ROWS = 5;
 export default function DashboardPage(): JSX.Element {
   const t = useTranslations("dashboard");
 
-  const overview = api.inventory.getStockOverview.useQuery({
+  // The catalogue card is a real count, and the restock card asks the server
+  // for the same set its destination shows (`needsRestock`, the filter
+  // /inventory?filter=restock uses) — a card and the list it opens must never
+  // disagree, because a number that is a door people walk through gets
+  // trusted the way a number in a paragraph does not (Phase 8 item 2).
+  const catalogueCount = api.product.count.useQuery();
+  const restockQuery = api.inventory.getStockOverview.useQuery({
     limit: OVERVIEW_PAGE_SIZE,
+    needsRestock: true,
   });
   const expiring = api.inventory.getExpiringItems.useQuery({
     days: EXPIRY_WINDOW_DAYS,
   });
   const expired = api.inventory.getExpiredItems.useQuery({});
 
-  const products = overview.data?.products;
+  const restockRows = restockQuery.data?.products;
 
   /**
    * Everything worth buying, worst first.
    *
-   * Out of stock outranks low stock: `isLowStock` is only true when a minimum
-   * is set, so a product that has run out without one would otherwise never
-   * appear. Both cases are labelled in words on the row.
+   * The server already filtered (out of stock, or below a set minimum); the
+   * order is this screen's: run out outranks running low, and both cases are
+   * labelled in words on the row.
    */
   const restock = useMemo(() => {
-    if (!products) return [];
+    if (!restockRows) return [];
 
-    return products
-      .filter((product) => product.totalStock <= 0 || product.isLowStock)
-      .sort((a, b) => {
-        const aOut = a.totalStock <= 0 ? 0 : 1;
-        const bOut = b.totalStock <= 0 ? 0 : 1;
-        if (aOut !== bOut) return aOut - bOut;
-        return a.totalStock - b.totalStock;
-      });
-  }, [products]);
+    return [...restockRows].sort((a, b) => {
+      const aOut = a.totalStock <= 0 ? 0 : 1;
+      const bOut = b.totalStock <= 0 ? 0 : 1;
+      if (aOut !== bOut) return aOut - bOut;
+      return a.totalStock - b.totalStock;
+    });
+  }, [restockRows]);
 
   const isPending =
-    overview.isPending || expiring.isPending || expired.isPending;
-  const failed = overview.error ?? expiring.error ?? expired.error;
+    catalogueCount.isPending ||
+    restockQuery.isPending ||
+    expiring.isPending ||
+    expired.isPending;
+  const failed =
+    catalogueCount.error ?? restockQuery.error ?? expiring.error ?? expired.error;
 
   if (isPending) {
     return (
@@ -85,7 +94,7 @@ export default function DashboardPage(): JSX.Element {
     );
   }
 
-  if (failed || !products) {
+  if (failed || catalogueCount.data === undefined || !restockRows) {
     // Every procedure on this page throws the same "User not in a household"
     // when the session has no household, which is the one failure a person can
     // actually act on. Anything else is reported generically rather than as raw
@@ -113,7 +122,7 @@ export default function DashboardPage(): JSX.Element {
   const expiredItems = expired.data ?? [];
   const expiringItems = expiring.data ?? [];
   const atRisk = expiredItems.length + expiringItems.length;
-  const catalogueIsCapped = overview.data?.nextCursor !== undefined;
+  const restockIsCapped = restockQuery.data?.nextCursor !== undefined;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -128,16 +137,19 @@ export default function DashboardPage(): JSX.Element {
         </h2>
         <ul className="grid gap-4 md:grid-cols-3">
           <StatCard
+            href="/products"
             label={t("statProducts")}
-            note={catalogueIsCapped ? t("statProductsCapped") : undefined}
-            value={products.length}
+            value={catalogueCount.data}
           />
           <StatCard
+            href="/inventory?filter=restock"
             label={t("statRestock")}
+            note={restockIsCapped ? t("statCapped") : undefined}
             tone={restock.length > 0 ? "warn" : "ok"}
             value={restock.length}
           />
           <StatCard
+            href="/inventory"
             label={t("statAtRisk", { days: EXPIRY_WINDOW_DAYS })}
             tone={expiredItems.length > 0 ? "danger" : atRisk > 0 ? "warn" : "ok"}
             value={atRisk}
@@ -296,18 +308,22 @@ export default function DashboardPage(): JSX.Element {
 }
 
 /**
- * One headline figure.
+ * One headline figure, and a door.
  *
- * The tone tints the figure, never the whole tile, and the label underneath
- * always says what the number is — colour is a second signal here, not the
- * only one (REDESIGN_PLAN §3).
+ * The whole tile is a link to the list showing exactly the rows the figure
+ * counts (the owner's pass: a number people act on has to be pressable, and
+ * what it opens has to match it). The tone tints the figure, never the whole
+ * tile, and the label underneath always says what the number is — colour is a
+ * second signal here, not the only one (REDESIGN_PLAN §3).
  */
 function StatCard({
+  href,
   label,
   note,
   tone = "neutral",
   value,
 }: {
+  href: string;
   label: string;
   note?: string | undefined;
   tone?: "neutral" | "ok" | "warn" | "danger";
@@ -321,12 +337,17 @@ function StatCard({
   }[tone];
 
   return (
-    <li className="rounded border border-border bg-card p-4">
-      <p className={`text-3xl font-bold ${toneClass}`}>{value}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
-      {note ? (
-        <p className="mt-1 text-xs text-muted-foreground">{note}</p>
-      ) : null}
+    <li>
+      <Link
+        href={href}
+        className="block min-h-[48px] rounded border border-border bg-card p-4 hover:border-input hover:bg-accent"
+      >
+        <p className={`text-3xl font-bold ${toneClass}`}>{value}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+        {note ? (
+          <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+        ) : null}
+      </Link>
     </li>
   );
 }

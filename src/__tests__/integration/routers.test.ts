@@ -845,6 +845,59 @@ describe("tRPC Router Integration Tests", () => {
       expect(foundProduct?.isLowStock).toBe(true);
     });
 
+    it("needsRestock returns the dashboard's set: out of stock counts even without a minimum", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "inv6b@example.com",
+        "Inventory User 6b",
+        "Inventory Household 6b"
+      );
+      // Three shapes: healthy, below its minimum, and — the case `lowStock`
+      // misses — run out with no minimum set at all.
+      const healthy = await createTestProduct(householdId, { name: "Sano", minStock: 1 });
+      const low = await createTestProduct(householdId, { name: "Bajo", minStock: 10 });
+      const outNoMin = await createTestProduct(householdId, { name: "Agotado sin mínimo" });
+      const { caller, envelope } = await createTestContext(user.id, householdId);
+
+      for (const [product, quantity] of [
+        [healthy, 5],
+        [low, 3],
+      ] as const) {
+        const entry = await caller.inventory.addStock({
+          ...envelope(),
+          productId: product.id,
+          quantity,
+          unit: "unit",
+        });
+        testData.stockEntries.push(entry.id);
+      }
+
+      const result = await caller.inventory.getStockOverview({
+        needsRestock: true,
+        limit: 100,
+      });
+
+      const ids = result.products.map((p) => p.id);
+      expect(ids).toContain(low.id);
+      expect(ids).toContain(outNoMin.id);
+      expect(ids).not.toContain(healthy.id);
+    });
+
+    it("counts the catalogue exactly, not a page of it", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "inv6c@example.com",
+        "Inventory User 6c",
+        "Inventory Household 6c"
+      );
+      await createTestProduct(householdId, { name: "Uno" });
+      await createTestProduct(householdId, { name: "Dos" });
+      await createTestProduct(householdId, { name: "Tres" });
+      const { caller } = await createTestContext(user.id, householdId);
+
+      const count = await caller.product.count();
+
+      expect(count).toBe(3);
+    });
+
     it("should transfer stock between locations", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv7@example.com",

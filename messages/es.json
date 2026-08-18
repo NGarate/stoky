@@ -62,7 +62,7 @@
     "errorGeneric": "Ha ocurrido un problema al cargar los datos. Vuelve a intentarlo en unos instantes.",
     "summaryTitle": "Resumen",
     "statProducts": "Productos en el catálogo",
-    "statProductsCapped": "Se muestran los primeros 100.",
+    "statCapped": "Se muestran los primeros 100.",
     "statRestock": "Necesitan reposición",
     "statAtRisk": "Caducados o que caducan en {days} días",
     "restockTitle": "Necesita reposición",
@@ -320,6 +320,9 @@
   },
   "inventory": {
     "title": "Inventario",
+    "filterRestockActive": "Solo lo que necesita reposición",
+    "filterRestockEmpty": "Nada necesita reposición ahora mismo.",
+    "filterClear": "Ver todo el inventario",
     "addStock": "Añadir stock",
     "adjust": "Ajustar",
     "transfer": "Transferir",

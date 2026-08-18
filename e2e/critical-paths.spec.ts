@@ -652,6 +652,41 @@ test.describe("Internationalization", () => {
  * products and left it registering, which failed for exactly that reason —
  * the new household cannot see them.
  */
+test.describe("The Panel's cards are doors", () => {
+  // Desktop width for the same reason as the low-stock suite below: the
+  // filtered list renders a table at lg and cards under it, and the row-based
+  // assertions need the visible copy to be the table.
+  test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
+
+  test("the restock card opens the inventory already filtered to its set", async ({ page }) => {
+    await page.goto("/dashboard");
+    await settle(page);
+
+    await page.click('a[href="/inventory?filter=restock"]');
+    await page.waitForURL(/\/inventory\?filter=restock/);
+    await settle(page);
+
+    // The filter is loud: it names itself and offers the way back.
+    await expect(page.getByText(es.inventory.filterRestockActive)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: es.inventory.filterClear }),
+    ).toBeVisible();
+
+    // The seed's below-minimum products are the set; Arroz redondo sits at 5
+    // of a minimum of 2 and must not be here — a filter that shows everything
+    // is the quiet failure this test exists for.
+    const table = page.locator("table");
+    for (const product of [
+      "Leche entera",
+      "Aceite de oliva virgen extra",
+      "Café molido natural",
+    ]) {
+      await expect(table.getByRole("link", { name: product })).toBeVisible();
+    }
+    await expect(table.getByText("Arroz redondo")).toHaveCount(0);
+  });
+});
+
 test.describe("Low stock, as the seeded household", () => {
   // Desktop width, deliberately. The page renders the same products twice —
   // a table from `lg` and cards below it — and only one is ever displayed.

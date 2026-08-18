@@ -107,6 +107,14 @@ export const inventoryRouter = createTRPCRouter({
    *
    * The list screens' single query. `lowStock` filters to products under their
    * `minStock`, which is what the phone screen's "to buy" section is.
+   *
+   * `needsRestock` is the Panel's broader definition: everything under its
+   * minimum **plus everything at or below zero even with no minimum set** —
+   * a product that has run out without one would otherwise never appear.
+   * A separate flag rather than a widening of `lowStock`, because the kitchen
+   * screen already reads `lowStock` and silently changing what a consumer
+   * sees is how a green suite stops meaning anything (Phase 8 item 2: the
+   * card and the list it opens must show the same set).
    */
   getStockOverview: householdProcedure
     .input(
@@ -114,6 +122,7 @@ export const inventoryRouter = createTRPCRouter({
         locationId: z.string().optional(),
         category: z.string().optional(),
         lowStock: z.boolean().optional(),
+        needsRestock: z.boolean().optional(),
         cursor: z.string().optional(),
         limit: z.number().min(1).max(100).default(20),
       })
@@ -184,6 +193,9 @@ export const inventoryRouter = createTRPCRouter({
           };
         })
         .filter((product) => {
+          if (input.needsRestock && !(product.totalStock <= 0 || product.isLowStock)) {
+            return false;
+          }
           if (!input.lowStock) return true;
           return product.isLowStock && product.minStock !== null;
         });

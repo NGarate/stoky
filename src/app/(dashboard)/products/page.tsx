@@ -39,7 +39,7 @@ function stockTone(product: ProductRow): string {
 }
 
 export default function ProductsPage(): JSX.Element {
-  const query = api.product.list.useQuery({ limit: 20 });
+  const query = api.product.list.useQuery({ limit: 100 });
   const result = query.data;
 
   // Three states, not two. `isLoading || !result` left a failed query on

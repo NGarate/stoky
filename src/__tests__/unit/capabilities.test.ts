@@ -68,6 +68,7 @@ const EXPECTED: Record<string, Record<string, string>> = {
   },
   "product.ts": {
     list: "householdProcedure",
+    count: "householdProcedure",
     getById: "householdProcedure",
     getByBarcode: "householdProcedure",
     searchByName: "householdProcedure",

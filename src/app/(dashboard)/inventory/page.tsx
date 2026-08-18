@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Suspense } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { ExpiringItems } from "@/components/inventory/ExpiringItems";
@@ -29,9 +31,33 @@ interface StockRow {
   isLowStock: boolean;
 }
 
+/**
+ * `useSearchParams` opts the subtree out of static rendering, so it has to sit
+ * under a Suspense boundary or the build fails — the same shape as
+ * /products/new, and for the same reason.
+ */
 export default function InventoryPage(): JSX.Element {
+  return (
+    <Suspense fallback={null}>
+      <InventoryView />
+    </Suspense>
+  );
+}
+
+/**
+ * The Panel's "Necesitan reposición" card links here with `?filter=restock`,
+ * and the rule that created the filter binds it: the rows this shows must be
+ * exactly the set the card counted, which is why both sides ask the server
+ * the same question (`needsRestock`) instead of each filtering for
+ * themselves. The filter announces itself and offers the way back — a list
+ * quietly showing less than everything is how numbers stop being trusted.
+ */
+export function InventoryView(): JSX.Element {
   const t = useTranslations("inventory");
-  const query = api.inventory.getStockOverview.useQuery({ limit: 50 });
+  const filterRestock = useSearchParams().get("filter") === "restock";
+  const query = api.inventory.getStockOverview.useQuery(
+    filterRestock ? { limit: 100, needsRestock: true } : { limit: 50 },
+  );
   const result = query.data;
 
   // Three states, not two. `isLoading || !result` left a failed query on
@@ -74,10 +100,30 @@ export default function InventoryPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Expiration Alerts */}
-      <div className="mb-8">
-        <ExpiringItems days={7} showExpired={true} maxItems={5} />
-      </div>
+      {filterRestock ? (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-foreground bg-warn px-4 py-3">
+          <p className="font-medium text-warn-foreground">
+            {t("filterRestockActive")}
+          </p>
+          <Link
+            href="/inventory"
+            className="inline-flex min-h-[48px] items-center text-warn-foreground underline underline-offset-4"
+          >
+            {t("filterClear")}
+          </Link>
+        </div>
+      ) : (
+        /* Expiration alerts — the full inventory's concern, not the filter's. */
+        <div className="mb-8">
+          <ExpiringItems days={7} showExpired={true} maxItems={5} />
+        </div>
+      )}
+
+      {filterRestock && products.length === 0 ? (
+        <p className="rounded border border-border bg-card p-4 text-muted-foreground">
+          {t("filterRestockEmpty")}
+        </p>
+      ) : null}
 
       {/* Desktop: the table, which is legitimate at this tier and only here.
 

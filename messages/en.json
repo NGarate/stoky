@@ -62,7 +62,7 @@
     "errorGeneric": "Something went wrong loading the data. Try again in a moment.",
     "summaryTitle": "Summary",
     "statProducts": "Products in the catalogue",
-    "statProductsCapped": "Showing the first 100.",
+    "statCapped": "Showing the first 100.",
     "statRestock": "Need restocking",
     "statAtRisk": "Expired or expiring within {days} days",
     "restockTitle": "Needs restocking",
@@ -320,6 +320,9 @@
   },
   "inventory": {
     "title": "Inventory",
+    "filterRestockActive": "Only what needs restocking",
+    "filterRestockEmpty": "Nothing needs restocking right now.",
+    "filterClear": "See the whole inventory",
     "addStock": "Add stock",
     "adjust": "Adjust",
     "transfer": "Transfer",
