@@ -74,7 +74,9 @@ const EXPECTED: Record<string, Record<string, string>> = {
     searchByName: "householdProcedure",
     create: "writeProcedure",
     update: "writeProcedure",
-    delete: "writeProcedure",
+    // Owner-directed (Phase 8 item 5, D90): a hard delete with no undo is the
+    // household's decision, not any member's.
+    delete: "adminProcedure",
     scanBarcode: "writeProcedure",
   },
   "receipt.ts": {

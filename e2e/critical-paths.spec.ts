@@ -453,6 +453,53 @@ test.describe("Product Creation Flow", () => {
     await expect(page.getByText("Marca E2E")).toBeVisible();
   });
 
+  test("should delete an unused product, as the household's admin, twice asked", async ({ page }) => {
+    const registerPage = new RegisterPage(page);
+    const dashboardPage = new DashboardPage(page);
+    const productsPage = new ProductsPage(page);
+
+    // Its own household: the registrant is its OWNER, which is what the
+    // admin-only delete needs (D90). The product never gets stock, so its
+    // ledger is empty and the button is offered at all.
+    await registerPage.goto();
+    await registerPage.register(
+      generateTestName("E2E Delete User"),
+      generateTestEmail("e2e-delete"),
+      "E2ETestPassword123!",
+      generateTestName("E2E Delete Household"),
+    );
+    await dashboardPage.expectLoaded();
+
+    await dashboardPage.navigateToProducts();
+    await productsPage.expectLoaded();
+
+    const productName = generateTestName("E2E Borrable");
+    await productsPage.createProduct(productName);
+
+    await page.goto("/products");
+    await page.click(`a:has-text("${productName}")`);
+    await page.waitForURL(/\/products\/[^/]+$/);
+
+    // Two presses, deliberately: the first opens the confirmation that names
+    // the product, the second is the one that fires.
+    await page.click(`button:has-text("${es.products.detail.deleteButton}")`);
+    await expect(
+      page.getByText(es.products.detail.deleteConfirmBody),
+    ).toBeVisible();
+    await page.click(
+      `button:has-text("${es.products.detail.deleteConfirm}")`,
+    );
+
+    await expect(
+      page.getByText(es.products.detail.deletedTitle),
+    ).toBeVisible();
+
+    // And the catalogue no longer lists it.
+    await page.goto("/products");
+    await settle(page);
+    await expect(page.locator(`a:has-text("${productName}")`)).toHaveCount(0);
+  });
+
   test("should require authentication for product pages", async ({ page }) => {
     // Try to access products without authentication
     await page.goto("/products");

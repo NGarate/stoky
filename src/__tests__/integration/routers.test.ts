@@ -612,6 +612,32 @@ describe("tRPC Router Integration Tests", () => {
       expect(result.brand).toBe("Marca");
     });
 
+    it("refuses the delete to a plain member — the household decides, not any member (D90)", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "product4b@example.com",
+        "Product User 4b",
+        "Product Household 4b"
+      );
+      const member = await prisma.user.create({
+        data: {
+          email: "product4b-member@example.com",
+          name: "Product Member 4b",
+          passwordHash: "not-a-real-hash",
+          householdId,
+          role: "MEMBER",
+        },
+      });
+      const product = await createTestProduct(householdId, { name: "Protegido" });
+      const { caller } = await createTestContext(member.id, householdId);
+
+      await expect(caller.product.delete({ id: product.id })).rejects.toThrow();
+      const still = await prisma.product.findUnique({ where: { id: product.id } });
+      expect(still).not.toBeNull();
+
+      await prisma.user.delete({ where: { id: member.id } });
+      void user;
+    });
+
     it("should delete product", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "product4@example.com",

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import type { JSX } from "react";
@@ -10,14 +11,20 @@ import type { JSX } from "react";
  *
  * Cards below `lg`, table from `lg` (DESIGN_AUDIT A3.2, PROGRESS D14).
  *
- * One column is deliberately absent from the card: **Acciones**. Its only
- * content is a "Ver" link pointing at `/products/{id}`, which is exactly where
- * the product's name already points — so on a card it would be a second link to
- * the same place, and a bare "Ver" is also the example `DESIGN_AUDIT` A4.5
- * gives of a link that fails WCAG 2.4.9 because its purpose cannot be worked
- * out from the link alone. Nothing is lost: the destination is still one tap
- * away, from a link that names what it opens. Every other column — brand,
- * category, stock — is on the card.
+ * The Acciones column used to hold a lone "Ver" — a second link to where the
+ * name already points, and DESIGN_AUDIT A4.5's own example of a link failing
+ * WCAG 2.4.9. The owner's pass replaced it (Phase 8 item 5): the name stays
+ * the way in, and the column holds the product's real actions — edit, adjust,
+ * the two histories — each carrying the product's name for a screen reader,
+ * because a column of identical verbs says nothing about which row any of
+ * them belongs to. Deleting is not here: a destructive action beside twenty
+ * identical rows invites the wrong row, so it lives on the product's own
+ * page, where its target is unambiguous (D98).
+ *
+ * The column is still absent from the cards: every action is one tap away
+ * through the product's page, and four links per card would bury the reading
+ * tier this layout exists for. This page was also the last one hardcoded in
+ * Spanish; it reads the catalogue now.
  */
 
 interface ProductRow {
@@ -39,6 +46,7 @@ function stockTone(product: ProductRow): string {
 }
 
 export default function ProductsPage(): JSX.Element {
+  const t = useTranslations("products.list");
   const query = api.product.list.useQuery({ limit: 100 });
   const result = query.data;
 
@@ -53,7 +61,7 @@ export default function ProductsPage(): JSX.Element {
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
-        title="Productos"
+        title={t("title")}
       />
     );
   }
@@ -64,20 +72,20 @@ export default function ProductsPage(): JSX.Element {
     <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          Productos
+          {t("title")}
         </h1>
         <div className="flex flex-wrap gap-2">
           <Link
             href="/products/scan"
             className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted md:text-lg"
           >
-            Escanear Código
+            {t("scan")}
           </Link>
           <Link
             href="/products/new"
             className="inline-flex min-h-[48px] items-center rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:text-lg"
           >
-            Nuevo Producto
+            {t("new")}
           </Link>
         </div>
       </div>
@@ -93,11 +101,11 @@ export default function ProductsPage(): JSX.Element {
         <table className="w-full">
           <thead className="bg-muted text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 text-left">Nombre</th>
-              <th className="px-4 py-3 text-left">Marca</th>
-              <th className="px-4 py-3 text-left">Categoría</th>
-              <th className="px-4 py-3 text-right">Stock</th>
-              <th className="px-4 py-3 text-center">Acciones</th>
+              <th className="px-4 py-3 text-left">{t("nameHeader")}</th>
+              <th className="px-4 py-3 text-left">{t("brandHeader")}</th>
+              <th className="px-4 py-3 text-left">{t("categoryHeader")}</th>
+              <th className="px-4 py-3 text-right">{t("stockHeader")}</th>
+              <th className="px-4 py-3 text-center">{t("actionsHeader")}</th>
             </tr>
           </thead>
           <tbody>
@@ -116,7 +124,7 @@ export default function ProductsPage(): JSX.Element {
                 </td>
                 <td className="px-4 py-3">
                   <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-sm">
-                    {product.category || "Sin categoría"}
+                    {product.category || t("noCategory")}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -124,19 +132,41 @@ export default function ProductsPage(): JSX.Element {
                     {product.totalStock}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-center">
-                  {/* 48px in both directions: three characters made this the
-                      narrowest control in the app at 21px wide (DESIGN_AUDIT
-                      A4.2). The product name is added for a screen reader as
-                      well, because a column of identical "Ver" links says
-                      nothing about where any of them goes. */}
-                  <Link
-                    href={`/products/${product.id}`}
-                    className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center text-sm text-primary hover:underline"
-                  >
-                    Ver
-                    <span className="sr-only"> {product.name}</span>
-                  </Link>
+                <td className="px-4 py-3">
+                  {/* Every link 48px in both directions (DESIGN_AUDIT A4.2)
+                      and named for a screen reader with the row's product —
+                      WCAG 2.4.9, the criterion the old bare "Ver" was A4.5's
+                      example of failing. */}
+                  <span className="flex flex-wrap items-center justify-center gap-1">
+                    <Link
+                      href={`/products/${product.id}/edit`}
+                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
+                    >
+                      {t("actionEdit")}
+                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
+                    </Link>
+                    <Link
+                      href={`/products/${product.id}/adjust`}
+                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
+                    >
+                      {t("actionAdjust")}
+                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
+                    </Link>
+                    <Link
+                      href={`/products/${product.id}/history`}
+                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
+                    >
+                      {t("actionHistory")}
+                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
+                    </Link>
+                    <Link
+                      href={`/prices/${product.id}`}
+                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
+                    >
+                      {t("actionPrices")}
+                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
+                    </Link>
+                  </span>
                 </td>
               </tr>
             ))}
@@ -159,18 +189,18 @@ export default function ProductsPage(): JSX.Element {
                 {product.name}
               </Link>
               <span className={`font-medium ${stockTone(product)} md:text-xl`}>
-                Stock: {product.totalStock}
+                {t("stockLabel", { stock: product.totalStock })}
               </span>
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:text-lg">
               <div>
-                <dt className="text-muted-foreground">Marca</dt>
+                <dt className="text-muted-foreground">{t("brandHeader")}</dt>
                 <dd className="mt-1 text-foreground">{product.brand || "-"}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Categoría</dt>
+                <dt className="text-muted-foreground">{t("categoryHeader")}</dt>
                 <dd className="mt-1 text-foreground">
-                  {product.category || "Sin categoría"}
+                  {product.category || t("noCategory")}
                 </dd>
               </div>
             </dl>

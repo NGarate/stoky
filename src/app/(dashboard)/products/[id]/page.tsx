@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import type { JSX } from "react";
@@ -74,6 +74,11 @@ export default function ProductDetailPage({
   params,
 }: ProductDetailPageProps): JSX.Element {
   const { id } = use(params);
+  return <ProductDetailView id={id} />;
+}
+
+/** Exported apart from the route so the component suite can render it. */
+export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.detail");
   const locale = useLocale();
 
@@ -82,6 +87,38 @@ export default function ProductDetailPage({
   // which would sit on the loading state for seconds before saying so.
   const query = api.product.getById.useQuery({ id }, { retry: false });
   const product = query.data;
+
+  // The signed-in account's role, for showing the delete section to the
+  // people the server would let use it. Hiding it from everyone else is
+  // courtesy, not the control — `adminProcedure` is the control (D90).
+  // First caller of `auth.me`, which waited for exactly this.
+  const me = api.auth.me.useQuery(undefined, { retry: false });
+  const isAdmin = me.data?.role === "OWNER" || me.data?.role === "ADMIN";
+
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState<string | null>(null);
+  const confirmRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (confirmingDelete) confirmRef.current?.focus();
+  }, [confirmingDelete]);
+
+  const utils = api.useUtils();
+  const deleteProduct = api.product.delete.useMutation({
+    onSuccess: async () => {
+      setDeleted(product?.name ?? "");
+      await utils.product.list.invalidate();
+    },
+    onError: (error) => {
+      const normalized = error.message.toLowerCase();
+      setDeleteError(
+        normalized.includes("still has")
+          ? t("deleteConflict")
+          : t("deleteFailed"),
+      );
+    },
+  });
 
   const dateFormat = useMemo(
     () =>
@@ -214,6 +251,27 @@ export default function ProductDetailPage({
             {t("retry")}
           </button>
         )}
+      </div>
+    );
+  }
+
+  if (deleted !== null) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <div
+          role="status"
+          tabIndex={-1}
+          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
+        >
+          <h1 className="text-2xl font-bold">{t("deletedTitle")}</h1>
+          <p className="mt-2">{t("deletedBody", { name: deleted })}</p>
+        </div>
+        <Link
+          href="/products"
+          className="mt-4 inline-flex min-h-[48px] items-center text-primary underline"
+        >
+          {t("deletedBack")}
+        </Link>
       </div>
     );
   }
@@ -503,7 +561,91 @@ export default function ProductDetailPage({
             {t("consumeStock")}
           </Link>
         </li>
+        <li>
+          <Link
+            href={`/products/${product.id}/adjust`}
+            className="inline-flex min-h-[48px] items-center text-primary underline"
+          >
+            {t("adjustStock")}
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={`/products/${product.id}/history`}
+            className="inline-flex min-h-[48px] items-center text-primary underline"
+          >
+            {t("stockHistoryLink")}
+          </Link>
+        </li>
       </ul>
+
+      {/* Owner-directed (Phase 8 item 5, D90): admin-only, confirmed, and only
+          for a product nothing references. Anything with history keeps it —
+          the history is the record the other screens exist to show — so the
+          button is only offered when the ledger is empty, and the server's
+          four-way count is still the control behind it. */}
+      {isAdmin ? (
+        <section aria-labelledby="product-delete" className="mt-10 rounded border border-border bg-muted p-4">
+          <h2 id="product-delete" className="text-lg font-semibold text-heading">
+            {t("deleteTitle")}
+          </h2>
+          {product.stockEntries.length > 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t("deleteBlockedHistory")}
+            </p>
+          ) : confirmingDelete ? (
+            <div
+              ref={confirmRef}
+              role="group"
+              aria-label={t("deleteConfirmTitle", { name: product.name })}
+              tabIndex={-1}
+              className="mt-3 rounded border border-danger-foreground bg-danger p-4"
+            >
+              <p className="font-semibold text-danger-foreground">
+                {t("deleteConfirmTitle", { name: product.name })}
+              </p>
+              <p className="mt-1 text-sm text-danger-foreground">
+                {t("deleteConfirmBody")}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={deleteProduct.isPending}
+                  onClick={() => deleteProduct.mutate({ id: product.id })}
+                  className="min-h-[48px] rounded bg-destructive px-4 py-2 font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+                >
+                  {t("deleteConfirm")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    setDeleteError(null);
+                  }}
+                  className="min-h-[48px] rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground"
+                >
+                  {t("deleteCancel")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-muted-foreground">{t("deleteHint")}</p>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                className="mt-3 min-h-[48px] rounded border border-danger-foreground bg-card px-4 py-2 font-medium text-danger-foreground hover:bg-danger"
+              >
+                {t("deleteButton")}
+              </button>
+            </>
+          )}
+          {/* Kept mounted so a refusal is announced when it arrives. */}
+          <p role="status" aria-live="polite" className="mt-2 text-sm font-medium text-danger-foreground">
+            {deleteError ?? ""}
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

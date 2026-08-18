@@ -1,0 +1,78 @@
+"use client";
+
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useLocale, useTranslations } from "next-intl";
+
+/**
+ * Net stock over time — the history screen's chart (Phase 8 item 5).
+ *
+ * One series, the gauge token, mirroring `PriceChart`: the design system has
+ * no categorical scale and a single product's ledger needs none. The points
+ * arrive already carrying their running total (`runningTotals`), oldest first,
+ * so this component only formats — arithmetic lives in the pure module the
+ * unit suite holds.
+ */
+export interface StockChartPoint {
+  /** ISO date of the movement. */
+  date: string;
+  /** Net stock immediately after it. */
+  total: number;
+}
+
+export function StockHistoryChart({
+  points,
+  unit,
+}: {
+  points: StockChartPoint[];
+  unit: string;
+}) {
+  const t = useTranslations("products.history");
+  const locale = useLocale();
+
+  const chartData = points.map((point) => ({
+    date: new Date(point.date).toLocaleDateString(locale),
+    total: point.total,
+  }));
+
+  return (
+    <div aria-hidden="true" className="h-72 w-full">
+      {/* aria-hidden: the ledger table below carries the same information row
+          by row — a reader gets the numbers, not a shape it cannot see. */}
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+            stroke="var(--border)"
+          />
+          <YAxis
+            tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+            stroke="var(--border)"
+            allowDecimals={false}
+          />
+          <Tooltip
+            formatter={(value: number) => [`${value} ${unit}`, t("totalHeader")]}
+            labelFormatter={(label) => label}
+          />
+          <Line
+            type="stepAfter"
+            dataKey="total"
+            stroke="var(--gauge)"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+            activeDot={{ r: 5 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

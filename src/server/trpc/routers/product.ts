@@ -1,6 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
+import {
+  adminProcedure,
+  createTRPCRouter,
+  householdProcedure,
+  writeProcedure,
+} from "../trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
 import {
@@ -245,8 +250,11 @@ export const productRouter = createTRPCRouter({
    *
    * So the references are counted first and the refusal names what is in the
    * way, which is the shape `location.delete` already had.
+   *
+   * `adminProcedure` since the owner's pass (Phase 8 item 5, D90): a hard
+   * delete with no undo is the household's decision, not any member's.
    */
-  delete: writeProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const existingProduct = await prisma.product.findFirst({
