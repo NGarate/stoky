@@ -33,7 +33,7 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
-| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`) and product editing (`8114501`) closed; four items remain |
+| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`), product editing (`8114501`) and the Panel's doors (`cf18b52`) closed; three items remain |
 
 ---
 
@@ -45,6 +45,7 @@ Rules for this log:
 |---|---|
 | UI-10 — the auth panels leave `bg-primary` for their own hero surface | `d7c178d` |
 | Product editing — `/products/[id]/edit`, and `product.update`'s first caller | `8114501` |
+| The Panel's cards become doors — `product.count`, `needsRestock`, the loud filter | `cf18b52` |
 
 ### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
 
@@ -1172,3 +1173,14 @@ alternative — blanks omitted, a separate "clear" affordance per field — make
 the common correction two controls instead of one. The component test pins
 the semantics by asserting the exact payload, and was watched to fail against
 an omit-blanks implementation.
+
+**D94 — `needsRestock` is a new flag, not a widening of `lowStock`, and both
+ends of the door ask it.** The Panel's restock definition (out of stock, or
+below a set minimum) was deliberately broader than the server's `lowStock`
+filter, and the card's count and the filtered list must be the same set — so
+the definition moved server-side once and both sides query it. Widening
+`lowStock` itself was rejected because the kitchen screen already reads it,
+and silently changing what an existing consumer sees is the drift the
+capability and journey suites exist to prevent. The third card's door is the
+plain `/inventory`: its alert block renders the same two expiry queries the
+card sums, so the promise holds without a third filter.

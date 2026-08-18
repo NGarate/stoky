@@ -12,7 +12,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6 and PRICE-1.** TEST-5 is the intermittent bun
+**Open: TEST-5, TEST-6, PRICE-1 and UI-11.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s
 whose stated reason names a phase that closed. PRICE-1 came out of the
@@ -79,6 +79,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
 | TEST-4 | The low-stock badge is unchecked on the card tier | ✅ Resolved (Phase 4) |
 | UI-10 | The auth hero panels are painted with the action colour | ✅ Resolved (`d7c178d`) |
+| UI-11 | A run-out product with a minimum is labelled low, not out | 🟡 Open |
 | PRICE-1 | No UI path can create a price record | 🟡 Open — Phase 8 |
 
 ---
@@ -1698,6 +1699,24 @@ theme needs its own answer, because pale cream is a light-theme idea.
 
 ---
 
+### 🟡 UI-11: A run-out product with a minimum is labelled low, not out
+
+**Files:** `src/app/(dashboard)/inventory/page.tsx` (StockStatus)  
+**Severity:** LOW  
+**Status:** OPEN — found 2026-08-18, verifying Phase 8 item 2 in the browser
+
+`StockStatus` checks `isLowStock` before `totalStock <= 0`, and a product at
+zero with a minimum set is both — so the seeded Café molido natural, at 0 of
+a minimum of 2, wears "Stock bajo" on `/inventory` while the Panel's restock
+row, which checks the other way round, calls the same product "Sin stock".
+Two screens, one product, two different words for the same state.
+
+The Panel's order is the right one: run out is the stronger statement and
+should win. One `if` swap plus the component assertions that pin the order;
+worth checking the card tier and the kitchen screen's vocabulary while there.
+
+---
+
 ### 🟡 PRICE-1: No UI path can create a price record
 
 **Files:** `src/app/(dashboard)/inventory/add/page.tsx`,
@@ -2495,6 +2514,8 @@ which is short:
   re-run before investigating.
 - **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
 - **PRICE-1** — no UI path can create a price record. Owned by Phase 8.
+- **UI-11** — "Stock bajo" on a product that has run out; the Panel says "Sin
+  stock" for the same row. One `if` swap, found in passing and filed per D6.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three
   manual passes, T7, the ± stepper, the per-device screen choice — and now

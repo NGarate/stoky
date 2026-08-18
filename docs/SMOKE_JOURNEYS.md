@@ -136,7 +136,7 @@ later cannot quietly take the wrong tier. Sampling six would have missed that.
 `/settings/people` creates an account with a role, so a KITCHEN account is
 reachable through the interface rather than only through the database write
 the test uses. The per-procedure count in the paragraph above has also grown
-with the routers — `capabilities.test.ts` asserts all 59 as declared today.
+with the routers — `capabilities.test.ts` asserts all 60 as declared today.
 
 A hidden button is not a control. This journey exists specifically to prove the
 restriction holds when the interface is bypassed.
