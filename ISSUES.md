@@ -669,11 +669,20 @@ elsewhere in the tree.
 
 ---
 
-### 🟡 SHOP-1: A shopping item with no name at all is accepted
+### ✅ SHOP-1: A shopping item with no name at all is accepted
 
 **Files:** `src/lib/validations/shopping.ts`, `src/server/trpc/routers/shopping.ts`
 **Severity:** LOW
-**Status:** OPEN — found 2026-08-11 while documenting the router for DOCS-1
+**Status:** RESOLVED (Phase 7 slice)
+
+**Resolution:** the suggested `.refine` exists as the `ONE_NAME` rule in
+`src/lib/validations/shopping.ts` — exactly one of `productId` and
+`customName`, whitespace not counting as a name — applied to the item schema
+and re-applied to `addShoppingItemSchema` after its merge, because a
+`.refine`d schema cannot be `.merge`d. No existing row was in either state.
+The heading said OPEN while the summary table said resolved; fixed 2026-08-18.
+
+**Original report follows.**
 
 A `ShoppingItem` is meant to reference a `Product` **or** carry a `customName`.
 `shoppingItemSchema` declares both as plain optionals with no refinement, and
@@ -895,11 +904,21 @@ and there are passing assertions for every branch of it.
 
 ---
 
-### 🟡 PROD-1: Deleting a used product fails, and says something else
+### ✅ PROD-1: Deleting a used product fails, and says something else
 
 **File:** `src/server/trpc/routers/product.ts`
 **Severity:** LOW
-**Status:** OPEN — found 2026-08-11 while documenting the router for DOCS-1
+**Status:** RESOLVED (Phase 7 slice)
+
+**Resolution:** the suggested fix is implemented. `product.delete` counts what
+references the product — stock entries, price records, receipt lines, shopping
+items — and refuses with `CONFLICT` naming the counts, before the foreign key
+gets a say; `store.delete` got the same treatment. Asserted by integration
+tests. The summary table and `STATUS.md` have said so since 2026-08-11 while
+this heading still read OPEN — the same drift the top of this file warns
+about, only in the opposite direction. Heading fixed 2026-08-18.
+
+**Original report follows.**
 
 No relation in `prisma/schema.prisma` declares `onDelete`, so Prisma's default
 applies and PostgreSQL refuses to delete a row anything references. A product
@@ -1883,7 +1902,7 @@ if (!product) {
 
 ---
 
-### 🟡 TEST-3: An E2E test writes to the seeded household that another one asserts
+### ✅ TEST-3: An E2E test writes to the seeded household that another one asserts
 
 **Files:** `e2e/screen-reader.spec.ts` (the "add stock" journey),
 `e2e/critical-paths.spec.ts:603`  
@@ -2037,12 +2056,24 @@ Verified failing before the fix: 4 of the 6 went red with the pages reverted.
 
 ---
 
-### 🟡 DEBT-6: The services layer still throws bare `Error`
+### ✅ DEBT-6: The services layer still throws bare `Error`
 
 **Files:** `src/server/services/ocr.ts`, `productMatcher.ts`,
 `receiptParser.ts`, `openFoodFacts.ts`  
 **Severity:** LOW  
-**Status:** OPEN — found 2026-08-10 while closing DEBT-4
+**Status:** RESOLVED (Phase 7 slice)
+
+**Resolution:** the decision this entry left open went to typed domain errors
+rather than `TRPCError` — `ServiceError` and its `NotFoundError` /
+`InvalidInputError` / `UpstreamError` in `src/server/services/errors.ts`,
+translated by the same tRPC middleware that handles Prisma's codes, so a
+missing row from a service reaches the client as `NOT_FOUND`. The pin in
+`src/__tests__/unit/router-errors.test.ts` is flipped: it now asserts no
+service throws bare, instead of asserting that one still did. `STATUS.md` and
+`REDESIGN_PLAN.md` §10 recorded this while the heading here said OPEN; fixed
+2026-08-18.
+
+**Original report follows.**
 
 DEBT-4 was filed and scoped against the routers, and the routers are done. One
 layer down, four services still throw bare `Error` — `"Receipt not found"`,
