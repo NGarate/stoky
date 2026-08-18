@@ -33,7 +33,7 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
-| 8 — The owner's first pass | In progress — UI-10 closed (`d7c178d`); five items remain |
+| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`) and product editing (`8114501`) closed; four items remain |
 
 ---
 
@@ -44,6 +44,7 @@ Rules for this log:
 | Unit | Commit |
 |---|---|
 | UI-10 — the auth panels leave `bg-primary` for their own hero surface | `d7c178d` |
+| Product editing — `/products/[id]/edit`, and `product.update`'s first caller | `8114501` |
 
 ### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
 
@@ -1150,3 +1151,24 @@ have: one warm token (`#f1eee1` light, `#201b14` dark), the ordinary ink on
 top, three new audited pairs. The aside card went solid `bg-card` rather than
 keeping its translucent wash, because a point-of-use opacity modifier is the
 one way to break contrast the token audit cannot see.
+
+**D92 — The edit screen is its own inline form, not an extraction of the
+create form.** The plan called extraction "the natural move", and reading the
+create page said otherwise: its 560 lines hardcode create-mode behaviour
+throughout — the scanned-code context, the Open Food Facts panel, the success
+screen with "create another" — so a shared component would be a props-driven
+mode switch through code that is already verified and shipping. This
+codebase's idiom is that a page owns its form (add, consume and new all do);
+the edit page duplicates the six field blocks and nothing else. The cost is
+~200 lines of markup twice; the alternative's cost was re-verifying the
+create journey to ship an unrelated screen.
+
+**D93 — On the edit screen, a blank optional field means "remove it".**
+`updateProductSchema` treats absence as "leave it alone" (partial update), so
+the form sends every field and blanks go as `null` — before the schema
+learned `nullish`, removing a wrong barcode was impossible: omission kept it
+and `""` would have landed in the `[barcode, householdId]` unique index. The
+alternative — blanks omitted, a separate "clear" affordance per field — makes
+the common correction two controls instead of one. The component test pins
+the semantics by asserting the exact payload, and was watched to fail against
+an omit-blanks implementation.

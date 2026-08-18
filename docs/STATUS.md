@@ -12,24 +12,25 @@ say what measured it.
 
 ## Gate status
 
-Measured on 2026-08-17/18 against a live PostgreSQL and Valkey, at `443718d`,
-after Phase 6, the CI campaign, and the browser suite's move to the production
-artefact.
+Measured on 2026-08-17/18 against a live PostgreSQL and Valkey — at
+`443718d` after Phase 6, the CI campaign and the browser suite's move to the
+production artefact, and re-measured at `8114501` for the suites and routes
+Phase 8's first two units changed.
 
 | Gate | Command | Result |
 |---|---|---|
 | Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — ~270 files, 101 rules |
 | Typecheck | `pnpm typecheck` | ✅ clean |
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `pnpm check:links` | ✅ 89 links against 30 routes, none broken |
+| Internal links | `pnpm check:links` | ✅ 93 links against 31 routes, none broken |
 | Contrast | `pnpm check:contrast` | ✅ 60 checks over 27 tokens × 2 themes, all AAA |
-| Unit tests | `pnpm test:unit` | ✅ 475 pass / 43 files |
-| Component tests | `pnpm test:components` | ✅ 349 pass / 31 files |
-| Integration tests | `pnpm test:integration` | ✅ 395 pass / 25 files |
-| Build | `pnpm build` | ✅ 31 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
+| Unit tests | `pnpm test:unit` | ✅ 479 pass / 44 files |
+| Component tests | `pnpm test:components` | ✅ 358 pass / 32 files |
+| Integration tests | `pnpm test:integration` | ✅ 396 pass / 25 files |
+| Build | `pnpm build` | ✅ 32 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **117 pass / 0 fail, 2.9 min** — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **122 pass / 0 fail, 3.1 min** — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
 
 **Use `pnpm`, not `corepack pnpm`.** On this machine corepack resolves 11.20.0
@@ -720,7 +721,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
 | 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
-| 8 — The owner's first pass | In progress — UI-10 closed (`d7c178d`); five items remain |
+| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`) and product editing (`8114501`) closed; four items remain |
 
 **What remains, in one place.** The review document (Phase 7's actual
 deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human

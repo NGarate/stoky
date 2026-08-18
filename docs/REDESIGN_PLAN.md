@@ -972,7 +972,7 @@ the detail lives in the phase itself (§9), the judgement calls in D87–D90.
 
 | Item | Why it is here |
 |---|---|
-| Product editing | `product.update` guarded and tested since before the plan, called by nothing but two integration tests; a dead `products.edit` key in both catalogues. Missing UI, not permissions |
+| ~~Product editing~~ | **Done** (`8114501`). `/products/[id]/edit`, its own inline form rather than an extraction (D92); blanks clear via `null` (D93, schema change); the duplicate-barcode check exempts the product's own code. En route it caught dynamic-routes auditing `/products/scan` under the name "product detail" |
 | The Panel's three cards become doors | Static `<li>`s over counts people act on. Needs URL-driven filters no list page has, a server filter as broad as the card's restock definition, and a real catalogue count instead of a page length |
 | The stock form in two layers | Essentials (product, quantity, expiry, store, price) visible; unit, location and note folded away with real defaults. Store and price have been accepted server-side since SEC-1's fix; closes both halves of PRICE-1 |
 | The kitchen screen acts | Add-to-list and start-a-list from the tablet; `shopping.create`/`addItem` move to the KITCHEN-callable tier. Supersedes §4's "Nothing else" — amendment in §4, trade in §5.2 (D88), journey changes in `SMOKE_JOURNEYS.md` 2 and 7 |
