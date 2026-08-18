@@ -18,7 +18,7 @@ that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D97 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D99 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.
@@ -71,7 +71,7 @@ run a gate, the file says so and says why, rather than omitting it.
 
 **[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **97 numbered decisions taken
+commits, and — the part worth reading in full — **99 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -91,10 +91,12 @@ for a tablet), the decisions that shaped them, and nine phases each with an
 explicit *done when*.
 
 Phases 0 through 6 are complete against their done-whens, each with its named
-exceptions. **What remains: Phase 7's review document, Phase 8 — the owner's
-first pass, six observations from real use planned 2026-08-18 — three human
-passes no suite can answer, and the §10 list**, including two §3/§5.1 promises
-found unbuilt when the journeys were re-audited on 2026-08-17.
+exceptions, and Phase 8 — the owner's first pass, six observations from real
+use — was built in a day and a half, closing 2026-08-19. **What remains:
+Phase 7's review document, Phase 8's own done-when (the owner repeating their
+pass), three human passes no suite can answer, and the §10 list**, including
+two §3/§5.1 promises found unbuilt when the journeys were re-audited on
+2026-08-17.
 
 - **Read** to know what you are building and what finishing it means.
 - **Write** when a phase closes — with what it actually did, including where the

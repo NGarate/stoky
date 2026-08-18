@@ -14,23 +14,22 @@ say what measured it.
 
 Measured on 2026-08-17/18 against a live PostgreSQL and Valkey — at
 `443718d` after Phase 6, the CI campaign and the browser suite's move to the
-production artefact, and re-measured at `941d1ed` for the suites and routes
-Phase 8's first five units changed.
+production artefact, and re-measured at `70386ea`, Phase 8's closing commit.
 
 | Gate | Command | Result |
 |---|---|---|
 | Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — ~270 files, 101 rules |
 | Typecheck | `pnpm typecheck` | ✅ clean |
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `pnpm check:links` | ✅ 93 links against 31 routes, none broken |
+| Internal links | `pnpm check:links` | ✅ 108 links against 33 routes, none broken |
 | Contrast | `pnpm check:contrast` | ✅ 60 checks over 27 tokens × 2 themes, all AAA |
-| Unit tests | `pnpm test:unit` | ✅ 483 pass / 45 files |
-| Component tests | `pnpm test:components` | ✅ 372 pass / 35 files |
-| Integration tests | `pnpm test:integration` | ✅ 401 pass / 25 files |
-| Build | `pnpm build` | ✅ 32 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
+| Unit tests | `pnpm test:unit` | ✅ 486 pass / 46 files |
+| Component tests | `pnpm test:components` | ✅ 385 pass / 39 files |
+| Integration tests | `pnpm test:integration` | ✅ 402 pass / 25 files |
+| Build | `pnpm build` | ✅ 34 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **123 pass / 0 fail, 3.2 min** — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **132 pass / 0 fail, 3.5 min** — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
 
 **Use `pnpm`, not `corepack pnpm`.** On this machine corepack resolves 11.20.0
@@ -721,7 +720,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
 | 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
-| 8 — The owner's first pass | In progress — five of six closed (`d7c178d`, `8114501`, `cf18b52`, `4bbb82d`, `941d1ed`); the products-list menu remains |
+| 8 — The owner's first pass | ✅ All six closed; the done-when — the owner repeats their pass — is the owner's to run |
 
 **What remains, in one place.** The review document (Phase 7's actual
 deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
@@ -729,9 +728,10 @@ passes no suite can answer (the manual screen-reader pass, a week on a real
 tablet, iOS Safari on a real device); T7, the offline scan resolution; two
 §3/§5.1 promises the 2026-08-17 journey re-audit found were never built — the
 ± stepper is a component nothing mounts, and nothing remembers the screen
-choice per `(userId, deviceId)`; and **Phase 8, the owner's first pass** — six
-observations from real use, planned 2026-08-18; UI-10 is closed and five
-items remain, detailed in `REDESIGN_PLAN.md` §9 with the ledger in §10. All of it is in
+choice per `(userId, deviceId)`; and **Phase 8's human half** — all six of the
+owner's observations are built and green (`70386ea` closes the last); what
+remains of the phase is its done-when, which no suite can run: the owner
+repeating the pass that produced them. All of it is in
 `REDESIGN_PLAN.md` §10, which is the list an item may only leave by being done
 or deliberately dropped.
 

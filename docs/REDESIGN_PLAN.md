@@ -432,7 +432,7 @@ Each phase leaves the app usable and verifiable.
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Rating | ✅ Complete against its done-when: no-data and non-food both behave well, both tested |
 | 7 — Security review | The backlog it owned is closed; the review document itself is not written |
-| 8 — The owner's first pass | Planned 2026-08-18, not started |
+| 8 — The owner's first pass | ✅ All six items closed 2026-08-18/19; the *done-when* — the owner repeats the pass — is the owner's to run |
 
 Gate results for each claim above are in `docs/STATUS.md`; the unit-by-unit
 record, with commits, is in `docs/PROGRESS.md`.
@@ -783,6 +783,15 @@ interface using it.* Five of the six need no new procedure at all.
 none of them reproduces — the Panel's cards and the forms on a phone, the
 kitchen items on the tablet.
 
+**All six items closed, 2026-08-18/19** — `d7c178d`, `8114501`, `cf18b52`,
+`4bbb82d`, `941d1ed`, `70386ea`, each with its docs commit beside it. What a
+suite can answer, answers green: 486 unit / 385 component / 402 integration /
+132 browser tests at the closing commit. **The done-when above is not a
+suite's to grant**: it is the owner sitting down with the phone and the
+tablet and failing to reproduce their own six observations. Until that pass
+happens, this phase is closed the way Phase 5 was — against everything
+measurable, with the human check named rather than implied.
+
 **1. Product editing.** `product.update` has been implemented, Zod-validated,
 household-scoped and role-guarded since before this plan, and its only callers
 are two integration tests. No screen mounts it: `/products/[id]`'s Acciones
@@ -968,7 +977,7 @@ unowned below, for the same reason as the iOS pass.
 
 Six observations from the owner using the product — this plan's first contact
 with its actual user. Each was verified against the code before being planned;
-the detail lives in the phase itself (§9), the judgement calls in D87–D90.
+the detail lives in the phase itself (§9), the judgement calls in D87–D99.
 
 | Item | Why it is here |
 |---|---|
@@ -976,8 +985,8 @@ the detail lives in the phase itself (§9), the judgement calls in D87–D90.
 | ~~The Panel's three cards become doors~~ | **Done** (`cf18b52`). `product.count` counts instead of paging; `needsRestock` is one question the card and `/inventory?filter=restock` both ask, so they cannot disagree (D94); the filter is loud and reversible. The expiry card opens `/inventory`, whose alert block shows the same two queries |
 | ~~The stock form in two layers~~ | **Done** (`4bbb82d`). Essentials visible, the rest behind an uncontrolled `<details>` (D95); location defaults to the product's usual one (`usualLocationId`, D96); price is refused without a store and refused at zero; the receipt upload asks the store. Closes PRICE-1 |
 | ~~The kitchen screen acts~~ | **Done** (`941d1ed`). `shopping.create`/`addItem` on the kitchen tier, held there by both capability suites; one-tap Apuntar per running-out row, queued offline with undo-by-cancel; the first tap creates the list, online-only and honest about it (D97). Journeys 2 and 7 rewritten to the landed shape |
-| The products list grows real actions | "Ver" retires (the name already links everywhere); the column becomes a menu: edit, adjust stock, stock history with a chart (`getStockHistory` has zero client usage), price history, admin-only confirmed delete. Decides PROD-1's open question (D90) |
 | ~~The auth panels leave `bg-primary`~~ | **Done** (`d7c178d`), the phase's first unit. One token, `--hero` — cream in light, deep warm in dark — the ordinary ink on top, the aside card solid. The gate grew three pairs (60 checks) and was watched to fire; 117 browser tests green |
+| ~~The products list grows real actions~~ | **Done** (`70386ea`), the phase's last unit. "Ver" retired; the column holds edit/adjust/history/prices, each named with its row's product; `/products/[id]/history` charts exact backwards-derived totals and `/adjust` computes the signed delta; delete is admin-only, two-step, on the product's own page (D98), with `auth.me`'s first caller carrying the role (D99). The list page stops being the last hardcoded-Spanish one |
 
 ### Unowned, and honest about it
 

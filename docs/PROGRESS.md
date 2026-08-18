@@ -33,7 +33,7 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
-| 8 — The owner's first pass | In progress — five of six closed (`d7c178d`, `8114501`, `cf18b52`, `4bbb82d`, `941d1ed`); the products-list menu remains |
+| 8 — The owner's first pass | ✅ All six closed (`d7c178d`, `8114501`, `cf18b52`, `4bbb82d`, `941d1ed`, `70386ea`); the done-when — the owner's re-pass — is the owner's to run |
 
 ---
 
@@ -48,6 +48,7 @@ Rules for this log:
 | The Panel's cards become doors — `product.count`, `needsRestock`, the loud filter | `cf18b52` |
 | The stock form in two layers — store and price recordable at last, PRICE-1 closed | `4bbb82d` |
 | The kitchen writes down what is needed — D88 enforced, Apuntar per row | `941d1ed` |
+| The catalogue's real actions — two new screens, admin-only two-step delete | `70386ea` |
 
 ### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
 
@@ -1215,3 +1216,19 @@ the first ever "Apuntar" with no list. The tap tries, and when there is no
 connection a live region says the list cannot be created right now, instead
 of the tap vanishing. §5.5.3's rule applied in the small: offering a control
 that cannot work is worse than saying why it will not.
+
+**D98 — Delete lives on the product's page, not in the list's actions
+column.** The owner's list named it among the row actions; it moved one tap
+away because a destructive, unrecoverable action beside twenty visually
+identical rows invites the wrong row, and the product's own page names its
+target unambiguously. Every other requested action is in the column. One tap
+of distance against an irreversible mistake is the trade; the owner can
+overrule it by asking again.
+
+**D99 — The client learns its role from `auth.me`, not from new plumbing.**
+The alternatives were threading `role` through the layout's ComposerProvider
+(whose job is offline composition identity, not authorisation courtesy) or a
+SessionProvider the app has deliberately never had. `auth.me` existed,
+documented as waiting for its first caller, reads the database rather than
+the token, and TanStack caches it — one query, no new conduit. Hiding the
+delete section is still only courtesy; `adminProcedure` is the control.
