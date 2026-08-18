@@ -397,7 +397,14 @@
       "successBody": "You added {quantity} {unit} of “{name}”.",
       "successNextTitle": "What next?",
       "successAddMore": "Add more stock",
-      "successViewInventory": "See the inventory"
+      "successViewInventory": "See the inventory",
+      "storeLabel": "Store (optional)",
+      "storeHint": "Where you bought it. With a store and a price, it lands in the price history.",
+      "priceLabel": "Price (optional)",
+      "priceHint": "What you paid in total for this quantity.",
+      "errorPriceInvalid": "The price has to be more than zero, or be left blank.",
+      "errorPriceNeedsStore": "To record the price, choose the store as well.",
+      "advancedSummary": "More details: unit, location and note"
     },
     "consume": {
       "title": "Consume stock",
@@ -435,7 +442,8 @@
       "successNextTitle": "What next?",
       "successConsumeMore": "Record another use",
       "successViewInventory": "See the inventory",
-      "productSelectHint": "Choose the product that has been used up."
+      "productSelectHint": "Choose the product that has been used up.",
+      "advancedSummary": "More details: unit, location and note"
     }
   },
   "receipts": {
@@ -550,7 +558,9 @@
       "nextPrices": "View the price history",
       "nextReview": "See this receipt line by line",
       "nextUpload": "Upload another receipt"
-    }
+    },
+    "uploadStoreLabel": "Receipt's store",
+    "uploadStoreHint": "Without a store, the receipt's prices are not recorded."
   },
   "shopping": {
     "title": "Shopping lists",

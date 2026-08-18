@@ -223,7 +223,10 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       addStockSchema
         .extend({
-          price: z.number().optional(),
+          // A zero or negative price used to pass validation and silently
+          // write no record (PRICE-1); refused at the edge instead, where the
+          // person can fix it.
+          price: z.number().positive().optional(),
           storeId: z.string().optional(),
         })
         .merge(replayable)

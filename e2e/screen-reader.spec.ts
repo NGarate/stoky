@@ -519,6 +519,18 @@ test.describe("Screen-reader journeys", () => {
       await page.selectOption("select[name=productId]", productId);
       await page.fill("input[name=quantity]", "2");
 
+      // The location picker lives behind the disclosure since Phase 8 item 3;
+      // a reader reaches it the same way — through the summary. Open-if-closed
+      // with a retry, because a click landing before hydration can be undone
+      // when React recreates the subtree.
+      await expect(async () => {
+        if (!(await page.locator('[role="combobox"]').isVisible())) {
+          await page.click("details > summary");
+        }
+        await expect(page.locator('[role="combobox"]')).toBeVisible({
+          timeout: 1_000,
+        });
+      }).toPass({ timeout: 15_000 });
       await page.click('[role="combobox"][aria-haspopup="listbox"]');
       await page.waitForSelector('[role="listbox"]');
       const open = await snapshot(page);

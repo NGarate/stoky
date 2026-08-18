@@ -53,6 +53,9 @@ export default function ConsumeStockPage(): JSX.Element {
   const [unitTouched, setUnitTouched] = useState(false);
   const [locationId, setLocationId] = useState<string | undefined>(undefined);
   const [note, setNote] = useState("");
+  // The folded half — same contract and same hydration reasoning as
+  // /inventory/add: uncontrolled, opened imperatively on a unit error.
+  const advancedRef = useRef<HTMLDetailsElement | null>(null);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -197,6 +200,7 @@ export default function ConsumeStockPage(): JSX.Element {
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0 || !product) {
+      if (errors.unit) advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
       return;
     }
@@ -355,79 +359,90 @@ export default function ConsumeStockPage(): JSX.Element {
           ) : null}
         </div>
 
-        <div>
-          <label
-            htmlFor={unitId}
-            className="mb-1 block text-sm font-medium text-foreground"
-          >
-            {t("unitLabel")}
-          </label>
-          <input
-            id={unitId}
-            name="unit"
-            type="text"
-            required
-            value={unit}
-            onChange={(event) => {
-              setUnitTouched(true);
-              setUnit(event.target.value);
-            }}
-            aria-invalid={fieldErrors.unit ? true : undefined}
-            aria-describedby={
-              fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
-            }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
-          />
-          <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
-            {t("unitHint")}
-          </p>
-          {fieldErrors.unit ? (
-            <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
-              {fieldErrors.unit}
-            </p>
-          ) : null}
-        </div>
-
-        {/* LocationPicker renders a combobox, not a form control, so it cannot
-            be the target of a <label for>. The group and the combobox are both
-            named by the same span instead. */}
-        <div role="group" aria-labelledby={locationLabelId}>
-          <span
-            id={locationLabelId}
-            className="mb-1 block text-sm font-medium text-foreground"
-          >
-            {t("locationLabel")}
-          </span>
-          <LocationPicker
-            value={locationId}
-            onChange={setLocationId}
-            placeholder={t("locationPlaceholder")}
-            labelledBy={locationLabelId}
-          />
-          <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
-        </div>
-
-        <div>
-          <label
-            htmlFor={noteId}
-            className="mb-1 block text-sm font-medium text-foreground"
-          >
-            {t("noteLabel")}
-          </label>
-          <textarea
-            id={noteId}
-            name="note"
-            rows={3}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder={t("notePlaceholder")}
-            aria-describedby={noteHintId}
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
-          />
-          <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
-            {t("noteHint")}
-          </p>
-        </div>
+        {/* The folded half (Phase 8 item 3): consuming is picking the product
+            and saying how much — the unit is prefilled and the rest is rare.
+            Same controlled-<details> shape as /inventory/add. */}
+        <details
+          className="rounded border border-border bg-muted"
+          ref={advancedRef}
+        >
+          <summary className="flex min-h-[48px] cursor-pointer items-center px-4 font-medium text-foreground">
+            {t("advancedSummary")}
+          </summary>
+          <div className="space-y-6 px-4 pb-4">
+            <div>
+              <label
+                htmlFor={unitId}
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                {t("unitLabel")}
+              </label>
+              <input
+                id={unitId}
+                name="unit"
+                type="text"
+                required
+                value={unit}
+                onChange={(event) => {
+                  setUnitTouched(true);
+                  setUnit(event.target.value);
+                }}
+                aria-invalid={fieldErrors.unit ? true : undefined}
+                aria-describedby={
+                  fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
+                }
+                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+              />
+              <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
+                {t("unitHint")}
+              </p>
+              {fieldErrors.unit ? (
+                <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
+                  {fieldErrors.unit}
+                </p>
+              ) : null}
+            </div>
+            {/* LocationPicker renders a combobox, not a form control, so it cannot
+                be the target of a <label for>. The group and the combobox are both
+                named by the same span instead. */}
+            <div role="group" aria-labelledby={locationLabelId}>
+              <span
+                id={locationLabelId}
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                {t("locationLabel")}
+              </span>
+              <LocationPicker
+                value={locationId}
+                onChange={setLocationId}
+                placeholder={t("locationPlaceholder")}
+                labelledBy={locationLabelId}
+              />
+              <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
+            </div>
+            <div>
+              <label
+                htmlFor={noteId}
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                {t("noteLabel")}
+              </label>
+              <textarea
+                id={noteId}
+                name="note"
+                rows={3}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={t("notePlaceholder")}
+                aria-describedby={noteHintId}
+                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+              />
+              <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
+                {t("noteHint")}
+              </p>
+            </div>
+          </div>
+        </details>
 
         <div className="flex flex-wrap items-center gap-3">
           <button

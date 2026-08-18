@@ -397,7 +397,14 @@
       "successBody": "Has añadido {quantity} {unit} de «{name}».",
       "successNextTitle": "¿Qué quieres hacer ahora?",
       "successAddMore": "Añadir más stock",
-      "successViewInventory": "Ver el inventario"
+      "successViewInventory": "Ver el inventario",
+      "storeLabel": "Tienda (opcional)",
+      "storeHint": "Dónde lo has comprado. Con tienda y precio, se apunta en el histórico de precios.",
+      "priceLabel": "Precio (opcional)",
+      "priceHint": "Lo que has pagado en total por esta cantidad.",
+      "errorPriceInvalid": "El precio tiene que ser mayor que cero, o quedarse en blanco.",
+      "errorPriceNeedsStore": "Para guardar el precio, elige también la tienda.",
+      "advancedSummary": "Más detalles: unidad, ubicación y nota"
     },
     "consume": {
       "title": "Consumir stock",
@@ -435,7 +442,8 @@
       "successNextTitle": "¿Qué quieres hacer ahora?",
       "successConsumeMore": "Apuntar otro consumo",
       "successViewInventory": "Ver el inventario",
-      "productSelectHint": "Elige el producto que se ha gastado."
+      "productSelectHint": "Elige el producto que se ha gastado.",
+      "advancedSummary": "Más detalles: unidad, ubicación y nota"
     }
   },
   "receipts": {
@@ -550,7 +558,9 @@
       "nextPrices": "Ver el historial de precios",
       "nextReview": "Ver el detalle línea a línea de este ticket",
       "nextUpload": "Subir otro ticket"
-    }
+    },
+    "uploadStoreLabel": "Tienda del ticket",
+    "uploadStoreHint": "Sin tienda no se guardan los precios del ticket."
   },
   "shopping": {
     "title": "Listas de compra",

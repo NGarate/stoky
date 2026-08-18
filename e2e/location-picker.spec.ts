@@ -39,6 +39,25 @@ async function gotoAddStock(page: Page): Promise<void> {
   // and it could not be lengthened for a loaded server without lengthening it
   // for an idle one.
   await settle(page);
+  await openAdvanced(page);
+}
+
+/**
+ * Since Phase 8 item 3 the picker lives in the folded half of the form —
+ * opened the way a person opens it, through the summary. Retried, because a
+ * click that lands before hydration can be undone when React recreates the
+ * subtree: open-if-closed is idempotent where a bare click is a coin toss.
+ * Needed again after any reload, which folds the form shut.
+ */
+async function openAdvanced(page: Page): Promise<void> {
+  await expect(async () => {
+    if (!(await page.locator('[role="combobox"]').isVisible())) {
+      await page.click("details > summary");
+    }
+    await expect(page.locator('[role="combobox"]')).toBeVisible({
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 15_000 });
 }
 
 /**
@@ -101,6 +120,8 @@ test.describe("LocationPicker on /inventory/add", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
     await settle(page);
+    // The reload folded the form shut again.
+    await openAdvanced(page);
 
     const trigger = page.locator('[role="combobox"]');
     await trigger.scrollIntoViewIfNeeded();

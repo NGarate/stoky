@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { UploadZone } from "@/components/receipt/UploadZone";
+import { StoreSelector } from "@/components/store/StoreSelector";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,10 @@ export default function UploadPage() {
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(null);
+  // "No store means no prices": applyReceipt writes a PriceRecord per line
+  // only when the receipt has a store, and until Phase 8 no screen ever sent
+  // one — the second half of ISSUES.md PRICE-1.
+  const [storeId, setStoreId] = useState("");
 
   const uploadMutation = api.receipt.upload.useMutation();
   const statusQuery = api.receipt.getStatus.useQuery(
@@ -48,6 +53,7 @@ export default function UploadPage() {
         const result = await uploadMutation.mutateAsync({
           fileBase64: base64,
           mimeType: file.type,
+          ...(storeId !== "" ? { storeId } : {}),
         });
         setUploadedReceiptId(result.id);
       };
@@ -72,6 +78,24 @@ export default function UploadPage() {
 
       {!uploadedReceiptId ? (
         <div className="space-y-6">
+          <div>
+            <label
+              htmlFor="receipt-store"
+              className="mb-1 block text-sm font-medium text-foreground"
+            >
+              {t("uploadStoreLabel")}
+            </label>
+            <StoreSelector
+              id="receipt-store"
+              value={storeId}
+              onChange={setStoreId}
+              className="min-h-[48px] w-full"
+            />
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("uploadStoreHint")}
+            </p>
+          </div>
+
           <UploadZone onUpload={handleUpload} isUploading={isUploading} />
 
           {isUploading && (

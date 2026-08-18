@@ -6,12 +6,14 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
+import { StoreSelector } from "@/components/store/StoreSelector";
 import { api } from "@/lib/trpc/client";
+import { usualLocationId } from "@/lib/inventory/usualLocation";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
 
-type FieldName = "product" | "quantity" | "unit" | "expiration";
+type FieldName = "product" | "quantity" | "unit" | "expiration" | "price" | "store";
 
 type FieldErrors = Partial<Record<FieldName, string>>;
 
@@ -46,8 +48,19 @@ export default function AddStockPage(): JSX.Element {
   // different product must not overwrite what they typed.
   const [unitTouched, setUnitTouched] = useState(false);
   const [expiration, setExpiration] = useState("");
+  const [storeId, setStoreId] = useState("");
+  const [price, setPrice] = useState("");
   const [locationId, setLocationId] = useState<string | undefined>(undefined);
+  // Same contract as `unitTouched`: once the person chooses a location, the
+  // usual-location default must not overwrite it.
+  const [locationTouched, setLocationTouched] = useState(false);
   const [note, setNote] = useState("");
+  // The folded half of the form. Uncontrolled — a controlled <details> races
+  // hydration: a native click before React attaches flips it open, and the
+  // first render after hydration snaps it shut again. The one programmatic
+  // need (a refusal about a folded field must not point at a closed drawer)
+  // is imperative, through the ref.
+  const advancedRef = useRef<HTMLDetailsElement | null>(null);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -67,6 +80,12 @@ export default function AddStockPage(): JSX.Element {
   const locationLabelId = useId();
   const noteId = useId();
   const noteHintId = useId();
+  const storeFieldId = useId();
+  const storeHintId = useId();
+  const storeErrorId = useId();
+  const priceId = useId();
+  const priceHintId = useId();
+  const priceErrorId = useId();
 
   const summaryRef = useRef<HTMLDivElement | null>(null);
   const successRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +130,8 @@ export default function AddStockPage(): JSX.Element {
     fieldErrors.quantity,
     fieldErrors.unit,
     fieldErrors.expiration,
+    fieldErrors.price,
+    fieldErrors.store,
     serverError,
   ].filter((message): message is string => Boolean(message));
 
@@ -125,6 +146,22 @@ export default function AddStockPage(): JSX.Element {
   useEffect(() => {
     if (saved) successRef.current?.focus();
   }, [saved]);
+
+  /**
+   * Where this product usually goes, read from its own ledger — the entries
+   * `product.getById` already returns, so the default costs no new procedure.
+   * Applied only until the person picks a location themselves.
+   */
+  const detail = api.product.getById.useQuery(
+    { id: product?.id ?? "" },
+    { enabled: product !== null },
+  );
+
+  useEffect(() => {
+    if (!locationTouched && product && detail.data && detail.data.id === product.id) {
+      setLocationId(usualLocationId(detail.data.stockEntries));
+    }
+  }, [detail.data, product, locationTouched]);
 
   function handleProductChange(selected: PickedProduct | null): void {
     setProduct(selected);
@@ -165,10 +202,29 @@ export default function AddStockPage(): JSX.Element {
       }
     }
 
+    let parsedPrice: number | undefined;
+    if (price.trim() !== "") {
+      const parsed = Number(price);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        errors.price = t("errorPriceInvalid");
+      } else {
+        parsedPrice = parsed;
+      }
+    }
+
+    // A price with no store cannot be recorded — `PriceRecord.storeId` is
+    // required — and the server would accept the call and quietly write
+    // nothing, which is worse than refusing here with the fix named.
+    if (parsedPrice !== undefined && storeId === "") {
+      errors.store = t("errorPriceNeedsStore");
+    }
+
     setServerError(null);
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0 || !product) {
+      // An error about a folded field must not point at a closed drawer.
+      if (errors.unit) advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
       return;
     }
@@ -181,6 +237,8 @@ export default function AddStockPage(): JSX.Element {
       ...(expirationDate ? { expirationDate } : {}),
       ...(locationId ? { locationId } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
+      ...(parsedPrice !== undefined ? { price: parsedPrice } : {}),
+      ...(storeId !== "" ? { storeId } : {}),
     });
   }
 
@@ -309,39 +367,6 @@ export default function AddStockPage(): JSX.Element {
 
         <div>
           <label
-            htmlFor={unitId}
-            className="mb-1 block text-sm font-medium text-foreground"
-          >
-            {t("unitLabel")}
-          </label>
-          <input
-            id={unitId}
-            name="unit"
-            type="text"
-            required
-            value={unit}
-            onChange={(event) => {
-              setUnitTouched(true);
-              setUnit(event.target.value);
-            }}
-            aria-invalid={fieldErrors.unit ? true : undefined}
-            aria-describedby={
-              fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
-            }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
-          />
-          <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
-            {t("unitHint")}
-          </p>
-          {fieldErrors.unit ? (
-            <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
-              {fieldErrors.unit}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label
             htmlFor={expirationId}
             className="mb-1 block text-sm font-medium text-foreground"
           >
@@ -374,46 +399,171 @@ export default function AddStockPage(): JSX.Element {
           ) : null}
         </div>
 
-        {/* LocationPicker renders a combobox, not a form control, so it cannot
-            be the target of a <label for>. The group and the combobox are both
-            named by the same span instead. */}
-        <div role="group" aria-labelledby={locationLabelId}>
-          <span
-            id={locationLabelId}
+        <div>
+          <label
+            htmlFor={storeFieldId}
             className="mb-1 block text-sm font-medium text-foreground"
           >
-            {t("locationLabel")}
-          </span>
-          <LocationPicker
-            value={locationId}
-            onChange={setLocationId}
-            placeholder={t("locationPlaceholder")}
-            labelledBy={locationLabelId}
+            {t("storeLabel")}
+          </label>
+          <StoreSelector
+            id={storeFieldId}
+            value={storeId}
+            onChange={(selected) => {
+              setStoreId(selected);
+              setFieldErrors((errors) => ({ ...errors, store: undefined }));
+            }}
+            ariaDescribedBy={
+              fieldErrors.store ? `${storeHintId} ${storeErrorId}` : storeHintId
+            }
+            ariaInvalid={fieldErrors.store ? true : undefined}
+            className="min-h-[48px] w-full"
           />
-          <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
+          <p id={storeHintId} className="mt-1 text-sm text-muted-foreground">
+            {t("storeHint")}
+          </p>
+          {fieldErrors.store ? (
+            <p
+              id={storeErrorId}
+              className="mt-1 text-sm font-medium text-danger-foreground"
+            >
+              {fieldErrors.store}
+            </p>
+          ) : null}
         </div>
 
         <div>
           <label
-            htmlFor={noteId}
+            htmlFor={priceId}
             className="mb-1 block text-sm font-medium text-foreground"
           >
-            {t("noteLabel")}
+            {t("priceLabel")}
           </label>
-          <textarea
-            id={noteId}
-            name="note"
-            rows={3}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder={t("notePlaceholder")}
-            aria-describedby={noteHintId}
+          <input
+            id={priceId}
+            name="price"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            min="0"
+            value={price}
+            onChange={(event) => {
+              setPrice(event.target.value);
+              setFieldErrors((errors) => ({
+                ...errors,
+                price: undefined,
+                store: undefined,
+              }));
+            }}
+            aria-invalid={fieldErrors.price ? true : undefined}
+            aria-describedby={
+              fieldErrors.price ? `${priceHintId} ${priceErrorId}` : priceHintId
+            }
             className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
-          <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
-            {t("noteHint")}
+          <p id={priceHintId} className="mt-1 text-sm text-muted-foreground">
+            {t("priceHint")}
           </p>
+          {fieldErrors.price ? (
+            <p
+              id={priceErrorId}
+              className="mt-1 text-sm font-medium text-danger-foreground"
+            >
+              {fieldErrors.price}
+            </p>
+          ) : null}
         </div>
+
+        {/* The folded half (Phase 8 item 3): most saves are quantity, expiry
+            and where it was bought — the unit is prefilled from the product,
+            the location defaults to the product's usual one, and the note is
+            rare. Native <details>, the pattern ProductRating set; controlled,
+            so a refusal about the unit can open it rather than point at a
+            closed drawer. */}
+        <details
+          className="rounded border border-border bg-muted"
+          ref={advancedRef}
+        >
+          <summary className="flex min-h-[48px] cursor-pointer items-center px-4 font-medium text-foreground">
+            {t("advancedSummary")}
+          </summary>
+          <div className="space-y-6 px-4 pb-4">
+            <div>
+              <label
+                htmlFor={unitId}
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                {t("unitLabel")}
+              </label>
+              <input
+                id={unitId}
+                name="unit"
+                type="text"
+                required
+                value={unit}
+                onChange={(event) => {
+                  setUnitTouched(true);
+                  setUnit(event.target.value);
+                }}
+                aria-invalid={fieldErrors.unit ? true : undefined}
+                aria-describedby={
+                  fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
+                }
+                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+              />
+              <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
+                {t("unitHint")}
+              </p>
+              {fieldErrors.unit ? (
+                <p id={unitErrorId} className="mt-1 text-sm font-medium text-danger-foreground">
+                  {fieldErrors.unit}
+                </p>
+              ) : null}
+            </div>
+            {/* LocationPicker renders a combobox, not a form control, so it cannot
+                be the target of a <label for>. The group and the combobox are both
+                named by the same span instead. */}
+            <div role="group" aria-labelledby={locationLabelId}>
+              <span
+                id={locationLabelId}
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                {t("locationLabel")}
+              </span>
+              <LocationPicker
+                value={locationId}
+                onChange={(selected) => {
+                  setLocationTouched(true);
+                  setLocationId(selected);
+                }}
+                placeholder={t("locationPlaceholder")}
+                labelledBy={locationLabelId}
+              />
+              <p className="mt-1 text-sm text-muted-foreground">{t("locationHint")}</p>
+            </div>
+            <div>
+              <label
+                htmlFor={noteId}
+                className="mb-1 block text-sm font-medium text-foreground"
+              >
+                {t("noteLabel")}
+              </label>
+              <textarea
+                id={noteId}
+                name="note"
+                rows={3}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={t("notePlaceholder")}
+                aria-describedby={noteHintId}
+                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
+              />
+              <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
+                {t("noteHint")}
+              </p>
+            </div>
+          </div>
+        </details>
 
         <div className="flex flex-wrap items-center gap-3">
           <button

@@ -898,6 +898,60 @@ describe("tRPC Router Integration Tests", () => {
       expect(count).toBe(3);
     });
 
+    it("refuses a price of zero instead of silently recording nothing", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "inv6d@example.com",
+        "Inventory User 6d",
+        "Inventory Household 6d"
+      );
+      const product = await createTestProduct(householdId);
+      const store = await createTestStore(householdId, { name: "Tienda 6d" });
+      const { caller, envelope } = await createTestContext(user.id, householdId);
+
+      // PRICE-1's nuance: price 0 used to pass validation and write no
+      // PriceRecord — a save that looks like it worked and quietly did not.
+      await expect(
+        caller.inventory.addStock({
+          ...envelope(),
+          productId: product.id,
+          quantity: 2,
+          unit: "unit",
+          price: 0,
+          storeId: store.id,
+        })
+      ).rejects.toThrow();
+    });
+
+    it("writes the stock entry and its price as one purchase", async () => {
+      const { user, householdId } = await createTestUserWithHousehold(
+        "inv6e@example.com",
+        "Inventory User 6e",
+        "Inventory Household 6e"
+      );
+      const product = await createTestProduct(householdId);
+      const store = await createTestStore(householdId, { name: "Tienda 6e" });
+      const { caller, envelope } = await createTestContext(user.id, householdId);
+
+      const entry = await caller.inventory.addStock({
+        ...envelope(),
+        productId: product.id,
+        quantity: 2,
+        unit: "kg",
+        price: 3.5,
+        storeId: store.id,
+      });
+      testData.stockEntries.push(entry.id);
+
+      const record = await prisma.priceRecord.findFirst({
+        where: { productId: product.id, storeId: store.id },
+      });
+      expect(record).not.toBeNull();
+      expect(record?.price).toBe(3.5);
+      expect(record?.quantity).toBe(2);
+      expect(record?.unit).toBe("kg");
+      if (record) testData.priceRecords.push(record.id);
+    });
+
     it("should transfer stock between locations", async () => {
       const { user, householdId } = await createTestUserWithHousehold(
         "inv7@example.com",
