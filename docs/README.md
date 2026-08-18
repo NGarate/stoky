@@ -18,7 +18,7 @@ that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D96 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D97 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.
@@ -71,7 +71,7 @@ run a gate, the file says so and says why, rather than omitting it.
 
 **[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **96 numbered decisions taken
+commits, and — the part worth reading in full — **97 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -119,7 +119,7 @@ per journey: the trigger, the visible outcome, and the before/after evidence
 required. Seven pass at the tiers a suite can answer; one is partial (T7); two
 turned out never to have been built — the state column was re-audited against
 the code on 2026-08-17, and journeys 2 and 7 were widened by the owner's pass
-on 2026-08-18 (their green measures the pre-Phase-8 shape).
+on 2026-08-18 and rewritten to the landed shape the same day.
 
 *Its closure rule:* a slice is done only when it names which journey it changes
 and what evidence proves the new state.

@@ -88,7 +88,7 @@ bunx playwright test e2e/critical-paths.spec.ts
 
 ## Current validation notes
 
-Last measured 2026-08-18 at `4bbb82d`. See `docs/STATUS.md` for the full
+Last measured 2026-08-18 at `941d1ed`. See `docs/STATUS.md` for the full
 table; if the two disagree, STATUS is the one that gets re-measured.
 
 - `pnpm lint` — 0 warnings, 0 errors across ~270 files
@@ -97,8 +97,8 @@ table; if the two disagree, STATUS is the one that gets re-measured.
 - `pnpm check:links` — 93 links against 31 routes, none broken
 - `pnpm check:contrast` — 60 checks over 27 tokens × 2 themes, all AAA
 - `pnpm test:unit` — 483 pass across 45 files
-- `pnpm test:components` — 368 pass across 35 files
-- `pnpm test:integration` — 400 pass across 25 files
+- `pnpm test:components` — 372 pass across 35 files
+- `pnpm test:integration` — 401 pass across 25 files
 - `pnpm build` — 32 routes
 - `bunx playwright test` — **123 pass, 0 fail in 3.2 minutes** against the
   standalone production build, including the build itself inside the untouched

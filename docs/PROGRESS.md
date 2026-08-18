@@ -33,7 +33,7 @@ Rules for this log:
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
 | 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
-| 8 — The owner's first pass | In progress — UI-10 (`d7c178d`), product editing (`8114501`), the Panel's doors (`cf18b52`) and the stock form (`4bbb82d`) closed; two items remain |
+| 8 — The owner's first pass | In progress — five of six closed (`d7c178d`, `8114501`, `cf18b52`, `4bbb82d`, `941d1ed`); the products-list menu remains |
 
 ---
 
@@ -47,6 +47,7 @@ Rules for this log:
 | Product editing — `/products/[id]/edit`, and `product.update`'s first caller | `8114501` |
 | The Panel's cards become doors — `product.count`, `needsRestock`, the loud filter | `cf18b52` |
 | The stock form in two layers — store and price recordable at last, PRICE-1 closed | `4bbb82d` |
+| The kitchen writes down what is needed — D88 enforced, Apuntar per row | `941d1ed` |
 
 ### The browser suite: its own data, the deployed artefact (2026-08-17/18, unplanned)
 
@@ -1205,3 +1206,12 @@ where something was taken from, not where it lives), the most frequent
 wins, ties to the most recent, no history guesses nothing. If deriving ever
 proves too magical, the column is still available — the function's call site
 is one line.
+
+**D97 — Creating the first list from the tablet is online-only, and says
+so.** `shopping.addItem` is offline-replayable and rides the queue;
+`shopping.create` is not, and making it so would mean a replay envelope, a
+queue path and a conflict story for a case that happens once per household —
+the first ever "Apuntar" with no list. The tap tries, and when there is no
+connection a live region says the list cannot be created right now, instead
+of the tap vanishing. §5.5.3's rule applied in the small: offering a control
+that cannot work is worse than saying why it will not.

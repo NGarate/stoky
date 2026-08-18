@@ -165,10 +165,10 @@ a kitchen account still cannot tick off, rename, delete or generate a list,
 change stock upward, or see account data. The trade, taken knowingly: a tablet
 that walks out of the house can now also scribble on the shopping list. What
 it writes is visible to everyone and reversible by anyone with a phone —
-unlike reading emails or deleting history, which stay where they were. This
-row exists in the enforced matrix only when Phase 8 lands; until then the
-capability tests hold the old shape, and Journey 2 says which side each
-procedure is on.
+unlike reading emails or deleting history, which stay where they were. The
+row landed in the enforced matrix with `941d1ed`; the capability tests hold
+the widening to exactly these two, and Journey 2 asserts the rows a kitchen
+account may now leave behind.
 
 **What this actually costs — the current state is thinner than it looks:**
 
@@ -975,7 +975,7 @@ the detail lives in the phase itself (§9), the judgement calls in D87–D90.
 | ~~Product editing~~ | **Done** (`8114501`). `/products/[id]/edit`, its own inline form rather than an extraction (D92); blanks clear via `null` (D93, schema change); the duplicate-barcode check exempts the product's own code. En route it caught dynamic-routes auditing `/products/scan` under the name "product detail" |
 | ~~The Panel's three cards become doors~~ | **Done** (`cf18b52`). `product.count` counts instead of paging; `needsRestock` is one question the card and `/inventory?filter=restock` both ask, so they cannot disagree (D94); the filter is loud and reversible. The expiry card opens `/inventory`, whose alert block shows the same two queries |
 | ~~The stock form in two layers~~ | **Done** (`4bbb82d`). Essentials visible, the rest behind an uncontrolled `<details>` (D95); location defaults to the product's usual one (`usualLocationId`, D96); price is refused without a store and refused at zero; the receipt upload asks the store. Closes PRICE-1 |
-| The kitchen screen acts | Add-to-list and start-a-list from the tablet; `shopping.create`/`addItem` move to the KITCHEN-callable tier. Supersedes §4's "Nothing else" — amendment in §4, trade in §5.2 (D88), journey changes in `SMOKE_JOURNEYS.md` 2 and 7 |
+| ~~The kitchen screen acts~~ | **Done** (`941d1ed`). `shopping.create`/`addItem` on the kitchen tier, held there by both capability suites; one-tap Apuntar per running-out row, queued offline with undo-by-cancel; the first tap creates the list, online-only and honest about it (D97). Journeys 2 and 7 rewritten to the landed shape |
 | The products list grows real actions | "Ver" retires (the name already links everywhere); the column becomes a menu: edit, adjust stock, stock history with a chart (`getStockHistory` has zero client usage), price history, admin-only confirmed delete. Decides PROD-1's open question (D90) |
 | ~~The auth panels leave `bg-primary`~~ | **Done** (`d7c178d`), the phase's first unit. One token, `--hero` — cream in light, deep warm in dark — the ordinary ink on top, the aside card solid. The gate grew three pairs (60 checks) and was watched to fire; 117 browser tests green |
 

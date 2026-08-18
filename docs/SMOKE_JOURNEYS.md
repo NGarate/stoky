@@ -19,12 +19,12 @@ plan rather than silently absorbed.
 | # | Journey | Passable from | State |
 |---|---|---|---|
 | 1 | Stock changes through the interface | Phase 1 | ✅ passes |
-| 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes — widened 2026-08-18: Phase 8 moves two list writes to the allowed side (see the amendment) |
+| 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes, including the 2026-08-18 widening (D88, `941d1ed`): the two list writes changed sides and the suite asserts the rows they leave behind |
 | 3 | The phone screen answers "what do I need to buy" | Phase 4–5 | ✅ passes |
 | 4 | Stock changes without a form | Phase 4–5 | ❌ not built — the stepper exists as a component nothing mounts (§10) |
 | 5 | Scanning never dead-ends | Phase 4–6 | partial — the connected cases pass; the offline barcode is T7 |
 | 6 | A whole shop with no signal | Phase 4 | ✅ passes, except the T7 bullet |
-| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer; the week on a real tablet is unowned. Widened 2026-08-18: add-to-list is Phase 8's, not built |
+| 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer, including the 2026-08-18 widening (add-to-list, `941d1ed`); the week on a real tablet is unowned |
 | 8 | The screen choice is remembered per person and per device | Phase 5 | ❌ not built — nothing stores it, nothing routes by role (§10) |
 | 9 | Both languages, everywhere | Phase 1 onwards, then every phase | ✅ against everything measured |
 | 10 | The rating answers "is this a good buy" — honestly | Phase 6 | ✅ passes |
@@ -141,15 +141,14 @@ with the routers — `capabilities.test.ts` asserts all 60 as declared today.
 A hidden button is not a control. This journey exists specifically to prove the
 restriction holds when the interface is bypassed.
 
-**Amended 2026-08-18 (owner's pass, Phase 8, D88).** `shopping.create` and
-`shopping.addItem` move to the tier a kitchen account may call — those two and
-no others. When Phase 8 lands, this journey's lists change sides for exactly
-that pair: the refused set keeps `addStock`, `shopping.updateItem`,
-`shopping.removeItem`, `shopping.generateFromLowStock`, `product.create`,
-`product.scanBarcode` and the rest of the write tier, and the after-check
-gains its mirror — a `ShoppingList` or `ShoppingItem` row *was* left behind,
-by the kitchen account, correctly. Until that lands, the journey as written
-below is what the code does and the suites hold it.
+**Amended 2026-08-18 (owner's pass, Phase 8, D88) — and landed the same day
+(`941d1ed`).** `shopping.create` and `shopping.addItem` moved to the tier a
+kitchen account may call — those two and no others. The refused set keeps
+`addStock`, `shopping.updateItem`, `shopping.generateFromLowStock`,
+`product.create`, `product.scanBarcode` and the rest of the write tier, and
+the suite carries the mirror check: the `ShoppingList` and `ShoppingItem`
+rows a kitchen account may now leave behind are asserted *present*, because
+"it was not refused" and "it worked" are different claims.
 
 Trigger:
 Call a write procedure directly, as a kitchen-role account, without going through
@@ -157,7 +156,9 @@ any screen.
 
 Visible outcome:
 
-- `inventory.consumeStock` succeeds — this is the one write a kitchen account has
+- `inventory.consumeStock`, `shopping.create` and `shopping.addItem` succeed —
+  the three writes a kitchen account has: look, use one up, write down what is
+  needed (§5.2 as amended)
 - `inventory.addStock`, `shopping.updateItem`, `shopping.generateFromLowStock`,
   `product.create` and `product.scanBarcode` are each refused with an
   authorisation error, not an internal error
@@ -168,9 +169,9 @@ Proof required:
 - before: a household with one admin, one user and one kitchen account
 - action: build a caller with the kitchen session (`appRouter.createCaller`, as
   the integration suite already does) and invoke each procedure above
-- after: exactly one call succeeded; every other call raised an authorisation
-  error and left no row behind — check that no `StockEntry` and no
-  `ShoppingItem` change resulted
+- after: the three permitted calls succeeded and their rows exist — the
+  consumption entry, the list, the item; every other call raised an
+  authorisation error and left no row behind
 
 Note: this journey has to be repeated per procedure rather than sampled. The
 capability matrix in §5.2 is the checklist, and Phase 7 §1 verifies it against
@@ -317,17 +318,15 @@ suite answers is the phase's own done-when** — a week on a real tablet,
 untouched except for using things up — and that is listed as unowned in §10
 rather than implied by the green.
 
-**Amended 2026-08-18 (owner's pass, Phase 8, D88).** The bullet below — "the
-only control anywhere on the screen is Use one" — was the design, and the
-owner's first real use overruled it: standing at this screen is exactly when a
-household notices something needs buying. Phase 8 adds a one-tap *add to the
-list* on the running-out rows and a way to start a list when none exists
-(§4's amendment carries the reasoning). The `KitchenPage` test that asserts
-"nothing but that one button per card" — and this journey's own proof bullet,
-the sweep for links that create or edit — both assert the old shape and go red
-the day the new one lands. That is correct: it is the assertion that must
-move, not the feature that must hide. Until then, the screen as built matches
-the outcome as written.
+**Amended 2026-08-18 (owner's pass, Phase 8, D88) — and landed the same day
+(`941d1ed`).** "The only control anywhere on the screen is Use one" was the
+design, and the owner's first real use overruled it: standing at this screen
+is exactly when a household notices something needs buying. Every running-out
+row now carries a one-tap *Apuntar a la compra* — queued offline like the
+cards' consume, undone by cancelling the queued add — and when no list exists
+the first tap creates one, online-only and saying so when it cannot (D97).
+The `KitchenPage` assertions moved with the feature, as this file's closure
+rule requires: one action per row, and still nothing that opens a form.
 
 Trigger:
 Look at the kitchen tablet from a metre away, without touching it.
@@ -342,10 +341,13 @@ Visible outcome:
   visible
 - the screen refreshes itself on a timer, so it stays correct after days
   untouched
-- the only control anywhere on the screen is **Use one**, once per card. There is
-  no create, no edit, no delete and no navigation into either — that is the
-  phone's job
-- a tap on **Use one** consumes a single unit and offers a 10-second undo
+- every control on the screen is a single tap: **Use one**, once per urgent
+  card, and **Apuntar a la compra**, once per running-out row. There is no
+  editing or deleting of products or stock, no form, and no navigation into
+  either — that is still the phone's job
+- a tap on **Use one** consumes a single unit; a tap on **Apuntar** writes the
+  product on the newest open list; both offer undo exactly while the queued
+  change can still be cancelled
 
 Proof required:
 
@@ -357,8 +359,9 @@ Proof required:
 - after: `inventory.getStockHistory` shows exactly one `CONSUME` entry of −1, not
   two. The card's quantity drops by one and the card disappears when the entry
   reaches zero.
-- also after: a sweep of the rendered screen finds one interactive control per
-  card and no link that leads to creating or editing anything
+- also after: a sweep of the rendered screen finds one action per urgent card,
+  one per running-out row, and no form — `KitchenPage.test.tsx` holds exactly
+  that shape
 
 Honest note for whoever builds this: `getExpiringItems` returns *stock entries*
 with a positive quantity, not net product stock. In the seed, Leche entera's
