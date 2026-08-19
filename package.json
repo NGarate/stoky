@@ -33,7 +33,7 @@
   ],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@11.19.0",
+  "packageManager": "pnpm@11.22.0",
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
     "@prisma/client": "^6.19.3",
