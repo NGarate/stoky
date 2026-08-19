@@ -217,6 +217,18 @@ describe("undo instead of confirm", () => {
     expect(toggle.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   });
 
+  it("is a header with a chevron, not a card among the rows", () => {
+    queryStub.data = [row({ isChecked: true })];
+    renderWithIntl(<ShopPage />);
+
+    // Noel's second pass (2026-08-19): the drawer control had been dressed as
+    // a card while the "Para comprar" heading above it was not, and one
+    // section header in a box is not consistency, it is clutter. The chevron
+    // and the count are what say "this opens"; the box said nothing.
+    const toggle = screen.getByRole("button", { name: /En el carro/ });
+    expect(toggle.className).not.toMatch(/bg-card|bg-muted|border|rounded/);
+  });
+
   it("keeps the count in words inside the toggle, open or closed", async () => {
     queryStub.data = [row({ isChecked: true })];
     renderWithIntl(<ShopPage />);
@@ -251,6 +263,18 @@ describe("what a queued change looks like", () => {
 
     // Straight into the trolley, before any server has heard about it.
     expect(screen.getByText("1 cosa marcada")).toBeInTheDocument();
+  });
+});
+
+describe("rows are rows, not cards", () => {
+  it("draws each item as a divided row without card chrome", () => {
+    renderWithIntl(<ShopPage />);
+
+    // Same review: a card around every element of a list is visual overhead.
+    // The tick circle, the words and the divider carry everything the border
+    // and the background used to pretend to.
+    const item = screen.getByRole("button", { name: /Leche entera/ });
+    expect(item.className).not.toMatch(/bg-card|rounded-xl|border/);
   });
 });
 

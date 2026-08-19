@@ -112,7 +112,7 @@ export default function ShopPage(): JSX.Element {
         </h2>
 
         {toBuy.length === 0 ? (
-          <div className="mt-3 rounded-xl border border-border bg-card p-6">
+          <div className="mt-3">
             <p className="text-foreground">{t("nothingToBuy")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {t("nothingToBuyHint")}
@@ -125,7 +125,10 @@ export default function ShopPage(): JSX.Element {
             </Link>
           </div>
         ) : (
-          <ul className="mt-3 space-y-2">
+          // Rows, not cards: a border and a background around every item of a
+          // list is visual overhead (Noel's review, 2026-08-19). A divider is
+          // all the separation a list needs.
+          <ul className="mt-1 divide-y divide-border">
             {toBuy.map((item) => (
               <li key={item.id}>
                 <ShopRow item={item} onToggle={() => setChecked(item, true)} />
@@ -139,44 +142,43 @@ export default function ShopPage(): JSX.Element {
         {/* Folded away, because what is already in the trolley is not the
             question being asked in the aisle — but folded *visibly*. As a
             bare uppercase label this read as a heading, and nobody taps
-            headings, so nobody found their ticked items again. It now wears
-            the same card language as the rows (in bg-muted, the colour
-            ticked rows already wear), keeps its count in words inside the
-            control, and carries a chevron. The chevron is aria-hidden:
-            aria-expanded already tells a screen reader what a sighted thumb
-            learns from the arrow. */}
+            headings, so nobody found their ticked items again. It is set in
+            the same header type as "Para comprar" above it — one screen, one
+            header language — and what says "this one opens" is the chevron
+            and the count kept in words inside the control, not a box around
+            it (Noel's second pass, 2026-08-19: the card dress went). The
+            chevron is aria-hidden: aria-expanded already tells a screen
+            reader what a sighted thumb learns from the arrow. */}
         <h2 id="trolley">
           <button
             aria-expanded={trolleyOpen}
-            className="flex min-h-[64px] w-full items-center gap-3 rounded-xl border border-border bg-muted p-4 text-left hover:bg-accent"
+            className="flex min-h-[48px] w-full items-center justify-between gap-3 text-left text-sm font-semibold uppercase tracking-wide text-muted-foreground"
             onClick={() => setTrolleyOpen((open) => !open)}
             type="button"
           >
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold text-foreground">
-                {t("inTrolley")}
-              </span>
-              <span className="block text-sm text-muted-foreground">
+            {t("inTrolley")}
+            <span className="flex items-center gap-2 normal-case tracking-normal">
+              <span className="font-normal">
                 {t("trolleyCount", { count: trolley.length })}
               </span>
+              <svg
+                aria-hidden="true"
+                className={`h-5 w-5 shrink-0 transition-transform motion-reduce:transition-none ${
+                  trolleyOpen ? "rotate-180" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
+                <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </span>
-            <svg
-              aria-hidden="true"
-              className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${
-                trolleyOpen ? "rotate-180" : ""
-              }`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
           </button>
         </h2>
 
         {trolleyOpen && trolley.length > 0 && (
-          <ul className="mt-2 space-y-2">
+          <ul className="mt-1 divide-y divide-border">
             {trolley.map((item) => (
               <li key={item.id}>
                 <ShopRow
@@ -235,13 +237,12 @@ function ShopRow({
       : 0;
 
   return (
+    // A row, not a card: the tick circle, the words and the list's dividers
+    // carry the state, so the box that used to wrap each item is gone
+    // (Noel's review, 2026-08-19).
     <button
       aria-pressed={item.isChecked}
-      className={`flex min-h-[64px] w-full items-center gap-3 rounded-xl border p-4 text-left ${
-        item.isChecked
-          ? "border-border bg-muted"
-          : "border-border bg-card hover:bg-accent"
-      }`}
+      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent"
       onClick={onToggle}
       type="button"
     >
