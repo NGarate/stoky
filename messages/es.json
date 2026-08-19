@@ -304,6 +304,7 @@
       "cameraErrorTitle": "Error al acceder a la cámara",
       "cameraErrorUnknown": "Error desconocido",
       "cameraErrorHint": "Asegúrate de permitir el acceso a la cámara e intenta de nuevo.",
+      "insecureContext": "La cámara solo funciona con una conexión segura. Abre la aplicación con una dirección https:// (o localhost) e inténtalo de nuevo.",
       "torchOn": "Encender linterna",
       "torchOff": "Apagar linterna",
       "torchFailed": "La linterna no se ha podido encender. Puede que otra aplicación esté usando la cámara: ciérrala y vuelve a intentarlo."

@@ -304,6 +304,7 @@
       "cameraErrorTitle": "The camera could not be reached",
       "cameraErrorUnknown": "Unknown error",
       "cameraErrorHint": "Make sure the camera is allowed, then try again.",
+      "insecureContext": "The camera only works over a secure connection. Open the app through an https:// address (or localhost) and try again.",
       "torchOn": "Turn the torch on",
       "torchOff": "Turn the torch off",
       "torchFailed": "The torch would not turn on. Another app may be using the camera — close it and try again."

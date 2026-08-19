@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner as BarcodeScannerComponent } from "@thewirv/react-barcode-scanner";
 
@@ -39,6 +39,21 @@ export function BarcodeScanner({
   const [torchFailed, setTorchFailed] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Whether the page can reach the camera at all. Browsers remove
+   * `navigator.mediaDevices` entirely outside a secure context (any plain-HTTP
+   * origin that is not localhost), and the scanner library reports that state
+   * as "your browser has no support" — wrong and unactionable on a phone
+   * pointed at a dev server by IP. Checked here so the user is told the real
+   * requirement. Read in an effect rather than during render: the first
+   * client render must match the server-rendered HTML, which had no `window`
+   * to ask.
+   */
+  const [secureContext, setSecureContext] = useState(true);
+  useEffect(() => {
+    setSecureContext(window.isSecureContext);
+  }, []);
 
   const handleSuccess = useCallback(
     (barcode: string) => {
@@ -111,6 +126,15 @@ export function BarcodeScanner({
       setTorchFailed(true);
     }
   }, [cameraTrack, torchEnabled]);
+
+  if (!secureContext) {
+    return (
+      <div className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">
+        <p className="font-medium">{t("cameraErrorTitle")}</p>
+        <p className="text-sm">{t("insecureContext")}</p>
+      </div>
+    );
+  }
 
   if (!isScanning) {
     return (

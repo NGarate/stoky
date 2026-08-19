@@ -84,11 +84,28 @@ function feedReady() {
   });
 }
 
+/**
+ * An insecure context, as Chrome presents one: `isSecureContext` is false and
+ * `navigator.mediaDevices` does not exist at all. Browsers remove the API
+ * entirely over plain HTTP away from localhost, which is exactly the state the
+ * scanner has to explain instead of letting the library blame the browser.
+ */
+function stubInsecureContext() {
+  Object.defineProperty(window, "isSecureContext", {
+    value: false,
+    configurable: true,
+  });
+}
+
 const { BarcodeScanner } = await import("@/components/barcode/Scanner");
 
 beforeEach(() => {
   lastScannerProps = undefined;
   stubCamera({ torch: false });
+  Object.defineProperty(window, "isSecureContext", {
+    value: true,
+    configurable: true,
+  });
 });
 
 afterEach(cleanup);
@@ -158,6 +175,20 @@ describe("BarcodeScanner", () => {
     expect(onError).not.toHaveBeenCalled();
 
     consoleError.mockRestore();
+  });
+
+  it("explains the HTTPS requirement over plain HTTP instead of blaming the browser", () => {
+    stubInsecureContext();
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+
+    expect(
+      screen.getByText(
+        "La cámara solo funciona con una conexión segura. Abre la aplicación con una dirección https:// (o localhost) e inténtalo de nuevo.",
+      ),
+    ).toBeInTheDocument();
+    // The scanner itself must not mount: the library would fire its own
+    // misleading "your browser has no support" error over this one.
+    expect(screen.queryByTestId("barcode-scanner")).toBeNull();
   });
 
   it("hides the error panel until something fails", () => {
