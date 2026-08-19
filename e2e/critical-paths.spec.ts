@@ -699,18 +699,36 @@ test.describe("Internationalization", () => {
  * products and left it registering, which failed for exactly that reason —
  * the new household cannot see them.
  */
-test.describe("The Panel's cards are doors", () => {
+test.describe("The Panel summarises; its lists are the doors", () => {
   // Desktop width for the same reason as the low-stock suite below: the
   // filtered list renders a table at lg and cards under it, and the row-based
   // assertions need the visible copy to be the table.
   test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
 
-  test("the restock card opens the inventory already filtered to its set", async ({ page }) => {
+  test("what needs attention is one sentence, not a second copy of the lists", async ({ page }) => {
+    // Noel's second pass (2026-08-19): the alert rows restated the lists
+    // rendered directly below them, so they went. The seed holds three
+    // below-minimum products, and the summary must count exactly those —
+    // it asks the server the same `needsRestock` question the filtered
+    // inventory asks, so the two cannot disagree (Phase 8 item 2).
     await page.goto("/dashboard");
     await settle(page);
 
-    await page.click('a[href="/inventory?filter=restock"]');
-    await page.waitForURL(/\/inventory\?filter=restock/);
+    const summary = page.getByText(/3 productos por reponer/);
+    await expect(summary).toBeVisible();
+
+    // A summary, not a door: the pre-filtered links live in the sections
+    // below, so the sentence itself must not be one.
+    await expect(
+      page.locator('a[href="/inventory?filter=restock"]'),
+    ).toHaveCount(0);
+  });
+
+  test("the restock filter shows exactly the summarised set", async ({ page }) => {
+    // Reached from the Panel's overflow note when its five rows are not
+    // everything; driven by URL here because the seed's three below-minimum
+    // products all fit on the Panel.
+    await page.goto("/inventory?filter=restock");
     await settle(page);
 
     // The filter is loud: it names itself and offers the way back.

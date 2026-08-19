@@ -45,12 +45,13 @@ export default function InventoryPage(): JSX.Element {
 }
 
 /**
- * The Panel's "Necesitan reposición" card links here with `?filter=restock`,
- * and the rule that created the filter binds it: the rows this shows must be
- * exactly the set the card counted, which is why both sides ask the server
- * the same question (`needsRestock`) instead of each filtering for
- * themselves. The filter announces itself and offers the way back — a list
- * quietly showing less than everything is how numbers stop being trusted.
+ * The Panel's restock overflow links here with `?filter=restock` when its
+ * section cannot show everything, and the rule that created the filter binds
+ * it: the rows this shows must be exactly the set the Panel counted, which is
+ * why both sides ask the server the same question (`needsRestock`) instead of
+ * each filtering for themselves. The filter announces itself and offers the
+ * way back — a list quietly showing less than everything is how numbers stop
+ * being trusted.
  */
 export function InventoryView(): JSX.Element {
   const t = useTranslations("inventory");

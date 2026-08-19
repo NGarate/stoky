@@ -10,14 +10,20 @@ import type { JSX, ReactNode } from "react";
  * Household overview — the screen every login lands on.
  *
  * It opens with the quick actions, because whoever lands here came to *do*
- * something — then raises alerts, and only alerts: things that require
- * attention, each leading with its reason rather than a headline figure
- * (Noel's review, 2026-08-19 — the catalogue size went with it, since a
- * count that asks nothing of anyone is not an alert). Each alert is still a
- * door to the list that shows its set (Phase 8 item 2):
+ * something — then one short sentence saying what needs attention, and then
+ * the lists themselves. Noel's second review (2026-08-19) cut the alert rows
+ * that stood between the two: they were cards restating the lists rendered
+ * directly below them, and information said twice is not said better. The
+ * summary is plain text, not a set of links — the sections underneath are
+ * the doors. Scanning is not offered here either: on a phone Escanear is
+ * permanently in the bottom bar, and this is the desktop overview, where
+ * there is no camera.
+ *
+ * The data the summary and the lists share (Phase 8 item 2 — a number and
+ * the list it describes must come from the same question):
  *
  * - `inventory.getStockOverview` with `needsRestock` — the same question
- *   /inventory?filter=restock asks, so alert and list cannot disagree.
+ *   /inventory?filter=restock asks, so summary and list cannot disagree.
  * - `inventory.getExpiringItems` — batches with a date inside the window.
  * - `inventory.getExpiredItems` — batches already past their date.
  *
@@ -31,7 +37,7 @@ const EXPIRY_WINDOW_DAYS = 7;
 
 /**
  * One page of the restock list. `getStockOverview` is cursor-paginated and
- * capped at 100 per page; past that, the card says so in words rather than
+ * capped at 100 per page; past that, the summary says so in words rather than
  * quietly rounding — a wrong number is worse than an honest bound.
  */
 const OVERVIEW_PAGE_SIZE = 100;
@@ -42,11 +48,10 @@ const MAX_ROWS = 5;
 export default function DashboardPage(): JSX.Element {
   const t = useTranslations("dashboard");
 
-  // The restock alert asks the server for the same set its destination shows
-  // (`needsRestock`, the filter /inventory?filter=restock uses) — an alert
-  // and the list it opens must never disagree, because a number that is a
-  // door people walk through gets trusted the way a number in a paragraph
-  // does not (Phase 8 item 2).
+  // The summary asks the server for the same set the section below shows
+  // (`needsRestock`, the filter /inventory?filter=restock uses) — a number
+  // and the list it describes must never disagree, because that is how
+  // numbers stop being trusted (Phase 8 item 2).
   const restockQuery = api.inventory.getStockOverview.useQuery({
     limit: OVERVIEW_PAGE_SIZE,
     needsRestock: true,
@@ -121,6 +126,26 @@ export default function DashboardPage(): JSX.Element {
   const atRisk = expiredItems.length + expiringItems.length;
   const restockIsCapped = restockQuery.data?.nextCursor !== undefined;
 
+  // What needs attention, in one sentence and nothing else. The lists below
+  // are the detail *and* the doors; repeating them as linked cards up here
+  // was saying everything twice (Noel's review, 2026-08-19). When nothing
+  // needs attention the sentence is absent — the sections already say all is
+  // well in words.
+  const summaryParts: string[] = [];
+  if (expiredItems.length > 0) {
+    summaryParts.push(t("summaryExpired", { count: expiredItems.length }));
+  }
+  if (expiringItems.length > 0) {
+    summaryParts.push(t("summaryExpiring", { count: expiringItems.length }));
+  }
+  if (restock.length > 0) {
+    summaryParts.push(
+      restockIsCapped
+        ? t("summaryRestockCapped", { count: restock.length })
+        : t("summaryRestock", { count: restock.length }),
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <div>
@@ -132,60 +157,17 @@ export default function DashboardPage(): JSX.Element {
         <h2 id="dashboard-quick" className="sr-only">
           {t("quickTitle")}
         </h2>
-        <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <ul className="grid gap-3 md:grid-cols-3">
           <QuickLink href="/inventory/add" label={t("quickAddStock")} primary />
           <QuickLink href="/inventory/consume" label={t("quickConsumeStock")} />
           <QuickLink href="/receipts/upload" label={t("quickUploadReceipt")} />
-          <QuickLink href="/products/scan" label={t("quickScan")} />
         </ul>
       </section>
 
-      {/* Alerts, and only alerts: each exists because something needs doing,
-          leads with the reason for it, and keeps its count in words below.
-          When nothing needs attention there is nothing here — the sections
-          below already say all is well, and a tile reporting zero problems
-          is furniture. */}
-      {atRisk + restock.length > 0 && (
-        <section aria-labelledby="dashboard-alerts">
-          <h2 id="dashboard-alerts" className="sr-only">
-            {t("alertsTitle")}
-          </h2>
-          <ul className="space-y-2">
-            {expiredItems.length > 0 && (
-              <AlertLink
-                detail={t("alertExpiredDetail", {
-                  count: expiredItems.length,
-                })}
-                href="/inventory"
-                reason={t("alertExpiredTitle")}
-                tone="danger"
-              />
-            )}
-            {expiringItems.length > 0 && (
-              <AlertLink
-                detail={t("alertExpiringDetail", {
-                  count: expiringItems.length,
-                  days: EXPIRY_WINDOW_DAYS,
-                })}
-                href="/inventory"
-                reason={t("alertExpiringTitle")}
-                tone="warn"
-              />
-            )}
-            {restock.length > 0 && (
-              <AlertLink
-                detail={
-                  restockIsCapped
-                    ? t("alertRestockDetailCapped", { count: restock.length })
-                    : t("alertRestockDetail", { count: restock.length })
-                }
-                href="/inventory?filter=restock"
-                reason={t("alertRestockTitle")}
-                tone="warn"
-              />
-            )}
-          </ul>
-        </section>
+      {summaryParts.length > 0 && (
+        <p className="font-medium text-foreground">
+          {summaryParts.join(" · ")}
+        </p>
       )}
 
       <section aria-labelledby="dashboard-restock">
@@ -208,11 +190,14 @@ export default function DashboardPage(): JSX.Element {
           <p className="mt-2 text-muted-foreground">{t("restockEmpty")}</p>
         ) : (
           <>
-            <ul className="mt-3 divide-y divide-border rounded border border-border bg-card">
+            {/* A list, not a card: rows separate with dividers, and the box
+                that used to frame them is gone (Noel's rule, 2026-08-19 —
+                cards only where a card is justified). */}
+            <ul className="mt-3 divide-y divide-border">
               {restock.slice(0, MAX_ROWS).map((product) => (
                 <li
                   key={product.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
                 >
                   <Link
                     href={`/products/${product.id}`}
@@ -237,8 +222,17 @@ export default function DashboardPage(): JSX.Element {
               ))}
             </ul>
             {restock.length > MAX_ROWS ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t("restockMore", { count: restock.length - MAX_ROWS })}
+              // The overflow is a door, not a shrug: when the panel cannot
+              // show everything, this is the way to the full set, asked of
+              // the server with the same `needsRestock` question (Phase 8
+              // item 2 — the alert row that used to be this door is gone).
+              <p className="mt-2 text-sm">
+                <Link
+                  href="/inventory?filter=restock"
+                  className="inline-flex min-h-[48px] items-center text-primary underline underline-offset-4"
+                >
+                  {t("restockMore", { count: restock.length - MAX_ROWS })}
+                </Link>
               </p>
             ) : null}
           </>
@@ -265,7 +259,7 @@ export default function DashboardPage(): JSX.Element {
           <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
         ) : (
           <>
-            <ul className="mt-3 divide-y divide-border rounded border border-border bg-card">
+            <ul className="mt-3 divide-y divide-border">
               {expiredItems.slice(0, MAX_ROWS).map((item) => (
                 <ExpiryRow
                   key={item.id}
@@ -327,58 +321,6 @@ export default function DashboardPage(): JSX.Element {
   );
 }
 
-/**
- * One thing needing attention, and a door.
- *
- * The reason is the headline — it is what makes this an alert — and the
- * count lives in a sentence below it, because "7" is not the news, "hay que
- * reponer" is. The whole row is a link to the list showing exactly its set
- * (the owner's pass: a claim people act on has to be pressable, and what it
- * opens has to match it). The tone tints the edge and the reason, never the
- * whole row, and the words carry the severity on their own — colour is a
- * second signal here, not the only one (REDESIGN_PLAN §3).
- */
-function AlertLink({
-  detail,
-  href,
-  reason,
-  tone,
-}: {
-  detail: string;
-  href: string;
-  reason: string;
-  tone: "warn" | "danger";
-}): JSX.Element {
-  const edgeClass =
-    tone === "danger" ? "border-l-danger-foreground" : "border-l-warn-foreground";
-  const reasonClass =
-    tone === "danger" ? "text-danger-foreground" : "text-warn-foreground";
-
-  return (
-    <li>
-      <Link
-        href={href}
-        className={`flex min-h-[48px] items-center gap-3 rounded border border-border border-l-4 ${edgeClass} bg-card px-4 py-3 hover:bg-accent`}
-      >
-        <span className="min-w-0 flex-1">
-          <span className={`block font-semibold ${reasonClass}`}>{reason}</span>
-          <span className="block text-sm text-muted-foreground">{detail}</span>
-        </span>
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5 shrink-0 text-muted-foreground"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          viewBox="0 0 24 24"
-        >
-          <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </Link>
-    </li>
-  );
-}
-
 /** One batch that has expired or is about to. */
 function ExpiryRow({
   location,
@@ -396,7 +338,7 @@ function ExpiryRow({
   status: ReactNode;
 }): JSX.Element {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
       <div>
         <Link
           href={`/products/${productId}`}
