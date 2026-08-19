@@ -101,14 +101,20 @@ const nextConfig: NextConfig = {
   // back to a native GET. Affects development only; it has no effect on a
   // production build. Add the LAN address you use to test from other devices.
   allowedDevOrigins: [
-    "192.168.8.132",
     // Convenience for testing from a phone on the same network. Narrow this to
     // specific addresses if the network is not trusted.
     "192.168.8.*",
-    // Tailscale. The entry that matters is this machine's own address, since
-    // that is the Host the browser requests; the second is another node on the
-    // tailnet, kept for when the server is reached through it.
+    // Tailscale. The hostname is what `tailscale serve` presents when it
+    // proxies https://pop-os.<tailnet>.ts.net to this dev server — the route
+    // that exists because the camera API only lives in secure contexts, and
+    // serve is the one HTTPS door a phone can walk through without trusting a
+    // hand-made certificate. The first IP is this machine's own address, since
+    // that is the Host the browser requests over plain HTTP; the others are
+    // other nodes on the tailnet, kept for when the server is reached through
+    // them.
+    "pop-os.fold-vibe.ts.net",
     "100.87.171.28",
+    "100.80.50.6",
     "100.124.170.3",
   ],
 };
