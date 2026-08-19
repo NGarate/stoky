@@ -9,13 +9,15 @@ import type { JSX, ReactNode } from "react";
 /**
  * Household overview — the screen every login lands on.
  *
- * It answers three questions and nothing else: what is running out, what is
- * about to go off, and how big the catalogue is — and since the owner's pass
- * (Phase 8 item 2) each answer is a door to the list that shows its set:
+ * It opens with the quick actions, because whoever lands here came to *do*
+ * something — then raises alerts, and only alerts: things that require
+ * attention, each leading with its reason rather than a headline figure
+ * (Noel's review, 2026-08-19 — the catalogue size went with it, since a
+ * count that asks nothing of anyone is not an alert). Each alert is still a
+ * door to the list that shows its set (Phase 8 item 2):
  *
- * - `product.count` — the catalogue, counted rather than paged.
  * - `inventory.getStockOverview` with `needsRestock` — the same question
- *   /inventory?filter=restock asks, so card and list cannot disagree.
+ *   /inventory?filter=restock asks, so alert and list cannot disagree.
  * - `inventory.getExpiringItems` — batches with a date inside the window.
  * - `inventory.getExpiredItems` — batches already past their date.
  *
@@ -40,12 +42,11 @@ const MAX_ROWS = 5;
 export default function DashboardPage(): JSX.Element {
   const t = useTranslations("dashboard");
 
-  // The catalogue card is a real count, and the restock card asks the server
-  // for the same set its destination shows (`needsRestock`, the filter
-  // /inventory?filter=restock uses) — a card and the list it opens must never
-  // disagree, because a number that is a door people walk through gets
-  // trusted the way a number in a paragraph does not (Phase 8 item 2).
-  const catalogueCount = api.product.count.useQuery();
+  // The restock alert asks the server for the same set its destination shows
+  // (`needsRestock`, the filter /inventory?filter=restock uses) — an alert
+  // and the list it opens must never disagree, because a number that is a
+  // door people walk through gets trusted the way a number in a paragraph
+  // does not (Phase 8 item 2).
   const restockQuery = api.inventory.getStockOverview.useQuery({
     limit: OVERVIEW_PAGE_SIZE,
     needsRestock: true,
@@ -76,12 +77,8 @@ export default function DashboardPage(): JSX.Element {
   }, [restockRows]);
 
   const isPending =
-    catalogueCount.isPending ||
-    restockQuery.isPending ||
-    expiring.isPending ||
-    expired.isPending;
-  const failed =
-    catalogueCount.error ?? restockQuery.error ?? expiring.error ?? expired.error;
+    restockQuery.isPending || expiring.isPending || expired.isPending;
+  const failed = restockQuery.error ?? expiring.error ?? expired.error;
 
   if (isPending) {
     return (
@@ -94,7 +91,7 @@ export default function DashboardPage(): JSX.Element {
     );
   }
 
-  if (failed || catalogueCount.data === undefined || !restockRows) {
+  if (failed || !restockRows) {
     // Every procedure on this page throws the same "User not in a household"
     // when the session has no household, which is the one failure a person can
     // actually act on. Anything else is reported generically rather than as raw
@@ -131,31 +128,65 @@ export default function DashboardPage(): JSX.Element {
         <p className="mt-2 text-muted-foreground">{t("intro")}</p>
       </div>
 
-      <section aria-labelledby="dashboard-summary">
-        <h2 id="dashboard-summary" className="sr-only">
-          {t("summaryTitle")}
+      <section aria-labelledby="dashboard-quick">
+        <h2 id="dashboard-quick" className="sr-only">
+          {t("quickTitle")}
         </h2>
-        <ul className="grid gap-4 md:grid-cols-3">
-          <StatCard
-            href="/products"
-            label={t("statProducts")}
-            value={catalogueCount.data}
-          />
-          <StatCard
-            href="/inventory?filter=restock"
-            label={t("statRestock")}
-            note={restockIsCapped ? t("statCapped") : undefined}
-            tone={restock.length > 0 ? "warn" : "ok"}
-            value={restock.length}
-          />
-          <StatCard
-            href="/inventory"
-            label={t("statAtRisk", { days: EXPIRY_WINDOW_DAYS })}
-            tone={expiredItems.length > 0 ? "danger" : atRisk > 0 ? "warn" : "ok"}
-            value={atRisk}
-          />
+        <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <QuickLink href="/inventory/add" label={t("quickAddStock")} primary />
+          <QuickLink href="/inventory/consume" label={t("quickConsumeStock")} />
+          <QuickLink href="/receipts/upload" label={t("quickUploadReceipt")} />
+          <QuickLink href="/products/scan" label={t("quickScan")} />
         </ul>
       </section>
+
+      {/* Alerts, and only alerts: each exists because something needs doing,
+          leads with the reason for it, and keeps its count in words below.
+          When nothing needs attention there is nothing here — the sections
+          below already say all is well, and a tile reporting zero problems
+          is furniture. */}
+      {atRisk + restock.length > 0 && (
+        <section aria-labelledby="dashboard-alerts">
+          <h2 id="dashboard-alerts" className="sr-only">
+            {t("alertsTitle")}
+          </h2>
+          <ul className="space-y-2">
+            {expiredItems.length > 0 && (
+              <AlertLink
+                detail={t("alertExpiredDetail", {
+                  count: expiredItems.length,
+                })}
+                href="/inventory"
+                reason={t("alertExpiredTitle")}
+                tone="danger"
+              />
+            )}
+            {expiringItems.length > 0 && (
+              <AlertLink
+                detail={t("alertExpiringDetail", {
+                  count: expiringItems.length,
+                  days: EXPIRY_WINDOW_DAYS,
+                })}
+                href="/inventory"
+                reason={t("alertExpiringTitle")}
+                tone="warn"
+              />
+            )}
+            {restock.length > 0 && (
+              <AlertLink
+                detail={
+                  restockIsCapped
+                    ? t("alertRestockDetailCapped", { count: restock.length })
+                    : t("alertRestockDetail", { count: restock.length })
+                }
+                href="/inventory?filter=restock"
+                reason={t("alertRestockTitle")}
+                tone="warn"
+              />
+            )}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="dashboard-restock">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -292,61 +323,57 @@ export default function DashboardPage(): JSX.Element {
         )}
       </section>
 
-      <section aria-labelledby="dashboard-quick">
-        <h2 id="dashboard-quick" className="text-lg font-semibold text-heading">
-          {t("quickTitle")}
-        </h2>
-        <ul className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <QuickLink href="/inventory/add" label={t("quickAddStock")} primary />
-          <QuickLink href="/inventory/consume" label={t("quickConsumeStock")} />
-          <QuickLink href="/receipts/upload" label={t("quickUploadReceipt")} />
-          <QuickLink href="/products/scan" label={t("quickScan")} />
-        </ul>
-      </section>
     </div>
   );
 }
 
 /**
- * One headline figure, and a door.
+ * One thing needing attention, and a door.
  *
- * The whole tile is a link to the list showing exactly the rows the figure
- * counts (the owner's pass: a number people act on has to be pressable, and
- * what it opens has to match it). The tone tints the figure, never the whole
- * tile, and the label underneath always says what the number is — colour is a
+ * The reason is the headline — it is what makes this an alert — and the
+ * count lives in a sentence below it, because "7" is not the news, "hay que
+ * reponer" is. The whole row is a link to the list showing exactly its set
+ * (the owner's pass: a claim people act on has to be pressable, and what it
+ * opens has to match it). The tone tints the edge and the reason, never the
+ * whole row, and the words carry the severity on their own — colour is a
  * second signal here, not the only one (REDESIGN_PLAN §3).
  */
-function StatCard({
+function AlertLink({
+  detail,
   href,
-  label,
-  note,
-  tone = "neutral",
-  value,
+  reason,
+  tone,
 }: {
+  detail: string;
   href: string;
-  label: string;
-  note?: string | undefined;
-  tone?: "neutral" | "ok" | "warn" | "danger";
-  value: number;
+  reason: string;
+  tone: "warn" | "danger";
 }): JSX.Element {
-  const toneClass = {
-    neutral: "text-heading",
-    ok: "text-ok-foreground",
-    warn: "text-warn-foreground",
-    danger: "text-danger-foreground",
-  }[tone];
+  const edgeClass =
+    tone === "danger" ? "border-l-danger-foreground" : "border-l-warn-foreground";
+  const reasonClass =
+    tone === "danger" ? "text-danger-foreground" : "text-warn-foreground";
 
   return (
     <li>
       <Link
         href={href}
-        className="block min-h-[48px] rounded border border-border bg-card p-4 hover:border-input hover:bg-accent"
+        className={`flex min-h-[48px] items-center gap-3 rounded border border-border border-l-4 ${edgeClass} bg-card px-4 py-3 hover:bg-accent`}
       >
-        <p className={`text-3xl font-bold ${toneClass}`}>{value}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{label}</p>
-        {note ? (
-          <p className="mt-1 text-xs text-muted-foreground">{note}</p>
-        ) : null}
+        <span className="min-w-0 flex-1">
+          <span className={`block font-semibold ${reasonClass}`}>{reason}</span>
+          <span className="block text-sm text-muted-foreground">{detail}</span>
+        </span>
+        <svg
+          aria-hidden="true"
+          className="h-5 w-5 shrink-0 text-muted-foreground"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </Link>
     </li>
   );
