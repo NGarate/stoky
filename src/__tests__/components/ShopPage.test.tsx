@@ -204,6 +204,34 @@ describe("undo instead of confirm", () => {
 
     expect(screen.getByText("2 cosas marcadas")).toBeInTheDocument();
   });
+
+  it("looks like something that opens: the toggle carries a disclosure icon", () => {
+    queryStub.data = [row({ isChecked: true })];
+    renderWithIntl(<ShopPage />);
+
+    // A bare uppercase label reads as a heading, and nobody taps headings —
+    // so nobody found the trolley. The chevron is decoration to a screen
+    // reader (aria-expanded already says it), but to a sighted thumb it is
+    // the difference between a section title and a drawer.
+    const toggle = screen.getByRole("button", { name: /En el carro/ });
+    expect(toggle.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it("keeps the count in words inside the toggle, open or closed", async () => {
+    queryStub.data = [row({ isChecked: true })];
+    renderWithIntl(<ShopPage />);
+
+    const toggle = screen.getByRole("button", { name: /En el carro/ });
+    expect(toggle.textContent).toContain("1 cosa marcada");
+
+    await userEvent.click(toggle);
+
+    // Opening the drawer must not eat its own caption: at the till, the
+    // count is the checklist.
+    expect(
+      screen.getByRole("button", { name: /En el carro/ }).textContent,
+    ).toContain("1 cosa marcada");
+  });
 });
 
 describe("what a queued change looks like", () => {
