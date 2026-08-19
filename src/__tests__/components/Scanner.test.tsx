@@ -274,6 +274,24 @@ describe("BarcodeScanner", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("previews the action on the icon: a lit bulb to turn on, a slashed one to turn off", async () => {
+    stubCamera({ torch: true });
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
+
+    // The icon is a button's icon: it says what pressing will do, not what
+    // the lamp is doing now. A dark torch offers to light it.
+    const turnOn = screen.getByRole("button", { name: "Encender linterna" });
+    expect(turnOn.querySelector('[data-testid="torch-icon-lit"]')).not.toBeNull();
+
+    await userEvent.click(turnOn);
+
+    const turnOff = screen.getByRole("button", { name: "Apagar linterna" });
+    expect(
+      turnOff.querySelector('[data-testid="torch-icon-slashed"]'),
+    ).not.toBeNull();
+  });
+
   it("says so when the camera refuses the torch, and keeps the label honest", async () => {
     stubCamera({ torch: true, applyRejects: true });
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
