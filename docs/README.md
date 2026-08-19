@@ -140,8 +140,9 @@ desktop.
 Still open: **A5.3** (the routes do not use the shared primitives, and the
 hardcoded copies of the target-size floor have grown from 74 to 100 with the
 Phase 5 pages) and **A5.4** (what `/dashboard` becomes — half-decided
-2026-08-18: the Panel stays and its cards become doors, which is Phase 8's
-work; whether three entry points is the right number is the half still open).
+2026-08-18: the Panel stays; the 2026-08-19 second pass replaced its doors
+with a one-line summary over the lists, which are the doors themselves;
+whether three entry points is the right number is the half still open).
 
 **[`SECURITY.md`](SECURITY.md)**
 The threat model for a self-hosted deployment, what is already hardened

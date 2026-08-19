@@ -463,6 +463,14 @@ not enumerate them.
   actionable. Whether three entry points remain the right number is the half
   still open.
 
+  **Superseded 2026-08-19, second pass.** The doors turned out to restate the
+  lists rendered directly below them, and the owner struck the duplication:
+  what needs attention is now one plain-text sentence, and the sections
+  underneath — which were always pre-filtered links — are the doors. The
+  invariant behind item 2 survives: the summary's restock count comes from
+  the same `needsRestock` question the inventory filter asks. The same review
+  set a general rule: no cards except where a card is concretely justified.
+
 ---
 
 ## 7. Suggested order
