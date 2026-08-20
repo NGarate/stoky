@@ -210,6 +210,24 @@ const PAIRS: Pair[] = [
   { fg: "ring", bg: "muted", scale: "nonText", where: "focus outline against the muted surface" },
   { fg: "destructive", bg: "background", scale: "nonText", where: "destructive button fill against the page" },
   { fg: "gauge", bg: "gauge-track", scale: "nonText", where: "stock gauge fill against its track" },
+
+  // The snackbar. An inverse surface, so its own ink is the only ink that
+  // ever lands on it, and both directions have to be measured — the light
+  // theme's snackbar is dark and the dark theme's is light.
+  { fg: "snackbar-foreground", bg: "snackbar", scale: "body", where: "snackbar message" },
+  { fg: "snackbar-action", bg: "snackbar", scale: "body", where: "the snackbar's undo label" },
+  { fg: "snackbar", bg: "background", scale: "nonText", where: "snackbar surface floating over the page" },
+  { fg: "snackbar", bg: "card", scale: "nonText", where: "snackbar surface floating over a card" },
+
+  // Chart marks, held to 1.4.11 against whichever surface they are drawn on.
+  // Emphasis against muted is deliberately *not* a pair: the two never touch
+  // — the mark spec puts a 2px gap of the surface between adjacent bars — so
+  // what has to be distinguishable is each mark from its background, which is
+  // what these four measure.
+  { fg: "chart-emphasis", bg: "card", scale: "nonText", where: "the answering series on a card" },
+  { fg: "chart-muted", bg: "card", scale: "nonText", where: "a context series on a card" },
+  { fg: "chart-emphasis", bg: "background", scale: "nonText", where: "the answering series on the page" },
+  { fg: "chart-muted", bg: "background", scale: "nonText", where: "a context series on the page" },
 ];
 
 // --- run --------------------------------------------------------------------

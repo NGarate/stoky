@@ -85,6 +85,28 @@
   /* Estante's signature fill gauge (REDESIGN_PLAN §3) */
   --gauge: #0e4f42;
   --gauge-track: #d3dbd6;
+
+  /* The snackbar is an *inverse* surface: it has to read as something laid
+     over the page rather than a part of it, and inverting is how Material
+     says that without a border or a shadow doing the work. So it is dark
+     here and light at night — the one pair in this file that swaps
+     direction between themes.
+
+     `snackbar-action` exists because no foreground token in the palette
+     survives the inversion: `primary` is #0e4f42, which on a near-black
+     surface is invisible. It is the dark theme's primary, borrowed. */
+  --snackbar: #1c2b24;
+  --snackbar-foreground: #eef3ef;
+  --snackbar-action: #8ddcc5;
+
+  /* Charts. Not a categorical scale — this is the emphasis pattern: the
+     series that answers the question in the accent, every other in the
+     de-emphasis grey. A ramp keyed to value would double-encode the bar
+     length as hue and burn the only free channel on information the bar
+     already carries. `chart-muted` sits near the 3:1 floor against both
+     surfaces on purpose; there is no headroom to lighten it further. */
+  --chart-emphasis: #0e4f42;
+  --chart-muted: #7d8d85;
 }
 
 :root[data-theme="light"] {
@@ -131,6 +153,13 @@
 
   --gauge: #8ddcc5;
   --gauge-track: #2a3831;
+
+  --snackbar: #e7efe9;
+  --snackbar-foreground: #12201a;
+  --snackbar-action: #0e4f42;
+
+  --chart-emphasis: #8ddcc5;
+  --chart-muted: #5c6f65;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -171,6 +200,13 @@
 
     --gauge: #8ddcc5;
     --gauge-track: #2a3831;
+
+    --snackbar: #e7efe9;
+    --snackbar-foreground: #12201a;
+    --snackbar-action: #0e4f42;
+
+    --chart-emphasis: #8ddcc5;
+    --chart-muted: #5c6f65;
   }
 }
 
@@ -216,6 +252,13 @@
 
   --color-gauge: var(--gauge);
   --color-gauge-track: var(--gauge-track);
+
+  --color-snackbar: var(--snackbar);
+  --color-snackbar-foreground: var(--snackbar-foreground);
+  --color-snackbar-action: var(--snackbar-action);
+
+  --color-chart-emphasis: var(--chart-emphasis);
+  --color-chart-muted: var(--chart-muted);
 }
 
 /* WCAG 1.4.8 (AAA) asks for at least 1.5 line spacing in a block of text.

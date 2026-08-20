@@ -57,11 +57,12 @@ const OWNED = [
   "warn",
   "danger",
   "gauge",
+  "snackbar",
+  "chart",
   // Names a shadcn-shaped component might reach for that this system does not
   // declare. Listing them means the test fails loudly rather than silently.
   "popover",
   "sidebar",
-  "chart",
 ];
 
 function themeTokens(): Set<string> {
@@ -105,6 +106,21 @@ describe("design tokens", () => {
     expect(tokens.size).toBeGreaterThan(0);
     expect(tokens.has("primary")).toBe(true);
     expect(tokens.has("ring")).toBe(true);
+  });
+
+  // The two families this phase adds. `check-contrast.ts` measures whether
+  // their values are legible; this measures whether a component can name
+  // them at all, which is the failure that renders as no colour rather than
+  // as bad colour.
+  it("exposes the snackbar's inverse surface as utilities", () => {
+    expect(tokens.has("snackbar")).toBe(true);
+    expect(tokens.has("snackbar-foreground")).toBe(true);
+    expect(tokens.has("snackbar-action")).toBe(true);
+  });
+
+  it("exposes the chart's emphasis pair as utilities", () => {
+    expect(tokens.has("chart-emphasis")).toBe(true);
+    expect(tokens.has("chart-muted")).toBe(true);
   });
 
   it("resolves every design-system colour utility used in src/", () => {
