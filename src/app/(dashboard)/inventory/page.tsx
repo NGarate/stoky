@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense } from "react";
+import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
+import { Badge } from "@/components/ui/badge";
+import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { ExpiringItems } from "@/components/inventory/ExpiringItems";
@@ -160,9 +163,9 @@ export function InventoryView(): JSX.Element {
                   </Link>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-sm">
+                  <Badge tone="neutral">
                     {product.category || t("noCategory")}
-                  </span>
+                  </Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <StockAmount
@@ -186,108 +189,36 @@ export function InventoryView(): JSX.Element {
       {/* Phone and tablet: one card per product. */}
       <ul className="space-y-3 lg:hidden">
         {products.map((product) => (
-          <li
+          <ItemRow
+            href={`/products/${product.id}`}
             key={product.id}
-            className={`rounded-lg border border-border p-4 shadow-sm md:p-5 ${
-              product.isLowStock ? "bg-warn" : "bg-card"
-            }`}
-          >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <Link
-                href={`/products/${product.id}`}
-                className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4 md:text-xl"
-              >
-                {product.name}
-              </Link>
-              <StockStatus
-                isLowStock={product.isLowStock}
-                totalStock={product.totalStock}
-              />
-            </div>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:text-lg">
-              <div>
-                <dt className="text-muted-foreground">{t("totalStockHeader")}</dt>
-                <dd className="mt-1">
+            meta={[
+              {
+                label: t("totalStockHeader"),
+                value: (
                   <StockAmount
                     defaultUnit={product.defaultUnit}
                     isLowStock={product.isLowStock}
                     totalStock={product.totalStock}
                   />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("categoryHeader")}</dt>
-                <dd className="mt-1 text-foreground">
-                  {product.category || t("noCategory")}
-                </dd>
-              </div>
-            </dl>
-          </li>
+                ),
+              },
+              {
+                label: t("categoryHeader"),
+                value: product.category || t("noCategory"),
+              },
+            ]}
+            status={
+              <StockStatus
+                isLowStock={product.isLowStock}
+                totalStock={product.totalStock}
+              />
+            }
+            title={product.name}
+            tone={product.isLowStock ? "warn" : "neutral"}
+          />
         ))}
       </ul>
     </div>
-  );
-}
-
-/** The quantity, tinted by how worrying it is and always carrying its unit. */
-function StockAmount({
-  defaultUnit,
-  isLowStock,
-  totalStock,
-}: {
-  defaultUnit: string;
-  isLowStock: boolean;
-  totalStock: number;
-}): JSX.Element {
-  return (
-    <span
-      className={`font-medium ${
-        totalStock <= 0
-          ? "text-danger-foreground"
-          : isLowStock
-            ? "text-warn-foreground"
-            : "text-ok-foreground"
-      }`}
-    >
-      {totalStock} {defaultUnit}
-    </span>
-  );
-}
-
-/**
- * The status, in words.
- *
- * The low-stock pill is outlined rather than filled: its row — and now its card
- * — is already tinted `bg-warn`, so a filled warn pill would vanish into it.
- */
-function StockStatus({
-  isLowStock,
-  totalStock,
-}: {
-  isLowStock: boolean;
-  totalStock: number;
-}): JSX.Element {
-  const t = useTranslations("inventory");
-
-  if (isLowStock) {
-    return (
-      <span className="rounded border border-warn-foreground bg-card px-2 py-1 text-sm font-medium text-warn-foreground">
-        {t("lowStock")}
-      </span>
-    );
-  }
-
-  if (totalStock <= 0) {
-    return (
-      <span className="rounded bg-danger px-2 py-1 text-sm text-danger-foreground">
-        {t("noStock")}
-      </span>
-    );
-  }
-
-  return (
-    <span className="rounded bg-ok px-2 py-1 text-sm text-ok-foreground">
-      {t("stockOk")}
-    </span>
   );
 }
