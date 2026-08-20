@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
+import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import type { JSX } from "react";
@@ -276,9 +277,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     );
   }
 
-  const isLowStock =
-    product.minStock !== null && product.totalStock < product.minStock;
-
   return (
     <div className="mx-auto max-w-3xl">
       <Link
@@ -311,7 +309,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       </p>
       {product.totalStock <= 0 ? (
         <p className="mt-1 font-medium text-danger-foreground">{t("stockEmpty")}</p>
-      ) : isLowStock && product.minStock !== null ? (
+      ) : isLowStock(product.totalStock, product.minStock) ? (
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
             minimum: product.minStock,

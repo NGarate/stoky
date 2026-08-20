@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import type { JSX } from "react";
@@ -39,7 +40,7 @@ interface ProductRow {
 /** Below its minimum, out entirely, or fine. */
 function stockTone(product: ProductRow): string {
   if (product.totalStock <= 0) return "text-danger-foreground";
-  if (product.minStock !== null && product.totalStock < product.minStock) {
+  if (isLowStock(product.totalStock, product.minStock)) {
     return "text-warn-foreground";
   }
   return "text-ok-foreground";

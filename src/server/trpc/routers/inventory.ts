@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { isLowStock, needsRestock } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
@@ -105,16 +106,13 @@ export const inventoryRouter = createTRPCRouter({
   /**
    * Everything in the household, with each product's net stock.
    *
-   * The list screens' single query. `lowStock` filters to products under their
-   * `minStock`, which is what the phone screen's "to buy" section is.
+   * The list screens' single query. Both filters ask
+   * `src/lib/stock/low-stock.ts`, which is the one place that decides what
+   * running out means; the difference between them is stated there.
    *
-   * `needsRestock` is the Panel's broader definition: everything under its
-   * minimum **plus everything at or below zero even with no minimum set** —
-   * a product that has run out without one would otherwise never appear.
-   * A separate flag rather than a widening of `lowStock`, because the kitchen
-   * screen already reads `lowStock` and silently changing what a consumer
-   * sees is how a green suite stops meaning anything (Phase 8 item 2: the
-   * card and the list it opens must show the same set).
+   * Phase 8 item 2 is why that matters here: the Panel's count and the list
+   * it opens must be the same set, and they can only be if both sides ask the
+   * same question rather than each writing the comparison out.
    */
   getStockOverview: householdProcedure
     .input(
@@ -182,22 +180,24 @@ export const inventoryRouter = createTRPCRouter({
             >
           );
 
-          const isLowStock =
-            product.minStock !== null && totalStock < product.minStock;
+          const lowStock = isLowStock(totalStock, product.minStock);
 
           return {
             ...product,
             totalStock,
             stockByLocation,
-            isLowStock,
+            isLowStock: lowStock,
           };
         })
         .filter((product) => {
-          if (input.needsRestock && !(product.totalStock <= 0 || product.isLowStock)) {
+          if (
+            input.needsRestock &&
+            !needsRestock(product.totalStock, product.minStock)
+          ) {
             return false;
           }
           if (!input.lowStock) return true;
-          return product.isLowStock && product.minStock !== null;
+          return product.isLowStock;
         });
 
       return {

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { isLowStock } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
@@ -374,12 +375,15 @@ export const shoppingRouter = createTRPCRouter({
       },
     });
 
+    // Asks the same question the inventory and the Panel ask. It used to write
+    // its own `currentStock < (minStock || 0)`, which reached the same answer
+    // by a different route — agreement nothing enforced.
     const lowStockProducts = products.filter((product) => {
       const currentStock = product.stockEntries.reduce(
         (sum, entry) => sum + entry.quantity,
         0
       );
-      return currentStock < (product.minStock || 0);
+      return isLowStock(currentStock, product.minStock);
     });
 
     // Add items to auto list (avoiding duplicates)
