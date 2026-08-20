@@ -750,7 +750,11 @@
       "exportDone": "File downloaded. Keep it somewhere safe: it contains the names and email addresses of everyone who uses this household.",
       "exportFailed": "The file could not be prepared. Try again in a moment.",
       "exportImagesNote": "Receipt photographs are not inside the file, only where they live. To keep them, copy the server's uploads folder too."
-    }
+    },
+    "snackbarDuration": "Notification duration",
+    "snackbarDefault": "Normal",
+    "snackbarLong": "Long",
+    "snackbarForever": "Until dismissed"
   },
   "errors": {
     "generic": "An error has occurred",
@@ -900,5 +904,11 @@
     "undoAddOf": "Take “{name}” off the shopping list",
     "listName": "Kitchen list",
     "listCreateFailed": "The list cannot be created right now. Try again when the connection is back."
+  },
+  "snackbar": {
+    "regionLabel": "Notifications (press F8 to reach the notification)",
+    "undo": "Undo",
+    "dismiss": "Dismiss notification",
+    "announcePrefix": "Notification"
   }
 }

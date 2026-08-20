@@ -8,6 +8,7 @@ import { WriteQueueProvider } from "@/components/offline/WriteQueueProvider";
 import { SyncStatus } from "@/components/offline/SyncStatus";
 import { ShellCacheGuard } from "@/components/session/ShellCacheGuard";
 import { ReadCache } from "@/components/offline/ReadCache";
+import { SnackbarProvider } from "@/components/ui/snackbar";
 
 /**
  * The authenticated shell.
@@ -47,6 +48,11 @@ export default async function DashboardLayout({
       }}
     >
       <WriteQueueProvider>
+        {/* Inside the queue provider, because an undo snackbar asks the queue
+            how long its change can still be taken back. Its viewport renders
+            after <main>, so it never intrudes on the tab order of someone
+            working down the page — F8 is how you reach it deliberately. */}
+        <SnackbarProvider>
         <div className="min-h-screen bg-background text-foreground">
           <DashboardNav />
           <CompactNav />
@@ -64,6 +70,7 @@ export default async function DashboardLayout({
             {children}
           </main>
         </div>
+        </SnackbarProvider>
       </WriteQueueProvider>
     </ComposerProvider>
   );

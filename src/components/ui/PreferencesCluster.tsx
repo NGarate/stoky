@@ -1,11 +1,12 @@
 "use client";
 
 import { LocaleSwitcher } from "@/components/ui/LocaleSwitcher";
+import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ThemeControl } from "@/components/ui/ThemeControl";
 import type { JSX } from "react";
 
 /**
- * Theme and language, together.
+ * Theme, language and how long a confirmation stays, together.
  *
  * The two settings that change how the app looks were previously in two
  * unrelated places — one in the navigation bar, one nowhere at all — so this
@@ -29,6 +30,11 @@ export function PreferencesCluster({
     <div className={`flex flex-wrap items-end gap-x-6 gap-y-3 ${className}`}>
       <ThemeControl />
       <LocaleSwitcher />
+      {/* WCAG 2.2.1: the snackbar removes itself, which is a time limit, and
+          a time limit has to be adjustable. It sits here rather than in a
+          settings page of its own because it is the same kind of thing as
+          the two beside it — how this screen behaves for the person at it. */}
+      <SnackbarDurationControl />
     </div>
   );
 }

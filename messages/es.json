@@ -750,7 +750,11 @@
       "exportDone": "Archivo descargado. Guárdalo en un sitio seguro: contiene los nombres y correos de quienes usan este hogar.",
       "exportFailed": "No se ha podido preparar el archivo. Inténtalo otra vez dentro de un momento.",
       "exportImagesNote": "Las fotos de los tickets no van dentro del archivo, solo su ubicación. Si quieres conservarlas, copia también la carpeta de subidas del servidor."
-    }
+    },
+    "snackbarDuration": "Duración de los avisos",
+    "snackbarDefault": "Normal",
+    "snackbarLong": "Larga",
+    "snackbarForever": "Hasta descartar"
   },
   "errors": {
     "generic": "Ha ocurrido un error",
@@ -900,5 +904,11 @@
     "undoAddOf": "Quitar «{name}» de la lista de la compra",
     "listName": "Lista de la cocina",
     "listCreateFailed": "Ahora mismo no se puede crear la lista. Prueba cuando vuelva la conexión."
+  },
+  "snackbar": {
+    "regionLabel": "Avisos (pulsa F8 para ir al aviso)",
+    "undo": "Deshacer",
+    "dismiss": "Descartar el aviso",
+    "announcePrefix": "Aviso"
   }
 }

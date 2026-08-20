@@ -20,6 +20,16 @@ import en from "../../../messages/en.json";
  * Dynamic keys are skipped rather than guessed at — `t(someVariable)` cannot be
  * resolved here, and pretending otherwise would either fail on correct code or
  * quietly pass on anything.
+ *
+ * **Snackbar messages are the exception that needed a second scan.** They are
+ * not `t("…")` calls at the call site: the queue stores an op label as
+ * `{ key, values }` and the provider is the only place that translates it
+ * (`queue.ts:41-47` — a queue composed in Spanish and read after a language
+ * switch would otherwise be half in each). To the regex above that is
+ * `t(variable)`, so every snackbar key would have been skipped and a
+ * misspelled one would have reached production announcing MISSING_MESSAGE.
+ * `labelKeysIn` collects those literals, so the gate has no hole from the
+ * moment it opens.
  */
 
 const SOURCE_ROOT = join(import.meta.dir, "../..");
@@ -89,13 +99,46 @@ function usagesIn(file: string): Usage[] {
   return usages;
 }
 
-const ALL_USAGES = sourceFiles(SOURCE_ROOT).flatMap(usagesIn);
+/**
+ * Keys written as data rather than called: `message: { key: "offline.usedUp" }`
+ * and the `label: { key: … }` every queued operation carries.
+ *
+ * Always absolute — there is no namespace at the point they are declared, and
+ * the provider that renders them uses `useTranslations()` with none.
+ */
+function labelKeysIn(file: string): Usage[] {
+  const source = readFileSync(file, "utf8");
+  const pattern = /\bkey:\s*"([^"]+)"/g;
+
+  return [...source.matchAll(pattern)]
+    .map((match) => match[1] as string)
+    // `key:` is a common property name — an HTTP header in `middleware.ts`, a
+    // sentinel in `LocationPicker`. A catalogue key is always
+    // `namespace.name`, dotted and camelCase, so that shape is the filter.
+    // The cost of being wrong here is one direction only: a key this misses
+    // is unguarded, never a false failure on correct code.
+    .filter((key) => /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+$/.test(key))
+    .map((key) => ({ file, key }));
+}
+
+const ALL_USAGES = sourceFiles(SOURCE_ROOT).flatMap((file) => [
+  ...usagesIn(file),
+  ...labelKeysIn(file),
+]);
 
 describe("the keys components actually ask for", () => {
   it("finds some, so the scan is not vacuous", () => {
     // If the regexes stopped matching, every assertion below would pass while
     // checking nothing at all.
     expect(ALL_USAGES.length).toBeGreaterThan(100);
+  });
+
+  it("sees the keys that are written as data, not called", () => {
+    // The op labels and snackbar messages. Without this the second scan could
+    // silently match nothing and the first assertion would not notice.
+    expect(
+      ALL_USAGES.some((usage) => usage.key.startsWith("offline.")),
+    ).toBe(true);
   });
 
   it("all exist in the Spanish catalogue", () => {

@@ -8,6 +8,7 @@ import { StoreSelector } from "@/components/store/StoreSelector";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
+import { useSnackbar } from "@/components/ui/snackbar";
 
 /**
  * `FileReader` as a promise.
@@ -30,6 +31,7 @@ function readAsDataUrl(file: File): Promise<string> {
 
 export default function UploadPage() {
   const t = useTranslations("receipts");
+  const snackbar = useSnackbar();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedReceiptId, setUploadedReceiptId] = useState<string | null>(null);
@@ -76,7 +78,15 @@ export default function UploadPage() {
       setUploadedReceiptId(result.id);
     } catch (error) {
       console.error("Upload failed:", error);
-      alert(t("uploadError"));
+      // Was `alert()`: a modal that stops the page, cannot be styled, cannot
+      // be translated by anything but its message, and is the one piece of
+      // feedback in this application a screen reader announces as a browser
+      // dialog rather than as part of the page.
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "receipts.uploadError" },
+        tone: "danger",
+      });
     } finally {
       setIsUploading(false);
     }

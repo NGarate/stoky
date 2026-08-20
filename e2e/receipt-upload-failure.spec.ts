@@ -12,18 +12,15 @@ import { SESSION_FILE } from "./session";
  *
  * Browser-tier because that is where the defect lives: both the broken and the
  * working version type-check, render, and pass every unit test.
+ *
+ * The message itself is now a snackbar rather than the `alert()` that was
+ * unreachable; what this asserts is unchanged — that a failure is reported.
  */
 test.use({ storageState: SESSION_FILE });
 
 test("says so when the upload fails, instead of waiting for ever", async ({
   page,
 }) => {
-  const dialogs: string[] = [];
-  page.on("dialog", async (dialog) => {
-    dialogs.push(dialog.message());
-    await dialog.dismiss();
-  });
-
   await page.route("**/api/trpc/**", async (route) => {
     if (route.request().url().includes("receipt.upload")) {
       await route.abort("failed");
@@ -44,8 +41,7 @@ test("says so when the upload fails, instead of waiting for ever", async ({
     ),
   });
 
-  await expect
-    .poll(() => dialogs.length, { timeout: 15_000 })
-    .toBeGreaterThan(0);
-  expect(dialogs[0]).toContain("No se ha podido subir el ticket");
+  const snackbar = page.getByTestId("snackbar");
+  await expect(snackbar).toBeVisible();
+  await expect(snackbar).toContainText("No se ha podido subir el ticket");
 });
