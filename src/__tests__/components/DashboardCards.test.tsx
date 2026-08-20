@@ -4,19 +4,21 @@ import { screen, cleanup } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
 
 /**
- * The Panel's opening: quick actions first, then one line of summary.
+ * The Panel's opening: quick actions first, then the sections themselves.
  *
- * Noel's second review (2026-08-19) removed what the first one had left: the
- * alert rows were cards restating the lists rendered directly below them, and
- * a screen that says everything twice is harder to read, not safer. What
- * needs attention is now one short sentence — a summary, not a set of doors,
- * because the sections underneath are already the doors. The scan quick
- * action went with it: on a phone, Escanear is permanently in the bottom
- * bar, and this screen is the desktop overview, where there is no camera.
+ * Three owner reviews have each cut a layer of the same redundancy. The
+ * second (2026-08-19) removed the alert rows — cards restating the lists
+ * rendered directly below them — and left one summary sentence in their
+ * place. The third removed the sentence: "3 productos por reponer" sitting
+ * above a section headed "Necesita reposición" that lists three products is
+ * the same count twice, and the section was always the door. The scan quick
+ * action went in the second pass: on a phone Escanear is permanently in the
+ * bottom bar, and this screen is the desktop overview, where there is no
+ * camera.
  *
- * What survives from the owner's pass (Phase 8 item 2): the summary asks the
- * server the same `needsRestock` question the inventory's restock filter
- * asks, so the number and the list it describes cannot disagree.
+ * What survives from Phase 8 item 2 is the invariant, not its wording: this
+ * screen asks the server the same `needsRestock` question the inventory's
+ * restock filter asks, so the rows here and the rows there cannot disagree.
  */
 
 let overviewCalls: Array<Record<string, unknown>>;
@@ -101,12 +103,14 @@ describe("the Panel's opening order", () => {
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
     const addStock = screen.getByRole("link", { name: "Añadir stock" });
-    const summary = screen.getByText(/por reponer/);
+    const restock = screen.getByRole("heading", {
+      name: "Necesita reposición",
+    });
 
     // The person opening this screen came to *do* something; what needs
     // attention reads second.
     expect(
-      addStock.compareDocumentPosition(summary) &
+      addStock.compareDocumentPosition(restock) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
@@ -124,7 +128,7 @@ describe("the Panel's opening order", () => {
   });
 });
 
-describe("the Panel's summary line", () => {
+describe("what the Panel does not say twice", () => {
   it("does not present the catalogue size as needing attention", () => {
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
@@ -132,43 +136,31 @@ describe("the Panel's summary line", () => {
     expect(screen.queryByText(/Productos en el catálogo/)).toBeNull();
   });
 
-  it("folds everything needing attention into one sentence, not cards", () => {
+  it("does not count above the sections that already show the count", () => {
     expiredStub.data = [expiredItem()];
     expiringStub.data = [expiringItem(), expiringItem({ id: "b3" })];
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
-    const summary = screen.getByText(
-      "1 lote caducado · 2 lotes caducan pronto · 1 producto por reponer",
-    );
-    // A summary, not a door: the sections below are the doors, and a second
-    // set of links restating them was the redundancy Noel struck.
-    expect(summary.closest("a")).toBeNull();
-    expect(
-      screen.queryByRole("link", { name: /Hay que reponer/ }),
-    ).toBeNull();
-  });
+    // The state that used to produce "1 lote caducado · 2 lotes caducan
+    // pronto · 1 producto por reponer". The sections below list exactly those
+    // rows, so the sentence was the same information a second time.
+    expect(screen.queryByText(/por reponer/)).toBeNull();
+    expect(screen.queryByText(/lotes? caducad/)).toBeNull();
+    expect(screen.queryByText(/lotes? caduca/)).toBeNull();
 
-  it("says when the restock count is a bound, not a total", () => {
-    overviewStub.data = {
-      products: Array.from({ length: 100 }, (_, i) => row({ id: `p${i}` })),
-      nextCursor: "p99",
-    };
-    renderWithIntl(<DashboardPage />, { locale: "es" });
-
+    // What replaced it is what was always underneath: the sections, which
+    // are the doors, still carry every row.
     expect(
-      screen.getByText(/más de 100 productos por reponer/),
+      screen.getByRole("heading", { name: "Necesita reposición" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
   });
 
-  it("shows no summary at all when nothing needs attention", () => {
+  it("still says all is well in words when nothing needs attention", () => {
     overviewStub.data = { products: [] };
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
-    // No "0 things wrong" line: the sections below already say all is well.
-    // (The patterns are the summary's own words — "No hay nada caducado", the
-    // empty section's sentence, must not trip them.)
-    expect(screen.queryByText(/por reponer/)).toBeNull();
-    expect(screen.queryByText(/lotes? caducad/)).toBeNull();
+    // Never a "0 things wrong" line — the empty sections say it themselves.
     expect(screen.getByText(/No falta nada/)).toBeInTheDocument();
   });
 

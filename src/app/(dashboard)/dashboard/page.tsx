@@ -10,20 +10,19 @@ import type { JSX, ReactNode } from "react";
  * Household overview — the screen every login lands on.
  *
  * It opens with the quick actions, because whoever lands here came to *do*
- * something — then one short sentence saying what needs attention, and then
- * the lists themselves. Noel's second review (2026-08-19) cut the alert rows
- * that stood between the two: they were cards restating the lists rendered
- * directly below them, and information said twice is not said better. The
- * summary is plain text, not a set of links — the sections underneath are
- * the doors. Scanning is not offered here either: on a phone Escanear is
- * permanently in the bottom bar, and this is the desktop overview, where
- * there is no camera.
+ * something — then the lists themselves. Noel's second review (2026-08-19)
+ * cut the alert rows that stood between the two: they were cards restating
+ * the lists rendered directly below them. The third review cut the sentence
+ * that replaced them for the same reason — "3 productos por reponer" above a
+ * section headed "Necesita reposición" listing three products is the count
+ * said twice, and the section was always the door. Scanning is not offered
+ * here either: on a phone Escanear is permanently in the bottom bar, and this
+ * is the desktop overview, where there is no camera.
  *
- * The data the summary and the lists share (Phase 8 item 2 — a number and
- * the list it describes must come from the same question):
+ * What it asks for:
  *
  * - `inventory.getStockOverview` with `needsRestock` — the same question
- *   /inventory?filter=restock asks, so summary and list cannot disagree.
+ *   /inventory?filter=restock asks, so this list and that one cannot disagree.
  * - `inventory.getExpiringItems` — batches with a date inside the window.
  * - `inventory.getExpiredItems` — batches already past their date.
  *
@@ -36,9 +35,9 @@ import type { JSX, ReactNode } from "react";
 const EXPIRY_WINDOW_DAYS = 7;
 
 /**
- * One page of the restock list. `getStockOverview` is cursor-paginated and
- * capped at 100 per page; past that, the summary says so in words rather than
- * quietly rounding — a wrong number is worse than an honest bound.
+ * One page of the restock list. `getStockOverview` is capped at 100 per page;
+ * past that the section shows its first rows and defers to
+ * /inventory?filter=restock, which is where the whole set lives.
  */
 const OVERVIEW_PAGE_SIZE = 100;
 
@@ -124,27 +123,6 @@ export default function DashboardPage(): JSX.Element {
   const expiredItems = expired.data ?? [];
   const expiringItems = expiring.data ?? [];
   const atRisk = expiredItems.length + expiringItems.length;
-  const restockIsCapped = restockQuery.data?.nextCursor !== undefined;
-
-  // What needs attention, in one sentence and nothing else. The lists below
-  // are the detail *and* the doors; repeating them as linked cards up here
-  // was saying everything twice (Noel's review, 2026-08-19). When nothing
-  // needs attention the sentence is absent — the sections already say all is
-  // well in words.
-  const summaryParts: string[] = [];
-  if (expiredItems.length > 0) {
-    summaryParts.push(t("summaryExpired", { count: expiredItems.length }));
-  }
-  if (expiringItems.length > 0) {
-    summaryParts.push(t("summaryExpiring", { count: expiringItems.length }));
-  }
-  if (restock.length > 0) {
-    summaryParts.push(
-      restockIsCapped
-        ? t("summaryRestockCapped", { count: restock.length })
-        : t("summaryRestock", { count: restock.length }),
-    );
-  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -163,12 +141,6 @@ export default function DashboardPage(): JSX.Element {
           <QuickLink href="/receipts/upload" label={t("quickUploadReceipt")} />
         </ul>
       </section>
-
-      {summaryParts.length > 0 && (
-        <p className="font-medium text-foreground">
-          {summaryParts.join(" · ")}
-        </p>
-      )}
 
       <section aria-labelledby="dashboard-restock">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
