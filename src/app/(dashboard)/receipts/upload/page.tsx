@@ -9,6 +9,25 @@ import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 
+/**
+ * `FileReader` as a promise.
+ *
+ * It is a callback API, and awaiting the upload *inside* `onloadend` puts the
+ * await in a different call stack from the `try` around it — so a rejected
+ * upload was an unhandled rejection rather than a caught error, and the
+ * failure branch could never run. The same shape made `finally` fire while the
+ * file was still being read.
+ */
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("The file could not be read"));
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function UploadPage() {
   const t = useTranslations("receipts");
   const router = useRouter();
@@ -47,17 +66,14 @@ export default function UploadPage() {
     // form. Revisit when babel-plugin-react-compiler supports it.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        const result = await uploadMutation.mutateAsync({
-          fileBase64: base64,
-          mimeType: file.type,
-          ...(storeId !== "" ? { storeId } : {}),
-        });
-        setUploadedReceiptId(result.id);
-      };
-      reader.readAsDataURL(file);
+      const dataUrl = await readAsDataUrl(file);
+      const base64 = dataUrl.split(",")[1];
+      const result = await uploadMutation.mutateAsync({
+        fileBase64: base64,
+        mimeType: file.type,
+        ...(storeId !== "" ? { storeId } : {}),
+      });
+      setUploadedReceiptId(result.id);
     } catch (error) {
       console.error("Upload failed:", error);
       alert(t("uploadError"));
