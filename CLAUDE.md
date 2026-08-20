@@ -93,7 +93,7 @@ src/
     auth.ts                   # Auth.js configuration (the config is this file)
     auth/                     # Error-message mapping only
   components/
-    ui/                       # shadcn/ui components (Radix + Tailwind, copied into project)
+    ui/                       # The design system: ItemRow, Badge, Button, Input, BackLink (see Design System below)
     barcode/                  # Barcode scanner
     receipt/                  # Receipt review UI
     inventory/                # Inventory-specific components
@@ -130,6 +130,77 @@ messages/
 - `db`: PostgreSQL 16 (internal network only, no exposed ports)
 - `cache`: Valkey 8 (internal network only, no exposed ports)
 - Production adds Traefik v3 for TLS termination
+
+## Design System
+
+**Before building anything that renders, look in `src/components/ui/`.** This
+section exists because nine screens grew nine ways of drawing the same list
+row, seven pills were written separately in four sizes, and 177 hardcoded
+`min-h-[48px]` declarations restated a floor the primitives already guarantee
+(`docs/DESIGN_AUDIT.md` A5.3). A new component that duplicates one of these is
+a regression, not a new feature.
+
+### The list row
+
+Every list of things uses `<ItemRow>` (`src/components/ui/item-row.tsx`). Its
+grammar is fixed: a **title** that links to the thing, a **status** badge
+opposite it, the details as a two-column **meta** definition list, and
+**actions** last.
+
+| Density | Used by | Why |
+|---|---|---|
+| `compact` | dense desktop lists | fits more on a screen read at a desk |
+| `default` | inventory, products, prices, receipts, settings | the reference — this is the row the owner picked |
+| `touch` | `/kitchen`, `/shopping` | Screen A is used with a trolley in one hand and Screen B is read from a metre away (`REDESIGN_PLAN.md` §3) |
+
+Two rules the component enforces, and callers must not work around:
+
+- **The title links; the row does not.** A row that is entirely a link
+  announces its whole contents as its accessible name and leaves nowhere to
+  put an action.
+- **`tone` is never the only carrier.** A tinted row always has the badge that
+  says the same thing in words (`REDESIGN_PLAN.md` §8).
+
+A screen that needs a different arrangement needs a conversation, not a fourth
+hand-written `<li>`.
+
+### Badges
+
+`<Badge tone=… variant=…>` (`src/components/ui/badge.tsx`) is the only pill.
+`ok` / `warn` / `danger` are **reserved for state** and mean healthy,
+needs-attention and wrong; anything that is not a state (`auto-generated`,
+`best price`) takes `neutral`. Each tone carries the foreground
+`scripts/check-contrast.ts` measured for it, so a badge cannot invent an
+unaudited colour pair. `variant="outline"` is for a badge sitting on a row
+already tinted with its own tone.
+
+Stock state has one answer, in `src/components/inventory/StockStatus.tsx`.
+Do not re-derive it: four screens each deriving it is how one product came to
+wear two different words (ISSUES UI-11).
+
+### Buttons and links
+
+- **Anything that *does* something is a `<Button>`** — `src/components/ui/button.tsx`,
+  colour chosen by the kind of action: `default` to commit, `destructive` to
+  destroy, `outline`/`secondary` to step aside, `ghost` for a row action.
+  Never a bare `<button>` with hand-written classes, and never a `<Link>`.
+- **Anything that *goes* somewhere is a link.** The way back out of a sub-page
+  is `<BackLink>` (`src/components/ui/back-link.tsx`), which carries the arrow
+  as an `aria-hidden` icon. Never put an arrow in a message string: it is a
+  layout decision in a translation file and the screen reader pronounces it.
+
+### Sizes and tokens
+
+- **Never write `min-h-[48px]` outside `src/components/ui/`.** Every primitive
+  clears the 48px floor already (PROGRESS D17, above the AAA 44).
+  Restating it means changing the floor leaves the restatements behind, which
+  is exactly the `h-10` defect `src/__tests__/components/target-size.test.tsx`
+  exists to prevent.
+- **Colour comes from `src/app/globals.css` and nowhere else.** A new token
+  goes in the light block, *both* dark blocks, and `@theme inline` — and needs
+  a row in the `PAIRS` list of `scripts/check-contrast.ts`. That list is
+  hand-written, so a token added without one is a token nothing audits and
+  nothing goes red to say so.
 
 ## Commit Convention
 
@@ -230,7 +301,7 @@ suite.
 When working with this codebase:
 
 1. **Always run lint, typecheck and `pnpm check:react`** after making changes
-2. **Check existing patterns** in similar files before implementing new features
+2. **Check `src/components/ui/` first**, then existing patterns in similar files. Anything that renders a list row, a state pill, an action or a way back already exists — see the Design System section. Writing a second one is a regression
 3. **Follow the domain-driven structure** — add code to the appropriate domain folder
 4. **Update migrations** when changing the Prisma schema
 5. **Add tests** for new functionality
