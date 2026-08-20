@@ -148,6 +148,22 @@ export interface WriteQueue {
    */
   cancel(id: string): boolean;
 
+  /**
+   * How long this change can still be taken back, in milliseconds.
+   *
+   * Zero for anything that cannot: a change with no hold, one whose window
+   * has closed, one already in flight, one that was never here. The caller
+   * therefore needs no second question — a positive number means `cancel`
+   * would work now and for that long, which is exactly what an undo
+   * affordance must know before it offers itself.
+   *
+   * `nextDelayMs` answers a neighbouring question and cannot serve this one:
+   * it looks only at the head, because it exists to tell the drain timer when
+   * to wake. A held change sitting second in the queue is undoable and is not
+   * the head.
+   */
+  holdRemainingMs(id: string): number;
+
   /** Put a failed change back at the tail, with its strikes cleared. */
   retry(id: string): void;
   /** Give up on a failed change deliberately. */
@@ -409,6 +425,14 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         pending: state.pending.filter((entry) => entry.id !== id),
       }));
       return true;
+    },
+
+    holdRemainingMs(id) {
+      // In flight is not undoable, whatever the clock says: `cancel` refuses
+      // it, and an undo button that does nothing is worse than none.
+      if (id === inFlightId) return 0;
+      const op = store.getState().pending.find((entry) => entry.id === id);
+      return op ? holdRemainingMs(op) : 0;
     },
 
     retry(id) {

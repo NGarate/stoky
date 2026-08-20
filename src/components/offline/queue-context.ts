@@ -26,6 +26,12 @@ export interface WriteQueueValue {
   drain: () => void;
   /** Take back a change that has not been sent. False when it is too late. */
   cancel: (id: string) => boolean;
+  /**
+   * How long that change can still be taken back, in milliseconds. Zero when
+   * it cannot be, for any reason — so a positive number is the whole licence
+   * an undo affordance needs to offer itself, and for how long.
+   */
+  holdRemainingMs: (id: string) => number;
   retry: (id: string) => void;
   discard: (id: string) => void;
   /** Send everything now and resolve when the queue has settled. */

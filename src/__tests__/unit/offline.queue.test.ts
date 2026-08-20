@@ -424,6 +424,70 @@ describe("a change made with a hold", () => {
     expect(queue.getState().pending).toHaveLength(0);
   });
 
+  it("says how long it can still be taken back, not just when to wake", () => {
+    // `nextDelayMs` answers the drain timer's question and only ever looks at
+    // the head. An undo affordance asks about *its own* change, which may be
+    // second in the queue and is undoable all the same.
+    const { queue, advance } = openHeld(async () => {});
+    const first = queue.enqueue({ ...tick(), holdMs: 10_000 });
+    const second = queue.enqueue({ ...tick(), holdMs: 10_000 });
+
+    expect(first.ok && queue.holdRemainingMs(first.id)).toBe(10_000);
+    expect(second.ok && queue.holdRemainingMs(second.id)).toBe(10_000);
+
+    advance(4_000);
+
+    expect(first.ok && queue.holdRemainingMs(first.id)).toBe(6_000);
+    expect(second.ok && queue.holdRemainingMs(second.id)).toBe(6_000);
+  });
+
+  it("reports zero for everything that cannot be taken back", async () => {
+    // One number, four reasons, so the caller needs no second question: a
+    // positive answer means `cancel` works now and for that long.
+    const { queue, advance } = openHeld(async () => {});
+
+    const noHold = queue.enqueue(tick());
+    expect(noHold.ok && queue.holdRemainingMs(noHold.id)).toBe(0);
+
+    expect(queue.holdRemainingMs("never-existed")).toBe(0);
+
+    const expiring = queue.enqueue({ ...tick(), holdMs: 10_000 });
+    advance(10_000);
+    expect(expiring.ok && queue.holdRemainingMs(expiring.id)).toBe(0);
+
+    await queue.drain();
+    // Sent, so gone from pending, so zero — the same answer `cancel` gives.
+    expect(expiring.ok && queue.holdRemainingMs(expiring.id)).toBe(0);
+    expect(expiring.ok && queue.cancel(expiring.id)).toBe(false);
+  });
+
+  it("reports zero while the change is in flight, whatever the clock says", async () => {
+    // The window can still be open by the clock and the change already gone.
+    // `cancel` refuses it, so this must too — an undo button that does
+    // nothing is worse than no undo button.
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let heldMidFlight: number | null = null;
+
+    const { queue } = openHeld(async () => {
+      heldMidFlight = queue.holdRemainingMs(queue.getState().pending[0]?.id ?? "");
+      await gate;
+    });
+    // No hold, so it is eligible immediately and reaches the sender; the
+    // question is what the queue says about it while it is there.
+    queue.enqueue(tick());
+
+    const draining = queue.drain();
+    release();
+    await draining;
+
+    // `?? -1` for the same reason the cancel test above uses `?? true`: the
+    // assignment happens inside the sender, which the compiler cannot see.
+    expect(heldMidFlight ?? -1).toBe(0);
+  });
+
   it("holds the changes behind it, because order is correctness", async () => {
     // consumeStock refuses when the quantity exceeds what is available, and
     // what is available depends on the queued writes in front of it. A held
