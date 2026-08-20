@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
+import { formatMoney } from "@/lib/money";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
@@ -51,24 +52,6 @@ function serverErrorKey(message: string | undefined): string {
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
-}
-
-/**
- * Formats an amount in the currency the record was stored with.
- *
- * `PriceRecord.currency` is a free-text column with a default, so a row written
- * by something other than this app could hold a code `Intl` rejects. That
- * throws a `RangeError`, which would take the whole page down over one bad
- * row — the number is still worth showing.
- */
-function formatMoney(locale: string, amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(locale, { style: "currency", currency }).format(
-      amount,
-    );
-  } catch {
-    return `${amount} ${currency}`;
-  }
 }
 
 export default function ProductDetailPage({

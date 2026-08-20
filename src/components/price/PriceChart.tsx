@@ -10,7 +10,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 interface PriceDataPoint {
   date: string;
@@ -25,6 +26,7 @@ interface PriceChartProps {
 
 export function PriceChart({ data, showStores = false }: PriceChartProps) {
   const t = useTranslations("prices.chart");
+  const locale = useLocale();
 
   // Group data by date for single line or by store for multiple lines
   type ChartDataPoint = { date: string; [key: string]: string | number };
@@ -74,10 +76,10 @@ export function PriceChart({ data, showStores = false }: PriceChartProps) {
           <YAxis
             tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
             stroke="var(--border)"
-            tickFormatter={(value) => `€${value.toFixed(2)}`}
+            tickFormatter={(value: number) => formatMoney(locale, value, DEFAULT_CURRENCY)}
           />
           <Tooltip
-            formatter={(value: number) => [`€${value.toFixed(2)}`, t("yAxis")]}
+            formatter={(value: number) => [formatMoney(locale, value, DEFAULT_CURRENCY), t("yAxis")]}
             labelFormatter={(label) => label}
           />
           {showStores ? (

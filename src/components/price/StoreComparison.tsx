@@ -1,6 +1,7 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 interface StoreComparisonProps {
@@ -9,6 +10,7 @@ interface StoreComparisonProps {
 
 export function StoreComparison({ productId }: StoreComparisonProps) {
   const t = useTranslations();
+  const locale = useLocale();
   const { data: prices, isLoading } = api.price.getLatestPrices.useQuery({
     productId,
   });
@@ -31,6 +33,11 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
   const worstPrice = sortedPrices[sortedPrices.length - 1];
   const avgPrice =
     sortedPrices.reduce((sum, p) => sum + p.price, 0) / sortedPrices.length;
+  // The three figures above the list are derived from these rows rather than
+  // being rows themselves, so they take the cheapest row's currency. Mixing
+  // currencies in one comparison is already meaningless — an average across
+  // two of them doubly so — and this at least labels the result honestly.
+  const currency = bestPrice.currency ?? DEFAULT_CURRENCY;
 
   /** The premium over the cheapest store, as a whole percentage. */
   const premium = (price: number): string =>
@@ -46,20 +53,20 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
         <div className="rounded-md bg-ok p-3">
           <p className="text-sm text-ok-foreground">{t("prices.bestPrice")}</p>
           <p className="text-2xl font-bold text-ok-foreground">
-            €{bestPrice.price.toFixed(2)}
+            {formatMoney(locale, bestPrice.price, currency)}
           </p>
           <p className="text-xs text-ok-foreground">{bestPrice.store.name}</p>
         </div>
         <div className="rounded-md bg-muted p-3">
           <p className="text-sm text-muted-foreground">{t("prices.averagePrice")}</p>
           <p className="text-2xl font-bold text-foreground">
-            €{avgPrice.toFixed(2)}
+            {formatMoney(locale, avgPrice, currency)}
           </p>
         </div>
         <div className="rounded-md bg-danger p-3">
           <p className="text-sm text-danger-foreground">{t("prices.worstPrice")}</p>
           <p className="text-2xl font-bold text-danger-foreground">
-            €{worstPrice.price.toFixed(2)}
+            {formatMoney(locale, worstPrice.price, currency)}
           </p>
           <p className="text-xs text-danger-foreground">{worstPrice.store.name}</p>
         </div>
@@ -79,7 +86,7 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
                 {price.store.name}
               </span>
               <span className="text-lg font-semibold text-heading md:text-2xl">
-                €{price.price.toFixed(2)}
+                {formatMoney(locale, price.price, price.currency ?? DEFAULT_CURRENCY)}
               </span>
             </div>
             <p className="mt-2 text-sm text-muted-foreground md:text-lg">
@@ -140,7 +147,7 @@ export function StoreComparison({ productId }: StoreComparisonProps) {
                 </div>
               </td>
               <td className="py-3 text-right font-medium">
-                €{price.price.toFixed(2)}
+                {formatMoney(locale, price.price, price.currency ?? DEFAULT_CURRENCY)}
               </td>
               <td className="py-3 text-right text-sm text-muted-foreground">
                 {new Date(price.recordedAt).toLocaleDateString()}

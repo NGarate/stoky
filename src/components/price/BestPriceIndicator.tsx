@@ -1,6 +1,7 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 interface BestPriceIndicatorProps {
@@ -15,6 +16,7 @@ export function BestPriceIndicator({
   currentStoreId,
 }: BestPriceIndicatorProps) {
   const t = useTranslations("prices");
+  const locale = useLocale();
   const { data: prices, isLoading } = api.price.getLatestPrices.useQuery({
     productId,
   });
@@ -72,7 +74,7 @@ export function BestPriceIndicator({
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">{t("bestPrice")}:</span>
       <span className="font-medium text-ok-foreground">
-        €{bestPrice.price.toFixed(2)}
+        {formatMoney(locale, bestPrice.price, bestPrice.currency ?? DEFAULT_CURRENCY)}
       </span>
       <span className="text-sm text-muted-foreground">{t("atStore", { store: bestPrice.store.name })}</span>
     </div>

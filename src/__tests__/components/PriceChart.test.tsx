@@ -121,10 +121,17 @@ describe("PriceChart", () => {
     expect(legendRendered).toBe(true);
   });
 
-  it("formats the price axis in euros", () => {
+  it("formats the price axis the way the reader's language writes money", () => {
     renderWithIntl(<PriceChart data={data} />);
 
-    expect(yTickFormatter?.(1.5)).toBe("€1.50");
+    // Not "€1.50". `renderWithIntl` renders in Spanish, which puts the symbol
+    // after the number and separates decimals with a comma. The axis used to
+    // be hand-written as `€${n.toFixed(2)}`, which is a format no Spanish
+    // reader uses — and which no assertion noticed because this one asserted
+    // it too. The space before the symbol is U+00A0, which is what Intl emits.
+    const tick = yTickFormatter?.(1.5) ?? "";
+    expect(tick).toContain("1,50");
+    expect(tick.indexOf("€")).toBeGreaterThan(tick.indexOf("1,50"));
   });
 
   it("renders an empty chart without crashing", () => {

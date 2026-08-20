@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 import { PriceChart } from "@/components/price/PriceChart";
 import { StoreComparison } from "@/components/price/StoreComparison";
@@ -13,6 +14,7 @@ interface ProductPricePageProps {
 
 export default function ProductPricePage({ params }: ProductPricePageProps) {
   const t = useTranslations();
+  const locale = useLocale();
   const [days, setDays] = useState(90);
   const { productId } = React.use(params);
 
@@ -96,7 +98,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
                       {t("prices.averagePrice")}
                     </dt>
                     <dd className="mt-1 font-medium text-foreground">
-                      €{trend.averagePrice.toFixed(2)}
+                      {formatMoney(locale, trend.averagePrice, DEFAULT_CURRENCY)}
                     </dd>
                   </div>
                   <div>
@@ -104,7 +106,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
                       {t("prices.bestPrice")}
                     </dt>
                     <dd className="mt-1 font-medium text-ok-foreground">
-                      €{trend.minPrice.toFixed(2)}
+                      {formatMoney(locale, trend.minPrice, DEFAULT_CURRENCY)}
                     </dd>
                   </div>
                   <div>
@@ -112,7 +114,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
                       {t("prices.worstPrice")}
                     </dt>
                     <dd className="mt-1 font-medium text-danger-foreground">
-                      €{trend.maxPrice.toFixed(2)}
+                      {formatMoney(locale, trend.maxPrice, DEFAULT_CURRENCY)}
                     </dd>
                   </div>
                 </dl>
@@ -136,13 +138,13 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
                     {new Date(trend.date).toLocaleDateString()}
                   </td>
                   <td className="py-3 text-right">
-                    €{trend.averagePrice.toFixed(2)}
+                    {formatMoney(locale, trend.averagePrice, DEFAULT_CURRENCY)}
                   </td>
                   <td className="py-3 text-right text-ok-foreground">
-                    €{trend.minPrice.toFixed(2)}
+                    {formatMoney(locale, trend.minPrice, DEFAULT_CURRENCY)}
                   </td>
                   <td className="py-3 text-right text-danger-foreground">
-                    €{trend.maxPrice.toFixed(2)}
+                    {formatMoney(locale, trend.maxPrice, DEFAULT_CURRENCY)}
                   </td>
                 </tr>
               ))}

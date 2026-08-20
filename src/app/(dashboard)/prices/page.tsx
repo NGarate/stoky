@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
 
 export default function PricesPage() {
   const t = useTranslations();
+  const locale = useLocale();
   const [search, setSearch] = useState("");
 
   const { data: products, isLoading } = api.price.getProductPrices.useQuery({
@@ -89,7 +91,7 @@ export default function PricesPage() {
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">{t("products.lastPrice")}</p>
                         <p className="font-medium">
-                          €{product.priceRecords[0].price.toFixed(2)}
+                          {formatMoney(locale, product.priceRecords[0].price, product.priceRecords[0].currency ?? DEFAULT_CURRENCY)}
                         </p>
                       </div>
                     ) : (
@@ -99,7 +101,7 @@ export default function PricesPage() {
                     )}
                     <BestPriceIndicator productId={product.id} />
                     {/* The whole row is the link, so its name already reads
-                        "Leche entera · Lácteos · Último precio €0.99 …". A
+                        "Leche entera · Lácteos · Último precio 0,99 € …". A
                         chevron announcing "Ver detalles" on the end of that
                         adds a hardcoded Spanish string to an otherwise
                         translated name, and says nothing the row has not
