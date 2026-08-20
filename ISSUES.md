@@ -12,13 +12,14 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6 and UI-11.** TEST-5 is the intermittent bun
+**Open: TEST-5 and TEST-6.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s
 whose stated reason names a phase that closed. PRICE-1 came out of the
 owner's first pass on 2026-08-18; UI-10 and PRICE-1, filed the same day,
-closed the same day (`d7c178d`, `4bbb82d`). UI-11 is the open one — found
-verifying the third unit in the browser.
+closed the same day (`d7c178d`, `4bbb82d`). UI-11, found verifying the third
+unit in the browser, closed with the design-system extraction that gave it
+one place to be fixed.
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
@@ -79,7 +80,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-3 | A seeded-session E2E test writes stock the low-stock test asserts | ✅ Resolved (Phase 3) |
 | TEST-4 | The low-stock badge is unchecked on the card tier | ✅ Resolved (Phase 4) |
 | UI-10 | The auth hero panels are painted with the action colour | ✅ Resolved (`d7c178d`) |
-| UI-11 | A run-out product with a minimum is labelled low, not out | 🟡 Open |
+| UI-11 | A run-out product with a minimum is labelled low, not out | ✅ Resolved 2026-08-20 |
 | PRICE-1 | No UI path can create a price record | ✅ Resolved (`4bbb82d`) |
 
 ---
@@ -1699,11 +1700,12 @@ theme needs its own answer, because pale cream is a light-theme idea.
 
 ---
 
-### 🟡 UI-11: A run-out product with a minimum is labelled low, not out
+### ✅ UI-11: A run-out product with a minimum is labelled low, not out
 
-**Files:** `src/app/(dashboard)/inventory/page.tsx` (StockStatus)  
+**Files:** `src/components/inventory/StockStatus.tsx`  
 **Severity:** LOW  
-**Status:** OPEN — found 2026-08-18, verifying Phase 8 item 2 in the browser
+**Status:** RESOLVED — found 2026-08-18, fixed 2026-08-20 in
+`fix(inventory): run out beats low, in the one place that now decides it`
 
 `StockStatus` checks `isLowStock` before `totalStock <= 0`, and a product at
 zero with a minimum set is both — so the seeded Café molido natural, at 0 of
@@ -1714,6 +1716,16 @@ Two screens, one product, two different words for the same state.
 The Panel's order is the right one: run out is the stronger statement and
 should win. One `if` swap plus the component assertions that pin the order;
 worth checking the card tier and the kitchen screen's vocabulary while there.
+
+**Fixed.** The swap landed in `StockStatus`, which the commit before it had
+lifted out of the inventory page into `src/components/inventory/` — so there
+is now one place that decides rather than four that each decide again. The
+card tier shares that component, so both inventory tiers changed together.
+The kitchen was checked and was already right: it asks `left <= 0` first and
+says "No queda nada". So was the Panel. `/inventory` was the only dissenter.
+
+`StockStatus.test.tsx` pins the precedence for the screens still to adopt
+these atoms; reverting the swap turns the first of them red.
 
 ---
 
@@ -2522,12 +2534,10 @@ which is short:
   roughly one `verify:ci` or CI `test` job in seven goes red spuriously;
   re-run before investigating.
 - **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
-- **UI-11** — "Stock bajo" on a product that has run out; the Panel says "Sin
-  stock" for the same row. One `if` swap, found in passing and filed per D6.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three
   manual passes, T7, the ± stepper, the per-device screen choice — and now
-  Phase 8, the owner's first pass, which owns the two entries above.
+  Phase 8, the owner's first pass, which owned UI-11.
 
 ---
 
