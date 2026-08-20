@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useDeferredValue, useEffect, useId, useRef, useState } from "react";
+import { BackLink } from "@/components/ui/back-link";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -213,12 +214,7 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-2xl">
-        <Link
-          href="/products"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToProduct")}
-        </Link>
+        <BackLink href="/products">{t("backToProduct")}</BackLink>
 
         <div
           role="alert"
@@ -258,12 +254,7 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link
-        href={`/products/${id}`}
-        className="inline-flex min-h-[48px] items-center text-primary underline"
-      >
-        {t("backToProduct")}
-      </Link>
+      <BackLink href={`/products/${id}`}>{t("backToProduct")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
