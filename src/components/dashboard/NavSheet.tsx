@@ -4,12 +4,10 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef } from "react";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
+import { tabbableWithin } from "@/lib/focus";
+
 import { SECONDARY_DESTINATIONS } from "./navigation";
 import type { JSX } from "react";
-
-/** Everything inside the panel that can hold focus, in DOM order. */
-const FOCUSABLE =
-  'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface NavSheetProps {
   /** The destination the current route belongs to, or `null`. */
@@ -59,11 +57,14 @@ export function NavSheet({
       const panel = panelRef.current;
       if (!panel) return;
 
-      const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      if (focusable.length === 0) return;
+      // Tab stops, not focusable elements. A radio group is one stop, and a
+      // `last` the browser never reaches is a wrap that never fires — see
+      // `tabbableWithin`.
+      const stops = tabbableWithin(panel);
+      if (stops.length === 0) return;
 
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+      const first = stops[0];
+      const last = stops[stops.length - 1];
       const active = document.activeElement;
 
       // Wrapping is done by hand because focus must not escape into the page

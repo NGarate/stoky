@@ -257,6 +257,28 @@ describe("CompactNav", () => {
     }
   });
 
+  it("never wraps onto a control Tab cannot reach", async () => {
+    pathname = "/dashboard";
+    renderWithIntl(<CompactNav />);
+
+    await openSheet();
+    const sheet = screen.getByRole("dialog");
+
+    // shift+Tab from the panel wraps to what the trap believes is its last
+    // stop. If that belief counts every radio in a group rather than the one
+    // the browser visits, the target is an element focus never lands on, the
+    // wrap silently fails, and focus leaves the sheet. The panel's preference
+    // controls are radio groups, so this is not hypothetical — it is what
+    // happens the moment a radio group is the last thing in the sheet.
+    await userEvent.tab({ shift: true });
+    const landed = document.activeElement;
+
+    expect(sheet.contains(landed)).toBe(true);
+    if (landed instanceof HTMLInputElement && landed.type === "radio") {
+      expect(landed.checked).toBe(true);
+    }
+  });
+
   it("wraps backwards from the first control to the last", async () => {
     pathname = "/dashboard";
     renderWithIntl(<CompactNav />);
