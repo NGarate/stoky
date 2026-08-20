@@ -4,7 +4,7 @@ import { createContext } from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
-import type { QueuedOp } from "@/lib/offline/queue";
+import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
 
 /**
  * Screen B, the kitchen (`REDESIGN_PLAN.md` §4).
@@ -14,7 +14,10 @@ import type { QueuedOp } from "@/lib/offline/queue";
  * for reading.
  */
 
-const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
+// Typed as the real result so a test can make the queue refuse a change.
+const enqueue = mock(
+  (_op: unknown): EnqueueResult => ({ ok: true, id: "op-1" }),
+);
 const cancel = mock((_id: string) => true);
 const createList = mock(
   (
@@ -35,6 +38,16 @@ let listsStub: { data: Array<{ id: string; name: string }> | undefined };
 let pending: QueuedOp[] = [];
 let expiringStub: Record<string, unknown>;
 let stockStub: Record<string, unknown>;
+
+const showSnackbar = mock((_input: unknown) => "snackbar-0");
+
+mock.module("@/components/ui/snackbar", () => ({
+  // The provider too: `mock.module` replaces the module for the whole
+  // process, so omitting it would turn the real provider into `undefined`
+  // in whichever suite renders it (the same trap `queue-context` documents).
+  SnackbarProvider: ({ children }: { children: unknown }) => children,
+  useSnackbar: () => ({ show: showSnackbar, dismiss: () => {} }),
+}));
 
 mock.module("@/components/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
@@ -102,6 +115,7 @@ function consumeOp(productId: string): QueuedOp {
 
 beforeEach(() => {
   enqueue.mockClear();
+  showSnackbar.mockClear();
   cancel.mockClear();
   createList.mockClear();
   createListFails = false;
@@ -273,64 +287,75 @@ describe("writing it on the list", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers undo exactly while the add is still queued", async () => {
-    pending = [
-      {
-        id: "op-add",
-        path: "shopping.addItem",
-        input: { shoppingListId: "l1", productId: "p9", quantity: 1, unit: "paquete" },
-        householdId: "h1",
-        label: { key: "offline.addedItem" },
-        createdAt: new Date("2026-08-18T10:00:00.000Z"),
-        attempts: 0,
-      },
-    ];
+  it("offers undo for the add, in the snackbar rather than in the row", async () => {
     renderWithIntl(<KitchenPage />);
 
     await userEvent.click(
-      screen.getByRole("button", { name: /Quitar «Café molido»/ }),
+      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
     );
 
-    expect(cancel).toHaveBeenCalledWith("op-add");
-    expect(enqueue).not.toHaveBeenCalled();
+    expect(showSnackbar.mock.calls[0]?.[0]).toEqual({
+      kind: "undo-queued",
+      opId: "op-1",
+      message: { key: "offline.addedItem", values: { name: "Café molido" } },
+    });
+    // And the row keeps its one action rather than swapping it for an undo:
+    // a row whose button changes label under the thumb is a row you mis-tap.
+    expect(
+      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("undo", () => {
-  it("is offered while the change is still waiting to be sent", async () => {
+  /**
+   * The button moved to the snackbar (D101), and the semantics did not. What
+   * this file pins is the half the page owns: that a tap offers an undo for
+   * *its own* queued change. That the offer is `queue.cancel` and never a
+   * compensating write — D57, the invariant — is enforced by the type here
+   * (a `undo-queued` entry carries an `opId` and no callback) and asserted
+   * against the real component in `Snackbar.test.tsx`.
+   */
+  it("offers the undo for the change the tap just queued", async () => {
+    renderWithIntl(<KitchenPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
+    );
+
+    expect(showSnackbar).toHaveBeenCalledTimes(1);
+    expect(showSnackbar.mock.calls[0]?.[0]).toEqual({
+      kind: "undo-queued",
+      // The id `enqueue` just returned, so undo cancels this change and no
+      // other — and never a compensating write.
+      opId: "op-1",
+      message: {
+        key: "offline.usedUp",
+        values: { quantity: 1, unit: "L", name: "Leche entera" },
+      },
+    });
+  });
+
+  it("says nothing when the queue refused the change for want of room", async () => {
+    enqueue.mockImplementationOnce(() => ({ ok: false, reason: "full" }));
+    renderWithIntl(<KitchenPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
+    );
+
+    // The shell's own banner reports a full queue, which is a state. Telling
+    // someone the unit was used when it was not is worse than silence.
+    expect(showSnackbar).not.toHaveBeenCalled();
+  });
+
+  it("keeps no undo button in the card, which moved the row under the thumb", () => {
     pending = [consumeOp("p1")];
     renderWithIntl(<KitchenPage />);
 
-    await userEvent.click(screen.getByRole("button", { name: /Deshacer/ }));
-
-    // Cancelling the queued change, never a compensating `addStock` — that
-    // would record the household acquiring something it never did, and every
-    // downstream reader would see a fabricated event.
-    expect(cancel).toHaveBeenCalledWith("op-pending");
-    expect(enqueue).not.toHaveBeenCalled();
-  });
-
-  it("disappears once the change can no longer be taken back", () => {
-    pending = [];
-    renderWithIntl(<KitchenPage />);
-
-    // The button tracks queue residency exactly: once the change has been
-    // sent, pressing undo could no longer work, so it is not offered.
+    // A second button appearing under the one just pressed pushed the next
+    // row down — on the tier where taps are least precise.
     expect(screen.queryByRole("button", { name: /Deshacer/ })).toBeNull();
-  });
-
-  it("belongs to the card whose product is waiting, and no other", () => {
-    expiringStub.data = [
-      batch({ id: "b1" }),
-      batch({ id: "b2", product: { id: "p2", name: "Huevos" } }),
-    ];
-    pending = [consumeOp("p2")];
-    renderWithIntl(<KitchenPage />);
-
-    expect(
-      screen.getByRole("button", { name: /Deshacer: Huevos/ }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Deshacer: Leche/ })).toBeNull();
   });
 });
 

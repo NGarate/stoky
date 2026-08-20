@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/components/offline/queue-context";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { projectStockTotals } from "@/lib/offline/project";
 import type { JSX } from "react";
 
@@ -40,6 +41,19 @@ import type { JSX } from "react";
  * round-trip online — the button flashed for a single render and was gone,
  * which is no undo at all. The hold keeps the two promises aligned: the
  * button shows exactly while pressing it works, and it works for ten seconds.
+ *
+ * **The button lives in the snackbar, not in the card** (D101). Two things
+ * were wrong with it in the card. It moved the layout: a second button
+ * appeared under the one just pressed, so the row below jumped down and the
+ * next thing to tap was somewhere else — on the tier where taps are least
+ * precise. And it put the undo where the eye had just left rather than where
+ * the confirmation is, so nothing told a person the tap had registered at all
+ * except a number changing somewhere else on the screen.
+ *
+ * What did not change is the semantics. The hold is still ten seconds, undo is
+ * still `queue.cancel`, and the affordance still exists exactly as long as
+ * pressing it works — the snackbar takes its lifetime from the queue rather
+ * than from a timer of its own.
  */
 /**
  * How long a tap can be taken back, and therefore how long it waits before
@@ -51,7 +65,8 @@ const UNDO_HOLD_MS = 10_000;
 
 export default function KitchenPage(): JSX.Element {
   const t = useTranslations("kitchen");
-  const { state: queue, enqueue, cancel } = useWriteQueue();
+  const { state: queue, enqueue } = useWriteQueue();
+  const snackbar = useSnackbar();
 
   // A tablet nobody touches must not show yesterday's answer. Long enough not
   // to be a load on a self-hosted box, short enough that "3 days" is true.
@@ -98,31 +113,15 @@ export default function KitchenPage(): JSX.Element {
     queue.pending,
   );
 
-  /** The queued change for this product, if one is still waiting. */
-  function pendingUse(productId: string): string | null {
-    const op = queue.pending.find(
-      (entry) =>
-        entry.path === "inventory.consumeStock" &&
-        (entry.input as { productId?: unknown }).productId === productId,
-    );
-    return op?.id ?? null;
-  }
-
-  /** The queued add for this product, if one is still waiting. */
-  function pendingAdd(productId: string): string | null {
-    const op = queue.pending.find(
-      (entry) =>
-        entry.path === "shopping.addItem" &&
-        (entry.input as { productId?: unknown }).productId === productId,
-    );
-    return op?.id ?? null;
-  }
-
   function enqueueAdd(
     listId: string,
     product: { id: string; name: string; defaultUnit: string },
   ): void {
-    enqueue({
+    const label = {
+      key: "offline.addedItem",
+      values: { name: product.name },
+    };
+    const queued = enqueue({
       path: "shopping.addItem",
       input: {
         shoppingListId: listId,
@@ -130,11 +129,19 @@ export default function KitchenPage(): JSX.Element {
         quantity: 1,
         unit: product.defaultUnit,
       },
-      label: {
-        key: "offline.addedItem",
-        values: { name: product.name },
-      },
+      label,
       holdMs: UNDO_HOLD_MS,
+    });
+
+    // Refused for want of room: the queue is full and says so in the shell's
+    // own banner, which is a state rather than an event. Claiming the item
+    // was added would be a lie.
+    if (!queued.ok) return;
+
+    snackbar.show({
+      kind: "undo-queued",
+      message: label,
+      opId: queued.id,
     });
   }
 
@@ -164,18 +171,27 @@ export default function KitchenPage(): JSX.Element {
   }
 
   function useOne(batch: (typeof batches)[number]): void {
-    enqueue({
+    const label = {
+      key: "offline.usedUp",
+      values: { quantity: 1, unit: batch.unit, name: batch.product.name },
+    };
+    const queued = enqueue({
       path: "inventory.consumeStock",
       input: {
         productId: batch.product.id,
         quantity: 1,
         unit: batch.unit,
       },
-      label: {
-        key: "offline.usedUp",
-        values: { quantity: 1, unit: batch.unit, name: batch.product.name },
-      },
+      label,
       holdMs: UNDO_HOLD_MS,
+    });
+
+    if (!queued.ok) return;
+
+    snackbar.show({
+      kind: "undo-queued",
+      message: label,
+      opId: queued.id,
     });
   }
 
@@ -208,7 +224,6 @@ export default function KitchenPage(): JSX.Element {
         ) : (
           <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {urgent.map((batch) => {
-              const queued = pendingUse(batch.product.id);
               return (
                 <li
                   key={batch.id}
@@ -237,21 +252,6 @@ export default function KitchenPage(): JSX.Element {
                       })}
                     </span>
                   </button>
-
-                  {/* Offered exactly while it can still work — which, with
-                      the hold, is the ten seconds the change waits to send. */}
-                  {queued ? (
-                    <button
-                      className="mt-2 min-h-[48px] w-full rounded-lg border border-warn-foreground px-4 py-2 text-lg text-warn-foreground"
-                      onClick={() => cancel(queued)}
-                      type="button"
-                    >
-                      <span aria-hidden="true">{t("undo")}</span>
-                      <span className="sr-only">
-                        {t("undoOf", { name: batch.product.name })}
-                      </span>
-                    </button>
-                  ) : null}
                 </li>
               );
             })}
@@ -309,7 +309,6 @@ export default function KitchenPage(): JSX.Element {
             <ul className="mt-3 space-y-2">
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
-                const queuedAdd = pendingAdd(product.id);
                 return (
                   <li
                     key={product.id}
@@ -327,29 +326,16 @@ export default function KitchenPage(): JSX.Element {
                             })}
                       </span>
                     </div>
-                    {queuedAdd ? (
-                      <button
-                        className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg text-foreground"
-                        onClick={() => cancel(queuedAdd)}
-                        type="button"
-                      >
-                        <span aria-hidden="true">{t("undo")}</span>
-                        <span className="sr-only">
-                          {t("undoAddOf", { name: product.name })}
-                        </span>
-                      </button>
-                    ) : (
-                      <button
-                        className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
-                        onClick={() => addToList(product)}
-                        type="button"
-                      >
-                        <span aria-hidden="true">{t("addToList")}</span>
-                        <span className="sr-only">
-                          {t("addToListOf", { name: product.name })}
-                        </span>
-                      </button>
-                    )}
+                    <button
+                      className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => addToList(product)}
+                      type="button"
+                    >
+                      <span aria-hidden="true">{t("addToList")}</span>
+                      <span className="sr-only">
+                        {t("addToListOf", { name: product.name })}
+                      </span>
+                    </button>
                   </li>
                 );
               })}

@@ -885,8 +885,6 @@
     "runningOut": "Se está acabando",
     "useOne": "He usado uno",
     "useOneOf": "He usado un {unit} de {name}",
-    "undo": "Deshacer",
-    "undoOf": "Deshacer: {name}",
     "expiresToday": "Caduca hoy",
     "expiresTomorrow": "Caduca mañana",
     "expiresInDays": "Quedan {days} días",
@@ -901,7 +899,6 @@
     "updated": "Actualizado a las {time}",
     "addToList": "Apuntar a la compra",
     "addToListOf": "Apuntar «{name}» a la lista de la compra",
-    "undoAddOf": "Quitar «{name}» de la lista de la compra",
     "listName": "Lista de la cocina",
     "listCreateFailed": "Ahora mismo no se puede crear la lista. Prueba cuando vuelva la conexión."
   },

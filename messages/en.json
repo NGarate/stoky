@@ -885,8 +885,6 @@
     "runningOut": "Running out",
     "useOne": "Used one",
     "useOneOf": "Used one {unit} of {name}",
-    "undo": "Undo",
-    "undoOf": "Undo: {name}",
     "expiresToday": "Goes off today",
     "expiresTomorrow": "Goes off tomorrow",
     "expiresInDays": "{days} days left",
@@ -901,7 +899,6 @@
     "updated": "Updated at {time}",
     "addToList": "Put on the list",
     "addToListOf": "Put “{name}” on the shopping list",
-    "undoAddOf": "Take “{name}” off the shopping list",
     "listName": "Kitchen list",
     "listCreateFailed": "The list cannot be created right now. Try again when the connection is back."
   },
