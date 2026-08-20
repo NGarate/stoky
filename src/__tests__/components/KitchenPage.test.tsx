@@ -165,6 +165,10 @@ describe("using something up", () => {
     expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
       path: "inventory.consumeStock",
       input: { productId: "p1", quantity: 1, unit: "L" },
+      // §4's ten-second undo window (D100). Without the hold the queue
+      // drains in one round-trip online and «Deshacer» flashes for a single
+      // render — an undo that exists only without a connection.
+      holdMs: 10_000,
     });
   });
 
@@ -232,6 +236,8 @@ describe("writing it on the list", () => {
         quantity: 1,
         unit: "paquete",
       },
+      // The same undo window as "he usado uno" — see that test.
+      holdMs: 10_000,
     });
   });
 
@@ -308,8 +314,8 @@ describe("undo", () => {
     pending = [];
     renderWithIntl(<KitchenPage />);
 
-    // More honest than a ten-second timer, which offers undo for ten seconds
-    // whether or not pressing it would do anything.
+    // The button tracks queue residency exactly: once the change has been
+    // sent, pressing undo could no longer work, so it is not offered.
     expect(screen.queryByRole("button", { name: /Deshacer/ })).toBeNull();
   });
 

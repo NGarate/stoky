@@ -379,6 +379,86 @@ describe("taking a change back", () => {
   });
 });
 
+describe("a change made with a hold", () => {
+  /**
+   * The undo window. D57 made undo "cancel the queued change", which is only
+   * an affordance while the change is *in* the queue — and online, an
+   * immediate drain empties the queue in one round-trip, so the button lived
+   * for a single render. The hold is what makes §4's ten-second undo true:
+   * the change is not eligible to send until the window closes, so pressing
+   * Deshacer inside it always works.
+   */
+  const start = new Date("2026-08-20T10:00:00.000Z");
+
+  function openHeld(send: (op: QueuedOp) => Promise<unknown>) {
+    let clock = start;
+    return {
+      queue: open(send, { now: () => clock }),
+      advance(ms: number) {
+        clock = new Date(clock.getTime() + ms);
+      },
+    };
+  }
+
+  it("is not sent while its window is open, and can still be taken back", async () => {
+    const send = mock(async () => {});
+    const { queue } = openHeld(send);
+    const added = queue.enqueue({ ...tick(), holdMs: 10_000 });
+
+    await queue.drain();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(added.ok && queue.cancel(added.id)).toBe(true);
+    expect(queue.getState().pending).toHaveLength(0);
+  });
+
+  it("is sent once the window has closed", async () => {
+    const send = mock(async () => {});
+    const { queue, advance } = openHeld(send);
+    queue.enqueue({ ...tick(), holdMs: 10_000 });
+
+    advance(10_000);
+    await queue.drain();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queue.getState().pending).toHaveLength(0);
+  });
+
+  it("holds the changes behind it, because order is correctness", async () => {
+    // consumeStock refuses when the quantity exceeds what is available, and
+    // what is available depends on the queued writes in front of it. A held
+    // head therefore blocks the queue rather than being overtaken.
+    const send = mock(async () => {});
+    const { queue } = openHeld(send);
+    queue.enqueue({ ...tick(), holdMs: 10_000 });
+    queue.enqueue(tick());
+
+    await queue.drain();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(queue.getState().pending).toHaveLength(2);
+  });
+
+  it("tells the timer how long is left, so the drain fires when it closes", () => {
+    const { queue, advance } = openHeld(async () => {});
+    queue.enqueue({ ...tick(), holdMs: 10_000 });
+
+    expect(queue.nextDelayMs()).toBe(10_000);
+    advance(4_000);
+    expect(queue.nextDelayMs()).toBe(6_000);
+  });
+
+  it("does not delay a change that asked for no hold", async () => {
+    const send = mock(async () => {});
+    const { queue } = openHeld(send);
+    queue.enqueue(tick());
+
+    await queue.drain();
+
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("dealing with what failed", () => {
   it("puts a retried change back at the tail with its strikes cleared", async () => {
     let fail = true;

@@ -33,10 +33,22 @@ import type { JSX } from "react";
  * acquired something it never did, and every downstream reader — the price
  * history, the expiry view, a future report — would see a fabricated event it
  * cannot tell from a real one. So the undo is offered exactly while the change
- * is still in the queue, and disappears when it can no longer work. That is
- * more honest than a ten-second timer, which offers undo for ten seconds
- * whether or not it would do anything.
+ * is still in the queue, and disappears when it can no longer work.
+ *
+ * **The change is held in the queue for ten seconds** (§4's undo window,
+ * D100). Without the hold, "while it is still in the queue" was one network
+ * round-trip online — the button flashed for a single render and was gone,
+ * which is no undo at all. The hold keeps the two promises aligned: the
+ * button shows exactly while pressing it works, and it works for ten seconds.
  */
+/**
+ * How long a tap can be taken back, and therefore how long it waits before
+ * being sent. §4 asked for ten seconds; long enough to read the button from a
+ * metre away and cross the kitchen, short enough that the change still lands
+ * while the person is standing there.
+ */
+const UNDO_HOLD_MS = 10_000;
+
 export default function KitchenPage(): JSX.Element {
   const t = useTranslations("kitchen");
   const { state: queue, enqueue, cancel } = useWriteQueue();
@@ -122,6 +134,7 @@ export default function KitchenPage(): JSX.Element {
         key: "offline.addedItem",
         values: { name: product.name },
       },
+      holdMs: UNDO_HOLD_MS,
     });
   }
 
@@ -162,6 +175,7 @@ export default function KitchenPage(): JSX.Element {
         key: "offline.usedUp",
         values: { quantity: 1, unit: batch.unit, name: batch.product.name },
       },
+      holdMs: UNDO_HOLD_MS,
     });
   }
 
@@ -224,8 +238,8 @@ export default function KitchenPage(): JSX.Element {
                     </span>
                   </button>
 
-                  {/* Offered exactly while it can still work, which is more
-                      honest than a countdown that offers it regardless. */}
+                  {/* Offered exactly while it can still work — which, with
+                      the hold, is the ten seconds the change waits to send. */}
                   {queued ? (
                     <button
                       className="mt-2 min-h-[48px] w-full rounded-lg border border-warn-foreground px-4 py-2 text-lg text-warn-foreground"

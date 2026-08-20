@@ -1232,3 +1232,18 @@ SessionProvider the app has deliberately never had. `auth.me` existed,
 documented as waiting for its first caller, reads the database rather than
 the token, and TanStack caches it — one query, no new conduit. Hiding the
 delete section is still only courtesy; `adminProcedure` is the control.
+
+**D100 — The kitchen's queued change waits ten seconds, so undo exists online.**
+D57 made undo "cancel the queued change" and rejected the countdown as a
+timer that offers undo whether or not it would do anything. What that missed:
+online — the common case — the queue drains in one round-trip, so «Deshacer»
+lived for a single render. The owner found it unusable, a flash. Fixed by
+holding a change enqueued with `holdMs` (the kitchen passes ten seconds, §4's
+original number) in the queue before it becomes eligible to send. D57's
+invariant stands — undo is still cancellation, never a compensating write —
+and the countdown objection dissolves, because for the whole window pressing
+the button genuinely works. The hold is measured from `createdAt`, so a
+change restored after a reload owes no second wait; a held head blocks the
+queue behind it, because order is correctness (`consumeStock` refuses when
+the quantity exceeds what the writes in front of it leave). Only the kitchen
+opts in: shopping ticks keep D54's trolley-as-undo and sync immediately.

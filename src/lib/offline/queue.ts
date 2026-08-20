@@ -62,6 +62,15 @@ export interface QueuedOp {
   createdAt: Date;
   /** Attempts that reached a server. Transport failures are not strikes. */
   attempts: number;
+  /**
+   * The undo window: not eligible to send until this many milliseconds after
+   * `createdAt`. This is what the kitchen's «Deshacer» stands on — undo means
+   * cancelling the queued change (D57), which is only an affordance while the
+   * change is still queued, and an immediate drain empties the queue in one
+   * round-trip. Measured from `createdAt`, so a change restored from storage
+   * after a reload owes no second wait.
+   */
+  holdMs?: number;
 }
 
 /**
@@ -97,6 +106,8 @@ export interface EnqueueInput {
   path: ReplayablePath;
   input: Record<string, unknown>;
   label: OpLabel;
+  /** See {@link QueuedOp.holdMs}. Omitted means eligible immediately. */
+  holdMs?: number;
 }
 
 export type EnqueueResult =
@@ -235,6 +246,12 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   /** The operation currently in flight, which cannot be taken back. */
   let inFlightId: string | null = null;
 
+  /** How much of the undo window is still open. Zero for a change without one. */
+  function holdRemainingMs(op: QueuedOp): number {
+    if (!op.holdMs) return 0;
+    return Math.max(0, op.createdAt.getTime() + op.holdMs - now().getTime());
+  }
+
   let hydrated = false;
 
   /**
@@ -270,7 +287,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     subscribe: (listener) => store.subscribe(listener),
     hydrate: hydrateOnce,
 
-    enqueue({ path, input, label }) {
+    enqueue({ path, input, label, holdMs }) {
       hydrateOnce();
       const state = store.getState();
 
@@ -290,6 +307,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         label,
         createdAt: now(),
         attempts: 0,
+        ...(holdMs !== undefined && { holdMs }),
       };
 
       commit((current) => ({
@@ -315,6 +333,12 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         // queued writes in front of it — so order is correctness, not tidiness.
         while (store.getState().pending.length > 0) {
           const op = store.getState().pending[0] as QueuedOp;
+
+          // Still inside its undo window. Stop rather than skip: order is
+          // correctness (see above), so nothing may overtake a held head. The
+          // provider's timer re-arms from `nextDelayMs` and drains when the
+          // window closes.
+          if (holdRemainingMs(op) > 0) return;
 
           if (op.householdId !== householdId) {
             // Composed in one household and drained in another. The server
@@ -416,7 +440,11 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
 
     nextDelayMs() {
       const head = store.getState().pending[0];
-      return head ? backoffDelay(head.attempts, random) : null;
+      if (!head) return null;
+      // A head inside its undo window has never been attempted, so the wait
+      // is the window itself, not a backoff.
+      const held = holdRemainingMs(head);
+      return held > 0 ? held : backoffDelay(head.attempts, random);
     },
   };
 }
