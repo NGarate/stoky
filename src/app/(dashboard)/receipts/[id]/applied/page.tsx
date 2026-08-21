@@ -153,10 +153,14 @@ export default function ReceiptAppliedPage({
   const isApplied = receipt.status === "APPLIED";
   const hasFailed = receipt.status === "FAILED";
 
-  // Reached by guessing the URL, or by coming back to it after the apply was
-  // undone elsewhere. Saying "applied" over a receipt that is not would be the
-  // worst thing this page could do, so it says the opposite and points at the
-  // step that is actually outstanding.
+  // Reached by guessing the URL, or with a receipt whose apply failed. It used
+  // to be reachable a third way — finishing a review navigated here, and
+  // `confirmAll` only sets CONFIRMED — which made this branch the ordinary
+  // outcome of the review journey rather than the exception it is written as.
+  // The review screen now stays where the outstanding step is.
+  //
+  // Saying "applied" over a receipt that is not would be the worst thing this
+  // page could do, so it says the opposite and points at what is outstanding.
   if (!isApplied) {
     return (
       <div className="mx-auto max-w-3xl">

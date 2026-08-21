@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Check, ArrowLeft, Package } from "lucide-react";
 import Link from "next/link";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { isItemReviewed } from "@/lib/receipts";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export default function ReviewPage() {
   const locale = useLocale();
   const params = useParams();
   const router = useRouter();
+  const snackbar = useSnackbar();
   const receiptId = params.id as string;
 
   const utils = api.useUtils();
@@ -23,9 +25,25 @@ export default function ReviewPage() {
     receiptId,
   });
 
+  /**
+   * Confirming every line does not apply the receipt.
+   *
+   * `confirmAll` sets the receipt to CONFIRMED; only `applyReceipt` sets
+   * APPLIED. So navigating to /applied landed on a page whose first job is to
+   * refuse to say "applied" over a receipt that is not — it rendered
+   * "todavía no se ha aplicado" and pointed at the outstanding step, which is
+   * the "Aplicar al inventario" button back on the page it had just left.
+   *
+   * It stays here, where the next step is, and refetches so the lines show
+   * as confirmed.
+   */
   const confirmAllMutation = api.receipt.confirmAll.useMutation({
-    onSuccess: () => {
-      router.push(`/receipts/${receiptId}/applied`);
+    onSuccess: async () => {
+      await utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "receipts.confirmedAll" },
+      });
     },
   });
 

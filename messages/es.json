@@ -631,7 +631,8 @@
       "nextUpload": "Subir otro ticket"
     },
     "uploadStoreLabel": "Tienda del ticket",
-    "uploadStoreHint": "Sin tienda no se guardan los precios del ticket."
+    "uploadStoreHint": "Sin tienda no se guardan los precios del ticket.",
+    "confirmedAll": "Terminaste la revisión. Ya puedes aplicarlo al inventario."
   },
   "shopping": {
     "title": "Listas de compra",

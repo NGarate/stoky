@@ -631,7 +631,8 @@
       "nextUpload": "Upload another receipt"
     },
     "uploadStoreLabel": "Receipt's store",
-    "uploadStoreHint": "Without a store, the receipt's prices are not recorded."
+    "uploadStoreHint": "Without a store, the receipt's prices are not recorded.",
+    "confirmedAll": "You finished the review. You can apply it to the inventory now."
   },
   "shopping": {
     "title": "Shopping lists",
