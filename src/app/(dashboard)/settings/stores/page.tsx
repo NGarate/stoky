@@ -21,23 +21,35 @@ export default function StoresPage() {
     address: "",
   });
 
+  const utils = api.useUtils();
   const { data: stores, isLoading } = api.store.list.useQuery({ limit: 100 });
 
+  // All three write to the list rendered directly below them, and none of
+  // them told the cache. A store created here did not appear until the route
+  // was left and re-entered; a deleted one stayed on screen. The form closing
+  // was the only sign anything had happened at all, which is how a write that
+  // succeeded and a write that silently failed came to look identical.
   const createMutation = api.store.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       setIsCreating(false);
       setFormData({ name: "", address: "" });
+      await utils.store.list.invalidate();
     },
   });
 
   const updateMutation = api.store.update.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       setEditingStore(null);
       setFormData({ name: "", address: "" });
+      await utils.store.list.invalidate();
     },
   });
 
-  const deleteMutation = api.store.delete.useMutation();
+  const deleteMutation = api.store.delete.useMutation({
+    onSuccess: async () => {
+      await utils.store.list.invalidate();
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
