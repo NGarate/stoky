@@ -1247,3 +1247,31 @@ change restored after a reload owes no second wait; a held head blocks the
 queue behind it, because order is correctness (`consumeStock` refuses when
 the quantity exceeds what the writes in front of it leave). Only the kitchen
 opts in: shopping ticks keep D54's trolley-as-undo and sync immediately.
+
+**D101 — One snackbar for events, and four other surfaces that are not it.**
+Feedback had no pattern: five ways of saying a thing had happened, and six
+writes that said nothing at all. The owner asked for one snackbar with undo,
+in Material's shape. The hard part was not building it but deciding what it is
+*not* for, because a snackbar removes itself and a message that removes itself
+must not be the only account of something still true. The taxonomy: a
+transient confirmation of an event is the snackbar; a persistent state stays
+in a live region where the control you would act on is (`SyncStatus`,
+`RouteState`, `ReconcileDialog`, `Scanner`, the kitchen's list failure); a
+success carrying next steps is a dialog over the screen that produced it,
+because that screen is still useful and closing the dialog is "do it again";
+destructive-and-irreversible-with-no-inverse is a confirmation dialog, since
+§7's "undo instead of confirm" assumes an undo exists and deleting a list
+cascades its items; and a refused submit stays an in-page `role="alert"`
+summary, because it is the target of a focus move that must land beside the
+fields, it lists several reasons at once, and it is still true while the form
+is invalid. **D54 survives unchanged**: `/shopping` keeps the trolley and gets
+no snackbar — an undo that expires is one you miss reaching for the next
+shelf. **D100 survives unchanged**: the kitchen's hold is still ten seconds
+and undo is still `queue.cancel`; only the button moved, out of the card and
+into the snackbar, because a second button appearing under the one just
+pressed moved the next row out from under the thumb. Undo is offered in
+exactly two shapes — cancelling a queued operation (D57), or an inverse write
+where an exact one exists — and never as a compensating write dressed up as
+one. Deleting a product is the deliberate asymmetry: it leaves the page and
+the sentence travels in the snackbar, because a confirmation on top of a
+record that no longer exists is the strangest option available.
