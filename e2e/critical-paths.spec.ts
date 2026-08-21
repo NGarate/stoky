@@ -705,23 +705,32 @@ test.describe("The Panel summarises; its lists are the doors", () => {
   // assertions need the visible copy to be the table.
   test.use({ storageState: SESSION_FILE, viewport: { width: 1280, height: 900 } });
 
-  test("what needs attention is one sentence, not a second copy of the lists", async ({ page }) => {
-    // Noel's second pass (2026-08-19): the alert rows restated the lists
-    // rendered directly below them, so they went. The seed holds three
-    // below-minimum products, and the summary must count exactly those —
-    // it asks the server the same `needsRestock` question the filtered
-    // inventory asks, so the two cannot disagree (Phase 8 item 2).
+  test("what needs attention is the sections, not a count above them", async ({ page }) => {
+    // Three owner passes each cut a layer of the same redundancy: the alert
+    // rows went in the second, the sentence that replaced them in the third.
+    // "3 productos por reponer" above a section headed "Necesita reposición"
+    // listing three products is the same count twice.
     await page.goto("/dashboard");
     await settle(page);
 
-    const summary = page.getByText(/3 productos por reponer/);
-    await expect(summary).toBeVisible();
+    await expect(page.getByText(/por reponer/)).toHaveCount(0);
+    await expect(page.getByText(/lotes? caduca/)).toHaveCount(0);
 
-    // A summary, not a door: the pre-filtered links live in the sections
-    // below, so the sentence itself must not be one.
-    await expect(
-      page.locator('a[href="/inventory?filter=restock"]'),
-    ).toHaveCount(0);
+    // What survives is Phase 8 item 2's invariant, not its wording: the rows
+    // here come from the same `needsRestock` question the filtered inventory
+    // asks, so the two cannot disagree. The seed holds three such products.
+    const section = page.getByRole("region", { name: "Necesita reposición" });
+    await expect(section).toBeVisible();
+    for (const product of [
+      "Leche entera",
+      "Aceite de oliva virgen extra",
+      "Café molido natural",
+    ]) {
+      await expect(
+        section.getByRole("link", { name: product }),
+        `${product} needs restocking in the seed and should be listed`,
+      ).toBeVisible();
+    }
   });
 
   test("the restock filter shows exactly the summarised set", async ({ page }) => {
@@ -769,20 +778,25 @@ test.describe("Low stock, as the seeded household", () => {
     await page.goto("/inventory");
     await settle(page);
 
-    // The seed guarantees three: Leche entera at 2 of 6, Aceite at 1 of 2,
-    // Café at 0 of 2. Named rather than counted — "three badges are showing"
-    // passes just as well when they are attached to the wrong products.
+    // The seed guarantees three below their minimum: Leche entera at 2 of 6,
+    // Aceite at 1 of 2, Café at 0 of 2. Named rather than counted — "three
+    // badges are showing" passes just as well when they are attached to the
+    // wrong products.
+    //
+    // Café is at zero, and run out beats low: it wears "Sin stock" (UI-11).
+    // Both words mean it needs restocking; which one is shown is the stronger
+    // statement about the same product.
     const lowStock = page.getByText(es.inventory.lowStock, { exact: false });
     await expect(lowStock.first()).toBeVisible();
 
-    for (const product of [
-      "Leche entera",
-      "Aceite de oliva virgen extra",
-      "Café molido natural",
-    ]) {
+    for (const [product, badge] of [
+      ["Leche entera", es.inventory.lowStock],
+      ["Aceite de oliva virgen extra", es.inventory.lowStock],
+      ["Café molido natural", es.inventory.noStock],
+    ] as const) {
       await expect(
-        page.getByRole("row", { name: new RegExp(product) }).getByText(es.inventory.lowStock),
-        `${product} is below its minimum in the seed and should be marked`,
+        page.getByRole("row", { name: new RegExp(product) }).getByText(badge),
+        `${product} needs restocking in the seed and should be marked`,
       ).toBeVisible();
     }
 
@@ -817,17 +831,19 @@ test.describe("Low stock on the card tier", () => {
     // The table must be gone, or the assertions below could be reading it.
     await expect(page.getByRole("table")).toBeHidden();
 
-    for (const product of [
-      "Leche entera",
-      "Aceite de oliva virgen extra",
-      "Café molido natural",
-    ]) {
+    // Café is at zero, so it wears "Sin stock" — run out beats low (UI-11),
+    // and the card tier shares the component that decides.
+    for (const [product, badge] of [
+      ["Leche entera", es.inventory.lowStock],
+      ["Aceite de oliva virgen extra", es.inventory.lowStock],
+      ["Café molido natural", es.inventory.noStock],
+    ] as const) {
       await expect(
         page
           .getByRole("listitem")
           .filter({ hasText: product })
-          .getByText(es.inventory.lowStock),
-        `${product} is below its minimum and should be marked on the card tier`,
+          .getByText(badge),
+        `${product} needs restocking and should be marked on the card tier`,
       ).toBeVisible();
     }
 
