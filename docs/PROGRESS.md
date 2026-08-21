@@ -1275,3 +1275,23 @@ where an exact one exists — and never as a compensating write dressed up as
 one. Deleting a product is the deliberate asymmetry: it leaves the page and
 the sentence travels in the snackbar, because a confirmation on top of a
 record that no longer exists is the strangest option available.
+
+**D102 — The edit screen is absorbed into the product, and D92 is narrowed
+rather than reversed.** The owner's review: "para editar el producto en la
+página de producto no tiene ningún sentido tener una pantalla aparte". It was
+right. Correcting a typo meant leaving the record and losing everything else
+it showed — the stock, the batches, the price history, the rating — and coming
+back. Two screens for one row, and the second existed only because the first
+refused to be edited. D92 said the edit screen should be its own inline form
+rather than an extraction of the create form, and that still holds: the form
+is used by one page and shared with nothing, and the create page keeps its
+own. What changes is which page owns it. The route stays as a
+`permanentRedirect`, because it has been linked for the life of the project
+and a 404 is a worse answer than the page somebody wanted. D93 survives
+untouched — a blank optional field still sends `null` and still means "remove
+it". Editing is a mode with an explicit Guardar and Descartar rather than
+fields that save as they are left: a catalogue row is read far more often than
+it is changed, and a screen whose values are always inputs invites a change
+nobody meant. Saving offers an inverse undo, which is legitimate here and
+nowhere near stock (D57, D101): the previous values are still in hand, so undo
+restores the row rather than writing a compensating anything.
