@@ -119,7 +119,6 @@
     "required": "Obligatorio",
     "currency": "EUR",
     "noResults": "No se encontraron resultados",
-    "confirmDelete": "¿Estás seguro de que deseas eliminar esto?",
     "confirmDeleteDescription": "Esta acción no se puede deshacer.",
     "items": "elementos",
     "item": "elemento",
@@ -680,7 +679,10 @@
     "tickOff": "Marcar «{name}» como comprado",
     "untick": "Devolver «{name}» a la lista",
     "trolleyCount": "{count, plural, one {# cosa marcada} other {# cosas marcadas}}",
-    "fromList": "De «{name}»"
+    "fromList": "De «{name}»",
+    "deleteConfirmTitle": "¿Eliminar «{name}» definitivamente?",
+    "deleteConfirmBody": "La lista y todo lo que hayas apuntado en ella desaparecen. No se puede deshacer.",
+    "deleteConfirm": "Sí, eliminar la lista"
   },
   "prices": {
     "title": "Precios",

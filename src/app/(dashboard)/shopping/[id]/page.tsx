@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
@@ -40,6 +42,11 @@ export function ShoppingListView({ id }: { id: string }) {
   const list = listQuery.data;
 
   const { state: queueState, enqueue } = useWriteQueue();
+
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // The opener is an ordinary button rather than a Radix trigger, so the
+  // dialog is told by hand where to put focus back.
+  const deleteRef = useRef<HTMLButtonElement>(null);
 
   const deleteListMutation = api.shopping.delete.useMutation({
     onSuccess: () => {
@@ -118,19 +125,34 @@ export function ShoppingListView({ id }: { id: string }) {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(t("common.confirmDelete"))) {
-              deleteListMutation.mutate({ id });
-            }
-          }}
+        <Button
           disabled={deleteListMutation.isPending}
-          className="rounded-md px-4 py-2 text-sm text-destructive hover:bg-danger disabled:opacity-50"
+          onClick={() => setConfirmingDelete(true)}
+          ref={deleteRef}
+          type="button"
+          variant="ghost"
         >
-          {t("common.delete")}
-        </button>
+          {t("shopping.delete")}
+        </Button>
       </div>
+
+      {/* Destructive, irreversible, and with no inverse to offer afterwards —
+          the one shape a snackbar cannot serve. Deleting a list cascades its
+          items and no procedure puts them back, so the honest moment to ask
+          is before rather than after. */}
+      <ConfirmDialog
+        confirmLabel={t("shopping.deleteConfirm")}
+        description={t("shopping.deleteConfirmBody")}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          deleteListMutation.mutate({ id });
+        }}
+        open={confirmingDelete}
+        pending={deleteListMutation.isPending}
+        returnFocus={deleteRef}
+        title={t("shopping.deleteConfirmTitle", { name: list.name })}
+      />
 
       {totalItems > 0 && (
         <div className="rounded-lg border border-border bg-card p-4">

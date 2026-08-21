@@ -119,7 +119,6 @@
     "required": "Required",
     "currency": "EUR",
     "noResults": "No results found",
-    "confirmDelete": "Are you sure you want to delete this?",
     "confirmDeleteDescription": "This action cannot be undone.",
     "items": "items",
     "item": "item",
@@ -680,7 +679,10 @@
     "tickOff": "Tick “{name}” off",
     "untick": "Put “{name}” back on the list",
     "trolleyCount": "{count, plural, one {# thing ticked off} other {# things ticked off}}",
-    "fromList": "From “{name}”"
+    "fromList": "From “{name}”",
+    "deleteConfirmTitle": "Delete “{name}” for good?",
+    "deleteConfirmBody": "The list and everything on it will be gone. This cannot be undone.",
+    "deleteConfirm": "Yes, delete the list"
   },
   "prices": {
     "title": "Prices",
