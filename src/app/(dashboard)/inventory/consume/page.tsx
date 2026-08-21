@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { Button } from "@/components/ui/button";
+import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import { useEnvelope } from "@/components/offline/Composer";
@@ -82,8 +83,6 @@ export default function ConsumeStockPage(): JSX.Element {
   const noteId = useId();
   const noteHintId = useId();
 
-  const summaryRef = useRef<HTMLDivElement | null>(null);
-
   // What is in stock right now, so nobody has to guess before typing a number.
   // `ProductPicker` hands back only identity and unit, so the figure is fetched
   // here: `getById` returns the same net `totalStock` field `product.list`
@@ -143,12 +142,6 @@ export default function ConsumeStockPage(): JSX.Element {
     fieldErrors.unit,
     serverError,
   ].filter((message): message is string => Boolean(message));
-
-  useEffect(() => {
-    if (errorSignal > 0) {
-      summaryRef.current?.focus();
-    }
-  }, [errorSignal]);
 
   function handleProductChange(selected: PickedProduct | null): void {
     setProduct(selected);
@@ -254,21 +247,11 @@ export default function ConsumeStockPage(): JSX.Element {
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
-        {summaryMessages.length > 0 ? (
-          <div
-            ref={summaryRef}
-            role="alert"
-            tabIndex={-1}
-            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-          >
-            <h2 className="font-semibold">{t("errorTitle")}</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {summaryMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <FormErrorSummary
+          focusSignal={errorSignal}
+          messages={summaryMessages}
+          title={t("errorTitle")}
+        />
 
         <ProductPicker
           hint={t("productSelectHint")}

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { use, useDeferredValue, useEffect, useId, useRef, useState } from "react";
+import { use, useDeferredValue, useEffect, useId, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
+import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
@@ -99,8 +100,6 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
   const minStockHintId = useId();
   const minStockErrorId = useId();
 
-  const summaryRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     if (product && !seeded) {
       setName(product.name);
@@ -156,12 +155,6 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
     fieldErrors.minStock,
     serverError,
   ].filter((message): message is string => Boolean(message));
-
-  useEffect(() => {
-    if (errorSignal > 0) {
-      summaryRef.current?.focus();
-    }
-  }, [errorSignal]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -262,21 +255,11 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
-        {summaryMessages.length > 0 ? (
-          <div
-            ref={summaryRef}
-            role="alert"
-            tabIndex={-1}
-            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-          >
-            <h2 className="font-semibold">{t("errorTitle")}</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {summaryMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <FormErrorSummary
+          focusSignal={errorSignal}
+          messages={summaryMessages}
+          title={t("errorTitle")}
+        />
 
         <div>
           <label

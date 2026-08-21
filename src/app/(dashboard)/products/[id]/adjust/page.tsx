@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { use, useEffect, useRef, useState, useId } from "react";
+import { use, useState, useId } from "react";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -60,12 +61,6 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const reasonId = useId();
   const reasonHintId = useId();
   const reasonErrorId = useId();
-
-  const summaryRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (errorSignal > 0) summaryRef.current?.focus();
-  }, [errorSignal]);
 
   const adjustStock = api.inventory.adjustStock.useMutation({
     onSuccess: async (_entry, variables) => {
@@ -194,21 +189,11 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
       </p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
-        {summaryMessages.length > 0 ? (
-          <div
-            ref={summaryRef}
-            role="alert"
-            tabIndex={-1}
-            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-          >
-            <h2 className="font-semibold">{t("errorTitle")}</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {summaryMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <FormErrorSummary
+          focusSignal={errorSignal}
+          messages={summaryMessages}
+          title={t("errorTitle")}
+        />
 
         <div>
           <label

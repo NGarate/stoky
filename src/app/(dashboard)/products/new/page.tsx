@@ -3,15 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import {
-  Suspense,
-  useDeferredValue,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useDeferredValue, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
@@ -125,8 +119,6 @@ function NewProductForm(): JSX.Element {
   const lookupHintId = useId();
   const lookupStatusId = useId();
 
-  const summaryRef = useRef<HTMLDivElement | null>(null);
-
   const trimmedBarcode = barcode.trim();
   // Keeps typing responsive: the duplicate check re-runs against the settled
   // value rather than firing once per keystroke.
@@ -212,12 +204,6 @@ function NewProductForm(): JSX.Element {
       : lookupOutcome === "failed"
         ? t("lookupFailed")
         : "";
-
-  useEffect(() => {
-    if (errorSignal > 0) {
-      summaryRef.current?.focus();
-    }
-  }, [errorSignal]);
 
   function handleLookup(): void {
     if (trimmedBarcode === "") return;
@@ -343,21 +329,11 @@ function NewProductForm(): JSX.Element {
       ) : null}
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
-        {summaryMessages.length > 0 ? (
-          <div
-            ref={summaryRef}
-            role="alert"
-            tabIndex={-1}
-            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-          >
-            <h2 className="font-semibold">{t("errorTitle")}</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {summaryMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <FormErrorSummary
+          focusSignal={errorSignal}
+          messages={summaryMessages}
+          title={t("errorTitle")}
+        />
 
         <div>
           <label

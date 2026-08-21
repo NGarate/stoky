@@ -8,6 +8,7 @@ import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { StoreSelector } from "@/components/store/StoreSelector";
 import { Button } from "@/components/ui/button";
+import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import { usualLocationId } from "@/lib/inventory/usualLocation";
@@ -88,8 +89,6 @@ export default function AddStockPage(): JSX.Element {
   const priceId = useId();
   const priceHintId = useId();
   const priceErrorId = useId();
-
-  const summaryRef = useRef<HTMLDivElement | null>(null);
   const [saved, setSaved] = useState<{
     name: string;
     quantity: number;
@@ -135,12 +134,6 @@ export default function AddStockPage(): JSX.Element {
     fieldErrors.store,
     serverError,
   ].filter((message): message is string => Boolean(message));
-
-  useEffect(() => {
-    if (errorSignal > 0) {
-      summaryRef.current?.focus();
-    }
-  }, [errorSignal]);
 
   /**
    * Where this product usually goes, read from its own ledger — the entries
@@ -277,21 +270,11 @@ export default function AddStockPage(): JSX.Element {
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
-        {summaryMessages.length > 0 ? (
-          <div
-            ref={summaryRef}
-            role="alert"
-            tabIndex={-1}
-            className="rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-          >
-            <h2 className="font-semibold">{t("errorTitle")}</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {summaryMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <FormErrorSummary
+          focusSignal={errorSignal}
+          messages={summaryMessages}
+          title={t("errorTitle")}
+        />
 
         <ProductPicker
           hint={t("productSelectHint")}
