@@ -279,7 +279,9 @@
       "deleteCancel": "Cancel",
       "deleteConflict": "It cannot be deleted: prices, receipt lines or list items still use it.",
       "deleteFailed": "It could not be deleted. Try again.",
-      "deletedBody": "“{name}” is no longer in the catalogue."
+      "deletedBody": "“{name}” is no longer in the catalogue.",
+      "editFields": "Edit the details",
+      "discardChanges": "Discard"
     },
     "scan": {
       "title": "Scan barcode",

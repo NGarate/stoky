@@ -1,0 +1,371 @@
+"use client";
+
+import { useDeferredValue, useId, useState } from "react";
+import { useTranslations } from "next-intl";
+
+import { Button } from "@/components/ui/button";
+import { FormErrorSummary } from "@/components/ui/form-error-summary";
+import { Input } from "@/components/ui/input";
+import { useSnackbar } from "@/components/ui/snackbar";
+import { api } from "@/lib/trpc/client";
+
+import type { JSX } from "react";
+
+/**
+ * The catalogue fields, read and written in the same place.
+ *
+ * They used to be a read-only list here and a form on a route of its own, so
+ * correcting a typo meant leaving the product, losing every other thing the
+ * page was showing, and coming back. Two screens for one record, and the
+ * second one existed only because the first refused to be edited.
+ *
+ * D92 says a page owns its form, and this respects it: the form lives beside
+ * the only page that uses it and is not shared with anything. It is a separate
+ * file because the product page is already six hundred lines, not because the
+ * form is a component two screens draw.
+ *
+ * Editing is a mode with an explicit Guardar and Descartar rather than fields
+ * that save as you leave them. A catalogue row is read far more often than it
+ * is changed, and a screen whose values are always inputs invites a change
+ * nobody meant — particularly on the tier where a scroll can land on a select.
+ */
+export interface EditableProduct {
+  id: string;
+  name: string;
+  brand: string | null;
+  category: string | null;
+  barcode: string | null;
+  defaultUnit: string;
+  minStock: number | null;
+  createdAt: Date;
+}
+
+interface FieldErrors {
+  name?: string;
+  unit?: string;
+  minStock?: string;
+  barcode?: string;
+}
+
+/** Turns a tRPC error into something a person can act on. */
+function serverErrorKey(message: string | undefined): string {
+  const normalized = message?.toLowerCase() ?? "";
+
+  if (normalized.includes("unique constraint")) return "errorBarcodeTakenServer";
+  if (normalized.includes("product not found")) return "errorNotFound";
+  if (normalized.includes("household")) return "errorNoHousehold";
+
+  return "errorGeneric";
+}
+
+export function ProductDetailsForm({
+  product,
+  canEdit,
+  formattedDate,
+}: {
+  product: EditableProduct;
+  /** Courtesy only. `writeProcedure` is the control (D90's shape). */
+  canEdit: boolean;
+  formattedDate: string;
+}): JSX.Element {
+  const tDetail = useTranslations("products.detail");
+
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <>
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold text-heading text-lg">
+          {tDetail("detailsTitle")}
+        </h2>
+        {canEdit && !editing ? (
+          <Button
+            onClick={() => setEditing(true)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {tDetail("editFields")}
+          </Button>
+        ) : null}
+      </div>
+
+      {editing ? (
+        // Keyed on the product so a refetch that changes it underneath starts
+        // the form again rather than leaving half-edited values from a row
+        // that no longer says that.
+        <Fields
+          key={product.id}
+          onDone={() => setEditing(false)}
+          product={product}
+        />
+      ) : (
+        <dl className="mt-2 space-y-3">
+          <Row label={tDetail("brandLabel")} value={product.brand || tDetail("notSet")} />
+          <Row
+            label={tDetail("categoryLabel")}
+            value={product.category || tDetail("notSet")}
+          />
+          <Row
+            label={tDetail("barcodeLabel")}
+            mono
+            value={product.barcode || tDetail("notSet")}
+          />
+          <Row label={tDetail("unitLabel")} value={product.defaultUnit} />
+          <Row
+            label={tDetail("minStockLabel")}
+            value={
+              product.minStock === null
+                ? tDetail("minStockNone")
+                : tDetail("stockValue", {
+                    quantity: product.minStock,
+                    unit: product.defaultUnit,
+                  })
+            }
+          />
+          <Row label={tDetail("addedLabel")} value={formattedDate} />
+        </dl>
+      )}
+    </>
+  );
+}
+
+function Row({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}): JSX.Element {
+  return (
+    <div>
+      <dt className="font-medium text-muted-foreground text-sm">{label}</dt>
+      <dd className={mono ? "font-mono text-foreground" : "text-foreground"}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Fields({
+  product,
+  onDone,
+}: {
+  product: EditableProduct;
+  onDone: () => void;
+}): JSX.Element {
+  // Its own hooks rather than props. Two translators sharing the name `t` in
+  // one file makes `message-usage.test.ts` attribute every key to whichever
+  // namespace it saw last, and it silently checked six `products.edit` keys
+  // against `products.detail`.
+  const t = useTranslations("products.edit");
+  const tDetail = useTranslations("products.detail");
+  const snackbar = useSnackbar();
+  const utils = api.useUtils();
+  const [name, setName] = useState(product.name);
+  const [brand, setBrand] = useState(product.brand ?? "");
+  const [category, setCategory] = useState(product.category ?? "");
+  const [barcode, setBarcode] = useState(product.barcode ?? "");
+  const [unit, setUnit] = useState(product.defaultUnit);
+  const [minStock, setMinStock] = useState(
+    product.minStock === null ? "" : String(product.minStock),
+  );
+
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [errorSignal, setErrorSignal] = useState(0);
+
+  const nameId = useId();
+  const brandId = useId();
+  const categoryId = useId();
+  const barcodeId = useId();
+  const unitId = useId();
+  const minStockId = useId();
+
+  const trimmedBarcode = barcode.trim();
+  // Keeps typing responsive: the duplicate check re-runs against the settled
+  // value rather than firing once per keystroke.
+  const settledBarcode = useDeferredValue(trimmedBarcode);
+  const duplicate = api.product.getByBarcode.useQuery(
+    { barcode: settledBarcode },
+    { enabled: settledBarcode !== "" },
+  );
+  // A product's own barcode is not a clash. `getByBarcode` finds *this* one
+  // when the code has not been touched, and calling that a collision would
+  // make every edit look like one.
+  const holder =
+    settledBarcode !== "" && settledBarcode === trimmedBarcode
+      ? (duplicate.data ?? null)
+      : null;
+  const takenBy = holder && holder.id !== product.id ? holder : null;
+
+  /** The row as it was, so undo restores rather than compensates. */
+  const previous = {
+    id: product.id,
+    name: product.name,
+    brand: product.brand,
+    category: product.category,
+    barcode: product.barcode,
+    defaultUnit: product.defaultUnit,
+    minStock: product.minStock,
+  };
+
+  const update = api.product.update.useMutation({
+    onSuccess: async (updated) => {
+      onDone();
+      await utils.product.getById.invalidate({ id: product.id });
+      await utils.product.list.invalidate();
+      await utils.product.getByBarcode.invalidate();
+
+      snackbar.show({
+        kind: "undo-inverse",
+        message: {
+          key: "products.edit.saved",
+          values: { name: updated.name },
+        },
+        // An exact inverse exists here and nowhere near stock: the row's
+        // previous values are still in hand, so undo restores them rather
+        // than writing a compensating anything (D101).
+        undo: () => update.mutate(previous),
+      });
+    },
+    onError: (error) => {
+      setServerError(t(serverErrorKey(error.message)));
+      setErrorSignal((signal) => signal + 1);
+    },
+  });
+
+  const summaryMessages = [
+    fieldErrors.name,
+    fieldErrors.unit,
+    fieldErrors.minStock,
+    fieldErrors.barcode,
+    serverError,
+  ].filter((message): message is string => Boolean(message));
+
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+
+    const errors: FieldErrors = {};
+    if (name.trim() === "") errors.name = t("errorNameRequired");
+    if (unit.trim() === "") errors.unit = t("errorUnitRequired");
+
+    let parsedMinStock: number | null = null;
+    if (minStock.trim() !== "") {
+      const parsed = Number(minStock);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        errors.minStock = t("errorMinStockInvalid");
+      } else {
+        parsedMinStock = parsed;
+      }
+    }
+    if (takenBy) {
+      errors.barcode = t("errorBarcodeTaken", { name: takenBy.name });
+    }
+
+    setServerError(null);
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setErrorSignal((signal) => signal + 1);
+      return;
+    }
+
+    update.mutate({
+      id: product.id,
+      name: name.trim(),
+      defaultUnit: unit.trim(),
+      barcode: trimmedBarcode !== "" ? trimmedBarcode : null,
+      brand: brand.trim() !== "" ? brand.trim() : null,
+      category: category.trim() !== "" ? category.trim() : null,
+      minStock: parsedMinStock,
+    });
+  }
+
+  return (
+    <form className="mt-2 space-y-4" onSubmit={handleSubmit}>
+      <FormErrorSummary
+        focusSignal={errorSignal}
+        messages={summaryMessages}
+        title={t("errorTitle")}
+      />
+
+      <Field id={nameId} label={t("nameLabel")}>
+        <Input id={nameId} onChange={(e) => setName(e.target.value)} value={name} />
+      </Field>
+      <Field id={brandId} label={t("brandLabel")}>
+        <Input id={brandId} onChange={(e) => setBrand(e.target.value)} value={brand} />
+      </Field>
+      <Field id={categoryId} label={t("categoryLabel")}>
+        <Input
+          id={categoryId}
+          onChange={(e) => setCategory(e.target.value)}
+          value={category}
+        />
+      </Field>
+      <Field id={barcodeId} label={t("barcodeLabel")}>
+        <Input
+          id={barcodeId}
+          inputMode="numeric"
+          onChange={(e) => setBarcode(e.target.value)}
+          value={barcode}
+        />
+        {/* Always mounted, empty when silent. */}
+        <p
+          aria-live="polite"
+          className="mt-1 font-medium text-danger-foreground text-sm"
+          role="status"
+        >
+          {takenBy ? t("barcodeTakenBy", { name: takenBy.name }) : ""}
+        </p>
+      </Field>
+      <Field id={unitId} label={t("unitLabel")}>
+        <Input id={unitId} onChange={(e) => setUnit(e.target.value)} value={unit} />
+      </Field>
+      <Field id={minStockId} label={t("minStockLabel")}>
+        <Input
+          id={minStockId}
+          inputMode="decimal"
+          min="0"
+          onChange={(e) => setMinStock(e.target.value)}
+          // "any" rather than a step: a minimum of 2 with step=0.1 is a step
+          // mismatch under exact arithmetic, and a form that fails constraint
+          // validation does not submit and does not say why.
+          step="any"
+          type="number"
+          value={minStock}
+        />
+      </Field>
+
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={update.isPending} type="submit">
+          {t("submit")}
+        </Button>
+        <Button onClick={onDone} type="button" variant="outline">
+          {tDetail("discardChanges")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Field({
+  id,
+  label,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}): JSX.Element {
+  return (
+    <div>
+      <label className="mb-1 block font-medium text-foreground text-sm" htmlFor={id}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}

@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney } from "@/lib/money";
 import { isLowStock } from "@/lib/stock/low-stock";
+import { ProductDetailsForm } from "@/components/products/ProductDetailsForm";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
@@ -82,6 +83,11 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   // First caller of `auth.me`, which waited for exactly this.
   const me = api.auth.me.useQuery(undefined, { retry: false });
   const isAdmin = me.data?.role === "OWNER" || me.data?.role === "ADMIN";
+  // `writeProcedure` admits OWNER, ADMIN and MEMBER; KITCHEN reads only
+  // (CAPABILITY_ROLES in trpc.ts). Hiding the control from a KITCHEN tablet
+  // is courtesy — the server is the control, the same shape as the delete
+  // section below (D90).
+  const canWrite = isAdmin || me.data?.role === "MEMBER";
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -469,56 +475,11 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </Link>
       </p>
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("detailsTitle")}</h2>
-      <dl className="mt-2 space-y-3">
-        <div>
-          <dt className="text-sm font-medium text-muted-foreground">
-            {t("brandLabel")}
-          </dt>
-          <dd className="text-foreground">{product.brand || t("notSet")}</dd>
-        </div>
-        <div>
-          <dt className="text-sm font-medium text-muted-foreground">
-            {t("categoryLabel")}
-          </dt>
-          <dd className="text-foreground">{product.category || t("notSet")}</dd>
-        </div>
-        <div>
-          <dt className="text-sm font-medium text-muted-foreground">
-            {t("barcodeLabel")}
-          </dt>
-          <dd className="font-mono text-foreground">
-            {product.barcode || t("notSet")}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm font-medium text-muted-foreground">
-            {t("unitLabel")}
-          </dt>
-          <dd className="text-foreground">{product.defaultUnit}</dd>
-        </div>
-        <div>
-          <dt className="text-sm font-medium text-muted-foreground">
-            {t("minStockLabel")}
-          </dt>
-          <dd className="text-foreground">
-            {product.minStock === null
-              ? t("minStockNone")
-              : t("stockValue", {
-                  quantity: product.minStock,
-                  unit: product.defaultUnit,
-                })}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm font-medium text-muted-foreground">
-            {t("addedLabel")}
-          </dt>
-          <dd className="text-foreground">
-            {dateFormat.format(product.createdAt)}
-          </dd>
-        </div>
-      </dl>
+      <ProductDetailsForm
+        canEdit={canWrite}
+        formattedDate={dateFormat.format(product.createdAt)}
+        product={product}
+      />
 
       <h2 className="mt-8 text-lg font-semibold text-heading">{t("actionsTitle")}</h2>
       <p className="mt-2 text-sm text-muted-foreground">

@@ -279,7 +279,9 @@
       "deleteCancel": "Cancelar",
       "deleteConflict": "No se puede eliminar: todavía hay precios, líneas de ticket o elementos de lista que lo usan.",
       "deleteFailed": "No se ha podido eliminar. Inténtalo otra vez.",
-      "deletedBody": "«{name}» ya no está en el catálogo."
+      "deletedBody": "«{name}» ya no está en el catálogo.",
+      "editFields": "Editar los datos",
+      "discardChanges": "Descartar"
     },
     "scan": {
       "title": "Escanear Código de Barras",
