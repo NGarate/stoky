@@ -109,12 +109,6 @@ const DESTINATIONS: Destination[] = [
     pattern: /^\/products\/(?!new$|scan$)[^/]+$/,
   },
   {
-    name: "product edit",
-    index: "/products",
-    via: /^\/products\/(?!new$|scan$)[^/]+$/,
-    pattern: /^\/products\/[^/]+\/edit$/,
-  },
-  {
     name: "product adjust",
     index: "/products",
     via: /^\/products\/(?!new$|scan$)[^/]+$/,

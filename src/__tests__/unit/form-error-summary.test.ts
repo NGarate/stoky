@@ -14,13 +14,18 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..", "..", "..");
 const APP = join(ROOT, "src", "app");
 
+/**
+ * The forms that refuse a submit. Five when this was written; the product
+ * edit page has since been absorbed into the product itself, so its form
+ * lives beside the page that owns it rather than on a route of its own.
+ */
 const PAGES = [
-  "(dashboard)/inventory/add/page.tsx",
-  "(dashboard)/inventory/consume/page.tsx",
-  "(dashboard)/products/new/page.tsx",
-  "(dashboard)/products/[id]/edit/page.tsx",
-  "(dashboard)/products/[id]/adjust/page.tsx",
-].map((path) => join(APP, path));
+  join(APP, "(dashboard)/inventory/add/page.tsx"),
+  join(APP, "(dashboard)/inventory/consume/page.tsx"),
+  join(APP, "(dashboard)/products/new/page.tsx"),
+  join(APP, "(dashboard)/products/[id]/adjust/page.tsx"),
+  join(ROOT, "src", "components", "products", "ProductDetailsForm.tsx"),
+];
 
 /** The `<ul>` class string every one of the five hand-wrote. */
 const HAND_WRITTEN = "list-disc space-y-1 pl-5";
@@ -40,7 +45,7 @@ describe("the form error summary", () => {
     text: readFileSync(path, "utf8"),
   }));
 
-  it("finds the five forms, so the checks below are not vacuous", () => {
+  it("finds every form, so the checks below are not vacuous", () => {
     // A path typo would make every assertion pass while reading nothing —
     // the same guard `message-usage.test.ts` carries.
     expect(sources).toHaveLength(5);
@@ -49,7 +54,7 @@ describe("the form error summary", () => {
     }
   });
 
-  it("is rendered by all five, rather than written out again", () => {
+  it("is rendered by all of them, rather than written out again", () => {
     for (const { path, text } of sources) {
       expect(text, `${path} does not render FormErrorSummary`).toContain(
         "<FormErrorSummary",
@@ -57,10 +62,11 @@ describe("the form error summary", () => {
     }
   });
 
-  it("is the only thing that draws one, anywhere under src/app", () => {
-    const offenders = tsxFiles(APP).filter((path) =>
-      readFileSync(path, "utf8").includes(HAND_WRITTEN),
-    );
+  it("is the only thing that draws one, anywhere under src/", () => {
+    const owner = join(ROOT, "src", "components", "ui", "form-error-summary.tsx");
+    const offenders = tsxFiles(join(ROOT, "src"))
+      .filter((path) => path !== owner)
+      .filter((path) => readFileSync(path, "utf8").includes(HAND_WRITTEN));
 
     expect(offenders.map((path) => path.replace(ROOT, ""))).toEqual([]);
   });

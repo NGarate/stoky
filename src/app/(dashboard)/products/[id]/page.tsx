@@ -488,14 +488,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       <ul className="mt-2 space-y-2">
         <li>
           <Link
-            href={`/products/${product.id}/edit`}
-            className="inline-flex min-h-[48px] items-center text-primary underline"
-          >
-            {t("editProduct")}
-          </Link>
-        </li>
-        <li>
-          <Link
             href="/inventory/add"
             className="inline-flex min-h-[48px] items-center text-primary underline"
           >

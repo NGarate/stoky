@@ -57,8 +57,9 @@ describe("the catalogue's actions column", () => {
   it("offers the row's real actions, each named with its product", () => {
     renderWithIntl(<ProductsPage />, { locale: "es" });
 
+    // No "Editar": the catalogue fields are edited on the product itself now,
+    // so a row action pointing at a second screen would point at a redirect.
     const wanted: Array<[RegExp, string]> = [
-      [/Editar de «Leche entera»/, "/products/p1/edit"],
       [/Ajustar de «Leche entera»/, "/products/p1/adjust"],
       [/Historial de «Leche entera»/, "/products/p1/history"],
       [/Precios de «Leche entera»/, "/prices/p1"],
@@ -67,6 +68,12 @@ describe("the catalogue's actions column", () => {
       const link = screen.getByRole("link", { name });
       expect(link.getAttribute("href")).toBe(href);
     }
+  });
+
+  it("no longer offers a separate screen to edit on", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    expect(screen.queryByRole("link", { name: /Editar/ })).toBeNull();
   });
 
   it("retires 'Ver' — the name is the way in", () => {

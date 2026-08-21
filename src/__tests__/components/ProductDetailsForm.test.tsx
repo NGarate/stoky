@@ -239,4 +239,25 @@ describe("the product's details", () => {
     });
     expect(invalidated).toContain("list");
   });
+
+  for (const locale of ["es", "en"] as const) {
+    it(`renders no raw key in ${locale}`, async () => {
+      const { container } = renderWithIntl(
+        <SnackbarProvider>
+          <ProductDetailsForm
+            canEdit
+            formattedDate="5 de enero de 2026"
+            product={product}
+          />
+        </SnackbarProvider>,
+        { locale },
+      );
+
+      await userEvent.click(
+        screen.getByRole("button", { name: locale === "es" ? "Editar los datos" : "Edit the details" }),
+      );
+
+      expect(container.textContent).not.toContain("products.");
+    });
+  }
 });

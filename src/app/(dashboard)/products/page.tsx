@@ -140,13 +140,6 @@ export default function ProductsPage(): JSX.Element {
                       example of failing. */}
                   <span className="flex flex-wrap items-center justify-center gap-1">
                     <Link
-                      href={`/products/${product.id}/edit`}
-                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
-                    >
-                      {t("actionEdit")}
-                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
-                    </Link>
-                    <Link
                       href={`/products/${product.id}/adjust`}
                       className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
                     >

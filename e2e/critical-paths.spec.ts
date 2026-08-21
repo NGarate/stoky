@@ -455,22 +455,20 @@ test.describe("Product Creation Flow", () => {
     await page.click(`a:has-text("${originalName}")`);
     await page.waitForURL(/\/products\/[^/]+$/);
 
-    await page.click('a[href$="/edit"]');
-    await page.waitForURL(/\/products\/[^/]+\/edit$/);
+    // No second screen to go to: the fields are edited where they are read.
+    await page.getByRole("button", { name: es.products.detail.editFields }).click();
 
     const editedName = `${originalName} (editado)`;
-    await page.fill('input[name="name"]', editedName);
-    await page.fill('input[name="brand"]', "Marca E2E");
-    await page.click('button[type="submit"]');
+    await page.getByLabel(es.products.edit.nameLabel).fill(editedName);
+    await page.getByLabel(es.products.edit.brandLabel).fill("Marca E2E");
+    await page.getByRole("button", { name: es.products.edit.submit }).click();
 
     // The save announces itself instead of redirecting into silence (A11Y-1).
-    await expect(
-      page.getByText(es.products.edit.saved.replace("{name}", editedName)),
-    ).toBeVisible();
+    await expect(page.getByTestId("snackbar")).toContainText(
+      es.products.edit.saved.replace("{name}", editedName),
+    );
 
-    // And the product's page carries the change.
-    const detailUrl = page.url().replace(/\/edit$/, "");
-    await page.goto(detailUrl);
+    // And the page it was made on carries the change without going anywhere.
     await expect(
       page.getByRole("heading", { level: 1, name: editedName }),
     ).toBeVisible();
