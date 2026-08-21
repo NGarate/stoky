@@ -2,6 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
+import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -35,6 +36,26 @@ let queryStub: QueryStub;
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
 
+// `/shopping/lists` reports its writes through the snackbar, so the provider
+// has to be here — `useSnackbar` throws outside it, deliberately, because
+// feedback outside the shell is a bug. The real one rather than a stub:
+// `mock.module` replaces a module process-wide and would reach
+// `Snackbar.test.tsx`.
+mock.module("@/components/offline/queue-context", () => ({
+  WriteQueueContext: createContext(null),
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true, id: "op" }),
+    drain: () => {},
+    cancel: () => true,
+    holdRemainingMs: () => 0,
+    retry: () => {},
+    discard: () => {},
+    flush: async () => {},
+    purgeAll: () => {},
+  }),
+}));
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
@@ -51,6 +72,7 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 const { default: ShoppingListsPage } = await import(
   "@/app/(dashboard)/shopping/lists/page"
 );
@@ -117,7 +139,11 @@ describe("a route whose query failed", () => {
         refetch: noop,
       };
 
-      renderWithIntl(<Page />);
+      renderWithIntl(
+        <SnackbarProvider>
+          <Page />
+        </SnackbarProvider>,
+      );
 
       expect(
         screen.getByText("No se han podido cargar los datos"),
@@ -135,7 +161,11 @@ describe("a route whose query failed", () => {
         refetch: noop,
       };
 
-      renderWithIntl(<Page />);
+      renderWithIntl(
+        <SnackbarProvider>
+          <Page />
+        </SnackbarProvider>,
+      );
 
       expect(
         screen.getByText("Todavía no tienes un hogar"),
@@ -154,7 +184,11 @@ describe("a route whose query failed", () => {
         refetch: noop,
       };
 
-      renderWithIntl(<Page />);
+      renderWithIntl(
+        <SnackbarProvider>
+          <Page />
+        </SnackbarProvider>,
+      );
 
       expect(screen.getByText(loadedText)).toBeInTheDocument();
       expect(
@@ -173,7 +207,11 @@ describe("a route whose query failed", () => {
         refetch: noop,
       };
 
-      renderWithIntl(<Page />);
+      renderWithIntl(
+        <SnackbarProvider>
+          <Page />
+        </SnackbarProvider>,
+      );
 
       expect(
         screen.getByText("Aquí todavía no hay nada guardado"),
@@ -191,7 +229,11 @@ describe("a route whose query failed", () => {
         refetch: noop,
       };
 
-      renderWithIntl(<Page />);
+      renderWithIntl(
+        <SnackbarProvider>
+          <Page />
+        </SnackbarProvider>,
+      );
 
       expect(screen.getByText(emptyState)).toBeInTheDocument();
       expect(

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import type { StoreInput } from "@/lib/validations/store";
 
@@ -21,6 +22,7 @@ export default function StoresPage() {
     address: "",
   });
 
+  const snackbar = useSnackbar();
   const utils = api.useUtils();
   const { data: stores, isLoading } = api.store.list.useQuery({ limit: 100 });
 
@@ -30,26 +32,32 @@ export default function StoresPage() {
   // was the only sign anything had happened at all, which is how a write that
   // succeeded and a write that silently failed came to look identical.
   const createMutation = api.store.create.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (store) => {
       setIsCreating(false);
       setFormData({ name: "", address: "" });
       await utils.store.list.invalidate();
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "stores.created", values: { name: store.name } },
+      });
     },
   });
 
   const updateMutation = api.store.update.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (store) => {
       setEditingStore(null);
       setFormData({ name: "", address: "" });
       await utils.store.list.invalidate();
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "stores.updated", values: { name: store.name } },
+      });
     },
   });
 
-  const deleteMutation = api.store.delete.useMutation({
-    onSuccess: async () => {
-      await utils.store.list.invalidate();
-    },
-  });
+  // No `onSuccess` here: the deleted store's name is in neither the input nor
+  // the result, so the per-call form is the only place that still knows it.
+  const deleteMutation = api.store.delete.useMutation();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +175,32 @@ export default function StoresPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => deleteMutation.mutate({ id: store.id })}
+                    onClick={() =>
+                      deleteMutation.mutate(
+                        { id: store.id },
+                        {
+                          onSuccess: async () => {
+                            await utils.store.list.invalidate();
+                            snackbar.show({
+                              kind: "confirm",
+                              message: {
+                                key: "stores.deleted",
+                                values: { name: store.name },
+                              },
+                            });
+                          },
+                          onError: () =>
+                            snackbar.show({
+                              kind: "confirm",
+                              tone: "danger",
+                              message: {
+                                key: "stores.deleteFailed",
+                                values: { name: store.name },
+                              },
+                            }),
+                        },
+                      )
+                    }
                     disabled={deleteMutation.isPending}
                     className="min-h-[48px] rounded-md px-3 py-1 text-sm text-destructive hover:bg-danger disabled:opacity-50"
                   >

@@ -39,22 +39,14 @@ let pending: QueuedOp[] = [];
 let expiringStub: Record<string, unknown>;
 let stockStub: Record<string, unknown>;
 
-const showSnackbar = mock((_input: unknown) => "snackbar-0");
-
-mock.module("@/components/ui/snackbar", () => ({
-  // The provider too: `mock.module` replaces the module for the whole
-  // process, so omitting it would turn the real provider into `undefined`
-  // in whichever suite renders it (the same trap `queue-context` documents).
-  SnackbarProvider: ({ children }: { children: unknown }) => children,
-  useSnackbar: () => ({ show: showSnackbar, dismiss: () => {} }),
-}));
-
 mock.module("@/components/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending, failed: [], status: "idle", full: false },
     enqueue,
     cancel,
+    // The snackbar asks how long its change can still be taken back.
+    holdRemainingMs: () => 10_000,
     drain: () => {},
     retry: () => {},
     discard: () => {},
@@ -88,7 +80,25 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 const { default: KitchenPage } = await import("@/app/(dashboard)/kitchen/page");
+
+/**
+ * The real snackbar, not a stub of it.
+ *
+ * `mock.module` replaces a module for the whole bun process, so stubbing
+ * this one reached every other suite that renders the real provider — which
+ * is how three unrelated files went red at once. Rendering it for real is
+ * immune to that and asserts more: that the sentence reaches the screen and
+ * that pressing Deshacer cancels the right change, rather than that a
+ * function was called with an object.
+ */
+const renderKitchen = () =>
+  renderWithIntl(
+    <SnackbarProvider>
+      <KitchenPage />
+    </SnackbarProvider>,
+  );
 
 function batch(overrides: Record<string, unknown> = {}) {
   return {
@@ -115,7 +125,6 @@ function consumeOp(productId: string): QueuedOp {
 
 beforeEach(() => {
   enqueue.mockClear();
-  showSnackbar.mockClear();
   cancel.mockClear();
   createList.mockClear();
   createListFails = false;
@@ -135,7 +144,7 @@ afterEach(cleanup);
 
 describe("what is urgent comes first", () => {
   it("puts anything within three days in 'usar ya'", () => {
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
     expect(screen.getByText("Quedan 2 días")).toBeInTheDocument();
@@ -143,7 +152,7 @@ describe("what is urgent comes first", () => {
 
   it("leaves what is further off in the reading columns", () => {
     expiringStub.data = [batch({ daysUntilExpiry: 6 })];
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     // Nothing urgent means no buttons at all — §4: one button per card, and
     // there are no cards.
@@ -156,7 +165,7 @@ describe("what is urgent comes first", () => {
       batch({ id: "b1", daysUntilExpiry: 0 }),
       batch({ id: "b2", daysUntilExpiry: 1, product: { id: "p2", name: "Huevos" } }),
     ];
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     expect(screen.getByText("Caduca hoy")).toBeInTheDocument();
     expect(screen.getByText("Caduca mañana")).toBeInTheDocument();
@@ -164,7 +173,7 @@ describe("what is urgent comes first", () => {
 
   it("says where it is, or says there is no place set", () => {
     expiringStub.data = [batch({ location: null })];
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     expect(screen.getByText("Sin sitio")).toBeInTheDocument();
   });
@@ -172,7 +181,7 @@ describe("what is urgent comes first", () => {
 
 describe("using something up", () => {
   it("enqueues one unit, so it works on a tablet with no signal", async () => {
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(screen.getByRole("button", { name: /He usado un L/ }));
 
@@ -187,7 +196,7 @@ describe("using something up", () => {
   });
 
   it("names the product in the accessible name, not just on the card", () => {
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     // Read from a metre away or not read at all: "He usado uno" alone tells a
     // screen reader nothing about which card it belongs to.
@@ -209,7 +218,7 @@ describe("using something up", () => {
       isPending: false,
       error: null,
     };
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     const buttons = screen.getAllByRole("button");
     expect(buttons).toHaveLength(2);
@@ -235,7 +244,7 @@ describe("writing it on the list", () => {
   });
 
   it("enqueues the product onto the newest list, one tap", async () => {
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(
       screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
@@ -257,7 +266,7 @@ describe("writing it on the list", () => {
 
   it("creates the first list with the first tap, and writes onto it", async () => {
     listsStub = { data: [] };
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(
       screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
@@ -275,7 +284,7 @@ describe("writing it on the list", () => {
   it("says so when the first list cannot be created", async () => {
     listsStub = { data: [] };
     createListFails = true;
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(
       screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
@@ -288,17 +297,15 @@ describe("writing it on the list", () => {
   });
 
   it("offers undo for the add, in the snackbar rather than in the row", async () => {
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(
       screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
     );
 
-    expect(showSnackbar.mock.calls[0]?.[0]).toEqual({
-      kind: "undo-queued",
-      opId: "op-1",
-      message: { key: "offline.addedItem", values: { name: "Café molido" } },
-    });
+    expect(
+      await screen.findAllByText("Añadiste «Café molido» a la lista"),
+    ).not.toHaveLength(0);
     // And the row keeps its one action rather than swapping it for an undo:
     // a row whose button changes label under the thumb is a row you mis-tap.
     expect(
@@ -317,28 +324,28 @@ describe("undo", () => {
    * against the real component in `Snackbar.test.tsx`.
    */
   it("offers the undo for the change the tap just queued", async () => {
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(
       screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
     );
 
-    expect(showSnackbar).toHaveBeenCalledTimes(1);
-    expect(showSnackbar.mock.calls[0]?.[0]).toEqual({
-      kind: "undo-queued",
-      // The id `enqueue` just returned, so undo cancels this change and no
-      // other — and never a compensating write.
-      opId: "op-1",
-      message: {
-        key: "offline.usedUp",
-        values: { quantity: 1, unit: "L", name: "Leche entera" },
-      },
-    });
+    expect(
+      await screen.findAllByText("Usaste 1 L de «Leche entera»"),
+    ).not.toHaveLength(0);
+
+    // Pressing it cancels the change `enqueue` just returned, and no other —
+    // and never writes a compensating one (D57).
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Deshacer" }),
+    );
+    expect(cancel).toHaveBeenCalledWith("op-1");
+    expect(enqueue).toHaveBeenCalledTimes(1);
   });
 
   it("says nothing when the queue refused the change for want of room", async () => {
     enqueue.mockImplementationOnce(() => ({ ok: false, reason: "full" }));
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     await userEvent.click(
       screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
@@ -346,12 +353,13 @@ describe("undo", () => {
 
     // The shell's own banner reports a full queue, which is a state. Telling
     // someone the unit was used when it was not is worse than silence.
-    expect(showSnackbar).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeNull();
+    expect(screen.queryAllByText(/Usaste/)).toHaveLength(0);
   });
 
   it("keeps no undo button in the card, which moved the row under the thumb", () => {
     pending = [consumeOp("p1")];
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     // A second button appearing under the one just pressed pushed the next
     // row down — on the tier where taps are least precise.
@@ -376,7 +384,7 @@ describe("what is running out", () => {
       isPending: false,
       error: null,
     };
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     expect(screen.getByText("Queda 1 de 2 paquete")).toBeInTheDocument();
   });
@@ -397,7 +405,7 @@ describe("what is running out", () => {
       isPending: false,
       error: null,
     };
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     expect(screen.getByText("No queda nada")).toBeInTheDocument();
   });
@@ -419,7 +427,7 @@ describe("what is running out", () => {
       error: null,
     };
     pending = [consumeOp("p1")];
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     // Two litres, one used and not yet sent: the tablet must not still say two.
     expect(screen.getByText("Queda 1 de 6 L")).toBeInTheDocument();
@@ -435,7 +443,7 @@ describe("with no connection and nothing saved", () => {
       fetchStatus: "paused",
       refetch: () => {},
     };
-    renderWithIntl(<KitchenPage />);
+    renderKitchen();
 
     expect(
       screen.getByText("Aquí todavía no hay nada guardado"),

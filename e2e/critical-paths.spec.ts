@@ -229,24 +229,6 @@ class ProductsPage {
   }
 }
 
-/**
- * A save opens a confirmation dialog over the form it was made on.
- *
- * That dialog is modal — it blocks pointer events outside itself — so a
- * journey that carries on somewhere else has to answer it first, exactly as
- * a person would. Escape is the cheapest of its three exits and the one that
- * leaves the journey where it was.
- */
-async function dismissConfirmation(page: Page, name?: string) {
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible({ timeout: 30_000 });
-  if (name) {
-    await expect(dialog).toContainText(name);
-  }
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-}
-
 class InventoryPage {
   constructor(private page: Page) {}
 

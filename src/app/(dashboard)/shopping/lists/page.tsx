@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { AutoListPreview } from "@/components/shopping/AutoListPreview";
@@ -17,16 +18,21 @@ export default function ShoppingListsPage() {
   });
   const lists = listsQuery.data;
 
+  const snackbar = useSnackbar();
   const utils = api.useUtils();
 
   // Both of these add a list, and neither refreshed the list they added it to.
   // Combined with the filter that hid an empty list, "Crear lista" looked like
   // it did nothing at all — twice over.
   const createMutation = api.shopping.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (list) => {
       setIsCreating(false);
       setNewListName("");
       void utils.shopping.list.invalidate();
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "shopping.listCreated", values: { name: list.name } },
+      });
     },
   });
 
@@ -34,6 +40,14 @@ export default function ShoppingListsPage() {
     onSuccess: () => {
       void utils.shopping.list.invalidate();
       void utils.shopping.getAutoList.invalidate();
+      // Deliberately says what was *done*, not what was found. The procedure
+      // adds nothing when everything is above its minimum, and a button that
+      // reports "0 productos añadidos" reads as a failure rather than as good
+      // news about the cupboard.
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "shopping.autoListUpToDate" },
+      });
     },
   });
 

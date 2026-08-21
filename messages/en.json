@@ -297,7 +297,9 @@
       "insecureContext": "The camera only works over a secure connection. Open the app through an https:// address (or localhost) and try again.",
       "torchOn": "Turn the torch on",
       "torchOff": "Turn the torch off",
-      "torchFailed": "The torch would not turn on. Another app may be using the camera — close it and try again."
+      "torchFailed": "The torch would not turn on. Another app may be using the camera — close it and try again.",
+      "foundExisting": "You already had “{name}” in the catalogue",
+      "createdFromLookup": "You created “{name}” from Open Food Facts data"
     },
     "rating": {
       "title": "Quality",
@@ -678,7 +680,9 @@
     "fromList": "From “{name}”",
     "deleteConfirmTitle": "Delete “{name}” for good?",
     "deleteConfirmBody": "The list and everything on it will be gone. This cannot be undone.",
-    "deleteConfirm": "Yes, delete the list"
+    "deleteConfirm": "Yes, delete the list",
+    "listCreated": "You created the list “{name}”",
+    "autoListUpToDate": "You checked the stock. The automatic list is up to date now."
   },
   "prices": {
     "title": "Prices",
@@ -714,7 +718,11 @@
     "select": "Select store",
     "noStores": "No stores",
     "addFirst": "Add your first store",
-    "defaultStore": "Default store"
+    "defaultStore": "Default store",
+    "created": "You created the store “{name}”",
+    "updated": "You updated “{name}”",
+    "deleted": "You deleted the store “{name}”",
+    "deleteFailed": "“{name}” could not be deleted. Prices or receipts still point at it."
   },
   "settings": {
     "title": "Settings",

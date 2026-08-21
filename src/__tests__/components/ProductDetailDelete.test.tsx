@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
+import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -34,8 +35,6 @@ const product = () => ({
 });
 
 const replaceCalls: string[] = [];
-const showSnackbar = mock((_input: unknown) => "snackbar-0");
-
 mock.module("next/navigation", () => ({
   useRouter: () => ({
     replace: (href: string) => replaceCalls.push(href),
@@ -48,11 +47,22 @@ mock.module("next/navigation", () => ({
   redirect: () => {},
 }));
 
-mock.module("@/components/ui/snackbar", () => ({
-  // The provider too: `mock.module` replaces the module process-wide, so
-  // omitting it turns the real provider into `undefined` wherever it renders.
-  SnackbarProvider: ({ children }: { children: unknown }) => children,
-  useSnackbar: () => ({ show: showSnackbar, dismiss: () => {} }),
+// The real snackbar rather than a stub of it: `mock.module` replaces a module
+// for the whole bun process, so stubbing this one reaches every other suite
+// that renders the real provider.
+mock.module("@/components/offline/queue-context", () => ({
+  WriteQueueContext: createContext(null),
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true, id: "op" }),
+    drain: () => {},
+    cancel: () => true,
+    holdRemainingMs: () => 0,
+    retry: () => {},
+    discard: () => {},
+    flush: async () => {},
+    purgeAll: () => {},
+  }),
 }));
 
 mock.module("@/components/products/ProductRating", () => ({
@@ -95,12 +105,18 @@ mock.module("@/lib/trpc/client", () => ({
   },
 }));
 
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 const { ProductDetailView } = await import(
   "@/app/(dashboard)/products/[id]/page"
 );
 
 function render() {
-  return renderWithIntl(<ProductDetailView id="p1" />, { locale: "es" });
+  return renderWithIntl(
+    <SnackbarProvider>
+      <ProductDetailView id="p1" />
+    </SnackbarProvider>,
+    { locale: "es" },
+  );
 }
 
 beforeEach(() => {
@@ -109,7 +125,6 @@ beforeEach(() => {
   deleteCalls = [];
   deleteFails = null;
   replaceCalls.length = 0;
-  showSnackbar.mockClear();
 });
 
 afterEach(cleanup);
@@ -148,13 +163,9 @@ describe("deleting a product", () => {
     // route, which is what lets a confirmation outlive the screen that
     // produced it.
     expect(replaceCalls).toEqual(["/products"]);
-    expect(showSnackbar).toHaveBeenCalledWith({
-      kind: "confirm",
-      message: {
-        key: "products.detail.deletedBody",
-        values: { name: "Sal fina" },
-      },
-    });
+    expect(
+      screen.getAllByText("«Sal fina» ya no está en el catálogo."),
+    ).not.toHaveLength(0);
   });
 
   it("turns the server's four-way CONFLICT into a sentence about references", () => {
@@ -169,6 +180,6 @@ describe("deleting a product", () => {
     expect(screen.getByText(/precios, líneas de ticket/)).toBeInTheDocument();
     // A refusal leaves you where you were, with the reason on the screen.
     expect(replaceCalls).toEqual([]);
-    expect(showSnackbar).not.toHaveBeenCalled();
+    expect(screen.queryAllByText(/ya no está en el catálogo/)).toHaveLength(0);
   });
 });

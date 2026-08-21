@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 
 export default function ScanPage() {
   const t = useTranslations("products.scan");
   const router = useRouter();
+  const snackbar = useSnackbar();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -19,15 +21,27 @@ export default function ScanPage() {
       setIsProcessing(false);
 
       if (result.product) {
-        if (result.source === "local") {
-          // Product already exists, navigate to it
-          router.push(`/products/${result.product.id}`);
-        } else {
-          // Product created from Open Food Facts
-          router.push(`/products/${result.product.id}?new=true`);
-        }
+        // Arriving at the product is not the whole answer. Whether the scan
+        // *found* it or *created* it is the one thing the destination cannot
+        // show — the page looks identical either way — and it is what decides
+        // whether the details on it were typed by this household or came from
+        // a stranger's database.
+        //
+        // `?new=true` used to carry that distinction and nothing ever read it.
+        snackbar.show({
+          kind: "confirm",
+          message: {
+            key:
+              result.source === "local"
+                ? "products.scan.foundExisting"
+                : "products.scan.createdFromLookup",
+            values: { name: result.product.name },
+          },
+        });
+        router.push(`/products/${result.product.id}`);
       } else {
-        // Product not found, redirect to create page with barcode
+        // Not found anywhere: the create form opens with the barcode filled
+        // in, which is itself the answer and needs no sentence.
         router.push(`/products/new?barcode=${scannedBarcode}`);
       }
     },
