@@ -107,6 +107,20 @@
      surfaces on purpose; there is no headroom to lighten it further. */
   --chart-emphasis: #0e4f42;
   --chart-muted: #7d8d85;
+
+  /* Categorical series, for the one chart that has more than one line.
+     Selected per theme rather than flipped: the previous five were fixed
+     hexes shared by both, so `#c2410c` sat on a near-black card at night.
+
+     Validated with the data-visualisation palette validator rather than by
+     `check-contrast.ts` — see the note beside PAIRS there for why a series
+     colour is audited by a different instrument. The previous set failed it:
+     `--gauge` was outside the lightness band and below the chroma floor,
+     which is to say it read as grey next to the others. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
 }
 
 :root[data-theme="light"] {
@@ -160,6 +174,11 @@
 
   --chart-emphasis: #8ddcc5;
   --chart-muted: #5c6f65;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -207,6 +226,11 @@
 
     --chart-emphasis: #8ddcc5;
     --chart-muted: #5c6f65;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
   }
 }
 
@@ -259,6 +283,11 @@
 
   --color-chart-emphasis: var(--chart-emphasis);
   --color-chart-muted: var(--chart-muted);
+
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
 }
 
 /* WCAG 1.4.8 (AAA) asks for at least 1.5 line spacing in a block of text.

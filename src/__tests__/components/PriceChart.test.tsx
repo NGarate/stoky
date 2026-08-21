@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { cleanup } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
 
@@ -13,7 +14,13 @@ import { renderWithIntl } from "../utils/render";
 type ChartRow = { date: string; [key: string]: string | number };
 
 let chartData: ChartRow[] = [];
-let lineProps: Array<{ dataKey: string; stroke: string }> = [];
+let lineProps: Array<{
+  dataKey: string;
+  stroke: string;
+  dot?: unknown;
+  activeDot?: unknown;
+}> = [];
+let gridProps: { strokeDasharray?: string } | undefined;
 let legendRendered = false;
 let yTickFormatter: ((value: number) => string) | undefined;
 
@@ -25,7 +32,12 @@ mock.module("recharts", () => ({
     chartData = data;
     return <div>{children}</div>;
   },
-  Line: (props: { dataKey: string; stroke: string }) => {
+  Line: (props: {
+    dataKey: string;
+    stroke: string;
+    dot?: unknown;
+    activeDot?: unknown;
+  }) => {
     lineProps.push(props);
     return null;
   },
@@ -34,7 +46,10 @@ mock.module("recharts", () => ({
     yTickFormatter = props.tickFormatter;
     return null;
   },
-  CartesianGrid: () => null,
+  CartesianGrid: (props: { strokeDasharray?: string }) => {
+    gridProps = props;
+    return null;
+  },
   Tooltip: () => null,
   Legend: () => {
     legendRendered = true;
@@ -53,6 +68,7 @@ const data = [
 beforeEach(() => {
   chartData = [];
   lineProps = [];
+  gridProps = undefined;
   legendRendered = false;
   yTickFormatter = undefined;
 });
@@ -101,7 +117,7 @@ describe("PriceChart", () => {
     expect(new Set(strokes).size).toBe(strokes.length);
   });
 
-  it("labels records with no store as Unknown", () => {
+  it("names a record with no store in the reader's language", () => {
     renderWithIntl(
       <PriceChart
         data={[{ date: "2026-01-05T00:00:00.000Z", price: 2 }]}
@@ -109,7 +125,11 @@ describe("PriceChart", () => {
       />,
     );
 
-    expect(lineProps.map((line) => line.dataKey)).toEqual(["Unknown"]);
+    // It used to be the literal "Unknown" — an English word in a Spanish
+    // application, in a legend entry nobody could act on.
+    expect(lineProps.map((line) => line.dataKey)).toEqual([
+      "Tienda desconocida",
+    ]);
   });
 
   it("only shows the legend in store-comparison mode", () => {
@@ -139,5 +159,67 @@ describe("PriceChart", () => {
 
     expect(chartData).toEqual([]);
     expect(lineProps).toHaveLength(1);
+  });
+
+  it("gives a single observation a marker big enough to be a series", () => {
+    renderWithIntl(
+      <PriceChart
+        data={[
+          { date: "2026-01-05T00:00:00.000Z", price: 2, storeName: "Lidl" },
+        ]}
+        showStores
+      />,
+    );
+
+    // A store seen once has no line — a line needs two points — so the dot
+    // *is* the series. At r=4 it read as a speck of grid, which is how three
+    // stores in the legend became one visible line.
+    const dot = lineProps[0]?.dot as { r?: number } | undefined;
+    expect(dot?.r ?? 0).toBeGreaterThanOrEqual(5);
+    const active = lineProps[0]?.activeDot as { r?: number } | undefined;
+    expect(active?.r ?? 0).toBeGreaterThanOrEqual(8);
+  });
+
+  it("takes its series colours from tokens, so night is a choice not a flip", () => {
+    renderWithIntl(<PriceChart data={data} showStores />);
+
+    // They used to be fixed hexes shared by both themes, so an orange picked
+    // for a white card sat on a near-black one at night.
+    for (const line of lineProps) {
+      expect(String(line.stroke)).toMatch(/^var\(--series-\d\)$/);
+    }
+  });
+
+  it("never cycles a hue: the fifth store is dropped and said so", async () => {
+    const many = ["A", "B", "C", "D", "E"].map((storeName, index) => ({
+      date: `2026-01-0${index + 1}T00:00:00.000Z`,
+      price: 1 + index,
+      storeName,
+    }));
+    renderWithIntl(<PriceChart data={many} showStores />);
+
+    // A fifth slot would reuse a hue and be indistinguishable from an
+    // existing one under colour vision deficiency.
+    expect(lineProps).toHaveLength(4);
+    expect(screen.getByText(/Otras 1 tienda/)).toBeInTheDocument();
+  });
+
+  it("offers the values as a table, which is what makes the chart optional", async () => {
+    renderWithIntl(<PriceChart data={data} showStores />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Ver como tabla" }));
+
+    // axe cannot read an SVG, and two of the four series sit below 3:1 on the
+    // light card. The table is what makes both acceptable.
+    const table = screen.getByRole("table");
+    expect(table).toBeInTheDocument();
+    expect(within(table).getAllByRole("columnheader").length).toBeGreaterThan(1);
+  });
+
+  it("draws a solid grid, not a dashed one", () => {
+    renderWithIntl(<PriceChart data={data} />);
+
+    // Dashing reads as a projection or a threshold when it is only a grid.
+    expect(gridProps?.strokeDasharray).toBeUndefined();
   });
 });

@@ -219,6 +219,24 @@ const PAIRS: Pair[] = [
   { fg: "snackbar", bg: "background", scale: "nonText", where: "snackbar surface floating over the page" },
   { fg: "snackbar", bg: "card", scale: "nonText", where: "snackbar surface floating over a card" },
 
+  // NOT here: `--series-1` … `--series-4`.
+  //
+  // A categorical series colour is not text, and the rules that govern one
+  // are not the rules this file implements. What matters for a set of series
+  // hues is that they stay distinguishable *from each other* under colour
+  // vision deficiency, that none of them reads as grey, and that they sit in
+  // a common lightness band — none of which is a contrast ratio against a
+  // background, and all of which this script would score as "fine" while the
+  // palette was unreadable. They are checked with the data-visualisation
+  // palette validator instead, and the previous set failed it: `--gauge` was
+  // outside the lightness band and below the chroma floor.
+  //
+  // Two of the four sit below 3:1 against the light card (aqua 2.82, yellow
+  // 2.17). That is legal under 1.4.11 only because the chart is not the only
+  // way to read its values: it ships with a table view and a legend, so the
+  // graphic is not "required to understand the content". If that table view
+  // is ever removed, these two colours have to change with it.
+
   // Chart marks, held to 1.4.11 against whichever surface they are drawn on.
   // Emphasis against muted is deliberately *not* a pair: the two never touch
   // — the mark spec puts a 2px gap of the surface between adjacent bars — so

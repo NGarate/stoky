@@ -703,7 +703,11 @@
     "chart": {
       "title": "Price evolution",
       "xAxis": "Date",
-      "yAxis": "Price (€)"
+      "yAxis": "Price (€)",
+      "tableView": "View as a table",
+      "chartView": "View as a chart",
+      "otherStores": "{count, plural, one {# other store} other {# other stores}}",
+      "unknownStore": "Unknown store"
     },
     "noPrices": "No prices recorded",
     "addFirst": "Record your first price",
