@@ -11,6 +11,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -124,7 +126,6 @@ function NewProductForm(): JSX.Element {
   const lookupStatusId = useId();
 
   const summaryRef = useRef<HTMLDivElement | null>(null);
-  const successRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedBarcode = barcode.trim();
   // Keeps typing responsive: the duplicate check re-runs against the settled
@@ -218,12 +219,6 @@ function NewProductForm(): JSX.Element {
     }
   }, [errorSignal]);
 
-  useEffect(() => {
-    if (created) {
-      successRef.current?.focus();
-    }
-  }, [created]);
-
   function handleLookup(): void {
     if (trimmedBarcode === "") return;
 
@@ -294,64 +289,37 @@ function NewProductForm(): JSX.Element {
     });
   }
 
-  if (created) {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <Link
-          href="/products"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToProducts")}
-        </Link>
-
-        <div
-          ref={successRef}
-          role="status"
-          tabIndex={-1}
-          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("successTitle")}</h1>
-          <p className="mt-2">
-            {created.fromLookup
-              ? t("successCreatedFromLookup", { name: created.name })
-              : t("successCreated", { name: created.name })}
-          </p>
-        </div>
-
-        <h2 className="mt-6 text-lg font-semibold text-heading">{t("successNextTitle")}</h2>
-        <ul className="mt-2 space-y-2">
-          <li>
-            <Link
-              href="/products"
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-            >
-              {t("successViewProducts")}
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/inventory/add"
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-            >
-              {t("successAddStock")}
-            </Link>
-          </li>
-          <li>
-            <button
-              type="button"
-              onClick={handleCreateAnother}
-              className="min-h-[48px] text-primary underline"
-            >
-              {t("successCreateAnother")}
-            </button>
-          </li>
-        </ul>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-2xl">
+      {/* Over the form rather than instead of it — see the note on the same
+          dialog in inventory/add. Closing it is `handleCreateAnother`, which
+          clears the form the way the button under the old screen did. */}
+      <Dialog
+        description={
+          created
+            ? created.fromLookup
+              ? t("successCreatedFromLookup", { name: created.name })
+              : t("successCreated", { name: created.name })
+            : undefined
+        }
+        footer={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/products">{t("successViewProducts")}</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/inventory/add">{t("successAddStock")}</Link>
+            </Button>
+            <Button onClick={handleCreateAnother} type="button">
+              {t("successCreateAnother")}
+            </Button>
+          </>
+        }
+        onClose={handleCreateAnother}
+        open={created !== null}
+        title={t("successTitle")}
+      />
+
       <Link
         href="/products"
         className="inline-flex min-h-[48px] items-center text-primary underline"

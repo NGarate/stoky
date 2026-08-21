@@ -219,7 +219,6 @@
       "successTitle": "Product created",
       "successCreated": "“{name}” is now in your household catalogue.",
       "successCreatedFromLookup": "“{name}” is now in your household catalogue, created from Open Food Facts data.",
-      "successNextTitle": "What would you like to do now?",
       "successViewProducts": "View all products",
       "successAddStock": "Add stock of this product",
       "successCreateAnother": "Create another product"
@@ -280,9 +279,7 @@
       "deleteCancel": "Cancel",
       "deleteConflict": "It cannot be deleted: prices, receipt lines or list items still use it.",
       "deleteFailed": "It could not be deleted. Try again.",
-      "deletedTitle": "Product deleted",
-      "deletedBody": "“{name}” is no longer in the catalogue.",
-      "deletedBack": "Back to the products"
+      "deletedBody": "“{name}” is no longer in the catalogue."
     },
     "scan": {
       "title": "Scan barcode",
@@ -471,7 +468,6 @@
       "errorGeneric": "We could not save it. Check the details and try again; if it keeps failing, try again in a few minutes.",
       "successTitle": "Stock added",
       "successBody": "You added {quantity} {unit} of “{name}”.",
-      "successNextTitle": "What next?",
       "successAddMore": "Add more stock",
       "successViewInventory": "See the inventory",
       "storeLabel": "Store (optional)",
@@ -515,7 +511,6 @@
       "errorGeneric": "We could not save it. Check the details and try again; if it keeps failing, try again in a few minutes.",
       "successTitle": "Use recorded",
       "successBody": "You recorded {quantity} {unit} of “{name}”. {left} {unit} left.",
-      "successNextTitle": "What next?",
       "successConsumeMore": "Record another use",
       "successViewInventory": "See the inventory",
       "productSelectHint": "Choose the product that has been used up.",

@@ -212,11 +212,39 @@ class ProductsPage {
       await this.fillBarcode(barcode);
     }
     await this.clickSave();
+
+    // The confirmation names what was created and offers where to go next.
+    // Taking its "ver todos los productos" exit is what a person does, and it
+    // leaves this journey on the list — which is where every caller looks
+    // afterwards. Escape would leave it on an emptied form.
+    const dialog = this.page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog).toContainText(name);
+    await dialog.getByRole("link", { name: es.products.new.successViewProducts }).click();
+    await this.page.waitForURL(/\/products$/);
   }
 
   async expectProductInList(name: string) {
     await expect(this.page.locator(`text=${name}`).first()).toBeVisible();
   }
+}
+
+/**
+ * A save opens a confirmation dialog over the form it was made on.
+ *
+ * That dialog is modal — it blocks pointer events outside itself — so a
+ * journey that carries on somewhere else has to answer it first, exactly as
+ * a person would. Escape is the cheapest of its three exits and the one that
+ * leaves the journey where it was.
+ */
+async function dismissConfirmation(page: Page, name?: string) {
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
+  if (name) {
+    await expect(dialog).toContainText(name);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 }
 
 class InventoryPage {
@@ -276,14 +304,28 @@ class InventoryPage {
     await this.clickSave();
   }
 
+  /**
+   * Read inside the confirmation, not on the page behind it.
+   *
+   * The form is still mounted under the dialog, so `text=NAME` also matches
+   * the `<option>` in the product picker — an element with a zero-size
+   * rectangle inside a closed native select, which never becomes visible.
+   */
   async expectStockEntry(productName: string) {
-    await expect(this.page.locator(`text=${productName}`).first()).toBeVisible();
+    const dialog = this.page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog).toContainText(productName);
   }
 
   async clickConsumeStock() {
-    // The stock forms report what they wrote instead of redirecting to
-    // /inventory (ISSUES.md A11Y-1), so this may be called from the
-    // confirmation panel, which has no navigation of its own.
+    // The stock forms confirm in a dialog rather than redirecting to
+    // /inventory (ISSUES.md A11Y-1). It is modal, so it must be answered
+    // before this journey can go anywhere else.
+    const dialog = this.page.getByRole("dialog");
+    if (await dialog.isVisible().catch(() => false)) {
+      await this.page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+    }
     if (!this.page.url().includes("/inventory/consume")) {
       await this.page.goto("/inventory/consume");
     }
@@ -490,9 +532,13 @@ test.describe("Product Creation Flow", () => {
       `button:has-text("${es.products.detail.deleteConfirm}")`,
     );
 
-    await expect(
-      page.getByText(es.products.detail.deletedTitle),
-    ).toBeVisible();
+    // The page described a product that no longer exists, so it leaves — and
+    // the confirmation travels with it, because the snackbar is mounted above
+    // every route rather than inside the screen that raised it.
+    await page.waitForURL(/\/products$/);
+    await expect(page.getByTestId("snackbar")).toContainText(
+      es.products.detail.deletedBody.replace("{name}", productName),
+    );
 
     // And the catalogue no longer lists it.
     await page.goto("/products");

@@ -541,35 +541,41 @@ test.describe("Screen-reader journeys", () => {
       await page.locator('[role="option"]').nth(1).click();
       await page.waitForTimeout(300);
 
-      const beforeSave = await snapshot(page);
-
       await page.click("form button[type=submit]");
-      // No redirect any more: the form reports what it wrote (A11Y-1). Waited
-      // for by its heading rather than by `role="status"` — the shell's sync
-      // indicator and the form's own hints are status regions too.
-      await expect(
-        page.getByRole("heading", { name: es.inventory.add.successTitle }),
-      ).toBeVisible({ timeout: 30_000 });
+
+      // A11Y-1, still flipped, now by a dialog rather than by a panel that
+      // replaced the page. It used to redirect to /inventory, whose only
+      // voice was Next's route announcer saying "Inventario" — the same word
+      // it says for a navigation nobody meant as a confirmation.
+      //
+      // A dialog is a stronger guarantee than the live region it replaces,
+      // not a weaker one: focus *moves into it*, so the confirmation is
+      // announced by the focus change rather than depending on a region
+      // being polled. That is also why this can no longer be measured with
+      // `newlySpoken` — `announcements()` collects nodes whose computed
+      // `aria-live` is not "off", and `role="dialog"` carries none.
+      const dialog = page.getByRole("dialog", {
+        name: es.inventory.add.successTitle,
+      });
+      await expect(dialog).toBeVisible({ timeout: 30_000 });
       await settle(page);
 
       const saved = await snapshot(page);
       assertTree(saved, "/inventory/add after a save");
 
-      // A11Y-1, flipped. It used to redirect to /inventory, whose only voice
-      // was Next's route announcer saying "Inventario" — the same word it says
-      // for a navigation nobody meant as a confirmation.
-      const confirmation = newlySpoken(spoken(beforeSave), spoken(saved));
+      // Focus is inside it, which is what makes the announcement happen.
       expect(
-        confirmation,
+        await dialog.evaluate((node) => node.contains(document.activeElement)),
         report(
           "/inventory/add after a save",
-          "new live-region announcement(s) — a save that announces nothing tells a reader only where they are",
-          confirmation,
+          "focus inside the confirmation — a dialog nobody is standing in announces nothing",
+          [],
         ),
-      ).not.toEqual([]);
+      ).toBe(true);
 
       // And it says *what*, not merely that something happened.
-      expect(confirmation.join(" ")).toMatch(/Arroz redondo/);
+      await expect(dialog).toContainText("Arroz redondo");
+
     });
 
     test("consume stock", async ({ page }) => {

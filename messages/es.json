@@ -219,7 +219,6 @@
       "successTitle": "Producto creado",
       "successCreated": "«{name}» ya está en el catálogo de tu hogar.",
       "successCreatedFromLookup": "«{name}» ya está en el catálogo de tu hogar, creado con los datos de Open Food Facts.",
-      "successNextTitle": "¿Qué quieres hacer ahora?",
       "successViewProducts": "Ver todos los productos",
       "successAddStock": "Añadir stock de este producto",
       "successCreateAnother": "Crear otro producto"
@@ -280,9 +279,7 @@
       "deleteCancel": "Cancelar",
       "deleteConflict": "No se puede eliminar: todavía hay precios, líneas de ticket o elementos de lista que lo usan.",
       "deleteFailed": "No se ha podido eliminar. Inténtalo otra vez.",
-      "deletedTitle": "Producto eliminado",
-      "deletedBody": "«{name}» ya no está en el catálogo.",
-      "deletedBack": "Volver a los productos"
+      "deletedBody": "«{name}» ya no está en el catálogo."
     },
     "scan": {
       "title": "Escanear Código de Barras",
@@ -471,7 +468,6 @@
       "errorGeneric": "No hemos podido guardarlo. Revisa los datos e inténtalo otra vez; si sigue fallando, prueba dentro de unos minutos.",
       "successTitle": "Stock añadido",
       "successBody": "Has añadido {quantity} {unit} de «{name}».",
-      "successNextTitle": "¿Qué quieres hacer ahora?",
       "successAddMore": "Añadir más stock",
       "successViewInventory": "Ver el inventario",
       "storeLabel": "Tienda (opcional)",
@@ -515,7 +511,6 @@
       "errorGeneric": "No hemos podido guardarlo. Revisa los datos e inténtalo otra vez; si sigue fallando, prueba dentro de unos minutos.",
       "successTitle": "Consumo apuntado",
       "successBody": "Has apuntado {quantity} {unit} de «{name}». Quedan {left} {unit}.",
-      "successNextTitle": "¿Qué quieres hacer ahora?",
       "successConsumeMore": "Apuntar otro consumo",
       "successViewInventory": "Ver el inventario",
       "productSelectHint": "Elige el producto que se ha gastado.",

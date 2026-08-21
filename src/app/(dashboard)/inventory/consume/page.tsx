@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
@@ -62,7 +64,6 @@ export default function ConsumeStockPage(): JSX.Element {
   // Bumped on every failed submit so the summary is re-focused each time, even
   // when the same errors come back twice in a row.
   const [errorSignal, setErrorSignal] = useState(0);
-  const successRef = useRef<HTMLDivElement | null>(null);
   const [saved, setSaved] = useState<{
     name: string;
     quantity: number;
@@ -149,11 +150,6 @@ export default function ConsumeStockPage(): JSX.Element {
     }
   }, [errorSignal]);
 
-  // Focus moves to the confirmation, so a reader hears it without hunting.
-  useEffect(() => {
-    if (saved) successRef.current?.focus();
-  }, [saved]);
-
   function handleProductChange(selected: PickedProduct | null): void {
     setProduct(selected);
     if (selected && !unitTouched) {
@@ -219,61 +215,37 @@ export default function ConsumeStockPage(): JSX.Element {
     });
   }
 
-  if (saved) {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <Link
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-          href="/inventory"
-        >
-          {t("backToInventory")}
-        </Link>
-
-        <div
-          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
-          ref={successRef}
-          role="status"
-          tabIndex={-1}
-        >
-          <h1 className="text-2xl font-bold">{t("successTitle")}</h1>
-          <p className="mt-2">
-            {t("successBody", {
-              quantity: saved.quantity,
-              unit: saved.unit,
-              name: saved.name,
-              left: saved.left,
-            })}
-          </p>
-        </div>
-
-        <h2 className="mt-6 text-lg font-semibold text-heading">
-          {t("successNextTitle")}
-        </h2>
-        <ul className="mt-2 space-y-2">
-          <li>
-            <button
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-              onClick={() => setSaved(null)}
-              type="button"
-            >
-              {t("successConsumeMore")}
-            </button>
-          </li>
-          <li>
-            <Link
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-              href="/inventory"
-            >
-              {t("successViewInventory")}
-            </Link>
-          </li>
-        </ul>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-2xl">
+      {/* Over the form rather than instead of it — see the note on the same
+          dialog in inventory/add. Closing it is what "Apuntar otro consumo"
+          used to be. */}
+      <Dialog
+        description={
+          saved
+            ? t("successBody", {
+                quantity: saved.quantity,
+                unit: saved.unit,
+                name: saved.name,
+                left: saved.left,
+              })
+            : undefined
+        }
+        footer={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/inventory">{t("successViewInventory")}</Link>
+            </Button>
+            <Button onClick={() => setSaved(null)} type="button">
+              {t("successConsumeMore")}
+            </Button>
+          </>
+        }
+        onClose={() => setSaved(null)}
+        open={saved !== null}
+        title={t("successTitle")}
+      />
+
       <Link href="/inventory" className="inline-flex min-h-[48px] items-center text-primary underline">
         {t("backToInventory")}
       </Link>

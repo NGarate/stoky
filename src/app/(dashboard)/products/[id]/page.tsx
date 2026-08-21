@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney } from "@/lib/money";
 import { isLowStock } from "@/lib/stock/low-stock";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import type { JSX } from "react";
@@ -65,6 +67,8 @@ export default function ProductDetailPage({
 export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.detail");
   const locale = useLocale();
+  const router = useRouter();
+  const snackbar = useSnackbar();
 
   // `retry: false` because the likeliest failure here is a product id that does
   // not exist, and the shared QueryClient retries three times by default —
@@ -81,7 +85,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deleted, setDeleted] = useState<string | null>(null);
   const confirmRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -90,9 +93,34 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
   const utils = api.useUtils();
   const deleteProduct = api.product.delete.useMutation({
-    onSuccess: async () => {
-      setDeleted(product?.name ?? "");
-      await utils.product.list.invalidate();
+    /**
+     * Leave, and say so on the way out.
+     *
+     * The other three success outcomes in this application are dialogs over
+     * the screen that produced them, because that screen is still true
+     * afterwards and still useful. This one is not: the page describes a
+     * product that no longer exists, so staying to show a confirmation on top
+     * of a dead record is the strangest of the four options. The snackbar
+     * carries the sentence across the navigation — it is mounted in the
+     * dashboard layout, above every route.
+     *
+     * `product.getById` is deliberately *not* invalidated. Refetching a
+     * deleted product mid-navigation makes this page render its own
+     * not-found alert on the way out.
+     */
+    onSuccess: () => {
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "products.detail.deletedBody",
+          values: { name: product?.name ?? "" },
+        },
+      });
+      router.replace("/products");
+      // Not awaited, and deliberately after the navigation: leaving should
+      // not wait on a cache invalidation. The list refetches on arrival
+      // either way, because the query is mounted by then.
+      void utils.product.list.invalidate();
     },
     onError: (error) => {
       const normalized = error.message.toLowerCase();
@@ -235,27 +263,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
             {t("retry")}
           </button>
         )}
-      </div>
-    );
-  }
-
-  if (deleted !== null) {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <div
-          role="status"
-          tabIndex={-1}
-          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("deletedTitle")}</h1>
-          <p className="mt-2">{t("deletedBody", { name: deleted })}</p>
-        </div>
-        <Link
-          href="/products"
-          className="mt-4 inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("deletedBack")}
-        </Link>
       </div>
     );
   }

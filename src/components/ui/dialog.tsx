@@ -20,12 +20,21 @@ import type { JSX, ReactNode, RefObject } from "react";
  * that: no Escape, no trap, no focus return, and `role="dialog"` on the scrim
  * rather than on the card.
  *
- * Both, however, say `aria-modal="true"` while leaving the rest of the page
- * reachable — nothing outside them is `inert` or `aria-hidden`. `aria-modal`
- * is a promise that everything else is unreachable, and a JS Tab trap only
- * keeps that promise for the Tab key. Neither portals either, so both depend
- * on `z-50` continuing to mean something, which stops being true the moment a
- * dialog opens from inside a transformed or clipped ancestor.
+ * Neither portals, so both depend on `z-50` continuing to mean something,
+ * which stops being true the moment a dialog opens from inside a transformed
+ * or clipped ancestor. That is what a library gets right and a hand-rolled
+ * panel keeps getting wrong, and it is why this one is not hand-rolled.
+ *
+ * **What `aria-modal="true"` here does and does not promise.** It buys the
+ * focus trap, the scroll lock and the blocking of outside pointer events —
+ * all measured. It does not currently buy `aria-hidden` on the page behind:
+ * Radix calls `hideOthers` from the `aria-hidden` package, and I measured it
+ * marking ten nodes in this shell while leaving the one that contains
+ * `<main>` alone. Why is not yet understood and is not claimed here. A
+ * screen reader in browse mode can therefore still reach the page underneath
+ * — the same gap `NavSheet` and `ReconcileDialog` have, neither better nor
+ * worse. Worth closing; not closed by this commit, and not asserted by its
+ * tests.
  *
  * Those two are exactly what a library does and a hand-rolled panel keeps
  * getting wrong, so this is Radix. Note what NavSheet's own docblock rejects
@@ -84,7 +93,7 @@ export function Dialog({
           // keep has to be written out here.
           aria-modal="true"
           className={cn(
-            "-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg rounded-lg border bg-card p-5 shadow-lg md:p-6",
+            "-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg rounded-lg border bg-card p-5 pt-16 shadow-lg md:p-6 md:pt-16",
             tone === "danger" ? "border-danger-foreground" : "border-border",
             className,
           )}
@@ -112,6 +121,23 @@ export function Dialog({
           ref={panelRef}
           tabIndex={-1}
         >
+          {/* First in the DOM because it is first on the screen. Rendered
+              last, it was read after the footer's actions while being drawn
+              a hundred pixels above them — which `e2e/screen-reader.spec.ts`
+              caught as a reading-order finding, and which is the whole class
+              of defect that audit exists for. */}
+          <RadixDialog.Close asChild>
+            <Button
+              aria-label={t("close")}
+              className="absolute top-3 right-3"
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <span aria-hidden="true">✕</span>
+            </Button>
+          </RadixDialog.Close>
+
           <RadixDialog.Title asChild>
             {/* An h2, never an h1: e2e/a11y-structure.spec.ts wants exactly
                 one h1 per page and the page underneath already has it. */}
@@ -130,17 +156,6 @@ export function Dialog({
 
           <div className="mt-6 flex flex-wrap justify-end gap-2">{footer}</div>
 
-          <RadixDialog.Close asChild>
-            <Button
-              aria-label={t("close")}
-              className="absolute top-3 right-3"
-              size="icon"
-              type="button"
-              variant="ghost"
-            >
-              <span aria-hidden="true">✕</span>
-            </Button>
-          </RadixDialog.Close>
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>

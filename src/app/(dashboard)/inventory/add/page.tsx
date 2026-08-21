@@ -7,6 +7,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { StoreSelector } from "@/components/store/StoreSelector";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
 import { usualLocationId } from "@/lib/inventory/usualLocation";
 import { useEnvelope } from "@/components/offline/Composer";
@@ -88,7 +90,6 @@ export default function AddStockPage(): JSX.Element {
   const priceErrorId = useId();
 
   const summaryRef = useRef<HTMLDivElement | null>(null);
-  const successRef = useRef<HTMLDivElement | null>(null);
   const [saved, setSaved] = useState<{
     name: string;
     quantity: number;
@@ -140,12 +141,6 @@ export default function AddStockPage(): JSX.Element {
       summaryRef.current?.focus();
     }
   }, [errorSignal]);
-
-  // Focus moves to the confirmation, so a reader hears it without hunting and
-  // a keyboard user is already where the next choices are.
-  useEffect(() => {
-    if (saved) successRef.current?.focus();
-  }, [saved]);
 
   /**
    * Where this product usually goes, read from its own ledger — the entries
@@ -242,60 +237,38 @@ export default function AddStockPage(): JSX.Element {
     });
   }
 
-  if (saved) {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <Link
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-          href="/inventory"
-        >
-          {t("backToInventory")}
-        </Link>
-
-        <div
-          className="mt-2 rounded border border-ok-foreground bg-ok p-4 text-ok-foreground"
-          ref={successRef}
-          role="status"
-          tabIndex={-1}
-        >
-          <h1 className="text-2xl font-bold">{t("successTitle")}</h1>
-          <p className="mt-2">
-            {t("successBody", {
-              quantity: saved.quantity,
-              unit: saved.unit,
-              name: saved.name,
-            })}
-          </p>
-        </div>
-
-        <h2 className="mt-6 text-lg font-semibold text-heading">
-          {t("successNextTitle")}
-        </h2>
-        <ul className="mt-2 space-y-2">
-          <li>
-            <button
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-              onClick={() => setSaved(null)}
-              type="button"
-            >
-              {t("successAddMore")}
-            </button>
-          </li>
-          <li>
-            <Link
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-              href="/inventory"
-            >
-              {t("successViewInventory")}
-            </Link>
-          </li>
-        </ul>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-2xl">
+      {/* Over the form rather than instead of it. A11Y-1 is why this is a
+          dialog and not a snackbar: focus moves into it, so the confirmation
+          is announced rather than left to Next's route announcer reading the
+          destination's name. Closing it is what "Añadir otro" used to be —
+          the form is still underneath, exactly as it was left. */}
+      <Dialog
+        description={
+          saved
+            ? t("successBody", {
+                quantity: saved.quantity,
+                unit: saved.unit,
+                name: saved.name,
+              })
+            : undefined
+        }
+        footer={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/inventory">{t("successViewInventory")}</Link>
+            </Button>
+            <Button onClick={() => setSaved(null)} type="button">
+              {t("successAddMore")}
+            </Button>
+          </>
+        }
+        onClose={() => setSaved(null)}
+        open={saved !== null}
+        title={t("successTitle")}
+      />
+
       <Link href="/inventory" className="inline-flex min-h-[48px] items-center text-primary underline">
         {t("backToInventory")}
       </Link>
