@@ -191,14 +191,23 @@ function CreateHousehold({ title }: { title: string }): JSX.Element {
           </Button>
         </form>
 
-        {failed ? (
-          <p
-            aria-live="polite"
-            className="mt-4 rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
-          >
-            {t("createFailed")}
-          </p>
-        ) : null}
+        {/* Always mounted, empty when there is nothing to say: a region
+            created at the moment it has something to say is one some readers
+            never announce (SyncStatus.tsx:64-65). It stays here rather than
+            becoming a snackbar because the form you would retry from is on
+            screen, and the reason has to still be there when you look back
+            at it. */}
+        <p
+          aria-live="polite"
+          className={
+            failed
+              ? "mt-4 rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
+              : "sr-only"
+          }
+          role="status"
+        >
+          {failed ? t("createFailed") : ""}
+        </p>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useEffect, useRef, useState, useId } from "react";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -38,6 +39,7 @@ export default function AdjustStockPage({
 /** Exported apart from the route so the component suite can render it. */
 export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.adjust");
+  const snackbar = useSnackbar();
   const utils = api.useUtils();
 
   const query = api.product.getById.useQuery({ id }, { retry: false });
@@ -51,7 +53,6 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
   }>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [errorSignal, setErrorSignal] = useState(0);
-  const [saved, setSaved] = useState<{ stock: number } | null>(null);
 
   const actualId = useId();
   const actualHintId = useId();
@@ -68,7 +69,17 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
   const adjustStock = api.inventory.adjustStock.useMutation({
     onSuccess: async (_entry, variables) => {
-      setSaved({ stock: (product?.totalStock ?? 0) + variables.quantity });
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "products.adjust.saved",
+          values: {
+            name: product?.name ?? "",
+            stock: (product?.totalStock ?? 0) + variables.quantity,
+            unit: product?.defaultUnit ?? "",
+          },
+        },
+      });
       await utils.product.getById.invalidate({ id });
       await utils.inventory.getStockOverview.invalidate();
     },
@@ -101,7 +112,6 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
       errors.reason = t("errorReasonRequired");
     }
 
-    setSaved(null);
     setServerError(null);
     setFieldErrors(errors);
 
@@ -287,18 +297,10 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           >
             {t("backToProduct")}
           </Link>
-          {/* Kept mounted so both the progress note and the saved confirmation
-              are announced when they appear (A11Y-1). */}
+          {/* Reduced to the pending state, which is what it was always for.
+              An adjustment is an event and now says so in the snackbar. */}
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-            {adjustStock.isPending
-              ? t("submitting")
-              : saved
-                ? t("saved", {
-                    name: product.name,
-                    stock: saved.stock,
-                    unit: product.defaultUnit,
-                  })
-                : ""}
+            {adjustStock.isPending ? t("submitting") : ""}
           </p>
         </div>
       </form>

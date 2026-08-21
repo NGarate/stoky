@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useDeferredValue, useEffect, useId, useRef, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -55,6 +56,7 @@ export default function ProductEditPage({
  */
 export function ProductEditView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.edit");
+  const snackbar = useSnackbar();
   const utils = api.useUtils();
 
   // `retry: false` for the same reason the detail page gives: the likeliest
@@ -79,8 +81,6 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
   // Bumped on every failed submit so the summary is re-focused each time, even
   // when the same errors come back twice in a row.
   const [errorSignal, setErrorSignal] = useState(0);
-  const [savedName, setSavedName] = useState<string | null>(null);
-
   const nameId = useId();
   const nameHintId = useId();
   const nameErrorId = useId();
@@ -135,7 +135,10 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
 
   const updateProduct = api.product.update.useMutation({
     onSuccess: async (updated) => {
-      setSavedName(updated.name);
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "products.edit.saved", values: { name: updated.name } },
+      });
       await utils.product.getById.invalidate({ id });
       await utils.product.list.invalidate();
       await utils.product.getByBarcode.invalidate();
@@ -187,7 +190,6 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
       }
     }
 
-    setSavedName(null);
     setServerError(null);
     setFieldErrors(errors);
 
@@ -484,12 +486,12 @@ export function ProductEditView({ id }: { id: string }): JSX.Element {
           {/* Kept mounted so both the progress note and the saved confirmation
               are announced when they appear (A11Y-1: a saved change must say
               so, not redirect into silence). */}
+          {/* Reduced to the pending state, which is what it was always for.
+              A save is an event and now says so in the snackbar; leaving
+              "Guardado" beside the form for ever made a screen you came back
+              to later claim you had just saved it. */}
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-            {updateProduct.isPending
-              ? t("submitting")
-              : savedName
-                ? t("saved", { name: savedName })
-                : ""}
+            {updateProduct.isPending ? t("submitting") : ""}
           </p>
         </div>
       </form>

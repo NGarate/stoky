@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TRPCClientError } from "@trpc/client";
 import { renderWithIntl } from "../utils/render";
@@ -284,10 +284,18 @@ describe("RouteState", () => {
       />,
     );
 
-    expect(screen.queryByRole("status")).toBeNull();
+    // The region exists from the start and is empty, rather than appearing
+    // when it has something to say: a region created at that moment is one
+    // some readers never announce (SyncStatus.tsx:64-65).
+    const region = screen.getByRole("status");
+    expect(region.textContent).toBe("");
 
     createOptions.onError?.();
 
-    expect(await screen.findByText(/no se ha podido crear el hogar/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toMatch(
+        /no se ha podido crear el hogar/i,
+      );
+    });
   });
 });

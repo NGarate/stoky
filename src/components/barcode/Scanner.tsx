@@ -225,14 +225,20 @@ export function BarcodeScanner({
         )}
       </div>
 
-      {torchFailed && (
-        <p
-          aria-live="polite"
-          className="mt-4 rounded border border-warn-foreground bg-warn p-4 text-sm text-warn-foreground"
-        >
-          {t("torchFailed")}
-        </p>
-      )}
+      {/* Always mounted, empty when silent — see the note in RouteState. The
+          torch failing is a standing fact about this device's camera, not an
+          event: it stays true for as long as you are on this screen. */}
+      <p
+        aria-live="polite"
+        className={
+          torchFailed
+            ? "mt-4 rounded border border-warn-foreground bg-warn p-4 text-sm text-warn-foreground"
+            : "sr-only"
+        }
+        role="status"
+      >
+        {torchFailed ? t("torchFailed") : ""}
+      </p>
 
       {scanError && (
         <div className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">

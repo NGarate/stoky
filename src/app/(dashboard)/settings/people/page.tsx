@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { TRPCClientError } from "@trpc/client";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import type { FormEvent, JSX } from "react";
@@ -25,6 +26,7 @@ import type { FormEvent, JSX } from "react";
  */
 export default function PeoplePage(): JSX.Element {
   const t = useTranslations("household");
+  const snackbar = useSnackbar();
   const fieldId = useId();
   const utils = api.useUtils();
 
@@ -34,12 +36,14 @@ export default function PeoplePage(): JSX.Element {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"MEMBER" | "KITCHEN">("KITCHEN");
-  const [created, setCreated] = useState<string | null>(null);
   const [failure, setFailure] = useState<"taken" | "other" | null>(null);
 
   const addMember = api.household.addMember.useMutation({
     onSuccess: (member) => {
-      setCreated(member.name);
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "household.addDone", values: { name: member.name } },
+      });
       setFailure(null);
       setName("");
       setEmail("");
@@ -47,7 +51,6 @@ export default function PeoplePage(): JSX.Element {
       void utils.household.members.invalidate();
     },
     onError: (error) => {
-      setCreated(null);
       // The database's own unique constraint, translated. Checking first and
       // then inserting would race with itself.
       const conflict =
@@ -220,23 +223,25 @@ export default function PeoplePage(): JSX.Element {
             ))}
           </fieldset>
 
-          {created ? (
-            <p
-              aria-live="polite"
-              className="rounded-md border border-ok-foreground bg-ok px-3 py-2 text-sm text-ok-foreground"
-            >
-              {t("addDone", { name: created })}
-            </p>
-          ) : null}
+          {/* Always mounted, empty when there is nothing to say. A region
+              created at the moment it has something to say is one some
+              readers never announce (SyncStatus.tsx:64-65).
 
-          {failure ? (
-            <p
-              aria-live="polite"
-              className="rounded-md border border-danger-foreground bg-danger px-3 py-2 text-sm text-danger-foreground"
-            >
-              {failure === "taken" ? t("addEmailTaken") : t("addFailed")}
-            </p>
-          ) : null}
+              The failure stays here rather than becoming a snackbar: the form
+              that produced it is on screen and is where you would retry, so
+              the reason has to still be there when you look back at the
+              fields. The success is an event and has gone to the snackbar. */}
+          <p
+            aria-live="polite"
+            className={
+              failure
+                ? "rounded-md border border-danger-foreground bg-danger px-3 py-2 text-sm text-danger-foreground"
+                : "sr-only"
+            }
+            role="status"
+          >
+            {failure ? (failure === "taken" ? t("addEmailTaken") : t("addFailed")) : ""}
+          </p>
 
           <button
             className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"

@@ -753,9 +753,10 @@
       "exportDescription": "Everything this household has, in one file: products, stock, receipts, prices and lists. It is yours and you can take it whenever you like.",
       "exportAction": "Download a file with everything",
       "exportWorking": "Preparing the file…",
-      "exportDone": "File downloaded. Keep it somewhere safe: it contains the names and email addresses of everyone who uses this household.",
+      "exportDone": "Archive downloaded.",
       "exportFailed": "The file could not be prepared. Try again in a moment.",
-      "exportImagesNote": "Receipt photographs are not inside the file, only where they live. To keep them, copy the server's uploads folder too."
+      "exportImagesNote": "Receipt photographs are not inside the file, only where they live. To keep them, copy the server's uploads folder too.",
+      "exportPrivacyNote": "The archive contains the names and emails of everyone who uses this household. Keep it somewhere safe."
     },
     "snackbarDuration": "Notification duration",
     "snackbarDefault": "Normal",

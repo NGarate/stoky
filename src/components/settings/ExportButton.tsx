@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/components/providers/TRPCProvider";
 import type { JSX } from "react";
 
@@ -21,7 +22,8 @@ import type { JSX } from "react";
  */
 export function ExportButton(): JSX.Element {
   const t = useTranslations("settings.hub");
-  const [state, setState] = useState<"idle" | "working" | "done" | "failed">(
+  const snackbar = useSnackbar();
+  const [state, setState] = useState<"idle" | "working">(
     "idle",
   );
 
@@ -52,9 +54,18 @@ export function ExportButton(): JSX.Element {
       link.click();
 
       URL.revokeObjectURL(url);
-      setState("done");
+      setState("idle");
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "settings.hub.exportDone" },
+      });
     } catch {
-      setState("failed");
+      setState("idle");
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "settings.hub.exportFailed" },
+      });
     }
   }
 
@@ -64,6 +75,13 @@ export function ExportButton(): JSX.Element {
       <p className="mt-1 text-muted-foreground">{t("exportDescription")}</p>
       <p className="mt-2 text-sm text-muted-foreground">
         {t("exportImagesNote")}
+      </p>
+      {/* A standing fact about the file, not news about this download. It
+          used to be the second half of the confirmation sentence, which meant
+          the caution left the screen a few seconds after the file arrived and
+          was gone entirely when you came back to look for it. */}
+      <p className="mt-2 text-sm text-muted-foreground">
+        {t("exportPrivacyNote")}
       </p>
 
       <button
@@ -75,19 +93,7 @@ export function ExportButton(): JSX.Element {
         {state === "working" ? t("exportWorking") : t("exportAction")}
       </button>
 
-      {/* `role="status"`, so the outcome is announced rather than only shown —
-          a download that has already happened leaves nothing else on screen to
-          notice. */}
-      {state === "done" || state === "failed" ? (
-        <p
-          className={`mt-3 text-sm ${
-            state === "done" ? "text-ok-foreground" : "text-danger-foreground"
-          }`}
-          role="status"
-        >
-          {state === "done" ? t("exportDone") : t("exportFailed")}
-        </p>
-      ) : null}
+
     </div>
   );
 }

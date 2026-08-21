@@ -753,9 +753,10 @@
       "exportDescription": "Todo lo que tiene este hogar en un archivo: productos, existencias, tickets, precios y listas. Es tuyo y puedes llevártelo cuando quieras.",
       "exportAction": "Descargar un archivo con todo",
       "exportWorking": "Preparando el archivo…",
-      "exportDone": "Archivo descargado. Guárdalo en un sitio seguro: contiene los nombres y correos de quienes usan este hogar.",
+      "exportDone": "Archivo descargado.",
       "exportFailed": "No se ha podido preparar el archivo. Inténtalo otra vez dentro de un momento.",
-      "exportImagesNote": "Las fotos de los tickets no van dentro del archivo, solo su ubicación. Si quieres conservarlas, copia también la carpeta de subidas del servidor."
+      "exportImagesNote": "Las fotos de los tickets no van dentro del archivo, solo su ubicación. Si quieres conservarlas, copia también la carpeta de subidas del servidor.",
+      "exportPrivacyNote": "El archivo contiene los nombres y correos de quienes usan este hogar. Guárdalo en un sitio seguro."
     },
     "snackbarDuration": "Duración de los avisos",
     "snackbarDefault": "Normal",

@@ -298,7 +298,11 @@ export default function KitchenPage(): JSX.Element {
           {/* Announced politely: the one failure this section can produce is
               "no connection to create the first list", and a tablet read from
               a metre away must say it rather than swallow the tap. */}
-          <p aria-live="polite" className={listError ? "mt-3 text-lg text-danger-foreground" : "sr-only"}>
+          <p
+            aria-live="polite"
+            className={listError ? "mt-3 text-lg text-danger-foreground" : "sr-only"}
+            role="status"
+          >
             {listError ? t("listCreateFailed") : ""}
           </p>
           {lowStock.length === 0 ? (

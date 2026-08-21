@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup, fireEvent } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -46,6 +47,24 @@ let updateOpts: {
   onError?: (error: { message: string }) => unknown;
 };
 
+// The real snackbar rather than a stub: `mock.module` replaces a module for
+// the whole bun process, so stubbing it would reach every suite that renders
+// the real provider.
+mock.module("@/components/offline/queue-context", () => ({
+  WriteQueueContext: createContext(null),
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true, id: "op" }),
+    drain: () => {},
+    cancel: () => true,
+    holdRemainingMs: () => 0,
+    retry: () => {},
+    discard: () => {},
+    flush: async () => {},
+    purgeAll: () => {},
+  }),
+}));
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
@@ -80,6 +99,7 @@ mock.module("@/lib/trpc/client", () => ({
 const { ProductEditView } = await import(
   "@/app/(dashboard)/products/[id]/edit/page"
 );
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 beforeEach(() => {
   queryStub = {
@@ -101,7 +121,12 @@ function field(label: string): HTMLInputElement {
 
 describe("the edit screen", () => {
   it("prefills every field from the catalogue", () => {
-    renderWithIntl(<ProductEditView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <ProductEditView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     expect(field("Nombre del producto").value).toBe("Leche entera");
     expect(field("Código de barras (opcional)").value).toBe("8400000000017");
@@ -112,7 +137,12 @@ describe("the edit screen", () => {
   });
 
   it("saves trimmed values, and a blank optional field as null — not omitted", async () => {
-    renderWithIntl(<ProductEditView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <ProductEditView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     fireEvent.change(field("Nombre del producto"), {
       target: { value: "  Leche semidesnatada  " },
@@ -135,16 +165,30 @@ describe("the edit screen", () => {
       },
     ]);
 
-    // A11Y-1's rule: the save says so where assistive tech can hear it.
-    const saved = await screen.findByText(
-      "Guardado. «Leche semidesnatada» está al día.",
-    );
-    expect(saved.closest("[role='status']")).not.toBeNull();
+    // A11Y-1's rule, unchanged: the save says so where assistive tech can
+    // hear it. It says it in the snackbar now rather than beside the form —
+    // which renders the sentence twice on purpose, once visibly and once in
+    // its polite region — so at least one copy must be inside one.
+    await waitFor(() => {
+      const spoken = [
+        ...document.querySelectorAll('[role="status"][aria-live="polite"]'),
+      ].map((node) => node.textContent ?? "");
+      expect(
+        spoken.some((text) =>
+          text.includes("Guardado. «Leche semidesnatada» está al día."),
+        ),
+      ).toBe(true);
+    });
   });
 
   it("refuses a barcode another product holds, and says whose it is", () => {
     barcodeHolder = { id: "p2", name: "Leche sin lactosa" };
-    renderWithIntl(<ProductEditView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <ProductEditView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
@@ -158,7 +202,12 @@ describe("the edit screen", () => {
     // `getByBarcode` answers with the product being edited — the code was
     // never touched. Treating that as taken would make every edit unsavable.
     barcodeHolder = { id: "p1", name: "Leche entera" };
-    renderWithIntl(<ProductEditView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <ProductEditView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
@@ -166,7 +215,12 @@ describe("the edit screen", () => {
   });
 
   it("refuses to save without a name", () => {
-    renderWithIntl(<ProductEditView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <ProductEditView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     fireEvent.change(field("Nombre del producto"), { target: { value: "  " } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -179,9 +233,12 @@ describe("the edit screen", () => {
 
   for (const locale of ["es", "en"] as const) {
     it(`renders no raw key in ${locale}`, () => {
-      const { container } = renderWithIntl(<ProductEditView id="p1" />, {
-        locale,
-      });
+      const { container } = renderWithIntl(
+        <SnackbarProvider>
+          <ProductEditView id="p1" />
+        </SnackbarProvider>,
+        { locale },
+      );
 
       expect(container.textContent).not.toContain("products.");
     });

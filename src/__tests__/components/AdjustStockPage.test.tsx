@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
+import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -12,6 +13,24 @@ import { renderWithIntl } from "../utils/render";
  * payload is asserted signed, both directions.
  */
 let adjustCalls: Array<Record<string, unknown>>;
+
+// The real snackbar rather than a stub: `mock.module` replaces a module for
+// the whole bun process, so stubbing it would reach every suite that renders
+// the real provider.
+mock.module("@/components/offline/queue-context", () => ({
+  WriteQueueContext: createContext(null),
+  useWriteQueue: () => ({
+    state: { pending: [], failed: [], status: "idle", full: false },
+    enqueue: () => ({ ok: true, id: "op" }),
+    drain: () => {},
+    cancel: () => true,
+    holdRemainingMs: () => 0,
+    retry: () => {},
+    discard: () => {},
+    flush: async () => {},
+    purgeAll: () => {},
+  }),
+}));
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
@@ -46,6 +65,7 @@ mock.module("@/lib/trpc/client", () => ({
 const { AdjustStockView } = await import(
   "@/app/(dashboard)/products/[id]/adjust/page"
 );
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 beforeEach(() => {
   adjustCalls = [];
@@ -65,7 +85,12 @@ function submit(actual: string, reason: string): void {
 
 describe("the adjustment", () => {
   it("computes a signed delta downwards from the counted total", () => {
-    renderWithIntl(<AdjustStockView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     submit("4", "Se rompieron dos");
 
@@ -80,7 +105,12 @@ describe("the adjustment", () => {
   });
 
   it("computes it upwards too — the sign is the point", () => {
-    renderWithIntl(<AdjustStockView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     submit("9", "Recuento de despensa");
 
@@ -88,7 +118,12 @@ describe("the adjustment", () => {
   });
 
   it("refuses a no-op and an unexplained adjustment", () => {
-    renderWithIntl(<AdjustStockView id="p1" />, { locale: "es" });
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
 
     submit("6", "  ");
 
