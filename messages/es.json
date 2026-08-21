@@ -706,7 +706,10 @@
       "yAxis": "Precio (€)"
     },
     "noPrices": "No hay precios registrados",
-    "addFirst": "Registra tu primer precio"
+    "addFirst": "Registra tu primer precio",
+    "comparisonSummary": "Media {average} en {count, plural, one {# tienda} other {# tiendas}}",
+    "premiumOver": "{percent} más caro que el mejor",
+    "recordedOn": "Visto el {date}"
   },
   "stores": {
     "title": "Tiendas",

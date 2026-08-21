@@ -706,7 +706,10 @@
       "yAxis": "Price (€)"
     },
     "noPrices": "No prices recorded",
-    "addFirst": "Record your first price"
+    "addFirst": "Record your first price",
+    "comparisonSummary": "Average {average} across {count, plural, one {# store} other {# stores}}",
+    "premiumOver": "{percent} dearer than the best",
+    "recordedOn": "Seen on {date}"
   },
   "stores": {
     "title": "Stores",
