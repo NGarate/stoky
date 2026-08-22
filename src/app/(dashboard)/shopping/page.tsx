@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/components/offline/queue-context";
@@ -117,12 +118,9 @@ export default function ShopPage(): JSX.Element {
             <p className="mt-2 text-sm text-muted-foreground">
               {t("nothingToBuyHint")}
             </p>
-            <Link
-              className="mt-4 inline-flex min-h-[48px] items-center text-primary underline"
-              href="/shopping/lists"
-            >
-              {t("manageLists")}
-            </Link>
+            <Button asChild className="mt-4" variant="link">
+              <Link href="/shopping/lists" > {t("manageLists")} </Link>
+            </Button>
           </div>
         ) : (
           // Rows, not cards: a border and a background around every item of a
@@ -191,12 +189,9 @@ export default function ShopPage(): JSX.Element {
         )}
       </section>
 
-      <Link
-        className="mt-8 inline-flex min-h-[48px] items-center text-primary underline"
-        href="/shopping/lists"
-      >
-        {t("manageLists")}
-      </Link>
+      <Button asChild className="mt-8" variant="link">
+        <Link href="/shopping/lists" > {t("manageLists")} </Link>
+      </Button>
     </div>
   );
 }

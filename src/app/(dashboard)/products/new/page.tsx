@@ -307,12 +307,9 @@ function NewProductForm(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <Link
-        href="/products"
-        className="inline-flex min-h-[48px] items-center text-primary underline"
-      >
-        {t("backToProducts")}
-      </Link>
+      <Button asChild variant="link">
+        <Link href="/products" > {t("backToProducts")} </Link>
+      </Button>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
@@ -556,12 +553,9 @@ function NewProductForm(): JSX.Element {
           >
             {t("submit")}
           </Button>
-          <Link
-            href="/products"
-            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
-          >
-            {t("cancel")}
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/products" > {t("cancel")} </Link>
+          </Button>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">

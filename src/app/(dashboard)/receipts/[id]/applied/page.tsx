@@ -97,12 +97,9 @@ export default function ReceiptAppliedPage({
   if (query.isPending) {
     return (
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/receipts"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToReceipts")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/receipts" > {t("backToReceipts")} </Link>
+        </Button>
         <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
           {t("loadingTitle")}
         </h1>
@@ -118,12 +115,9 @@ export default function ReceiptAppliedPage({
 
     return (
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/receipts"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToReceipts")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/receipts" > {t("backToReceipts")} </Link>
+        </Button>
 
         <div
           role="alert"
@@ -164,12 +158,9 @@ export default function ReceiptAppliedPage({
   if (!isApplied) {
     return (
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/receipts"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToReceipts")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/receipts" > {t("backToReceipts")} </Link>
+        </Button>
 
         <div
           role="status"
@@ -189,21 +180,15 @@ export default function ReceiptAppliedPage({
         <ul className="mt-6 space-y-2">
           {hasFailed ? null : (
             <li>
-              <Link
-                href={`/receipts/${receipt.id}/review`}
-                className="inline-flex min-h-[48px] items-center text-primary underline md:text-lg"
-              >
-                {t("pendingReviewLink")}
-              </Link>
+              <Button asChild className="md:text-lg" variant="link">
+                <Link href={`/receipts/${receipt.id}/review`} > {t("pendingReviewLink")} </Link>
+              </Button>
             </li>
           )}
           <li>
-            <Link
-              href="/receipts/upload"
-              className="inline-flex min-h-[48px] items-center text-primary underline md:text-lg"
-            >
-              {t("nextUpload")}
-            </Link>
+            <Button asChild className="md:text-lg" variant="link">
+              <Link href="/receipts/upload" > {t("nextUpload")} </Link>
+            </Button>
           </li>
         </ul>
       </div>
@@ -212,12 +197,9 @@ export default function ReceiptAppliedPage({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link
-        href="/receipts"
-        className="inline-flex min-h-[48px] items-center text-primary underline"
-      >
-        {t("backToReceipts")}
-      </Link>
+      <Button asChild variant="link">
+        <Link href="/receipts" > {t("backToReceipts")} </Link>
+      </Button>
 
       <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
         {t("title")}
@@ -346,36 +328,24 @@ export default function ReceiptAppliedPage({
       </h2>
       <ul className="mt-2 space-y-2">
         <li>
-          <Link
-            href="/inventory"
-            className="inline-flex min-h-[48px] items-center text-primary underline md:text-lg"
-          >
-            {t("nextInventory")}
-          </Link>
+          <Button asChild className="md:text-lg" variant="link">
+            <Link href="/inventory" > {t("nextInventory")} </Link>
+          </Button>
         </li>
         <li>
-          <Link
-            href="/prices"
-            className="inline-flex min-h-[48px] items-center text-primary underline md:text-lg"
-          >
-            {t("nextPrices")}
-          </Link>
+          <Button asChild className="md:text-lg" variant="link">
+            <Link href="/prices" > {t("nextPrices")} </Link>
+          </Button>
         </li>
         <li>
-          <Link
-            href={`/receipts/${receipt.id}/review`}
-            className="inline-flex min-h-[48px] items-center text-primary underline md:text-lg"
-          >
-            {t("nextReview")}
-          </Link>
+          <Button asChild className="md:text-lg" variant="link">
+            <Link href={`/receipts/${receipt.id}/review`} > {t("nextReview")} </Link>
+          </Button>
         </li>
         <li>
-          <Link
-            href="/receipts/upload"
-            className="inline-flex min-h-[48px] items-center text-primary underline md:text-lg"
-          >
-            {t("nextUpload")}
-          </Link>
+          <Button asChild className="md:text-lg" variant="link">
+            <Link href="/receipts/upload" > {t("nextUpload")} </Link>
+          </Button>
         </li>
       </ul>
     </div>

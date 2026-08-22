@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 
@@ -66,12 +67,9 @@ export default function LocationsPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-heading">{TITLE}</h1>
-        <Link
-          href="/settings"
-          className="inline-flex min-h-[48px] items-center text-primary hover:underline"
-        >
-          ← Volver a configuración
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/settings" > ← Volver a configuración </Link>
+        </Button>
       </div>
 
       <div className="mb-6 rounded-lg border border-border bg-muted p-4">

@@ -84,12 +84,9 @@ export default function ShoppingListsPage() {
             {t("shopping.title")}
           </h1>
           {/* Back to the screen this used to be. Filing is not shopping. */}
-          <Link
-            className="mt-1 inline-flex min-h-[48px] items-center text-primary underline"
-            href="/shopping"
-          >
-            {t("shopping.shopTitle")}
-          </Link>
+          <Button asChild className="mt-1" variant="link">
+            <Link href="/shopping" > {t("shopping.shopTitle")} </Link>
+          </Button>
         </div>
         <div className="flex gap-2">
           <Button

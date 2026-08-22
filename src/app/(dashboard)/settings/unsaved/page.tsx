@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
@@ -47,12 +48,9 @@ export default function UnsavedPage(): JSX.Element {
         <h1 className="text-2xl font-bold text-heading md:text-4xl">
           {t("unsavedTitle")}
         </h1>
-        <Link
-          className="inline-flex min-h-[48px] items-center text-primary hover:underline"
-          href="/settings"
-        >
-          {t("backToSettings")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/settings" > {t("backToSettings")} </Link>
+        </Button>
       </div>
 
       {failed.length === 0 ? (

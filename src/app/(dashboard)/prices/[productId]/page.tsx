@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 import { PriceChart } from "@/components/price/PriceChart";
@@ -42,12 +43,9 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
-        <Link
-          href="/prices"
-          className="inline-flex min-h-[48px] items-center rounded-md border border-input bg-card px-3 py-1 text-sm text-foreground hover:bg-accent hover:text-accent-foreground md:text-lg"
-        >
-          {t("common.back")}
-        </Link>
+        <Button asChild className="md:text-lg" variant="outline">
+          <Link href="/prices" > {t("common.back")} </Link>
+        </Button>
         <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("prices.history")}</h1>
       </div>
 

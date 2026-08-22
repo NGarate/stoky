@@ -130,12 +130,9 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-2xl">
-        <Link
-          href="/products"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToProduct")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/products" > {t("backToProduct")} </Link>
+        </Button>
 
         <div
           role="alert"
@@ -170,12 +167,9 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link
-        href={`/products/${id}`}
-        className="inline-flex min-h-[48px] items-center text-primary underline"
-      >
-        {t("backToProduct")}
-      </Link>
+      <Button asChild variant="link">
+        <Link href={`/products/${id}`} > {t("backToProduct")} </Link>
+      </Button>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">
         {t("titleOf", { name: product.name })}
@@ -275,12 +269,9 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           >
             {t("submit")}
           </Button>
-          <Link
-            href={`/products/${id}`}
-            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
-          >
-            {t("backToProduct")}
-          </Link>
+          <Button asChild variant="outline">
+            <Link href={`/products/${id}`} > {t("backToProduct")} </Link>
+          </Button>
           {/* Reduced to the pending state, which is what it was always for.
               An adjustment is an event and now says so in the snackbar. */}
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">

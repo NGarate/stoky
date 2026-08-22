@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Button } from "@/components/ui/button";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { DESKTOP_DESTINATIONS, activeHref } from "./navigation";
 import type { JSX } from "react";
@@ -39,12 +40,9 @@ export function DashboardNav(): JSX.Element {
           {/* The wordmark is a link like any other and gets the same target
               floor; at 54×28 it was the smallest control on every signed-in
               route (DESIGN_AUDIT A4.2). */}
-          <Link
-            href="/dashboard"
-            className="inline-flex min-h-[48px] items-center text-xl font-bold text-primary"
-          >
-            Stoky
-          </Link>
+          <Button asChild variant="link">
+            <Link href="/dashboard" > Stoky </Link>
+          </Button>
           <ul className="flex items-center gap-1">
             {DESKTOP_DESTINATIONS.map((destination) => {
               const isCurrent = current === destination.href;

@@ -80,12 +80,9 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/products"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToProduct")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/products" > {t("backToProduct")} </Link>
+        </Button>
 
         <div
           role="alert"
@@ -123,12 +120,9 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link
-        href={`/products/${id}`}
-        className="inline-flex min-h-[48px] items-center text-primary underline"
-      >
-        {t("backToProduct")}
-      </Link>
+      <Button asChild variant="link">
+        <Link href={`/products/${id}`} > {t("backToProduct")} </Link>
+      </Button>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">
         {t("titleOf", { name: product.name })}

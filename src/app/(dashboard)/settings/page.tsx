@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Button } from "@/components/ui/button";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { ExportButton } from "@/components/settings/ExportButton";
 import { SignOutButton } from "@/components/session/SignOutButton";
@@ -39,35 +40,26 @@ export default function SettingsPage(): JSX.Element {
       <ul className="mt-6 space-y-4">
         <li className="rounded border border-border bg-card p-4">
           <h2 className="text-lg font-semibold text-heading">
-            <Link
-              href="/settings/locations"
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-            >
-              {t("locationsTitle")}
-            </Link>
+            <Button asChild variant="link">
+              <Link href="/settings/locations" > {t("locationsTitle")} </Link>
+            </Button>
           </h2>
           <p className="mt-1 text-muted-foreground">{t("locationsDescription")}</p>
         </li>
 
         <li className="rounded border border-border bg-card p-4">
           <h2 className="text-lg font-semibold text-heading">
-            <Link
-              href="/settings/stores"
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-            >
-              {t("storesTitle")}
-            </Link>
+            <Button asChild variant="link">
+              <Link href="/settings/stores" > {t("storesTitle")} </Link>
+            </Button>
           </h2>
           <p className="mt-1 text-muted-foreground">{t("storesDescription")}</p>
         </li>
         <li className="rounded border border-border bg-card p-4">
           <h2 className="text-lg font-semibold text-heading">
-            <Link
-              href="/settings/people"
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-            >
-              {tHousehold("peopleTitle")}
-            </Link>
+            <Button asChild variant="link">
+              <Link href="/settings/people" > {tHousehold("peopleTitle")} </Link>
+            </Button>
           </h2>
           <p className="mt-1 text-muted-foreground">
             {tHousehold("peopleDescription")}
@@ -75,12 +67,9 @@ export default function SettingsPage(): JSX.Element {
         </li>
         <li className="rounded border border-border bg-card p-4">
           <h2 className="text-lg font-semibold text-heading">
-            <Link
-              href="/settings/unsaved"
-              className="inline-flex min-h-[48px] items-center text-primary underline"
-            >
-              {tOffline("unsavedTitle")}
-            </Link>
+            <Button asChild variant="link">
+              <Link href="/settings/unsaved" > {tOffline("unsavedTitle")} </Link>
+            </Button>
           </h2>
           <p className="mt-1 text-muted-foreground">
             {tOffline("unsavedDescription")}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { syncStatus, isUrgent } from "@/lib/offline/status";
 import { useWriteQueue } from "./queue-context";
 import { ReconcileDialog } from "./ReconcileDialog";
@@ -128,12 +129,9 @@ export function SyncStatus(): JSX.Element {
             {/* Where the same changes can be found deliberately, with when
                 each one was made — which a banner cannot say. */}
             {state.failed.length > 0 ? (
-              <Link
-                className="mt-3 mr-2 inline-flex min-h-[48px] items-center rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
-                href="/settings/unsaved"
-              >
-                {t("seeUnsaved")}
-              </Link>
+              <Button asChild className="mt-3 mr-2" variant="outline">
+                <Link href="/settings/unsaved" > {t("seeUnsaved")} </Link>
+              </Button>
             ) : null}
 
             {/* The only honest answer to a captive portal, which reports

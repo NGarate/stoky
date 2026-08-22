@@ -240,9 +240,9 @@ export default function ConsumeStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <Link href="/inventory" className="inline-flex min-h-[48px] items-center text-primary underline">
-        {t("backToInventory")}
-      </Link>
+      <Button asChild variant="link">
+        <Link href="/inventory" > {t("backToInventory")} </Link>
+      </Button>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
@@ -405,12 +405,9 @@ export default function ConsumeStockPage(): JSX.Element {
           >
             {t("submit")}
           </Button>
-          <Link
-            href="/inventory"
-            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
-          >
-            {t("cancel")}
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/inventory" > {t("cancel")} </Link>
+          </Button>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">

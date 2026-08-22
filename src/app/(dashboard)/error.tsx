@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useTranslations } from "next-intl";
@@ -63,12 +64,9 @@ export default function DashboardError({
           >
             {t("boundaryRetry")}
           </button>
-          <Link
-            className="inline-flex min-h-[48px] items-center rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
-            href="/dashboard"
-          >
-            {t("boundaryHome")}
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/dashboard" > {t("boundaryHome")} </Link>
+          </Button>
         </div>
 
         {error.digest ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import Link from "next/link";
 
@@ -100,12 +101,9 @@ export function ExpiringItems({
                 className="flex items-center justify-between p-2 bg-card rounded"
               >
                 <div className="flex items-center gap-3">
-                  <Link
-                    href={`/products/${item.product.id}`}
-                    className="inline-flex min-h-[48px] items-center font-medium text-danger-foreground hover:underline"
-                  >
-                    {item.product.name}
-                  </Link>
+                  <Button asChild variant="link">
+                    <Link href={`/products/${item.product.id}`} > {item.product.name} </Link>
+                  </Button>
                   {item.location && (
                     <span className="text-sm text-muted-foreground">
                       en {item.location.name}

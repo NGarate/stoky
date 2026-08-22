@@ -223,12 +223,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   if (query.isPending) {
     return (
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/products"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToProducts")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/products" > {t("backToProducts")} </Link>
+        </Button>
         <h1 className="mt-2 text-2xl font-bold text-heading">{t("loadingTitle")}</h1>
         <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
           {t("loading")}
@@ -242,12 +239,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/products"
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("backToProducts")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href="/products" > {t("backToProducts")} </Link>
+        </Button>
 
         <div
           role="alert"
@@ -275,12 +269,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link
-        href="/products"
-        className="inline-flex min-h-[48px] items-center text-primary underline"
-      >
-        {t("backToProducts")}
-      </Link>
+      <Button asChild variant="link">
+        <Link href="/products" > {t("backToProducts")} </Link>
+      </Button>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{product.name}</h1>
 
@@ -467,12 +458,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </>
       )}
       <p className="mt-2">
-        <Link
-          href={`/prices/${product.id}`}
-          className="inline-flex min-h-[48px] items-center text-primary underline"
-        >
-          {t("pricesHistoryLink")}
-        </Link>
+        <Button asChild variant="link">
+          <Link href={`/prices/${product.id}`} > {t("pricesHistoryLink")} </Link>
+        </Button>
       </p>
 
       <ProductDetailsForm
@@ -487,36 +475,24 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       </p>
       <ul className="mt-2 space-y-2">
         <li>
-          <Link
-            href="/inventory/add"
-            className="inline-flex min-h-[48px] items-center text-primary underline"
-          >
-            {t("addStock")}
-          </Link>
+          <Button asChild variant="link">
+            <Link href="/inventory/add" > {t("addStock")} </Link>
+          </Button>
         </li>
         <li>
-          <Link
-            href="/inventory/consume"
-            className="inline-flex min-h-[48px] items-center text-primary underline"
-          >
-            {t("consumeStock")}
-          </Link>
+          <Button asChild variant="link">
+            <Link href="/inventory/consume" > {t("consumeStock")} </Link>
+          </Button>
         </li>
         <li>
-          <Link
-            href={`/products/${product.id}/adjust`}
-            className="inline-flex min-h-[48px] items-center text-primary underline"
-          >
-            {t("adjustStock")}
-          </Link>
+          <Button asChild variant="link">
+            <Link href={`/products/${product.id}/adjust`} > {t("adjustStock")} </Link>
+          </Button>
         </li>
         <li>
-          <Link
-            href={`/products/${product.id}/history`}
-            className="inline-flex min-h-[48px] items-center text-primary underline"
-          >
-            {t("stockHistoryLink")}
-          </Link>
+          <Button asChild variant="link">
+            <Link href={`/products/${product.id}/history`} > {t("stockHistoryLink")} </Link>
+          </Button>
         </li>
       </ul>
 

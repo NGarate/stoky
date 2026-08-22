@@ -160,18 +160,12 @@ export function InventoryView(): JSX.Element {
           {t("title")}
         </h1>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/inventory/add"
-            className="inline-flex min-h-[48px] items-center rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:text-lg"
-          >
-            {t("addStock")}
-          </Link>
-          <Link
-            href="/inventory/consume"
-            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted md:text-lg"
-          >
-            {t("consumeStock")}
-          </Link>
+          <Button asChild className="md:text-lg" variant="default">
+            <Link href="/inventory/add" > {t("addStock")} </Link>
+          </Button>
+          <Button asChild className="md:text-lg" variant="outline">
+            <Link href="/inventory/consume" > {t("consumeStock")} </Link>
+          </Button>
         </div>
       </div>
 
@@ -180,12 +174,9 @@ export function InventoryView(): JSX.Element {
           <p className="font-medium text-warn-foreground">
             {t("filterRestockActive")}
           </p>
-          <Link
-            href="/inventory"
-            className="inline-flex min-h-[48px] items-center text-warn-foreground underline underline-offset-4"
-          >
-            {t("filterClear")}
-          </Link>
+          <Button asChild variant="link">
+            <Link href="/inventory" > {t("filterClear")} </Link>
+          </Button>
         </div>
       ) : (
         /* Expiration alerts — the full inventory's concern, not the filter's. */
@@ -307,12 +298,9 @@ export function InventoryView(): JSX.Element {
                 }`}
               >
                 <td className="px-4 py-3">
-                  <Link
-                    href={`/products/${product.id}`}
-                    className="inline-flex min-h-[48px] items-center text-primary hover:underline font-medium"
-                  >
-                    {product.name}
-                  </Link>
+                  <Button asChild variant="link">
+                    <Link href={`/products/${product.id}`} > {product.name} </Link>
+                  </Button>
                 </td>
                 <td className="px-4 py-3">
                   <Badge tone="neutral">
