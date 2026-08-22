@@ -45,6 +45,16 @@ export default function ReviewPage() {
         message: { key: "receipts.confirmedAll" },
       });
     },
+    // A failure said nothing at all: the button re-enabled, the count did
+    // not move, and no text was written anywhere in the document — so a
+    // screen-reader user was told nothing had happened, and a sighted one
+    // reasonably pressed it again (WCAG 3.3.1).
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.confirmAllFailed" },
+      }),
   });
 
   // Without the invalidation the write landed and the page did not move: the
@@ -56,11 +66,31 @@ export default function ReviewPage() {
     onSuccess: () => {
       utils.receipt.getReceiptWithItems.invalidate({ receiptId });
     },
+    // A failure said nothing at all: the button re-enabled, the count did
+    // not move, and no text was written anywhere in the document — so a
+    // screen-reader user was told nothing had happened, and a sighted one
+    // reasonably pressed it again (WCAG 3.3.1).
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.confirmItemFailed" },
+      }),
   });
   const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
     onSuccess: () => {
       router.push(`/receipts/${receiptId}/applied`);
     },
+    // A failure said nothing at all: the button re-enabled, the count did
+    // not move, and no text was written anywhere in the document — so a
+    // screen-reader user was told nothing had happened, and a sighted one
+    // reasonably pressed it again (WCAG 3.3.1).
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "receipts.applyFailed" },
+      }),
   });
 
   const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale), [locale]);
@@ -91,21 +121,23 @@ export default function ReviewPage() {
 
 
 
-  const handleConfirmAll = async () => {
+  // `mutate` rather than `mutateAsync`. Both of these awaited the async form
+  // and neither caught it, so a refusal became an unhandled promise
+  // rejection — a failure the page could not have reported even if it had
+  // wanted to. Nothing here needs the promise; the callbacks above do the
+  // work.
+  const handleConfirmAll = (): void => {
     const itemsToConfirm = receipt.items.map((item) => ({
       receiptItemId: item.id,
       action: (item.matchedProductId ? "MATCH" : "SKIP") as "MATCH" | "CREATE" | "SKIP",
       productId: item.matchedProductId || undefined,
     }));
 
-    await confirmAllMutation.mutateAsync({
-      receiptId,
-      items: itemsToConfirm,
-    });
+    confirmAllMutation.mutate({ receiptId, items: itemsToConfirm });
   };
 
-  const handleApply = async () => {
-    await applyReceiptMutation.mutateAsync({ receiptId });
+  const handleApply = (): void => {
+    applyReceiptMutation.mutate({ receiptId });
   };
 
   return (

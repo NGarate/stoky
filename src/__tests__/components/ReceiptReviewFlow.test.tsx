@@ -19,6 +19,14 @@ const pushes: string[] = [];
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
 
+/** When true, every mutation reports a failure instead of succeeding. */
+let failing = false;
+
+interface Callbacks {
+  onSuccess?: () => void | Promise<void>;
+  onError?: () => void;
+}
+
 const receipt = {
   id: "r1",
   status: "REVIEWING",
@@ -90,20 +98,43 @@ mock.module("@/lib/trpc/client", () => ({
         useQuery: () => ({ data: receipt, isLoading: false }),
       },
       confirmAll: {
-        // The page uses `mutateAsync`, not `mutate` — a mock offering only
-        // the latter makes the click a no-op and every assertion read zero.
-        useMutation: (opts?: { onSuccess?: () => void | Promise<void> }) => ({
-          mutateAsync: async (input: unknown) => {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: (input: unknown) => {
             confirmAllCalls.push(input);
-            await opts?.onSuccess?.();
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
           },
-          mutate: () => {},
+          mutateAsync: async () => {},
           isPending: false,
         }),
       },
-      confirmItem: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
+      confirmItem: {
+        useMutation: (opts?: Callbacks) => ({
+          mutate: () => {
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
+      },
       applyReceipt: {
-        useMutation: () => ({ mutateAsync: async () => {}, mutate: () => {}, isPending: false }),
+        useMutation: (opts?: Callbacks) => ({
+          mutate: () => {
+            if (failing) {
+              opts?.onError?.();
+              return;
+            }
+            void opts?.onSuccess?.();
+          },
+          mutateAsync: async () => {},
+          isPending: false,
+        }),
       },
     },
   },
@@ -124,6 +155,7 @@ beforeEach(() => {
   pushes.length = 0;
   invalidated.length = 0;
   confirmAllCalls.length = 0;
+  failing = false;
 });
 
 afterEach(cleanup);
@@ -165,5 +197,36 @@ describe("finishing a receipt review", () => {
     expect(
       await screen.findAllByText(/Ya puedes aplicarlo al inventario/),
     ).not.toHaveLength(0);
+  });
+});
+
+describe("when it does not work", () => {
+  it("says a refused review failed, rather than nothing at all", async () => {
+    failing = true;
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Terminar revisión" }),
+    );
+
+    // There was no error path at all. The button re-enabled, the pending
+    // count did not move, no text was written anywhere in the document, and
+    // `mutateAsync` rejected into an unhandled promise rejection — so a
+    // screen-reader user was told nothing had happened and a sighted one
+    // reasonably pressed it again (WCAG 3.3.1).
+    expect(
+      await screen.findAllByText(/No se ha podido terminar la revisión/),
+    ).not.toHaveLength(0);
+  });
+
+  it("does not claim the review finished when it did not", async () => {
+    failing = true;
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Terminar revisión" }),
+    );
+
+    expect(screen.queryByText(/Ya puedes aplicarlo al inventario/)).toBeAbsent();
   });
 });

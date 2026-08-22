@@ -651,7 +651,10 @@
     },
     "uploadStoreLabel": "Tienda del ticket",
     "uploadStoreHint": "Sin tienda no se guardan los precios del ticket.",
-    "confirmedAll": "Terminaste la revisión. Ya puedes aplicarlo al inventario."
+    "confirmedAll": "Terminaste la revisión. Ya puedes aplicarlo al inventario.",
+    "confirmAllFailed": "No se ha podido terminar la revisión. Vuelve a intentarlo.",
+    "confirmItemFailed": "No se ha podido confirmar esa línea. Vuelve a intentarlo.",
+    "applyFailed": "No se ha podido aplicar el ticket al inventario. Vuelve a intentarlo."
   },
   "shopping": {
     "title": "Listas de compra",
