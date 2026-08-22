@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
@@ -241,9 +242,7 @@ export default function ConsumeStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <Button asChild variant="link">
-        <Link href="/inventory" > {t("backToInventory")} </Link>
-      </Button>
+      <BackLink href="/inventory">{t("backToInventory")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useDeferredValue, useId, useState } from "react";
@@ -307,9 +308,7 @@ function NewProductForm(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <Button asChild variant="link">
-        <Link href="/products" > {t("backToProducts")} </Link>
-      </Button>
+      <BackLink href="/products">{t("backToProducts")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>

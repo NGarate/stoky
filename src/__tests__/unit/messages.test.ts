@@ -132,3 +132,53 @@ describe("one word for one thing", () => {
     expect(RETIRED[0][0].test("Subir ticket")).toBe(false);
   });
 });
+
+/**
+ * Arrows belong to the component, never to the string.
+ *
+ * `BackLink` draws an `aria-hidden` `<ArrowLeft/>`, and eight catalogue
+ * entries opened with a literal "← ". The first two screens to adopt the
+ * component therefore rendered **two** back arrows side by side — one drawn,
+ * one typed — and no gate saw it: the strings were valid, the parity test
+ * passed, and `tsc` has no opinion about the contents of a translation.
+ *
+ * A typed arrow is also worse than redundant on its own. Screen readers
+ * announce "flecha hacia la izquierda" as part of the accessible name, which
+ * is the noise `aria-hidden` exists to prevent (WCAG 2.4.9, DESIGN_AUDIT §4),
+ * and a right-to-left locale would need the glyph flipped in every string
+ * rather than once in a stylesheet.
+ */
+describe("decoration lives in components, not in the catalogue", () => {
+  /**
+   * Glyphs a component draws. None of them is ever part of a message.
+   *
+   * Not `«»`: those are Spanish quotation marks, which is typography the
+   * catalogue is right to carry — forty-odd strings use them correctly.
+   */
+  const DRAWN = /[←→↑↓▲▼✓✔✕✖]/u;
+
+  test("no catalogue string carries a glyph a component draws", () => {
+    const offenders = [
+      ...spanish.map((key) => [key, "es", value(es as Catalogue, key)] as const),
+      ...english.map((key) => [key, "en", value(en as Catalogue, key)] as const),
+    ]
+      .filter(([, , text]) => typeof text === "string" && DRAWN.test(text))
+      .map(([key, locale]) => `${locale}:${key}`);
+
+    expect(offenders).toEqual([]);
+  });
+
+  test("would notice one", () => {
+    expect(DRAWN.test("← Volver a productos")).toBe(true);
+    expect(DRAWN.test("Volver a productos")).toBe(false);
+    // Typography, not iconography: the em dash, the middot and the Spanish
+    // quotation marks all stay.
+    expect(DRAWN.test("2 lotes — 3 productos · «Leche»")).toBe(false);
+  });
+});
+
+function value(node: Catalogue, key: string): unknown {
+  return key
+    .split(".")
+    .reduce<unknown>((current, part) => (current as Catalogue)?.[part], node);
+}

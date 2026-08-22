@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
+import { BackLink } from "@/components/ui/back-link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useWriteQueue } from "@/components/offline/queue-context";
@@ -48,9 +48,7 @@ export default function UnsavedPage(): JSX.Element {
         <h1 className="text-2xl font-bold text-heading md:text-4xl">
           {t("unsavedTitle")}
         </h1>
-        <Button asChild variant="link">
-          <Link href="/settings" > {t("backToSettings")} </Link>
-        </Button>
+        <BackLink href="/settings">{t("backToSettings")}</BackLink>
       </div>
 
       {failed.length === 0 ? (

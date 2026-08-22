@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -97,9 +98,7 @@ export default function ReceiptAppliedPage({
   if (query.isPending) {
     return (
       <div className="mx-auto max-w-3xl">
-        <Button asChild variant="link">
-          <Link href="/receipts" > {t("backToReceipts")} </Link>
-        </Button>
+        <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
         <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
           {t("loadingTitle")}
         </h1>
@@ -115,9 +114,7 @@ export default function ReceiptAppliedPage({
 
     return (
       <div className="mx-auto max-w-3xl">
-        <Button asChild variant="link">
-          <Link href="/receipts" > {t("backToReceipts")} </Link>
-        </Button>
+        <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
 
         <div
           role="alert"
@@ -158,9 +155,7 @@ export default function ReceiptAppliedPage({
   if (!isApplied) {
     return (
       <div className="mx-auto max-w-3xl">
-        <Button asChild variant="link">
-          <Link href="/receipts" > {t("backToReceipts")} </Link>
-        </Button>
+        <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
 
         <div
           role="status"
@@ -197,9 +192,7 @@ export default function ReceiptAppliedPage({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Button asChild variant="link">
-        <Link href="/receipts" > {t("backToReceipts")} </Link>
-      </Button>
+      <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
         {t("title")}

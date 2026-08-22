@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { BackLink } from "@/components/ui/back-link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
@@ -70,12 +70,7 @@ export default function ScanPage() {
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <Link
-          href="/products"
-          className="text-primary hover:underline"
-        >
-          {t("backToProducts")}
-        </Link>
+        <BackLink href="/products">{t("backToProducts")}</BackLink>
       </div>
 
       {isProcessing ? (

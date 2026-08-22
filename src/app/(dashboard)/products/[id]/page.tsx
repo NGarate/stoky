@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -223,9 +224,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   if (query.isPending) {
     return (
       <div className="mx-auto max-w-3xl">
-        <Button asChild variant="link">
-          <Link href="/products" > {t("backToProducts")} </Link>
-        </Button>
+        <BackLink href="/products">{t("backToProducts")}</BackLink>
         <h1 className="mt-2 text-2xl font-bold text-heading">{t("loadingTitle")}</h1>
         <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
           {t("loading")}
@@ -239,9 +238,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-3xl">
-        <Button asChild variant="link">
-          <Link href="/products" > {t("backToProducts")} </Link>
-        </Button>
+        <BackLink href="/products">{t("backToProducts")}</BackLink>
 
         <div
           role="alert"
@@ -269,9 +266,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Button asChild variant="link">
-        <Link href="/products" > {t("backToProducts")} </Link>
-      </Button>
+      <BackLink href="/products">{t("backToProducts")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{product.name}</h1>
 
