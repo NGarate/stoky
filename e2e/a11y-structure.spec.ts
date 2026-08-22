@@ -281,10 +281,34 @@ async function collectViolations(
       return false;
     }
 
+    /**
+     * A control wrapped in a label is aimed at through the label.
+     *
+     * Clicking anywhere inside a `<label>` that wraps its control activates
+     * that control, so the region that accepts the pointer action — which is
+     * what 2.5.5 measures — is the label's box, not the 24px checkbox drawn
+     * inside it. Measuring the input alone reports a target smaller than the
+     * one a finger actually has.
+     *
+     * Deliberately narrow. Only a **wrapping** label counts: a `for=` label
+     * sitting above a text box is a second, disjoint region, and claiming it
+     * as the target would excuse a genuinely small control. And the label has
+     * to clear the floor in both dimensions itself, so this can never turn a
+     * failure into a pass without there being a real 48px region to press.
+     */
+    function hasWrappingLabelTarget(element: Element): boolean {
+      if (!element.matches("input, select, textarea")) return false;
+      const label = element.closest("label");
+      if (!label) return false;
+      const box = label.getBoundingClientRect();
+      return box.width >= minSize && box.height >= minSize;
+    }
+
     for (const element of controls) {
       if (element.hasAttribute("disabled")) continue;
       if (isInlineInText(element)) continue;
       if (hasEquivalentTarget(element)) continue;
+      if (hasWrappingLabelTarget(element)) continue;
 
       const rect = element.getBoundingClientRect();
       const width = Math.round(rect.width);
@@ -541,5 +565,43 @@ test.describe("Structural accessibility (DESIGN_AUDIT A4.2–A4.4)", () => {
         await auditStructure(page, route);
       });
     }
+
+    /**
+     * The one route here with an id in it, and the reason it earns the
+     * exception: it is the screen with the most controls per square inch in
+     * the application, it is the one read one-handed in a shop, and the list
+     * above cannot name it. So it was never measured — and its own back
+     * control was 28px tall and its "add" button 36px, both hand-written,
+     * against a 48px floor that eleven other screens are held to.
+     *
+     * The id is discovered by following a link rather than read from the
+     * database, the way `dynamic-routes.spec.ts` does it: a route reachable
+     * by clicking is a route that gets checked.
+     */
+    test("/shopping/[id]", async ({ page }) => {
+      await page.goto("/shopping/lists");
+      await settle(page);
+
+      const href = await page
+        .waitForFunction(
+          () =>
+            [...document.querySelectorAll("a[href]")]
+              .map((a) => a.getAttribute("href") ?? "")
+              .find((value) => /^\/shopping\/(?!lists$)[^/]+$/.test(value)) ??
+            null,
+          undefined,
+          { timeout: 15_000 },
+        )
+        .then((handle) => handle.jsonValue())
+        .catch(() => null);
+
+      expect(
+        href,
+        "/shopping/lists linked to no list. Either the seed created none, or " +
+          "the index stopped linking to its own detail pages.",
+      ).toBeTruthy();
+
+      await auditStructure(page, href as string);
+    });
   });
 });

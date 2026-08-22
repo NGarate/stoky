@@ -170,8 +170,13 @@ export function ShoppingItem({
           ),
         },
       ]}
+      /* `min-w` as well as `min-h`: the label is the tick's real target, and
+         with nothing but a 24px checkbox in it — which is every unticked row —
+         it was 24px wide and 48px tall. The same half-target `ItemRow`'s title
+         had. The badge widens it once the row is ticked, which is why only the
+         unticked rows failed. */
       status={
-        <label className="flex min-h-[48px] items-center gap-2 text-lg">
+        <label className="flex min-h-[48px] min-w-[48px] items-center justify-center gap-2 text-lg">
           <input
             checked={item.isChecked}
             className="h-6 w-6 rounded border-input accent-primary"
