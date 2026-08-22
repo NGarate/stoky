@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import type { StoreInput } from "@/lib/validations/store";
 
@@ -92,13 +95,9 @@ export default function StoresPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-heading">{t("stores.title")}</h1>
         {!isCreating && (
-          <button
-            type="button"
-            onClick={() => setIsCreating(true)}
-            className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={() => setIsCreating(true)} type="button">
             {t("stores.create")}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -110,41 +109,37 @@ export default function StoresPage() {
           <div className="space-y-4">
             <div>
               <label htmlFor="store-name" className="mb-1 block text-sm font-medium">{t("stores.name")} *</label>
-              <input
+              <Input
                 id="store-name"
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
-                required
               />
             </div>
             <div>
               <label htmlFor="store-address" className="mb-1 block text-sm font-medium">{t("stores.address")}</label>
-              <input
+              <Input
                 id="store-address"
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 type="text"
                 value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
               />
             </div>
           </div>
           <div className="mt-6 flex gap-3">
-            <button
-              type="submit"
+            <Button
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              type="submit"
             >
               {t("common.save")}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground"
-            >
+            </Button>
+            {/* Was a bare button with no `min-h` at all — the one control on
+                this screen that undoes a mistake, and the only one under the
+                target floor. */}
+            <Button onClick={handleCancel} type="button" variant="outline">
               {t("common.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -156,58 +151,65 @@ export default function StoresPage() {
             <p className="mt-2 text-sm">{t("stores.addFirst")}</p>
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="space-y-3 p-3">
             {stores?.map((store: Store) => (
-              <li key={store.id} className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium">{store.name}</p>
-                  {store.address && (
-                    <p className="text-sm text-muted-foreground">{store.address}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(store)}
-                    className="min-h-[48px] rounded-md px-3 py-1 text-sm text-primary hover:bg-accent"
-                  >
-                    {t("common.edit")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      deleteMutation.mutate(
-                        { id: store.id },
-                        {
-                          onSuccess: async () => {
-                            await utils.store.list.invalidate();
-                            snackbar.show({
-                              kind: "confirm",
-                              message: {
-                                key: "stores.deleted",
-                                values: { name: store.name },
-                              },
-                            });
+              <ItemRow
+                actions={
+                  <>
+                    <Button
+                      onClick={() => handleEdit(store)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("common.edit")}
+                      <span className="sr-only"> {store.name}</span>
+                    </Button>
+                    <Button
+                      disabled={deleteMutation.isPending}
+                      onClick={() =>
+                        deleteMutation.mutate(
+                          { id: store.id },
+                          {
+                            onSuccess: async () => {
+                              await utils.store.list.invalidate();
+                              snackbar.show({
+                                kind: "confirm",
+                                message: {
+                                  key: "stores.deleted",
+                                  values: { name: store.name },
+                                },
+                              });
+                            },
+                            onError: () =>
+                              snackbar.show({
+                                kind: "confirm",
+                                tone: "danger",
+                                message: {
+                                  key: "stores.deleteFailed",
+                                  values: { name: store.name },
+                                },
+                              }),
                           },
-                          onError: () =>
-                            snackbar.show({
-                              kind: "confirm",
-                              tone: "danger",
-                              message: {
-                                key: "stores.deleteFailed",
-                                values: { name: store.name },
-                              },
-                            }),
-                        },
-                      )
-                    }
-                    disabled={deleteMutation.isPending}
-                    className="min-h-[48px] rounded-md px-3 py-1 text-sm text-destructive hover:bg-danger disabled:opacity-50"
-                  >
-                    {t("common.delete")}
-                  </button>
-                </div>
-              </li>
+                        )
+                      }
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <span className="text-destructive">{t("common.delete")}</span>
+                      <span className="sr-only"> {store.name}</span>
+                    </Button>
+                  </>
+                }
+                key={store.id}
+                meta={
+                  store.address
+                    ? [{ label: t("stores.address"), value: store.address }]
+                    : undefined
+                }
+                title={store.name}
+              />
             ))}
           </ul>
         )}

@@ -108,7 +108,7 @@ describe("the stores settings screen", () => {
   it("refetches the list after deleting one", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
 
     expect(deleteCalls).toHaveLength(1);
     expect(invalidated).toContain("store.list");
@@ -129,7 +129,7 @@ describe("the stores settings screen", () => {
   it("names the store it deleted, which is in neither the input nor the result", async () => {
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
 
     expect(
       await screen.findAllByText(/Eliminaste la tienda «Mercadona»/),

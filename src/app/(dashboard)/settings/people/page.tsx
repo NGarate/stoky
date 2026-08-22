@@ -1,10 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { TRPCClientError } from "@trpc/client";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { BackLink } from "@/components/ui/back-link";
+import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import type { FormEvent, JSX } from "react";
@@ -83,29 +87,20 @@ export default function PeoplePage(): JSX.Element {
         <h1 className="text-2xl font-bold text-heading md:text-4xl">
           {t("peopleTitle")}
         </h1>
-        <Link
-          className="inline-flex min-h-[48px] items-center text-primary hover:underline"
-          href="/settings"
-        >
-          {t("backToSettings")}
-        </Link>
+        <BackLink href="/settings">{t("backToSettings")}</BackLink>
       </div>
 
       <p className="text-muted-foreground">{t("peopleIntro")}</p>
 
       <ul className="mt-6 space-y-3">
         {members.data.map((member) => (
-          <li
+          <ItemRow
             key={member.id}
-            className="rounded-lg border border-border bg-card p-4"
-          >
-            <p className="font-medium text-foreground">{member.name}</p>
-            <p className="text-sm text-muted-foreground">{member.email}</p>
-            {/* The role in words. Never a colour or a letter. */}
-            <p className="mt-1 text-sm font-medium text-foreground">
-              {t(`role${member.role}`)}
-            </p>
-          </li>
+            meta={[{ label: t("addEmail"), value: member.email }]}
+            /* The role in words. Never a colour or a letter. */
+            status={<Badge tone="neutral">{t(`role${member.role}`)}</Badge>}
+            title={member.name}
+          />
         ))}
       </ul>
 
@@ -120,9 +115,9 @@ export default function PeoplePage(): JSX.Element {
             >
               {t("addName")}
             </label>
-            <input
+            <Input
               autoComplete="off"
-              className="mt-1 min-h-[48px] w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
+              className="mt-1"
               id={`${fieldId}-name`}
               onChange={(event) => setName(event.target.value)}
               required
@@ -137,9 +132,9 @@ export default function PeoplePage(): JSX.Element {
             >
               {t("addEmail")}
             </label>
-            <input
+            <Input
               autoComplete="off"
-              className="mt-1 min-h-[48px] w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
+              className="mt-1"
               id={`${fieldId}-email`}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -155,10 +150,10 @@ export default function PeoplePage(): JSX.Element {
             >
               {t("addPassword")}
             </label>
-            <input
+            <Input
               aria-describedby={`${fieldId}-password-hint`}
               autoComplete="new-password"
-              className="mt-1 min-h-[48px] w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
+              className="mt-1"
               id={`${fieldId}-password`}
               minLength={8}
               onChange={(event) => setPassword(event.target.value)}
@@ -243,13 +238,9 @@ export default function PeoplePage(): JSX.Element {
             {failure ? (failure === "taken" ? t("addEmailTaken") : t("addFailed")) : ""}
           </p>
 
-          <button
-            className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            disabled={addMember.isPending}
-            type="submit"
-          >
+          <Button disabled={addMember.isPending} type="submit">
             {addMember.isPending ? t("addWorking") : t("addSubmit")}
-          </button>
+          </Button>
         </form>
       </section>
     </div>
