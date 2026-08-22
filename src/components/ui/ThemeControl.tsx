@@ -10,6 +10,7 @@ import {
   THEME_MODES,
   type ThemeMode,
 } from "@/lib/theme";
+import { RadioOption } from "@/components/ui/radio-option";
 import type { JSX } from "react";
 
 /** Translation key per mode, in `settings`. */
@@ -62,37 +63,17 @@ export function ThemeControl(): JSX.Element {
         {t("theme")}
       </legend>
       <div className="flex items-stretch gap-1 rounded-md border border-input p-1">
-        {THEME_MODES.map((value) => {
-          const isSelected = mode === value;
-          return (
-            <label
-              key={value}
-              className={`relative inline-flex min-h-[48px] min-w-[48px] cursor-pointer items-center justify-center rounded px-3 text-sm transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring ${
-                isSelected
-                  ? "bg-primary font-semibold text-primary-foreground"
-                  : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              {/* Drawn by the segment around it, but still the real control:
-                  it carries the checked state, the group and the arrow-key
-                  behaviour a div would have to reimplement.
-
-                  Stretched over the whole segment rather than hidden in a
-                  corner with `sr-only`, so the 48px target belongs to the
-                  control itself and not merely to the box it sits in. */}
-              <input
-                type="radio"
-                name={groupName}
-                value={value}
-                checked={isSelected}
-                onChange={() => setTheme(value)}
-                className="absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none rounded opacity-0"
-              />
-              {/* The input underneath must stay the hit target. */}
-              <span className="pointer-events-none">{t(LABEL_KEY[value])}</span>
-            </label>
-          );
-        })}
+        {THEME_MODES.map((value) => (
+          <RadioOption
+            checked={mode === value}
+            key={value}
+            name={groupName}
+            onSelect={() => setTheme(value)}
+            value={value}
+          >
+            {t(LABEL_KEY[value])}
+          </RadioOption>
+        ))}
       </div>
     </fieldset>
   );

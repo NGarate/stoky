@@ -10,6 +10,7 @@ import {
   subscribeSnackbarDuration,
   type SnackbarDuration,
 } from "@/lib/snackbar-duration";
+import { RadioOption } from "@/components/ui/radio-option";
 import type { JSX } from "react";
 
 /** Translation key per option, in `settings`. */
@@ -53,29 +54,17 @@ export function SnackbarDurationControl(): JSX.Element {
         {t("snackbarDuration")}
       </legend>
       <div className="flex items-stretch gap-1 rounded-md border border-input p-1">
-        {SNACKBAR_DURATIONS.map((option) => {
-          const isSelected = value === option;
-          return (
-            <label
-              key={option}
-              className={`relative inline-flex min-h-[48px] min-w-[48px] cursor-pointer items-center justify-center rounded px-3 text-sm transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring ${
-                isSelected
-                  ? "bg-primary font-semibold text-primary-foreground"
-                  : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <input
-                type="radio"
-                name={groupName}
-                value={option}
-                checked={isSelected}
-                onChange={() => setSnackbarDuration(option)}
-                className="absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none rounded opacity-0"
-              />
-              <span className="pointer-events-none">{t(LABEL_KEY[option])}</span>
-            </label>
-          );
-        })}
+        {SNACKBAR_DURATIONS.map((option) => (
+          <RadioOption
+            checked={value === option}
+            key={option}
+            name={groupName}
+            onSelect={() => setSnackbarDuration(option)}
+            value={option}
+          >
+            {t(LABEL_KEY[option])}
+          </RadioOption>
+        ))}
       </div>
     </fieldset>
   );

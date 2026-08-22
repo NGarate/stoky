@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { TRPCClientError } from "@trpc/client";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Badge } from "@/components/ui/badge";
+import { RadioOption } from "@/components/ui/radio-option";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BackLink } from "@/components/ui/back-link";
@@ -182,39 +183,36 @@ export default function PeoplePage(): JSX.Element {
                 the label around it (DESIGN_AUDIT A4.2, same technique as
                 `ThemeControl`). */}
             {(["KITCHEN", "MEMBER"] as const).map((option) => (
-              <label
+              <RadioOption
+                checked={role === option}
+                className="mt-2"
                 key={option}
-                className="relative mt-2 flex min-h-[48px] items-start gap-3 rounded-md border border-input p-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring"
-                htmlFor={`${fieldId}-role-${option}`}
+                name={`${fieldId}-role`}
+                onSelect={() => setRole(option)}
+                value={option}
+                variant="card"
               >
-                <input
-                  checked={role === option}
-                  className="absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none rounded opacity-0"
-                  id={`${fieldId}-role-${option}`}
-                  name={`${fieldId}-role`}
-                  onChange={() => setRole(option)}
-                  type="radio"
-                  value={option}
-                />
-                <span
-                  aria-hidden="true"
-                  className={`mt-1 h-5 w-5 shrink-0 rounded-full border-2 ${
-                    role === option
-                      ? "border-primary bg-primary"
-                      : "border-input bg-card"
-                  }`}
-                />
-                <span>
-                  <span className="block font-medium text-foreground">
-                    {t(`role${option}`)}
-                  </span>
-                  <span className="block text-sm text-muted-foreground">
-                    {option === "KITCHEN"
-                      ? t("roleKitchenHint")
-                      : t("roleMemberHint")}
+                <span className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className={`mt-1 h-5 w-5 shrink-0 rounded-full border-2 ${
+                      role === option
+                        ? "border-primary bg-primary"
+                        : "border-input bg-card"
+                    }`}
+                  />
+                  <span>
+                    <span className="block font-medium text-foreground">
+                      {t(`role${option}`)}
+                    </span>
+                    <span className="block text-muted-foreground text-sm">
+                      {option === "KITCHEN"
+                        ? t("roleKitchenHint")
+                        : t("roleMemberHint")}
+                    </span>
                   </span>
                 </span>
-              </label>
+              </RadioOption>
             ))}
           </fieldset>
 
