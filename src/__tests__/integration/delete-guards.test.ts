@@ -61,6 +61,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prisma.shoppingItem.deleteMany({
+    where: { shoppingList: { householdId } },
+  });
+  await prisma.shoppingList.deleteMany({ where: { householdId } });
   await prisma.priceRecord.deleteMany({ where: { product: { householdId } } });
   await prisma.stockEntry.deleteMany({ where: { product: { householdId } } });
   await prisma.product.deleteMany({ where: { householdId } });
@@ -135,6 +139,63 @@ describe("deleting a product that has been used", () => {
     await refusalFrom(caller.product.delete({ id: product.id }));
 
     expect(await prisma.product.count({ where: { id: product.id } })).toBe(1);
+  });
+});
+
+describe("deleting a product that is on a shopping list", () => {
+  /**
+   * The constraint underneath, not the resolver on top of it.
+   *
+   * `product.delete` counts what points at a product and refuses before it
+   * touches the database, so it answers CONFLICT whatever the foreign key
+   * says — which is why this asserts against the database directly. Written
+   * through the resolver, this test passed against both keys and proved
+   * nothing.
+   *
+   * `ShoppingItem_productId_fkey` was created `ON DELETE SET NULL` while
+   * `productId` was still nullable, and the migration that made the column
+   * required (D103's contract half) did not revisit it. A key that says "set
+   * this to NULL" on a NOT NULL column does not refuse cleanly: measured, it
+   * gets as far as `UPDATE ... SET "productId" = NULL` and comes back with
+   * `null value in column "productId" ... violates not-null constraint`,
+   * about a column the caller never mentioned. Prisma maps a foreign-key
+   * refusal to P2003 and `prisma-errors.ts` turns that into the CONFLICT the
+   * tests above expect; it has no such route for a not-null violation, so
+   * any path that reached the delete without the resolver's count would have
+   * answered with a 500.
+   *
+   * Prisma noticed the drift and corrected the key. This is what holds the
+   * correction.
+   */
+  it("is refused by the key, as a foreign-key conflict", async () => {
+    const product = await prisma.product.create({
+      data: { name: "Pan de molde", defaultUnit: "unit", householdId },
+    });
+    const list = await prisma.shoppingList.create({
+      data: { name: "Lista", householdId },
+    });
+    await prisma.shoppingItem.create({
+      data: { shoppingListId: list.id, productId: product.id, quantity: 1 },
+    });
+
+    let code = "";
+    try {
+      await prisma.product.delete({ where: { id: product.id } });
+    } catch (error) {
+      code = (error as { code?: string }).code ?? "";
+    }
+
+    // P2003 is Prisma's foreign-key refusal. P2011 — the null-constraint
+    // violation — is what the old key produced, and is the failure this
+    // guards against.
+    expect(code).toBe("P2003");
+    expect(
+      await prisma.product.findUnique({ where: { id: product.id } }),
+    ).not.toBeNull();
+
+    await prisma.shoppingItem.deleteMany({ where: { productId: product.id } });
+    await prisma.shoppingList.delete({ where: { id: list.id } });
+    await prisma.product.delete({ where: { id: product.id } });
   });
 });
 
