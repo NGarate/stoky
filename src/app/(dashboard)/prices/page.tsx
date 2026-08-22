@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import Link from "next/link";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
 
@@ -73,56 +73,31 @@ export default function PricesPage() {
             <p className="mt-2 text-sm">{t("prices.addFirst")}</p>
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="space-y-3">
             {products?.map((product) => (
-              <li key={product.id}>
-                <Link
-                  href={`/prices/${product.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-muted"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium">{product.name}</p>
-                    {product.category && (
-                      <p className="text-sm text-muted-foreground">{product.category}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    {product.priceRecords.length > 0 ? (
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">{t("products.lastPrice")}</p>
-                        <p className="font-medium">
-                          {formatMoney(locale, product.priceRecords[0].price, product.priceRecords[0].currency ?? DEFAULT_CURRENCY)}
-                        </p>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        {t("prices.noPrices")}
-                      </span>
-                    )}
-                    <BestPriceIndicator productId={product.id} />
-                    {/* The whole row is the link, so its name already reads
-                        "Leche entera · Lácteos · Último precio 0,99 € …". A
-                        chevron announcing "Ver detalles" on the end of that
-                        adds a hardcoded Spanish string to an otherwise
-                        translated name, and says nothing the row has not
-                        already said. */}
-                    <svg
-                      aria-hidden="true"
-                      className="h-5 w-5 text-muted-foreground"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
-                </Link>
-              </li>
+              <ItemRow
+                href={`/prices/${product.id}`}
+                key={product.id}
+                meta={[
+                  {
+                    label: t("products.list.categoryHeader"),
+                    value: product.category ?? t("products.list.noCategory"),
+                  },
+                  {
+                    label: t("products.lastPrice"),
+                    value:
+                      product.priceRecords.length > 0
+                        ? formatMoney(
+                            locale,
+                            product.priceRecords[0].price,
+                            product.priceRecords[0].currency ?? DEFAULT_CURRENCY,
+                          )
+                        : t("prices.noPrices"),
+                  },
+                ]}
+                status={<BestPriceIndicator productId={product.id} />}
+                title={product.name}
+              />
             ))}
           </ul>
         )}

@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { Plus, FileText } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
 import type { ReceiptStatus } from "@prisma/client";
@@ -105,30 +106,38 @@ export default function ReceiptsPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <ul className="space-y-3">
           {receipts.map((receipt) => (
-          <Link
-            key={receipt.id}
-            href={receiptHref(receipt)}
-              className="block p-4 rounded-lg border border-border bg-card hover:bg-muted transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">
-                    {receipt.store?.name || t("storeUnknown")}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {dateFormat.format(receipt.createdAt)}
-                    {receipt.totalAmount && ` • ${moneyFormat.format(receipt.totalAmount)}`}
-                    {receipt._count.items > 0 &&
-                      ` • ${t("itemCount", { count: receipt._count.items })}`}
-                  </p>
-                </div>
-                <ReceiptStatusBadge status={receipt.status} />
-              </div>
-            </Link>
+            <ItemRow
+              href={receiptHref(receipt)}
+              key={receipt.id}
+              meta={[
+                {
+                  label: t("purchaseDate"),
+                  value: dateFormat.format(receipt.createdAt),
+                },
+                ...(receipt.totalAmount
+                  ? [
+                      {
+                        label: t("totalAmount"),
+                        value: moneyFormat.format(receipt.totalAmount),
+                      },
+                    ]
+                  : []),
+                ...(receipt._count.items > 0
+                  ? [
+                      {
+                        label: t("items"),
+                        value: t("itemCount", { count: receipt._count.items }),
+                      },
+                    ]
+                  : []),
+              ]}
+              status={<ReceiptStatusBadge status={receipt.status} />}
+              title={receipt.store?.name || t("storeUnknown")}
+            />
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

@@ -132,4 +132,15 @@ describe("ItemRow densities", () => {
       ).toBeGreaterThanOrEqual(48);
     });
   }
+
+  it("keeps a short title a target in both directions", async () => {
+    list(<ItemRow href={`/products/${id}`} title="Pan" />);
+
+    // A target is 48px wide as well as tall, and a short name is not: "Lidl"
+    // measured 25×48 on the receipts list and the structural browser audit
+    // failed it at every tier. Height alone is half a guarantee.
+    const className = screen.getByRole("link").className;
+    expect(className).toContain("min-w-[48px]");
+    expect(await minimumHeight(className)).toBeGreaterThanOrEqual(48);
+  });
 });

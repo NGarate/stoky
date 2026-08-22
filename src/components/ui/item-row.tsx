@@ -49,7 +49,12 @@ const itemRowVariants = cva(
 );
 
 const titleVariants = cva(
-  "inline-flex min-h-[48px] items-center font-medium text-foreground",
+  // `min-w` as well as `min-h`. A target is 48px in *both* directions, and a
+  // short product name is not: "Lidl" measured 25×48 on the receipts list and
+  // `e2e/a11y-structure.spec.ts` failed it at all three tiers. The underline
+  // decorates the text run rather than the flex box, so the box grows and the
+  // rule under the word does not.
+  "inline-flex min-h-[48px] min-w-[48px] items-center font-medium text-foreground",
   {
     variants: {
       density: {
