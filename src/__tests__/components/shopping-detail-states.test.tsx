@@ -43,6 +43,8 @@ mock.module("@/components/offline/queue-context", () => ({
     drain: noop,
     retry: noop,
     discard: noop,
+    cancel: () => true,
+    holdRemainingMs: () => 10_000,
   }),
 }));
 
@@ -80,6 +82,7 @@ mock.module("@/lib/trpc/client", () => ({
 const { ShoppingListView } = await import(
   "@/app/(dashboard)/shopping/[id]/page"
 );
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
   const error = new TRPCClientError<never>("refused");
@@ -93,7 +96,11 @@ function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
  * the screen takes a plain id and is rendered directly.
  */
 function renderPage() {
-  return renderWithIntl(<ShoppingListView id="list-1" />);
+  return renderWithIntl(
+    <SnackbarProvider>
+      <ShoppingListView id="list-1" />
+    </SnackbarProvider>,
+  );
 }
 
 const LOADED = {

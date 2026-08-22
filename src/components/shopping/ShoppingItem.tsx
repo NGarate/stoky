@@ -11,8 +11,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
+import { useSnackbar } from "@/components/ui/snackbar";
 
 import type { JSX } from "react";
+
+/**
+ * How long a removal can still be taken back.
+ *
+ * The same ten seconds the kitchen holds a consumption for (D100), and for
+ * the same reason: long enough to notice the wrong row went, short enough
+ * that the change still lands while the person is standing in the aisle.
+ */
+const UNDO_HOLD_MS = 10_000;
 
 interface ShoppingItemProps {
   item: {
@@ -50,7 +60,16 @@ interface ShoppingItemProps {
  * Drawn with `ItemRow` at `touch` density, like every other list in the
  * application and at the size the two hand-held screens use. What is *not*
  * shared with `/shopping` is D54's trolley: this screen has none, so a
- * removal here is a removal.
+ * removal here is a removal — which is why the bin holds its change for ten
+ * seconds and offers to take it back.
+ *
+ * **The tick is the one write here that says nothing, and that is a
+ * decision.** Every other action on this row reports through the snackbar
+ * (D101). Ticking does not, because its result is not transient: the row
+ * strikes through and gains a badge and stays that way, and the control that
+ * did it undoes it. Someone working down a list in a shop ticks continuously,
+ * and a stack of confirmations over the bottom of the screen would cover the
+ * list they are reading.
  */
 export function ShoppingItem({
   item,
@@ -59,6 +78,7 @@ export function ShoppingItem({
 }: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
   const { enqueue } = useWriteQueue();
+  const snackbar = useSnackbar();
   const quantityId = useId();
   const storeId = useId();
 
@@ -68,11 +88,46 @@ export function ShoppingItem({
   function change(
     input: { quantity: number } | { storeId: string | null },
   ): void {
-    enqueue({
+    const label = { key: "shopping.itemUpdated", values: { name } };
+    const queued = enqueue({
       path: "shopping.updateItem",
       input: { id: item.id, ...input },
-      label: { key: "shopping.itemUpdated", values: { name } },
+      label,
     });
+
+    // Refused for want of room: the queue is full and says so in the shell's
+    // own banner, which is a state rather than an event.
+    if (!queued.ok) return;
+
+    // A confirmation without an undo, deliberately. The control keeps the
+    // value that was chosen, so the screen already shows the new answer and
+    // the way back is to choose again — but a change committed on blur is
+    // easy to make without noticing, which is what the confirmation is for.
+    snackbar.show({ kind: "confirm", message: label });
+  }
+
+  /**
+   * Taking the row off the list.
+   *
+   * Held for ten seconds and undone by cancelling the queued change, which is
+   * D57's rule and the same window the kitchen uses. This screen is not
+   * Screen A: it has no trolley to hold a removal, so before this the bin was
+   * one tap, silent and final. `REDESIGN_PLAN.md` §7 asks for an undo rather
+   * than a confirmation, and that only works where an undo exists — so here
+   * is one.
+   */
+  function remove(): void {
+    const label = { key: "offline.removedItem", values: { name } };
+    const queued = enqueue({
+      path: "shopping.removeItem",
+      input: { id: item.id },
+      label,
+      holdMs: UNDO_HOLD_MS,
+    });
+
+    if (!queued.ok) return;
+
+    snackbar.show({ kind: "undo-queued", message: label, opId: queued.id });
   }
 
   return (
@@ -94,13 +149,7 @@ export function ShoppingItem({
           ) : null}
           <Button
             aria-label={t("removeItem")}
-            onClick={() =>
-              enqueue({
-                path: "shopping.removeItem",
-                input: { id: item.id },
-                label: { key: "offline.removedItem", values: { name } },
-              })
-            }
+            onClick={remove}
             size="icon"
             type="button"
             variant="ghost"

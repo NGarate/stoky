@@ -19,10 +19,30 @@ mock.module("@/components/offline/queue-context", () => ({
     drain: () => {},
     retry: () => {},
     discard: () => {},
+    // The row reports through the snackbar now, and the snackbar asks the
+    // queue how long a change can still be taken back.
+    cancel: () => true,
+    holdRemainingMs: () => 10_000,
   }),
 }));
 
 const { ShoppingItem } = await import("@/components/shopping/ShoppingItem");
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
+
+/**
+ * The real provider, never a stub of it.
+ *
+ * `mock.module` replaces a module for the whole process, so stubbing the
+ * snackbar here would poison `Snackbar.test.tsx` depending on which suite bun
+ * loaded first. Mounting the real one costs nothing and is what the screen
+ * does.
+ */
+function render(
+  ui: React.ReactElement,
+  options?: Parameters<typeof renderWithIntl>[1],
+): ReturnType<typeof renderWithIntl> {
+  return renderWithIntl(<SnackbarProvider>{ui}</SnackbarProvider>, options);
+}
 
 const STORES = [{ id: "s1", name: "Mercadona" }];
 
@@ -49,7 +69,7 @@ function lastEnqueued(): Record<string, unknown> {
 
 describe("ShoppingItem", () => {
   it("shows the linked product name and quantity", () => {
-    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
     // The quantity is an editable field now, not a sentence.
@@ -58,7 +78,7 @@ describe("ShoppingItem", () => {
   });
 
   it("falls back to the custom name for free-text items", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         stores={STORES}
@@ -76,7 +96,7 @@ describe("ShoppingItem", () => {
   });
 
   it("falls back to the translated placeholder if the product is gone", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         stores={STORES}
@@ -89,7 +109,7 @@ describe("ShoppingItem", () => {
   });
 
   it("reflects the checked state in the checkbox", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
     );
 
@@ -97,7 +117,7 @@ describe("ShoppingItem", () => {
   });
 
   it("strikes through the name once checked", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
     );
 
@@ -105,7 +125,7 @@ describe("ShoppingItem", () => {
   });
 
   it("toggles an unchecked item to checked", async () => {
-    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     await userEvent.click(screen.getByRole("checkbox"));
 
@@ -119,7 +139,7 @@ describe("ShoppingItem", () => {
   });
 
   it("toggles a checked item back to unchecked", async () => {
-    renderWithIntl(
+    render(
       <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
     );
 
@@ -133,7 +153,7 @@ describe("ShoppingItem", () => {
   });
 
   it("removes the item via the labelled delete control", async () => {
-    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     // shopping.removeItem in messages/es.json
     await userEvent.click(
@@ -147,12 +167,63 @@ describe("ShoppingItem", () => {
     });
   });
 
+  it("holds the removal, and offers to take it back", async () => {
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Eliminar artículo" }),
+    );
+
+    // This screen is not Screen A: it has no trolley to hold a removal, so
+    // the bin used to be one tap, silent and final. §7's "undo instead of
+    // confirm" only works where an undo exists, and the hold is what makes
+    // one exist — cancelling the queued change, never a compensating write
+    // (D57).
+    expect(lastEnqueued()).toMatchObject({ holdMs: 10_000 });
+    expect(
+      await screen.findByRole("button", { name: "Deshacer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says a quantity change happened, which is easy to miss on blur", async () => {
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+    const box = screen.getByLabelText("Cantidad de «Leche entera»");
+    fireEvent.change(box, { target: { value: "5" } });
+    fireEvent.blur(box);
+
+    expect(await screen.findAllByText("Cambiaste «Leche entera»")).not.toHaveLength(0);
+  });
+
+  it("says the shop changed too", async () => {
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+    fireEvent.change(screen.getByLabelText("Dónde comprar «Leche entera»"), {
+      target: { value: "s1" },
+    });
+
+    expect(await screen.findAllByText("Cambiaste «Leche entera»")).not.toHaveLength(0);
+  });
+
+  it("says nothing when the row is ticked off, and that is deliberate", async () => {
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+    await userEvent.click(screen.getByRole("checkbox"));
+
+    // The one write on this row that reports nothing. Its result is not
+    // transient — the row strikes through, gains a badge and stays that way,
+    // and the control that did it undoes it. Someone working down a list in
+    // a shop ticks continuously, and a stack of confirmations over the bottom
+    // of the screen would cover the list they are reading.
+    expect(screen.queryByTestId("snackbar")).toBeNull();
+  });
+
   it("never blocks the next tap on the last one", async () => {
     // This replaces "disables the delete control while the removal is in
     // flight". There is no flight any more: enqueueing is synchronous, which
     // is the point — someone walking down an aisle should not wait on a
     // round trip between two items.
-    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     const remove = screen.getByRole("button", { name: "Eliminar artículo" });
     expect(remove).not.toBeDisabled();
@@ -168,14 +239,14 @@ describe("ShoppingItem", () => {
     // rather than once per tap — asserted in WriteQueueProvider.test.tsx. What
     // is left to check here is that this component has no second path to the
     // server, because two paths is two things to get wrong.
-    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
     await userEvent.click(screen.getByRole("checkbox"));
 
     expect(enqueue).toHaveBeenCalledTimes(1);
   });
 
   it("changes the quantity through the queue, like every other write here", async () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         item={{ ...baseItem, product: { name: "Leche entera" } }}
@@ -197,7 +268,7 @@ describe("ShoppingItem", () => {
   });
 
   it("says nothing when the quantity has not actually changed", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         item={{ ...baseItem, product: { name: "Leche entera" } }}
@@ -213,7 +284,7 @@ describe("ShoppingItem", () => {
   });
 
   it("refuses a quantity of zero rather than queueing it", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         item={{ ...baseItem, product: { name: "Leche entera" } }}
@@ -229,7 +300,7 @@ describe("ShoppingItem", () => {
   });
 
   it("chooses where to buy it, and lets that be nowhere in particular", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         item={{ ...baseItem, product: { name: "Leche entera" }, storeId: "s1" }}
@@ -250,7 +321,7 @@ describe("ShoppingItem", () => {
   });
 
   it("shows a kitchen account the values without the controls", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite={false}
         item={{
@@ -273,7 +344,7 @@ describe("ShoppingItem", () => {
   });
 
   it("offers what it costs where, from the aisle", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         item={{ ...baseItem, product: { name: "Leche entera" } }}
@@ -288,7 +359,7 @@ describe("ShoppingItem", () => {
   });
 
   it("offers no price link when there is no product to price", () => {
-    renderWithIntl(
+    render(
       <ShoppingItem
         canWrite
         item={{ ...baseItem, productId: null, product: null }}

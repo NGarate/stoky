@@ -12,7 +12,11 @@ import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/components/offline/queue-context";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { projectShoppingItems } from "@/lib/offline/project";
+
+/** The same window the kitchen and the row's bin use (D100). */
+const UNDO_HOLD_MS = 10_000;
 
 interface ShoppingListPageProps {
   params: Promise<{ id: string }>;
@@ -52,6 +56,7 @@ export function ShoppingListView({ id }: { id: string }) {
   const list = listQuery.data;
 
   const { state: queueState, enqueue } = useWriteQueue();
+  const snackbar = useSnackbar();
 
   const quantityId = useId();
   const unitId = useId();
@@ -76,11 +81,12 @@ export function ShoppingListView({ id }: { id: string }) {
 
   /** Puts a chosen or freshly created product on the list. */
   function addProduct(chosen: PickedProduct): void {
-    // Enqueued like the tick-off and the removal: all three writes on this
+    // Enqueued like the tick-off and the removal: all the writes on this
     // screen go the same way, so there is one path to get wrong. It also
     // means adding something works with no signal, and shows immediately
     // through the projection rather than after a round trip.
-    enqueue({
+    const label = { key: "offline.addedItem", values: { name: chosen.name } };
+    const queued = enqueue({
       path: "shopping.addItem",
       input: {
         shoppingListId: id,
@@ -88,9 +94,17 @@ export function ShoppingListView({ id }: { id: string }) {
         quantity: newItem.quantity,
         unit: newItem.unit || chosen.defaultUnit,
       },
-      label: { key: "offline.addedItem", values: { name: chosen.name } },
+      label,
+      holdMs: UNDO_HOLD_MS,
     });
     resetForm();
+
+    // Refused for want of room: the queue is full and says so in the shell's
+    // own banner, which is a state rather than an event. Claiming the item
+    // was added would be a lie.
+    if (!queued.ok) return;
+
+    snackbar.show({ kind: "undo-queued", message: label, opId: queued.id });
   }
 
   const createProduct = api.product.create.useMutation({
