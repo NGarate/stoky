@@ -88,7 +88,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
                 className="rounded-md border border-border p-3 md:p-4"
               >
                 <p className="font-medium text-foreground md:text-xl">
-                  {new Date(trend.date).toLocaleDateString()}
+                  {new Date(trend.date).toLocaleDateString(locale)}
                 </p>
                 <dl className="mt-2 grid grid-cols-3 gap-2 text-sm md:text-lg">
                   <div>
@@ -133,7 +133,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
               {trends.map((trend) => (
                 <tr key={trend.date} className="border-b border-border last:border-0">
                   <td className="py-3">
-                    {new Date(trend.date).toLocaleDateString()}
+                    {new Date(trend.date).toLocaleDateString(locale)}
                   </td>
                   <td className="py-3 text-right">
                     {formatMoney(locale, trend.averagePrice, DEFAULT_CURRENCY)}
