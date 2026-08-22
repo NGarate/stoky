@@ -1,16 +1,23 @@
 import { TRPCError } from "@trpc/server";
-import { isLowStock, needsRestock } from "@/lib/stock/low-stock";
+import { isLowStock } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   addStockSchema,
   adjustStockSchema,
   consumeStockSchema,
+  stockOverviewSchema,
 } from "@/lib/validations/inventory";
 import { daysBetween, remainingByBatch } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
 import { withReplay } from "../replay";
-import type { Prisma, StockOperation } from "@prisma/client";
+import type {
+  StockDirection,
+  StockOverviewInput,
+  StockSort,
+} from "@/lib/validations/inventory";
+// The value namespace, not only the type: `Prisma.sql` is a function.
+import { Prisma, type StockOperation } from "@prisma/client";
 
 /** Half-open bounds on an expiry date, in the shape Prisma words them. */
 interface ExpiryWindow {
@@ -102,107 +109,184 @@ async function datedBatchesInWindow(
  * shop composes — because Phase 4's offline queue may send the same write twice — see `src/server/trpc/replay.ts`. Those carry an
  * `idempotencyKey` and run inside one transaction with the product row held.
  */
+/**
+ * Accent folding, in the only language the database speaks.
+ *
+ * `datcollate` on the shipped image is en_US.utf8 on musl, which collates by
+ * byte: `ORDER BY lower(name)` files "Ávila" and "Ñoquis" *after* "Zumo".
+ * Measured against the dev database. `COLLATE "es-x-icu"` fixes it and exists
+ * on that image, but a self-hosted Postgres built without ICU would fail this
+ * query outright — and this is the inventory's main query, not a nicety. So
+ * the fold is done with `translate`, which depends on nothing.
+ *
+ * One fragment for sorting *and* searching, deliberately: the two have to
+ * agree about which letters are the same letter, or "cafe" finds a row the
+ * sort then files somewhere else. The cost is that "ñ" folds onto "n", so the
+ * RAE's ordering is lost on ties, and that a trigram index cannot serve the
+ * folded predicate. Both are stated rather than discovered.
+ */
+const ACCENTED = "áàäâãéèëêíìïîóòöôõúùüûñç";
+const UNACCENTED = "aaaaaeeeeiiiiooooouuuunc";
+
+const folded = (value: Prisma.Sql): Prisma.Sql =>
+  Prisma.sql`translate(lower(${value}), ${ACCENTED}, ${UNACCENTED})`;
+
+/**
+ * The sort keys, as SQL fragments.
+ *
+ * ORDER BY cannot be parameterised, so this is the whitelist: a closed literal
+ * map from the values `stockOverviewSchema` accepts. `Record<StockSort, …>`
+ * makes both drifts a type error — a key added to the schema with no fragment,
+ * and a fragment for a key the schema will never send.
+ */
+const SORT_COLUMNS: Record<StockSort, Prisma.Sql> = {
+  name: folded(Prisma.sql`rows.name`),
+  stock: Prisma.sql`rows."totalStock"`,
+};
+
+const SORT_DIRECTIONS: Record<StockDirection, Prisma.Sql> = {
+  asc: Prisma.sql`ASC`,
+  desc: Prisma.sql`DESC`,
+};
+
+/** A search term as a LIKE pattern, with the wildcards a person typed made literal. */
+function likePattern(search: string): string {
+  return `%${search.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+/** One row as Postgres hands it back. Every number is already a JS number. */
+interface StockOverviewRow {
+  id: string;
+  name: string;
+  category: string | null;
+  defaultUnit: string;
+  minStock: number | null;
+  totalStock: number;
+}
+
+/**
+ * Every product this request matches, with its net stock — one row per product.
+ *
+ * Returned as a fragment rather than run, because the page and the count are
+ * the same question asked twice, and writing the filter out twice is how the
+ * two come to disagree.
+ *
+ * Two things in here are load-bearing and easy to undo by accident:
+ *
+ * - **The location filter is in the `ON` clause, not the `WHERE`.** A product
+ *   with nothing in the chosen location has to appear with a total of zero.
+ *   Moved into the `WHERE`, the LEFT JOIN silently becomes an inner one and
+ *   the product vanishes, which answers a different question from the one the
+ *   screen asks.
+ * - **`::float8` on the aggregate.** `ROUND(…, 2)` returns `numeric`, which
+ *   arrives as a Decimal object and reaches the browser as `{ s, e, d }`. The
+ *   rounding itself matches `projectStockTotals`, so the figure the offline
+ *   queue projects and the figure the server returns are the same number
+ *   rather than the same number plus 4e-17.
+ */
+function matchingProducts(
+  input: StockOverviewInput,
+  householdId: string,
+): Prisma.Sql {
+  const inLocation = input.locationId
+    ? Prisma.sql`AND entry."locationId" = ${input.locationId}`
+    : Prisma.empty;
+
+  const inCategory = input.category
+    ? Prisma.sql`AND product.category = ${input.category}`
+    : Prisma.empty;
+
+  const matchesSearch = input.search
+    ? Prisma.sql`AND ${folded(Prisma.sql`product.name`)} LIKE ${folded(
+        Prisma.sql`${likePattern(input.search)}`,
+      )}`
+    : Prisma.empty;
+
+  // `src/lib/stock/low-stock.ts` owns what running out means; this is that
+  // rule in SQL, because the database cannot import TypeScript. An integration
+  // case asks both over the same rows so they cannot drift apart.
+  const below = Prisma.sql`(totals."minStock" IS NOT NULL AND totals."totalStock" < totals."minStock")`;
+  const onlyLow = input.lowStock ? Prisma.sql`AND ${below}` : Prisma.empty;
+  const onlyRestock = input.needsRestock
+    ? Prisma.sql`AND (totals."totalStock" <= 0 OR ${below})`
+    : Prisma.empty;
+
+  return Prisma.sql`
+    WITH totals AS (
+      SELECT
+        product.id,
+        product.name,
+        product.category,
+        product."defaultUnit",
+        product."minStock",
+        ROUND(COALESCE(SUM(entry.quantity), 0)::numeric, 2)::float8 AS "totalStock"
+      FROM "Product" product
+      LEFT JOIN "StockEntry" entry
+        ON entry."productId" = product.id
+        ${inLocation}
+      WHERE product."householdId" = ${householdId}
+        ${inCategory}
+        ${matchesSearch}
+      GROUP BY product.id
+    )
+    SELECT totals.*
+    FROM totals
+    WHERE true ${onlyLow} ${onlyRestock}
+  `;
+}
+
 export const inventoryRouter = createTRPCRouter({
   /**
-   * Everything in the household, with each product's net stock.
+   * Every product in the household, with its net stock — one page of it.
    *
-   * The list screens' single query. Both filters ask
-   * `src/lib/stock/low-stock.ts`, which is the one place that decides what
-   * running out means; the difference between them is stated there.
+   * Filter, sort, page and total all happen in Postgres. They used to happen
+   * in three places: the page was taken by cursor, the totals were summed in
+   * JavaScript from every ledger row of every product on it, and the filters
+   * were applied *after* that. So a page came back shorter than it asked for,
+   * there was no total to show, and page two of a filtered list was a
+   * different set from the one page one implied.
    *
-   * Phase 8 item 2 is why that matters here: the Panel's count and the list
-   * it opens must be the same set, and they can only be if both sides ask the
-   * same question rather than each writing the comparison out.
+   * Both filters ask `src/lib/stock/low-stock.ts` — restated in SQL, because
+   * the database cannot import TypeScript, and held to it by an integration
+   * case that asks both over the same rows. Phase 8 item 2 is why that
+   * matters: the Panel's count and the list it opens must be one question.
+   *
+   * The page and the count are the same filter run twice, from one fragment,
+   * inside one transaction — so the total cannot describe a different set from
+   * the rows, and a page past the end still knows how many rows there are.
    */
   getStockOverview: householdProcedure
-    .input(
-      z.object({
-        locationId: z.string().optional(),
-        category: z.string().optional(),
-        lowStock: z.boolean().optional(),
-        needsRestock: z.boolean().optional(),
-        cursor: z.string().optional(),
-        limit: z.number().min(1).max(100).default(20),
-      })
-    )
+    .input(stockOverviewSchema)
     .query(async ({ ctx, input }) => {
-      const where = {
-        householdId: ctx.householdId,
-        ...(input.category && { category: input.category }),
-      };
+      const matching = matchingProducts(input, ctx.householdId);
 
-      const products = await ctx.db.product.findMany({
-        where,
-        take: input.limit + 1,
-        cursor: input.cursor ? { id: input.cursor } : undefined,
-        orderBy: { name: "asc" },
-        include: {
-          stockEntries: {
-            where: input.locationId
-              ? { locationId: input.locationId }
-              : undefined,
-            include: {
-              location: true,
-            },
-          },
-        },
-      });
+      const [rows, [count]] = await ctx.db.$transaction([
+        ctx.db.$queryRaw<StockOverviewRow[]>(Prisma.sql`
+          WITH rows AS (${matching})
+          SELECT * FROM rows
+          ORDER BY ${SORT_COLUMNS[input.sort]} ${SORT_DIRECTIONS[input.direction]}, rows.id ASC
+          LIMIT ${input.limit} OFFSET ${(input.page - 1) * input.limit}
+        `),
+        ctx.db.$queryRaw<[{ total: number }]>(Prisma.sql`
+          WITH rows AS (${matching})
+          SELECT COUNT(*)::int AS total FROM rows
+        `),
+      ]);
 
-      let nextCursor: typeof input.cursor = undefined;
-      if (products.length > input.limit) {
-        const nextItem = products.pop();
-        if (nextItem) {
-          nextCursor = nextItem.id;
-        }
-      }
-
-      const stockOverview = products
-        .map((product) => {
-          const totalStock = product.stockEntries.reduce(
-            (sum, entry) => sum + entry.quantity,
-            0
-          );
-
-          const stockByLocation = product.stockEntries.reduce(
-            (acc, entry) => {
-              if (entry.location) {
-                acc[entry.location.id] = {
-                  locationName: entry.location.name,
-                  quantity:
-                    (acc[entry.location.id]?.quantity || 0) + entry.quantity,
-                };
-              }
-              return acc;
-            },
-            {} as Record<
-              string,
-              { locationName: string; quantity: number }
-            >
-          );
-
-          const lowStock = isLowStock(totalStock, product.minStock);
-
-          return {
-            ...product,
-            totalStock,
-            stockByLocation,
-            isLowStock: lowStock,
-          };
-        })
-        .filter((product) => {
-          if (
-            input.needsRestock &&
-            !needsRestock(product.totalStock, product.minStock)
-          ) {
-            return false;
-          }
-          if (!input.lowStock) return true;
-          return product.isLowStock;
-        });
+      const total = count.total;
 
       return {
-        products: stockOverview,
-        nextCursor,
+        // The only derivation left in TypeScript, and deliberately so: the
+        // flag the screen reads comes from the same function the SQL filter
+        // mirrors, applied to the same rounded figure the row carries. A row
+        // cannot come back marked low and be filtered out as healthy.
+        products: rows.map((row) => ({
+          ...row,
+          isLowStock: isLowStock(row.totalStock, row.minStock),
+        })),
+        total,
+        page: input.page,
+        pageCount: Math.max(1, Math.ceil(total / input.limit)),
       };
     }),
 

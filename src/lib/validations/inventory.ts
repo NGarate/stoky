@@ -72,3 +72,32 @@ export type ConsumeStockInput = z.infer<typeof consumeStockSchema>;
 export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
 export type StorageLocationInput = z.infer<typeof storageLocationSchema>;
 export type UpdateStorageLocationInput = z.infer<typeof updateStorageLocationSchema>;
+
+/**
+ * What the stock list asks for.
+ *
+ * Cursor paging is gone. It could not survive a filter applied after the page
+ * was taken: the page came back short, the cursor still pointed somewhere, and
+ * there was no way to say how many rows the filter had matched. Offsets are
+ * cheap at household scale and are the only way to answer "page 2".
+ *
+ * `sort` and `direction` are enums rather than strings because they end up in
+ * an ORDER BY, which cannot be parameterised. The router maps them through a
+ * closed literal whitelist; this is the other half of it.
+ */
+export const stockOverviewSchema = z.object({
+  locationId: z.string().optional(),
+  category: z.string().optional(),
+  /** Part of a name. Case- and accent-insensitive; wildcards are literal. */
+  search: z.string().trim().max(100).optional(),
+  lowStock: z.boolean().optional(),
+  needsRestock: z.boolean().optional(),
+  sort: z.enum(["name", "stock"]).default("name"),
+  direction: z.enum(["asc", "desc"]).default("asc"),
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+
+export type StockOverviewInput = z.infer<typeof stockOverviewSchema>;
+export type StockSort = StockOverviewInput["sort"];
+export type StockDirection = StockOverviewInput["direction"];

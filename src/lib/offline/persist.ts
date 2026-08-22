@@ -32,7 +32,10 @@ import type { Persister } from "@tanstack/react-query-persist-client";
  * — Next's `buildId` changes on every build, which would throw the cache away
  * on deploys that did not need it.
  */
-export const CACHE_VERSION = "1";
+// Bumped to 2 when `getStockOverview` stopped returning `nextCursor` and
+// `stockEntries` and started returning `total`. A device restoring the older
+// shape would hand the inventory page rows with no total to page by.
+export const CACHE_VERSION = "2";
 
 /**
  * The queries worth keeping between visits.
