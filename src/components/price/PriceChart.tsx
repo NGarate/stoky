@@ -254,8 +254,19 @@ function PriceTable({
           </tr>
         </thead>
         <tbody>
-          {data.map((row) => (
-            <tr className="border-border border-b last:border-0" key={row.date}>
+          {/* Keyed by position as well as by date. In store-comparison mode
+              the rows are grouped by date and the date is unique, but the
+              single-series view is one row per *record* — so two prices for
+              the same product on the same day, which is what a receipt with
+              two lines does, gave React two children with the same key. The
+              index is stable here because these rows are a straight
+              projection of a fixed-order array: nothing is inserted,
+              removed or reordered within it. */}
+          {data.map((row, index) => (
+            <tr
+              className="border-border border-b last:border-0"
+              key={`${row.date}-${index}`}
+            >
               <td className="py-2">{row.date}</td>
               {series.map((name) => (
                 <td className="py-2 text-right tabular-nums" key={name}>

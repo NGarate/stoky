@@ -233,6 +233,35 @@ describe("PriceChart", () => {
     expect(within(table).getAllByRole("columnheader").length).toBeGreaterThan(1);
   });
 
+  it("gives two prices on one date two distinct keys", async () => {
+    // The fixture's first two records share a date. In store-comparison mode
+    // they are grouped into one row, but the single-series view is one row
+    // per *record* — which is what a receipt with two lines for the same
+    // product produces — and both were keyed by the date alone.
+    //
+    // React renders both rows either way and reports the collision through
+    // `console.error` alone, so that is what this reads. Asserting on the
+    // rendered table passes against the defect: the output is identical, and
+    // what a duplicate key costs is reconciliation — React may reuse the
+    // wrong row's DOM node when the list changes, which is a wrong price
+    // under a right date.
+    const warnings: string[] = [];
+    const real = console.error;
+    console.error = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+
+    try {
+      renderWithIntl(<PriceChart data={data} />);
+      await userEvent.click(screen.getByRole("button", { name: /tabla/i }));
+    } finally {
+      console.error = real;
+    }
+
+    expect(screen.getAllByRole("row")).toHaveLength(4);
+    expect(warnings.filter((line) => /key/i.test(line))).toEqual([]);
+  });
+
   it("draws a solid grid, not a dashed one", () => {
     renderWithIntl(<PriceChart data={data} />);
 
