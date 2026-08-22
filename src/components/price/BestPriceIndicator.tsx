@@ -1,6 +1,9 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+
+import { Badge } from "@/components/ui/badge";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
@@ -33,39 +36,36 @@ export function BestPriceIndicator({
     const isBestPrice = currentPrice <= bestPrice.price + 0.01; // Small tolerance
     const isGoodDeal = currentPrice <= bestPrice.price * 1.1; // Within 10%
 
+    // `neutral`, not `ok`. The design system reserves `ok`/`warn`/`danger`
+    // for state — healthy, needs-attention, wrong — and names "best price"
+    // as the example of a pill that is *not* one. Green here would spend a
+    // tone that has to keep meaning "this product is fine". The tick still
+    // carries the good news.
     if (isBestPrice) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-ok px-2 py-1 text-xs font-medium text-ok-foreground">
-          <svg
-            className="h-3 w-3"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <title>{t("bestPrice")}</title>
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-              clipRule="evenodd"
-            />
-          </svg>
-          {t("bestPrice")}
-        </span>
+        <Badge tone="neutral">
+          <span className="inline-flex items-center gap-1">
+            <Check aria-hidden="true" className="h-4 w-4" />
+            {t("bestPrice")}
+          </span>
+        </Badge>
       );
     }
 
     if (isGoodDeal) {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-          {t("priceStable")}
-        </span>
-      );
+      return <Badge tone="neutral">{t("priceStable")}</Badge>;
     }
 
+    // Dearer than it needs to be, which is the one comparison here that asks
+    // the reader to do something — and it says so in words. It used to read
+    // "+15%" and nothing else, so what that number meant was carried by the
+    // pill being amber. `premiumOver` already existed for this sentence;
+    // `StoreComparison` has been using it.
     const priceDiff = ((currentPrice / bestPrice.price - 1) * 100).toFixed(0);
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-warn px-2 py-1 text-xs font-medium text-warn-foreground">
-        +{priceDiff}%
-      </span>
+      <Badge tone="warn">
+        {t("premiumOver", { percent: `+${priceDiff}%` })}
+      </Badge>
     );
   }
 

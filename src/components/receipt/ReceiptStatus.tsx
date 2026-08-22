@@ -4,6 +4,8 @@ import { ReceiptStatus } from "@prisma/client";
 import { useTranslations } from "next-intl";
 import { Loader2, CheckCircle, AlertCircle, Check } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
+
 interface ReceiptStatusProps {
   status: ReceiptStatus;
   progress?: {
@@ -15,51 +17,26 @@ interface ReceiptStatusProps {
 /**
  * Presentation only. The wording lives in `receipts.status.*`, which the applied
  * summary already reads, so the badge and that page cannot drift apart.
+ *
+ * The pill itself is `<Badge>` now. This was a hand-written
+ * `rounded-full px-3 py-1.5` with its own fill and its own foreground — a
+ * fifth size and a second rounding for the same object the design system
+ * exists to own, and a colour pair `check-contrast.ts` audits only because
+ * the tokens happened to be the same ones.
+ *
+ * `tone` rather than a colour: the four waiting states are not a state of
+ * health, so they are `neutral`; needing review is the one that wants
+ * attention; confirmed and applied are `ok`; failed is `danger`.
  */
 const statusConfig = {
-  [ReceiptStatus.UPLOADING]: {
-    color: "text-muted-foreground",
-    bgColor: "bg-muted",
-    icon: Loader2,
-    spin: true,
-  },
-  [ReceiptStatus.PROCESSING]: {
-    color: "text-muted-foreground",
-    bgColor: "bg-muted",
-    icon: Loader2,
-    spin: true,
-  },
-  [ReceiptStatus.PARSED]: {
-    color: "text-muted-foreground",
-    bgColor: "bg-muted",
-    icon: Loader2,
-    spin: true,
-  },
-  [ReceiptStatus.NEEDS_REVIEW]: {
-    color: "text-warn-foreground",
-    bgColor: "bg-warn",
-    icon: AlertCircle,
-    spin: false,
-  },
-  [ReceiptStatus.CONFIRMED]: {
-    color: "text-ok-foreground",
-    bgColor: "bg-ok",
-    icon: CheckCircle,
-    spin: false,
-  },
-  [ReceiptStatus.APPLIED]: {
-    color: "text-ok-foreground",
-    bgColor: "bg-ok",
-    icon: Check,
-    spin: false,
-  },
-  [ReceiptStatus.FAILED]: {
-    color: "text-danger-foreground",
-    bgColor: "bg-danger",
-    icon: AlertCircle,
-    spin: false,
-  },
-};
+  [ReceiptStatus.UPLOADING]: { tone: "neutral", icon: Loader2, spin: true },
+  [ReceiptStatus.PROCESSING]: { tone: "neutral", icon: Loader2, spin: true },
+  [ReceiptStatus.PARSED]: { tone: "neutral", icon: Loader2, spin: true },
+  [ReceiptStatus.NEEDS_REVIEW]: { tone: "warn", icon: AlertCircle, spin: false },
+  [ReceiptStatus.CONFIRMED]: { tone: "ok", icon: CheckCircle, spin: false },
+  [ReceiptStatus.APPLIED]: { tone: "ok", icon: Check, spin: false },
+  [ReceiptStatus.FAILED]: { tone: "danger", icon: AlertCircle, spin: false },
+} as const;
 
 export function ReceiptStatusBadge({ status, progress }: ReceiptStatusProps) {
   const t = useTranslations("receipts.status");
@@ -67,17 +44,20 @@ export function ReceiptStatusBadge({ status, progress }: ReceiptStatusProps) {
   const Icon = config.icon;
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor}`}>
-      <Icon className={`w-4 h-4 ${config.color} ${config.spin ? "animate-spin" : ""}`} />
-      <span className={`text-sm font-medium ${config.color}`}>
+    <Badge tone={config.tone}>
+      <span className="inline-flex items-center gap-2">
+        <Icon
+          aria-hidden="true"
+          className={`h-4 w-4 ${config.spin ? "animate-spin" : ""}`}
+        />
         {t(status.toLowerCase())}
+        {progress && status !== ReceiptStatus.APPLIED ? (
+          <span>
+            ({progress.processed}/{progress.total})
+          </span>
+        ) : null}
       </span>
-      {progress && status !== ReceiptStatus.APPLIED && (
-        <span className="text-xs text-muted-foreground">
-          ({progress.processed}/{progress.total})
-        </span>
-      )}
-    </div>
+    </Badge>
   );
 }
 
