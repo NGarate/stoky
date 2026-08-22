@@ -77,6 +77,18 @@ function Harness({
       <button
         onClick={() =>
           snackbar.show({
+            kind: "confirm",
+            message: { key: "stores.deleteFailed", values: { name: "Lidl" } },
+            tone: "danger",
+          })
+        }
+        type="button"
+      >
+        fallo
+      </button>
+      <button
+        onClick={() =>
+          snackbar.show({
             kind: "undo-queued",
             message: { key: "offline.usedUp", values: { quantity: 1, unit: "L", name: "Leche" } },
             opId: "op-1",
@@ -180,6 +192,37 @@ describe("what the snackbar says", () => {
 
     await screen.findAllByText("Marcaste «Leche»");
     expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
+  });
+});
+
+describe("a failure", () => {
+  it("does not look exactly like a success", async () => {
+    const { baseElement } = render();
+
+    await press("confirmar");
+    await screen.findAllByText("Marcaste «Leche»");
+    const success = baseElement.querySelector('[data-testid="snackbar"]');
+    const successMarkup = success?.innerHTML ?? "";
+
+    await press("fallo");
+    await screen.findAllByText(/No se ha podido eliminar/);
+    const failure = baseElement.querySelector('[data-testid="snackbar"]');
+
+    // `tone` was declared on the input type and read by nobody, so the three
+    // call sites that pass `tone: "danger"` drew the identical bar a success
+    // draws — a failed export looked exactly like one that worked.
+    expect(failure?.innerHTML).not.toBe(successMarkup);
+    expect(failure?.querySelector(".text-snackbar-danger")).not.toBeAbsent();
+  });
+
+  it("says so in words too, never in colour alone", async () => {
+    render();
+    await press("fallo");
+
+    // The icon is `aria-hidden` and the tint is not announced, so the words
+    // are what a screen reader has. They have to carry it on their own.
+    const said = await screen.findAllByText(/No se ha podido eliminar/);
+    expect(said.length).toBeGreaterThan(0);
   });
 });
 

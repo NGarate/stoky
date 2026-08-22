@@ -98,6 +98,12 @@
   --snackbar: #1c2b24;
   --snackbar-foreground: #eef3ef;
   --snackbar-action: #8ddcc5;
+  /* A snackbar that reports a failure. Ink, not a surface: inverting is what
+     makes the thing read as laid over the page, and a pale pink bar would
+     lose that. Borrowed from the dark theme's `danger-foreground` for the
+     same reason `snackbar-action` is borrowed — after the inversion, this
+     block's own reds are unreadable here. */
+  --snackbar-danger: #f5a8a8;
 
   /* Charts. Not a categorical scale — this is the emphasis pattern: the
      series that answers the question in the accent, every other in the
@@ -171,6 +177,7 @@
   --snackbar: #e7efe9;
   --snackbar-foreground: #12201a;
   --snackbar-action: #0e4f42;
+  --snackbar-danger: #8a1220;
 
   --chart-emphasis: #8ddcc5;
   --chart-muted: #5c6f65;
@@ -223,6 +230,7 @@
     --snackbar: #e7efe9;
     --snackbar-foreground: #12201a;
     --snackbar-action: #0e4f42;
+    --snackbar-danger: #8a1220;
 
     --chart-emphasis: #8ddcc5;
     --chart-muted: #5c6f65;
@@ -280,6 +288,7 @@
   --color-snackbar: var(--snackbar);
   --color-snackbar-foreground: var(--snackbar-foreground);
   --color-snackbar-action: var(--snackbar-action);
+  --color-snackbar-danger: var(--snackbar-danger);
 
   --color-chart-emphasis: var(--chart-emphasis);
   --color-chart-muted: var(--chart-muted);

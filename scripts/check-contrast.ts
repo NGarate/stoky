@@ -216,6 +216,7 @@ const PAIRS: Pair[] = [
   // theme's snackbar is dark and the dark theme's is light.
   { fg: "snackbar-foreground", bg: "snackbar", scale: "body", where: "snackbar message" },
   { fg: "snackbar-action", bg: "snackbar", scale: "body", where: "the snackbar's undo label" },
+  { fg: "snackbar-danger", bg: "snackbar", scale: "body", where: "a snackbar reporting a failure" },
   { fg: "snackbar", bg: "background", scale: "nonText", where: "snackbar surface floating over the page" },
   { fg: "snackbar", bg: "card", scale: "nonText", where: "snackbar surface floating over a card" },
 

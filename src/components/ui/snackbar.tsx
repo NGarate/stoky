@@ -1,6 +1,7 @@
 "use client";
 
 import * as Toast from "@radix-ui/react-toast";
+import { AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   createContext,
@@ -291,7 +292,31 @@ function SnackbarRoot({
       // Polite, always. See the note on `role="alert"` above.
       type="background"
     >
-      <Toast.Title className="min-w-0 flex-1">{message}</Toast.Title>
+      {/* A failure looks like a failure.
+          `tone` was declared on the input type and read by nobody, so the
+          three call sites that pass `tone: "danger"` — a store that could not
+          be deleted, an upload that failed, an export that failed — drew the
+          identical bar a success draws.
+
+          Two carriers, neither of them colour alone. The icon is
+          `aria-hidden`, so what a screen reader gets is the message, and
+          every one of those messages already says in words that the thing did
+          not work; the tint and the icon are for the glance. */}
+      {entry.tone === "danger" ? (
+        <AlertTriangle
+          aria-hidden="true"
+          className="h-5 w-5 shrink-0 text-snackbar-danger"
+        />
+      ) : null}
+
+      <Toast.Title
+        className={cn(
+          "min-w-0 flex-1",
+          entry.tone === "danger" && "text-snackbar-danger",
+        )}
+      >
+        {message}
+      </Toast.Title>
 
       {undoable ? (
         <Toast.Action
