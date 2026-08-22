@@ -337,6 +337,7 @@
       "brandHeader": "Brand",
       "categoryHeader": "Category",
       "stockHeader": "In stock",
+      "truncated": "Showing the first {count} products. There are more in the catalogue.",
       "actionsHeader": "Actions",
       "noCategory": "No category",
       "actionEdit": "Edit",

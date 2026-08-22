@@ -94,6 +94,11 @@ export default function ProductsPage(): JSX.Element {
   }
 
   const products = result.products as ProductRow[];
+  // `product.list` returns a cursor when it held something back. The screen
+  // asked for a hundred and drew exactly what it was given, so a household
+  // with more than that had a catalogue that simply ended — no page two, no
+  // count, and nothing to say a product that exists is not on the screen.
+  const truncated = Boolean(result.nextCursor);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -110,6 +115,12 @@ export default function ProductsPage(): JSX.Element {
           </Button>
         </div>
       </div>
+
+      {truncated ? (
+        <p className="mb-4 rounded border border-border bg-card p-3 text-sm text-muted-foreground">
+          {t("truncated", { count: products.length })}
+        </p>
+      ) : null}
 
       {/* Desktop: the table.
 

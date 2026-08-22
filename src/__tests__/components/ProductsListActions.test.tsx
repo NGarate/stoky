@@ -13,7 +13,7 @@ import { renderWithIntl } from "../utils/render";
  * the catalogue in both languages.
  */
 let listStub: {
-  data: { products: unknown[] } | undefined;
+  data: { products: unknown[]; nextCursor?: string } | undefined;
   isPending: boolean;
   error: null;
   fetchStatus: "idle";
@@ -110,5 +110,37 @@ describe("the catalogue's actions column", () => {
     expect(screen.getAllByText("Products").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("Productos")).toBeAbsent();
     expect(screen.queryByText("Sin categoría")).toBeAbsent();
+  });
+});
+
+describe("when the catalogue does not fit", () => {
+  it("says it has stopped, rather than simply ending", () => {
+    listStub.data = {
+      products: [
+        {
+          id: "p1",
+          name: "Leche entera",
+          brand: "Pascual",
+          category: "Lácteos",
+          totalStock: 2,
+          minStock: 6,
+          defaultUnit: "L",
+        },
+      ],
+      nextCursor: "p2",
+    };
+
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    // The screen asked for a hundred and drew what it was given. A household
+    // with more than that had a catalogue that simply ended — no page two, no
+    // count, and nothing to say a product that exists is not on the screen.
+    expect(screen.getByText(/Se muestran los primeros/)).toBeInTheDocument();
+  });
+
+  it("says nothing when everything is on the screen", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    expect(screen.queryByText(/Se muestran los primeros/)).toBeAbsent();
   });
 });
