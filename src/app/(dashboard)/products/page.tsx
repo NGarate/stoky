@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -46,6 +49,33 @@ function stockTone(product: ProductRow): string {
   return "text-ok-foreground";
 }
 
+/**
+ * One of a row's onward links.
+ *
+ * Named for a screen reader with the row's product, because "Ajustar" read
+ * out of context names nothing — WCAG 2.4.9, and the criterion the old bare
+ * "Ver" was DESIGN_AUDIT A4.5's example of failing. A link rather than a
+ * button because it genuinely navigates.
+ */
+function RowAction({
+  href,
+  label,
+  name,
+}: {
+  href: string;
+  label: string;
+  name: string;
+}): JSX.Element {
+  return (
+    <Button asChild size="sm" variant="ghost">
+      <Link href={href}>
+        {label}
+        <span className="sr-only"> {name}</span>
+      </Link>
+    </Button>
+  );
+}
+
 export default function ProductsPage(): JSX.Element {
   const t = useTranslations("products.list");
   const query = api.product.list.useQuery({ limit: 100 });
@@ -76,18 +106,12 @@ export default function ProductsPage(): JSX.Element {
           {t("title")}
         </h1>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/products/scan"
-            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted md:text-lg"
-          >
-            {t("scan")}
-          </Link>
-          <Link
-            href="/products/new"
-            className="inline-flex min-h-[48px] items-center rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:text-lg"
-          >
-            {t("new")}
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/products/scan">{t("scan")}</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/products/new">{t("new")}</Link>
+          </Button>
         </div>
       </div>
 
@@ -113,20 +137,17 @@ export default function ProductsPage(): JSX.Element {
             {products.map((product) => (
               <tr key={product.id} className="border-t border-border">
                 <td className="px-4 py-3">
-                  <Link
-                    href={`/products/${product.id}`}
-                    className="inline-flex min-h-[48px] items-center text-primary hover:underline"
-                  >
-                    {product.name}
-                  </Link>
+                  <Button asChild variant="link">
+                    <Link href={`/products/${product.id}`}>{product.name}</Link>
+                  </Button>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {product.brand || "-"}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-sm">
+                  <Badge tone="neutral">
                     {product.category || t("noCategory")}
-                  </span>
+                  </Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <span className={`font-medium ${stockTone(product)}`}>
@@ -139,27 +160,21 @@ export default function ProductsPage(): JSX.Element {
                       WCAG 2.4.9, the criterion the old bare "Ver" was A4.5's
                       example of failing. */}
                   <span className="flex flex-wrap items-center justify-center gap-1">
-                    <Link
+                    <RowAction
                       href={`/products/${product.id}/adjust`}
-                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
-                    >
-                      {t("actionAdjust")}
-                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
-                    </Link>
-                    <Link
+                      label={t("actionAdjust")}
+                      name={t("actionOf", { name: product.name })}
+                    />
+                    <RowAction
                       href={`/products/${product.id}/history`}
-                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
-                    >
-                      {t("actionHistory")}
-                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
-                    </Link>
-                    <Link
+                      label={t("actionHistory")}
+                      name={t("actionOf", { name: product.name })}
+                    />
+                    <RowAction
                       href={`/prices/${product.id}`}
-                      className="inline-flex min-h-[48px] items-center px-2 text-sm text-primary hover:underline"
-                    >
-                      {t("actionPrices")}
-                      <span className="sr-only"> {t("actionOf", { name: product.name })}</span>
-                    </Link>
+                      label={t("actionPrices")}
+                      name={t("actionOf", { name: product.name })}
+                    />
                   </span>
                 </td>
               </tr>
@@ -171,34 +186,42 @@ export default function ProductsPage(): JSX.Element {
       {/* Phone and tablet: one card per product. */}
       <ul className="space-y-3 lg:hidden">
         {products.map((product) => (
-          <li
+          <ItemRow
+            actions={
+              <>
+                <RowAction
+                  href={`/products/${product.id}/adjust`}
+                  label={t("actionAdjust")}
+                  name={t("actionOf", { name: product.name })}
+                />
+                <RowAction
+                  href={`/products/${product.id}/history`}
+                  label={t("actionHistory")}
+                  name={t("actionOf", { name: product.name })}
+                />
+                <RowAction
+                  href={`/prices/${product.id}`}
+                  label={t("actionPrices")}
+                  name={t("actionOf", { name: product.name })}
+                />
+              </>
+            }
+            href={`/products/${product.id}`}
             key={product.id}
-            className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-5"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <Link
-                href={`/products/${product.id}`}
-                className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4 md:text-xl"
-              >
-                {product.name}
-              </Link>
+            meta={[
+              { label: t("brandHeader"), value: product.brand || "-" },
+              {
+                label: t("categoryHeader"),
+                value: product.category || t("noCategory"),
+              },
+            ]}
+            status={
               <span className={`font-medium ${stockTone(product)} md:text-xl`}>
                 {t("stockLabel", { stock: product.totalStock })}
               </span>
-            </div>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:text-lg">
-              <div>
-                <dt className="text-muted-foreground">{t("brandHeader")}</dt>
-                <dd className="mt-1 text-foreground">{product.brand || "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">{t("categoryHeader")}</dt>
-                <dd className="mt-1 text-foreground">
-                  {product.category || t("noCategory")}
-                </dd>
-              </div>
-            </dl>
-          </li>
+            }
+            title={product.name}
+          />
         ))}
       </ul>
     </div>

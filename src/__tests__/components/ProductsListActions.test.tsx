@@ -65,8 +65,14 @@ describe("the catalogue's actions column", () => {
       [/Precios de «Leche entera»/, "/prices/p1"],
     ];
     for (const [name, href] of wanted) {
-      const link = screen.getByRole("link", { name });
-      expect(link.getAttribute("href")).toBe(href);
+      // Both tiers now offer them. The card tier — the phone and the kitchen
+      // tablet — had no row actions at all before, so a product could only be
+      // adjusted from a screen wide enough for a table.
+      const links = screen.getAllByRole("link", { name });
+      expect(links.length).toBeGreaterThanOrEqual(2);
+      for (const link of links) {
+        expect(link.getAttribute("href")).toBe(href);
+      }
     }
   });
 
