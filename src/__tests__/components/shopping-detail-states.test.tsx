@@ -174,6 +174,26 @@ describe("the shopping list someone is holding", () => {
     expect(screen.queryByText("No encontrado")).toBeNull();
   });
 
+  it("draws its rows inside a list, not loose in a div", () => {
+    queryStub = {
+      data: LOADED,
+      isPending: false,
+      error: null,
+      fetchStatus: "idle",
+      refetch: noop,
+    };
+
+    renderPage();
+
+    // `ItemRow` is an `<li>`. Loose in a `<div>` it is still drawn with a
+    // bullet, and the accessibility tree loses the list — which is what tells
+    // a screen-reader user how many things are on the list before reading the
+    // first one. Asserted on the real parent rather than by scanning source.
+    const row = screen.getByText("Leche entera").closest("li");
+    expect(row).not.toBeNull();
+    expect(row?.parentElement?.tagName).toBe("UL");
+  });
+
   it("keeps showing the list when a refetch cannot reach the server", () => {
     queryStub = {
       data: LOADED,

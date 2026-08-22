@@ -309,23 +309,27 @@ export function ShoppingListView({ id }: { id: string }) {
         </form>
       )}
 
-      <div className="space-y-2">
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-            <p>{t("shopping.emptyList")}</p>
-            <p className="mt-2 text-sm">{t("shopping.addItems")}</p>
-          </div>
-        ) : (
-          items.map((item) => (
+      {/* A `<ul>`, because `ItemRow` renders an `<li>` and every other screen
+          that adopted it already wraps its rows. This one wrapped them in a
+          `<div>`, so each row was an orphaned list item: drawn with a bullet,
+          and announced without the count that makes a list worth being one. */}
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
+          <p>{t("shopping.emptyList")}</p>
+          <p className="mt-2 text-sm">{t("shopping.addItems")}</p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((item) => (
             <ShoppingItem
               canWrite={canWrite}
               item={item}
               key={item.id}
               stores={stores}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
