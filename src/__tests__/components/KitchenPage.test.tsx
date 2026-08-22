@@ -385,6 +385,47 @@ describe("what the lists already cover", () => {
     error: null,
   });
 
+  it("does not report good news when it could not ask", () => {
+    stockStub = {
+      data: undefined,
+      isPending: false,
+      error: new Error("no"),
+      refetch: () => {},
+    };
+    renderKitchen();
+
+    // `lowStock` fell back to an empty array and an empty array rendered
+    // "No falta nada" — so a failed query told a household everything was in
+    // stock. On a tablet propped up in a kitchen and read from a metre away
+    // that is the worst shape a failure can take: it looks exactly like good
+    // news, and nobody goes to check.
+    expect(screen.queryByText("No falta nada")).toBeAbsent();
+    expect(
+      screen.getByText("No se ha podido comprobar qué falta."),
+    ).toBeInTheDocument();
+  });
+
+  it("says it is still asking rather than answering early", () => {
+    stockStub = {
+      data: undefined,
+      isPending: true,
+      error: null,
+      refetch: () => {},
+    };
+    renderKitchen();
+
+    expect(screen.queryByText("No falta nada")).toBeAbsent();
+    expect(screen.getByText("Comprobando qué falta…")).toBeInTheDocument();
+  });
+
+  it("still says nothing is running out when that is the answer", () => {
+    stockStub = { data: { products: [] }, isPending: false, error: null };
+    renderKitchen();
+
+    expect(screen.getByText("No falta nada")).toBeInTheDocument();
+  });
+
+
   it("stops offering to add what is already covered", () => {
     // One left, one already written down, a minimum of two: buying more is
     // not what this product needs, and a button that stays lit on a tablet

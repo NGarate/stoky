@@ -114,6 +114,19 @@ export default function KitchenPage(): JSX.Element {
   const later = batches.filter((batch) => batch.daysUntilExpiry > 3);
 
   const lowStock = stock.data?.products ?? [];
+  /**
+   * Whether the section can answer at all.
+   *
+   * `lowStock` falls back to an empty array, and an empty array rendered
+   * "No falta nada" — so a failed or unanswered query told a household
+   * everything was in stock. On a tablet propped up in a kitchen and read
+   * from a metre away that is the worst shape a failure can take: it looks
+   * exactly like good news, and nobody goes to check.
+   *
+   * Stale data still counts as an answer: a five-minute-old list of what is
+   * running low is worth more than a failure panel over it.
+   */
+  const restock = stock.data ? "ready" : stock.error ? "failed" : "checking";
   // What the lists already cover, with anything tapped but not yet sent
   // folded in — the same reason the totals are projected rather than read.
   const onList = projectOnListQuantities(
@@ -320,7 +333,25 @@ export default function KitchenPage(): JSX.Element {
           >
             {listError ? t("listCreateFailed") : ""}
           </p>
-          {lowStock.length === 0 ? (
+          {restock === "failed" ? (
+            <div className="mt-3">
+              <p className="text-xl text-danger-foreground">
+                {t("runningOutFailed")}
+              </p>
+              <Button
+                className="mt-2"
+                onClick={() => void stock.refetch()}
+                type="button"
+                variant="outline"
+              >
+                {t("runningOutRetry")}
+              </Button>
+            </div>
+          ) : restock === "checking" ? (
+            <p className="mt-3 text-xl text-muted-foreground">
+              {t("runningOutLoading")}
+            </p>
+          ) : lowStock.length === 0 ? (
             <p className="mt-3 text-xl text-muted-foreground">
               {t("nothingRunningOut")}
             </p>
