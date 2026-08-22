@@ -196,6 +196,25 @@ describe("undo", () => {
     expect(screen.queryByRole("button", { name: "Deshacer" })).toBeNull();
   });
 
+  it("keeps the undo it opened with while the window ticks down", async () => {
+    render();
+    await press("deshacible");
+    await screen.findByRole("button", { name: "Deshacer" });
+
+    // Time passes and something else re-renders the shell — which happens
+    // constantly in the real application, because the queue ticks.
+    holdRemaining = 500;
+    await press("confirmar");
+
+    // The window was read on every render, so the button vanished under the
+    // hand reaching for it. Worse and invisibly: Radix restarts its close
+    // timer whenever `duration` changes, and once the remainder fell below
+    // MIN_UNDO_MS the duration fell through to the *preference* — so the
+    // snackbar outlived the window it was measuring, and under "hasta
+    // descartar" it never closed at all.
+    expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
+  });
+
   it("runs the inverse when there is an exact one", async () => {
     const undo = mock(() => {});
     render(undo);

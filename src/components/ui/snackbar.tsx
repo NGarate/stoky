@@ -95,6 +95,7 @@ export function useSnackbar(): SnackbarApi {
 /** Below this, the button would stop working before it could be pressed. */
 const MIN_UNDO_MS = 2_000;
 
+
 interface Entry extends Omit<SnackbarInput, "kind"> {
   id: string;
   kind: SnackbarInput["kind"];
@@ -215,12 +216,27 @@ function SnackbarRoot({
   // after a language switch would otherwise be half in each (queue.ts:41-47).
   const message = t(entry.message.key, entry.message.values);
 
-  // Read once per render of a keyed component, so it is the window as it was
-  // when this snackbar opened rather than a value that changes under it.
-  const heldMs =
+  // Captured once, on mount, and never recomputed.
+  //
+  // It was read on every render, and the comment here claimed that amounted
+  // to the same thing. It does not. This component re-renders whenever the
+  // shell does, and the window shrinks in real time, so two things went
+  // wrong at once. Radix restarts its close timer whenever `duration`
+  // changes (`react-toast` index.mjs:353-356), so a snackbar meant to live
+  // ten seconds kept being given a fresh, shorter one. And once the
+  // remainder fell under `MIN_UNDO_MS`, `undoDuration` stopped matching its
+  // first branch and fell through to the *preference* duration — so the
+  // snackbar outlived the window it was measuring, and under "hasta
+  // descartar" it never closed at all.
+  //
+  // A lazy `useState` initialiser rather than a `useRef`, so the clock is
+  // read once at mount instead of on every render: the component is keyed by
+  // entry id, so a new snackbar is a new mount and gets its own reading.
+  const [heldMs] = useState(() =>
     entry.kind === "undo-queued" && entry.opId
       ? queue.holdRemainingMs(entry.opId)
-      : 0;
+      : 0,
+  );
 
   const undoable =
     entry.kind === "undo-inverse" ||
