@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { ProductDetailsForm } from "@/components/products/ProductDetailsForm";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import type { JSX } from "react";
@@ -259,15 +260,14 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         {/* Retrying a product that is not in the catalogue would fail the same
             way every time; a transport failure is the case worth offering. */}
         {errorKey === "errorNotFound" ? null : (
-          <button
+          <Button
             type="button"
             onClick={() => {
               void query.refetch();
             }}
-            className="mt-4 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {t("retry")}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -549,36 +549,33 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                 {t("deleteConfirmBody")}
               </p>
               <div className="mt-3 flex flex-wrap gap-3">
-                <button
+                <Button
                   type="button"
                   disabled={deleteProduct.isPending}
                   onClick={() => deleteProduct.mutate({ id: product.id })}
-                  className="min-h-[48px] rounded bg-destructive px-4 py-2 font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
                 >
                   {t("deleteConfirm")}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     setConfirmingDelete(false);
                     setDeleteError(null);
                   }}
-                  className="min-h-[48px] rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground"
                 >
                   {t("deleteCancel")}
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
             <>
               <p className="mt-2 text-sm text-muted-foreground">{t("deleteHint")}</p>
-              <button
+              <Button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
-                className="mt-3 min-h-[48px] rounded border border-danger-foreground bg-card px-4 py-2 font-medium text-danger-foreground hover:bg-danger"
               >
                 {t("deleteButton")}
-              </button>
+              </Button>
             </>
           )}
           {/* Kept mounted so a refusal is announced when it arrives. */}

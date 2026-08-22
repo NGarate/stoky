@@ -9,6 +9,7 @@ import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { Button } from "@/components/ui/button";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
@@ -283,7 +284,7 @@ export default function ConsumeStockPage(): JSX.Element {
           >
             {t("quantityLabel")}
           </label>
-          <input
+          <Input
             id={quantityId}
             name="quantity"
             type="number"
@@ -299,7 +300,6 @@ export default function ConsumeStockPage(): JSX.Element {
                 ? `${availableId} ${quantityHintId} ${quantityErrorId}`
                 : `${availableId} ${quantityHintId}`
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={quantityHintId} className="mt-1 text-sm text-muted-foreground">
             {t("quantityHint")}
@@ -332,7 +332,7 @@ export default function ConsumeStockPage(): JSX.Element {
               >
                 {t("unitLabel")}
               </label>
-              <input
+              <Input
                 id={unitId}
                 name="unit"
                 type="text"
@@ -346,7 +346,6 @@ export default function ConsumeStockPage(): JSX.Element {
                 aria-describedby={
                   fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
                 }
-                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
               />
               <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
                 {t("unitHint")}
@@ -400,13 +399,12 @@ export default function ConsumeStockPage(): JSX.Element {
         </details>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             type="submit"
             disabled={consumeStock.isPending}
-            className="min-h-[48px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
-          </button>
+          </Button>
           <Link
             href="/inventory"
             className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"

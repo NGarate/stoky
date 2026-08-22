@@ -7,7 +7,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { StoreSelector } from "@/components/store/StoreSelector";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
@@ -262,9 +264,7 @@ export default function AddStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <Link href="/inventory" className="inline-flex min-h-[48px] items-center text-primary underline">
-        {t("backToInventory")}
-      </Link>
+      <BackLink href="/inventory">{t("backToInventory")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
       <p className="mt-2 text-muted-foreground">{t("intro")}</p>
@@ -290,7 +290,7 @@ export default function AddStockPage(): JSX.Element {
           >
             {t("quantityLabel")}
           </label>
-          <input
+          <Input
             id={quantityId}
             name="quantity"
             type="number"
@@ -306,7 +306,6 @@ export default function AddStockPage(): JSX.Element {
                 ? `${quantityHintId} ${quantityErrorId}`
                 : quantityHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={quantityHintId} className="mt-1 text-sm text-muted-foreground">
             {t("quantityHint")}
@@ -328,7 +327,7 @@ export default function AddStockPage(): JSX.Element {
           >
             {t("expirationLabel")}
           </label>
-          <input
+          <Input
             id={expirationId}
             name="expirationDate"
             type="date"
@@ -340,7 +339,6 @@ export default function AddStockPage(): JSX.Element {
                 ? `${expirationHintId} ${expirationErrorId}`
                 : expirationHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={expirationHintId} className="mt-1 text-sm text-muted-foreground">
             {t("expirationHint")}
@@ -395,7 +393,7 @@ export default function AddStockPage(): JSX.Element {
           >
             {t("priceLabel")}
           </label>
-          <input
+          <Input
             id={priceId}
             name="price"
             type="number"
@@ -415,7 +413,6 @@ export default function AddStockPage(): JSX.Element {
             aria-describedby={
               fieldErrors.price ? `${priceHintId} ${priceErrorId}` : priceHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={priceHintId} className="mt-1 text-sm text-muted-foreground">
             {t("priceHint")}
@@ -451,7 +448,7 @@ export default function AddStockPage(): JSX.Element {
               >
                 {t("unitLabel")}
               </label>
-              <input
+              <Input
                 id={unitId}
                 name="unit"
                 type="text"
@@ -465,7 +462,6 @@ export default function AddStockPage(): JSX.Element {
                 aria-describedby={
                   fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
                 }
-                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
               />
               <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
                 {t("unitHint")}
@@ -512,6 +508,9 @@ export default function AddStockPage(): JSX.Element {
                 onChange={(event) => setNote(event.target.value)}
                 placeholder={t("notePlaceholder")}
                 aria-describedby={noteHintId}
+                // `Input` is an `<input>`; a note is a `<textarea>` and has
+                // no primitive. The classes are `Input`'s, written out, which
+                // is the one place in this file that is still true.
                 className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
               />
               <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
@@ -522,19 +521,15 @@ export default function AddStockPage(): JSX.Element {
         </details>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             type="submit"
             disabled={addStock.isPending}
-            className="min-h-[48px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
-          </button>
-          <Link
-            href="/inventory"
-            className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
-          >
-            {t("cancel")}
-          </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/inventory">{t("cancel")}</Link>
+          </Button>
           {/* Kept mounted so the message is announced when it appears, rather
               than the whole region arriving at once. */}
           <p role="status" aria-live="polite" className="text-sm text-muted-foreground">

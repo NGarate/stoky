@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { use, useState, useId } from "react";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -144,13 +146,12 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
         </div>
 
         {errorKey === "errorNotFound" ? null : (
-          <button
+          <Button
             type="button"
             onClick={() => void query.refetch()}
-            className="mt-4 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {t("retry")}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -202,7 +203,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           >
             {t("actualLabel")}
           </label>
-          <input
+          <Input
             id={actualId}
             name="actual"
             type="number"
@@ -218,7 +219,6 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
                 ? `${actualHintId} ${actualErrorId}`
                 : actualHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={actualHintId} className="mt-1 text-sm text-muted-foreground">
             {t("actualHint", { unit: product.defaultUnit })}
@@ -269,13 +269,12 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             type="submit"
             disabled={adjustStock.isPending}
-            className="min-h-[48px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
-          </button>
+          </Button>
           <Link
             href={`/products/${id}`}
             className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"

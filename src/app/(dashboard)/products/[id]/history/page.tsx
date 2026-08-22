@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { runningTotals } from "@/lib/inventory/stockLedger";
 import { StockHistoryChart } from "@/components/inventory/StockHistoryChart";
@@ -95,16 +96,15 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
         </div>
 
         {errorKey === "errorNotFound" ? null : (
-          <button
+          <Button
             type="button"
             onClick={() => {
               void detail.refetch();
               void history.refetch();
             }}
-            className="mt-4 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {t("retry")}
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -207,14 +207,13 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
           </div>
 
           {history.hasNextPage ? (
-            <button
+            <Button
               type="button"
               disabled={history.isFetchingNextPage}
               onClick={() => void history.fetchNextPage()}
-              className="mt-4 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
             >
               {history.isFetchingNextPage ? t("loadingMore") : t("loadMore")}
-            </button>
+            </Button>
           ) : null}
         </>
       )}

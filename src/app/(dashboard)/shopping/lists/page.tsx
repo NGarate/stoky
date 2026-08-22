@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { AutoListPreview } from "@/components/shopping/AutoListPreview";
@@ -90,21 +92,19 @@ export default function ShoppingListsPage() {
           </Link>
         </div>
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
             onClick={() => generateMutation.mutate()}
             disabled={generateMutation.isPending}
-            className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
           >
             {t("shopping.generateFromLowStock")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => setIsCreating(true)}
-            className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
           >
             {t("shopping.create")}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -115,30 +115,27 @@ export default function ShoppingListsPage() {
           onSubmit={handleCreate}
           className="flex gap-2 rounded-lg border border-border bg-card p-4"
         >
-          <input
+          <Input
             type="text"
             placeholder={t("shopping.listName")}
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
-            className="min-h-[48px] flex-1 rounded-md border border-input bg-card px-3 py-2 text-foreground"
           />
-          <button
+          <Button
             type="submit"
             disabled={createMutation.isPending}
-            className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {t("common.create")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => {
               setIsCreating(false);
               setNewListName("");
             }}
-            className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {t("common.cancel")}
-          </button>
+          </Button>
         </form>
       )}
 

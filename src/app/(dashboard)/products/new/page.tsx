@@ -7,6 +7,7 @@ import { Suspense, useDeferredValue, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
 
@@ -342,7 +343,7 @@ function NewProductForm(): JSX.Element {
           >
             {t("nameLabel")}
           </label>
-          <input
+          <Input
             id={nameId}
             name="name"
             type="text"
@@ -354,7 +355,6 @@ function NewProductForm(): JSX.Element {
             aria-describedby={
               fieldErrors.name ? `${nameHintId} ${nameErrorId}` : nameHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={nameHintId} className="mt-1 text-sm text-muted-foreground">
             {t("nameHint")}
@@ -373,7 +373,7 @@ function NewProductForm(): JSX.Element {
           >
             {t("barcodeLabel")}
           </label>
-          <input
+          <Input
             id={barcodeId}
             name="barcode"
             type="text"
@@ -391,7 +391,6 @@ function NewProductForm(): JSX.Element {
                 ? `${barcodeHintId} ${barcodeTakenId} ${barcodeErrorId}`
                 : `${barcodeHintId} ${barcodeTakenId}`
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={barcodeHintId} className="mt-1 text-sm text-muted-foreground">
             {t("barcodeHint")}
@@ -423,15 +422,14 @@ function NewProductForm(): JSX.Element {
           <p id={lookupHintId} className="mt-1 text-sm text-muted-foreground">
             {t("lookupHint")}
           </p>
-          <button
+          <Button
             type="button"
             onClick={handleLookup}
             disabled={trimmedBarcode === "" || lookup.isPending}
             aria-describedby={`${lookupHintId} ${lookupStatusId}`}
-            className="mt-3 min-h-[48px] rounded border border-input bg-card px-4 py-2 font-medium text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
           >
             {t("lookupButton")}
-          </button>
+          </Button>
           {/* Kept mounted so the outcome is announced when it arrives, rather
               than the whole region arriving at once. */}
           <p
@@ -451,7 +449,7 @@ function NewProductForm(): JSX.Element {
           >
             {t("brandLabel")}
           </label>
-          <input
+          <Input
             id={brandId}
             name="brand"
             type="text"
@@ -459,7 +457,6 @@ function NewProductForm(): JSX.Element {
             value={brand}
             onChange={(event) => setBrand(event.target.value)}
             aria-describedby={brandHintId}
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={brandHintId} className="mt-1 text-sm text-muted-foreground">
             {t("brandHint")}
@@ -473,7 +470,7 @@ function NewProductForm(): JSX.Element {
           >
             {t("categoryLabel")}
           </label>
-          <input
+          <Input
             id={categoryId}
             name="category"
             type="text"
@@ -481,7 +478,6 @@ function NewProductForm(): JSX.Element {
             value={category}
             onChange={(event) => setCategory(event.target.value)}
             aria-describedby={categoryHintId}
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={categoryHintId} className="mt-1 text-sm text-muted-foreground">
             {t("categoryHint")}
@@ -495,7 +491,7 @@ function NewProductForm(): JSX.Element {
           >
             {t("unitLabel")}
           </label>
-          <input
+          <Input
             id={unitId}
             name="defaultUnit"
             type="text"
@@ -506,7 +502,6 @@ function NewProductForm(): JSX.Element {
             aria-describedby={
               fieldErrors.unit ? `${unitHintId} ${unitErrorId}` : unitHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={unitHintId} className="mt-1 text-sm text-muted-foreground">
             {t("unitHint")}
@@ -525,7 +520,7 @@ function NewProductForm(): JSX.Element {
           >
             {t("minStockLabel")}
           </label>
-          <input
+          <Input
             id={minStockId}
             name="minStock"
             type="number"
@@ -540,7 +535,6 @@ function NewProductForm(): JSX.Element {
                 ? `${minStockHintId} ${minStockErrorId}`
                 : minStockHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={minStockHintId} className="mt-1 text-sm text-muted-foreground">
             {t("minStockHint")}
@@ -556,13 +550,12 @@ function NewProductForm(): JSX.Element {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             type="submit"
             disabled={createProduct.isPending}
-            className="min-h-[48px] rounded bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {t("submit")}
-          </button>
+          </Button>
           <Link
             href="/products"
             className="inline-flex min-h-[48px] items-center rounded border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
