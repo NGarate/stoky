@@ -179,9 +179,18 @@ export function ShoppingItem({
                 min="0.1"
                 onBlur={(event) => {
                   const next = Number.parseFloat(event.target.value);
-                  if (Number.isFinite(next) && next > 0 && next !== item.quantity) {
-                    change({ quantity: next });
+                  if (Number.isFinite(next) && next > 0) {
+                    if (next !== item.quantity) change({ quantity: next });
+                    return;
                   }
+                  // A rejected value used to stay on screen. The box is
+                  // uncontrolled — `defaultValue` with `key={item.quantity}`
+                  // — so typing "0" and looking away left the row reading
+                  // "0 L" while the list still said two, and nothing would
+                  // correct it until the quantity changed by some other
+                  // route. The number a row shows has to be the number the
+                  // list holds, so it goes back.
+                  event.target.value = String(item.quantity);
                 }}
                 step="any"
                 type="number"

@@ -185,6 +185,21 @@ describe("ShoppingItem", () => {
     ).toBeInTheDocument();
   });
 
+  it("puts back a quantity it would not accept", async () => {
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+    const box = screen.getByLabelText("Cantidad de «Leche entera»");
+    fireEvent.change(box, { target: { value: "0" } });
+    fireEvent.blur(box);
+
+    // The box is uncontrolled — `defaultValue` keyed on the quantity — so a
+    // rejected value simply stayed there: the row read "0 L" while the list
+    // still said two, and nothing corrected it until the quantity changed by
+    // some other route.
+    expect((box as HTMLInputElement).value).toBe("2");
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it("says a quantity change happened, which is easy to miss on blur", async () => {
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
