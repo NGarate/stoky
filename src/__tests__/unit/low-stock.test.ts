@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { isLowStock, needsRestock } from "@/lib/stock/low-stock";
+import { isLowStock, needsMoreOnList, needsRestock } from "@/lib/stock/low-stock";
 
 /**
  * The two questions, and the gap between them.
@@ -60,6 +60,29 @@ describe("needsRestock", () => {
       if (isLowStock(stock, min)) {
         expect(needsRestock(stock, min)).toBe(true);
       }
+    }
+  });
+});
+
+describe("needsMoreOnList", () => {
+  it("is false once the list covers the gap", () => {
+    // One left, one written down, a minimum of two. Buying more is not what
+    // this product needs.
+    expect(needsMoreOnList(1, 1, 2)).toBe(false);
+  });
+
+  it("is true while the two together are still short", () => {
+    expect(needsMoreOnList(1, 1, 6)).toBe(true);
+  });
+
+  it("is false with no minimum, as isLowStock is", () => {
+    // Nothing said what enough means, so nothing can say it is not enough.
+    expect(needsMoreOnList(0, 0, null)).toBe(false);
+  });
+
+  it("is exactly isLowStock when the list holds nothing", () => {
+    for (const [stock, min] of [[0, 2], [1, 2], [2, 2], [5, 2]] as const) {
+      expect(needsMoreOnList(stock, 0, min)).toBe(isLowStock(stock, min));
     }
   });
 });

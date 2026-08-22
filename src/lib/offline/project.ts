@@ -113,6 +113,43 @@ export function projectStockTotals(
   return projected;
 }
 
+/**
+ * What is on the household's lists per product, with unsent additions folded
+ * in.
+ *
+ * Same shape as `projectStockTotals` and for the same reason: the queue is the
+ * optimistic layer, not the cache. Without this, tapping "Apuntar" offline
+ * leaves the button lit — the server has not heard yet — and a second tap
+ * writes a second item.
+ *
+ * **A queued removal is not folded back out, and cannot be.**
+ * `shopping.removeItem` carries only `{ id }`, so nothing in the queue says
+ * which product it frees or how much. A removal composed without a signal
+ * therefore keeps its product suppressed until the queue drains. Widening that
+ * procedure's input would touch `ReplayablePath` and both replayable tests,
+ * which is a large blast radius for a case measured in seconds — so it is
+ * accepted, and written down rather than discovered.
+ */
+export function projectOnListQuantities(
+  quantities: ReadonlyMap<string, number>,
+  pending: readonly QueuedOp[],
+): Map<string, number> {
+  const projected = new Map(quantities);
+
+  for (const op of pending) {
+    if (op.path !== "shopping.addItem") continue;
+    const input = op.input as { productId?: unknown; quantity?: unknown };
+    if (typeof input.productId !== "string") continue;
+    const quantity = typeof input.quantity === "number" ? input.quantity : 1;
+    projected.set(
+      input.productId,
+      round((projected.get(input.productId) ?? 0) + quantity),
+    );
+  }
+
+  return projected;
+}
+
 /** Quantities are entered by people, to two decimals at most. */
 function round(value: number): number {
   return Math.round(value * 100) / 100;

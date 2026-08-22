@@ -35,7 +35,10 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // Bumped to 2 when `getStockOverview` stopped returning `nextCursor` and
 // `stockEntries` and started returning `total`. A device restoring the older
 // shape would hand the inventory page rows with no total to page by.
-export const CACHE_VERSION = "2";
+// 3 when `onListQuantity` joined the row. A commit-18-era cache has no such
+// field, and `left + undefined < min` is `NaN < min`, which is false — so the
+// kitchen's button would silently vanish for everyone holding one.
+export const CACHE_VERSION = "3";
 
 /**
  * The queries worth keeping between visits.

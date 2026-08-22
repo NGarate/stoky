@@ -323,3 +323,96 @@ describe("the stock overview", () => {
     }
   });
 });
+
+describe("what the household's lists already cover", () => {
+  let listId = "";
+
+  beforeAll(async () => {
+    const list = await prisma.shoppingList.create({
+      data: { name: "Semanal", householdId: OWNER.householdId },
+    });
+    listId = list.id;
+  });
+
+  afterAll(async () => {
+    await prisma.shoppingItem.deleteMany({ where: { shoppingListId: listId } });
+    await prisma.shoppingList.deleteMany({ where: { id: listId } });
+  });
+
+  it("reports nothing on a list as zero, not as absent", async () => {
+    const api = await caller();
+    const { products } = await api.inventory.getStockOverview({ limit: 100 });
+
+    // `undefined` here reaches the kitchen as `left + undefined < min`, which
+    // is `NaN < min`, which is false — and the button silently vanishes.
+    for (const row of products) expect(row.onListQuantity).toBe(0);
+  });
+
+  it("sums every unticked item for a product, across lists", async () => {
+    const api = await caller();
+    const productId = ids.get("Leche entera")!;
+    await prisma.shoppingItem.createMany({
+      data: [
+        { shoppingListId: listId, productId, quantity: 1, unit: "unidad" },
+        { shoppingListId: listId, productId, quantity: 6, unit: "unidad" },
+      ],
+    });
+
+    const { products } = await api.inventory.getStockOverview({ limit: 100 });
+    const row = products.find((p) => p.name === "Leche entera");
+
+    expect(row?.onListQuantity).toBe(7);
+
+    await prisma.shoppingItem.deleteMany({ where: { productId } });
+  });
+
+  it("does not multiply the stock by the number of list items", async () => {
+    const api = await caller();
+    const productId = ids.get("Leche entera")!;
+    const before = await api.inventory.getStockOverview({ limit: 100 });
+    const stockBefore = before.products.find((p) => p.name === "Leche entera")
+      ?.totalStock;
+
+    await prisma.shoppingItem.createMany({
+      data: [
+        { shoppingListId: listId, productId, quantity: 1, unit: "unidad" },
+        { shoppingListId: listId, productId, quantity: 1, unit: "unidad" },
+        { shoppingListId: listId, productId, quantity: 1, unit: "unidad" },
+      ],
+    });
+
+    const after = await api.inventory.getStockOverview({ limit: 100 });
+    const row = after.products.find((p) => p.name === "Leche entera");
+
+    // Joined without aggregating first, each of the product's two stock
+    // entries pairs with each of its three list items: the stock reads six
+    // times over and the list twice.
+    expect(row?.totalStock).toBe(stockBefore);
+    expect(row?.onListQuantity).toBe(3);
+
+    await prisma.shoppingItem.deleteMany({ where: { productId } });
+  });
+
+  it("ignores what has already been ticked off", async () => {
+    const api = await caller();
+    const productId = ids.get("Leche entera")!;
+    await prisma.shoppingItem.create({
+      data: {
+        shoppingListId: listId,
+        productId,
+        quantity: 4,
+        unit: "unidad",
+        isChecked: true,
+        checkedAt: new Date(),
+      },
+    });
+
+    const { products } = await api.inventory.getStockOverview({ limit: 100 });
+    const row = products.find((p) => p.name === "Leche entera");
+
+    // Already in the trolley is not still to buy.
+    expect(row?.onListQuantity).toBe(0);
+
+    await prisma.shoppingItem.deleteMany({ where: { productId } });
+  });
+});

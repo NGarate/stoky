@@ -162,6 +162,8 @@ interface StockOverviewRow {
   defaultUnit: string;
   minStock: number | null;
   totalStock: number;
+  /** Unticked, product-linked, on any of this household's lists. */
+  onListQuantity: number;
 }
 
 /**
@@ -178,6 +180,10 @@ interface StockOverviewRow {
  *   Moved into the `WHERE`, the LEFT JOIN silently becomes an inner one and
  *   the product vanishes, which answers a different question from the one the
  *   screen asks.
+ * - **`onList` is aggregated before it is joined.** Joined raw, each of a
+ *   product's stock entries would pair with each of its list items and
+ *   multiply both sums — three entries and two items would report six times
+ *   the stock and three times the list.
  * - **`::float8` on the aggregate.** `ROUND(…, 2)` returns `numeric`, which
  *   arrives as a Decimal object and reaches the browser as `{ s, e, d }`. The
  *   rounding itself matches `projectStockTotals`, so the figure the offline
@@ -228,9 +234,23 @@ function matchingProducts(
         ${inCategory}
         ${matchesSearch}
       GROUP BY product.id
+    ),
+    "onList" AS (
+      SELECT
+        item."productId" AS "productId",
+        SUM(item.quantity)::float8 AS quantity
+      FROM "ShoppingItem" item
+      JOIN "ShoppingList" list ON list.id = item."shoppingListId"
+      WHERE list."householdId" = ${householdId}
+        AND item."isChecked" = false
+        AND item."productId" IS NOT NULL
+      GROUP BY item."productId"
     )
-    SELECT totals.*
+    SELECT
+      totals.*,
+      COALESCE("onList".quantity, 0)::float8 AS "onListQuantity"
     FROM totals
+    LEFT JOIN "onList" ON "onList"."productId" = totals.id
     WHERE true ${onlyLow} ${onlyRestock}
   `;
 }

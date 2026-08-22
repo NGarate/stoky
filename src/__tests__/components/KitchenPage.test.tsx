@@ -212,7 +212,7 @@ describe("using something up", () => {
     stockStub = {
       data: {
         products: [
-          { id: "p9", name: "Café", totalStock: 0, minStock: 2, defaultUnit: "ud" },
+          { id: "p9", name: "Café", totalStock: 0, minStock: 2, onListQuantity: 0, defaultUnit: "ud" },
         ],
       },
       isPending: false,
@@ -231,7 +231,7 @@ describe("writing it on the list", () => {
     id: "p9",
     name: "Café molido",
     totalStock: 0,
-    minStock: 2,
+    minStock: 2, onListQuantity: 0,
     defaultUnit: "paquete",
   };
 
@@ -367,6 +367,76 @@ describe("undo", () => {
   });
 });
 
+describe("what the lists already cover", () => {
+  const runningOut = (onListQuantity: number, totalStock = 1, minStock = 2) => ({
+    data: {
+      products: [
+        {
+          id: "p9",
+          name: "Café molido",
+          totalStock,
+          minStock,
+          onListQuantity,
+          defaultUnit: "paquete",
+        },
+      ],
+    },
+    isPending: false,
+    error: null,
+  });
+
+  it("stops offering to add what is already covered", () => {
+    // One left, one already written down, a minimum of two: buying more is
+    // not what this product needs, and a button that stays lit on a tablet
+    // read from a metre away is a button somebody presses again.
+    stockStub = runningOut(1);
+    renderKitchen();
+
+    expect(
+      screen.queryByRole("button", { name: /Apuntar/ }),
+    ).toBeNull();
+    expect(screen.getByText("Ya en la lista: 1 paquete")).toBeInTheDocument();
+  });
+
+  it("keeps offering while the two together are still short", () => {
+    // One left, one on the list, a minimum of six. Still short by four.
+    stockStub = runningOut(1, 1, 6);
+    renderKitchen();
+
+    expect(
+      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("counts a tap that has not been sent yet", () => {
+    stockStub = runningOut(0);
+    pending = [
+      {
+        id: "op-add",
+        path: "shopping.addItem",
+        input: { shoppingListId: "l1", productId: "p9", quantity: 1, unit: "paquete" },
+        householdId: "h1",
+        label: { key: "offline.addedItem" },
+        createdAt: new Date("2026-08-18T10:00:00.000Z"),
+        attempts: 0,
+      },
+    ];
+    renderKitchen();
+
+    // The server has not heard yet. Without folding the queue in, the button
+    // stays lit offline and the second tap writes a second item.
+    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeNull();
+  });
+
+  it("says nothing about a product with no minimum, rather than suppressing it", () => {
+    // Nothing said what enough means, so nothing can say it is not enough.
+    stockStub = runningOut(0, 0, null as unknown as number);
+    renderKitchen();
+
+    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeNull();
+  });
+});
+
 describe("what is running out", () => {
   it("says how much is left against the minimum", () => {
     stockStub = {
@@ -376,7 +446,7 @@ describe("what is running out", () => {
             id: "p9",
             name: "Café molido",
             totalStock: 1,
-            minStock: 2,
+            minStock: 2, onListQuantity: 0,
             defaultUnit: "paquete",
           },
         ],
@@ -397,7 +467,7 @@ describe("what is running out", () => {
             id: "p9",
             name: "Café molido",
             totalStock: 0,
-            minStock: 2,
+            minStock: 2, onListQuantity: 0,
             defaultUnit: "paquete",
           },
         ],
@@ -418,7 +488,7 @@ describe("what is running out", () => {
             id: "p1",
             name: "Leche entera",
             totalStock: 2,
-            minStock: 6,
+            minStock: 6, onListQuantity: 0,
             defaultUnit: "L",
           },
         ],

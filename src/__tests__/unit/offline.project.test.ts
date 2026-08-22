@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   pendingProductIds,
+  projectOnListQuantities,
   projectShoppingItems,
   projectStockTotals,
 } from "@/lib/offline/project";
@@ -225,5 +226,64 @@ describe("pendingProductIds", () => {
 
   it("is empty when only list changes are waiting", () => {
     expect(pendingProductIds([op("shopping.removeItem", { id: "a" })]).size).toBe(0);
+  });
+});
+
+describe("what the lists already cover", () => {
+  const add = (productId: string, quantity: number): QueuedOp => ({
+    id: `op-${productId}`,
+    path: "shopping.addItem",
+    input: { shoppingListId: "l1", productId, quantity, unit: "L" },
+    householdId: "h1",
+    label: { key: "offline.addedItem" },
+    createdAt: new Date("2026-08-18T10:00:00.000Z"),
+    attempts: 0,
+  });
+
+  it("folds an unsent addition into what the server reported", () => {
+    const projected = projectOnListQuantities(new Map([["p1", 2]]), [add("p1", 3)]);
+
+    expect(projected.get("p1")).toBe(5);
+  });
+
+  it("counts a product the server has never seen on a list", () => {
+    const projected = projectOnListQuantities(new Map(), [add("p9", 1)]);
+
+    expect(projected.get("p9")).toBe(1);
+  });
+
+  it("defaults a missing quantity to one, which is what a tap means", () => {
+    const op = add("p1", 1);
+    const projected = projectOnListQuantities(new Map(), [
+      { ...op, input: { shoppingListId: "l1", productId: "p1" } },
+    ]);
+
+    expect(projected.get("p1")).toBe(1);
+  });
+
+  it("ignores a queued change that is not an addition", () => {
+    const projected = projectOnListQuantities(new Map([["p1", 2]]), [
+      { ...add("p1", 5), path: "shopping.removeItem" },
+    ]);
+
+    // A queued removal carries only an id, so nothing here knows which
+    // product it frees. Its product stays suppressed until the queue drains,
+    // which is stated in the function rather than discovered.
+    expect(projected.get("p1")).toBe(2);
+  });
+
+  it("rounds, because quantities are entered by people", () => {
+    const projected = projectOnListQuantities(new Map([["p1", 0.1]]), [
+      add("p1", 0.2),
+    ]);
+
+    expect(projected.get("p1")).toBe(0.3);
+  });
+
+  it("leaves what it was given alone", () => {
+    const original = new Map([["p1", 2]]);
+    projectOnListQuantities(original, [add("p1", 3)]);
+
+    expect(original.get("p1")).toBe(2);
   });
 });

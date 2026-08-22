@@ -928,7 +928,8 @@
     "addToList": "Put on the list",
     "addToListOf": "Put “{name}” on the shopping list",
     "listName": "Kitchen list",
-    "listCreateFailed": "The list cannot be created right now. Try again when the connection is back."
+    "listCreateFailed": "The list cannot be created right now. Try again when the connection is back.",
+    "onList": "Already on the list: {quantity} {unit}"
   },
   "snackbar": {
     "regionLabel": "Notifications (press F8 to reach the notification)",

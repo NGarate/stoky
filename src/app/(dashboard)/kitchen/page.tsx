@@ -4,9 +4,13 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { useSnackbar } from "@/components/ui/snackbar";
-import { projectStockTotals } from "@/lib/offline/project";
+import {
+  projectOnListQuantities,
+  projectStockTotals,
+} from "@/lib/offline/project";
 import type { JSX } from "react";
 
 /**
@@ -108,6 +112,12 @@ export default function KitchenPage(): JSX.Element {
   const later = batches.filter((batch) => batch.daysUntilExpiry > 3);
 
   const lowStock = stock.data?.products ?? [];
+  // What the lists already cover, with anything tapped but not yet sent
+  // folded in — the same reason the totals are projected rather than read.
+  const onList = projectOnListQuantities(
+    new Map(lowStock.map((product) => [product.id, product.onListQuantity])),
+    queue.pending,
+  );
   const totals = projectStockTotals(
     new Map(lowStock.map((product) => [product.id, product.totalStock])),
     queue.pending,
@@ -313,6 +323,7 @@ export default function KitchenPage(): JSX.Element {
             <ul className="mt-3 space-y-2">
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
+                const already = onList.get(product.id) ?? 0;
                 return (
                   <li
                     key={product.id}
@@ -330,16 +341,31 @@ export default function KitchenPage(): JSX.Element {
                             })}
                       </span>
                     </div>
-                    <button
-                      className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
-                      onClick={() => addToList(product)}
-                      type="button"
-                    >
-                      <span aria-hidden="true">{t("addToList")}</span>
-                      <span className="sr-only">
-                        {t("addToListOf", { name: product.name })}
+                    {/* Offered only while it would change anything. Six
+                        litres already written down and a minimum of six is
+                        not a product that needs buying, and a button that
+                        stays lit on a tablet read from a metre away is a
+                        button somebody presses again. What replaces it is the
+                        reason, not a blank. */}
+                    {needsMoreOnList(left, already, product.minStock) ? (
+                      <button
+                        className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => addToList(product)}
+                        type="button"
+                      >
+                        <span aria-hidden="true">{t("addToList")}</span>
+                        <span className="sr-only">
+                          {t("addToListOf", { name: product.name })}
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="shrink-0 text-lg text-muted-foreground">
+                        {t("onList", {
+                          quantity: already,
+                          unit: product.defaultUnit,
+                        })}
                       </span>
-                    </button>
+                    )}
                   </li>
                 );
               })}

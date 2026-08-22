@@ -56,3 +56,22 @@ export function needsRestock(
 ): boolean {
   return totalStock <= 0 || isLowStock(totalStock, minStock);
 }
+
+/**
+ * Low even counting what is already written down to buy.
+ *
+ * The kitchen offers "Apuntar a la compra" on this and nothing else. Without
+ * the second term the button stays lit after somebody has already put six
+ * litres on the list, and a tablet read from a metre away invites the same tap
+ * again — which is how a household ends up buying milk twice.
+ *
+ * A null minimum is false, exactly as in `isLowStock`: nothing said what
+ * enough would mean for this product, so nothing can say it is not enough.
+ */
+export function needsMoreOnList(
+  totalStock: number,
+  onListQuantity: number,
+  minStock: number | null,
+): boolean {
+  return isLowStock(totalStock + onListQuantity, minStock);
+}
