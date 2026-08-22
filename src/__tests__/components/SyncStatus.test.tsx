@@ -289,15 +289,65 @@ describe("the dialog itself", () => {
     };
     renderWithIntl(<SyncStatus />);
 
-    await act(async () => {
-      screen.getByRole("button", { name: "Revisar" }).click();
-    });
+    await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     // Otherwise the keyboard and a screen reader land back at the top of the
     // page and never find the question.
-    expect(document.activeElement).toBe(
-      screen.getByRole("dialog").firstElementChild,
-    );
+    //
+    // The panel itself, not its first child: `role="dialog"` used to sit on
+    // the full-viewport scrim with the card inside it, so the dialog's
+    // accessible name covered the whole screen and the card was merely
+    // content. It is on the card now, and the card is what takes focus.
+    expect(screen.getByRole("dialog")).toHaveFocus();
+  });
+
+  it("closes on Escape, which it used to ignore", async () => {
+    queueState = {
+      ...queueState,
+      failed: [failed("f1", "needs-reconciliation")],
+    };
+    renderWithIntl(<SyncStatus />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+
+    // It declared `aria-modal="true"` — a promise that everything outside is
+    // unavailable — with no keydown handler at all. There was no cancel
+    // control either, so the only keyboard ways out were submitting an
+    // adjustment or pressing the button that throws the queued change away.
+    expect(screen.queryByRole("dialog")).toBeAbsent();
+  });
+
+  it("gives focus back to the row that opened it", async () => {
+    queueState = {
+      ...queueState,
+      failed: [failed("f1", "needs-reconciliation")],
+    };
+    renderWithIntl(<SyncStatus />);
+
+    const opener = screen.getByRole("button", { name: "Revisar" });
+    await userEvent.click(opener);
+    await userEvent.keyboard("{Escape}");
+
+    // It dropped focus on <body>, so a keyboard user restarted at the top of
+    // the document every time they closed it.
+    expect(opener).toHaveFocus();
+  });
+
+  it("offers a way out that is neither saving nor discarding", async () => {
+    queueState = {
+      ...queueState,
+      failed: [failed("f1", "needs-reconciliation")],
+    };
+    renderWithIntl(<SyncStatus />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar" }));
+
+    expect(screen.queryByRole("dialog")).toBeAbsent();
+    expect(discard).not.toHaveBeenCalled();
   });
 
   it("says what happened before it asks anything", async () => {

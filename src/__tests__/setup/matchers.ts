@@ -32,6 +32,13 @@ expect.extend(matchers as Parameters<typeof expect.extend>[0]);
  * than like a bug in the code under test. A test that cannot report a
  * failure is not a test.
  *
+ * **The same trap has a second door.** `expect(document.activeElement).toBe(el)`
+ * puts *two* nodes in the message when it fails, and a stale one of those
+ * spun a whole component run at 100% of a core — it took a bisection to find
+ * that the wedge was one out-of-date assertion rather than anything it was
+ * testing. Use jest-dom's `toHaveFocus()`, whose message prints a short
+ * representation of the element instead of the tree it sits in.
+ *
  * This matcher never puts a node in its message. It says what it found in a
  * sentence — tag, and the first of its text — which is what a person reading
  * a failure needs anyway.

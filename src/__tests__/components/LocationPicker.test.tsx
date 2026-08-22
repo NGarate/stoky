@@ -287,7 +287,7 @@ describe("LocationPicker", () => {
     // style getter on it and the run takes minutes rather than seconds.
     expect(trigger()).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("listbox")).toBeAbsent();
-    expect(document.activeElement).toBe(trigger());
+    expect(trigger()).toHaveFocus();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -327,7 +327,7 @@ describe("LocationPicker", () => {
     // which is the same defect as not closing at all from where they are
     // standing. Moved down from the browser suite, which asserted it against a
     // real click and paid a page load for a fact about the DOM.
-    expect(document.activeElement).toBe(trigger());
+    expect(trigger()).toHaveFocus();
   });
 });
 
