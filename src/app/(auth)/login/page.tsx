@@ -175,14 +175,27 @@ export default function LoginPage(): JSX.Element {
                   </p>
                 </div>
 
-                {errorKey ? (
-                  <p
-                    aria-live="polite"
-                    className="rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
-                  >
-                    {t(errorKey)}
-                  </p>
-                ) : null}
+                {/* Present from the first render, empty until it has
+                    something to say.
+                    It was inserted together with its text, so the polite
+                    region was created at the moment it spoke — the case
+                    screen readers may skip, and the reason someone who
+                    mistyped a password could be left with a form that looked
+                    unchanged and said nothing (WCAG 4.1.3). It carried no
+                    `role` either, so there was no fallback role to fall back
+                    on. `SyncStatus` owns the one assertive region in this
+                    application, so this stays polite. */}
+                <p
+                  aria-live="polite"
+                  className={
+                    errorKey
+                      ? "rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
+                      : "sr-only"
+                  }
+                  role="status"
+                >
+                  {errorKey ? t(errorKey) : ""}
+                </p>
 
                 <Button className="w-full" disabled={isBusy} type="submit">
                   {isBusy ? t("loggingIn") : t("login")}

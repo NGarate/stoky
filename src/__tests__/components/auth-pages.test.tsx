@@ -195,3 +195,39 @@ describe("neither page renders a raw key", () => {
     });
   }
 });
+
+describe("how a failed sign-in reaches someone who cannot see the form", () => {
+  for (const [name, Page] of [
+    ["login", LoginPage],
+    ["register", RegisterPage],
+  ] as const) {
+    it(`${name} carries its region before it has anything to say`, () => {
+      const { container } = renderWithIntl(<Page />, { locale: "es" });
+
+      // The region was rendered only once there was an error, so it was
+      // inserted together with its text — the case screen readers may skip.
+      // Someone who mistyped a password could be left with a form that looked
+      // unchanged and said nothing (WCAG 4.1.3).
+      const region = container.querySelector('[role="status"]');
+      expect(region).not.toBeAbsent();
+      expect(region?.getAttribute("aria-live")).toBe("polite");
+      expect(region?.textContent).toBe("");
+    });
+
+    it(`${name} keeps that region out of the way while it is empty`, () => {
+      const { container } = renderWithIntl(<Page />, { locale: "es" });
+
+      // Present in the accessibility tree, absent from the layout: an empty
+      // red panel above the button would be a failure nobody had had yet.
+      expect(container.querySelector('[role="status"]')?.className).toContain(
+        "sr-only",
+      );
+    });
+
+    it(`${name} never adds a second assertive region`, () => {
+      const { container } = renderWithIntl(<Page />, { locale: "es" });
+
+      expect(container.querySelector('[role="alert"]')).toBeAbsent();
+    });
+  }
+});
