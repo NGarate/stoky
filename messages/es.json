@@ -706,7 +706,8 @@
     "quantityLabel": "Cantidad",
     "unitLabel": "Unidad",
     "itemUpdated": "Cambiaste «{name}»",
-    "seePrices": "Ver precios de «{name}»"
+    "seePrices": "Ver precios de «{name}»",
+    "bought": "Comprado"
   },
   "prices": {
     "title": "Precios",

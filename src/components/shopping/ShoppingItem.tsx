@@ -1,7 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Trash2 } from "lucide-react";
+
 import { useWriteQueue } from "@/components/offline/queue-context";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
+
+import type { JSX } from "react";
 
 interface ShoppingItemProps {
   item: {
@@ -25,76 +32,73 @@ interface ShoppingItemProps {
  *
  * The envelope is added by the sender rather than here, so a change that waits
  * two hours still carries the key it was minted with.
+ *
+ * Drawn with `ItemRow` at `touch` density, like every other list in the
+ * application and at the size the two hand-held screens use. What is *not*
+ * shared with `/shopping` is D54's trolley: this screen has none, so a
+ * removal here is a removal.
  */
-export function ShoppingItem({ item }: ShoppingItemProps) {
+export function ShoppingItem({ item }: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
   const { enqueue } = useWriteQueue();
 
   const name = item.product?.name || t("itemName");
 
   return (
-    <div
-      className={`flex items-center justify-between rounded-lg border p-3 ${
-        item.isChecked ? "border-border bg-muted" : "border-border bg-card"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <input
-          type="checkbox"
-          checked={item.isChecked}
-          onChange={() =>
+    <ItemRow
+      actions={
+        <Button
+          aria-label={t("removeItem")}
+          onClick={() =>
             enqueue({
-              path: "shopping.updateItem",
-              input: { id: item.id, isChecked: !item.isChecked },
-              label: {
-                key: item.isChecked ? "offline.untickedOff" : "offline.tickedOff",
-                values: { name },
-              },
+              path: "shopping.removeItem",
+              input: { id: item.id },
+              label: { key: "offline.removedItem", values: { name } },
             })
           }
-          className="h-5 w-5 rounded border-input accent-primary"
-        />
-        <div>
-          <p
-            className={`font-medium ${
-              item.isChecked ? "text-muted-foreground line-through" : "text-foreground"
-            }`}
-          >
-            {name}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {item.quantity} {item.unit}
-          </p>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() =>
-          enqueue({
-            path: "shopping.removeItem",
-            input: { id: item.id },
-            label: { key: "offline.removedItem", values: { name } },
-          })
-        }
-        className="rounded-md p-2 text-destructive hover:bg-danger disabled:opacity-50"
-        aria-label={t("removeItem")}
-      >
-        <svg
-          className="h-5 w-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+          size="icon"
+          type="button"
+          variant="ghost"
         >
-          <title>Eliminar</title>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
+          <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
+        </Button>
+      }
+      density="touch"
+      meta={[
+        { label: t("quantityLabel"), value: `${item.quantity} ${item.unit ?? ""}`.trim() },
+      ]}
+      status={
+        <label className="flex min-h-[48px] items-center gap-2 text-lg">
+          <input
+            checked={item.isChecked}
+            className="h-6 w-6 rounded border-input accent-primary"
+            onChange={() =>
+              enqueue({
+                path: "shopping.updateItem",
+                input: { id: item.id, isChecked: !item.isChecked },
+                label: {
+                  key: item.isChecked
+                    ? "offline.untickedOff"
+                    : "offline.tickedOff",
+                  values: { name },
+                },
+              })
+            }
+            type="checkbox"
           />
-        </svg>
-      </button>
-    </div>
+          <span className="sr-only">
+            {item.isChecked ? t("untick", { name }) : t("tickOff", { name })}
+          </span>
+          {item.isChecked ? (
+            <Badge tone="ok">{t("bought")}</Badge>
+          ) : null}
+        </label>
+      }
+      title={
+        <span className={item.isChecked ? "text-muted-foreground line-through" : ""}>
+          {name}
+        </span>
+      }
+    />
   );
 }
