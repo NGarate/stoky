@@ -94,9 +94,12 @@ export const shoppingRouter = createTRPCRouter({
         include: {
           items: {
             include: {
+              // No `store`. Its two callers are the lists index and the
+              // kitchen, and neither draws one — so it was a whole Store row,
+              // name and address, fetched onto two screens that show none of
+              // it. For a privacy-first application the default is to send
+              // what is read, not what might be.
               product: true,
-              // The row shows where to buy it, so the row needs its name.
-              store: true,
             },
             orderBy: {
               id: "asc",
@@ -124,6 +127,11 @@ export const shoppingRouter = createTRPCRouter({
           items: {
             include: {
               product: true,
+              // The row names where to buy it, and this is the query the row
+              // is drawn from. The include went onto `list` instead, which
+              // nothing renders — so a reader who cannot edit was told every
+              // item could be bought anywhere.
+              store: true,
             },
             orderBy: {
               id: "asc",

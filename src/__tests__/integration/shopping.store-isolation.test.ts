@@ -188,6 +188,32 @@ describe("addItem and another household's store", () => {
   });
 });
 
+describe("the query the row is drawn from", () => {
+  it("tells the reader where to buy it", async () => {
+    const api = await callerFor(A);
+
+    await api.shopping.updateItem({
+      ...envelope(A.userId),
+      id: A.itemId,
+      storeId: ownStoreId,
+    });
+
+    const list = await api.shopping.getById({ id: A.listId });
+    const item = list.items.find((row) => row.id === A.itemId);
+
+    // `getById` had no `store` include while `shopping.list` — which no
+    // screen draws a store from — did. So a KITCHEN account, which sees the
+    // read-only row, was told every item could be bought anywhere.
+    expect(item?.store?.name).toBe("Tienda A");
+
+    await api.shopping.updateItem({
+      ...envelope(A.userId),
+      id: A.itemId,
+      storeId: null,
+    });
+  });
+});
+
 describe("updateItem and another household's store", () => {
   it("refuses a store that belongs to someone else", async () => {
     const api = await callerFor(A);
