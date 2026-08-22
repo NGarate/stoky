@@ -18,14 +18,18 @@ import type { QueuedOp, ReplayablePath } from "@/lib/offline/queue";
  */
 
 let counter = 0;
-function op(path: ReplayablePath, input: Record<string, unknown>): QueuedOp {
+function op(
+  path: ReplayablePath,
+  input: Record<string, unknown>,
+  label: QueuedOp["label"] = { key: "offline.change" },
+): QueuedOp {
   counter += 1;
   return {
     id: `op-${counter}`,
     path,
     input,
     householdId: "h1",
-    label: { key: "offline.change" },
+    label,
     createdAt: new Date("2026-08-11T10:00:00.000Z"),
     attempts: 0,
   };
@@ -75,7 +79,7 @@ describe("projectShoppingItems", () => {
   it("shows an item added offline, under the operation's own id", () => {
     const added = op("shopping.addItem", {
       shoppingListId: "list-1",
-      customName: "Pan",
+      productId: "p-pan",
     });
 
     const projected = projectShoppingItems(rows, [added], "list-1");
@@ -86,10 +90,43 @@ describe("projectShoppingItems", () => {
     expect(projected.find((row) => row.id === added.id)?.pending).toBe(true);
   });
 
+  it("gives an item added offline the name it was added under", () => {
+    const added = op(
+      "shopping.addItem",
+      { shoppingListId: "list-1", productId: "p-pan", quantity: 1 },
+      { key: "offline.addedItem", values: { name: "Pan de centeno" } },
+    );
+
+    const row = projectShoppingItems(rows, [added], "list-1").find(
+      (candidate) => candidate.id === added.id,
+    ) as { name?: string; product?: { name: string } } | undefined;
+
+    // The input carries a `productId` and no name — the server joins it — so
+    // a row composed offline had nothing to call itself. `/shopping/[id]`
+    // drew the placeholder "Nombre del artículo" and `/shopping` drew an
+    // empty line and then labelled its tick "Marcaste «undefined»". Both
+    // shapes, because the two screens read different ones.
+    expect(row?.name).toBe("Pan de centeno");
+    expect(row?.product?.name).toBe("Pan de centeno");
+  });
+
+  it("leaves an unnamed addition alone rather than inventing one", () => {
+    const added = op("shopping.addItem", {
+      shoppingListId: "list-1",
+      productId: "p-pan",
+    });
+
+    const row = projectShoppingItems(rows, [added], "list-1").find(
+      (candidate) => candidate.id === added.id,
+    ) as { name?: string } | undefined;
+
+    expect(row?.name).toBeUndefined();
+  });
+
   it("does not put an item added to one list into another", () => {
     const added = op("shopping.addItem", {
       shoppingListId: "list-2",
-      customName: "Pan",
+      productId: "p-pan",
     });
 
     expect(projectShoppingItems(rows, [added], "list-1")).toHaveLength(2);

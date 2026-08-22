@@ -77,8 +77,26 @@ export function projectShoppingItems<T extends ServerItem>(
       // Scoped to the list being looked at, or an item added to one list would
       // appear in every list.
       if (listId !== undefined && input.shoppingListId !== listId) continue;
+
+      // The name comes from the op's own label.
+      //
+      // `shopping.addItem`'s input carries a `productId` and no name — the
+      // server joins it — so a row composed offline arrived with nothing to
+      // call it: `/shopping/[id]` drew the placeholder "Nombre del artículo"
+      // and `/shopping` drew an empty line and then labelled its tick
+      // "Marcaste «undefined»". The op does know the name, because it is
+      // what its own label says, and that label is minted at the call site
+      // where the product was chosen.
+      //
+      // Written into both shapes because the two screens read different
+      // ones: the list detail joins a product and reads `product.name`,
+      // while `getBuyList` flattens and reads `name`.
+      const named = op.label.values?.name;
+      const name = typeof named === "string" ? named : undefined;
+
       projected.set(op.id, {
         ...(op.input as unknown as T),
+        ...(name === undefined ? {} : { name, product: { name } }),
         id: op.id,
         isChecked: false,
         pending: true,
