@@ -19,6 +19,7 @@ let lineProps: Array<{
   stroke: string;
   dot?: unknown;
   activeDot?: unknown;
+  connectNulls?: boolean;
 }> = [];
 let gridProps: { strokeDasharray?: string } | undefined;
 let legendRendered = false;
@@ -37,6 +38,7 @@ mock.module("recharts", () => ({
     stroke: string;
     dot?: unknown;
     activeDot?: unknown;
+    connectNulls?: boolean;
   }) => {
     lineProps.push(props);
     return null;
@@ -108,6 +110,21 @@ describe("PriceChart", () => {
       "Mercadona",
       "Carrefour",
     ]);
+  });
+
+  it("keeps a store's line across a date only another store was seen", () => {
+    renderWithIntl(<PriceChart data={data} showStores />);
+
+    // The fixture is exactly the shape that broke it: Carrefour has a value
+    // on the first date and none on the second, because nobody bought there
+    // that day. Rows are per date, so Carrefour's second cell is `undefined`
+    // — and Recharts reads that as the end of the line unless told
+    // otherwise, leaving lone points on the screen whose job is comparing
+    // shops over time.
+    expect(chartData[1]?.Carrefour).toBeUndefined();
+    for (const line of lineProps) {
+      expect(line.connectNulls).toBe(true);
+    }
   });
 
   it("gives each store series a distinct colour", () => {

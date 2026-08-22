@@ -175,6 +175,19 @@ export function PriceChart({
                       // and this animation is JavaScript. A price line is
                       // read, not watched.
                       isAnimationActive={false}
+                      // Rows are one per *date*, and a store only has a value
+                      // on the dates it was seen. So a shop recorded in
+                      // January and March had `undefined` on every row
+                      // belonging to some other shop in between, and Recharts
+                      // read each of those as the end of the line — two lone
+                      // points and no line at all, on the screen whose whole
+                      // job is comparing shops over time.
+                      //
+                      // Joining across them is also the honest reading: a
+                      // price series between two observations means "it went
+                      // from here to there", not "this shop ceased to exist
+                      // on the days a different shop was visited".
+                      connectNulls
                       key={storeName}
                       stroke={colours[index]}
                       strokeWidth={2}
