@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { type PrismaClient } from "@prisma/client";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
@@ -33,6 +34,43 @@ import { withReplay } from "../replay";
  * `addShoppingItemSchema`; it was not, and an item with neither used to arrive
  * on the phone screen as an empty row that could still be ticked (SHOP-1).
  */
+/**
+ * A store this household owns, or a refusal — before anything is written.
+ *
+ * `addItem` and `updateItem` both take a `storeId` from the client and both
+ * wrote it into the row unread. The list and the product were checked against
+ * `ctx.householdId`; the store was the one that was not. So a MEMBER of one
+ * household could name another household's `Store`, and `shopping.list`
+ * includes the store — which handed that household's name and address back
+ * inside a response the caller had every right to read.
+ *
+ * This is the same hole, on the same field, that SEC-1 closed for
+ * `inventory.addStock`, and that `price.recordPrice` has guarded since it was
+ * written. Two sibling procedures had the check and these two did not, which
+ * is the argument for one function rather than a third copy of the paragraph.
+ *
+ * `null` and `undefined` pass without a query: "anywhere" names no row, so
+ * there is nothing to own.
+ */
+async function assertStoreIsOurs(
+  ctx: { db: PrismaClient; householdId: string },
+  storeId: string | null | undefined,
+): Promise<void> {
+  if (!storeId) return;
+
+  const store = await ctx.db.store.findFirst({
+    where: { id: storeId, householdId: ctx.householdId },
+    select: { id: true },
+  });
+
+  if (!store) {
+    // NOT_FOUND rather than FORBIDDEN, deliberately: the two siblings answer
+    // this way, and a household that cannot see a store should not be told
+    // the difference between "no such store" and "not yours".
+    throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+  }
+}
+
 export const shoppingRouter = createTRPCRouter({
   /** The household's lists, with a count of what is still unticked. */
   list: householdProcedure
@@ -220,6 +258,8 @@ export const shoppingRouter = createTRPCRouter({
         }
       }
 
+      await assertStoreIsOurs(ctx, input.storeId);
+
       // The envelope is named out rather than spread. This resolver wrote
       // `data: input`, so merging anything into the schema would have reached
       // Prisma as `Unknown argument 'idempotencyKey'` — at runtime, with
@@ -266,6 +306,10 @@ export const shoppingRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Same trap as `addItem`: this spread everything but `id` into Prisma.
       const { id, idempotencyKey, composedByUserId, ...data } = input;
+
+      // `data` is spread into the update, so an unchecked `storeId` reaches
+      // the row the same way it did in `addItem`.
+      await assertStoreIsOurs(ctx, data.storeId);
 
       return withReplay(ctx, {
         key: idempotencyKey,
