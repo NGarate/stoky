@@ -30,7 +30,7 @@ describe("SessionKeepAlive", () => {
 
     // Silence is the requirement, not an omission: a timeout warning that is
     // always on screen is one nobody reads when it matters.
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeAbsent();
   });
 
   it("warns, out loud, once the session is nearly over", () => {
@@ -65,7 +65,7 @@ describe("SessionKeepAlive", () => {
     await userEvent.click(screen.getByRole("button", { name: /seguir conectado/i }));
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeAbsent();
   });
 
   it("keeps the session alive on activity, without saying anything", async () => {
@@ -78,7 +78,7 @@ describe("SessionKeepAlive", () => {
     });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeAbsent();
   });
 
   it("does not ask the server again on every keystroke", async () => {

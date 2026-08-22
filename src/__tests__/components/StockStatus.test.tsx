@@ -26,7 +26,7 @@ describe("StockStatus", () => {
 
     // Both are true of this product. Run out is the stronger statement.
     expect(screen.getByText("Sin stock")).toBeInTheDocument();
-    expect(screen.queryByText("Stock bajo")).toBeNull();
+    expect(screen.queryByText("Stock bajo")).toBeAbsent();
   });
 
   it("says run out for a product with no minimum at all", () => {

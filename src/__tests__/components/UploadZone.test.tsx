@@ -62,7 +62,7 @@ describe("UploadZone", () => {
       screen.queryByText(
         "Arrastra una foto del ticket o haz clic para seleccionar",
       ),
-    ).toBeNull();
+    ).toBeAbsent();
   });
 
   it("lets the user clear the preview and choose again", async () => {
@@ -77,7 +77,7 @@ describe("UploadZone", () => {
       .find((button) => button.className.includes("bg-destructive"));
     await userEvent.click(clear as HTMLElement);
 
-    expect(screen.queryByAltText("Vista previa del ticket")).toBeNull();
+    expect(screen.queryByAltText("Vista previa del ticket")).toBeAbsent();
     expect(
       screen.getByText("Arrastra una foto del ticket o haz clic para seleccionar"),
     ).toBeInTheDocument();

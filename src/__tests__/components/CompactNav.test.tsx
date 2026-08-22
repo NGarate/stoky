@@ -140,8 +140,8 @@ describe("CompactNav", () => {
     pathname = "/dashboard";
     renderWithIntl(<CompactNav />);
 
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Tickets" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeAbsent();
+    expect(screen.queryByRole("link", { name: "Tickets" })).toBeAbsent();
     expect(
       within(bars()[0]).getByRole("button", { name: /Más/ }),
     ).toHaveAttribute("aria-expanded", "false");
@@ -221,7 +221,7 @@ describe("CompactNav", () => {
     await userEvent.keyboard("{Escape}");
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeAbsent();
     });
     expect(trigger).toHaveFocus();
   });
@@ -238,7 +238,7 @@ describe("CompactNav", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeAbsent();
     });
   });
 

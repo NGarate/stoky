@@ -62,7 +62,7 @@ describe("LocationPicker", () => {
     renderWithIntl(<LocationPicker onChange={() => {}} />);
 
     expect(screen.getByText("Cargando ubicaciones…")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeAbsent();
   });
 
   it("shows the placeholder when nothing is selected", () => {
@@ -83,14 +83,14 @@ describe("LocationPicker", () => {
     expect(
       screen.getByText("Cocina → Nevera → Congelador (2)"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Seleccionar ubicación")).toBeNull();
+    expect(screen.queryByText("Seleccionar ubicación")).toBeAbsent();
   });
 
   it("keeps the dropdown closed until the trigger is clicked", () => {
     renderWithIntl(<LocationPicker onChange={() => {}} />);
 
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.queryByText("Cocina")).toBeNull();
+    expect(screen.queryByRole("listbox")).toBeAbsent();
+    expect(screen.queryByText("Cocina")).toBeAbsent();
   });
 
   // ---------------------------------------------------------------- UI-2 ---
@@ -122,7 +122,7 @@ describe("LocationPicker", () => {
     expect(
       screen.getByRole("option", { name: "Cocina → Nevera" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Nevera" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "Nevera" })).toBeAbsent();
   });
 
   it("indents deeper options further than their parents", async () => {
@@ -148,7 +148,7 @@ describe("LocationPicker", () => {
     );
 
     expect(onChange).toHaveBeenCalledWith("freezer");
-    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.queryByRole("listbox")).toBeAbsent();
   });
 
   it("appends a non-zero stock count to the location name", async () => {
@@ -178,7 +178,7 @@ describe("LocationPicker", () => {
 
     await userEvent.click(trigger());
 
-    expect(screen.queryByText("Sin ubicación específica")).toBeNull();
+    expect(screen.queryByText("Sin ubicación específica")).toBeAbsent();
   });
 
   it("renders without crashing when the query returns nothing", () => {
@@ -258,7 +258,7 @@ describe("LocationPicker", () => {
     await userEvent.keyboard("{Enter}");
 
     expect(onChange).toHaveBeenCalledWith("freezer");
-    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.queryByRole("listbox")).toBeAbsent();
   });
 
   it("chooses the active option with Space", async () => {
@@ -286,7 +286,7 @@ describe("LocationPicker", () => {
     // fails, `toBeNull()` on a live happy-dom node serialises every computed
     // style getter on it and the run takes minutes rather than seconds.
     expect(trigger()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.queryByRole("listbox")).toBeAbsent();
     expect(document.activeElement).toBe(trigger());
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -320,7 +320,7 @@ describe("LocationPicker", () => {
     expect(scrim).not.toBeNull();
     await userEvent.click(scrim as Element);
 
-    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.queryByRole("listbox")).toBeAbsent();
     expect(onChange).not.toHaveBeenCalled();
     // And focus comes back to the trigger. Dismissing a panel that took focus
     // without returning it drops a keyboard user at the top of the document,

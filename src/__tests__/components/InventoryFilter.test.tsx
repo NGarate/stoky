@@ -114,7 +114,7 @@ describe("the restock filter", () => {
     expect(overviewCalls).toEqual([
       { limit: 20, page: 1, sort: "name", direction: "asc" },
     ]);
-    expect(screen.queryByText("Solo lo que necesita reposición")).toBeNull();
+    expect(screen.queryByText("Solo lo que necesita reposición")).toBeAbsent();
   });
 });
 
@@ -198,7 +198,7 @@ describe("paging a long inventory", () => {
     overviewStub.data = { products: [], total: 3, page: 1, pageCount: 1 };
     renderWithIntl(<InventoryView />, { locale: "es" });
 
-    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeAbsent();
   });
 
   it("says where you are, and keeps the description while you page", () => {

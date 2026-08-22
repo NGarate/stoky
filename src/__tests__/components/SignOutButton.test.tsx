@@ -96,7 +96,7 @@ describe("with nothing waiting", () => {
     // Nothing to send, so no such option is offered.
     expect(
       screen.queryByRole("button", { name: "Enviar y cerrar sesión" }),
-    ).toBeNull();
+    ).toBeAbsent();
   });
 
   it("takes the queue and the cached shell off the device before leaving", async () => {
@@ -160,7 +160,7 @@ describe("with unsent changes", () => {
 
     expect(signOutAction).not.toHaveBeenCalled();
     expect(purgeAll).not.toHaveBeenCalled();
-    expect(screen.queryByRole("group")).toBeNull();
+    expect(screen.queryByRole("group")).toBeAbsent();
   });
 });
 

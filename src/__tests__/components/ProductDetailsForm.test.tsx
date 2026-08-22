@@ -104,7 +104,7 @@ describe("the product's details", () => {
     expect(screen.getByText("Pascual")).toBeInTheDocument();
     // A catalogue row is read far more often than it is changed, and a screen
     // whose values are always inputs invites a change nobody meant.
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeAbsent();
   });
 
   it("offers no way in when the account cannot write", () => {
@@ -114,7 +114,7 @@ describe("the product's details", () => {
     // whatever this renders.
     expect(
       screen.queryByRole("button", { name: "Editar los datos" }),
-    ).toBeNull();
+    ).toBeAbsent();
   });
 
   it("prefills every field from the row it is showing", async () => {

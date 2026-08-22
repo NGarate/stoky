@@ -46,7 +46,7 @@ describe("ReceiptStatusBadge", () => {
       <ReceiptStatusBadge status={ReceiptStatus.APPLIED} />,
     );
 
-    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(container.querySelector(".animate-spin")).toBeAbsent();
   });
 
   it("shows the processed/total counter when progress is supplied", () => {
@@ -68,7 +68,7 @@ describe("ReceiptStatusBadge", () => {
       />,
     );
 
-    expect(screen.queryByText("(8/8)")).toBeNull();
+    expect(screen.queryByText("(8/8)")).toBeAbsent();
   });
 
   it("omits the counter entirely when no progress is supplied", () => {

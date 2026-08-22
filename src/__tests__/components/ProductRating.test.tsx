@@ -84,7 +84,7 @@ describe("the honest states", () => {
     );
     // And no number appears anywhere: an invented score is the one lie this
     // feature must never tell.
-    expect(screen.queryByText(/de 100/)).toBeNull();
+    expect(screen.queryByText(/de 100/)).toBeAbsent();
   });
 
   it("says non-food is not rated, rather than scoring it low", () => {
@@ -96,7 +96,7 @@ describe("the honest states", () => {
     );
 
     expect(screen.getByText(/no es un alimento/)).toBeInTheDocument();
-    expect(screen.queryByText(/de 100/)).toBeNull();
+    expect(screen.queryByText(/de 100/)).toBeAbsent();
   });
 });
 

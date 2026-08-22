@@ -115,7 +115,7 @@ describe("BarcodeScanner", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} isScanning={false} />);
 
     expect(screen.getByText("Escáner desactivado")).toBeInTheDocument();
-    expect(screen.queryByTestId("barcode-scanner")).toBeNull();
+    expect(screen.queryByTestId("barcode-scanner")).toBeAbsent();
   });
 
   it("mounts the camera view and framing hint while scanning", () => {
@@ -188,13 +188,13 @@ describe("BarcodeScanner", () => {
     ).toBeInTheDocument();
     // The scanner itself must not mount: the library would fire its own
     // misleading "your browser has no support" error over this one.
-    expect(screen.queryByTestId("barcode-scanner")).toBeNull();
+    expect(screen.queryByTestId("barcode-scanner")).toBeAbsent();
   });
 
   it("hides the error panel until something fails", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    expect(screen.queryByText("Error al acceder a la cámara")).toBeNull();
+    expect(screen.queryByText("Error al acceder a la cámara")).toBeAbsent();
   });
 
   it("omits the torch control on a camera that has none", () => {
@@ -202,7 +202,7 @@ describe("BarcodeScanner", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
     feedReady();
 
-    expect(screen.queryByRole("button", { name: /linterna/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /linterna/ })).toBeAbsent();
   });
 
   it("omits the torch control when the feed never arrives", () => {
@@ -211,7 +211,7 @@ describe("BarcodeScanner", () => {
 
     // No camera, so the library never reports a loaded feed and the component
     // never learns of a torch. The control is absent rather than inert.
-    expect(screen.queryByRole("button", { name: /linterna/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /linterna/ })).toBeAbsent();
   });
 
   it("offers a torch toggle on a camera that has one", () => {

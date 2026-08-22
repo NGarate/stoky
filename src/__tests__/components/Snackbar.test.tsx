@@ -179,7 +179,7 @@ describe("what the snackbar says", () => {
     await press("confirmar");
 
     await screen.findAllByText("Marcaste «Leche»");
-    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
   });
 });
 
@@ -205,7 +205,7 @@ describe("undo", () => {
 
     // Two matches by design: the visible title and Radix's announced copy.
     await screen.findAllByText(/Usaste/);
-    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
   });
 
   it("keeps the undo it opened with while the window ticks down", async () => {

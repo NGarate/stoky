@@ -120,7 +120,7 @@ describe("the Panel's opening order", () => {
 
     expect(
       screen.queryByRole("link", { name: "Escanear un código" }),
-    ).toBeNull();
+    ).toBeAbsent();
     // The other three actions have no other home on this tier and stay.
     expect(screen.getByRole("link", { name: "Añadir stock" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Consumir stock" })).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe("what the Panel does not say twice", () => {
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
     // Nothing about "27 productos" requires attention; it is not news.
-    expect(screen.queryByText(/Productos en el catálogo/)).toBeNull();
+    expect(screen.queryByText(/Productos en el catálogo/)).toBeAbsent();
   });
 
   it("does not count above the sections that already show the count", () => {
@@ -144,9 +144,9 @@ describe("what the Panel does not say twice", () => {
     // The state that used to produce "1 lote caducado · 2 lotes caducan
     // pronto · 1 producto por reponer". The sections below list exactly those
     // rows, so the sentence was the same information a second time.
-    expect(screen.queryByText(/por reponer/)).toBeNull();
-    expect(screen.queryByText(/lotes? caducad/)).toBeNull();
-    expect(screen.queryByText(/lotes? caduca/)).toBeNull();
+    expect(screen.queryByText(/por reponer/)).toBeAbsent();
+    expect(screen.queryByText(/lotes? caducad/)).toBeAbsent();
+    expect(screen.queryByText(/lotes? caduca/)).toBeAbsent();
 
     // What replaced it is what was always underneath: the sections, which
     // are the doors, still carry every row.

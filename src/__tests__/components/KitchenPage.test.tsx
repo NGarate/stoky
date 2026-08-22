@@ -156,7 +156,7 @@ describe("what is urgent comes first", () => {
 
     // Nothing urgent means no buttons at all — §4: one button per card, and
     // there are no cards.
-    expect(screen.queryByRole("button", { name: /He usado/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /He usado/ })).toBeAbsent();
     expect(screen.getByText("No hay nada a punto de caducar")).toBeInTheDocument();
   });
 
@@ -222,7 +222,7 @@ describe("using something up", () => {
 
     const buttons = screen.getAllByRole("button");
     expect(buttons).toHaveLength(2);
-    expect(document.querySelector("form")).toBeNull();
+    expect(document.querySelector("form")).toBeAbsent();
   });
 });
 
@@ -353,7 +353,7 @@ describe("undo", () => {
 
     // The shell's own banner reports a full queue, which is a state. Telling
     // someone the unit was used when it was not is worse than silence.
-    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
     expect(screen.queryAllByText(/Usaste/)).toHaveLength(0);
   });
 
@@ -363,7 +363,7 @@ describe("undo", () => {
 
     // A second button appearing under the one just pressed pushed the next
     // row down — on the tier where taps are least precise.
-    expect(screen.queryByRole("button", { name: /Deshacer/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Deshacer/ })).toBeAbsent();
   });
 });
 
@@ -394,7 +394,7 @@ describe("what the lists already cover", () => {
 
     expect(
       screen.queryByRole("button", { name: /Apuntar/ }),
-    ).toBeNull();
+    ).toBeAbsent();
     expect(screen.getByText("Ya en la lista: 1 paquete")).toBeInTheDocument();
   });
 
@@ -425,7 +425,7 @@ describe("what the lists already cover", () => {
 
     // The server has not heard yet. Without folding the queue in, the button
     // stays lit offline and the second tap writes a second item.
-    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeAbsent();
   });
 
   it("says nothing about a product with no minimum, rather than suppressing it", () => {
@@ -433,7 +433,7 @@ describe("what the lists already cover", () => {
     stockStub = runningOut(0, 0, null as unknown as number);
     renderKitchen();
 
-    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeAbsent();
   });
 });
 
@@ -518,6 +518,6 @@ describe("with no connection and nothing saved", () => {
     expect(
       screen.getByText("Aquí todavía no hay nada guardado"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("No hay nada a punto de caducar")).toBeNull();
+    expect(screen.queryByText("No hay nada a punto de caducar")).toBeAbsent();
   });
 });

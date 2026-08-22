@@ -148,7 +148,7 @@ describe("ticking something off", () => {
     await userEvent.click(screen.getByRole("button", { name: /Leche entera/ }));
 
     // §7 rule 3. A dialogue here would be asked once per aisle.
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeAbsent();
   });
 
   it("says what the tap will do, not just what the row is", () => {
@@ -195,7 +195,7 @@ describe("undo instead of confirm", () => {
 
     const toggle = screen.getByRole("button", { name: /En el carro/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: /Devolver/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Devolver/ })).toBeAbsent();
   });
 
   it("counts what is in it without being opened", () => {
@@ -305,6 +305,6 @@ describe("with no connection and nothing saved", () => {
     expect(
       screen.getByText("Aquí todavía no hay nada guardado"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("No hay nada apuntado")).toBeNull();
+    expect(screen.queryByText("No hay nada apuntado")).toBeAbsent();
   });
 });

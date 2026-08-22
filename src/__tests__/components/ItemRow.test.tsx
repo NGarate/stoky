@@ -34,7 +34,7 @@ describe("ItemRow", () => {
   it("renders a title with no link when there is nowhere to go", () => {
     list(<ItemRow title="Café molido" />);
 
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("link")).toBeAbsent();
     expect(screen.getByText("Café molido")).toBeInTheDocument();
   });
 
@@ -58,7 +58,7 @@ describe("ItemRow", () => {
   it("omits the definition list rather than rendering an empty one", () => {
     const { container } = list(<ItemRow meta={[]} title="Café molido" />);
 
-    expect(container.querySelector("dl")).toBeNull();
+    expect(container.querySelector("dl")).toBeAbsent();
   });
 
   it("carries the status and the actions it is given", () => {

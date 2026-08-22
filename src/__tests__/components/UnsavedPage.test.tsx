@@ -85,7 +85,7 @@ describe("when nothing is waiting", () => {
     renderWithIntl(<UnsavedPage />);
 
     expect(screen.getByText("No hay nada pendiente")).toBeInTheDocument();
-    expect(screen.queryByRole("listitem")).toBeNull();
+    expect(screen.queryByRole("listitem")).toBeAbsent();
   });
 });
 
@@ -164,7 +164,7 @@ describe("what can be done about it", () => {
 
     // Retrying would be refused again for the same reason. The question is
     // for a person.
-    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeAbsent();
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
@@ -175,7 +175,7 @@ describe("what can be done about it", () => {
     failed = [failure("needs-reconciliation")];
     renderWithIntl(<UnsavedPage />);
 
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeAbsent();
   });
 });
 

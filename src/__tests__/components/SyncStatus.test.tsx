@@ -204,7 +204,7 @@ describe("a refused consumption", () => {
 
     // A conflict is discovered on reconnect, with the phone in a pocket. A
     // dialog thrown then interrupts someone who cannot answer it.
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeAbsent();
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
@@ -277,7 +277,7 @@ describe("a refused consumption", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent(
       /no ajustar el stock/i,
     );
-    expect(screen.queryByLabelText(/cuánto hay ahora/i)).toBeNull();
+    expect(screen.queryByLabelText(/cuánto hay ahora/i)).toBeAbsent();
   });
 });
 

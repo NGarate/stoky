@@ -146,7 +146,7 @@ describe("the shopping list someone is holding", () => {
     expect(
       screen.getByText("Aquí todavía no hay nada guardado"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("No encontrado")).toBeNull();
+    expect(screen.queryByText("No encontrado")).toBeAbsent();
   });
 
   it("still says a deleted list is gone", () => {
@@ -161,7 +161,7 @@ describe("the shopping list someone is holding", () => {
     renderPage();
 
     expect(screen.getByText("No encontrado")).toBeInTheDocument();
-    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeNull();
+    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeAbsent();
   });
 
   it("offers a retry for any other failure", () => {
@@ -178,7 +178,7 @@ describe("the shopping list someone is holding", () => {
     expect(
       screen.getByText("No se han podido cargar los datos"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("No encontrado")).toBeNull();
+    expect(screen.queryByText("No encontrado")).toBeAbsent();
   });
 
   it("draws its rows inside a list, not loose in a div", () => {
@@ -215,7 +215,7 @@ describe("the shopping list someone is holding", () => {
     // The list is still true. Only the refresh failed, and replacing a working
     // shopping list with a failure panel mid-shop is the worse answer.
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
-    expect(screen.queryByText("No se han podido cargar los datos")).toBeNull();
-    expect(screen.queryByText("No encontrado")).toBeNull();
+    expect(screen.queryByText("No se han podido cargar los datos")).toBeAbsent();
+    expect(screen.queryByText("No encontrado")).toBeAbsent();
   });
 });

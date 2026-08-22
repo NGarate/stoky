@@ -149,7 +149,7 @@ describe("a route whose query failed", () => {
         screen.getByText("No se han podido cargar los datos"),
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
-      expect(screen.queryByText(emptyState)).toBeNull();
+      expect(screen.queryByText(emptyState)).toBeAbsent();
     });
 
     it(`${name} offers a household form when that is what is missing`, () => {
@@ -170,7 +170,7 @@ describe("a route whose query failed", () => {
       expect(
         screen.getByText("Todavía no tienes un hogar"),
       ).toBeInTheDocument();
-      expect(screen.queryByText(emptyState)).toBeNull();
+      expect(screen.queryByText(emptyState)).toBeAbsent();
     });
 
     it(`${name} keeps showing what is loaded when a refetch cannot reach the server`, () => {
@@ -193,7 +193,7 @@ describe("a route whose query failed", () => {
       expect(screen.getByText(loadedText)).toBeInTheDocument();
       expect(
         screen.queryByText("No se han podido cargar los datos"),
-      ).toBeNull();
+      ).toBeAbsent();
     });
 
     it(`${name} does not claim to be empty when there is no connection`, () => {
@@ -216,8 +216,8 @@ describe("a route whose query failed", () => {
       expect(
         screen.getByText("Aquí todavía no hay nada guardado"),
       ).toBeInTheDocument();
-      expect(screen.queryByText(emptyState)).toBeNull();
-      expect(document.querySelector("[aria-busy]")).toBeNull();
+      expect(screen.queryByText(emptyState)).toBeAbsent();
+      expect(document.querySelector("[aria-busy]")).toBeAbsent();
     });
 
     it(`${name} still shows its empty state when the query succeeded with nothing`, () => {
@@ -238,7 +238,7 @@ describe("a route whose query failed", () => {
       expect(screen.getByText(emptyState)).toBeInTheDocument();
       expect(
         screen.queryByText("No se han podido cargar los datos"),
-      ).toBeNull();
+      ).toBeAbsent();
     });
   }
 });

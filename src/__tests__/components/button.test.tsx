@@ -111,7 +111,7 @@ describe("Button", () => {
     expect(link).toHaveAttribute("href", "/inventory");
     // The variant classes are forwarded onto the anchor, not a wrapper button.
     expect(link).toHaveClass("bg-primary");
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("button")).toBeAbsent();
   });
 
   it("forwards a ref to the underlying button", () => {

@@ -41,7 +41,7 @@ describe("FormErrorSummary", () => {
       <FormErrorSummary focusSignal={0} messages={[]} title="No se ha podido guardar" />,
     );
 
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeAbsent();
   });
 
   it("lists every reason, in the order given", () => {

@@ -134,7 +134,7 @@ describe("deleting a product", () => {
     role = "MEMBER";
     render();
 
-    expect(screen.queryByText("Eliminar el producto")).toBeNull();
+    expect(screen.queryByText("Eliminar el producto")).toBeAbsent();
   });
 
   it("explains itself instead of offering a button when the ledger is not empty", () => {
@@ -144,7 +144,7 @@ describe("deleting a product", () => {
     expect(screen.getByText(/tiene historial/)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Eliminar el producto" }),
-    ).toBeNull();
+    ).toBeAbsent();
   });
 
   it("never fires on the first press — the second one names the product", () => {

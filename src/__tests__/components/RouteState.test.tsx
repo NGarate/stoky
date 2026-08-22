@@ -95,7 +95,7 @@ describe("RouteState with no signal", () => {
     expect(
       screen.getByText("Aquí todavía no hay nada guardado"),
     ).toBeInTheDocument();
-    expect(document.querySelector("[aria-busy]")).toBeNull();
+    expect(document.querySelector("[aria-busy]")).toBeAbsent();
   });
 
   it("does not call it a failure, because nothing was attempted", () => {
@@ -111,7 +111,7 @@ describe("RouteState with no signal", () => {
 
     expect(
       screen.queryByText("No se han podido cargar los datos"),
-    ).toBeNull();
+    ).toBeAbsent();
   });
 
   it("offers a way to ask again once there is signal", async () => {
@@ -147,7 +147,7 @@ describe("RouteState with no signal", () => {
     );
 
     expect(screen.getByText("Todavía no tienes un hogar")).toBeInTheDocument();
-    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeNull();
+    expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeAbsent();
   });
 });
 
@@ -164,8 +164,8 @@ describe("RouteState", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Inventario" })).toBeInTheDocument();
-    expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button")).toBeAbsent();
+    expect(screen.queryByRole("textbox")).toBeAbsent();
   });
 
   it("offers a way to create a household when that is what is missing", () => {
@@ -198,7 +198,7 @@ describe("RouteState", () => {
       />,
     );
 
-    expect(screen.queryByLabelText(/hogar/i)).toBeNull();
+    expect(screen.queryByLabelText(/hogar/i)).toBeAbsent();
     expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
   });
 

@@ -54,8 +54,8 @@ describe("Dialog", () => {
   it("renders nothing at all when closed", () => {
     renderWithIntl(<Harness />, { locale: "es" });
 
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByText(/definitivamente/)).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeAbsent();
+    expect(screen.queryByText(/definitivamente/)).toBeAbsent();
   });
 
   it("names itself with its title, and describes what is at stake", async () => {
@@ -120,7 +120,7 @@ describe("Dialog", () => {
     await userEvent.keyboard("{Escape}");
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeAbsent();
     });
   });
 });
@@ -134,7 +134,7 @@ describe("ConfirmDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeAbsent();
     });
     expect(onConfirm).not.toHaveBeenCalled();
   });

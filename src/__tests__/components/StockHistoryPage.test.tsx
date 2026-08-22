@@ -121,6 +121,6 @@ describe("the stock history", () => {
     renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
 
     expect(screen.getByText(/Todavía no hay movimientos/)).toBeInTheDocument();
-    expect(screen.queryByTestId("chart")).toBeNull();
+    expect(screen.queryByTestId("chart")).toBeAbsent();
   });
 });

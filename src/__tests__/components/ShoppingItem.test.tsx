@@ -215,7 +215,7 @@ describe("ShoppingItem", () => {
     // and the control that did it undoes it. Someone working down a list in
     // a shop ticks continuously, and a stack of confirmations over the bottom
     // of the screen would cover the list they are reading.
-    expect(screen.queryByTestId("snackbar")).toBeNull();
+    expect(screen.queryByTestId("snackbar")).toBeAbsent();
   });
 
   it("never blocks the next tap on the last one", async () => {
@@ -337,8 +337,8 @@ describe("ShoppingItem", () => {
     // D88 widened KITCHEN by exactly two capabilities and editing an item is
     // not one of them. `writeProcedure` is the control; this is courtesy, so
     // the values are still readable.
-    expect(screen.queryByRole("spinbutton")).toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("spinbutton")).toBeAbsent();
+    expect(screen.queryByRole("combobox")).toBeAbsent();
     expect(screen.getByText("2 L")).toBeInTheDocument();
     expect(screen.getByText("Mercadona")).toBeInTheDocument();
   });
@@ -367,6 +367,6 @@ describe("ShoppingItem", () => {
       />,
     );
 
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("link")).toBeAbsent();
   });
 });

@@ -79,13 +79,13 @@ describe("the catalogue's actions column", () => {
   it("no longer offers a separate screen to edit on", () => {
     renderWithIntl(<ProductsPage />, { locale: "es" });
 
-    expect(screen.queryByRole("link", { name: /Editar/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Editar/ })).toBeAbsent();
   });
 
   it("retires 'Ver' — the name is the way in", () => {
     renderWithIntl(<ProductsPage />, { locale: "es" });
 
-    expect(screen.queryByRole("link", { name: /^Ver/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^Ver/ })).toBeAbsent();
     const name = screen.getAllByRole("link", { name: "Leche entera" });
     expect(name.length).toBeGreaterThanOrEqual(1);
     expect(name[0]?.getAttribute("href")).toBe("/products/p1");
@@ -95,7 +95,7 @@ describe("the catalogue's actions column", () => {
     renderWithIntl(<ProductsPage />, { locale: "en" });
 
     expect(screen.getAllByText("Products").length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText("Productos")).toBeNull();
-    expect(screen.queryByText("Sin categoría")).toBeNull();
+    expect(screen.queryByText("Productos")).toBeAbsent();
+    expect(screen.queryByText("Sin categoría")).toBeAbsent();
   });
 });
