@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
@@ -41,13 +42,13 @@ export default function PricesPage() {
             block, so the label can sit above without the magnifier drifting
             up into it. */}
         <div className="relative">
-          <input
+          <Input
             id="price-search"
             type="search"
             placeholder={t("products.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="min-h-[48px] w-full rounded-md border border-input bg-card px-4 py-2 pl-10 text-foreground"
+            className="pl-10"
           />
           <svg
             aria-hidden="true"

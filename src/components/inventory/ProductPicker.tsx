@@ -3,6 +3,7 @@
 import { useDeferredValue, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
 
 /**
@@ -87,7 +88,7 @@ export function ProductPicker({ value, onChange, error, hint }: ProductPickerPro
         >
           {t("productSearchLabel")}
         </label>
-        <input
+        <Input
           id={searchId}
           name="product"
           type="search"
@@ -95,7 +96,6 @@ export function ProductPicker({ value, onChange, error, hint }: ProductPickerPro
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={t("productSearchPlaceholder")}
-          className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
         />
       </div>
 

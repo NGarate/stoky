@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
 import { useWriteQueue } from "./queue-context";
 import type { FailedOp } from "@/lib/offline/queue";
@@ -129,9 +130,9 @@ export function ReconcileDialog({
             >
               {t("reconcileQuestion")}
             </label>
-            <input
+            <Input
               aria-describedby={hintId}
-              className="mt-1 min-h-[48px] w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
+              className="mt-1"
               id={`${fieldId}-amount`}
               inputMode="decimal"
               min="0"

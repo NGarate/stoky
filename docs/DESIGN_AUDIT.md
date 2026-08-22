@@ -437,7 +437,26 @@ not enumerate them.
 - ~~**A5.2**~~ **Done.** `/dashboard` is a real household overview with 35
   translated strings. Verified rather than assumed, which is what this action
   asked for.
-- **A5.3 — still open, and it now has a measurable cost.** None of the five
+- ~~**A5.3**~~ **Done, 2026-08-22.** Closed by the design-system phase. The
+  count went from **142** hardcoded `min-h-[48px]` declarations outside
+  `src/components/ui/` to **13**, and the remainder is held by
+  `src/__tests__/unit/target-floor.test.ts`: a floor written outside the
+  design system now needs an entry in that file's allow-list *with a reason*,
+  and an entry that outlives its floor fails too. So the number can only fall
+  by deletion, and it can only rise by somebody writing down why.
+
+  What actually did the work was building the primitives the screens were
+  missing. `Select`, `Textarea` and `RadioOption` each came out of the same
+  question — "why is this floor here?" — answered honestly. `Button`, `Input`
+  and `ItemRow` absorbed the rest. Two defects surfaced on the way that no
+  screenshot would have shown: `ItemRow`'s title guaranteed 48px of height and
+  none of width, so a short product name was a 25×48 target; and the stretched
+  radio, copied by hand in three places, is a technique whose obvious
+  alternative looks identical and is 13px.
+
+  The original text of this action, for the record:
+
+- **A5.3 — was still open, and it had a measurable cost.** None of the five
   Phase 1 routes imports `button.tsx` or `input.tsx`; they use plain elements
   because the primitives were unsafe, and that reason went away in Phase 2.
 
