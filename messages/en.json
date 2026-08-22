@@ -162,7 +162,9 @@
       "retry": "Try again",
       "submit": "Save changes",
       "submitting": "Saving the changes...",
-      "saved": "Saved. “{name}” is up to date."
+      "saved": "Saved. “{name}” is up to date.",
+      "undone": "Undone. «{name}» is back as it was.",
+      "undoFailed": "Could not undo. «{name}» stays as you saved it."
     },
     "delete": "Delete product",
     "name": "Product name",

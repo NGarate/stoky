@@ -162,7 +162,9 @@
       "retry": "Reintentar",
       "submit": "Guardar cambios",
       "submitting": "Guardando los cambios...",
-      "saved": "Guardado. «{name}» está al día."
+      "saved": "Guardado. «{name}» está al día.",
+      "undone": "Deshecho. «{name}» ha vuelto a como estaba.",
+      "undoFailed": "No se ha podido deshacer. «{name}» se queda como lo guardaste."
     },
     "delete": "Eliminar producto",
     "name": "Nombre del producto",

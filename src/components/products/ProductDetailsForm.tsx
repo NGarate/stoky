@@ -212,6 +212,38 @@ function Fields({
     minStock: product.minStock,
   };
 
+  /**
+   * The same procedure, reported differently.
+   *
+   * Restoring is not a save: it produces no further undo — there is nothing
+   * left to take back that the reader did not already ask for — and its
+   * failure belongs in the snackbar, because the form it came from is gone.
+   */
+  const undoUpdate = api.product.update.useMutation({
+    onSuccess: async (restored) => {
+      await utils.product.getById.invalidate({ id: product.id });
+      await utils.product.list.invalidate();
+      await utils.product.getByBarcode.invalidate();
+
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "products.edit.undone",
+          values: { name: restored.name },
+        },
+      });
+    },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: {
+          key: "products.edit.undoFailed",
+          values: { name: product.name },
+        },
+      }),
+  });
+
   const update = api.product.update.useMutation({
     onSuccess: async (updated) => {
       onDone();
@@ -228,7 +260,14 @@ function Fields({
         // An exact inverse exists here and nowhere near stock: the row's
         // previous values are still in hand, so undo restores them rather
         // than writing a compensating anything (D101).
-        undo: () => update.mutate(previous),
+        //
+        // Its own mutation, not this one. Sending the restore through
+        // `update` re-entered this `onSuccess`, so undoing produced a second
+        // snackbar offering to undo *that* — and by then `previous` had been
+        // refetched to the values just restored, so pressing it did nothing
+        // at all. A failed restore was worse: it wrote its message into a
+        // form `onDone()` had already closed, where nobody could read it.
+        undo: () => undoUpdate.mutate(previous),
       });
     },
     onError: (error) => {

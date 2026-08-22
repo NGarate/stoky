@@ -13,6 +13,9 @@ import { renderWithIntl } from "../utils/render";
  * other thing the page showed, and coming back.
  */
 const updateCalls: unknown[] = [];
+
+/** When true, every `product.update` reports a failure. */
+let updateFails = false;
 const invalidated: string[] = [];
 let barcodeHolder: { id: string; name: string } | null = null;
 
@@ -43,11 +46,18 @@ mock.module("@/lib/trpc/client", () => ({
     product: {
       getByBarcode: { useQuery: () => ({ data: barcodeHolder }) },
       update: {
+        // Two instances now: the save and the restore report differently, so
+        // a stub that shares one `opts` would hide which of them ran.
         useMutation: (opts?: {
           onSuccess?: (data: unknown) => void | Promise<void>;
+          onError?: () => void;
         }) => ({
           mutate: (input: { name?: string }) => {
             updateCalls.push(input);
+            if (updateFails) {
+              opts?.onError?.();
+              return;
+            }
             void opts?.onSuccess?.({ ...input, name: input.name ?? "" });
           },
           isPending: false,
@@ -91,6 +101,7 @@ const startEditing = async (): Promise<void> => {
 
 beforeEach(() => {
   updateCalls.length = 0;
+  updateFails = false;
   invalidated.length = 0;
   barcodeHolder = null;
 });
@@ -260,4 +271,45 @@ describe("the product's details", () => {
       expect(container.textContent).not.toContain("products.");
     });
   }
+});
+
+describe("undoing a save", () => {
+  it("does not offer to undo the undo, which did nothing", async () => {
+    render();
+    await startEditing();
+
+    fireEvent.change(screen.getByLabelText(/Marca/), { target: { value: "Otra" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Deshacer" }),
+    );
+
+    // Restoring used to go through the save's own mutation, so it re-entered
+    // that `onSuccess` and produced a second snackbar offering to undo *that*
+    // — and by then the previous values had been refetched to the ones just
+    // restored, so pressing it did nothing at all.
+    await waitFor(() => {
+      expect(screen.getAllByText(/ha vuelto a como estaba/).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
+  });
+
+  it("says so when the restore itself is refused", async () => {
+    render();
+    await startEditing();
+
+    fireEvent.change(screen.getByLabelText(/Marca/), { target: { value: "Otra" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    const undo = await screen.findByRole("button", { name: "Deshacer" });
+    updateFails = true;
+    await userEvent.click(undo);
+
+    // It wrote its message into the form `onDone()` had already closed, where
+    // nobody could read it.
+    await waitFor(() => {
+      expect(screen.getAllByText(/No se ha podido deshacer/).length).toBeGreaterThan(0);
+    });
+  });
 });
