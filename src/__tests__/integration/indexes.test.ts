@@ -62,6 +62,16 @@ describe("the lookups every screen makes", () => {
     expect(hasIndex("ShoppingItem", ["shoppingListId"])).toBe(true);
   });
 
+  it("finds what a product is already written down for", () => {
+    // `getStockOverview` asks this for every product on the page at once, to
+    // decide whether the kitchen still offers to add it.
+    expect(hasIndex("ShoppingItem", ["productId"])).toBe(true);
+  });
+
+  it("finds what is meant to be bought at one shop", () => {
+    expect(hasIndex("ShoppingItem", ["storeId"])).toBe(true);
+  });
+
   it("finds a product's price history in date order", () => {
     // Composite rather than two: the history is always read for one product
     // *and* ordered by date, so the second column saves the sort as well.

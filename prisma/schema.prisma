@@ -99,6 +99,7 @@ model Store {
   household    Household @relation(fields: [householdId], references: [id])
   priceRecords PriceRecord[]
   receipts     Receipt[]
+  shoppingItems ShoppingItem[]
 
   @@index([householdId])
 }
@@ -181,9 +182,16 @@ model ShoppingItem {
   unit           String?
   isChecked      Boolean   @default(false)
   checkedAt      DateTime?
+  /// Where this one is meant to be bought. Per item rather than per list,
+  /// because one shop rarely covers a household's week: the milk is cheapest
+  /// in one place and the fruit in another, and a list that forces one store
+  /// makes people keep two lists instead.
+  storeId        String?
+  store          Store?    @relation(fields: [storeId], references: [id])
 
   @@index([shoppingListId])
   @@index([productId])
+  @@index([storeId])
 }
 
 enum ReceiptStatus {
