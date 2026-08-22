@@ -111,7 +111,7 @@ describe("a row that is no longer there", () => {
     const item = await api.shopping.addItem({
       ...envelope(OWNER.userId),
       shoppingListId: OWNER.listId,
-      customName: "Pan",
+      productId: OWNER.productId,
       quantity: 1,
       unit: "unit",
     });
@@ -137,7 +137,7 @@ describe("a row that is no longer there", () => {
     const item = await api.shopping.addItem({
       ...envelope(OWNER.userId),
       shoppingListId: OWNER.listId,
-      customName: "Pan",
+      productId: OWNER.productId,
       quantity: 1,
       unit: "unit",
     });

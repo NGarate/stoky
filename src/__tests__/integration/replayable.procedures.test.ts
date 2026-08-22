@@ -149,7 +149,7 @@ describe("what /shopping shows", () => {
     const item = await api.shopping.addItem({
       ...envelope(),
       shoppingListId: OWNER.listId,
-      customName: "Pan",
+      productId: OWNER.productId,
       quantity: 1,
       unit: "unit",
     });
@@ -169,7 +169,7 @@ describe("what /shopping shows", () => {
     await api.shopping.addItem({
       ...envelope(),
       shoppingListId: OWNER.listId,
-      customName: "Pan",
+      productId: OWNER.productId,
       quantity: 1,
       unit: "unit",
     });

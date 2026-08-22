@@ -52,13 +52,26 @@ async function openOwnList(page: Page, items: number): Promise<void> {
   await page.waitForURL(/\/shopping\/[a-z0-9]+/);
   await settle(page);
 
+  // An item names a product the household has, rather than free text typed
+  // onto the list — so the seeded catalogue is where these come from.
+  const chosen: string[] = [];
   for (let i = 0; i < items; i += 1) {
     await page.getByRole("button", { name: es.shopping.addItem }).click();
-    await page.getByPlaceholder(es.shopping.itemName).fill(`Cosa ${i + 1}`);
+
+    const picker = page.locator('select[name="productId"]');
+    await expect(picker.locator("option")).not.toHaveCount(1, {
+      timeout: 15_000,
+    });
+    const value = await picker.locator("option").nth(i + 1).getAttribute("value");
+    const label = await picker.locator("option").nth(i + 1).textContent();
+    await picker.selectOption(value ?? "");
+    // The option reads "Nombre — Marca"; the row shows the name alone.
+    chosen.push((label ?? "").split("—")[0]!.trim());
+
     await page
       .getByRole("button", { name: es.common.add, exact: true })
       .click();
-    await expect(page.getByText(`Cosa ${i + 1}`)).toBeVisible({
+    await expect(page.getByText(chosen[i]!, { exact: false }).first()).toBeVisible({
       timeout: 15_000,
     });
   }

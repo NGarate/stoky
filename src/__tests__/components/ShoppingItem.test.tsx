@@ -59,20 +59,21 @@ describe("ShoppingItem", () => {
       <ShoppingItem
         item={{
           ...baseItem,
-          productId: null,
-          product: null,
-          customName: "Bombillas",
+          productId: "p9",
+          product: { name: "Bombillas LED" },
         }}
       />,
     );
 
-    expect(screen.getByText("Bombillas")).toBeInTheDocument();
+    // Free text stopped being a thing an item can be: a product it is, and
+    // the product's name is what a row says.
+    expect(screen.getByText("Bombillas LED")).toBeInTheDocument();
   });
 
-  it("falls back to the translated placeholder when the item has no name", () => {
+  it("falls back to the translated placeholder if the product is gone", () => {
     renderWithIntl(
       <ShoppingItem
-        item={{ ...baseItem, productId: null, product: null, customName: null }}
+        item={{ ...baseItem, productId: null, product: null }}
       />,
     );
 

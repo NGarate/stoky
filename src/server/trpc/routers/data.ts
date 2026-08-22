@@ -159,7 +159,6 @@ export const dataRouter = createTRPCRouter({
               select: {
                 id: true,
                 productId: true,
-                customName: true,
                 quantity: true,
                 unit: true,
                 isChecked: true,

@@ -59,7 +59,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
-| SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice) |
+| SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
@@ -709,6 +709,17 @@ field and reading `getBuyList` back — the name came out as `""`.
 **Suggested fix:** a `.refine` on `shoppingItemSchema` requiring exactly one of
 the two, so it is refused at the edge rather than rendered as nothing. Worth
 checking whether any existing row is already in this state before adding it.
+
+
+**Superseded 2026-08-22.** The rule this filed for — exactly one of
+`productId` and `customName` — is now stricter: the product is required and
+the free-text field is gone from the schema and the database. Free text reads
+like the obvious kindness and costs more than it gives, because an item naming
+nothing the household knows about cannot be priced, counted against stock,
+matched to a receipt line, or suppressed when it is already covered. The
+kindness moved to the add form, which creates the product inline. The defect
+this entry describes remains fixed, by a wider rule than the one that fixed
+it.
 
 ---
 

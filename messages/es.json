@@ -696,7 +696,17 @@
     "deleteConfirmBody": "La lista y todo lo que hayas apuntado en ella desaparecen. No se puede deshacer.",
     "deleteConfirm": "Sí, eliminar la lista",
     "listCreated": "Creaste la lista «{name}»",
-    "autoListUpToDate": "Revisaste el stock. La lista automática ya está al día."
+    "autoListUpToDate": "Revisaste el stock. La lista automática ya está al día.",
+    "productSelectHint": "Elige el producto que quieres comprar, o créalo si todavía no está.",
+    "createProductPrompt": "¿No está en la lista? Créalo",
+    "createProductCancel": "Elegir uno que ya existe",
+    "productRequired": "Elige un producto, o crea uno nuevo.",
+    "storeLabel": "¿Dónde comprarlo?",
+    "storeAnywhere": "En cualquier sitio",
+    "quantityLabel": "Cantidad",
+    "unitLabel": "Unidad",
+    "itemUpdated": "Cambiaste «{name}»",
+    "seePrices": "Ver precios de «{name}»"
   },
   "prices": {
     "title": "Precios",

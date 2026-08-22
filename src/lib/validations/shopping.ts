@@ -11,65 +11,49 @@ export const updateShoppingListSchema = shoppingListSchema.partial().extend({
 });
 
 /**
- * A line on a shopping list — ISSUES.md SHOP-1.
+ * A line on a shopping list.
  *
- * **Exactly one of `productId` and `customName`.** Free text is the whole point
- * of a shopping list: nobody wants to create a product record to remember to
- * buy stamps. But both fields were plain optionals with nothing joining them,
- * so an item with *neither* was accepted and arrived on the phone screen as an
- * empty row that could still be ticked — `getBuyList` computes
- * `product?.name ?? item.customName ?? ""`, and that last empty string was the
- * only thing between this and a crash.
+ * **A product, always.** This used to accept a `productId` *or* a
+ * `customName` typed into a box, with exactly one required (ISSUES.md
+ * SHOP-1). Free text reads like the obvious kindness — nobody wants to
+ * create a product record to remember stamps — and it costs more than it
+ * gives: a free-text item cannot be priced, cannot be counted against what is
+ * in the cupboard, cannot be matched to a receipt line, and cannot be
+ * suppressed when it is already covered. Every one of those is a feature this
+ * application has, and each of them had to carry a branch for the case where
+ * the item names nothing the household knows about.
  *
- * Both is refused too, and that is the stricter half. `getBuyList` shows the
- * product's name and ignores the custom one, so an item with both stores a
- * string nobody will ever see. If naming a product differently on a list is
- * ever wanted, it wants a field of its own rather than an overloaded pair.
+ * The owner's judgement (2026-08-20): "no tiene sentido comprar cosas que no
+ * existen, se convierte en una locura técnica y organizativa".
  *
- * Checked against the database before this went in: no existing row was in
- * either state, so nothing already saved becomes unreadable.
+ * The kindness survives in a better place. The add form creates the product
+ * inline, so writing "sellos" on a list still takes one step — it just leaves
+ * the household with a thing it can price next time.
+ *
+ * `quantity` is `.positive()` now. It was a bare `z.number()` with a default,
+ * so zero and negative quantities were accepted and rendered as "0 L" — a
+ * line that asks you to buy nothing.
  */
 const shoppingItemFields = z.object({
   shoppingListId: z.string(),
-  productId: z.string().optional(),
-  customName: z.string().optional(),
-  quantity: z.number().default(1),
+  productId: z.string().min(1),
+  quantity: z.number().positive().default(1),
   unit: z.string().optional(),
+  /** Where to buy it. Optional: most items do not care. */
+  storeId: z.string().optional(),
 });
 
-/**
- * Exactly one of the two, as a value rather than a call.
- *
- * `.refine` produces a `ZodEffects`, which cannot be `.merge`d — so the rule has
- * to be applied *after* the replay envelope goes on. Keeping the predicate and
- * its message here means the two schemas below cannot drift apart, which is the
- * failure this shape is guarding against.
- */
-const ONE_NAME = {
-  // An empty string is not a name. Without the trim, a form submitting its
-  // untouched text field passes and the row is nameless anyway.
-  check: (item: { productId?: string; customName?: string }) =>
-    Boolean(item.productId) !== Boolean(item.customName?.trim()),
-  options: {
-    message: "An item needs either a product or a name of its own, not both",
-    path: ["customName"],
-  },
-};
+export const shoppingItemSchema = shoppingItemFields;
 
-export const shoppingItemSchema = shoppingItemFields.refine(
-  ONE_NAME.check,
-  ONE_NAME.options,
-);
-
-/** What `shopping.addItem` takes: the same rule, with the replay envelope. */
-export const addShoppingItemSchema = shoppingItemFields
-  .merge(replayable)
-  .refine(ONE_NAME.check, ONE_NAME.options);
+/** What `shopping.addItem` takes: the same fields, with the replay envelope. */
+export const addShoppingItemSchema = shoppingItemFields.merge(replayable);
 
 export const updateShoppingItemSchema = z.object({
   id: z.string(),
   isChecked: z.boolean().optional(),
-  quantity: z.number().optional(),
+  quantity: z.number().positive().optional(),
+  /** `null` clears it: "anywhere" is a real answer. */
+  storeId: z.string().nullish(),
 });
 
 export const shoppingListQuerySchema = z.object({

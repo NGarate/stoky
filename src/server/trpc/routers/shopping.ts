@@ -26,7 +26,8 @@ import { withReplay } from "../replay";
  * may send each of them twice, so they carry an `idempotencyKey` and apply once
  * (`src/server/trpc/replay.ts`).
  *
- * An item references a `Product` **or** carries a `customName`, exactly one.
+ * An item always references a `Product`. Free text was accepted until 2026-08-22
+ * and cost more than it gave — see `src/lib/validations/shopping.ts`.
  * Free text is what a shopping list is for — nobody wants to create a product
  * record to remember to buy stamps. The "exactly" is enforced by
  * `addShoppingItemSchema`; it was not, and an item with neither used to arrive
@@ -462,7 +463,7 @@ export const shoppingRouter = createTRPCRouter({
 
       return {
         id: item.id,
-        name: product?.name ?? item.customName ?? "",
+        name: product?.name ?? "",
         quantity: item.quantity,
         unit: item.unit ?? product?.defaultUnit ?? null,
         isChecked: item.isChecked,

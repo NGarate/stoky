@@ -1532,17 +1532,21 @@ describe("tRPC Router Integration Tests", () => {
       );
       const list = await createTestShoppingList(householdId);
       const { caller, envelope } = await createTestContext(user.id, householdId);
+      const product = await createTestProduct(householdId, { name: "Bombillas LED" });
 
       const result = await caller.shopping.addItem({
         ...envelope(),
         shoppingListId: list.id,
-        customName: "Custom Item",
+        productId: product.id,
         quantity: 2,
         unit: "kg",
       });
 
-      expect(result.customName).toBe("Custom Item");
-      expect(result.productId).toBeNull();
+      // Free text used to be the point of this case. It is now the thing the
+      // schema refuses: an item names a product the household knows about,
+      // and the add form creates one inline when it does not.
+      expect(result.productId).toBe(product.id);
+      expect(result.quantity).toBe(2);
     });
 
     it("should check/uncheck shopping item", async () => {

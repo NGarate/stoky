@@ -8,7 +8,6 @@ interface ShoppingItemProps {
     id: string;
     productId: string | null;
     product?: { name: string } | null;
-    customName: string | null;
     quantity: number;
     unit: string | null;
     isChecked: boolean;
@@ -31,7 +30,7 @@ export function ShoppingItem({ item }: ShoppingItemProps) {
   const t = useTranslations("shopping");
   const { enqueue } = useWriteQueue();
 
-  const name = item.product?.name || item.customName || t("itemName");
+  const name = item.product?.name || t("itemName");
 
   return (
     <div

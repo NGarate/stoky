@@ -6,13 +6,21 @@ import {
 } from "@/lib/validations/shopping";
 
 /**
- * ISSUES.md SHOP-1 — an item has a name, one way or the other.
+ * An item on a list is a product and a quantity.
  *
- * `productId` and `customName` were plain optionals with nothing joining them,
- * so an item with *neither* was accepted. It reached the phone screen as an
- * empty row that could still be ticked: `getBuyList` computes
- * `product?.name ?? item.customName ?? ""`, and that final empty string was the
- * only thing between this and a crash.
+ * SHOP-1 fixed a real defect — `productId` and `customName` were plain
+ * optionals with nothing joining them, so an item with *neither* reached the
+ * phone screen as an empty row that could still be ticked — and it fixed it by
+ * requiring exactly one of the two. That rule is now stricter still: the
+ * product is required and the free-text field is gone.
+ *
+ * Free text reads like the obvious kindness. It costs more than it gives: an
+ * item that names nothing the household knows about cannot be priced, cannot
+ * be counted against what is in the cupboard, cannot be matched to a receipt
+ * line, and cannot be suppressed when it is already covered — and every one of
+ * those is a feature this application has. The kindness survives where it
+ * belongs: the add form creates the product inline, so writing "sellos" on a
+ * list still takes one step.
  *
  * Unit tests because it is a property of the schema, which is the cheapest
  * place there is to ask.
@@ -28,73 +36,73 @@ describe("what makes an item nameable", () => {
     );
   });
 
-  it("accepts free text, which is what a shopping list is for", () => {
-    // Nobody wants to create a product record to remember to buy stamps.
-    expect(
-      shoppingItemSchema.safeParse({ ...LIST, customName: "Sellos" }).success,
-    ).toBe(true);
-  });
-
-  it("refuses neither", () => {
-    // The defect. This used to pass, and arrive on screen as a row with no name.
+  it("refuses an item with no product", () => {
+    // SHOP-1's defect and its successor at once: a row that names nothing
+    // was accepted, and a row that names free text is now refused too.
     expect(shoppingItemSchema.safeParse(LIST).success).toBe(false);
   });
 
-  it("refuses a name that is only whitespace", () => {
-    // A form submitting its untouched text field. Without the trim this passes
-    // and the row is nameless anyway, which is the same bug wearing a space.
+  it("refuses an empty product id, which is not a product", () => {
     expect(
-      shoppingItemSchema.safeParse({ ...LIST, customName: "   " }).success,
+      shoppingItemSchema.safeParse({ ...LIST, productId: "" }).success,
     ).toBe(false);
   });
 
-  it("refuses both", () => {
-    // `getBuyList` shows the product's name and ignores the custom one, so an
-    // item with both stores a string nobody will ever see. If naming a product
-    // differently on a list is wanted, it wants a field of its own.
+  it("ignores free text rather than storing it", () => {
+    const parsed = shoppingItemSchema.safeParse({
+      ...LIST,
+      productId: "p1",
+      customName: "Sellos",
+    });
+
+    // Zod strips unknown keys, so an older client still sending the field is
+    // served rather than refused — and the field does not come back.
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && "customName" in parsed.data).toBe(false);
+  });
+
+  it("refuses a quantity of zero, which asks you to buy nothing", () => {
     expect(
-      shoppingItemSchema.safeParse({
-        ...LIST,
-        productId: "p1",
-        customName: "La grande",
-      }).success,
+      shoppingItemSchema.safeParse({ ...LIST, productId: "p1", quantity: 0 })
+        .success,
     ).toBe(false);
   });
 
-  it("says which field to look at", () => {
-    // next-intl aside, a Zod error with no path leaves a form unable to mark
-    // anything.
-    const parsed = shoppingItemSchema.safeParse(LIST);
-
-    expect(parsed.success).toBe(false);
-    expect(parsed.success === false && parsed.error.issues[0]?.path).toEqual([
-      "customName",
-    ]);
+  it("refuses a negative quantity", () => {
+    expect(
+      shoppingItemSchema.safeParse({ ...LIST, productId: "p1", quantity: -2 })
+        .success,
+    ).toBe(false);
   });
-});
 
-describe("the schema the procedure actually uses", () => {
-  // `.refine` produces a `ZodEffects`, which cannot be `.merge`d — so the rule
-  // has to go on *after* the replay envelope. That is the kind of arrangement
-  // where one of the two schemas quietly loses the rule, so both are asserted.
+  it("defaults the quantity to one, because that is what a tap means", () => {
+    const parsed = shoppingItemSchema.safeParse({
+      shoppingListId: "list-1",
+      productId: "p1",
+    });
 
-  it("carries the replay envelope", () => {
+    expect(parsed.success && parsed.data.quantity).toBe(1);
+  });
+
+  it("takes an optional store, and lets it be left out", () => {
+    expect(
+      shoppingItemSchema.safeParse({ ...LIST, productId: "p1", storeId: "s1" })
+        .success,
+    ).toBe(true);
+    expect(
+      shoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
+    ).toBe(true);
+  });
+
+  it("applies the same rule with the replay envelope on", () => {
+    // The envelope is merged after the fields, and a rule attached to the
+    // wrong one of the two schemas is a rule the queue does not apply.
+    expect(
+      addShoppingItemSchema.safeParse({ ...LIST, ...ENVELOPE }).success,
+    ).toBe(false);
     expect(
       addShoppingItemSchema.safeParse({ ...LIST, ...ENVELOPE, productId: "p1" })
         .success,
     ).toBe(true);
-  });
-
-  it("still refuses a nameless item", () => {
-    expect(
-      addShoppingItemSchema.safeParse({ ...LIST, ...ENVELOPE }).success,
-    ).toBe(false);
-  });
-
-  it("still needs the envelope", () => {
-    // The other direction: the refinement must not have replaced the merge.
-    expect(
-      addShoppingItemSchema.safeParse({ ...LIST, productId: "p1" }).success,
-    ).toBe(false);
   });
 });

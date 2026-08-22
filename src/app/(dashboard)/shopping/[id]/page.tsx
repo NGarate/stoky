@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ProductPicker, type PickedProduct } from "@/components/inventory/ProductPicker";
+import { CreateProductInline } from "@/components/receipt/CreateProductInline";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
@@ -32,17 +35,18 @@ export default function ShoppingListPage({ params }: ShoppingListPageProps) {
 export function ShoppingListView({ id }: { id: string }) {
   const t = useTranslations();
   const [isAdding, setIsAdding] = useState(false);
-  const [newItem, setNewItem] = useState({
-    customName: "",
-    quantity: 1,
-    unit: "unit",
-  });
+  const [product, setProduct] = useState<PickedProduct | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [productError, setProductError] = useState<string | null>(null);
+  const [newItem, setNewItem] = useState({ quantity: 1, unit: "" });
 
   const listQuery = api.shopping.getById.useQuery({ id });
   const list = listQuery.data;
 
   const { state: queueState, enqueue } = useWriteQueue();
 
+  const quantityId = useId();
+  const unitId = useId();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // The opener is an ordinary button rather than a Radix trigger, so the
   // dialog is told by hand where to put focus back.
@@ -54,29 +58,44 @@ export function ShoppingListView({ id }: { id: string }) {
     },
   });
 
+  function resetForm(): void {
+    setIsAdding(false);
+    setCreating(false);
+    setProduct(null);
+    setProductError(null);
+    setNewItem({ quantity: 1, unit: "" });
+  }
+
+  /** Puts a chosen or freshly created product on the list. */
+  function addProduct(chosen: PickedProduct): void {
+    // Enqueued like the tick-off and the removal: all three writes on this
+    // screen go the same way, so there is one path to get wrong. It also
+    // means adding something works with no signal, and shows immediately
+    // through the projection rather than after a round trip.
+    enqueue({
+      path: "shopping.addItem",
+      input: {
+        shoppingListId: id,
+        productId: chosen.id,
+        quantity: newItem.quantity,
+        unit: newItem.unit || chosen.defaultUnit,
+      },
+      label: { key: "offline.addedItem", values: { name: chosen.name } },
+    });
+    resetForm();
+  }
+
+  const createProduct = api.product.create.useMutation({
+    onSuccess: (created) => addProduct(created),
+  });
+
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newItem.customName.trim()) {
-      // Enqueued like the tick-off and the removal: all three writes on this
-      // screen go the same way, so there is one path to get wrong. It also
-      // means adding something works with no signal, and shows immediately
-      // through the projection rather than after a round trip.
-      enqueue({
-        path: "shopping.addItem",
-        input: {
-          shoppingListId: id,
-          customName: newItem.customName.trim(),
-          quantity: newItem.quantity,
-          unit: newItem.unit,
-        },
-        label: {
-          key: "offline.addedItem",
-          values: { name: newItem.customName.trim() },
-        },
-      });
-      setIsAdding(false);
-      setNewItem({ customName: "", quantity: 1, unit: "unit" });
+    if (!product) {
+      setProductError(t("shopping.productRequired"));
+      return;
     }
+    addProduct(product);
   };
 
   // Data first. `isLoading` is `isPending && isFetching`, which is *false*
@@ -189,52 +208,95 @@ export function ShoppingListView({ id }: { id: string }) {
           onSubmit={handleAddItem}
           className="rounded-lg border border-border bg-card p-4"
         >
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder={t("shopping.itemName")}
-              value={newItem.customName}
-              onChange={(e) =>
-                setNewItem({ ...newItem, customName: e.target.value })
-              }
-              className="flex-1 rounded-md border border-input bg-card px-3 py-2 text-foreground"
-            />
-            <input
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={newItem.quantity}
-              onChange={(e) =>
-                setNewItem({
-                  ...newItem,
-                  quantity: Number.parseFloat(e.target.value) || 1,
-                })
-              }
-              className="w-20 rounded-md border border-input bg-card px-3 py-2 text-foreground"
-            />
-            <input
-              type="text"
-              placeholder={t("common.unit")}
-              value={newItem.unit}
-              onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
-              className="w-24 rounded-md border border-input bg-card px-3 py-2 text-foreground"
-            />
-            <button
-              type="submit"
-              className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {t("common.add")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAdding(false);
-                setNewItem({ customName: "", quantity: 1, unit: "unit" });
-              }}
-              className="rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground"
-            >
-              {t("common.cancel")}
-            </button>
+          <div className="space-y-3">
+            {creating ? (
+              /* The kindness free text used to provide, in a better place:
+                 writing something the household has never bought still takes
+                 one step, and leaves it with a thing it can price next time. */
+              <CreateProductInline
+                defaultName=""
+                onCancel={() => setCreating(false)}
+                onCreate={(name) =>
+                  createProduct.mutate({
+                    name,
+                    defaultUnit: newItem.unit || "unit",
+                  })
+                }
+              />
+            ) : (
+              <>
+                <ProductPicker
+                  error={productError ?? undefined}
+                  hint={t("shopping.productSelectHint")}
+                  onChange={(chosen) => {
+                    setProduct(chosen);
+                    setProductError(null);
+                    if (chosen && !newItem.unit) {
+                      setNewItem((current) => ({
+                        ...current,
+                        unit: chosen.defaultUnit,
+                      }));
+                    }
+                  }}
+                  value={product?.id ?? ""}
+                />
+                <Button
+                  onClick={() => setCreating(true)}
+                  type="button"
+                  variant="ghost"
+                >
+                  {t("shopping.createProductPrompt")}
+                </Button>
+              </>
+            )}
+
+            {creating ? null : (
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <label
+                    className="mb-1 block font-medium text-foreground text-sm"
+                    htmlFor={quantityId}
+                  >
+                    {t("shopping.quantityLabel")}
+                  </label>
+                  <Input
+                    className="w-28"
+                    id={quantityId}
+                    inputMode="decimal"
+                    min="0.1"
+                    onChange={(e) =>
+                      setNewItem({
+                        ...newItem,
+                        quantity: Number.parseFloat(e.target.value) || 1,
+                      })
+                    }
+                    step="any"
+                    type="number"
+                    value={newItem.quantity}
+                  />
+                </div>
+                <div>
+                  <label
+                    className="mb-1 block font-medium text-foreground text-sm"
+                    htmlFor={unitId}
+                  >
+                    {t("shopping.unitLabel")}
+                  </label>
+                  <Input
+                    className="w-32"
+                    id={unitId}
+                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                    value={newItem.unit}
+                  />
+                </div>
+                <Button disabled={createProduct.isPending} type="submit">
+                  {t("common.add")}
+                </Button>
+                <Button onClick={resetForm} type="button" variant="outline">
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            )}
           </div>
         </form>
       )}

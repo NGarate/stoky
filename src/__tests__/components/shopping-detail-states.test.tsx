@@ -56,6 +56,13 @@ mock.module("@/lib/trpc/client", () => ({
       },
     }),
     household: { create: { useMutation: () => idleMutation } },
+    // The add form creates a product inline now, and the picker reads the
+    // catalogue to offer one.
+    product: {
+      create: { useMutation: () => idleMutation },
+      list: { useQuery: () => ({ data: { products: [] }, isLoading: false }) },
+      getByBarcode: { useQuery: () => ({ data: null }) },
+    },
     shopping: {
       getById: { useQuery: () => queryStub },
       addItem: { useMutation: () => idleMutation },
@@ -92,9 +99,8 @@ const LOADED = {
   items: [
     {
       id: "item-1",
-      productId: null,
-      product: null,
-      customName: "Leche entera",
+      productId: "p1",
+      product: { name: "Leche entera" },
       quantity: 2,
       unit: "L",
       isChecked: false,

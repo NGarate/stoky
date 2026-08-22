@@ -1295,3 +1295,20 @@ it is changed, and a screen whose values are always inputs invites a change
 nobody meant. Saving offers an inverse undo, which is legitimate here and
 nowhere near stock (D57, D101): the previous values are still in hand, so undo
 restores the row rather than writing a compensating anything.
+
+**D103 — A list item is a product and a quantity, and free text is gone.**
+SHOP-1 required exactly one of `productId` and `customName`; the owner's review
+went further: "las listas de compra te dejan añadir cualquier artículo con
+cualquier cantidad, existan o no, eso añade complejidad ya que si o si deberán
+ir asociados". The argument holds. A free-text item cannot be priced, cannot be
+counted against what is in the cupboard, cannot be matched to a receipt line,
+and cannot be suppressed when it is already covered — and every one of those is
+a feature this application has, each carrying a branch for the case where the
+item names nothing. The kindness free text provided survives where it belongs:
+the add form creates the product inline, so writing "sellos" on a list still
+takes one step and leaves the household with something it can price next time.
+Migrated expand → code → contract, with the middle step reusing an existing
+product per household when the normalised names match and minting one otherwise,
+carrying the original spelling as the product's name. `quantity` gained
+`.positive()` in the same pass: it was a bare number with a default, so a line
+asking you to buy zero was accepted and rendered as "0 L".

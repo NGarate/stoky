@@ -289,6 +289,17 @@ async function main(): Promise<void> {
     data: { name: "Compra semanal", householdId: household.id },
   });
 
+  // Not in the catalogue above: this is the household writing down something
+  // it has never bought, which is the case free text used to serve.
+  const bulbs = await prisma.product.create({
+    data: {
+      name: "Bombillas LED",
+      category: "Hogar",
+      defaultUnit: "unidad",
+      householdId: household.id,
+    },
+  });
+
   const milk = createdProducts.find((p) => p.name === "Leche entera");
   const coffee = createdProducts.find((p) => p.name === "Café molido natural");
 
@@ -311,8 +322,11 @@ async function main(): Promise<void> {
       },
       {
         shoppingListId: weeklyList.id,
-        productId: null,
-        customName: "Bombillas LED",
+        // A product created for the list rather than a name typed onto it:
+        // free text stopped being a thing an item can be, and this is what
+        // the add form does now — one step, and the household keeps something
+        // it can price next time.
+        productId: bulbs.id,
         quantity: 4,
         unit: "unidad",
         isChecked: false,

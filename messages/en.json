@@ -696,7 +696,17 @@
     "deleteConfirmBody": "The list and everything on it will be gone. This cannot be undone.",
     "deleteConfirm": "Yes, delete the list",
     "listCreated": "You created the list “{name}”",
-    "autoListUpToDate": "You checked the stock. The automatic list is up to date now."
+    "autoListUpToDate": "You checked the stock. The automatic list is up to date now.",
+    "productSelectHint": "Choose the product you want to buy, or create it if it is not there yet.",
+    "createProductPrompt": "Not on the list? Create it",
+    "createProductCancel": "Choose one that already exists",
+    "productRequired": "Choose a product, or create a new one.",
+    "storeLabel": "Where to buy it?",
+    "storeAnywhere": "Anywhere",
+    "quantityLabel": "Quantity",
+    "unitLabel": "Unit",
+    "itemUpdated": "You changed “{name}”",
+    "seePrices": "See prices for “{name}”"
   },
   "prices": {
     "title": "Prices",
