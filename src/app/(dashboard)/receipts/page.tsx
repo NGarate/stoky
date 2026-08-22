@@ -69,9 +69,9 @@ export default function ReceiptsPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
+          <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("title")}</h1>
         </div>
         <div className="text-center py-12">
           <p className="text-muted-foreground">{t("loadingList")}</p>
@@ -81,9 +81,9 @@ export default function ReceiptsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="mx-auto max-w-6xl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
+        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("title")}</h1>
         {/* `asChild` so the anchor *is* the button: a `<Link>` wrapping a
             `<Button>` produced an `<a>` with no box of its own — 103×17, well
             under the target floor — around a button that had one, and an anchor

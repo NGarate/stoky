@@ -150,7 +150,7 @@ export function ShoppingListView({ id }: { id: string }) {
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <BackLink href="/shopping">{t("common.back")}</BackLink>

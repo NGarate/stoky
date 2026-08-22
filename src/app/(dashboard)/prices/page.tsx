@@ -23,9 +23,12 @@ export default function PricesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    // Bounded like every other index. Unbounded, it ran the full width of the
+    // layout's 7xl while `/inventory` and `/products` beside it stopped at
+    // 6xl — the same list, two line lengths, depending which one you opened.
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-heading">{t("prices.title")}</h1>
+        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("prices.title")}</h1>
       </div>
 
       {/* The placeholder was doing the job of the label, which means the field

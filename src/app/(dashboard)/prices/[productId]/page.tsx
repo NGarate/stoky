@@ -42,7 +42,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
     })) || [];
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center gap-4">
         <Button asChild className="md:text-lg" variant="outline">
           <Link href="/prices" > {t("common.back")} </Link>

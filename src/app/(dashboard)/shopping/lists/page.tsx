@@ -79,7 +79,10 @@ export default function ShoppingListsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    // Bounded like every other index. Unbounded, it ran the full width of the
+    // layout's 7xl while `/inventory` and `/products` beside it stopped at
+    // 6xl — the same list, two line lengths, depending which one you opened.
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-heading">
