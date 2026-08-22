@@ -211,100 +211,108 @@ export function ShoppingListView({ id }: { id: string }) {
         )}
       </div>
 
-      {isAdding && (
+      {/* Two panels, never one nested inside the other.
+          `CreateProductInline` is itself a `<form>`, and it used to be
+          rendered inside this screen's add-item `<form>`. Nesting forms is
+          invalid HTML, and Chromium's behaviour was measured rather than
+          assumed: both elements exist (React builds the DOM through
+          `createElement`, so nothing is dropped), the button's form owner is
+          correctly the inner one, and pressing "Crear producto" still
+          produced a native submission with no `product.create` request at
+          all — a page load that threw away the name just typed.
+          So the two forms are siblings, chosen between rather than stacked. */}
+      {isAdding && creating && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          {/* The kindness free text used to provide, in a better place:
+              writing something the household has never bought still takes
+              one step, and leaves it with a thing it can price next time. */}
+          <CreateProductInline
+            defaultName=""
+            onCancel={() => setCreating(false)}
+            onCreate={(name) =>
+              createProduct.mutate({
+                name,
+                defaultUnit: newItem.unit || "unit",
+              })
+            }
+          />
+        </div>
+      )}
+
+      {isAdding && !creating && (
         <form
           onSubmit={handleAddItem}
           className="rounded-lg border border-border bg-card p-4"
         >
           <div className="space-y-3">
-            {creating ? (
-              /* The kindness free text used to provide, in a better place:
-                 writing something the household has never bought still takes
-                 one step, and leaves it with a thing it can price next time. */
-              <CreateProductInline
-                defaultName=""
-                onCancel={() => setCreating(false)}
-                onCreate={(name) =>
-                  createProduct.mutate({
-                    name,
-                    defaultUnit: newItem.unit || "unit",
-                  })
+            <ProductPicker
+              error={productError ?? undefined}
+              hint={t("shopping.productSelectHint")}
+              onChange={(chosen) => {
+                setProduct(chosen);
+                setProductError(null);
+                if (chosen && !newItem.unit) {
+                  setNewItem((current) => ({
+                    ...current,
+                    unit: chosen.defaultUnit,
+                  }));
                 }
-              />
-            ) : (
-              <>
-                <ProductPicker
-                  error={productError ?? undefined}
-                  hint={t("shopping.productSelectHint")}
-                  onChange={(chosen) => {
-                    setProduct(chosen);
-                    setProductError(null);
-                    if (chosen && !newItem.unit) {
-                      setNewItem((current) => ({
-                        ...current,
-                        unit: chosen.defaultUnit,
-                      }));
-                    }
-                  }}
-                  value={product?.id ?? ""}
-                />
-                <Button
-                  onClick={() => setCreating(true)}
-                  type="button"
-                  variant="ghost"
-                >
-                  {t("shopping.createProductPrompt")}
-                </Button>
-              </>
-            )}
+              }}
+              value={product?.id ?? ""}
+            />
+            <Button
+              onClick={() => setCreating(true)}
+              type="button"
+              variant="ghost"
+            >
+              {t("shopping.createProductPrompt")}
+            </Button>
 
-            {creating ? null : (
-              <div className="flex flex-wrap items-end gap-2">
-                <div>
-                  <label
-                    className="mb-1 block font-medium text-foreground text-sm"
-                    htmlFor={quantityId}
-                  >
-                    {t("shopping.quantityLabel")}
-                  </label>
-                  <Input
-                    className="w-28"
-                    id={quantityId}
-                    inputMode="decimal"
-                    min="0.1"
-                    onChange={(e) =>
-                      setNewItem({
-                        ...newItem,
-                        quantity: Number.parseFloat(e.target.value) || 1,
-                      })
-                    }
-                    step="any"
-                    type="number"
-                    value={newItem.quantity}
-                  />
-                </div>
-                <div>
-                  <label
-                    className="mb-1 block font-medium text-foreground text-sm"
-                    htmlFor={unitId}
-                  >
-                    {t("shopping.unitLabel")}
-                  </label>
-                  <Input
-                    className="w-32"
-                    id={unitId}
-                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
-                    value={newItem.unit}
-                  />
-                </div>
-                <Button disabled={createProduct.isPending} type="submit">
-                  {t("common.add")}
-                </Button>
-                <Button onClick={resetForm} type="button" variant="outline">
-                  {t("common.cancel")}
-                </Button>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label
+                  className="mb-1 block font-medium text-foreground text-sm"
+                  htmlFor={quantityId}
+                >
+                  {t("shopping.quantityLabel")}
+                </label>
+                <Input
+                  className="w-28"
+                  id={quantityId}
+                  inputMode="decimal"
+                  min="0.1"
+                  onChange={(e) =>
+                    setNewItem({
+                      ...newItem,
+                      quantity: Number.parseFloat(e.target.value) || 1,
+                    })
+                  }
+                  step="any"
+                  type="number"
+                  value={newItem.quantity}
+                />
               </div>
-            )}
+              <div>
+                <label
+                  className="mb-1 block font-medium text-foreground text-sm"
+                  htmlFor={unitId}
+                >
+                  {t("shopping.unitLabel")}
+                </label>
+                <Input
+                  className="w-32"
+                  id={unitId}
+                  onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                  value={newItem.unit}
+                />
+              </div>
+              <Button disabled={createProduct.isPending} type="submit">
+                {t("common.add")}
+              </Button>
+              <Button onClick={resetForm} type="button" variant="outline">
+                {t("common.cancel")}
+              </Button>
+            </div>
           </div>
         </form>
       )}
