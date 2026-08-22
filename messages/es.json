@@ -519,7 +519,19 @@
       "successViewInventory": "Ver el inventario",
       "productSelectHint": "Elige el producto que se ha gastado.",
       "advancedSummary": "Más detalles: unidad, ubicación y nota"
-    }
+    },
+    "searchLabel": "Buscar en el inventario",
+    "searchPlaceholder": "Por ejemplo: leche",
+    "searchClear": "Quitar la búsqueda",
+    "searchEmpty": "Ningún producto coincide con «{search}». Prueba con otras palabras.",
+    "sortLabel": "Ordenar",
+    "sortNameAz": "Nombre (A–Z)",
+    "sortNameZa": "Nombre (Z–A)",
+    "sortStockLow": "Menos stock primero",
+    "sortStockHigh": "Más stock primero",
+    "resultCount": "{count, plural, =0 {Ningún producto} one {# producto} other {# productos}}",
+    "pagerLabel": "Páginas del inventario",
+    "pageStatus": "Página {page} de {pages}"
   },
   "receipts": {
     "title": "Tickets",

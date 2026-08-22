@@ -53,7 +53,6 @@ const FIXTURES = [
 ];
 
 const ids = new Map<string, string>();
-let locationId = "";
 let otherLocationId = "";
 
 beforeAll(async () => {
@@ -82,7 +81,6 @@ beforeAll(async () => {
   const empty = await prisma.storageLocation.create({
     data: { name: "Vacío", householdId: household.id },
   });
-  locationId = shelf.id;
   otherLocationId = empty.id;
 
   for (const fixture of FIXTURES) {

@@ -519,7 +519,19 @@
       "successViewInventory": "See the inventory",
       "productSelectHint": "Choose the product that has been used up.",
       "advancedSummary": "More details: unit, location and note"
-    }
+    },
+    "searchLabel": "Search the inventory",
+    "searchPlaceholder": "For example: milk",
+    "searchClear": "Clear the search",
+    "searchEmpty": "No product matches “{search}”. Try other words.",
+    "sortLabel": "Sort",
+    "sortNameAz": "Name (A–Z)",
+    "sortNameZa": "Name (Z–A)",
+    "sortStockLow": "Least stock first",
+    "sortStockHigh": "Most stock first",
+    "resultCount": "{count, plural, =0 {No products} one {# product} other {# products}}",
+    "pagerLabel": "Inventory pages",
+    "pageStatus": "Page {page} of {pages}"
   },
   "receipts": {
     "title": "Receipts",
