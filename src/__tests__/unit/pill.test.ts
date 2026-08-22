@@ -45,11 +45,30 @@ function sourceFiles(dir: string, found: string[] = []): string[] {
   return found;
 }
 
-/** A class list that is fully rounded *and* horizontally padded. */
+/**
+ * A class list shaped like a pill.
+ *
+ * Two shapes, because `Badge` has two. A fully rounded box with horizontal
+ * padding is the obvious one. The second is a chip: a fill from the reserved
+ * tone set, horizontal padding, and either `inline-` or `text-xs`. That one
+ * was added after the first missed a real pill — `rounded bg-warn px-2
+ * py-0.5 text-xs` on the shopping-lists index, which is `Badge`'s own
+ * geometry minus the component.
+ *
+ * The tone fills alone are not enough: eight message panels use `bg-danger`
+ * or `bg-warn` with `px-4 py-3`, and a banner is not a pill. What separates
+ * them is being inline, or being smaller than body text.
+ */
 function looksLikeAPill(source: string): boolean {
   return markupOnly(source)
     .split("\n")
-    .some((line) => /rounded-full/.test(line) && /\bpx-/.test(line));
+    .some((line) => {
+      if (!/\bpx-/.test(line)) return false;
+      if (/rounded-full/.test(line)) return true;
+      const tinted = /\bbg-(ok|warn|danger)\b/.test(line);
+      const chip = /\binline-/.test(line) || /\btext-xs\b/.test(line);
+      return tinted && chip;
+    });
 }
 
 describe("the only pill is Badge", () => {
@@ -70,9 +89,17 @@ describe("the only pill is Badge", () => {
 
   it("would notice one, and leaves the things that are not pills alone", () => {
     expect(looksLikeAPill('<span className="rounded-full bg-ok px-2 py-1" />')).toBe(true);
+    // The chip shape, which the first version of this check let through.
+    expect(
+      looksLikeAPill('<span className="rounded bg-warn px-2 py-0.5 text-xs" />'),
+    ).toBe(true);
     // A progress bar and an icon button, which are not pills.
     expect(looksLikeAPill('<div className="h-2 rounded-full bg-gauge" />')).toBe(false);
     expect(looksLikeAPill('<button className="rounded-full p-2" />')).toBe(false);
+    // A message panel: same fill, full width, body text.
+    expect(
+      looksLikeAPill('<p className="rounded-xl border bg-danger px-4 py-3 text-sm" />'),
+    ).toBe(false);
     // And prose describing one.
     expect(looksLikeAPill('  // it was rounded-full px-3 py-1.5 before')).toBe(false);
   });
