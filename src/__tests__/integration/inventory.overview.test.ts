@@ -40,17 +40,26 @@ async function caller() {
 }
 
 /**
- * Six products, chosen so that every branch has a witness:
+ * Eight products, chosen so that every branch has a witness:
  * two below a minimum, one at zero with a minimum, one at zero with none,
- * one healthy, and one whose name only matches an accent-folded search.
+ * one healthy, one whose name only matches an accent-folded search, and two
+ * that file in a different place depending on whether the sort folds.
+ *
+ * The last pair earns its place. "Ñoquis frescos" alone proves nothing about
+ * collation, because it is last under either rule — the accent-folding test
+ * below used to lean on it and could not fail. `Ácido cítrico` belongs second
+ * folded and last unfolded, and `Nuez moscada` sits either side of `Ñoquis`
+ * depending on the same question.
  */
 const FIXTURES = [
   { name: "Aceite de oliva", minStock: 2, stock: [1], category: "Despensa" },
+  { name: "Ácido cítrico", minStock: null, stock: [1], category: "Despensa" },
   { name: "Arroz redondo", minStock: 1, stock: [5], category: "Despensa" },
   { name: "Café molido", minStock: 2, stock: [3, -3], category: "Desayuno" },
   { name: "Detergente", minStock: null, stock: [2, -2], category: "Hogar" },
   { name: "Leche entera", minStock: 6, stock: [4, -2], category: "Lácteos" },
   { name: "Ñoquis frescos", minStock: null, stock: [3], category: "Despensa" },
+  { name: "Nuez moscada", minStock: null, stock: [1], category: "Despensa" },
 ];
 
 const ids = new Map<string, string>();
@@ -174,7 +183,7 @@ describe("the stock overview", () => {
     // only by counting what it had been handed.
     expect(page.products).toHaveLength(2);
     expect(page.total).toBe(FIXTURES.length);
-    expect(page.pageCount).toBe(3);
+    expect(page.pageCount).toBe(Math.ceil(FIXTURES.length / 2));
   });
 
   it("gives page two of a filtered list, which is the case that was wrong", async () => {
@@ -284,16 +293,32 @@ describe("the stock overview", () => {
     }
   });
 
-  it("sorts by name without filing accents after Z", async () => {
+  it("sorts by name as Spanish reads it, with accents folded in", async () => {
     const api = await caller();
     const { products } = await api.inventory.getStockOverview({ limit: 100 });
 
-    // The shipped image collates by byte, which puts "Ñoquis" after "Zumo".
-    const names = products.map((p) => p.name);
-    expect(names.indexOf("Ñoquis frescos")).toBeLessThan(
-      names.indexOf("Zumo") === -1 ? names.length : names.indexOf("Zumo"),
-    );
-    expect(names[0]).toBe("Aceite de oliva");
+    // The whole order, deliberately, rather than one relative position.
+    //
+    // This test used to say `indexOf("Ñoquis") < indexOf("Zumo")`, and there
+    // is no Zumo in these fixtures — so the bound fell back to the array's
+    // length and the assertion read "5 < 6", true under every collation
+    // there is. Ñoquis is last either way, so it could not have discriminated
+    // even with a real bound.
+    //
+    // These two do. Folded, `Ácido cítrico` is "acido citrico" and belongs
+    // between Aceite and Arroz; collated by byte, `Á` is two bytes above
+    // every ASCII letter and it files last. `Nuez moscada` and `Ñoquis
+    // frescos` swap for the same reason.
+    expect(products.map((p) => p.name)).toEqual([
+      "Aceite de oliva",
+      "Ácido cítrico",
+      "Arroz redondo",
+      "Café molido",
+      "Detergente",
+      "Leche entera",
+      "Ñoquis frescos",
+      "Nuez moscada",
+    ]);
   });
 
   it("sorts by stock, in either direction", async () => {
