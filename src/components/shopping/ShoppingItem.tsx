@@ -132,6 +132,12 @@ export function ShoppingItem({
 
   return (
     <ItemRow
+      /* `canWrite` reached the quantity and the shop and stopped there, so a
+         KITCHEN account was still offered the tick and the bin — two
+         controls `writeProcedure` refuses, discovered by pressing one. D88
+         widened that role by exactly two capabilities and neither is this;
+         `addItem` is `householdProcedure` on purpose, which is why the row
+         can be read here at all. */
       actions={
         <>
           {/* Genuine navigation, so a link — the one exception the design
@@ -147,15 +153,17 @@ export function ShoppingItem({
               </Link>
             </Button>
           ) : null}
-          <Button
-            aria-label={t("removeItem")}
-            onClick={remove}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
-          </Button>
+          {canWrite ? (
+            <Button
+              aria-label={t("removeItem")}
+              onClick={remove}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
+            </Button>
+          ) : null}
         </>
       }
       density="touch"
@@ -234,31 +242,39 @@ export function ShoppingItem({
          had. The badge widens it once the row is ticked, which is why only the
          unticked rows failed. */
       status={
-        <label className="flex min-h-[48px] min-w-[48px] items-center justify-center gap-2 text-lg">
-          <input
-            checked={item.isChecked}
-            className="h-6 w-6 rounded border-input accent-primary"
-            onChange={() =>
-              enqueue({
-                path: "shopping.updateItem",
-                input: { id: item.id, isChecked: !item.isChecked },
-                label: {
-                  key: item.isChecked
-                    ? "offline.untickedOff"
-                    : "offline.tickedOff",
-                  values: { name },
-                },
-              })
-            }
-            type="checkbox"
-          />
-          <span className="sr-only">
-            {item.isChecked ? t("untick", { name }) : t("tickOff", { name })}
-          </span>
-          {item.isChecked ? (
-            <Badge tone="ok">{t("bought")}</Badge>
-          ) : null}
-        </label>
+        canWrite ? (
+          <label className="flex min-h-[48px] min-w-[48px] items-center justify-center gap-2 text-lg">
+            <input
+              checked={item.isChecked}
+              className="h-6 w-6 rounded border-input accent-primary"
+              onChange={() =>
+                enqueue({
+                  path: "shopping.updateItem",
+                  input: { id: item.id, isChecked: !item.isChecked },
+                  label: {
+                    key: item.isChecked
+                      ? "offline.untickedOff"
+                      : "offline.tickedOff",
+                    values: { name },
+                  },
+                })
+              }
+              type="checkbox"
+            />
+            <span className="sr-only">
+              {item.isChecked ? t("untick", { name }) : t("tickOff", { name })}
+            </span>
+            {item.isChecked ? (
+              <Badge tone="ok">{t("bought")}</Badge>
+            ) : null}
+          </label>
+        ) : (
+          /* The same fact without the control: a reader who cannot tick it
+             off still needs to know whether it has been. */
+          <Badge tone={item.isChecked ? "ok" : "neutral"}>
+            {item.isChecked ? t("bought") : t("toBuy")}
+          </Badge>
+        )
       }
       title={
         <span className={item.isChecked ? "text-muted-foreground line-through" : ""}>

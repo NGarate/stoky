@@ -220,6 +220,39 @@ describe("ShoppingItem", () => {
     expect(await screen.findAllByText("Cambiaste «Leche entera»")).not.toHaveLength(0);
   });
 
+  it("offers a reader none of the controls the server refuses them", () => {
+    render(<ShoppingItem canWrite={false} stores={STORES} item={baseItem} />);
+
+    // `canWrite` reached the quantity and the shop and stopped there, so a
+    // KITCHEN account was still offered the tick and the bin — two controls
+    // `writeProcedure` refuses, found out by pressing one. D88 widened that
+    // role by exactly two capabilities and neither is this.
+    expect(screen.queryByRole("checkbox")).toBeAbsent();
+    expect(screen.queryByRole("button", { name: "Eliminar artículo" })).toBeAbsent();
+  });
+
+  it("still tells a reader whether it has been bought", () => {
+    render(
+      <ShoppingItem
+        canWrite={false}
+        stores={STORES}
+        item={{ ...baseItem, isChecked: true }}
+      />,
+    );
+
+    // Removing the control must not remove the fact.
+    expect(screen.getByText("Comprado")).toBeInTheDocument();
+  });
+
+  it("still shows a reader where to buy it", () => {
+    render(<ShoppingItem canWrite={false} stores={STORES} item={baseItem} />);
+
+    // Prices are a read, so the one action that survives is the link to them.
+    expect(
+      screen.getByRole("link", { name: /Ver precios/ }),
+    ).toBeInTheDocument();
+  });
+
   it("says nothing when the row is ticked off, and that is deliberate", async () => {
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
