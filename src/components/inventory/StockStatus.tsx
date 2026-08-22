@@ -18,6 +18,28 @@ import type { JSX } from "react";
  * there is one answer to give.
  */
 
+/**
+ * What colour a row carrying this stock should be.
+ *
+ * The same three questions in the same order as `StockStatus` below, because
+ * the row and the badge on it were deciding separately and disagreeing. The
+ * inventory tinted by `isLowStock` alone, so a product at 0 of a minimum of 2
+ * had a **warn** row under a **danger** badge, and a product at 0 with no
+ * minimum at all had an untinted row under a danger badge — the one state
+ * where the tint mattered most was the one it did not draw.
+ *
+ * That is UI-11 again in a different costume: two rules for one state, in one
+ * file this time rather than two.
+ */
+export function stockTone(
+  totalStock: number,
+  isLowStock: boolean,
+): "neutral" | "warn" | "danger" {
+  if (totalStock <= 0) return "danger";
+  if (isLowStock) return "warn";
+  return "neutral";
+}
+
 /** The quantity, tinted by how worrying it is and always carrying its unit. */
 export function StockAmount({
   defaultUnit,

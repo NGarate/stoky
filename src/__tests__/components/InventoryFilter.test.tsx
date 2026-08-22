@@ -98,6 +98,56 @@ describe("the restock filter", () => {
     expect(clear.getAttribute("href")).toBe("/inventory");
   });
 
+  it("tints a row by the rule its own badge uses", () => {
+    overviewStub.data = {
+      products: [
+        {
+          id: "p1",
+          name: "Café molido",
+          category: "Desayuno",
+          defaultUnit: "paquete",
+          minStock: 2,
+          totalStock: 0,
+          isLowStock: true,
+          onListQuantity: 0,
+        },
+        {
+          id: "p2",
+          name: "Detergente",
+          category: "Hogar",
+          defaultUnit: "unidad",
+          minStock: null,
+          totalStock: 0,
+          isLowStock: false,
+          onListQuantity: 0,
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageCount: 1,
+    };
+
+    renderWithIntl(<InventoryView />, { locale: "es" });
+
+    // The row was tinted by `isLowStock` alone while `StockStatus` asks
+    // `totalStock <= 0` first. So the first product sat in a warn row under a
+    // danger badge, and the second — out of stock with nobody having set a
+    // minimum — had no tint at all under a danger badge. One state, two
+    // rules, which is UI-11 in a different costume.
+    for (const name of ["Café molido", "Detergente"]) {
+      // Both tiers are in the tree — the desktop table comes first in source
+      // order — so the card row is found rather than taken as the first hit.
+      const row = screen
+        .getAllByText(name)
+        .map((node) => node.closest("li"))
+        .find((node): node is HTMLLIElement => node !== null);
+
+      expect(row).toBeDefined();
+      expect(row?.className ?? "").toContain("bg-danger");
+      expect(row?.className ?? "").not.toContain("bg-warn");
+    }
+  });
+
   it("says so when nothing needs restocking, instead of a bare empty list", () => {
     searchParams = new URLSearchParams("filter=restock");
 

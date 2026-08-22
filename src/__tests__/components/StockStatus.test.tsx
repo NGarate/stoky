@@ -2,7 +2,11 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
 import { renderWithIntl } from "../utils/render";
-import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
+import {
+  StockAmount,
+  StockStatus,
+  stockTone,
+} from "@/components/inventory/StockStatus";
 
 /**
  * ISSUES UI-11, pinned.
@@ -65,6 +69,18 @@ describe("StockAmount", () => {
     expect(screen.getByText("0 paquete").className).toContain(
       "text-danger-foreground",
     );
+  });
+
+  it("gives the row the same answer it gives the badge", () => {
+    // The inventory tinted its rows by `isLowStock` alone while the badge
+    // asked `totalStock <= 0` first. So a product at 0 of a minimum of 2 sat
+    // in a **warn** row under a **danger** badge, and one at 0 with no
+    // minimum had no tint at all under a danger badge — the state where the
+    // tint matters most was the one it did not draw.
+    expect(stockTone(0, true)).toBe("danger");
+    expect(stockTone(0, false)).toBe("danger");
+    expect(stockTone(1, true)).toBe("warn");
+    expect(stockTone(5, false)).toBe("neutral");
   });
 
   it("always carries the unit, because a bare number is not an amount", () => {

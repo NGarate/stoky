@@ -5,7 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useId } from "react";
 import { Select } from "@/components/ui/select";
-import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
+import {
+  StockAmount,
+  StockStatus,
+  stockTone,
+} from "@/components/inventory/StockStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +60,17 @@ const SORT_LABELS: Record<SortParam, string> = {
 const DEFAULT_SORT: SortParam = "name-az";
 /** The ceiling `stockOverviewSchema` enforces, so the client cannot exceed it. */
 const MAX_PAGE = 10_000;
+
+/**
+ * The table's tint per tone. `ItemRow` owns the card tier's; this tier is a
+ * `<tr>`, which no primitive covers, so the mapping is written out once here
+ * rather than derived a second time from the stock numbers.
+ */
+const ROW_TINTS: Record<ReturnType<typeof stockTone>, string> = {
+  neutral: "",
+  warn: "bg-warn",
+  danger: "bg-danger",
+};
 
 const PAGE_SIZE = 20;
 
@@ -322,7 +337,7 @@ export function InventoryView(): JSX.Element {
               <tr
                 key={product.id}
                 className={`border-t border-border ${
-                  product.isLowStock ? "bg-warn" : ""
+                  ROW_TINTS[stockTone(product.totalStock, product.isLowStock)]
                 }`}
               >
                 <td className="px-4 py-3">
@@ -383,7 +398,7 @@ export function InventoryView(): JSX.Element {
               />
             }
             title={product.name}
-            tone={product.isLowStock ? "warn" : "neutral"}
+            tone={stockTone(product.totalStock, product.isLowStock)}
           />
         ))}
       </ul>
