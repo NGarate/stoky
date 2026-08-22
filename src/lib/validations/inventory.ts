@@ -94,7 +94,21 @@ export const stockOverviewSchema = z.object({
   needsRestock: z.boolean().optional(),
   sort: z.enum(["name", "stock"]).default("name"),
   direction: z.enum(["asc", "desc"]).default("asc"),
-  page: z.number().int().min(1).default(1),
+  /**
+   * Bounded, and the bound is not decoration.
+   *
+   * `page` becomes `OFFSET (page - 1) * limit`, and Postgres takes that as a
+   * bigint. `page: 1e19` is an integer as far as `.int()` is concerned, so it
+   * passed, reached the database as `OFFSET 2e20`, and came back `bigint out
+   * of range` — a failed query and an error screen where an empty page was
+   * the honest answer.
+   *
+   * Ten thousand rather than something nearer the bigint ceiling: at the
+   * maximum `limit` of 100 that is a million rows, which no household's
+   * cupboards will hold, and a number a person can actually reach by paging
+   * is worth more as a bound than one chosen to fit a machine word.
+   */
+  page: z.number().int().min(1).max(10_000).default(1),
   limit: z.number().int().min(1).max(100).default(20),
 });
 

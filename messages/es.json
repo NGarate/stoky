@@ -533,7 +533,9 @@
     "sortStockHigh": "Más stock primero",
     "resultCount": "{count, plural, =0 {Ningún producto} one {# producto} other {# productos}}",
     "pagerLabel": "Páginas del inventario",
-    "pageStatus": "Página {page} de {pages}"
+    "pageStatus": "Página {page} de {pages}",
+    "pagePastEnd": "Esta página no existe. La lista llega hasta la {pages}.",
+    "goToLastPage": "Ir a la última página"
   },
   "receipts": {
     "title": "Tickets",

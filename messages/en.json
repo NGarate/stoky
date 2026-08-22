@@ -533,7 +533,9 @@
     "sortStockHigh": "Most stock first",
     "resultCount": "{count, plural, =0 {No products} one {# product} other {# products}}",
     "pagerLabel": "Inventory pages",
-    "pageStatus": "Page {page} of {pages}"
+    "pageStatus": "Page {page} of {pages}",
+    "pagePastEnd": "This page does not exist. The list ends at page {pages}.",
+    "goToLastPage": "Go to the last page"
   },
   "receipts": {
     "title": "Receipts",

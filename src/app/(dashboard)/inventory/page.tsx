@@ -54,6 +54,9 @@ const SORT_LABELS: Record<SortParam, string> = {
 };
 
 const DEFAULT_SORT: SortParam = "name-az";
+/** The ceiling `stockOverviewSchema` enforces, so the client cannot exceed it. */
+const MAX_PAGE = 10_000;
+
 const PAGE_SIZE = 20;
 
 /**
@@ -96,7 +99,15 @@ export function InventoryView(): JSX.Element {
   const chosen = SORT_PARAMS[sortKey];
   // A page number typed by hand can be anything. `Number("abc")` is NaN and
   // `NaN || 1` is 1, which is the right answer for every kind of nonsense.
-  const page = Math.max(1, Number(params.get("page") ?? 1) || 1);
+  //
+  // Floored and capped as well, to the same ceiling the schema enforces: an
+  // unfloored 1.5 and an uncapped 1e19 were both rejected by the server —
+  // one by Zod, one by Postgres running out of bigint — and a URL somebody
+  // typed should land on a page rather than on a failure.
+  const page = Math.min(
+    MAX_PAGE,
+    Math.max(1, Math.floor(Number(params.get("page") ?? 1) || 1)),
+  );
 
   const query = api.inventory.getStockOverview.useQuery({
     limit: PAGE_SIZE,
@@ -270,6 +281,23 @@ export function InventoryView(): JSX.Element {
         <p className="rounded border border-border bg-card p-4 text-muted-foreground">
           {t("filterRestockEmpty")}
         </p>
+      ) : null}
+
+      {/* A page past the end used to be a blank screen with a pager reading
+          "Página 500 de 3" and nothing to explain it — the two empty states
+          above both need a search or a filter to speak, and a stray page
+          number has neither. */}
+      {result.pageCount > 0 && result.page > result.pageCount ? (
+        <div className="rounded border border-border bg-card p-4">
+          <p className="text-muted-foreground">
+            {t("pagePastEnd", { pages: result.pageCount })}
+          </p>
+          <Button asChild className="mt-2" variant="outline">
+            <Link href={hrefForPage(result.pageCount)}>
+              {t("goToLastPage")}
+            </Link>
+          </Button>
+        </div>
       ) : null}
 
       {/* Desktop: the table, which is legitimate at this tier and only here.

@@ -1,3 +1,4 @@
+import type { TRPCError } from "@trpc/server";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
@@ -205,6 +206,37 @@ describe("the stock overview", () => {
 
     // `COUNT(*) OVER ()` would have returned nothing here, and the pager
     // would have told someone there was nothing to page through.
+    expect(page.products).toEqual([]);
+    expect(page.total).toBe(FIXTURES.length);
+  });
+
+  it("refuses a page number the database could not offset to, as a bad request", async () => {
+    const api = await caller();
+
+    // `page` had a floor and no ceiling, and `1e19` is an integer as far as
+    // `.int()` is concerned. It reached Postgres as `OFFSET 2e20` and came
+    // back `bigint out of range`.
+    //
+    // The assertion is the *code*, not merely that it was refused: both the
+    // bounded and the unbounded schema refuse this call, and asserting "it
+    // threw" passes against the defect. Bounded, Zod turns it away as a
+    // BAD_REQUEST before a query is built; unbounded, the database fails
+    // mid-query and the caller gets an INTERNAL_SERVER_ERROR — a failure
+    // screen where an empty page was the honest answer.
+    let code = "";
+    try {
+      await api.inventory.getStockOverview({ limit: 20, page: 1e19 });
+    } catch (error) {
+      code = (error as TRPCError).code;
+    }
+
+    expect(code).toBe("BAD_REQUEST");
+  });
+
+  it("still answers for a page number a person could reach", async () => {
+    const api = await caller();
+    const page = await api.inventory.getStockOverview({ limit: 20, page: 10_000 });
+
     expect(page.products).toEqual([]);
     expect(page.total).toBe(FIXTURES.length);
   });
