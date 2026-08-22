@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { type PrismaClient } from "@prisma/client";
-import { isLowStock } from "@/lib/stock/low-stock";
+import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
@@ -430,33 +430,89 @@ export const shoppingRouter = createTRPCRouter({
       },
     });
 
-    // Asks the same question the inventory and the Panel ask. It used to write
-    // its own `currentStock < (minStock || 0)`, which reached the same answer
-    // by a different route — agreement nothing enforced.
-    const lowStockProducts = products.filter((product) => {
-      const currentStock = product.stockEntries.reduce(
-        (sum, entry) => sum + entry.quantity,
-        0
-      );
-      return isLowStock(currentStock, product.minStock);
+    /**
+     * What the household has already written down to buy, across every list.
+     *
+     * This procedure used to ask a narrower question: it skipped a product
+     * only if that product was already on **its own** auto-generated list. So
+     * anything somebody had written on a list of their own was offered again
+     * here, and "Generar desde stock bajo" quietly duplicated the week's
+     * shop. It was also a third definition of "already covered", alongside
+     * the kitchen's and `getStockOverview`'s — which is exactly what
+     * `low-stock.ts` was extracted to stop.
+     *
+     * Unticked only: a row already bought covers nothing.
+     */
+    const onList = await ctx.db.shoppingItem.groupBy({
+      by: ["productId"],
+      where: {
+        isChecked: false,
+        shoppingList: { householdId: ctx.householdId },
+      },
+      _sum: { quantity: true },
     });
 
-    // Add items to auto list (avoiding duplicates)
-    const existingProductIds = new Set(
-      autoList.items.map((item) => item.productId).filter(Boolean)
+    const alreadyOnList = new Map(
+      onList.map((row) => [row.productId, row._sum.quantity ?? 0]),
     );
 
-    for (const product of lowStockProducts) {
-      if (!existingProductIds.has(product.id)) {
-        await ctx.db.shoppingItem.create({
-          data: {
-            shoppingListId: autoList.id,
-            productId: product.id,
-            quantity: (product.minStock || 0) * 1.5, // Suggest 1.5x minimum stock
-            unit: product.defaultUnit,
-          },
+    // The same question the kitchen asks before it offers its button, and the
+    // same function. It used to write its own `currentStock < (minStock || 0)`,
+    // which reached a similar answer by a different route — agreement nothing
+    // enforced.
+    const needed = products.filter((product) =>
+      needsMoreOnList(
+        product.stockEntries.reduce((sum, entry) => sum + entry.quantity, 0),
+        alreadyOnList.get(product.id) ?? 0,
+        product.minStock,
+      ),
+    );
+
+    /**
+     * The auto list's own unticked rows, so a top-up amends rather than
+     * duplicates.
+     *
+     * With the quantity rule, "already there" no longer decides on its own
+     * whether to write — a product on the list at one of a minimum of two
+     * still needs another one. Creating a second row for it would leave the
+     * same product on the same list twice, which no screen can explain.
+     */
+    const existing = new Map(
+      autoList.items
+        .filter((item) => !item.isChecked)
+        .map((item) => [item.productId, item]),
+    );
+
+    for (const product of needed) {
+      const stock = product.stockEntries.reduce(
+        (sum, entry) => sum + entry.quantity,
+        0,
+      );
+      const covered = stock + (alreadyOnList.get(product.id) ?? 0);
+      // 1.5× the minimum is the target to reach, not the amount to add: what
+      // is in the cupboard and what is already written down both count
+      // towards it. Rounded, because these are floats and "0.30000000000004
+      // paquetes" is not a shopping list.
+      const shortfall = Math.round(((product.minStock ?? 0) * 1.5 - covered) * 100) / 100;
+      if (shortfall <= 0) continue;
+
+      const row = existing.get(product.id);
+      if (row) {
+        await ctx.db.shoppingItem.update({
+          where: { id: row.id },
+          data: { quantity: row.quantity + shortfall },
         });
+        continue;
       }
+
+      await ctx.db.shoppingItem.create({
+        data: {
+          shoppingListId: autoList.id,
+          productId: product.id,
+          quantity: shortfall,
+          unit: product.defaultUnit,
+        },
+      });
     }
 
     // Return updated list
