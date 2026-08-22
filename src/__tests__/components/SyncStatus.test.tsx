@@ -350,6 +350,26 @@ describe("the dialog itself", () => {
     expect(discard).not.toHaveBeenCalled();
   });
 
+  it("does not draw throwing the change away as the way to keep it", async () => {
+    queueState = {
+      ...queueState,
+      failed: [failed("f1", "needs-reconciliation")],
+    };
+    renderWithIntl(<SyncStatus />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
+
+    // "Descartar" deletes an unsent change and no procedure puts it back.
+    // Drawn as the filled primary beside "Guardar", it was the same colour
+    // as the action that keeps the work — the design system's rule is that
+    // the colour says what kind of action it is.
+    const save = screen.getByRole("button", { name: /Guardar/ });
+    const discardButton = screen.getByRole("button", { name: /Descartar/ });
+
+    expect(discardButton.className).not.toBe(save.className);
+    expect(discardButton.className).toContain("destructive");
+  });
+
   it("says what happened before it asks anything", async () => {
     queueState = {
       ...queueState,

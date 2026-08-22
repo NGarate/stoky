@@ -124,12 +124,16 @@ export default function ShoppingListsPage() {
           >
             {t("common.create")}
           </Button>
+          {/* Steps aside; it does not compete. Drawn as the filled primary
+              it was indistinguishable from "Crear", which is the one action
+              on this form that does something. */}
           <Button
-            type="button"
             onClick={() => {
               setIsCreating(false);
               setNewListName("");
             }}
+            type="button"
+            variant="outline"
           >
             {t("common.cancel")}
           </Button>

@@ -79,11 +79,18 @@ export default function ShopPage(): JSX.Element {
         {t("shopTitle")}
       </h1>
 
-      {/* The primary action, always on top and always the same size. */}
-      <Link
-        className="mt-4 flex min-h-[64px] w-full items-center justify-center gap-3 rounded-xl bg-primary px-4 py-4 text-lg font-semibold text-primary-foreground hover:bg-primary/90"
-        href="/products/scan"
+      {/* The primary action, always on top and always the same size.
+          Its colour, hover and focus ring come from `Button` rather than
+          being written out beside it — they were, and a hand-written
+          `bg-primary` is a copy of the primitive that stops matching it the
+          moment the primitive changes. What stays local is the geometry:
+          64px and full width is Screen A's own decision, a row read with a
+          trolley in one hand, and no size in the primitive means that. */}
+      <Button
+        asChild
+        className="mt-4 min-h-[64px] w-full gap-3 rounded-xl py-4 text-lg font-semibold"
       >
+        <Link href="/products/scan">
         <svg
           aria-hidden="true"
           className="h-6 w-6"
@@ -98,8 +105,9 @@ export default function ShopPage(): JSX.Element {
             strokeLinejoin="round"
           />
         </svg>
-        {t("scan")}
-      </Link>
+          {t("scan")}
+        </Link>
+      </Button>
 
       <section aria-labelledby="to-buy" className="mt-8">
         <h2

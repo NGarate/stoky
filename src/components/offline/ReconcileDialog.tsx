@@ -249,12 +249,16 @@ export function ReconcileDialog({
               >
                 {adjust.isPending ? t("reconcileSaving") : t("reconcileSubmit")}
               </Button>
+              {/* It throws away an unsent change, and no procedure puts it
+                  back. Drawn as the filled primary beside "Guardar", it was
+                  the same colour as the action that keeps the work. */}
               <Button
                 onClick={() => {
                   discard(op.id);
                   onClose();
                 }}
                 type="button"
+                variant="destructive"
               >
                 {t("reconcileDiscard")}
               </Button>
@@ -266,10 +270,7 @@ export function ReconcileDialog({
                 than no control. The matrix gives KITCHEN looking and
                 consuming, and this says who can do the rest. */}
             <p className="text-sm text-foreground">{t("reconcileKitchen")}</p>
-            <Button
-              onClick={onClose}
-              type="button"
-            >
+            <Button onClick={onClose} type="button" variant="outline">
               {t("refresh")}
             </Button>
           </div>
