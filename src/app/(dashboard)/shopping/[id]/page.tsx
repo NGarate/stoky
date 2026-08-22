@@ -41,6 +41,14 @@ export function ShoppingListView({ id }: { id: string }) {
   const [newItem, setNewItem] = useState({ quantity: 1, unit: "" });
 
   const listQuery = api.shopping.getById.useQuery({ id });
+  // One query for the whole list rather than one per row.
+  const storesQuery = api.store.list.useQuery({ limit: 100 });
+  const me = api.auth.me.useQuery(undefined, { retry: false });
+  const stores = storesQuery.data ?? [];
+  // `writeProcedure` admits OWNER, ADMIN and MEMBER; KITCHEN reads only
+  // (D88 widened it by exactly two capabilities, and editing is not one).
+  // The server is the control; hiding the controls is courtesy.
+  const canWrite = me.data?.role !== "KITCHEN" && me.data?.role !== undefined;
   const list = listQuery.data;
 
   const { state: queueState, enqueue } = useWriteQueue();
@@ -309,7 +317,12 @@ export function ShoppingListView({ id }: { id: string }) {
           </div>
         ) : (
           items.map((item) => (
-            <ShoppingItem key={item.id} item={item} />
+            <ShoppingItem
+              canWrite={canWrite}
+              item={item}
+              key={item.id}
+              stores={stores}
+            />
           ))
         )}
       </div>

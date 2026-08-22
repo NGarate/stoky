@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -24,11 +24,12 @@ mock.module("@/components/offline/queue-context", () => ({
 
 const { ShoppingItem } = await import("@/components/shopping/ShoppingItem");
 
+const STORES = [{ id: "s1", name: "Mercadona" }];
+
 const baseItem = {
   id: "item-1",
   productId: "product-1",
   product: { name: "Leche entera" },
-  customName: null,
   quantity: 2,
   unit: "L",
   isChecked: false,
@@ -48,15 +49,19 @@ function lastEnqueued(): Record<string, unknown> {
 
 describe("ShoppingItem", () => {
   it("shows the linked product name and quantity", () => {
-    renderWithIntl(<ShoppingItem item={baseItem} />);
+    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
-    expect(screen.getByText("2 L")).toBeInTheDocument();
+    // The quantity is an editable field now, not a sentence.
+    expect(screen.getByLabelText(/Cantidad de «Leche entera»/)).toHaveValue(2);
+    expect(screen.getByText("L")).toBeInTheDocument();
   });
 
   it("falls back to the custom name for free-text items", () => {
     renderWithIntl(
       <ShoppingItem
+        canWrite
+        stores={STORES}
         item={{
           ...baseItem,
           productId: "p9",
@@ -73,6 +78,8 @@ describe("ShoppingItem", () => {
   it("falls back to the translated placeholder if the product is gone", () => {
     renderWithIntl(
       <ShoppingItem
+        canWrite
+        stores={STORES}
         item={{ ...baseItem, productId: null, product: null }}
       />,
     );
@@ -83,7 +90,7 @@ describe("ShoppingItem", () => {
 
   it("reflects the checked state in the checkbox", () => {
     renderWithIntl(
-      <ShoppingItem item={{ ...baseItem, isChecked: true }} />,
+      <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
     );
 
     expect(screen.getByRole("checkbox")).toBeChecked();
@@ -91,14 +98,14 @@ describe("ShoppingItem", () => {
 
   it("strikes through the name once checked", () => {
     renderWithIntl(
-      <ShoppingItem item={{ ...baseItem, isChecked: true }} />,
+      <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
     );
 
     expect(screen.getByText("Leche entera")).toHaveClass("line-through");
   });
 
   it("toggles an unchecked item to checked", async () => {
-    renderWithIntl(<ShoppingItem item={baseItem} />);
+    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     await userEvent.click(screen.getByRole("checkbox"));
 
@@ -113,7 +120,7 @@ describe("ShoppingItem", () => {
 
   it("toggles a checked item back to unchecked", async () => {
     renderWithIntl(
-      <ShoppingItem item={{ ...baseItem, isChecked: true }} />,
+      <ShoppingItem canWrite stores={STORES} item={{ ...baseItem, isChecked: true }} />,
     );
 
     await userEvent.click(screen.getByRole("checkbox"));
@@ -126,7 +133,7 @@ describe("ShoppingItem", () => {
   });
 
   it("removes the item via the labelled delete control", async () => {
-    renderWithIntl(<ShoppingItem item={baseItem} />);
+    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     // shopping.removeItem in messages/es.json
     await userEvent.click(
@@ -145,7 +152,7 @@ describe("ShoppingItem", () => {
     // flight". There is no flight any more: enqueueing is synchronous, which
     // is the point — someone walking down an aisle should not wait on a
     // round trip between two items.
-    renderWithIntl(<ShoppingItem item={baseItem} />);
+    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     const remove = screen.getByRole("button", { name: "Eliminar artículo" });
     expect(remove).not.toBeDisabled();
@@ -161,9 +168,134 @@ describe("ShoppingItem", () => {
     // rather than once per tap — asserted in WriteQueueProvider.test.tsx. What
     // is left to check here is that this component has no second path to the
     // server, because two paths is two things to get wrong.
-    renderWithIntl(<ShoppingItem item={baseItem} />);
+    renderWithIntl(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
     await userEvent.click(screen.getByRole("checkbox"));
 
     expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("changes the quantity through the queue, like every other write here", async () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite
+        item={{ ...baseItem, product: { name: "Leche entera" } }}
+        stores={STORES}
+      />,
+    );
+
+    const field = screen.getByLabelText(/Cantidad de «Leche entera»/);
+    fireEvent.change(field, { target: { value: "6" } });
+    fireEvent.blur(field);
+
+    // Not a mutation: a change made in a supermarket basement has to survive
+    // having no signal, exactly as the tick does.
+    expect(enqueue.mock.calls).toHaveLength(1);
+    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
+      path: "shopping.updateItem",
+      input: { id: "item-1", quantity: 6 },
+    });
+  });
+
+  it("says nothing when the quantity has not actually changed", () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite
+        item={{ ...baseItem, product: { name: "Leche entera" } }}
+        stores={STORES}
+      />,
+    );
+
+    // Blurring a field you only looked at is not an edit, and a queued write
+    // per glance is a queue full of nothing.
+    fireEvent.blur(screen.getByLabelText(/Cantidad de «Leche entera»/));
+
+    expect(enqueue.mock.calls).toHaveLength(0);
+  });
+
+  it("refuses a quantity of zero rather than queueing it", () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite
+        item={{ ...baseItem, product: { name: "Leche entera" } }}
+        stores={STORES}
+      />,
+    );
+
+    const field = screen.getByLabelText(/Cantidad de «Leche entera»/);
+    fireEvent.change(field, { target: { value: "0" } });
+    fireEvent.blur(field);
+
+    expect(enqueue.mock.calls).toHaveLength(0);
+  });
+
+  it("chooses where to buy it, and lets that be nowhere in particular", () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite
+        item={{ ...baseItem, product: { name: "Leche entera" }, storeId: "s1" }}
+        stores={STORES}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/Dónde comprar «Leche entera»/), {
+      target: { value: "" },
+    });
+
+    // Null, not an empty string: "anywhere" is a real answer and the column
+    // is nullable for it.
+    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
+      path: "shopping.updateItem",
+      input: { id: "item-1", storeId: null },
+    });
+  });
+
+  it("shows a kitchen account the values without the controls", () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite={false}
+        item={{
+          ...baseItem,
+          product: { name: "Leche entera" },
+          store: { id: "s1", name: "Mercadona" },
+          storeId: "s1",
+        }}
+        stores={STORES}
+      />,
+    );
+
+    // D88 widened KITCHEN by exactly two capabilities and editing an item is
+    // not one of them. `writeProcedure` is the control; this is courtesy, so
+    // the values are still readable.
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByText("2 L")).toBeInTheDocument();
+    expect(screen.getByText("Mercadona")).toBeInTheDocument();
+  });
+
+  it("offers what it costs where, from the aisle", () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite
+        item={{ ...baseItem, product: { name: "Leche entera" } }}
+        stores={STORES}
+      />,
+    );
+
+    // What makes choosing a shop above an informed decision rather than a
+    // guess: the answer is one tap away, where the question is asked.
+    const link = screen.getByRole("link", { name: /Ver precios de «Leche entera»/ });
+    expect(link.getAttribute("href")).toBe("/prices/product-1");
+  });
+
+  it("offers no price link when there is no product to price", () => {
+    renderWithIntl(
+      <ShoppingItem
+        canWrite
+        item={{ ...baseItem, productId: null, product: null }}
+        stores={STORES}
+      />,
+    );
+
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

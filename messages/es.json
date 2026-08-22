@@ -707,7 +707,10 @@
     "unitLabel": "Unidad",
     "itemUpdated": "Cambiaste «{name}»",
     "seePrices": "Ver precios de «{name}»",
-    "bought": "Comprado"
+    "bought": "Comprado",
+    "quantityOf": "Cantidad de «{name}»",
+    "storeOf": "Dónde comprar «{name}»",
+    "seePricesShort": "Precios"
   },
   "prices": {
     "title": "Precios",

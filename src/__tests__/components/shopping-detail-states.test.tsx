@@ -63,6 +63,10 @@ mock.module("@/lib/trpc/client", () => ({
       list: { useQuery: () => ({ data: { products: [] }, isLoading: false }) },
       getByBarcode: { useQuery: () => ({ data: null }) },
     },
+    // The row offers a shop to buy at, and asks who is looking to decide
+    // whether to render the controls at all.
+    store: { list: { useQuery: () => ({ data: [], isLoading: false }) } },
+    auth: { me: { useQuery: () => ({ data: { role: "OWNER" } }) } },
     shopping: {
       getById: { useQuery: () => queryStub },
       addItem: { useMutation: () => idleMutation },

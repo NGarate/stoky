@@ -1,11 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { useId } from "react";
 import { Trash2 } from "lucide-react";
 
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
 
 import type { JSX } from "react";
@@ -18,7 +21,17 @@ interface ShoppingItemProps {
     quantity: number;
     unit: string | null;
     isChecked: boolean;
+    storeId?: string | null;
+    store?: { id: string; name: string } | null;
   };
+  /**
+   * Courtesy only. `shopping.updateItem` is a `writeProcedure`, so a KITCHEN
+   * account is refused by the server whatever this renders — D88 widened that
+   * role by exactly two capabilities and this is not one of them.
+   */
+  canWrite: boolean;
+  /** The household's shops, for the "where" control. */
+  stores: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -38,34 +51,124 @@ interface ShoppingItemProps {
  * shared with `/shopping` is D54's trolley: this screen has none, so a
  * removal here is a removal.
  */
-export function ShoppingItem({ item }: ShoppingItemProps): JSX.Element {
+export function ShoppingItem({
+  item,
+  canWrite,
+  stores,
+}: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
   const { enqueue } = useWriteQueue();
+  const quantityId = useId();
+  const storeId = useId();
 
   const name = item.product?.name || t("itemName");
+
+  /** Both controls write the same way the tick does: through the queue. */
+  function change(
+    input: { quantity: number } | { storeId: string | null },
+  ): void {
+    enqueue({
+      path: "shopping.updateItem",
+      input: { id: item.id, ...input },
+      label: { key: "shopping.itemUpdated", values: { name } },
+    });
+  }
 
   return (
     <ItemRow
       actions={
-        <Button
-          aria-label={t("removeItem")}
-          onClick={() =>
-            enqueue({
-              path: "shopping.removeItem",
-              input: { id: item.id },
-              label: { key: "offline.removedItem", values: { name } },
-            })
-          }
-          size="icon"
-          type="button"
-          variant="ghost"
-        >
-          <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
-        </Button>
+        <>
+          {/* Genuine navigation, so a link — the one exception the design
+              system's "actions are buttons" rule admits. It is what makes
+              choosing a shop above an informed decision rather than a guess:
+              the answer to "where is this cheapest" is one tap away, in the
+              aisle, which is where the question is asked. */}
+          {item.productId ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/prices/${item.productId}`}>
+                <span aria-hidden="true">{t("seePricesShort")}</span>
+                <span className="sr-only">{t("seePrices", { name })}</span>
+              </Link>
+            </Button>
+          ) : null}
+          <Button
+            aria-label={t("removeItem")}
+            onClick={() =>
+              enqueue({
+                path: "shopping.removeItem",
+                input: { id: item.id },
+                label: { key: "offline.removedItem", values: { name } },
+              })
+            }
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
+          </Button>
+        </>
       }
       density="touch"
       meta={[
-        { label: t("quantityLabel"), value: `${item.quantity} ${item.unit ?? ""}`.trim() },
+        {
+          label: t("quantityLabel"),
+          value: canWrite ? (
+            <div className="flex items-center gap-2">
+              <label className="sr-only" htmlFor={quantityId}>
+                {t("quantityOf", { name })}
+              </label>
+              {/* Committed on change rather than on every keystroke: each one
+                  is a queued write, and a queue with eight entries for one
+                  number is eight round trips. */}
+              <Input
+                className="w-24"
+                defaultValue={item.quantity}
+                id={quantityId}
+                inputMode="decimal"
+                key={item.quantity}
+                min="0.1"
+                onBlur={(event) => {
+                  const next = Number.parseFloat(event.target.value);
+                  if (Number.isFinite(next) && next > 0 && next !== item.quantity) {
+                    change({ quantity: next });
+                  }
+                }}
+                step="any"
+                type="number"
+              />
+              <span>{item.unit ?? ""}</span>
+            </div>
+          ) : (
+            `${item.quantity} ${item.unit ?? ""}`.trim()
+          ),
+        },
+        {
+          label: t("storeLabel"),
+          value: canWrite ? (
+            <>
+              <label className="sr-only" htmlFor={storeId}>
+                {t("storeOf", { name })}
+              </label>
+              <select
+                className="min-h-[48px] w-full rounded-md border border-input bg-card px-3 text-foreground"
+                id={storeId}
+                onChange={(event) =>
+                  change({ storeId: event.target.value || null })
+                }
+                value={item.storeId ?? ""}
+              >
+                <option value="">{t("storeAnywhere")}</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            (item.store?.name ?? t("storeAnywhere"))
+          ),
+        },
       ]}
       status={
         <label className="flex min-h-[48px] items-center gap-2 text-lg">

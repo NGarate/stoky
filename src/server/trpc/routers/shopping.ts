@@ -57,6 +57,8 @@ export const shoppingRouter = createTRPCRouter({
           items: {
             include: {
               product: true,
+              // The row shows where to buy it, so the row needs its name.
+              store: true,
             },
             orderBy: {
               id: "asc",

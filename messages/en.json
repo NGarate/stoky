@@ -707,7 +707,10 @@
     "unitLabel": "Unit",
     "itemUpdated": "You changed “{name}”",
     "seePrices": "See prices for “{name}”",
-    "bought": "Bought"
+    "bought": "Bought",
+    "quantityOf": "Quantity of “{name}”",
+    "storeOf": "Where to buy “{name}”",
+    "seePricesShort": "Prices"
   },
   "prices": {
     "title": "Prices",
