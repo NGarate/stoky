@@ -761,7 +761,10 @@
     "created": "You created the store “{name}”",
     "updated": "You updated “{name}”",
     "deleted": "You deleted the store “{name}”",
-    "deleteFailed": "“{name}” could not be deleted. Prices or receipts still point at it."
+    "deleteFailed": "“{name}” could not be deleted. Prices or receipts still point at it.",
+    "saveFailed": "Could not save. Try again.",
+    "deleteFailedUnknown": "Could not delete «{name}». Try again.",
+    "readOnly": "Only a household admin can change the shops."
   },
   "settings": {
     "title": "Settings",

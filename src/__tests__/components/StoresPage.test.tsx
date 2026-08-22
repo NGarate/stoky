@@ -23,17 +23,31 @@ const deleteCalls: unknown[] = [];
 
 const stores = [{ id: "s1", name: "Mercadona", address: "Calle A" }];
 
+/** Who the screen thinks is looking. All three writes are admin-only. */
+let role = "OWNER";
+
+/** When set, every mutation reports this instead of succeeding. */
+let failure: { data?: { code?: string } } | null = null;
+
+interface Callbacks {
+  onSuccess?: (data: unknown) => void | Promise<void>;
+  onError?: (error: { data?: { code?: string } }) => void;
+}
+
 function mutation(record: unknown[], result?: unknown) {
   return {
-    useMutation: (opts?: { onSuccess?: (data: unknown) => void | Promise<void> }) => ({
-      mutate: (
-        input: unknown,
-        perCall?: { onSuccess?: (data: unknown) => void | Promise<void> },
-      ) => {
+    useMutation: (opts?: Callbacks) => ({
+      mutate: (input: unknown, perCall?: Callbacks) => {
         record.push(input);
+        if (failure) {
+          opts?.onError?.(failure);
+          // Delete carries no name in its input or result, so the page passes
+          // its callbacks per call — where the row still knows which store it
+          // is. Failures take the same route.
+          perCall?.onError?.(failure);
+          return;
+        }
         void opts?.onSuccess?.(result);
-        // Delete carries no name in its input or result, so the page passes
-        // its callbacks per call — where the row still knows which store it is.
         void perCall?.onSuccess?.(result);
       },
       isPending: false,
@@ -64,6 +78,8 @@ mock.module("@/lib/trpc/client", () => ({
     useUtils: () => ({
       store: { list: { invalidate: async () => void invalidated.push("store.list") } },
     }),
+    // The screen asks who is looking before it draws an admin's controls.
+    auth: { me: { useQuery: () => ({ data: { role } }) } },
     store: {
       list: { useQuery: () => ({ data: stores, isLoading: false }) },
       create: mutation(createCalls, { id: "s2", name: "Lidl" }),
@@ -88,6 +104,8 @@ beforeEach(() => {
   invalidated.length = 0;
   createCalls.length = 0;
   deleteCalls.length = 0;
+  role = "OWNER";
+  failure = null;
 });
 
 afterEach(cleanup);
@@ -124,6 +142,70 @@ describe("the stores settings screen", () => {
     // Naming it is the point: "Guardado" over a list you cannot see change
     // is what this screen already had, which was nothing.
     expect(await screen.findAllByText(/Creaste la tienda «Lidl»/)).not.toHaveLength(0);
+  });
+
+  it("offers a member none of the three things the server refuses", async () => {
+    role = "MEMBER";
+    renderPage();
+
+    // `store.create`, `store.update` and `store.delete` are all
+    // `adminProcedure`. This screen drew all three for everybody, so a member
+    // found out by pressing one.
+    expect(screen.queryByRole("button", { name: "Crear tienda" })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: /Eliminar/ })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: /Editar/ })).toBeAbsent();
+    expect(
+      screen.getByText(/Sólo quien administra el hogar/),
+    ).toBeInTheDocument();
+  });
+
+  it("still offers them to an admin", async () => {
+    role = "ADMIN";
+    renderPage();
+
+    expect(
+      screen.getByRole("button", { name: "Crear tienda" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Sólo quien administra el hogar/)).toBeAbsent();
+  });
+
+  it("says when a store could not be saved", async () => {
+    failure = { data: { code: "INTERNAL_SERVER_ERROR" } };
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Crear tienda" }));
+    await userEvent.type(screen.getByLabelText(/Nombre de la tienda/), "Lidl");
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    // A failure left the form open with the data still in it and said
+    // nothing, so a refused write looked like a form nobody had finished.
+    expect(await screen.findAllByText(/No se ha podido guardar/)).not.toHaveLength(0);
+  });
+
+  it("explains a refused delete only when it knows the reason", async () => {
+    failure = { data: { code: "FORBIDDEN" } };
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
+
+    // "Todavía hay precios o tickets de esa tienda" is true of a CONFLICT and
+    // a guess about anything else. It was shown for every failure, so a
+    // refused permission was explained as data that does not exist.
+    expect(
+      await screen.findAllByText(/No se ha podido eliminar «Mercadona». Vuelve/),
+    ).not.toHaveLength(0);
+    expect(screen.queryByText(/Todavía hay precios/)).toBeAbsent();
+  });
+
+  it("keeps the specific sentence for the specific failure", async () => {
+    failure = { data: { code: "CONFLICT" } };
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Eliminar Mercadona/ }));
+
+    expect(
+      await screen.findAllByText(/Todavía hay precios o tickets/),
+    ).not.toHaveLength(0);
   });
 
   it("names the store it deleted, which is in neither the input nor the result", async () => {

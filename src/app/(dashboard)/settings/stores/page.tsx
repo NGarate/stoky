@@ -29,11 +29,26 @@ export default function StoresPage() {
   const utils = api.useUtils();
   const { data: stores, isLoading } = api.store.list.useQuery({ limit: 100 });
 
+  // All three writes here are `adminProcedure`, and this screen drew "Crear
+  // tienda", "Editar" and "Eliminar" for everyone — so a MEMBER was offered
+  // three things the server refuses, and found out by pressing one. Courtesy
+  // only, like the shopping row's `canWrite`: the server is the control.
+  const me = api.auth.me.useQuery(undefined, { retry: false });
+  const canManage = me.data?.role === "OWNER" || me.data?.role === "ADMIN";
+
   // All three write to the list rendered directly below them, and none of
   // them told the cache. A store created here did not appear until the route
   // was left and re-entered; a deleted one stayed on screen. The form closing
   // was the only sign anything had happened at all, which is how a write that
   // succeeded and a write that silently failed came to look identical.
+  function reportSaveFailure(): void {
+    snackbar.show({
+      kind: "confirm",
+      tone: "danger",
+      message: { key: "stores.saveFailed" },
+    });
+  }
+
   const createMutation = api.store.create.useMutation({
     onSuccess: async (store) => {
       setIsCreating(false);
@@ -44,6 +59,10 @@ export default function StoresPage() {
         message: { key: "stores.created", values: { name: store.name } },
       });
     },
+    // A failure left the form open with the data still in it and said
+    // nothing, so a refused write looked like a form somebody had not
+    // finished filling in.
+    onError: () => reportSaveFailure(),
   });
 
   const updateMutation = api.store.update.useMutation({
@@ -56,6 +75,7 @@ export default function StoresPage() {
         message: { key: "stores.updated", values: { name: store.name } },
       });
     },
+    onError: () => reportSaveFailure(),
   });
 
   // No `onSuccess` here: the deleted store's name is in neither the input nor
@@ -94,14 +114,23 @@ export default function StoresPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-heading">{t("stores.title")}</h1>
-        {!isCreating && (
+        {canManage && !isCreating && (
           <Button onClick={() => setIsCreating(true)} type="button">
             {t("stores.create")}
           </Button>
         )}
       </div>
 
-      {isCreating && (
+      {/* Said once, plainly, rather than left to be discovered by pressing
+          something. A reader who cannot change the shops can still read
+          them — which is the whole of what this screen is for them. */}
+      {!canManage && me.data ? (
+        <p className="rounded border border-border bg-card p-4 text-muted-foreground">
+          {t("stores.readOnly")}
+        </p>
+      ) : null}
+
+      {canManage && isCreating && (
         <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-heading">
             {editingStore ? t("stores.edit") : t("stores.create")}
@@ -155,6 +184,7 @@ export default function StoresPage() {
             {stores?.map((store: Store) => (
               <ItemRow
                 actions={
+                  canManage ? (
                   <>
                     <Button
                       onClick={() => handleEdit(store)}
@@ -181,12 +211,21 @@ export default function StoresPage() {
                                 },
                               });
                             },
-                            onError: () =>
+                            // The specific sentence only for the specific
+                            // failure. "Todavía hay precios o tickets de esa
+                            // tienda" is true of a CONFLICT and a guess about
+                            // anything else — it was shown for every failure,
+                            // so a refused permission or a dropped connection
+                            // was explained as data that does not exist.
+                            onError: (error) =>
                               snackbar.show({
                                 kind: "confirm",
                                 tone: "danger",
                                 message: {
-                                  key: "stores.deleteFailed",
+                                  key:
+                                    error.data?.code === "CONFLICT"
+                                      ? "stores.deleteFailed"
+                                      : "stores.deleteFailedUnknown",
                                   values: { name: store.name },
                                 },
                               }),
@@ -201,6 +240,7 @@ export default function StoresPage() {
                       <span className="sr-only"> {store.name}</span>
                     </Button>
                   </>
+                  ) : undefined
                 }
                 key={store.id}
                 meta={

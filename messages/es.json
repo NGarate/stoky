@@ -761,7 +761,10 @@
     "created": "Creaste la tienda «{name}»",
     "updated": "Actualizaste «{name}»",
     "deleted": "Eliminaste la tienda «{name}»",
-    "deleteFailed": "No se ha podido eliminar «{name}». Todavía hay precios o tickets de esa tienda."
+    "deleteFailed": "No se ha podido eliminar «{name}». Todavía hay precios o tickets de esa tienda.",
+    "saveFailed": "No se ha podido guardar. Vuelve a intentarlo.",
+    "deleteFailedUnknown": "No se ha podido eliminar «{name}». Vuelve a intentarlo.",
+    "readOnly": "Sólo quien administra el hogar puede cambiar las tiendas."
   },
   "settings": {
     "title": "Configuración",
