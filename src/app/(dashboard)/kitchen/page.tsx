@@ -366,6 +366,10 @@ export default function KitchenPage(): JSX.Element {
                     key={product.id}
                     meta={[
                       {
+                        // The label says "Queda"; the value used to say it
+                        // again — "Queda / Queda 1 de 2 L", and "Queda / No
+                        // queda nada" — which on a tablet read from a metre
+                        // away is a word of the sentence spent twice.
                         label: t("leftLabel"),
                         value:
                           left <= 0

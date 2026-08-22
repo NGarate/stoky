@@ -26,9 +26,12 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <select
         className={cn(
-          // Same geometry and the same focus treatment as `Input`, because it
-          // sits beside one in every form that has both.
-          "flex min-h-[48px] w-full rounded-md border border-input bg-card px-3 py-2 text-foreground text-sm",
+          // Same geometry, same fill and the same focus treatment as
+          // `Input`, because it sits beside one in every form that has both.
+          // The fill was `bg-card` while `Input` was `bg-background`, so the
+          // two boxes on the shopping row — a quantity and a shop — were
+          // visibly different shades of the same control.
+          "flex min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-foreground text-sm",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           "disabled:cursor-not-allowed disabled:opacity-50",
           className,

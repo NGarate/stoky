@@ -426,6 +426,18 @@ describe("what the lists already cover", () => {
   });
 
 
+  it("does not say the same word twice in one row", () => {
+    stockStub = runningOut(1);
+    renderKitchen();
+
+    // The label is "Queda" and the value used to open with it too, so the row
+    // read "Queda / Queda 1 de 2 paquete" — and at zero, "Queda / No queda
+    // nada". On a tablet read from a metre away that is a word of the
+    // sentence spent twice.
+    expect(screen.getByText("1 de 2 paquete")).toBeInTheDocument();
+    expect(screen.queryByText(/Queda 1 de 2/)).toBeAbsent();
+  });
+
   it("stops offering to add what is already covered", () => {
     // One left, one already written down, a minimum of two: buying more is
     // not what this product needs, and a button that stays lit on a tablet
@@ -497,7 +509,7 @@ describe("what is running out", () => {
     };
     renderKitchen();
 
-    expect(screen.getByText("Queda 1 de 2 paquete")).toBeInTheDocument();
+    expect(screen.getByText("1 de 2 paquete")).toBeInTheDocument();
   });
 
   it("says plainly when there is none", () => {
@@ -518,7 +530,7 @@ describe("what is running out", () => {
     };
     renderKitchen();
 
-    expect(screen.getByText("No queda nada")).toBeInTheDocument();
+    expect(screen.getByText("Nada")).toBeInTheDocument();
   });
 
   it("counts a queued use against what is left", () => {
@@ -541,7 +553,7 @@ describe("what is running out", () => {
     renderKitchen();
 
     // Two litres, one used and not yet sent: the tablet must not still say two.
-    expect(screen.getByText("Queda 1 de 6 L")).toBeInTheDocument();
+    expect(screen.getByText("1 de 6 L")).toBeInTheDocument();
   });
 });
 
