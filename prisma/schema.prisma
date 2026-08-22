@@ -175,9 +175,10 @@ model ShoppingItem {
   id             String    @id @default(cuid())
   shoppingListId String
   shoppingList   ShoppingList @relation(fields: [shoppingListId], references: [id])
-  productId      String?
-  product        Product?  @relation(fields: [productId], references: [id])
-  customName     String?
+  /// Required. An item names a product the household knows about — free text
+  /// was accepted until 2026-08-22 and cost more than it gave (D103).
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id])
   quantity       Float     @default(1)
   unit           String?
   isChecked      Boolean   @default(false)

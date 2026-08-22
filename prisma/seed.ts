@@ -300,21 +300,27 @@ async function main(): Promise<void> {
     },
   });
 
+  // Found rather than assumed, and asserted rather than defaulted: an item
+  // without a product is no longer a row the database will take, so a seed
+  // that silently wrote one would fail at the insert with nothing to read.
   const milk = createdProducts.find((p) => p.name === "Leche entera");
   const coffee = createdProducts.find((p) => p.name === "Café molido natural");
+  if (!milk || !coffee) {
+    throw new Error("Seed catalogue is missing a product the shopping list needs");
+  }
 
   await prisma.shoppingItem.createMany({
     data: [
       {
         shoppingListId: weeklyList.id,
-        productId: milk?.id ?? null,
+        productId: milk.id,
         quantity: 6,
         unit: "L",
         isChecked: false,
       },
       {
         shoppingListId: weeklyList.id,
-        productId: coffee?.id ?? null,
+        productId: coffee.id,
         quantity: 2,
         unit: "paquete",
         isChecked: true,
