@@ -88,13 +88,12 @@ export function SyncStatus(): JSX.Element {
                     <span className="flex-1">
                       {t(op.label.key.replace("offline.", ""), op.label.values)}
                     </span>
-                    <button
-                      className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                    <Button
                       onClick={() => setReconciling(op)}
                       type="button"
                     >
                       {t("review")}
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -107,20 +106,18 @@ export function SyncStatus(): JSX.Element {
                     <span className="flex-1">
                       {t(op.label.key.replace("offline.", ""), op.label.values)}
                     </span>
-                    <button
-                      className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+                    <Button
                       onClick={() => retry(op.id)}
                       type="button"
                     >
                       {t("retry")}
-                    </button>
-                    <button
-                      className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+                    </Button>
+                    <Button
                       onClick={() => discard(op.id)}
                       type="button"
                     >
                       {t("discard")}
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -136,13 +133,12 @@ export function SyncStatus(): JSX.Element {
 
             {/* The only honest answer to a captive portal, which reports
                 itself as online and swallows every request. */}
-            <button
-              className="mt-3 min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+            <Button
               onClick={drain}
               type="button"
             >
               {t("sendNow")}
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>

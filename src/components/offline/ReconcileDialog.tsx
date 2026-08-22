@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { useWriteQueue } from "./queue-context";
 import type { FailedOp } from "@/lib/offline/queue";
@@ -154,15 +155,13 @@ export function ReconcileDialog({
             ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              <Button
                 disabled={adjust.isPending || amount.trim() === ""}
                 type="submit"
               >
                 {adjust.isPending ? t("reconcileSaving") : t("reconcileSubmit")}
-              </button>
-              <button
-                className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+              </Button>
+              <Button
                 onClick={() => {
                   discard(op.id);
                   onClose();
@@ -170,7 +169,7 @@ export function ReconcileDialog({
                 type="button"
               >
                 {t("reconcileDiscard")}
-              </button>
+              </Button>
             </div>
           </form>
         ) : (
@@ -179,13 +178,12 @@ export function ReconcileDialog({
                 than no control. The matrix gives KITCHEN looking and
                 consuming, and this says who can do the rest. */}
             <p className="text-sm text-foreground">{t("reconcileKitchen")}</p>
-            <button
-              className="mt-4 min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+            <Button
               onClick={onClose}
               type="button"
             >
               {t("refresh")}
-            </button>
+            </Button>
           </div>
         )}
       </div>

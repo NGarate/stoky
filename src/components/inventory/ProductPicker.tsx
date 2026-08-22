@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useId, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Select } from "@/components/ui/select";
 import { api } from "@/lib/trpc/client";
 
 /**
@@ -105,7 +106,7 @@ export function ProductPicker({ value, onChange, error, hint }: ProductPickerPro
         >
           {t("productLabel")}
         </label>
-        <select
+        <Select
           id={selectId}
           name="productId"
           required
@@ -127,7 +128,6 @@ export function ProductPicker({ value, onChange, error, hint }: ProductPickerPro
                 : null,
             );
           }}
-          className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
         >
           <option value="">{t("productPlaceholder")}</option>
           {products.map((product) => (
@@ -140,7 +140,7 @@ export function ProductPicker({ value, onChange, error, hint }: ProductPickerPro
                 : product.name}
             </option>
           ))}
-        </select>
+        </Select>
         <p
           id={statusId}
           role="status"

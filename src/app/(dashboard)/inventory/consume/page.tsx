@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { Button } from "@/components/ui/button";
@@ -381,7 +382,7 @@ export default function ConsumeStockPage(): JSX.Element {
               >
                 {t("noteLabel")}
               </label>
-              <textarea
+              <Textarea
                 id={noteId}
                 name="note"
                 rows={3}
@@ -389,7 +390,6 @@ export default function ConsumeStockPage(): JSX.Element {
                 onChange={(event) => setNote(event.target.value)}
                 placeholder={t("notePlaceholder")}
                 aria-describedby={noteHintId}
-                className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
               />
               <p id={noteHintId} className="mt-1 text-sm text-muted-foreground">
                 {t("noteHint")}

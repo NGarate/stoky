@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/lib/auth/actions";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { forgetCachedShell } from "@/lib/sw/register";
@@ -57,13 +58,12 @@ export function SignOutButton(): JSX.Element {
   if (!asking) {
     return (
       <div>
-        <button
-          className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+        <Button
           onClick={() => setAsking(true)}
           type="button"
         >
           {t("signOut")}
-        </button>
+        </Button>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("signOutShared")}
         </p>
@@ -86,18 +86,16 @@ export function SignOutButton(): JSX.Element {
 
       <div className="mt-4 flex flex-wrap gap-2">
         {pending > 0 ? (
-          <button
-            className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          <Button
             disabled={working}
             onClick={() => void sendThenLeave()}
             type="button"
           >
             {working ? t("signOutWorking") : t("signOutSendFirst")}
-          </button>
+          </Button>
         ) : null}
 
-        <button
-          className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted disabled:opacity-50"
+        <Button
           disabled={working}
           onClick={() => void leave()}
           type="button"
@@ -107,16 +105,15 @@ export function SignOutButton(): JSX.Element {
             : pending > 0
               ? t("signOutDiscard")
               : t("signOut")}
-        </button>
+        </Button>
 
-        <button
-          className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted disabled:opacity-50"
+        <Button
           disabled={working}
           onClick={() => setAsking(false)}
           type="button"
         >
           {t("signOutCancel")}
-        </button>
+        </Button>
       </div>
     </div>
   );

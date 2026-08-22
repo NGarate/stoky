@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
@@ -51,17 +52,16 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
 
       <div className="flex flex-wrap items-center gap-4">
         <label htmlFor="days-select" className="text-sm font-medium md:text-lg">{t("common.date")}:</label>
-        <select
+        <Select
           id="days-select"
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="min-h-[48px] rounded-md border border-input bg-card px-3 py-1 text-foreground md:text-lg"
         >
           <option value={30}>30 {t("common.days")}</option>
           <option value={90}>90 {t("common.days")}</option>
           <option value={180}>6 {t("common.months")}</option>
           <option value={365}>1 {t("common.year")}</option>
-        </select>
+        </Select>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">

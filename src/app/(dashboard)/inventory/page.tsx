@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useId } from "react";
+import { Select } from "@/components/ui/select";
 import { StockAmount, StockStatus } from "@/components/inventory/StockStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -233,8 +234,7 @@ export function InventoryView(): JSX.Element {
           >
             {t("sortLabel")}
           </label>
-          <select
-            className="min-h-[48px] rounded-md border border-input bg-card px-3 text-foreground"
+          <Select
             id={sortId}
             onChange={(event) => go({ sort: event.target.value })}
             value={sortKey}
@@ -244,7 +244,7 @@ export function InventoryView(): JSX.Element {
                 {t(SORT_LABELS[option])}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 

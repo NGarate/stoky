@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Button } from "@/components/ui/button";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/components/providers/TRPCProvider";
 import type { JSX } from "react";
@@ -84,14 +85,13 @@ export function ExportButton(): JSX.Element {
         {t("exportPrivacyNote")}
       </p>
 
-      <button
-        className="mt-4 min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+      <Button
         disabled={state === "working"}
         onClick={() => void download()}
         type="button"
       >
         {state === "working" ? t("exportWorking") : t("exportAction")}
-      </button>
+      </Button>
 
 
     </div>

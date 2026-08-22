@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { Trash2 } from "lucide-react";
 
+import { Select } from "@/components/ui/select";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -149,8 +150,7 @@ export function ShoppingItem({
               <label className="sr-only" htmlFor={storeId}>
                 {t("storeOf", { name })}
               </label>
-              <select
-                className="min-h-[48px] w-full rounded-md border border-input bg-card px-3 text-foreground"
+              <Select
                 id={storeId}
                 onChange={(event) =>
                   change({ storeId: event.target.value || null })
@@ -163,7 +163,7 @@ export function ShoppingItem({
                     {store.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </>
           ) : (
             (item.store?.name ?? t("storeAnywhere"))

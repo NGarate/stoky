@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useState, useId } from "react";
+import { Textarea } from "@/components/ui/textarea";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
@@ -234,7 +235,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           >
             {t("reasonLabel")}
           </label>
-          <textarea
+          <Textarea
             id={reasonId}
             name="reason"
             rows={3}
@@ -247,7 +248,6 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
                 ? `${reasonHintId} ${reasonErrorId}`
                 : reasonHintId
             }
-            className="min-h-[48px] w-full rounded border border-input bg-card px-3 py-2 text-foreground"
           />
           <p id={reasonHintId} className="mt-1 text-sm text-muted-foreground">
             {t("reasonHint")}

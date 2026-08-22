@@ -87,30 +87,27 @@ export default function UnsavedPage(): JSX.Element {
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {op.reason === "needs-reconciliation" ? (
-                    <button
-                      className="min-h-[48px] rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                    <Button
                       onClick={() => setReconciling(op)}
                       type="button"
                     >
                       {t("review")}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+                    <Button
                       onClick={() => retry(op.id)}
                       type="button"
                     >
                       {t("retry")}
-                    </button>
+                    </Button>
                   )}
 
-                  <button
-                    className="min-h-[48px] rounded-md border border-input bg-card px-4 py-2 text-foreground hover:bg-muted"
+                  <Button
                     onClick={() => discard(op.id)}
                     type="button"
                   >
                     {t("discard")}
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
