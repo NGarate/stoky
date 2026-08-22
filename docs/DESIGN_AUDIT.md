@@ -482,6 +482,13 @@ not enumerate them.
   actionable. Whether three entry points remain the right number is the half
   still open.
 
+  **Third pass, 2026-08-22.** The summary sentence went too, for the reason
+  that killed the cards: "3 productos por reponer" above a section headed
+  "Necesita reposición" listing three products is the same count twice. What
+  is left is the sections, which were always the doors. The invariant behind
+  item 2 survives a third time: the Panel's rows and the rows
+  /inventory?filter=restock shows come from one `needsRestock` question.
+
   **Superseded 2026-08-19, second pass.** The doors turned out to restate the
   lists rendered directly below them, and the owner struck the duplication:
   what needs attention is now one plain-text sentence, and the sections

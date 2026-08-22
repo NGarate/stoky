@@ -1312,3 +1312,26 @@ product per household when the normalised names match and minting one otherwise,
 carrying the original spelling as the product's name. `quantity` gained
 `.positive()` in the same pass: it was a bare number with a default, so a line
 asking you to buy zero was accepted and rendered as "0 L".
+
+**D104 — The nine list rows are one component with three densities.** The
+owner's review found the plainest possible symptom: "en cada pantalla se muestran
+de una manera". Nine screens drew the same object nine ways — cards on inventory
+and products, bordered boxes on the shopping detail, `divide-y` rows on prices
+and the Panel, a whole-card `<Link>` on receipts, a full-width button on the shop
+screen — and the drift was not only untidy, it hid defects. `ItemRow` is the
+inventory card, which is the one the owner picked, with `density` for the tier
+(Screen A is used with a trolley in one hand, Screen B is read from a metre away)
+and `variant` for whether it is a card at all, because A5.4's "no cards except
+where justified" is a decision the Panel and the kitchen already made. Sharing
+the grammar is the point; forcing the chrome would have reversed a recorded
+decision. Two defects surfaced that no screenshot would have shown: the title
+guaranteed 48px of height and none of width, so a short name like "Lidl" was a
+25×48 target at every tier; and the whole-row link made a row's accessible name
+its entire contents. Both were invisible while nine implementations each got them
+differently wrong. `Badge` absorbed seven separately-written pills whose tones
+were reserved for state and then used for "auto-generated"; `Select`, `Textarea`,
+`RadioOption`, `BackLink`, `Pagination`, `Dialog` and `FormErrorSummary` each came
+out of the same question asked honestly — "why is this floor written here?" — and
+`src/__tests__/unit/target-floor.test.ts` keeps the answer from drifting: 142
+hardcoded target floors outside the design system became 13, each with a reason
+that is checked for staleness as well as for presence (DESIGN_AUDIT A5.3, closed).
