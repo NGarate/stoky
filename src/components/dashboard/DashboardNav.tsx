@@ -39,8 +39,14 @@ export function DashboardNav(): JSX.Element {
         <div className="flex items-center gap-8">
           {/* The wordmark is a link like any other and gets the same target
               floor; at 54×28 it was the smallest control on every signed-in
-              route (DESIGN_AUDIT A4.2). */}
-          <Button asChild variant="link">
+              route (DESIGN_AUDIT A4.2).
+              `min-w` explicitly, because the `link` variant carries no
+              horizontal padding — a link in a column of text should start
+              where that text starts. This one is not in a column of text: it
+              is a navigation target sitting alone, so it states its own
+              width rather than borrowing a button's. Measured at 35×48
+              without it, which the structural audit failed at desktop. */}
+          <Button asChild className="min-w-[48px]" variant="link">
             <Link href="/dashboard" > Stoky </Link>
           </Button>
           <ul className="flex items-center gap-1">

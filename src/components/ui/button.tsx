@@ -43,6 +43,22 @@ const buttonVariants = cva(
         icon: "min-h-[48px] min-w-[48px]",
       },
     },
+    compoundVariants: [
+      /**
+       * A link's text starts where the text around it starts.
+       *
+       * Every size carries horizontal padding, which is right for a button —
+       * it is a target with a surface. A `link` has no surface, so the
+       * padding only pushed the words 16px to the right of the column they
+       * belong to: "Volver al inventario" under a paragraph it no longer
+       * lined up with, on a dozen screens.
+       *
+       * The 48px floor is untouched. It is `min-h`, and the click target of
+       * a text link is its text — widening it with invisible padding is the
+       * "Equivalent" exception being used to paper over a misalignment.
+       */
+      { variant: "link", class: "px-0" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

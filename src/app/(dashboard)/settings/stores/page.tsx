@@ -173,14 +173,19 @@ export default function StoresPage() {
         </form>
       )}
 
-      <div className="rounded-lg border border-border bg-card shadow-sm">
+      {/* No card around the cards. `ItemRow` draws each row as one, so a
+          bordered, shadowed box holding them put a card inside a card —
+          two frames for one list, and the owner's rule is no card without a
+          concrete reason (DESIGN_AUDIT A5.4). The inventory and the
+          catalogue already list into a bare `<ul>`. */}
+      <div>
         {stores?.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
             <p>{t("stores.noStores")}</p>
             <p className="mt-2 text-sm">{t("stores.addFirst")}</p>
           </div>
         ) : (
-          <ul className="space-y-3 p-3">
+          <ul className="space-y-3">
             {stores?.map((store: Store) => (
               <ItemRow
                 actions={

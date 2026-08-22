@@ -136,3 +136,33 @@ describe("Button", () => {
     expect(screen.getByRole("button")).toHaveAttribute("type", "submit");
   });
 });
+
+describe("the link variant", () => {
+  it("does not indent its text by a button's padding", () => {
+    render(<Button variant="link">Volver al inventario</Button>);
+
+    // Every size carries `px-4`, which is right for a button — it is a target
+    // with a surface. A link has no surface, so the padding only pushed the
+    // words 16px right of the column they belong to.
+    const button = screen.getByRole("button", { name: "Volver al inventario" });
+    expect(button.className).toContain("px-0");
+  });
+
+  it("keeps the 48px floor, which is a height rather than a width", () => {
+    render(<Button variant="link">Volver al inventario</Button>);
+
+    // Removing the horizontal padding must not be read as licence to shrink
+    // the target: the floor is `min-h`, and a text link's target is its text.
+    expect(
+      screen.getByRole("button", { name: "Volver al inventario" }).className,
+    ).toContain("min-h-[48px]");
+  });
+
+  it("leaves every other variant padded", () => {
+    render(<Button variant="outline">Cancelar</Button>);
+
+    expect(
+      screen.getByRole("button", { name: "Cancelar" }).className,
+    ).toContain("px-4");
+  });
+});
