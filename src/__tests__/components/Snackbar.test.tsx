@@ -89,6 +89,18 @@ function Harness({
       <button
         onClick={() =>
           snackbar.show({
+            kind: "undo-queued",
+            message: { key: "offline.addedStock", values: { quantity: 2, unit: "L", name: "Pan" } },
+            opId: "op-2",
+          })
+        }
+        type="button"
+      >
+        deshacible otro
+      </button>
+      <button
+        onClick={() =>
+          snackbar.show({
             kind: "undo-inverse",
             message: { key: "offline.addedItem", values: { name: "Pan" } },
             undo: () => onUndo?.(),
@@ -241,6 +253,23 @@ describe("two things at once", () => {
       expect(screen.getAllByText("Quitaste «Pan» de la lista")).not.toHaveLength(0);
     });
     expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+  });
+
+  it("gives a second undoable action its own undo, not one ten seconds late", async () => {
+    render();
+    await press("deshacible");
+    await screen.findByRole("button", { name: "Deshacer" });
+
+    await press("deshacible otro");
+
+    // They used to queue, one visible at a time. So tapping two things in
+    // quick succession showed the second's confirmation when the first had
+    // finished — up to ten seconds later, by which point its own window had
+    // run out and it arrived with no undo at all. Two independent windows
+    // are two snackbars.
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Deshacer" })).toHaveLength(2);
+    });
   });
 
   it("never takes away an undo to show a confirmation", async () => {

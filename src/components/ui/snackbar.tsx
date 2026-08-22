@@ -95,6 +95,16 @@ export function useSnackbar(): SnackbarApi {
 /** Below this, the button would stop working before it could be pressed. */
 const MIN_UNDO_MS = 2_000;
 
+/**
+ * How many undos may stand at once.
+ *
+ * Three, because the alternative to a cap is a wall: someone ticking a
+ * trolley off item by item would end up reading their own shopping list back
+ * through a stack of snackbars. When a fourth arrives the oldest goes, which
+ * is the one whose window is closest to expiry anyway — its change simply
+ * sends, which is what would have happened had nobody pressed the button.
+ */
+const MAX_UNDO_STACK = 3;
 
 interface Entry extends Omit<SnackbarInput, "kind"> {
   id: string;
@@ -120,16 +130,24 @@ export function SnackbarProvider({
     const entry: Entry = { ...input, id };
 
     setQueued((current) => {
-      const [visible, ...rest] = current;
-      if (!visible) return [entry];
+      const undos = current.filter((queuedEntry) => queuedEntry.kind !== "confirm");
+      const confirms = current.filter((queuedEntry) => queuedEntry.kind === "confirm");
 
       // A confirmation replaces a confirmation — nobody needs the previous
       // one — but never an undo. Taking away the button someone is reaching
-      // for is exactly the failure D54 rejected toasts over.
-      if (entry.kind === "confirm" && visible.kind === "confirm") {
-        return [entry, ...rest];
-      }
-      return [...current, entry];
+      // for is exactly the failure D54 rejected toasts over, so a
+      // confirmation arriving over an undo still waits behind it.
+      if (entry.kind === "confirm") return [...undos, entry];
+
+      // Undoable changes stand beside each other rather than in a line.
+      //
+      // They used to queue, and only the head was rendered — so tapping two
+      // things in quick succession meant the second one's confirmation
+      // appeared when the first had finished, up to ten seconds later, by
+      // which time its *own* window had run out and it was shown with no
+      // undo at all. Each queued change holds its own independent window;
+      // making them wait for each other is what threw the second one away.
+      return [...undos, entry].slice(-MAX_UNDO_STACK).concat(confirms);
     });
 
     return id;
@@ -140,7 +158,10 @@ export function SnackbarProvider({
   }, []);
 
   const api = useMemo<SnackbarApi>(() => ({ show, dismiss }), [show, dismiss]);
-  const visible = queued[0];
+
+  // Every live undo, or — when there is none — the first confirmation.
+  const undos = queued.filter((entry) => entry.kind !== "confirm");
+  const visible = undos.length > 0 ? undos : queued.slice(0, 1);
 
   return (
     <SnackbarContext.Provider value={api}>
@@ -150,13 +171,13 @@ export function SnackbarProvider({
           application comes from the catalogue; this one has to as well. */}
       <SnackbarProviderRoot>
         {children}
-        {visible ? (
+        {visible.map((entry) => (
           <SnackbarRoot
-            entry={visible}
-            key={visible.id}
-            onClosed={() => dismiss(visible.id)}
+            entry={entry}
+            key={entry.id}
+            onClosed={() => dismiss(entry.id)}
           />
-        ) : null}
+        ))}
         <SnackbarViewport />
       </SnackbarProviderRoot>
     </SnackbarContext.Provider>
