@@ -50,9 +50,24 @@ export function MatchSelector({
         </div>
       )}
 
+      {/* `aria-pressed` on each candidate, which is what makes the choice
+          exist for anyone not looking at it.
+          These are mutually exclusive and the selected one was marked by a
+          tint and a tick — and `lucide-react` gives an unlabelled icon
+          `aria-hidden`, so the tick is invisible to a screen reader too. The
+          announced output for the chosen candidate was byte-identical to the
+          ones beside it: three candidates for a receipt line, tab through
+          them, and no way to tell which one you just picked before pressing
+          "Confirmar" (WCAG 4.1.2).
+          `aria-pressed` rather than a radiogroup deliberately. A radiogroup
+          is the more precise role and brings a keyboard model with it —
+          roving tabindex, arrow keys — which is a widget rather than a fix.
+          `ShopRow` on /shopping already states a selection this way, so this
+          is the convention here rather than a new one. */}
       <div className="space-y-1">
         {candidates.map((candidate) => (
           <button
+            aria-pressed={selectedId === candidate.productId}
             type="button"
             key={candidate.productId}
             onClick={() => onSelect(candidate.productId)}
@@ -64,7 +79,7 @@ export function MatchSelector({
           >
             <div className="flex items-center gap-2">
               {selectedId === candidate.productId && (
-                <Check className="w-4 h-4 text-primary" />
+                <Check aria-hidden="true" className="w-4 h-4 text-primary" />
               )}
               <span className="text-sm">{candidate.name}</span>
             </div>
