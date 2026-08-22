@@ -177,6 +177,47 @@ describe("decoration lives in components, not in the catalogue", () => {
   });
 });
 
+/**
+ * A number in a sentence agrees with the sentence.
+ *
+ * `{count} artículos` reads "1 artículos", and Spanish notices. next-intl
+ * speaks ICU, so the plural rule belongs in the catalogue rather than in a
+ * ternary at the call site — where it would have to be written once per
+ * screen and would still be wrong in a language with more than two forms.
+ *
+ * Only `count` is checked. `quantity` and `stock` are amounts rather than
+ * counts — "1,5 L" is not a plural — and the unit beside them comes from the
+ * household's own data, which no catalogue can decline.
+ */
+describe("a number in a sentence agrees with it", () => {
+  test("every {count} carries a plural rule", () => {
+    const offenders = [
+      ...spanish.map((key) => [key, "es", value(es as Catalogue, key)] as const),
+      ...english.map((key) => [key, "en", value(en as Catalogue, key)] as const),
+    ]
+      .filter(
+        ([, , text]) =>
+          typeof text === "string" &&
+          text.includes("{count}") &&
+          !text.includes("plural"),
+      )
+      .map(([key, locale]) => `${locale}:${key}`);
+
+    expect(offenders).toEqual([]);
+  });
+
+  test("would notice one", () => {
+    const bare = "{count} artículos";
+    const declined =
+      "{count, plural, one {# artículo} other {# artículos}}";
+
+    expect(bare.includes("{count}") && !bare.includes("plural")).toBe(true);
+    expect(
+      declined.includes("{count}") && !declined.includes("plural"),
+    ).toBe(false);
+  });
+});
+
 function value(node: Catalogue, key: string): unknown {
   return key
     .split(".")
