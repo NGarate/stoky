@@ -72,53 +72,60 @@ export function RouteState({
   const t = useTranslations("household");
   const offline = useTranslations("offline");
 
-  if (fetchStatus === "paused") {
-    return (
-      <div className="mx-auto max-w-6xl">
-        <h1 className="mb-6 text-2xl font-bold text-heading md:text-4xl">{title}</h1>
-        <div className="rounded-xl border border-input bg-card p-6">
-          <h2 className="text-lg font-semibold text-heading">
-            {offline("nothingSavedTitle")}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {offline("nothingSavedBody")}
-          </p>
-          <Button className="mt-4" onClick={onRetry} type="button">
-            {offline("refresh")}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-6xl">
-        <h1 className="mb-6 text-2xl font-bold text-heading md:text-4xl">{title}</h1>
-        <div className="space-y-4" aria-busy="true">
-          {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5"].map(
-            (key) => (
-              <div key={key} className="h-16 animate-pulse rounded bg-muted" />
-            ),
-          )}
-        </div>
-      </div>
-    );
-  }
-
+  // The no-household branch is a form rather than a message, so it leaves
+  // before the live region below — a `role="status"` wrapped around a form
+  // announces the whole form.
   if (isNoHouseholdError(error)) {
     return <CreateHousehold title={title} />;
   }
 
+  const paused = fetchStatus === "paused";
+
+  /**
+   * One region, present from the first render, whose *contents* change.
+   *
+   * The three branches used to be three separate returns, each a plain
+   * `<div>`. So nothing here was a live region at all: the skeleton said
+   * nothing — `aria-busy` on a container that is not live is not announced —
+   * and when the query failed, React swapped the skeleton for a failure panel
+   * in silence. On the seven routes that render this, a screen-reader user
+   * reading elsewhere on the page was never told the screen had given up
+   * (WCAG 4.1.3).
+   *
+   * It has to be one element rather than one per branch. A region created at
+   * the moment it gains text is the case readers may skip, so the wrapper
+   * lives at a fixed position in the tree and React keeps the same DOM node
+   * across every state change — only what is inside it moves.
+   *
+   * Polite, never `alert`: `SyncStatus` owns the one assertive region in this
+   * shell and a second would make `getByRole("alert")` ambiguous everywhere.
+   */
   return (
     <div className="mx-auto max-w-6xl">
       <h1 className="mb-6 text-2xl font-bold text-heading md:text-4xl">{title}</h1>
-      <div className="rounded-xl border border-input bg-card p-6">
-        <h2 className="text-lg font-semibold text-heading">{t("loadFailedTitle")}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{t("loadFailedBody")}</p>
-        <Button className="mt-4" onClick={onRetry} type="button">
-          {t("retry")}
-        </Button>
+      <div aria-live="polite" role="status">
+        {isLoading && !paused ? (
+          <div className="space-y-4" aria-busy="true">
+            <p className="sr-only">{t("loading")}</p>
+            {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5"].map(
+              (key) => (
+                <div key={key} className="h-16 animate-pulse rounded bg-muted" />
+              ),
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-input bg-card p-6">
+            <h2 className="text-lg font-semibold text-heading">
+              {paused ? offline("nothingSavedTitle") : t("loadFailedTitle")}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {paused ? offline("nothingSavedBody") : t("loadFailedBody")}
+            </p>
+            <Button className="mt-4" onClick={onRetry} type="button">
+              {paused ? offline("refresh") : t("retry")}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

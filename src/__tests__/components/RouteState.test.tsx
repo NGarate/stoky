@@ -299,3 +299,74 @@ describe("RouteState", () => {
     });
   });
 });
+
+describe("what a screen reader is told", () => {
+  it("keeps one region across every state, so a failure is announced", () => {
+    const { rerender, container } = renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+      { locale: "es" },
+    );
+
+    const region = container.querySelector('[role="status"]');
+    expect(region).not.toBeAbsent();
+
+    rerender(
+      <RouteState
+        error={new Error("boom")}
+        fetchStatus="idle"
+        isLoading={false}
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+    );
+
+    // The same node, not a new one. A region created at the moment it gains
+    // text is the case screen readers may skip — and before this the three
+    // states were three separate returns, none of them live at all, so a
+    // query that failed replaced the skeleton in silence.
+    expect(container.querySelector('[role="status"]')).toBe(region);
+    expect(region?.textContent).toContain("No se han podido cargar");
+  });
+
+  it("says it is loading, rather than showing five silent grey bars", () => {
+    renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+      { locale: "es" },
+    );
+
+    // `aria-busy` on a container that is not a live region is not announced.
+    expect(screen.getByText("Cargando…")).toBeInTheDocument();
+  });
+
+  it("is polite, never a second assertive region", () => {
+    const { container } = renderWithIntl(
+      <RouteState
+        error={new Error("boom")}
+        fetchStatus="idle"
+        isLoading={false}
+        onRetry={() => {}}
+        title="Inventario"
+      />,
+      { locale: "es" },
+    );
+
+    // `SyncStatus` owns the one assertive region in this shell; a second
+    // makes `getByRole("alert")` ambiguous in every browser test.
+    expect(container.querySelector('[role="alert"]')).toBeAbsent();
+    expect(
+      container.querySelector('[role="status"]')?.getAttribute("aria-live"),
+    ).toBe("polite");
+  });
+});

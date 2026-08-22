@@ -838,6 +838,7 @@
     "createFailed": "No se ha podido crear el hogar. Inténtalo de nuevo.",
     "loadFailedTitle": "No se han podido cargar los datos",
     "loadFailedBody": "La consulta al servidor ha fallado. Puede ser algo temporal de la conexión.",
+    "loading": "Cargando…",
     "retry": "Reintentar",
     "peopleTitle": "Personas del hogar",
     "peopleDescription": "Quién puede entrar, y qué puede hacer cada uno.",

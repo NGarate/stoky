@@ -838,6 +838,7 @@
     "createFailed": "The household could not be created. Try again.",
     "loadFailedTitle": "The data could not be loaded",
     "loadFailedBody": "The request to the server failed. It may be a temporary connection problem.",
+    "loading": "Loading…",
     "retry": "Try again",
     "peopleTitle": "People in the household",
     "peopleDescription": "Who can get in, and what each of them can do.",
