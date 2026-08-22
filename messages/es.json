@@ -79,7 +79,9 @@
     "quickTitle": "Acciones rápidas",
     "quickAddStock": "Añadir stock",
     "quickConsumeStock": "Consumir stock",
-    "quickUploadReceipt": "Subir un ticket"
+    "quickUploadReceipt": "Subir un ticket",
+    "expiryQuantityLabel": "Cantidad",
+    "expiryLocationLabel": "Dónde está"
   },
   "common": {
     "save": "Guardar",
@@ -943,7 +945,8 @@
     "addToListOf": "Apuntar «{name}» a la lista de la compra",
     "listName": "Lista de la cocina",
     "listCreateFailed": "Ahora mismo no se puede crear la lista. Prueba cuando vuelva la conexión.",
-    "onList": "Ya en la lista: {quantity} {unit}"
+    "onList": "Ya en la lista: {quantity} {unit}",
+    "leftLabel": "Queda"
   },
   "snackbar": {
     "regionLabel": "Avisos (pulsa F8 para ir al aviso)",

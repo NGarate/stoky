@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/components/offline/queue-context";
 import { useSnackbar } from "@/components/ui/snackbar";
@@ -249,9 +251,10 @@ export default function KitchenPage(): JSX.Element {
                     {batch.location?.name ?? t("noLocation")}
                   </p>
 
-                  <button
-                    className="mt-4 min-h-[64px] w-full rounded-lg bg-primary px-4 py-3 text-xl font-semibold text-primary-foreground hover:bg-primary/90"
+                  <Button
+                    className="mt-4 w-full text-xl"
                     onClick={() => useOne(batch)}
+                    size="lg"
                     type="button"
                   >
                     <span aria-hidden="true">{t("useOne")}</span>
@@ -261,7 +264,7 @@ export default function KitchenPage(): JSX.Element {
                         name: batch.product.name,
                       })}
                     </span>
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -282,17 +285,19 @@ export default function KitchenPage(): JSX.Element {
               {t("nothingThisWeek")}
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-3">
               {later.map((batch) => (
-                <li
+                <ItemRow
+                  density="touch"
                   key={batch.id}
-                  className="flex items-baseline justify-between gap-4 border-b border-border py-2 text-xl"
-                >
-                  <span className="text-foreground">{batch.product.name}</span>
-                  <span className="shrink-0 text-muted-foreground">
-                    {when(batch.daysUntilExpiry)}
-                  </span>
-                </li>
+                  status={
+                    <span className="shrink-0 text-muted-foreground">
+                      {when(batch.daysUntilExpiry)}
+                    </span>
+                  }
+                  title={batch.product.name}
+                  variant="plain"
+                />
               ))}
             </ul>
           )}
@@ -320,53 +325,57 @@ export default function KitchenPage(): JSX.Element {
               {t("nothingRunningOut")}
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-3">
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
                 const already = onList.get(product.id) ?? 0;
                 return (
-                  <li
+                  <ItemRow
+                    density="touch"
                     key={product.id}
-                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border py-2 text-xl"
-                  >
-                    <div className="min-w-0">
-                      <span className="block text-foreground">{product.name}</span>
-                      <span className="block text-lg text-muted-foreground">
-                        {left <= 0
-                          ? t("noneLeft")
-                          : t("leftOf", {
-                              stock: left,
-                              minimum: product.minStock ?? 0,
-                              unit: product.defaultUnit,
-                            })}
-                      </span>
-                    </div>
-                    {/* Offered only while it would change anything. Six
-                        litres already written down and a minimum of six is
-                        not a product that needs buying, and a button that
-                        stays lit on a tablet read from a metre away is a
-                        button somebody presses again. What replaces it is the
-                        reason, not a blank. */}
-                    {needsMoreOnList(left, already, product.minStock) ? (
-                      <button
-                        className="min-h-[48px] shrink-0 rounded-lg border border-input bg-card px-4 py-2 text-lg font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
-                        onClick={() => addToList(product)}
-                        type="button"
-                      >
-                        <span aria-hidden="true">{t("addToList")}</span>
-                        <span className="sr-only">
-                          {t("addToListOf", { name: product.name })}
+                    meta={[
+                      {
+                        label: t("leftLabel"),
+                        value:
+                          left <= 0
+                            ? t("noneLeft")
+                            : t("leftOf", {
+                                stock: left,
+                                minimum: product.minStock ?? 0,
+                                unit: product.defaultUnit,
+                              }),
+                      },
+                    ]}
+                    status={
+                      /* Offered only while it would change anything. Six
+                         litres already written down and a minimum of six is
+                         not a product that needs buying, and a button that
+                         stays lit on a tablet read from a metre away is a
+                         button somebody presses again. What replaces it is
+                         the reason, not a blank. */
+                      needsMoreOnList(left, already, product.minStock) ? (
+                        <Button
+                          onClick={() => addToList(product)}
+                          type="button"
+                          variant="outline"
+                        >
+                          <span aria-hidden="true">{t("addToList")}</span>
+                          <span className="sr-only">
+                            {t("addToListOf", { name: product.name })}
+                          </span>
+                        </Button>
+                      ) : (
+                        <span className="shrink-0 text-lg text-muted-foreground">
+                          {t("onList", {
+                            quantity: already,
+                            unit: product.defaultUnit,
+                          })}
                         </span>
-                      </button>
-                    ) : (
-                      <span className="shrink-0 text-lg text-muted-foreground">
-                        {t("onList", {
-                          quantity: already,
-                          unit: product.defaultUnit,
-                        })}
-                      </span>
-                    )}
-                  </li>
+                      )
+                    }
+                    title={product.name}
+                    variant="plain"
+                  />
                 );
               })}
             </ul>

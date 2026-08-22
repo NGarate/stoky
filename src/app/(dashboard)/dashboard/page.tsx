@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import type { JSX, ReactNode } from "react";
 
@@ -150,12 +153,9 @@ export default function DashboardPage(): JSX.Element {
           >
             {t("restockTitle")}
           </h2>
-          <Link
-            href="/shopping"
-            className="inline-flex min-h-[48px] items-center text-sm text-primary underline underline-offset-4"
-          >
-            {t("restockListLink")}
-          </Link>
+          <Button asChild variant="link">
+              <Link href="/shopping">{t("restockListLink")}</Link>
+            </Button>
         </div>
 
         {restock.length === 0 ? (
@@ -165,32 +165,28 @@ export default function DashboardPage(): JSX.Element {
             {/* A list, not a card: rows separate with dividers, and the box
                 that used to frame them is gone (Noel's rule, 2026-08-19 —
                 cards only where a card is justified). */}
-            <ul className="mt-3 divide-y divide-border">
+            <ul className="mt-3">
               {restock.slice(0, MAX_ROWS).map((product) => (
-                <li
+                <ItemRow
+                  density="compact"
+                  href={`/products/${product.id}`}
                   key={product.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
-                  <Link
-                    href={`/products/${product.id}`}
-                    className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4"
-                  >
-                    {product.name}
-                  </Link>
-                  {product.totalStock <= 0 ? (
-                    <span className="rounded bg-danger px-2 py-1 text-sm font-medium text-danger-foreground">
-                      {t("restockOut")}
-                    </span>
-                  ) : (
-                    <span className="rounded bg-warn px-2 py-1 text-sm font-medium text-warn-foreground">
-                      {t("restockLow", {
-                        quantity: product.totalStock,
-                        minimum: product.minStock ?? 0,
-                        unit: product.defaultUnit,
-                      })}
-                    </span>
-                  )}
-                </li>
+                  status={
+                    product.totalStock <= 0 ? (
+                      <Badge tone="danger">{t("restockOut")}</Badge>
+                    ) : (
+                      <Badge tone="warn">
+                        {t("restockLow", {
+                          quantity: product.totalStock,
+                          minimum: product.minStock ?? 0,
+                          unit: product.defaultUnit,
+                        })}
+                      </Badge>
+                    )
+                  }
+                  title={product.name}
+                  variant="plain"
+                />
               ))}
             </ul>
             {restock.length > MAX_ROWS ? (
@@ -198,14 +194,11 @@ export default function DashboardPage(): JSX.Element {
               // show everything, this is the way to the full set, asked of
               // the server with the same `needsRestock` question (Phase 8
               // item 2 — the alert row that used to be this door is gone).
-              <p className="mt-2 text-sm">
-                <Link
-                  href="/inventory?filter=restock"
-                  className="inline-flex min-h-[48px] items-center text-primary underline underline-offset-4"
-                >
+              <Button asChild className="mt-2" variant="link">
+                <Link href="/inventory?filter=restock">
                   {t("restockMore", { count: restock.length - MAX_ROWS })}
                 </Link>
-              </p>
+              </Button>
             ) : null}
           </>
         )}
@@ -219,12 +212,9 @@ export default function DashboardPage(): JSX.Element {
           >
             {t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
           </h2>
-          <Link
-            href="/inventory"
-            className="inline-flex min-h-[48px] items-center text-sm text-primary underline underline-offset-4"
-          >
-            {t("expiryInventoryLink")}
-          </Link>
+          <Button asChild variant="link">
+              <Link href="/inventory">{t("expiryInventoryLink")}</Link>
+            </Button>
         </div>
 
         {atRisk === 0 ? (
@@ -239,14 +229,16 @@ export default function DashboardPage(): JSX.Element {
                   name={item.product.name}
                   noLocationLabel={t("expiryNoLocation")}
                   productId={item.product.id}
+                  locationLabel={t("expiryLocationLabel")}
                   quantity={t("expiryQuantity", {
                     quantity: item.quantity,
                     unit: item.unit,
                   })}
+                  quantityLabel={t("expiryQuantityLabel")}
                   status={
-                    <span className="rounded bg-danger px-2 py-1 text-sm font-medium text-danger-foreground">
+                    <Badge tone="danger">
                       {t("expiryExpired", { days: item.daysExpired })}
-                    </span>
+                    </Badge>
                   }
                 />
               ))}
@@ -257,24 +249,20 @@ export default function DashboardPage(): JSX.Element {
                   name={item.product.name}
                   noLocationLabel={t("expiryNoLocation")}
                   productId={item.product.id}
+                  locationLabel={t("expiryLocationLabel")}
                   quantity={t("expiryQuantity", {
                     quantity: item.quantity,
                     unit: item.unit,
                   })}
+                  quantityLabel={t("expiryQuantityLabel")}
                   status={
-                    <span
-                      className={`rounded px-2 py-1 text-sm font-medium ${
-                        item.isExpiringSoon
-                          ? "bg-danger text-danger-foreground"
-                          : "bg-warn text-warn-foreground"
-                      }`}
-                    >
+                    <Badge tone={item.isExpiringSoon ? "danger" : "warn"}>
                       {item.daysUntilExpiry <= 0
                         ? t("expiryToday")
                         : item.daysUntilExpiry === 1
                           ? t("expiryTomorrow")
                           : t("expiryInDays", { days: item.daysUntilExpiry })}
-                    </span>
+                    </Badge>
                   }
                 />
               ))}
@@ -296,10 +284,12 @@ export default function DashboardPage(): JSX.Element {
 /** One batch that has expired or is about to. */
 function ExpiryRow({
   location,
+  locationLabel,
   name,
   noLocationLabel,
   productId,
   quantity,
+  quantityLabel,
   status,
 }: {
   location: string | null;
@@ -307,23 +297,22 @@ function ExpiryRow({
   noLocationLabel: string;
   productId: string;
   quantity: string;
+  quantityLabel: string;
+  locationLabel: string;
   status: ReactNode;
 }): JSX.Element {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
-      <div>
-        <Link
-          href={`/products/${productId}`}
-          className="inline-flex min-h-[48px] items-center font-medium text-primary underline underline-offset-4"
-        >
-          {name}
-        </Link>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {quantity} · {location ?? noLocationLabel}
-        </p>
-      </div>
-      {status}
-    </li>
+    <ItemRow
+      density="compact"
+      href={`/products/${productId}`}
+      meta={[
+        { label: quantityLabel, value: quantity },
+        { label: locationLabel, value: location ?? noLocationLabel },
+      ]}
+      status={status}
+      title={name}
+      variant="plain"
+    />
   );
 }
 
@@ -339,16 +328,15 @@ function QuickLink({
 }): JSX.Element {
   return (
     <li>
-      <Link
-        href={href}
-        className={`flex min-h-[48px] items-center justify-center rounded px-4 py-2 text-center font-medium ${
-          primary
-            ? "bg-primary text-primary-foreground hover:bg-primary/90"
-            : "border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
-        }`}
+      <Button
+        asChild
+        className="w-full"
+        variant={primary ? "default" : "outline"}
       >
-        {label}
-      </Link>
+        <Link href={href}>
+          {label}
+        </Link>
+      </Button>
     </li>
   );
 }

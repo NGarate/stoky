@@ -79,7 +79,9 @@
     "quickTitle": "Quick actions",
     "quickAddStock": "Add stock",
     "quickConsumeStock": "Consume stock",
-    "quickUploadReceipt": "Upload a receipt"
+    "quickUploadReceipt": "Upload a receipt",
+    "expiryQuantityLabel": "Quantity",
+    "expiryLocationLabel": "Where it is"
   },
   "common": {
     "save": "Save",
@@ -943,7 +945,8 @@
     "addToListOf": "Put “{name}” on the shopping list",
     "listName": "Kitchen list",
     "listCreateFailed": "The list cannot be created right now. Try again when the connection is back.",
-    "onList": "Already on the list: {quantity} {unit}"
+    "onList": "Already on the list: {quantity} {unit}",
+    "leftLabel": "Left"
   },
   "snackbar": {
     "regionLabel": "Notifications (press F8 to reach the notification)",
