@@ -5,6 +5,10 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import {
+  StockAmount,
+  StockStatus,
+} from "@/components/inventory/StockStatus";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -38,15 +42,7 @@ interface ProductRow {
   category: string | null;
   totalStock: number;
   minStock: number | null;
-}
-
-/** Below its minimum, out entirely, or fine. */
-function stockTone(product: ProductRow): string {
-  if (product.totalStock <= 0) return "text-danger-foreground";
-  if (isLowStock(product.totalStock, product.minStock)) {
-    return "text-warn-foreground";
-  }
-  return "text-ok-foreground";
+  defaultUnit: string;
 }
 
 /**
@@ -150,8 +146,19 @@ export default function ProductsPage(): JSX.Element {
                   </Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className={`font-medium ${stockTone(product)}`}>
-                    {product.totalStock}
+                  {/* The number and what it means, in the same cell rather
+                      than a new column: the state was carried by the colour
+                      of the number and by nothing else. */}
+                  <span className="flex items-center justify-end gap-2">
+                    <StockAmount
+                      defaultUnit={product.defaultUnit}
+                      isLowStock={isLowStock(product.totalStock, product.minStock)}
+                      totalStock={product.totalStock}
+                    />
+                    <StockStatus
+                      isLowStock={isLowStock(product.totalStock, product.minStock)}
+                      totalStock={product.totalStock}
+                    />
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -209,16 +216,33 @@ export default function ProductsPage(): JSX.Element {
             href={`/products/${product.id}`}
             key={product.id}
             meta={[
+              {
+                label: t("stockHeader"),
+                value: (
+                  <StockAmount
+                    defaultUnit={product.defaultUnit}
+                    isLowStock={isLowStock(product.totalStock, product.minStock)}
+                    totalStock={product.totalStock}
+                  />
+                ),
+              },
               { label: t("brandHeader"), value: product.brand || "-" },
               {
                 label: t("categoryHeader"),
                 value: product.category || t("noCategory"),
               },
             ]}
+            /* The state in words, from the one component that decides it.
+               This screen used to say it in colour and nothing else — a
+               coloured number, with "bajo" and "sin stock" never written
+               anywhere (WCAG 1.4.1) — and it worked the answer out for
+               itself, which made four derivations of a rule that already had
+               a home. */
             status={
-              <span className={`font-medium ${stockTone(product)} md:text-xl`}>
-                {t("stockLabel", { stock: product.totalStock })}
-              </span>
+              <StockStatus
+                isLowStock={isLowStock(product.totalStock, product.minStock)}
+                totalStock={product.totalStock}
+              />
             }
             title={product.name}
           />

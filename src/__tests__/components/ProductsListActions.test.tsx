@@ -41,6 +41,7 @@ beforeEach(() => {
           category: "Lácteos",
           totalStock: 2,
           minStock: 6,
+          defaultUnit: "L",
         },
       ],
     },
@@ -74,6 +75,18 @@ describe("the catalogue's actions column", () => {
         expect(link.getAttribute("href")).toBe(href);
       }
     }
+  });
+
+  it("says the stock state in words, not only in colour", () => {
+    renderWithIntl(<ProductsPage />, { locale: "es" });
+
+    // Two litres of a minimum of six. The screen used to show "Stock: 2" in
+    // amber and say nothing at all — the state was carried by the colour of
+    // the number and by nothing else (WCAG 1.4.1) — and it worked the answer
+    // out for itself, which made a fourth derivation of a rule that already
+    // had a home in `StockStatus`.
+    expect(screen.getAllByText("Stock bajo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2 L").length).toBeGreaterThan(0);
   });
 
   it("no longer offers a separate screen to edit on", () => {

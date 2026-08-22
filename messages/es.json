@@ -339,7 +339,6 @@
       "stockHeader": "Stock",
       "actionsHeader": "Acciones",
       "noCategory": "Sin categoría",
-      "stockLabel": "Stock: {stock}",
       "actionEdit": "Editar",
       "actionAdjust": "Ajustar",
       "actionHistory": "Historial",
