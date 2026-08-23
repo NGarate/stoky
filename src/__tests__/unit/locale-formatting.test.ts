@@ -10,7 +10,9 @@ import { join, relative } from "node:path";
  * is, which on a device set to English gives "1/5/2026" — inside a Spanish
  * interface, next to "1,19 €" formatted from the application's own locale.
  * The price screen's trends table did exactly that, in two places, with
- * `locale` already in scope three lines below for the money.
+ * `locale` already in scope three lines below for the money. That table has
+ * since been removed for repeating the chart above it, so do not go looking:
+ * the defect is what this check is about, not the screen it was found on.
  *
  * The locale this application means is `useLocale()` on the client and the
  * request locale on the server; `Intl` cannot guess it. So the argument is

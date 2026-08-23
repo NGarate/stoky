@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 import { PriceChart } from "@/components/price/PriceChart";
 import { StoreComparison } from "@/components/price/StoreComparison";
@@ -16,16 +15,10 @@ interface ProductPricePageProps {
 
 export default function ProductPricePage({ params }: ProductPricePageProps) {
   const t = useTranslations();
-  const locale = useLocale();
   const [days, setDays] = useState(90);
   const { productId } = React.use(params);
 
   const { data: history, isLoading } = api.price.getHistory.useQuery({
-    productId,
-    days,
-  });
-
-  const { data: trends } = api.price.getPriceTrends.useQuery({
     productId,
     days,
   });
@@ -74,82 +67,6 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       </div>
 
       <StoreComparison productId={productId} />
-
-      {trends && trends.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
-          <h2 className="mb-4 text-lg font-semibold text-heading md:text-2xl">{t("prices.trends")}</h2>
-
-          {/* Phone and tablet: one card per day. All four columns survive —
-              date, average, best and worst (DESIGN_AUDIT A3.2). */}
-          <ul className="space-y-3 lg:hidden">
-            {trends.map((trend) => (
-              <li
-                key={trend.date}
-                className="rounded-md border border-border p-3 md:p-4"
-              >
-                <p className="font-medium text-foreground md:text-xl">
-                  {new Date(trend.date).toLocaleDateString(locale)}
-                </p>
-                <dl className="mt-2 grid grid-cols-3 gap-2 text-sm md:text-lg">
-                  <div>
-                    <dt className="text-muted-foreground">
-                      {t("prices.averagePrice")}
-                    </dt>
-                    <dd className="mt-1 font-medium text-foreground">
-                      {formatMoney(locale, trend.averagePrice, DEFAULT_CURRENCY)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">
-                      {t("prices.bestPrice")}
-                    </dt>
-                    <dd className="mt-1 font-medium text-ok-foreground">
-                      {formatMoney(locale, trend.minPrice, DEFAULT_CURRENCY)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">
-                      {t("prices.worstPrice")}
-                    </dt>
-                    <dd className="mt-1 font-medium text-danger-foreground">
-                      {formatMoney(locale, trend.maxPrice, DEFAULT_CURRENCY)}
-                    </dd>
-                  </div>
-                </dl>
-              </li>
-            ))}
-          </ul>
-
-          <table className="hidden w-full lg:table">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="pb-2 text-left">{t("common.date")}</th>
-                <th className="pb-2 text-right">{t("prices.averagePrice")}</th>
-                <th className="pb-2 text-right">{t("prices.bestPrice")}</th>
-                <th className="pb-2 text-right">{t("prices.worstPrice")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trends.map((trend) => (
-                <tr key={trend.date} className="border-b border-border last:border-0">
-                  <td className="py-3">
-                    {new Date(trend.date).toLocaleDateString(locale)}
-                  </td>
-                  <td className="py-3 text-right">
-                    {formatMoney(locale, trend.averagePrice, DEFAULT_CURRENCY)}
-                  </td>
-                  <td className="py-3 text-right text-ok-foreground">
-                    {formatMoney(locale, trend.minPrice, DEFAULT_CURRENCY)}
-                  </td>
-                  <td className="py-3 text-right text-danger-foreground">
-                    {formatMoney(locale, trend.maxPrice, DEFAULT_CURRENCY)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
