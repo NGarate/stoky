@@ -137,53 +137,6 @@ export const priceRouter = createTRPCRouter({
    * product. Worth knowing before writing a query against this table: filtering
    * on the record alone would cross households.
    */
-  getPriceTrends: householdProcedure
-    .input(
-      z.object({
-        productId: z.string(),
-        days: z.number().default(90),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - input.days);
-
-      const prices = await prisma.priceRecord.findMany({
-        where: {
-          productId: input.productId,
-          recordedAt: {
-            gte: startDate,
-          },
-          product: {
-            householdId: ctx.householdId,
-          },
-        },
-        include: {
-          store: true,
-        },
-        orderBy: {
-          recordedAt: "asc",
-        },
-      });
-
-      // Group by date and calculate average price per day
-      const trends = new Map();
-      for (const price of prices) {
-        const date = price.recordedAt.toISOString().split("T")[0];
-        if (!trends.has(date)) {
-          trends.set(date, { date, prices: [] });
-        }
-        trends.get(date).prices.push(price.price);
-      }
-
-      return Array.from(trends.values()).map((day: { date: string; prices: number[] }) => ({
-        date: day.date,
-        averagePrice: day.prices.reduce((a: number, b: number) => a + b, 0) / day.prices.length,
-        minPrice: Math.min(...day.prices),
-        maxPrice: Math.max(...day.prices),
-      }));
-    }),
-
   /** Every sighting for a product, across every store. */
   getProductPrices: householdProcedure
     .input(

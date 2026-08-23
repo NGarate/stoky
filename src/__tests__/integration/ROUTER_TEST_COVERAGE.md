@@ -75,7 +75,6 @@ Comprehensive integration test suite for all 8 tRPC routers in the Stoky applica
 | `recordPrice` | ✓ Record valid price<br>✓ Reject invalid product<br>✓ Reject invalid store | ✅ Complete |
 | `getHistory` | ✓ Get price history | ✅ Complete |
 | `getLatestPrices` | ✓ Get latest per store | ✅ Complete |
-| `getPriceTrends` | ✓ Get price trends over time | ✅ Complete |
 
 ### 8. Shopping Router (11 tests)
 
@@ -156,11 +155,11 @@ DATABASE_URL="postgresql://stoky:stoky@localhost:5432/stoky"
 | Location Router | 7 |
 | Receipt Router | 4 |
 | Store Router | 6 |
-| Price Router | 6 |
+| Price Router | 5 |
 | Shopping Router | 11 |
 | Cross-cutting | 3 |
 | Edge Cases | 4 |
-| **Total** | **67** |
+| **Total** | **66** |
 
 ---
 

@@ -62,7 +62,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
   "price.ts": {
     getHistory: "householdProcedure",
     getLatestPrices: "householdProcedure",
-    getPriceTrends: "householdProcedure",
     getProductPrices: "householdProcedure",
     recordPrice: "writeProcedure",
   },

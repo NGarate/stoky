@@ -1424,32 +1424,6 @@ describe("tRPC Router Integration Tests", () => {
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThanOrEqual(1);
     });
-
-    it("should get price trends", async () => {
-      const { user, householdId } = await createTestUserWithHousehold(
-        "price6@example.com",
-        "Price User 6",
-        "Price Household 6"
-      );
-      const product = await createTestProduct(householdId);
-      const store = await createTestStore(householdId);
-      const { caller } = await createTestContext(user.id, householdId);
-
-      const priceRecord = await caller.price.recordPrice({
-        productId: product.id,
-        storeId: store.id,
-        price: 10.0,
-        unit: "unit",
-      });
-      testData.priceRecords.push(priceRecord.id);
-
-      const result = await caller.price.getPriceTrends({
-        productId: product.id,
-        days: 30,
-      });
-
-      expect(Array.isArray(result)).toBe(true);
-    });
   });
 
   describe("Shopping Router", () => {
