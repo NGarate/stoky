@@ -78,22 +78,8 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("PriceChart", () => {
-  it("plots one point per record in single-series mode", () => {
-    renderWithIntl(<PriceChart data={data} />);
-
-    expect(chartData).toHaveLength(3);
-    expect(chartData.map((row) => row.price)).toEqual([1.19, 1.25, 1.09]);
-  });
-
-  it("draws a single price series by default", () => {
-    renderWithIntl(<PriceChart data={data} />);
-
-    expect(lineProps).toHaveLength(1);
-    expect(lineProps[0]?.dataKey).toBe("price");
-  });
-
   it("collapses records onto one row per date when comparing stores", () => {
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
 
     // Two distinct dates, with the same-day stores merged into one row.
     expect(chartData).toHaveLength(2);
@@ -104,7 +90,7 @@ describe("PriceChart", () => {
   });
 
   it("draws one series per distinct store when comparing", () => {
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
 
     expect(lineProps.map((line) => line.dataKey)).toEqual([
       "Mercadona",
@@ -113,7 +99,7 @@ describe("PriceChart", () => {
   });
 
   it("keeps a store's line across a date only another store was seen", () => {
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
 
     // The fixture is exactly the shape that broke it: Carrefour has a value
     // on the first date and none on the second, because nobody bought there
@@ -128,7 +114,7 @@ describe("PriceChart", () => {
   });
 
   it("gives each store series a distinct colour", () => {
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
 
     const strokes = lineProps.map((line) => line.stroke);
     expect(new Set(strokes).size).toBe(strokes.length);
@@ -138,7 +124,7 @@ describe("PriceChart", () => {
     renderWithIntl(
       <PriceChart
         data={[{ date: "2026-01-05T00:00:00.000Z", price: 2 }]}
-        showStores
+       
       />,
     );
 
@@ -149,12 +135,21 @@ describe("PriceChart", () => {
     ]);
   });
 
-  it("only shows the legend in store-comparison mode", () => {
-    renderWithIntl(<PriceChart data={data} />);
+  it("only shows the legend when there is more than one shop", () => {
+    // One series needs no legend box — the title names it. Two do, because
+    // colour is then carrying identity and must not carry it alone.
+    renderWithIntl(
+      <PriceChart
+        data={[
+          { date: "2026-01-05T00:00:00.000Z", price: 1.19, storeName: "Mercadona" },
+          { date: "2026-02-10T00:00:00.000Z", price: 1.09, storeName: "Mercadona" },
+        ]}
+      />,
+    );
     expect(legendRendered).toBe(false);
 
     cleanup();
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
     expect(legendRendered).toBe(true);
   });
 
@@ -174,8 +169,10 @@ describe("PriceChart", () => {
   it("renders an empty chart without crashing", () => {
     renderWithIntl(<PriceChart data={[]} />);
 
+    // No shops, so no series: the chart used to draw one line regardless,
+    // because the single-series branch did not depend on the data.
     expect(chartData).toEqual([]);
-    expect(lineProps).toHaveLength(1);
+    expect(lineProps).toHaveLength(0);
   });
 
   it("gives a single observation a marker big enough to be a series", () => {
@@ -184,7 +181,7 @@ describe("PriceChart", () => {
         data={[
           { date: "2026-01-05T00:00:00.000Z", price: 2, storeName: "Lidl" },
         ]}
-        showStores
+       
       />,
     );
 
@@ -198,7 +195,7 @@ describe("PriceChart", () => {
   });
 
   it("takes its series colours from tokens, so night is a choice not a flip", () => {
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
 
     // They used to be fixed hexes shared by both themes, so an orange picked
     // for a white card sat on a near-black one at night.
@@ -213,7 +210,7 @@ describe("PriceChart", () => {
       price: 1 + index,
       storeName,
     }));
-    renderWithIntl(<PriceChart data={many} showStores />);
+    renderWithIntl(<PriceChart data={many} />);
 
     // A fifth slot would reuse a hue and be indistinguishable from an
     // existing one under colour vision deficiency.
@@ -222,7 +219,7 @@ describe("PriceChart", () => {
   });
 
   it("offers the values as a table, which is what makes the chart optional", async () => {
-    renderWithIntl(<PriceChart data={data} showStores />);
+    renderWithIntl(<PriceChart data={data} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Ver como tabla" }));
 
@@ -233,33 +230,23 @@ describe("PriceChart", () => {
     expect(within(table).getAllByRole("columnheader").length).toBeGreaterThan(1);
   });
 
-  it("gives two prices on one date two distinct keys", async () => {
-    // The fixture's first two records share a date. In store-comparison mode
-    // they are grouped into one row, but the single-series view is one row
-    // per *record* — which is what a receipt with two lines for the same
-    // product produces — and both were keyed by the date alone.
-    //
-    // React renders both rows either way and reports the collision through
-    // `console.error` alone, so that is what this reads. Asserting on the
-    // rendered table passes against the defect: the output is identical, and
-    // what a duplicate key costs is reconciliation — React may reuse the
-    // wrong row's DOM node when the list changes, which is a wrong price
-    // under a right date.
-    const warnings: string[] = [];
-    const real = console.error;
-    console.error = (...args: unknown[]) => {
-      warnings.push(args.map(String).join(" "));
-    };
+  it("gives each date one row, which is what makes the date a key", async () => {
+    // The fixture's first two records share a date. They are one row, and
+    // that is the invariant `PriceTable` keys on: there used to be a
+    // per-record view where two prices on a day were two rows sharing a
+    // date, and React had two children with the same key. Removing the view
+    // removed the collision; this is what keeps it removed.
+    renderWithIntl(<PriceChart data={data} />);
 
-    try {
-      renderWithIntl(<PriceChart data={data} />);
-      await userEvent.click(screen.getByRole("button", { name: /tabla/i }));
-    } finally {
-      console.error = real;
-    }
+    await userEvent.click(screen.getByRole("button", { name: /tabla/i }));
 
-    expect(screen.getAllByRole("row")).toHaveLength(4);
-    expect(warnings.filter((line) => /key/i.test(line))).toEqual([]);
+    const dates = screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => within(row).getAllByRole("cell")[0]?.textContent);
+
+    expect(dates).toHaveLength(2);
+    expect(new Set(dates).size).toBe(dates.length);
   });
 
   it("draws a solid grid, not a dashed one", () => {

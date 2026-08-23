@@ -60,7 +60,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
         <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.chart.title")}</h2>
         {chartData.length > 0 ? (
-          <PriceChart data={chartData} showStores={true} />
+          <PriceChart data={chartData} />
         ) : (
           <p className="py-8 text-center text-muted-foreground">{t("prices.noPrices")}</p>
         )}

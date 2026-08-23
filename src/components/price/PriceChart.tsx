@@ -51,10 +51,8 @@ interface PriceDataPoint {
  */
 export function PriceChart({
   data,
-  showStores = false,
 }: {
   data: PriceDataPoint[];
-  showStores?: boolean;
 }): JSX.Element {
   const t = useTranslations("prices.chart");
   const locale = useLocale();
@@ -71,22 +69,17 @@ export function PriceChart({
 
   type ChartDataPoint = { date: string; [key: string]: string | number };
 
-  const chartData: ChartDataPoint[] = showStores
-    ? Object.values(
-        data.reduce((acc: Record<string, ChartDataPoint>, item) => {
-          const date = new Date(item.date).toLocaleDateString(locale);
-          // `??=` rather than this reads better and the React Compiler does
-          // not support it — it declines to optimise the whole component and
-          // `pnpm check:react` fails on the syntax.
-          if (!acc[date]) acc[date] = { date };
-          acc[date][item.storeName ?? unknownStore] = item.price;
-          return acc;
-        }, {}),
-      )
-    : data.map((item) => ({
-        date: new Date(item.date).toLocaleDateString(locale),
-        price: item.price,
-      }));
+  const chartData: ChartDataPoint[] = Object.values(
+    data.reduce((acc: Record<string, ChartDataPoint>, item) => {
+      const date = new Date(item.date).toLocaleDateString(locale);
+      // `??=` rather than this reads better and the React Compiler does not
+      // support it — it declines to optimise the whole component and
+      // `pnpm check:react` fails on the syntax.
+      if (!acc[date]) acc[date] = { date };
+      acc[date][item.storeName ?? unknownStore] = item.price;
+      return acc;
+    }, {}),
+  );
 
   /**
    * Four slots, never cycled.
@@ -98,9 +91,9 @@ export function PriceChart({
    * is for.
    */
   const SERIES_LIMIT = 4;
-  const allStores = showStores
-    ? [...new Set(data.map((item) => item.storeName ?? unknownStore))]
-    : [];
+  const allStores = [
+    ...new Set(data.map((item) => item.storeName ?? unknownStore)),
+  ];
   const storeNames = allStores.slice(0, SERIES_LIMIT);
   const hiddenStores = allStores.length - storeNames.length;
 
@@ -128,8 +121,7 @@ export function PriceChart({
         <PriceTable
           data={chartData}
           money={money}
-          series={showStores ? allStores : ["price"]}
-          seriesLabel={showStores ? undefined : t("yAxis")}
+          series={allStores}
           dateLabel={t("xAxis")}
         />
       ) : (
@@ -154,8 +146,7 @@ export function PriceChart({
                   formatter={(value: number) => [money(value), t("yAxis")]}
                   labelFormatter={(label) => label}
                 />
-                {showStores ? (
-                  storeNames.map((storeName, index) => (
+                {storeNames.map((storeName, index) => (
                     <Line
                       activeDot={{ r: 8 }}
                       // A store seen once has no line — a line needs two
@@ -193,19 +184,8 @@ export function PriceChart({
                       strokeWidth={2}
                       type="monotone"
                     />
-                  ))
-                ) : (
-                  <Line
-                    activeDot={{ r: 8 }}
-                    dataKey="price"
-                    dot={{ r: 5 }}
-                    isAnimationActive={false}
-                    stroke={colours[0]}
-                    strokeWidth={2}
-                    type="monotone"
-                  />
-                )}
-                {showStores && storeNames.length > 1 ? <Legend /> : null}
+                ))}
+                {storeNames.length > 1 ? <Legend /> : null}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -227,13 +207,11 @@ function PriceTable({
   series,
   money,
   dateLabel,
-  seriesLabel,
 }: {
   data: Array<{ date: string; [key: string]: string | number }>;
   series: string[];
   money: (value: number) => string;
   dateLabel: string;
-  seriesLabel?: string;
 }): JSX.Element {
   return (
     <div className="overflow-x-auto">
@@ -248,25 +226,20 @@ function PriceTable({
                 className="pb-2 text-right font-medium text-muted-foreground"
                 key={name}
               >
-                {name === "price" ? seriesLabel : name}
+                {name}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {/* Keyed by position as well as by date. In store-comparison mode
-              the rows are grouped by date and the date is unique, but the
-              single-series view is one row per *record* — so two prices for
-              the same product on the same day, which is what a receipt with
-              two lines does, gave React two children with the same key. The
-              index is stable here because these rows are a straight
-              projection of a fixed-order array: nothing is inserted,
-              removed or reordered within it. */}
-          {data.map((row, index) => (
-            <tr
-              className="border-border border-b last:border-0"
-              key={`${row.date}-${index}`}
-            >
+          {/* Keyed by the date, which is unique: the rows are one per date
+              by construction, grouped in `chartData` above. This carried the
+              index as well, guarding against two prices on one day — the
+              case a receipt with two lines for the same product produced in
+              the per-record view that used to exist. It does not any more,
+              so neither does the collision. */}
+          {data.map((row) => (
+            <tr className="border-border border-b last:border-0" key={row.date}>
               <td className="py-2">{row.date}</td>
               {series.map((name) => (
                 <td className="py-2 text-right tabular-nums" key={name}>
