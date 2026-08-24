@@ -26,6 +26,12 @@ const EXPECTED: Record<string, Record<string, string>> = {
     register: "publicProcedure",
     me: "protectedProcedure",
     logout: "protectedProcedure",
+    // An account setting, so `protectedProcedure` and deliberately not
+    // `householdProcedure`: an account with no household still sees
+    // snackbars — the form that creates the household raises them — and the
+    // matrix has no column for "how long you need to read a message". It is
+    // nobody's household data.
+    setSnackbarDuration: "protectedProcedure",
   },
   // Reachable by an account with no household, which is the whole reason it
   // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the

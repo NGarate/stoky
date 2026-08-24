@@ -303,6 +303,103 @@ describe("Authentication Flow Integration Tests", () => {
     });
   });
 
+  /**
+   * WCAG 2.2.1 asks that a time limit be adjustable, and the adjustment is
+   * about the person: somebody who needs longer to read a message needs
+   * longer on the phone in the shop as well as on the kitchen tablet. It was
+   * in `localStorage`, so it was a property of the browser and was lost with
+   * the browser's storage.
+   */
+  describe("Snackbar duration", () => {
+    it("records the choice against the account", async () => {
+      const user = await createTestUser({
+        email: runEmail("snackbar"),
+        name: generateTestName("Snackbar User"),
+        password: "SecurePassword123!",
+      });
+
+      const authCaller = appRouter.createCaller(
+        await createTRPCContext({ session: createMockSession(user) }),
+      );
+
+      const result = await authCaller.auth.setSnackbarDuration({
+        snackbarDuration: "forever",
+      });
+
+      expect(result.snackbarDuration).toBe("forever");
+
+      const stored = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { snackbarDuration: true },
+      });
+      expect(stored?.snackbarDuration).toBe("forever");
+    });
+
+    it("hands the stored choice back through me, which is what the shell reads", async () => {
+      const user = await createTestUser({
+        email: runEmail("snackbar-me"),
+        name: generateTestName("Snackbar Me User"),
+        password: "SecurePassword123!",
+      });
+
+      const authCaller = appRouter.createCaller(
+        await createTRPCContext({ session: createMockSession(user) }),
+      );
+
+      // The default first: an account that has never chosen must not be
+      // handed something the store would reject.
+      expect((await authCaller.auth.me()).snackbarDuration).toBe("default");
+
+      await authCaller.auth.setSnackbarDuration({ snackbarDuration: "long" });
+
+      expect((await authCaller.auth.me()).snackbarDuration).toBe("long");
+    });
+
+    it("refuses a duration the snackbar could not honour", async () => {
+      const user = await createTestUser({
+        email: runEmail("snackbar-bad"),
+        name: generateTestName("Snackbar Bad User"),
+        password: "SecurePassword123!",
+      });
+
+      const authCaller = appRouter.createCaller(
+        await createTRPCContext({ session: createMockSession(user) }),
+      );
+
+      let error: Error | null = null;
+      try {
+        // The column is TEXT, so nothing below the schema would stop this;
+        // the store would then reject it on read and silently fall back,
+        // which is a preference that appears to save and does not.
+        await authCaller.auth.setSnackbarDuration({
+          snackbarDuration: "eternity" as "forever",
+        });
+      } catch (e) {
+        error = e as Error;
+      }
+
+      expect(error).toBeDefined();
+
+      const stored = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { snackbarDuration: true },
+      });
+      expect(stored?.snackbarDuration).toBe("default");
+    });
+
+    it("refuses to record anything for a caller with no session", async () => {
+      let error: Error | null = null;
+      try {
+        await caller.auth.setSnackbarDuration({ snackbarDuration: "forever" });
+      } catch (e) {
+        error = e as Error;
+      }
+
+      expect(error).toBeDefined();
+      expect(error?.message).toContain("Not signed in");
+    });
+  });
+
   describe("User Logout", () => {
     it("should logout successfully when authenticated", async () => {
       const email = runEmail("logout");

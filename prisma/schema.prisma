@@ -12,7 +12,13 @@ model User {
   email         String     @unique
   name          String
   passwordHash  String
+  /// The language this person reads. Beats the `locale` cookie; see src/i18n/request.ts.
   locale        String     @default("es")
+  /// How long a confirmation stays on screen: "default" | "long" | "forever".
+  /// A WCAG 2.2.1 adjustment, so it belongs to the person rather than to the
+  /// browser — the reader who needs longer needs longer everywhere. The theme
+  /// deliberately does not live here: that one is a property of the screen.
+  snackbarDuration String  @default("default")
   household     Household? @relation(fields: [householdId], references: [id])
   householdId   String?
   role          HouseholdRole @default(MEMBER)

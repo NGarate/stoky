@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
+import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
 import { SignOutButton } from "@/components/session/SignOutButton";
 import type { JSX } from "react";
@@ -21,6 +22,16 @@ import type { JSX } from "react";
  * elements with the same id on the page and `<label for>` named the wrong one.
  * Both controls take their ids and their radio group name from `useId()`, so
  * two instances no longer collide (DESIGN_AUDIT A2.1).
+ *
+ * It is now the *only* surface that renders them. `DashboardNav` and
+ * `NavSheet` rendered the cluster too, so three settings controls sat on every
+ * signed-in route; both link here instead.
+ *
+ * The three controls do not all store their answer in the same place, and the
+ * copy under the heading says which is which — because "why is the app in
+ * English on my phone but Spanish on the tablet" is a question somebody will
+ * otherwise have to guess the answer to. Theme is the device's, language and
+ * the confirmation duration are the account's.
  *
  * What it still does not do, on purpose: household, profile and notification
  * settings. The `settings.household`, `settings.profile` and
@@ -91,11 +102,19 @@ export default function SettingsPage(): JSX.Element {
         <SignOutButton />
       </section>
 
+      {/* The only place in the application these are offered. They used to be
+          in the top bar and in the "Más" sheet as well, which put settings
+          controls across the top of every screen — including the household
+          overview, whose whole job is what to buy and what is running out. */}
       <h2 className="mt-8 text-lg font-semibold text-heading">
         {t("preferencesTitle")}
       </h2>
       <p className="mt-2 text-muted-foreground">{t("preferencesDescription")}</p>
       <PreferencesCluster className="mt-4" />
+
+      {/* Beside the cluster rather than inside it: this one needs an account
+          to write to, and the cluster is also rendered on `/login`. */}
+      <SnackbarDurationControl />
 
       <h2 className="mt-8 text-lg font-semibold text-heading">{t("pendingTitle")}</h2>
       <p className="mt-2 text-muted-foreground">{t("pendingDescription")}</p>

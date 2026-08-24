@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { CompactNav } from "@/components/dashboard/CompactNav";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
@@ -7,6 +8,7 @@ import { ComposerProvider } from "@/components/offline/Composer";
 import { WriteQueueProvider } from "@/components/offline/WriteQueueProvider";
 import { SyncStatus } from "@/components/offline/SyncStatus";
 import { ShellCacheGuard } from "@/components/session/ShellCacheGuard";
+import { PreferencesSync } from "@/components/session/PreferencesSync";
 import { ReadCache } from "@/components/offline/ReadCache";
 import { SnackbarProvider } from "@/components/ui/snackbar";
 
@@ -37,6 +39,19 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  // Read here rather than asked for by the component that needs it. The
+  // snackbar duration belongs to the account, and the thing that reads it sits
+  // under every screen — a query per screen for a preference is a loading
+  // state behind a setting. This layout has already awaited the session, so
+  // the row is one indexed lookup away.
+  //
+  // A missing row is a session for a deleted account; the default is the right
+  // answer and signing out is somebody else's job.
+  const preferences = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { snackbarDuration: true },
+  });
+
   return (
     // The only place that has awaited `auth()`. Every change composed below
     // here carries the account and the household it was composed under, and
@@ -60,6 +75,11 @@ export default async function DashboardLayout({
           <SessionKeepAlive expiresAt={session.expires} />
         {/* The cached shell belongs to this account and no other. */}
         <ShellCacheGuard userId={session.user.id} />
+        {/* Renders nothing; hands the account's answer to the store the
+            snackbar reads. */}
+        <PreferencesSync
+          snackbarDuration={preferences?.snackbarDuration ?? "default"}
+        />
         {/* The last answer each screen showed, so opening without a signal
             shows real data rather than the paused panel. */}
         <ReadCache />

@@ -10,6 +10,7 @@ import {
   subscribeSnackbarDuration,
   type SnackbarDuration,
 } from "@/lib/snackbar-duration";
+import { api } from "@/lib/trpc/client";
 import { RadioOption } from "@/components/ui/radio-option";
 import type { JSX } from "react";
 
@@ -36,8 +37,25 @@ const LABEL_KEY: Record<
  * Built as the theme control is, and beside it, for the same three reasons: a
  * radio group rather than a toggle because there are three real choices, the
  * preference in an external store because two instances of the cluster share a
- * page, and the server rendering the default because `localStorage` does not
- * exist during a server render.
+ * page, and the server rendering the default because there is no device cache
+ * to read during a server render.
+ *
+ * **Where it differs from the theme: this one belongs to the account.** The
+ * theme is a property of the screen you are looking at; this is a property of
+ * how long you need to read something, which does not change when you pick up
+ * a different device. So the choice is applied locally at once — the reader
+ * gets no spinner for a preference — and sent to the server after, and the
+ * store is re-seeded from the account on the next load either way.
+ *
+ * Nothing is said when the write fails. The setting has still taken effect on
+ * this device, the reader can see that it has, and a red message about a
+ * preference is a worse outcome than a preference that has to be set again on
+ * the next machine. It is the one place in this application where a failed
+ * write is deliberately quiet, which is why that is written down here.
+ *
+ * Consequently this control is only rendered where there is an account:
+ * `/settings`, and not `/login` or `/register`. `PreferencesCluster` carries
+ * the two that work signed out.
  */
 export function SnackbarDurationControl(): JSX.Element {
   const t = useTranslations("settings");
@@ -47,6 +65,14 @@ export function SnackbarDurationControl(): JSX.Element {
     getSnackbarDurationSnapshot,
     getServerSnackbarDurationSnapshot,
   );
+  const remember = api.auth.setSnackbarDuration.useMutation();
+
+  function choose(next: SnackbarDuration): void {
+    // Local first, and unconditionally: the reader sees the choice take effect
+    // whether or not the server is reachable.
+    setSnackbarDuration(next);
+    remember.mutate({ snackbarDuration: next });
+  }
 
   return (
     <fieldset className="min-w-0 border-0 p-0">
@@ -59,7 +85,7 @@ export function SnackbarDurationControl(): JSX.Element {
             checked={value === option}
             key={option}
             name={groupName}
-            onSelect={() => setSnackbarDuration(option)}
+            onSelect={() => choose(option)}
             value={option}
           >
             {t(LABEL_KEY[option])}

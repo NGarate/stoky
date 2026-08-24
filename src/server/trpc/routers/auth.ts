@@ -4,6 +4,7 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import { registerSchema } from "@/lib/validations/auth";
+import { snackbarDurationSchema } from "@/lib/validations/preferences";
 import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -146,9 +147,41 @@ export const authRouter = createTRPCRouter({
         email: user.email,
         name: user.name,
         locale: user.locale,
+        snackbarDuration: user.snackbarDuration,
         role: user.role,
         household: user.household,
       };
+    }),
+
+  /**
+   * How long a confirmation stays on screen, recorded against the account.
+   *
+   * It was in `localStorage`, which made a WCAG 2.2.1 adjustment a property of
+   * the browser: somebody who needs longer to read a message had to say so
+   * again on the phone, and again on the kitchen tablet, and lost it whenever
+   * storage was cleared. The criterion is about the person.
+   *
+   * `protectedProcedure` and not `householdProcedure`: this is an account
+   * setting, and an account with no household still sees snackbars — the form
+   * that creates the household raises them.
+   *
+   * The device keeps a copy, written by the control rather than here. That is
+   * a cache for the first paint before this value has been read, not a second
+   * source of truth; the account is what `PreferencesSync` hands the store on
+   * every load.
+   */
+  setSnackbarDuration: protectedProcedure
+    .input(snackbarDurationSchema)
+    .mutation(async ({ ctx, input }) => {
+      // `updateMany`, so a session whose account has since been deleted
+      // records nothing rather than throwing P2025. Failing to store a
+      // preference must not become an error the reader has to act on.
+      await prisma.user.updateMany({
+        where: { id: ctx.session.user.id },
+        data: { snackbarDuration: input.snackbarDuration },
+      });
+
+      return input;
     }),
 
   /**
