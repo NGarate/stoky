@@ -5,7 +5,8 @@ Updated: 2026-08-18
 **If you are an agent or a person picking this project up, start here.**
 
 There are thirteen documents, plus two executed implementation plans kept as
-records. That is a lot, and it is deliberate: an earlier revision had six
+records and one pre-plan waiting on a decision. That is a lot, and it is
+deliberate: an earlier revision had six
 overlapping status files that contradicted each other, and a fake test suite
 survived five months inside the gap between them. The rule that replaced them
 is **one owner per subject** — every question below has exactly one document
@@ -186,6 +187,13 @@ which supersedes every estimate in it.
 The browser suite's move to isolated data and the production artefact —
 executed 2026-08-17/18. `PROGRESS.md` D82–D86 carry the decisions;
 `TEST_SETUP.md` describes the result.
+
+**[`superpowers/plans/2026-08-25-development-in-the-image-preplan.md`](superpowers/plans/2026-08-25-development-in-the-image-preplan.md)**
+A **pre-plan**, not an executable one: the measurements behind moving
+development into the Docker image, and behind the open question of whether the
+server should run on Bun. Fourteen numbered runs with what each established,
+and an explicit list of what is still unknown. Stage 1 landed (`dc06795`); the
+rest is undecided. Read it before proposing either change.
 
 ---
 
