@@ -160,11 +160,23 @@ describe("DashboardNav", () => {
     }
   });
 
-  it("includes the preferences cluster", () => {
+  /**
+   * The bar carried theme, language and snackbar duration on every signed-in
+   * route, so three settings controls sat across the top of the household
+   * overview — the screen whose job is what to buy and what is running out.
+   * They are on `/settings` now, which this bar links to.
+   */
+  it("carries no settings controls, only destinations", () => {
     pathname = "/dashboard";
     renderWithIntl(<DashboardNav />);
 
-    expect(screen.getByLabelText("Idioma")).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Tema" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Idioma")).toBeAbsent();
+    expect(screen.queryByRole("group", { name: "Tema" })).toBeAbsent();
+    expect(
+      screen.queryByRole("group", { name: "Duración de los avisos" }),
+    ).toBeAbsent();
+    expect(
+      screen.getByRole("link", { name: "Configuración" }),
+    ).toHaveAttribute("href", "/settings");
   });
 });

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef } from "react";
-import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { tabbableWithin } from "@/lib/focus";
 
 import { SECONDARY_DESTINATIONS } from "./navigation";
@@ -18,8 +17,13 @@ interface NavSheetProps {
 }
 
 /**
- * The "Más" panel: the destinations the compact tiers do not show, plus theme
- * and language.
+ * The "Más" panel: the destinations the compact tiers do not show.
+ *
+ * It used to carry theme and language as well. They have gone to `/settings`,
+ * which is one of the destinations listed here — a settings control reachable
+ * from a navigation sheet is a setting somebody changes by accident while
+ * looking for a page, and on the phone the sheet is 85vh with the preferences
+ * at the bottom of it.
  *
  * Hand-rolled rather than `<dialog>`. `showModal()` would give the focus trap
  * and Escape for free, but it is not implemented in the DOM the component tests
@@ -170,12 +174,6 @@ export function NavSheet({
           })}
         </ul>
 
-        <div className="mt-6 border-t border-border pt-4">
-          <h3 className="mb-3 text-sm font-semibold text-heading md:text-lg">
-            {t("preferencesTitle")}
-          </h3>
-          <PreferencesCluster />
-        </div>
       </div>
     </div>
   );

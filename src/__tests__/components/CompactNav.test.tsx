@@ -171,19 +171,26 @@ describe("CompactNav", () => {
     }
   });
 
-  it("carries theme and language into the sheet", async () => {
+  /**
+   * The sheet used to carry theme and language at the bottom of 85vh. A
+   * settings control inside a navigation panel is one somebody changes by
+   * accident while looking for a page; `/settings` is a destination in the
+   * same list and is where they belong.
+   */
+  it("carries destinations and nothing else", async () => {
     pathname = "/dashboard";
     renderWithIntl(<CompactNav />);
 
     await openSheet();
 
     const sheet = screen.getByRole("dialog");
-    // A1.3: the two settings that change how the app looks must be reachable
-    // from every screen, including a phone.
-    expect(within(sheet).getByLabelText("Idioma")).toBeInTheDocument();
+    expect(within(sheet).queryByLabelText("Idioma")).toBeAbsent();
     expect(
-      within(sheet).getByRole("group", { name: "Tema" }),
-    ).toBeInTheDocument();
+      within(sheet).queryByRole("group", { name: "Tema" }),
+    ).toBeAbsent();
+    expect(
+      within(sheet).getByRole("link", { name: "Configuración" }),
+    ).toHaveAttribute("href", "/settings");
   });
 
   it("marks the current page inside the sheet too", async () => {

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { DESKTOP_DESTINATIONS, activeHref } from "./navigation";
 import type { JSX } from "react";
 
@@ -21,6 +20,13 @@ import type { JSX } from "react";
  * `hidden lg:block` is safe here in a way `hidden md:flex` was not. It is not
  * dropping content on small screens — the content is rendered by another
  * component at those widths — which is the distinction A3.4 turns on.
+ *
+ * It no longer carries the preferences. Theme, language and how long a
+ * confirmation stays were rendered in this bar on every signed-in route, which
+ * put three settings controls across the top of the household overview — the
+ * screen whose whole job is what to buy and what is running out. They live on
+ * `/settings`, which this bar links to, and which is where somebody goes when
+ * changing a setting is what they came to do.
  */
 export function DashboardNav(): JSX.Element {
   const t = useTranslations("navigation");
@@ -32,9 +38,10 @@ export function DashboardNav(): JSX.Element {
       aria-label={t("mainLabel")}
       className="hidden border-b border-border bg-card lg:block"
     >
-      {/* `flex-wrap` because the preferences cluster is wider than the locale
-          select it replaces; without it the row overflows horizontally, which
-          DESIGN_AUDIT A3.3 counts as a defect rather than a nit. */}
+      {/* `flex-wrap` kept even though the row is now only the wordmark and the
+          destinations: eight labels in a long language still wrap before they
+          overflow, and a horizontal scrollbar on the shell is DESIGN_AUDIT
+          A3.3 rather than a nit. */}
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
         <div className="flex items-center gap-8">
           {/* The wordmark is a link like any other and gets the same target
@@ -71,7 +78,6 @@ export function DashboardNav(): JSX.Element {
             })}
           </ul>
         </div>
-        <PreferencesCluster />
       </div>
     </nav>
   );
