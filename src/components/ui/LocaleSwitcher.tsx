@@ -3,7 +3,7 @@
 import { useId, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { setLocaleCookie } from "@/lib/i18n/cookies";
+import { setLocalePreference } from "@/lib/i18n/cookies";
 import type { ChangeEvent, JSX } from "react";
 
 /**
@@ -20,10 +20,16 @@ import type { ChangeEvent, JSX } from "react";
  *   the same id, and `<label for>` would then name the wrong one — which is
  *   why `/settings` linked to the switcher in the nav instead of rendering it.
  * - The locale is applied with `router.refresh()` rather than
- *   `window.location.reload()`. The locale lives in a cookie read by the root
- *   layout on the server, so a refresh re-renders the tree with the new
- *   messages while leaving the client alive — someone half-way through
- *   registering keeps what they typed. A reload threw all of it away.
+ *   `window.location.reload()`. The locale is read by the root layout on the
+ *   server, so a refresh re-renders the tree with the new messages while
+ *   leaving the client alive — someone half-way through registering keeps
+ *   what they typed. A reload threw all of it away.
+ *
+ * The same control on `/login` and on `/settings`, writing to different
+ * places without knowing it: `setLocalePreference` records the choice on the
+ * account when there is one and on the device either way. That is what makes
+ * this component usable before anybody has signed in, which is exactly where
+ * a reader who cannot read the interface needs it.
  */
 export function LocaleSwitcher(): JSX.Element {
   const t = useTranslations("settings");
@@ -35,9 +41,9 @@ export function LocaleSwitcher(): JSX.Element {
   function onSelectChange(event: ChangeEvent<HTMLSelectElement>): void {
     const nextLocale = event.target.value;
     startTransition(async () => {
-      // Awaited: the refresh re-reads the cookie on the server, so refreshing
-      // before the server action has written it renders the old language.
-      await setLocaleCookie(nextLocale);
+      // Awaited: the refresh re-reads the preference on the server, so
+      // refreshing before the action has written it renders the old language.
+      await setLocalePreference(nextLocale);
       router.refresh();
     });
   }

@@ -35,7 +35,7 @@ mock.module("next/link", () => ({
 }));
 
 mock.module("@/lib/i18n/cookies", () => ({
-  setLocaleCookie: async () => {},
+  setLocalePreference: async () => {},
 }));
 
 const { DashboardNav } = await import("@/components/dashboard/DashboardNav");

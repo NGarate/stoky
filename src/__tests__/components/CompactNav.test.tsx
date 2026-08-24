@@ -43,7 +43,7 @@ mock.module("next/link", () => ({
 }));
 
 mock.module("@/lib/i18n/cookies", () => ({
-  setLocaleCookie: async () => {},
+  setLocalePreference: async () => {},
 }));
 
 const { CompactNav } = await import("@/components/dashboard/CompactNav");

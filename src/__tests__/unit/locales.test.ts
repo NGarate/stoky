@@ -5,13 +5,14 @@ import {
   DEFAULT_LOCALE,
   LOCALES,
   isSupportedLocale,
+  preferredLocale,
   resolveLocale,
 } from "@/lib/i18n/locales";
 
 /**
  * The last thing between an attacker-chosen string and a module path.
  *
- * `setLocaleCookie` is a `"use server"` action, which is a public HTTP
+ * `setLocalePreference` is a `"use server"` action, which is a public HTTP
  * endpoint, and it is unauthenticated on purpose — switching language should
  * not need an account. Its argument was a bare `string`, written straight into
  * a cookie that `src/i18n/request.ts` interpolates into a dynamic `import()`.
@@ -65,6 +66,48 @@ describe("resolveLocale", () => {
 
   it("falls back to Spanish, which the plan calls primary and not a fallback", () => {
     expect(DEFAULT_LOCALE).toBe("es");
+  });
+});
+
+/**
+ * ISSUES.md I18N-3's other half: the language was a property of the browser.
+ *
+ * `User.locale` has been in the schema since the first migration and nothing
+ * read it. The cookie was the whole answer, so two people sharing the kitchen
+ * tablet shared a language, and signing in somewhere new meant setting it
+ * again — on a self-hosted household application, where a shared device is
+ * the normal case rather than the edge one.
+ */
+describe("preferredLocale", () => {
+  it("lets the account override the device", () => {
+    expect(preferredLocale("en", "es")).toBe("en");
+    expect(preferredLocale("es", "en")).toBe("es");
+  });
+
+  it("uses the device when nobody is signed in", () => {
+    // `/login` and `/register`, where there is no account to ask and where a
+    // reader who cannot read the interface most needs the switcher.
+    expect(preferredLocale(null, "en")).toBe("en");
+    expect(preferredLocale(undefined, "en")).toBe("en");
+  });
+
+  it("falls back to the device when the account carries something unusable", () => {
+    // A row edited by hand, or written by a build that shipped a language this
+    // one does not. That is a stale account value, not a reason to throw away
+    // the perfectly good preference on the device.
+    expect(preferredLocale("de", "en")).toBe("en");
+    expect(preferredLocale("", "en")).toBe("en");
+  });
+
+  it("refuses to let either steer a module path", () => {
+    // Both are resolved, not only the cookie. A check that guards the input
+    // you thought of is the one that gets bypassed.
+    expect(preferredLocale("../package", "../../etc/passwd")).toBe(DEFAULT_LOCALE);
+    expect(preferredLocale("es/../../../etc/passwd", null)).toBe(DEFAULT_LOCALE);
+  });
+
+  it("falls back to Spanish when neither has an answer", () => {
+    expect(preferredLocale(null, undefined)).toBe(DEFAULT_LOCALE);
   });
 });
 

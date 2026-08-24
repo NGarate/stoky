@@ -32,3 +32,30 @@ export function isSupportedLocale(value: unknown): value is Locale {
 export function resolveLocale(value: unknown): Locale {
   return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
 }
+
+/**
+ * The language to render in, given what the account says and what the device
+ * says.
+ *
+ * **The account wins.** `User.locale` is a property of the person and has to
+ * follow them to the kitchen tablet and to whatever they sign in on next; the
+ * cookie is a property of one browser. Two people sharing a device shared a
+ * language while the cookie was the only answer.
+ *
+ * The device is not merely a fallback for the signed-out case, though that is
+ * where it matters most — `/login` has no account to ask, and that is exactly
+ * where somebody who cannot read the interface needs the switcher. It is also
+ * what answers while the account's value is unreadable: an account carrying a
+ * language this build no longer ships is a stale row, not a reason to ignore
+ * the perfectly good preference sitting on the device.
+ *
+ * Both are resolved rather than trusted. The value ends up interpolated into a
+ * dynamic `import()` in `src/i18n/request.ts`, and while the cookie is the
+ * attacker-reachable one, a column edited by hand deserves the same treatment
+ * — a check that only guards the input you thought of is the one that gets
+ * bypassed.
+ */
+export function preferredLocale(account: unknown, device: unknown): Locale {
+  if (isSupportedLocale(account)) return account;
+  return resolveLocale(device);
+}

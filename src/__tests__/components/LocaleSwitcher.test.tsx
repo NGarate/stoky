@@ -4,10 +4,10 @@ import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 
-// `setLocaleCookie` is a server action; importing it for real would pull in
+// `setLocalePreference` is a server action; importing it for real would pull in
 // `next/headers`, which has no meaning outside a request.
-const setLocaleCookie = mock(async (_locale: string) => {});
-mock.module("@/lib/i18n/cookies", () => ({ setLocaleCookie }));
+const setLocalePreference = mock(async (_locale: string) => {});
+mock.module("@/lib/i18n/cookies", () => ({ setLocalePreference }));
 
 // The switcher now applies the locale with a router refresh instead of a full
 // page reload, so the router is what the test has to observe.
@@ -35,7 +35,7 @@ Object.defineProperty(window.location, "reload", {
 const { LocaleSwitcher } = await import("@/components/ui/LocaleSwitcher");
 
 beforeEach(() => {
-  setLocaleCookie.mockClear();
+  setLocalePreference.mockClear();
   refresh.mockClear();
   reload.mockClear();
 });
@@ -73,7 +73,7 @@ describe("LocaleSwitcher", () => {
     await userEvent.selectOptions(screen.getByLabelText("Idioma"), "en");
 
     await waitFor(() => {
-      expect(setLocaleCookie).toHaveBeenCalledWith("en");
+      expect(setLocalePreference).toHaveBeenCalledWith("en");
     });
     await waitFor(() => {
       expect(refresh).toHaveBeenCalledTimes(1);
@@ -87,7 +87,7 @@ describe("LocaleSwitcher", () => {
     // The locale is read back from the cookie on the server, so refreshing
     // first would re-render in the language the user just left.
     const order: string[] = [];
-    setLocaleCookie.mockImplementationOnce(async () => {
+    setLocalePreference.mockImplementationOnce(async () => {
       // A server action is a network round-trip, so it does not settle in the
       // same tick. Resolving synchronously would let a `refresh()` that was
       // never awaited still land second, and the test would prove nothing.
@@ -109,7 +109,7 @@ describe("LocaleSwitcher", () => {
   it("does not persist anything before an interaction", () => {
     renderWithIntl(<LocaleSwitcher />);
 
-    expect(setLocaleCookie).not.toHaveBeenCalled();
+    expect(setLocalePreference).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
