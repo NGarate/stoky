@@ -68,7 +68,18 @@ mock.module("@/lib/trpc/client", () => ({
       create: { useMutation: () => idleMutation },
       generateFromLowStock: { useMutation: () => idleMutation },
     },
-    location: { getTree: { useQuery: () => queryStub } },
+    location: {
+      getTree: { useQuery: () => queryStub },
+      // `/settings/locations` grew a create/rename/remove form, and a hook is
+      // called on every render whether or not the branch under test reaches
+      // the button that fires it.
+      create: { useMutation: () => idleMutation },
+      update: { useMutation: () => idleMutation },
+      delete: { useMutation: () => idleMutation },
+    },
+    // The same screen asks who is looking before it draws an admin's
+    // controls. It is not what is under test here, so it answers plainly.
+    auth: { me: { useQuery: () => ({ data: { role: "OWNER" } }) } },
   },
 }));
 
@@ -101,8 +112,8 @@ const ROUTES = [
   {
     name: "/settings/locations",
     Page: LocationsPage,
-    /** The lie this route told: "No hay ubicaciones configuradas." */
-    emptyState: /No hay ubicaciones configuradas/,
+    /** The lie this route told: it claimed the household had no locations. */
+    emptyState: /Todavía no hay ubicaciones/,
     loaded: [
       {
         id: "loc-1",
@@ -110,6 +121,7 @@ const ROUTES = [
         children: [],
         parentId: null,
         householdId: "h1",
+        _count: { stockEntries: 0 },
       },
     ],
     loadedText: "Nevera",
@@ -190,7 +202,12 @@ describe("a route whose query failed", () => {
         </SnackbarProvider>,
       );
 
-      expect(screen.getByText(loadedText)).toBeInTheDocument();
+      // `getAllByText`, because a row names the thing more than once: the
+      // title, and again inside the `sr-only` suffix that keeps "Editar" and
+      // "Eliminar" telling a screen reader *which* one. What is under test is
+      // that the loaded row is on screen at all, not how many times it says
+      // its own name.
+      expect(screen.getAllByText(loadedText)).not.toHaveLength(0);
       expect(
         screen.queryByText("No se han podido cargar los datos"),
       ).toBeAbsent();

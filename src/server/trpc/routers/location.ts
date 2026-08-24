@@ -20,6 +20,23 @@ import {
  * inventing or removing one changes what everybody else's forms offer
  * (REDESIGN_PLAN §5.2).
  */
+/**
+ * A location with its own sub-locations hanging off it, as `getTree` returns
+ * them.
+ *
+ * Exported because the settings screen and the stock picker both walk it, and
+ * a shape two callers re-declare is a shape that will eventually disagree with
+ * itself. Recursive by necessity: the hierarchy has no fixed depth.
+ */
+export interface LocationTreeNode {
+  id: string;
+  name: string;
+  parentId: string | null;
+  householdId: string;
+  _count: { stockEntries: number };
+  children: LocationTreeNode[];
+}
+
 export const locationRouter = createTRPCRouter({
   /** Every location, flat and alphabetical. What a picker needs. */
   list: householdProcedure.query(async ({ ctx }) => {
@@ -55,9 +72,15 @@ export const locationRouter = createTRPCRouter({
    * answer for an arbitrarily deep tree and a household has a few dozen
    * locations at most. Two passes: build a map, then attach each child to its
    * parent.
+   *
+   * The return type is written out rather than inferred, and that is the point
+   * of `LocationTreeNode`. The map was a bare `new Map()` and the accumulator
+   * was typed `typeof allLocations` — a flat row with no `children` — so the
+   * one thing this procedure exists to add was the one thing its type did not
+   * say. Every caller therefore had to cast, and a cast is where a wrong shape
+   * stops being a compiler error and becomes an empty list on a screen.
    */
-  getTree: householdProcedure.query(async ({ ctx }) => {
-    // Get all locations
+  getTree: householdProcedure.query(async ({ ctx }): Promise<LocationTreeNode[]> => {
     const allLocations = await prisma.storageLocation.findMany({
       where: {
         householdId: ctx.householdId,
@@ -74,9 +97,8 @@ export const locationRouter = createTRPCRouter({
       },
     });
 
-    // Build tree structure
-    const locationMap = new Map();
-    const roots: typeof allLocations = [];
+    const locationMap = new Map<string, LocationTreeNode>();
+    const roots: LocationTreeNode[] = [];
 
     // First pass: create map
     for (const location of allLocations) {
@@ -89,11 +111,19 @@ export const locationRouter = createTRPCRouter({
     // Second pass: build hierarchy
     for (const location of allLocations) {
       const node = locationMap.get(location.id);
-      if (location.parentId) {
-        const parent = locationMap.get(location.parentId);
-        if (parent) {
-          parent.children.push(node);
-        }
+      if (!node) continue;
+
+      const parent = location.parentId
+        ? locationMap.get(location.parentId)
+        : undefined;
+
+      // A child whose parent is missing would otherwise vanish from the tree
+      // entirely. It cannot happen through this router — `parentId` is a
+      // foreign key inside the same household — but "cannot happen" is how a
+      // location becomes unreachable rather than merely misplaced, so an
+      // orphan is surfaced at the root instead of dropped.
+      if (parent) {
+        parent.children.push(node);
       } else {
         roots.push(node);
       }
