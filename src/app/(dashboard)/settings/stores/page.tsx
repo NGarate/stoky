@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
@@ -112,6 +113,19 @@ export default function StoresPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {/* The way back out, which this screen was the only settings sub-page
+          not to have. `/settings` is the one route that links here, so
+          leaving meant the browser's own back button — which the compact
+          tiers do not draw at all, and which a tap on "Configuración" in the
+          navigation does not replace: that goes to the hub as a fresh
+          destination rather than back out of this one.
+
+          Above the heading rather than beside it, which is where
+          `/products/[id]` and `/inventory/add` put theirs. `people` and
+          `unsaved` share their heading row with it because they have nothing
+          else in it; this row already holds "Crear tienda". */}
+      <BackLink href="/settings">{t("stores.backToSettings")}</BackLink>
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-heading">{t("stores.title")}</h1>
         {canManage && !isCreating && (

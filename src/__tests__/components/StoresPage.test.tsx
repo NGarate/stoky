@@ -217,4 +217,33 @@ describe("the stores settings screen", () => {
       await screen.findAllByText(/Eliminaste la tienda «Mercadona»/),
     ).not.toHaveLength(0);
   });
+
+  /**
+   * This screen was the only settings sub-page with no way back out of it.
+   * `/settings` is the one route that links here, and the compact tiers draw
+   * no browser chrome, so leaving it was a gesture rather than a control.
+   *
+   * The arrow is asserted to be absent from the *name* as well as present in
+   * the markup: `BackLink` draws it `aria-hidden`, and the moment a "←" gets
+   * typed into the string beside it the reader hears "flecha hacia la
+   * izquierda volver a configuración" and the sighted reader sees two.
+   */
+  it("offers a way back to the settings hub", () => {
+    renderPage();
+
+    const back = screen.getByRole("link", { name: "Volver a configuración" });
+
+    expect(back).toHaveAttribute("href", "/settings");
+    expect(back.querySelector("svg")).not.toBeNull();
+    expect(back.textContent).toBe("Volver a configuración");
+  });
+
+  it("offers it to a member too, who can read the shops but not change them", () => {
+    role = "MEMBER";
+    renderPage();
+
+    expect(
+      screen.getByRole("link", { name: "Volver a configuración" }),
+    ).toHaveAttribute("href", "/settings");
+  });
 });
