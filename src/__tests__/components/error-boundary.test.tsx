@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterAll, afterEach, mock } from "bun:test";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import { readFileSync } from "node:fs";
@@ -132,6 +132,40 @@ describe("the controls a thumb has to hit", () => {
 });
 
 /**
+ * Rendering the global boundary, into a container of its own that is **not in
+ * the document**.
+ *
+ * `GlobalError` supplies its own `<html>` and `<body>` — that is the whole
+ * point of it, since it stands in for the root layout. Testing Library's
+ * default container is a `<div>` appended to `document.body`, so the default
+ * render grafts a second `<html>` *inside* the live one, and every query,
+ * every event dispatch and every accessibility computation afterwards is
+ * walking a document that cannot exist in a browser.
+ *
+ * That is not a tidiness point. Clicking inside that nested document wedges
+ * the runner: the tests all pass, and then the process spins at 100% of a
+ * core and never exits, so the run dies on the ten-minute budget with no
+ * output at all. It took a bisection to find, because the symptom appears in
+ * whatever *other* file happens to push the run past the threshold — the
+ * suite was green until an unrelated screen grew a twelfth test, and the
+ * failure it then reported was "the component suite is stuck", pointing at
+ * nothing.
+ *
+ * It is the same family as the trap `setup/matchers.ts` documents: a happy-dom
+ * node graph that something walks, in a walk with no useful bound. The fix is
+ * the same shape too — do not hand it the graph. A detached container keeps
+ * the nested document out of the live one, and the assertions are unchanged.
+ */
+function renderGlobalError(reset: () => void = () => {}): HTMLElement {
+  const { container } = renderWithIntl(
+    <GlobalError error={FAILURE} reset={reset} />,
+    // Deliberately never appended: see above.
+    { container: document.createElement("div") },
+  );
+  return container;
+}
+
+/**
  * The last resort, which replaces the root layout rather than rendering inside
  * it — so it has no intl provider, no theme and no stylesheet.
  *
@@ -141,9 +175,7 @@ describe("the controls a thumb has to hit", () => {
  */
 describe("when even the layout failed", () => {
   it("says its piece in both languages, because it cannot know which to use", () => {
-    const { container } = renderWithIntl(
-      <GlobalError error={FAILURE} reset={() => {}} />,
-    );
+    const container = renderGlobalError();
 
     expect(container.textContent).toContain("no ha podido arrancar");
     expect(container.textContent).toContain("could not start");
@@ -151,9 +183,11 @@ describe("when even the layout failed", () => {
 
   it("still offers the retry", async () => {
     const reset = mock(() => {});
-    renderWithIntl(<GlobalError error={FAILURE} reset={reset} />);
+    // `within(container)` rather than `screen`, which reads `document.body` —
+    // and the container is deliberately not in it.
+    const container = renderGlobalError(reset);
 
-    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(within(container).getByRole("button"));
 
     expect(reset).toHaveBeenCalledTimes(1);
   });
