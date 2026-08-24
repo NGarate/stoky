@@ -57,7 +57,11 @@ const LABEL_KEY: Record<
  * `/settings`, and not `/login` or `/register`. `PreferencesCluster` carries
  * the two that work signed out.
  */
-export function SnackbarDurationControl(): JSX.Element {
+export function SnackbarDurationControl({
+  className = "",
+}: {
+  className?: string;
+} = {}): JSX.Element {
   const t = useTranslations("settings");
   const groupName = useId();
   const value = useSyncExternalStore(
@@ -75,7 +79,7 @@ export function SnackbarDurationControl(): JSX.Element {
   }
 
   return (
-    <fieldset className="min-w-0 border-0 p-0">
+    <fieldset className={`min-w-0 border-0 p-0 ${className}`}>
       <legend className="mb-1 text-sm font-medium text-foreground">
         {t("snackbarDuration")}
       </legend>

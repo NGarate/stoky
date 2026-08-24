@@ -113,8 +113,13 @@ export default function SettingsPage(): JSX.Element {
       <PreferencesCluster className="mt-4" />
 
       {/* Beside the cluster rather than inside it: this one needs an account
-          to write to, and the cluster is also rendered on `/login`. */}
-      <SnackbarDurationControl />
+          to write to, and the cluster is also rendered on `/login`.
+
+          `mt-3` is the cluster's own `gap-y-3`, restated because this control
+          is outside it. Without it the two sat flush — measured at 1280px,
+          "Tema" ended and "Duración de los avisos" began on the same pixel —
+          so three controls of one kind read as two groups with a seam. */}
+      <SnackbarDurationControl className="mt-3" />
 
       <h2 className="mt-8 text-lg font-semibold text-heading">{t("pendingTitle")}</h2>
       <p className="mt-2 text-muted-foreground">{t("pendingDescription")}</p>
