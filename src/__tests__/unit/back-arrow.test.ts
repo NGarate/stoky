@@ -131,3 +131,85 @@ describe("the back arrow belongs to BackLink", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * And the way back itself belongs to `BackLink`, not to a hand-rolled link.
+ *
+ * The arrow scan above catches a *typed* arrow. It cannot catch the other half
+ * of the same defect, which is what the four screens converted alongside it
+ * actually had: a way back built out of `<Button asChild><Link>` with no arrow
+ * at all. Twelve sub-pages drew one control and five drew three others, so
+ * "Volver al producto" was an underlined link here, an outlined button there,
+ * and on `/receipts/[id]/review` an icon with no words — named by `aria-label`
+ * alone, which satisfies WCAG 2.4.4 and not 2.4.9, the level this project is
+ * held to elsewhere.
+ *
+ * The scan is on the message key rather than on the words, so it keeps working
+ * in both catalogues and through a rewording. It has no exemption list, and
+ * that is deliberate: the moment one is needed, the rule has stopped being
+ * true and should be argued with rather than annotated.
+ *
+ * Note what it does *not* claim. A link that happens to point at the same
+ * place as the way back is not a way back — `/products/[id]/adjust` ends its
+ * form with a "Cancelar" beside the submit, going to the same product — and
+ * this passes it, because it asks about the phrase the screen uses to mean
+ * "back", not about the href.
+ */
+const BACK_KEY = /\b(?:backTo[A-Z]\w*|common\.back)\b/;
+
+/** `<Tag …>…</Tag>` pairs, non-greedy, for the two tags that matter here. */
+const LINK_ELEMENT = /<(BackLink|Link)\b([^>]*)>([\s\S]*?)<\/\1>/g;
+
+describe("the way back belongs to BackLink", () => {
+  test("no hand-rolled link carries a back message", () => {
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      for (const match of file.markup.matchAll(LINK_ELEMENT)) {
+        const [, tag, attributes, body] = match;
+        if (tag === "BackLink") continue;
+        if (BACK_KEY.test(`${attributes} ${body}`)) {
+          offenders.push(`${file.path}: <Link>${body.trim().slice(0, 40)}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test("would notice each shape that shipped", () => {
+    const asButton =
+      '<Button asChild variant="link"><Link href="/products" > {t("backToProduct")} </Link></Button>';
+    const asIcon =
+      '<Link aria-label={t("backToList")} href="/receipts"><ArrowLeft /></Link>';
+
+    for (const source of [asButton, asIcon]) {
+      const found = [...source.matchAll(LINK_ELEMENT)].filter(
+        ([, tag, attributes, body]) =>
+          tag !== "BackLink" && BACK_KEY.test(`${attributes} ${body}`),
+      );
+      expect(found.length, source).toBe(1);
+    }
+  });
+
+  test("passes the component that is allowed to carry it", () => {
+    const correct = '<BackLink href="/products">{t("backToProduct")}</BackLink>';
+    const found = [...correct.matchAll(LINK_ELEMENT)].filter(
+      ([, tag, attributes, body]) =>
+        tag !== "BackLink" && BACK_KEY.test(`${attributes} ${body}`),
+    );
+
+    expect(found).toEqual([]);
+  });
+
+  test("does not mistake a same-destination action for a way back", () => {
+    // The adjust form's escape, beside its submit. Same product, its own name.
+    const cancel = '<Link href={`/products/${id}`}>{tCommon("cancel")}</Link>';
+    const found = [...cancel.matchAll(LINK_ELEMENT)].filter(
+      ([, tag, attributes, body]) =>
+        tag !== "BackLink" && BACK_KEY.test(`${attributes} ${body}`),
+    );
+
+    expect(found).toEqual([]);
+  });
+});

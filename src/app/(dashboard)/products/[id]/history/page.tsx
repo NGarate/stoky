@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo } from "react";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { runningTotals } from "@/lib/inventory/stockLedger";
@@ -80,9 +80,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-3xl">
-        <Button asChild variant="link">
-          <Link href="/products" > {t("backToProduct")} </Link>
-        </Button>
+        <BackLink href="/products">{t("backToProduct")}</BackLink>
 
         <div
           role="alert"
@@ -120,9 +118,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Button asChild variant="link">
-        <Link href={`/products/${id}`} > {t("backToProduct")} </Link>
-      </Button>
+      <BackLink href={`/products/${id}`}>{t("backToProduct")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">
         {t("titleOf", { name: product.name })}

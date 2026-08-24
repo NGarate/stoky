@@ -3,11 +3,12 @@
 import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, ArrowLeft, Package } from "lucide-react";
+import { Check, Package } from "lucide-react";
 import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { isItemReviewed } from "@/lib/receipts";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
@@ -144,23 +145,22 @@ export default function ReviewPage() {
     // No padding of its own: the dashboard `main` already pads every route, and
     // a second `p-6` on top of it cost 48px of a 390px screen (ISSUES UI-5).
     <div className="mx-auto max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
-        {/* `asChild` so the anchor is the button rather than a boxless wrapper
-            around one — an `<a>` containing a `<button>` is neither valid HTML
-            nor a target of its own (DESIGN_AUDIT A4.2). */}
-        <Button asChild variant="ghost" size="icon">
-          <Link aria-label={t("backToList")} href="/receipts">
-            <ArrowLeft aria-hidden="true" className="w-5 h-5" />
-          </Link>
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-heading">{t("review")}</h1>
-          <p className="text-muted-foreground">
-            {receipt.store?.name || t("storeUnknown")}
-            {receipt.purchaseDate &&
-              ` • ${dateFormat.format(new Date(receipt.purchaseDate))}`}
-          </p>
-        </div>
+      {/* Was an icon-only link: a bare `<ArrowLeft/>` in a ghost button,
+          named only by `aria-label`. That is enough for WCAG 2.4.4 and not for
+          2.4.9, which asks that a link's purpose be clear from its link text —
+          and this project is held to AAA elsewhere (`check:contrast`, the 48px
+          floor). It was also the last way back in the application that was not
+          a `BackLink`, so this screen alone spelled "back" as an icon while
+          eleven others spelled it as an arrow and a sentence. */}
+      <div className="mb-6">
+        <BackLink href="/receipts">{t("backToList")}</BackLink>
+
+        <h1 className="mt-2 text-2xl font-bold text-heading">{t("review")}</h1>
+        <p className="text-muted-foreground">
+          {receipt.store?.name || t("storeUnknown")}
+          {receipt.purchaseDate &&
+            ` • ${dateFormat.format(new Date(receipt.purchaseDate))}`}
+        </p>
       </div>
 
       <div className="mb-6">

@@ -2,9 +2,8 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { PriceChart } from "@/components/price/PriceChart";
 import { StoreComparison } from "@/components/price/StoreComparison";
@@ -36,11 +35,11 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <Button asChild className="md:text-lg" variant="outline">
-          <Link href="/prices" > {t("common.back")} </Link>
-        </Button>
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("prices.history")}</h1>
+      <div>
+        <BackLink href="/prices">{t("common.back")}</BackLink>
+        <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
+          {t("prices.history")}
+        </h1>
       </div>
 
       <div className="flex flex-wrap items-center gap-4">

@@ -123,4 +123,24 @@ describe("the stock history", () => {
     expect(screen.getByText(/Todavía no hay movimientos/)).toBeInTheDocument();
     expect(screen.queryByTestId("chart")).toBeAbsent();
   });
+
+  /**
+   * The way out was a `<Button variant="link">` wrapping a `<Link>`, so it was
+   * the only kind of back link in the application with no arrow on it — the
+   * others draw one from `BackLink`. Same words, same destination, three
+   * different controls across five screens.
+   *
+   * The arrow is counted rather than assumed present: one drawn by the
+   * component, and none typed into the string beside it. Both halves matter,
+   * and the second is the one that shipped twice.
+   */
+  it("leaves by the same link every other screen leaves by", () => {
+    renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
+
+    const back = screen.getByRole("link", { name: "Volver al producto" });
+
+    expect(back).toHaveAttribute("href", "/products/p1");
+    expect(back.querySelectorAll("svg").length).toBe(1);
+    expect(back.textContent).toBe("Volver al producto");
+  });
 });

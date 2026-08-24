@@ -132,4 +132,36 @@ describe("the adjustment", () => {
     expect(alert).toContain("Ya coincide");
     expect(alert).toContain("motivo del ajuste");
   });
+
+  /**
+   * Two controls point at the product, and they are two different jobs.
+   *
+   * The one at the top is the way out of the screen: a `BackLink`, carrying
+   * the arrow every other way back carries. The one in the form's action row
+   * is the form's escape — it sits beside the submit, it wears a button, and
+   * it says "Cancelar".
+   *
+   * They used to say the same words and go to the same place, which meant a
+   * screen reader announced two identical links and neither said which was
+   * which (WCAG 2.4.9). `Button asChild` renders an anchor, so they were both
+   * links; the fix is the wording, not the element.
+   */
+  it("leaves by a back link and cancels by a differently-named one", () => {
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    const back = screen.getByRole("link", { name: "Volver al producto" });
+    expect(back).toHaveAttribute("href", "/products/p1");
+    expect(back.querySelectorAll("svg").length).toBe(1);
+    expect(back.textContent).toBe("Volver al producto");
+
+    // The form's escape: same destination, its own name, no arrow.
+    const cancel = screen.getByRole("link", { name: "Cancelar" });
+    expect(cancel).toHaveAttribute("href", "/products/p1");
+    expect(cancel.querySelectorAll("svg").length).toBe(0);
+  });
 });

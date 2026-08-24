@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useState, useId } from "react";
+import { BackLink } from "@/components/ui/back-link";
 import { Textarea } from "@/components/ui/textarea";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -43,6 +44,7 @@ export default function AdjustStockPage({
 /** Exported apart from the route so the component suite can render it. */
 export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.adjust");
+  const tCommon = useTranslations("common");
   const snackbar = useSnackbar();
   const utils = api.useUtils();
 
@@ -131,9 +133,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
     return (
       <div className="mx-auto max-w-2xl">
-        <Button asChild variant="link">
-          <Link href="/products" > {t("backToProduct")} </Link>
-        </Button>
+        <BackLink href="/products">{t("backToProduct")}</BackLink>
 
         <div
           role="alert"
@@ -168,9 +168,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Button asChild variant="link">
-        <Link href={`/products/${id}`} > {t("backToProduct")} </Link>
-      </Button>
+      <BackLink href={`/products/${id}`}>{t("backToProduct")}</BackLink>
 
       <h1 className="mt-2 text-2xl font-bold text-heading">
         {t("titleOf", { name: product.name })}
@@ -269,8 +267,16 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           >
             {t("submit")}
           </Button>
+          {/* "Cancelar", not "Volver al producto" a second time. The way out
+              of the screen is the `BackLink` at the top; this is the form's
+              own escape, sitting beside its submit. Both used to carry the
+              same words and the same destination, so a screen reader
+              announced two identical links and neither said which was which
+              — and with the top one now drawing an arrow, the pair also
+              looked like two different controls for one job. `Cancelar` is
+              what the two other forms in settings call this. */}
           <Button asChild variant="outline">
-            <Link href={`/products/${id}`} > {t("backToProduct")} </Link>
+            <Link href={`/products/${id}`}>{tCommon("cancel")}</Link>
           </Button>
           {/* Reduced to the pending state, which is what it was always for.
               An adjustment is an event and now says so in the snackbar. */}
