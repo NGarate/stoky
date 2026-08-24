@@ -21,11 +21,41 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack pnpm install --frozen-lockfile --trust-lockfile
 
 # ----------------------------------------------------------- development --
+#
+# The image people actually develop in. It is the production base with the
+# test runner added, and that ordering is the point: the runtime here is Node,
+# exactly as it is in production, because Next's standalone output is started
+# with `node server.js`. Bun is a *tool* this repository uses to run tests, not
+# a runtime it adopts — basing this stage on `oven/bun` would have the dev
+# server running under Bun and the deployed one under Node, which is a wider
+# gap than the one containerising development is meant to close.
+#
+# Pinned to a version rather than to `1-alpine`. A floating tag means a rebuild
+# can change the test runner underneath a green suite.
+#
+# This pin is the version of record from here on. The host may have another —
+# it had 1.3.14 when this landed — and that is the point of moving development
+# into the image: the answer a suite gives should not depend on whose laptop
+# asked it.
+FROM oven/bun:1.4.0-alpine AS bun
+
 FROM node:24-alpine AS development
 WORKDIR /app
+# libstdc++ because Bun links against it and the Node Alpine image does not
+# carry it. git because three tests ask the repository about itself — whether
+# the OCR worker is tracked, and whether `.gitignore` excludes it — and a
+# suite that cannot answer that question in the container it now runs in is a
+# suite with a hole in it.
+RUN apk add --no-cache libstdc++ git
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# The Prisma client is generated, not installed: `deps` runs `pnpm install`,
+# which leaves `@prisma/client` uninitialised. Without this every suite that
+# imports it fails on "did not initialize yet" — measured, three unit files
+# before this line existed.
+RUN corepack pnpm db:generate
 ENV NODE_ENV=development
 EXPOSE 3000
 CMD ["corepack", "pnpm", "dev"]

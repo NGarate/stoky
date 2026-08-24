@@ -39,6 +39,18 @@ pnpm db:seed                # demo data. The E2E suite now seeds itself first, s
 # Development
 pnpm dev                    # Start Next.js dev server (port 3000)
 
+# Or in the image, which is where development is moving. The `development`
+# target is the production base — `node:24-alpine`, because Next's standalone
+# output is started with `node server.js` — plus Bun for the test runner and
+# git for the three tests that ask the repository about itself.
+docker compose up -d app    # the dev server, on the compose network
+docker compose exec app corepack pnpm test:unit
+docker compose exec app corepack pnpm test:components
+
+# Bun is pinned in the Dockerfile and that pin is the version of record. A
+# host with a different one is exactly the gap this closes: the answer a suite
+# gives should not depend on whose machine asked it.
+
 # Quality
 pnpm lint                   # oxlint
 pnpm typecheck              # tsc --noEmit
