@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, mock } from "bun:test";
 import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 import { UploadZone } from "@/components/receipt/UploadZone";
 
 afterEach(cleanup);
@@ -29,13 +30,26 @@ describe("UploadZone", () => {
     expect(screen.getByText("JPG, PNG o WebP (máx. 10 MB)")).toBeInTheDocument();
   });
 
-  it("accepts only the supported image types", () => {
+  it("offers exactly the types the server accepts, and nothing else", () => {
     const { container } = renderWithIntl(<UploadZone onUpload={() => {}} />);
 
+    // The whole attribute, not a `toContain` per type. On Android this is
+    // what decides which of the phone's photos can be chosen at all, so a
+    // type here that the router refuses is a failure after the choosing
+    // rather than before it — and one missing is a photo somebody cannot
+    // pick. Compared against the router's own list so the two cannot drift.
     const accept = fileInput(container).getAttribute("accept") ?? "";
-    for (const type of ["image/jpeg", "image/png", "image/webp"]) {
-      expect(accept).toContain(type);
-    }
+    expect(accept.split(",")).toEqual([...RECEIPT_IMAGE_TYPES]);
+  });
+
+  it("offers no file extensions, which Android does not read", () => {
+    const { container } = renderWithIntl(<UploadZone onUpload={() => {}} />);
+
+    // It listed `.jpg`, `.png` and `.webp` beside the same three MIME types.
+    // Android builds its picker from types; the extensions said nothing the
+    // types did not.
+    const accept = fileInput(container).getAttribute("accept") ?? "";
+    expect(accept).not.toContain(".");
   });
 
   it("hands the selected file to onUpload", async () => {

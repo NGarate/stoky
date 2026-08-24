@@ -5,6 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { useTranslations } from "next-intl";
 import { Upload, Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 
 interface UploadZoneProps {
   onUpload: (file: File) => void;
@@ -32,11 +33,20 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "image/jpeg": [".jpg", ".jpeg"],
-      "image/png": [".png"],
-      "image/webp": [".webp"],
-    },
+    // Types, not extensions, and the server's own list.
+    //
+    // This becomes the `accept` attribute, which on Android decides which of
+    // the phone's photos can be chosen at all. It listed `.jpg`, `.png` and
+    // `.webp` beside the same three MIME types; Android reasons about types
+    // rather than extensions, so they said nothing the types did not.
+    //
+    // Read from `RECEIPT_IMAGE_TYPES` rather than written out again: the
+    // router refuses anything outside it, and offering a type the server
+    // refuses is a failure after the choosing rather than before it. That
+    // file also records why HEIC is not on it.
+    accept: Object.fromEntries(
+      RECEIPT_IMAGE_TYPES.map((type) => [type, [] as string[]]),
+    ),
     maxFiles: 1,
     disabled: isUploading,
   });

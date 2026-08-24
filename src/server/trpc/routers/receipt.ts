@@ -10,8 +10,9 @@ import { parseReceiptText, saveParsedItems } from "@/server/services/receiptPars
 import { matchReceiptItems, getItemCandidates } from "@/server/services/productMatcher";
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
+import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 
-const VALID_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 /**
