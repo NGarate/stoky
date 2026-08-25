@@ -12,10 +12,13 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5 and TEST-6.** TEST-5 is the intermittent bun
+**Open: TEST-5, TEST-6 and BUILD-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
-reproduction in `docs/reproductions/`. TEST-6 is two inert mobile `test.skip`s
-whose stated reason names a phase that closed. PRICE-1 came out of the
+reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
+and does not fix it. TEST-6 is two inert mobile `test.skip`s
+whose stated reason names a phase that closed. BUILD-1 is the image and CI
+pinning different bun versions with nothing comparing them, found while taking
+that measurement. PRICE-1 came out of the
 owner's first pass on 2026-08-18; UI-10 and PRICE-1, filed the same day,
 closed the same day (`d7c178d`, `4bbb82d`). UI-11, found verifying the third
 unit in the browser, closed with the design-system extraction that gave it
@@ -63,6 +66,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
+| BUILD-1 | The image and CI pin different bun versions, and nothing compares them | 🟡 Open — needs a direction chosen |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -2401,6 +2405,52 @@ afterAll(async () => {
 **Priority:** Complete before writing integration tests for Phase 1 features
 
 ---
+
+### 🟡 BUILD-1: The image and CI pin different bun versions, and nothing compares them
+
+**Files:** `Dockerfile:40`, `.bun-version`
+**Severity:** LOW — no gate is wrong today; the hazard is that neither can go red
+**Status:** OPEN — found 2026-08-25 while measuring 1.4.0 against TEST-5
+
+`.bun-version` says `1.3.14` and `Dockerfile:40` says `oven/bun:1.4.0-alpine`.
+CI's three `setup-bun` steps read the first; `docker compose exec app` runs the
+second. So the suites run on a different bun depending on where they are asked,
+which is the exact gap `dc06795` moved development into the image to close, open
+in the place it most matters.
+
+**Nothing detects it.** There is no check comparing the two — unlike the
+Playwright pin, which has a fail-fast step in `ci.yml` that exits 1 when the
+container tag and `package.json` disagree. And CI never builds the stage the
+Dockerfile pin lives in: both image jobs build `target: production`, which
+carries no bun at all. So the image's runner reaches no gate.
+
+**A direction has to be chosen, and the two are not symmetric.**
+
+- *Dockerfile back to `1.3.14-alpine`.* Everything lands on the version the
+  suites are written against — `5ec7068`'s charter for `.bun-version` in as many
+  words — and on which TEST-5's rate, its reproduction's calibration and the
+  pending upstream report are all measured. The tag exists (amd64 and arm64).
+  The 1.4.0 in the Dockerfile was never *chosen*: the pre-plan records it as what
+  the floating `1-alpine` tag happened to resolve to on the day the stage landed.
+- *`.bun-version` forward to `1.4.0`.* Was investigated on 2026-08-25 and is
+  **not** recommended as things stand. It fixes nothing — 1.4.0 still reproduces
+  TEST-5 (see that entry) — and `.bun-version` governs strictly more than the
+  Dockerfile pin does: three CI jobs, the 443-test integration suite where TEST-5
+  lives, `check:contrast`, `check:links`, and the seed the whole browser suite
+  depends on. The measurements cannot exclude that 1.4.0's failure rate is worse,
+  and all three batches leaned that way. Everything was otherwise exercised green
+  under it, so the option stays open; it just buys nothing today.
+
+Note that either way the two would match only as *version strings*: the image
+takes the musl build and `setup-bun` on the runners takes glibc.
+
+**Cost of closing:** one line, plus building the `development` stage and running
+the two suites inside it, since no gate does. Worth pairing with the check that
+would have caught this on the push that created it — the Playwright assertion is
+the shape to copy. Filed rather than fixed in passing (D6), because choosing the
+direction is a judgement, and it sits next to Open decision 1 of the image
+pre-plan (whether CI moves into the image at all), which would retire
+`.bun-version` entirely and make the question moot.
 
 ### 🟡 TEST-6: Two inert mobile skips cite a phase that closed
 
