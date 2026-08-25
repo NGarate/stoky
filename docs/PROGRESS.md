@@ -39,6 +39,12 @@ Rules for this log:
 
 ## Done
 
+### The §10 tail — unowned items leaving the list by being done (from 2026-08-25)
+
+| Unit | Commit |
+|---|---|
+| The ± stepper mounted on the product detail — Journey 4 passes (§3 flow 3, D105) | `74cff4b` |
+
 ### Phase 8 — the owner's first pass (started 2026-08-18)
 
 | Unit | Commit |
@@ -1335,3 +1341,23 @@ out of the same question asked honestly — "why is this floor written here?" �
 `src/__tests__/unit/target-floor.test.ts` keeps the answer from drifting: 142
 hardcoded target floors outside the design system became 13, each with a reason
 that is checked for staleness as well as for presence (DESIGN_AUDIT A5.3, closed).
+
+**D105 — The stepper's minus is a consumption, and the stepper is not a
+correction tool.** §3 flow 3 says "add to stock — the ± stepper" and Journey 4
+says "plus and minus adjust the quantity", which left minus's ledger meaning
+open: it could have been `adjustStock` (a correction) or `consumeStock` (a
+use). It is a consumption, because the stepper's presses are things that
+happened — bought one, used one — and the ledger should say so; a correction
+carries a reason precisely because nothing happened, and the reconcile dialog
+and `/products/[id]/adjust` already own that vocabulary. Consequences taken
+with it: plus books the purchase at the product's usual location (D96's
+default, since a one-tap flow has nowhere to ask) while minus names none, like
+the kitchen's "he usado uno"; the pair reuses the kitchen's exact undo shape
+(D100's shared hold, now one exported `UNDO_HOLD_MS`, and D57's
+never-a-compensating-write); and the value paragraph is deliberately **not** a
+live region — the snackbar already announces each press as a sentence, and two
+regions saying the same thing is the same thing said twice. The old unmounted
+component's local count, hardcoded Spanish and hand-written CSS all went: the
+value is the queue projection, the labels are catalogue keys, and the buttons
+are the `Button` primitive so the 48px floor is inherited rather than
+restated.

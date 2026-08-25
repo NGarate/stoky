@@ -1,6 +1,6 @@
 # Stoky Smoke Journeys
 
-Updated: 2026-08-18
+Updated: 2026-08-25
 
 These are the minimum user-visible journeys that should be proven before closing
 Stoky product work. They are rewritten around the two entry screens defined in
@@ -13,15 +13,16 @@ passable, and carries a state **re-audited against the code and the suites on
 2026-08-17** — which found that this table had drifted a long way from the
 bodies below it (the table said Journey 2 "not yet" while its own body said
 "passes since Phase 3"), and that two journeys' features were never built at
-all despite the phases that owned them closing. Both are now in §10 of the
-plan rather than silently absorbed.
+all despite the phases that owned them closing. Both went into §10 of the
+plan rather than being silently absorbed; the stepper half (Journey 4) landed
+2026-08-25.
 
 | # | Journey | Passable from | State |
 |---|---|---|---|
 | 1 | Stock changes through the interface | Phase 1 | ✅ passes |
 | 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes, including the 2026-08-18 widening (D88, `941d1ed`): the two list writes changed sides and the suite asserts the rows they leave behind |
 | 3 | The phone screen answers "what do I need to buy" | Phase 4–5 | ✅ passes |
-| 4 | Stock changes without a form | Phase 4–5 | ❌ not built — the stepper exists as a component nothing mounts (§10) |
+| 4 | Stock changes without a form | Phase 4–5 | ✅ passes since 2026-08-25 (`74cff4b`) — the stepper is mounted on the product detail and the browser proves two presses arrive as two deltas |
 | 5 | Scanning never dead-ends | Phase 4–6 | partial — the connected cases pass; the offline barcode is T7 |
 | 6 | A whole shop with no signal | Phase 4 | ✅ passes, except the T7 bullet |
 | 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer, including the 2026-08-18 widening (add-to-list, `941d1ed`); the week on a real tablet is unowned |
@@ -209,13 +210,11 @@ Proof required:
 
 ## Journey 4. Stock changes without a form
 
-**❌ Not built, and the 2026-08-17 re-audit is what noticed.** The ± stepper
-was lifted out of the Bolsillo prototype into
-`src/components/inventory/QuantityStepper.tsx` in Phase 0 precisely so this
-journey could exist — and nothing has ever mounted it. Adding stock from the
-product detail still goes through the `/inventory/add` form. Phase 5 closed
-"Screen A" without this flow, and §10 of the plan now carries it explicitly,
-because a promise that nothing tracks is a promise that gets forgotten.
+**✅ Passes since 2026-08-25 (`74cff4b`).** The ± stepper — lifted out of the
+Bolsillo prototype in Phase 0 precisely so this journey could exist, then left
+unmounted through two phases that claimed it — sits where the stock number was
+on `/products/[id]`, for the roles the server would admit. The 2026-08-17
+re-audit is what noticed the gap; §10 of the plan carried it until now.
 
 Trigger:
 Open a product from the phone screen and change its quantity with the stepper.
@@ -226,15 +225,28 @@ Visible outcome:
 - each press is a delta against the current stock, not a new absolute value
 - the result is confirmed in plain words, with undo rather than a confirmation
   prompt
-- targets are at least 48px and sit in the lower half of the screen
+- targets are at least 48px (the stepper's buttons are the `Button` primitive,
+  whose floor they inherit)
 
-Proof required:
+Evidence:
 
-- before: Aceite at 1 L of a minimum 2
-- action: press plus twice
-- after: the product reads 3 L, no longer counts as missing, and
-  `inventory.getStockHistory` shows two `PURCHASE` entries of +1 rather than one
-  entry that set the total to 3 — the delta is what makes Journey 6 possible
+- `e2e/critical-paths.spec.ts` "Journey 4 — stock changes without a form": a
+  fresh product at zero has minus disabled and "no queda nada" said in words;
+  two plus presses move the number to 2 in place with the URL unmoved, each
+  confirmed by the snackbar sentence with its Deshacer; and after the queue's
+  ten-second hold drains, the history table shows **two `PURCHASE` rows of +1**
+  rather than one write that set the total — the delta is what makes Journey 6
+  possible
+- `src/__tests__/components/ProductDetailStepper.test.tsx`: the deltas' exact
+  inputs (a purchase of one at the product's usual location, a consumption of
+  one with none), the projection folding unsent presses onto the shown total
+  and the below-minimum sentence, undo cancelling the queued change and never
+  writing a compensating one, and a KITCHEN account reading a number instead of
+  a control the server would refuse
+- the proof's original "Aceite at 1 L of a minimum 2" shape runs against a
+  test-owned product instead of the seed: the browser suite's tests bring the
+  state they mutate (TEST-3's lesson), and the below-minimum half is asserted
+  in the component tier, where the projection can be posed directly
 
 ## Journey 5. Scanning never dead-ends
 
