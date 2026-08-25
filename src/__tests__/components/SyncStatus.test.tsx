@@ -24,6 +24,7 @@ let queueState = {
   failed: [] as FailedOp[],
   status: "idle" as "idle" | "sending" | "needs-signin",
   full: false,
+  hydrated: true,
 };
 
 let productQuery: unknown = {
@@ -80,7 +81,16 @@ beforeEach(() => {
   discard.mockClear();
   retry.mockClear();
   drain.mockClear();
-  queueState = { pending: [], failed: [], status: "idle", full: false };
+  // `hydrated: true` is the resting state every other test here means: a queue
+  // that has read the device and found nothing. The two that care about the
+  // other case set it themselves.
+  queueState = {
+    pending: [],
+    failed: [],
+    status: "idle",
+    full: false,
+    hydrated: true,
+  };
   productQuery = {
     data: { name: "Leche entera", defaultUnit: "L", stockEntries: [] },
     error: null,
@@ -88,6 +98,55 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe("an unread queue is not a saved one", () => {
+  /**
+   * The calm region renders *nothing* when everything is saved — and an
+   * unhydrated queue is empty, so it renders nothing then too. Identical DOM,
+   * opposite meanings: one says "there is nothing waiting", the other says
+   * "nobody has looked yet".
+   *
+   * A browser test read the empty region as proof the queue had drained, then
+   * reloaded the page on top of changes that had never been sent. `data-sync`
+   * is what separates them. It is deliberately not a visible difference: the
+   * state lasts one effect, and a spinner for it would be worse than silence.
+   */
+  it("says it is still reading the device", () => {
+    queueState = { ...queueState, hydrated: false };
+    renderWithIntl(<SyncStatus />);
+
+    expect(screen.getByTestId("sync-status")).toHaveAttribute(
+      "data-sync",
+      "hydrating",
+    );
+  });
+
+  it("says it is ready once the device has been read", () => {
+    queueState = { ...queueState, hydrated: true };
+    renderWithIntl(<SyncStatus />);
+
+    expect(screen.getByTestId("sync-status")).toHaveAttribute(
+      "data-sync",
+      "ready",
+    );
+  });
+
+  it("looks identical either way, which is why the attribute exists", () => {
+    queueState = { ...queueState, hydrated: false };
+    const { container } = renderWithIntl(<SyncStatus />);
+    const unread = container.querySelector('[data-testid="sync-calm"]')?.innerHTML;
+    cleanup();
+
+    queueState = { ...queueState, hydrated: true };
+    const second = renderWithIntl(<SyncStatus />);
+    const saved = second.container
+      .querySelector('[data-testid="sync-calm"]')
+      ?.innerHTML;
+
+    expect(unread).toBe(saved);
+    expect(saved).toBe("");
+  });
+});
 
 describe("the two live regions", () => {
   it("both exist even when neither has anything to say", () => {

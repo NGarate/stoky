@@ -22,6 +22,26 @@ const calm = (page: Page) => page.getByTestId("sync-calm");
 const urgent = (page: Page) => page.getByTestId("sync-urgent");
 
 /**
+ * Wait until the queue has actually read the device.
+ *
+ * The calm region is empty when everything is saved *and* when the queue has
+ * not been hydrated yet — same DOM, opposite meanings. Asserting the region is
+ * empty without this first is asking "has everything been sent?" before anyone
+ * has looked, and taking silence for yes. That is not hypothetical: it reloaded
+ * a page on top of two changes that had never left the device, and the list
+ * came back empty.
+ *
+ * Cheap on a page that has already hydrated, which is most of them.
+ */
+async function queueReady(page: Page): Promise<void> {
+  await expect(page.getByTestId("sync-status")).toHaveAttribute(
+    "data-sync",
+    "ready",
+    { timeout: 15_000 },
+  );
+}
+
+/**
  * A list of this test's own, with its own items.
  *
  * It used to open the seeded list, and that made every test here depend on
@@ -82,6 +102,7 @@ async function openOwnList(page: Page, items: number): Promise<void> {
   // projection before the server has it. Cutting the network at that moment
   // leaves the cached list one item behind — which is correct behaviour and
   // a useless starting point for a test about ticking things off.
+  await queueReady(page);
   await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
   await page.reload();
   await settle(page);
@@ -130,6 +151,7 @@ test.describe("A shop with no signal", () => {
     await context.setOffline(false);
 
     // The indicator falls silent once everything has been sent.
+    await queueReady(page);
     await expect(calm(page)).toBeEmpty({ timeout: 20_000 });
     await expect(urgent(page)).toBeEmpty();
 
@@ -175,6 +197,7 @@ test.describe("A shop with no signal", () => {
     await page.getByRole("checkbox").first().click();
     await context.setOffline(false);
 
+    await queueReady(page);
     await expect(calm(page)).toBeEmpty({ timeout: 30_000 });
 
     expect(keys.length).toBeGreaterThanOrEqual(2);
@@ -218,6 +241,7 @@ test.describe("A shop with no signal", () => {
     });
 
     blocked = false;
+    await queueReady(page);
     await expect(calm(page)).toBeEmpty({ timeout: 30_000 });
 
   });

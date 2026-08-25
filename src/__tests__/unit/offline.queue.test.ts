@@ -258,6 +258,59 @@ describe("room", () => {
   });
 });
 
+describe("an unread queue is not an empty one", () => {
+  /**
+   * The store starts empty and `hydrate()` fills it from the device, in an
+   * effect. So for one paint "three changes are waiting" and "nothing is
+   * waiting" are the same object, and everything downstream reports the second
+   * — which is not an early answer but a wrong one.
+   *
+   * `hydrated` is what tells them apart. It is deliberately *not* "the queue
+   * has something in it": a queue that was read and found empty is a different
+   * claim from one that has not been read, and only the first licenses saying
+   * everything is saved.
+   */
+  it("starts unhydrated, and says so", () => {
+    const queue = open(async () => {}, { storage: createMemoryStorage() });
+
+    expect(queue.getState().hydrated).toBe(false);
+    expect(queue.getState().pending).toHaveLength(0);
+  });
+
+  it("is hydrated after reading a device that had nothing on it", () => {
+    const queue = open(async () => {}, { storage: createMemoryStorage() });
+    queue.hydrate();
+
+    // Empty both before and after, which is the whole point: the flag is the
+    // only thing that moved, and it is the only thing that could have.
+    expect(queue.getState().pending).toHaveLength(0);
+    expect(queue.getState().hydrated).toBe(true);
+  });
+
+  it("is hydrated after restoring changes, without dropping them", () => {
+    const storage = createMemoryStorage();
+    const first = open(async () => {}, { storage });
+    first.enqueue(tick());
+
+    const second = open(async () => {}, { storage });
+    expect(second.getState().hydrated).toBe(false);
+    second.hydrate();
+
+    expect(second.getState().hydrated).toBe(true);
+    expect(second.getState().pending).toHaveLength(1);
+  });
+
+  it("is hydrated by an enqueue that reads the device on the way", () => {
+    // `enqueue` hydrates first so the first write cannot overwrite the stored
+    // queue. The flag has to follow that path too, or a screen that wrote
+    // before mounting still reports an unread queue.
+    const queue = open(async () => {}, { storage: createMemoryStorage() });
+    queue.enqueue(tick());
+
+    expect(queue.getState().hydrated).toBe(true);
+  });
+});
+
 describe("what survives a reload", () => {
   it("comes back with the same changes and the same keys", () => {
     const storage = createMemoryStorage();
@@ -608,6 +661,23 @@ describe("subscribers", () => {
     queue.enqueue(tick());
     queue.enqueue(tick());
 
-    expect(heard).toEqual([1, 2]);
+    // Three notifications for two changes. The first is the hydration the
+    // first `enqueue` performs on its way in: it leaves the queue still empty
+    // but no longer *unread*, and that is a state change subscribers must hear
+    // — `SyncStatus` renders a different thing on either side of it.
+    expect(heard).toEqual([0, 1, 2]);
+  });
+
+  it("hear the moment the queue stops being unread", () => {
+    const queue = open(async () => {});
+    const heard: boolean[] = [];
+    queue.subscribe((state) => heard.push(state.hydrated));
+
+    queue.hydrate();
+    queue.hydrate();
+
+    // Once, not twice: hydration is idempotent, and a second notification
+    // would re-render every consumer for nothing.
+    expect(heard).toEqual([true]);
   });
 });

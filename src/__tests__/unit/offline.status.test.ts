@@ -51,6 +51,7 @@ describe("syncStatus over every queue it can be handed", () => {
             const state: QueueState = {
               status,
               full,
+              hydrated: true,
               pending: Array.from({ length: pendingCount }, (_, i) =>
                 op(`p${i}`),
               ),
@@ -78,6 +79,7 @@ describe("syncStatus over every queue it can be handed", () => {
       const state: QueueState = {
         status: "idle",
         full: false,
+        hydrated: true,
         pending: [],
         failed: [failed("f1", reason)],
       };
@@ -99,6 +101,7 @@ describe("what it says, and in which order", () => {
   const base: QueueState = {
     status: "idle",
     full: false,
+    hydrated: true,
     pending: [],
     failed: [],
   };
@@ -126,6 +129,7 @@ describe("what it says, and in which order", () => {
     const state: QueueState = {
       status: "needs-signin",
       full: true,
+      hydrated: true,
       pending: [op("a")],
       failed: [failed("f1", "needs-reconciliation")],
     };

@@ -61,7 +61,18 @@ export function SyncStatus(): JSX.Element {
                   : t("unrepresented");
 
   return (
-    <div className="mb-4" data-testid="sync-status">
+    // `data-sync` separates "the device has been read and there is nothing
+    // waiting" from "the device has not been read yet". Both render the same
+    // thing — nothing — because there is nothing honest to show for a state
+    // that lasts one effect, and a spinner for it would be worse than silence.
+    // What it stops is anything *else* reading the empty region as proof that
+    // everything is saved, which a browser test did, and which is only going to
+    // happen more often as the shell starts arriving before hydration.
+    <div
+      className="mb-4"
+      data-sync={state.hydrated ? "ready" : "hydrating"}
+      data-testid="sync-status"
+    >
       {/* Both regions exist for every state. A region created at the moment it
           has something to say is a region screen readers may not announce.
 

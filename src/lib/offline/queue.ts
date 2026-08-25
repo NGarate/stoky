@@ -113,6 +113,22 @@ export interface QueueState {
   status: "idle" | "sending" | "needs-signin";
   /** Set when the last enqueue was refused for want of room. */
   full: boolean;
+  /**
+   * Whether what is on the device has been read yet.
+   *
+   * The store starts empty and `hydrate()` fills it, which happens in an
+   * effect — so for the first paint an unread queue and an empty one are the
+   * same object. Everything downstream then says "all saved", because that is
+   * what no pending changes means. It is the wrong answer rather than an early
+   * one: somebody who has three unsent changes is told, briefly, that they have
+   * none.
+   *
+   * Consumers that report the queue's state to a person must say nothing until
+   * this is true. It is also the only honest signal a test has for "the client
+   * is live", which matters more under a streamed shell: quiet, painted and
+   * hydrated stop coinciding.
+   */
+  hydrated: boolean;
 }
 
 export interface EnqueueInput {
@@ -192,6 +208,7 @@ const EMPTY: QueueState = {
   failed: [],
   status: "idle",
   full: false,
+  hydrated: false,
 };
 
 /** Only the parts worth keeping between visits. `status` is per-session. */
@@ -297,7 +314,14 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     hydrated = true;
 
     const restored = storage.read(userId);
-    if (!isPersisted(restored)) return;
+
+    // The flag is set even when there was nothing to restore, and that is the
+    // whole point: "read it, and it was empty" is a different claim from "have
+    // not read it", and only the first one licenses saying everything is saved.
+    if (!isPersisted(restored)) {
+      store.setState((state) => ({ ...state, hydrated: true }), true);
+      return;
+    }
 
     // Merged rather than replaced, so a change made in between survives.
     store.setState(
@@ -305,6 +329,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         ...state,
         pending: [...restored.pending, ...state.pending],
         failed: [...restored.failed, ...state.failed],
+        hydrated: true,
       }),
       true,
     );
