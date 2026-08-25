@@ -43,7 +43,364 @@ Rules for this log:
 
 | Unit | Commit |
 |---|---|
-| The ± stepper mounted on the product detail — Journey 4 passes (§3 flow 3, D105) | `74cff4b` |
+| The ± stepper mounted on the product detail — Journey 4 passes (§3 flow 3, D105) | `74cff4b`, `e13c540` |
+
+### Development in the image, and the phone photograph that will not decode (2026-08-25)
+
+Reported from Android: tapping to upload a receipt opened a filtered gallery
+rather than a file chooser, and the `accept` attribute measured as
+`image/jpeg,.jpg,.jpeg,image/png,.png,image/webp,.webp` — Android builds its
+picker from MIME types and does not reason about `.jpg`. Tidying the attribute
+found the real complaint underneath it: "only some photos" is HEIC, which is
+what both platforms save camera photographs as, and which this build of `sharp`
+cannot decode. Alpine's packaged `vips-heif` converts them, so the way in
+exists; taking it means rebuilding the production image *and* every machine that
+runs the suites. That is a decision, not a consequence of tidying an attribute —
+so it was measured rather than taken.
+
+| Unit | Commit |
+|---|---|
+| One `accept` list in `src/lib/validations/receipt.ts` — types, not extensions; HEIC measured and still out | `9df4ab9` |
+| The `development` image runs the suites — Bun pinned, Prisma generated, git present | `dc06795` |
+| The pre-plan, not an executable one — fourteen measured runs and a "what is NOT known" section | `611cd2c` |
+
+### Settings grows the screens its procedures were waiting for (2026-08-24)
+
+§2's pattern again, three more times: `location.create`/`update`/`delete` had no
+caller in the application, `User.locale` was written at registration and read by
+nothing, and `User.snackbarDuration` was a column with no control. Theme,
+language and duration were meanwhile living in the navigation sheet, where
+`/settings` already rendered them — the same three preferences in two places.
+The split that came out of it is deliberate: what follows the account moves to
+the account; the theme stays the device's, because WCAG 2.2.1 is about the
+screen in front of you, not the person behind it.
+
+| Unit | Commit |
+|---|---|
+| Storage locations can be created, renamed and removed — three procedures had no caller | `1710297` |
+| Theme, language and duration leave the nav — `/settings` already rendered them | `ae31241` |
+| `User.locale` read at last — the language follows the account, the cookie answers `/login` | `265e2f8` |
+| `User.snackbarDuration` follows the account, the theme stays the device's (WCAG 2.2.1) | `e28a273` |
+| `mt-3` off the duration control — the cluster's own `gap-y-3`, so `/settings` reads as one group | `c0e9739` |
+
+### The design system — nine ways of drawing one row become one (D104, 2026-08-20/24)
+
+The owner's review gave the plainest possible symptom — "en cada pantalla se
+muestran de una manera" — and `DESIGN_AUDIT.md` A5.3 gave the count: the
+hardcoded copies of the target-size floor had grown from 74 to 100. Nine screens
+drew the same object nine ways, and the drift was not only untidy, it hid
+defects that were invisible while nine implementations each got them differently
+wrong: a title that guaranteed 48px of height and none of width, so "Lidl" was a
+25×48 target at every tier, and a whole-row `<Link>` that made a row's
+accessible name its entire contents. `ItemRow` is the inventory card — the row
+the owner picked — with `density` for the tier and `variant` for whether it is a
+card at all, because A5.4's "no cards except where justified" is a decision the
+Panel and the kitchen had already made. The reasoning is D104; the gate that
+keeps it from drifting is `src/__tests__/unit/target-floor.test.ts`, which took
+142 hardcoded floors outside the design system down to 13, each with a reason
+checked for staleness as well as for presence.
+
+**The extraction, and the contract written where an agent reads first.**
+
+| Unit | Commit |
+|---|---|
+| One `cn`, imported — `button.tsx` stops keeping a second copy of it | `6ea8c4d` |
+| `BackLink` — the way out carries an `aria-hidden` arrow, `/products/[id]/edit` its first caller | `71ca3ec` |
+| The snackbar and chart tokens land with their audit pairs — 76 checks over 32 tokens | `6908ec2` |
+| `ItemRow` and `Badge` lifted from the inventory card, the row the owner picked (D104) | `9be4ea7` |
+| The four rules written into `CLAUDE.md` and `AGENTS.md`, where an agent reads first | `45d27e8` |
+
+**UI-11 — one answer for stock state, closed and then closed properly.**
+
+| Unit | Commit |
+|---|---|
+| Run out beats low, in the single `StockStatus` the extraction left | `8128d04` |
+| `stockTone` beside `StockStatus` — the row's tint and its badge stop disagreeing | `ee508c7` |
+| The catalogue states the stock in words, not in amber — WCAG 1.4.1, `StockStatus` reused | `a7a6f6d` |
+
+**The sweep — nine lists onto `ItemRow`.**
+
+| Unit | Commit |
+|---|---|
+| The shopping detail at `touch` density — the removal gains its 48px | `1368707` |
+| The catalogue is `ItemRow` and `Button` — row actions reach the card tier at last | `aef6ec9` |
+| Receipts and prices drop the whole-row `<Link>` — and `ItemRow`'s title gains a `min-w` | `90b4ba7` |
+| Stores and people on `ItemRow`, `Button` and `Input` — Cancelar had no floor at all | `b43fa23` |
+| The Panel and the kitchen take `ItemRow` `plain` — the grammar without the card (A5.4) | `6581625` |
+| The lists index joins; auto-generada goes neutral, and the pill gate learns the chip | `7fe1ae2` |
+| The last four hand-written pills become `<Badge>`, held there by a source scan | `73829cd` |
+
+**The primitives, and the 48px floor that stops being retyped.**
+
+| Unit | Commit |
+|---|---|
+| `RadioOption` — the stretched radio is a primitive, not a technique retyped thrice | `8a5237c` |
+| Eight screens take `Button` and `Input` — 33 hardcoded 48px floors gone with the classes | `2cca84d` |
+| Forty-six link-shaped buttons become `<Button asChild>` — still anchors, one size | `6a9349f` |
+| `Select` and `Textarea`, native — four selects and three textareas stop being hand-written | `b5a2e5d` |
+| `target-floor.test.ts` — a hand-written 48px floor now needs a reason; A5.3 closed | `6faca1c` |
+
+**The way back out.**
+
+| Unit | Commit |
+|---|---|
+| Eight typed `←` out of the catalogue, six more ways back on `BackLink`, glyphs gated | `550fb10` |
+| `/settings/stores` gets a `BackLink` — the only settings sub-page with no way back out | `6aa593c` |
+| Nothing types `←` — the scan reaches JSX, where the catalogue sweep could not | `261888e` |
+| Six hand-rolled ways back on four sub-pages become `BackLink` — WCAG 2.4.9, gated on the key | `0478a97` |
+
+**Consistency, once there was something to be consistent with.**
+
+| Unit | Commit |
+|---|---|
+| Three actions get the variant their kind calls for; the scan link stops copying `bg-primary` | `1a32a31` |
+| `Select` takes `Input`'s fill, and the kitchen row stops spending «Queda» twice | `d7a843c` |
+| The `link` variant drops `px-4` so it aligns with its column; two lists lose the outer card (A5.4) | `6a446d2` |
+| Every dashboard screen states its width — five ran the full 7xl, `/receipts` was inset twice | `c82d7dd` |
+
+**The paper trail.**
+
+| Unit | Commit |
+|---|---|
+| D104 recorded, A5.3 closed in the audit, and A5.4's third pass filed beside its second | `9254fd2` |
+
+### Toolchain, and suites that can fail (2026-08-19/24)
+
+Four of these are the same lesson from four directions: a gate that cannot go
+red is not a gate. `verify:ci` does not include Playwright, and two commits in
+this run claimed green on it plus a subset of specs they had chosen themselves —
+the subsets happened to exclude the specs covering what had changed. 94
+component assertions were written in a shape that could hang the run but never
+fail it. An accent-collation test compared against a name no fixture held. And
+the Prisma CLI had been broken since Phase 0's own tidy-up: `prisma.config.ts`
+silenced the `.env` loading it was expected to replace, and nothing caught it
+because Next and Bun load `.env` themselves — only the bare CLI takes that path.
+
+| Unit | Commit |
+|---|---|
+| `packageManager` bumped to pnpm 11.22.0 | `5289e2b` |
+| `prisma.config.ts` loads the `.env` its own presence silenced — the CLI broken since `436cfea` | `6d5d3c3` |
+| Three browser assertions two earlier commits left behind — `verify:ci` is not the suite | `b6771eb` |
+| `toBeAbsent` — 94 assertions that could hang but never fail, converted | `b49abcc` |
+| The accent-collation test can fail — it had compared against a name no fixture held | `ec67cef` |
+| The global boundary renders detached; the nested `<html>` was wedging the component suite | `f947182` |
+
+### Prices — the screens finally have something to draw (2026-08-21/23)
+
+Phase 8 item 3 closed PRICE-1, so for the first time a price screen had records
+to chart rather than a table nothing could populate — and what it drew turned
+out to be wrong in four ways nobody had been able to see. Prices were formatted
+by hand in fifteen places, so a Spanish reader was shown «€1.19»; a shop
+unvisited on a date was drawn as a shop that had ended; two lines from one
+receipt on one date collided on a React key; and the trends table below the
+chart wrote its dates in whatever language the device happened to be in. The
+last move is a subtraction: the trends table gave three numbers the chart and
+`StoreComparison` directly above it already gave.
+
+| Unit | Commit |
+|---|---|
+| Fifteen hand-written prices move to `src/lib/money.ts` — «€1.19» is not Spanish; the four scratch probes a batch `git add -A` swept in, removed | `f54777d`, `9b93921` |
+| Three renderings of one store list become one sorted bar per store, in HTML, scaled from zero | `9c0e54f` |
+| `PriceChart` — markers drawn once the animation is off, four CVD-validated tokens, a table view | `8dc3e58` |
+| `connectNulls` on the price chart — a shop unvisited on a date is not a shop that ended | `421f5e4` |
+| `PriceChart`'s table view keys by date and index — a receipt's two lines collided in React | `e064c72` |
+| `toLocaleDateString()` with no locale asked the device — a source scan now forbids it | `b9e2ac8` |
+| The trends table goes, and with it `getPriceTrends` and `PriceChart`'s never-drawn `showStores` branch | `9da2c93`, `57f25f4`, `5e96924` |
+
+### Defects found by reading, not by a suite going red (2026-08-20/23)
+
+A full read of the week's diff rather than a run of it. None of these was
+reported and none of them failed a gate: a screen that says «No falta nada»
+whether the household is stocked or the query died; a shops screen offering a
+MEMBER four controls the server will refuse; a catalogue silently stopping at a
+hundred products with nothing saying so; «3 3 artículos», which is what a
+hand-built plural does when it meets a count; and four callers who had each
+written their own definition of low stock and agreed only by luck.
+
+| Unit | Commit |
+|---|---|
+| One definition of low stock in `src/lib/stock/low-stock.ts` — four callers had agreed only by luck | `de4ded9` |
+| «No falta nada» told apart from a failed `getStockOverview` on the kitchen tablet | `05a7df7` |
+| The shops screen hides what a MEMBER cannot do, and a refused write says so without guessing | `68479bb` |
+| The catalogue says when `product.list` stopped at a hundred, and at what number | `d7bdc1a` |
+| Two counts take ICU plural rules; a scan holds every `{count}`, and «3 3 artículos» fell out | `92ea46d` |
+
+### Feedback gets a pattern — D100, D101 and the one snackbar (2026-08-20/23)
+
+The trigger was small and the consequence was not. «Deshacer» on the kitchen
+screen was unusable in the common case: online, the queue drains in one
+round-trip, so the button lived for a single render — a flash, not an
+affordance. Fixing it (D100: a change waits ten seconds before it becomes
+eligible to send, so D57's "undo is cancellation, never a compensating write"
+survives intact) opened the wider question, which was that feedback had no
+pattern at all — five ways of saying a thing had happened, and six writes that
+said nothing. D101 is the answer, and the hard part was deciding what a snackbar
+is *not* for: a message that removes itself must not be the only account of
+something still true.
+
+**The hold that makes undo real (D100).**
+
+| Unit | Commit |
+|---|---|
+| The kitchen's change waits ten seconds, so «Deshacer» exists online too (D100) | `51712b3` |
+| `holdRemainingMs(id)` — the queue says how long one change can still be taken back | `778956a` |
+
+**The snackbar itself (D101).**
+
+| Unit | Commit |
+|---|---|
+| A failed receipt upload reaches its own handler — the await had left the `try`'s stack | `6d55138` |
+| One snackbar, polite and mounted once — with normal / larga / hasta descartar | `01c76d4` |
+| The kitchen's undo moves into the snackbar — D100's ten seconds and D57's cancel intact | `510d5b5` |
+
+**The four surfaces that are not it.**
+
+| Unit | Commit |
+|---|---|
+| A `Dialog` primitive on Radix, and the last `window.confirm` gone — the delete now names the list | `4c6786d` |
+| The three success screens become a dialog over the form they came from — A11Y-1 strengthened | `98e3601` |
+| Ten inline live regions sorted by event or state — four move to the snackbar, six stay put | `1c4b1fc` |
+| `FormErrorSummary` extracted from five forms — a refused submit keeps its focused `role="alert"` | `bfd89d4` |
+
+**The writes that had said nothing.**
+
+| Unit | Commit |
+|---|---|
+| The three store writes invalidate the list below them — a delete had no callbacks at all | `fef41f1` |
+| Confirming a review stays on the review — `confirmAll` sets CONFIRMED, and only apply sets APPLIED | `6323056` |
+| Six silent writes gain a confirmation, and no test stubs the snackbar module any more | `3af1d4e` |
+| Undoing a save is its own mutation — one confirmation, and a refusal that can be read | `33314bf` |
+
+**What using it found.**
+
+| Unit | Commit |
+|---|---|
+| An undo lives exactly as long as the window it measures, and a second no longer arrives spent | `f93faab`, `4a16287` |
+| A failure snackbar is tinted and iconed — `--snackbar-danger`, AAA in both themes | `05281c9` |
+
+**The record.**
+
+| Unit | Commit |
+|---|---|
+| D101 recorded — three files already cited it and the log had no D101 in it | `03dd254` |
+
+### The shop, the kitchen, and what already covers what (2026-08-22/23)
+
+"Is this already on a list?" turned out to be a question three screens each
+answered differently, and two of them answered it wrong: the kitchen offered
+Apuntar for things already bought, and «Generar desde stock bajo» counted only
+its own list's coverage, so a second list generated the same items again. It is
+now one server-side question over stock plus every list. The rest of this
+section is the shopping detail screen itself, which D103 had just rebuilt and
+which no audit had ever visited.
+
+| Unit | Commit |
+|---|---|
+| Apuntar gives way to «Ya en la lista» where stock plus the lists clear the minimum | `9b3bb48` |
+| `/shopping/[id]`'s rows sit in a `<ul>` — the parent asserted, the scan generalised | `71fc1cd` |
+| `/shopping/[id]` audited at last — three sub-48px targets, the wrapping label measured | `e87d247` |
+| The store include moves to `getById`, which draws it, off `list`, which does not | `63d0251` |
+| Four of the five writes report, the bin held ten seconds (D100, D57) — the tick silent | `5473c34` |
+| «Generar desde stock bajo» asks `needsMoreOnList` over every list, not just its own | `f81e773` |
+| A quantity the shopping row refuses is put back — the uncontrolled box had kept it | `6060cf0` |
+| `canWrite` reaches the tick and the bin too; a badge keeps what the tick said (D88) | `eca0b12` |
+
+### The accessibility review's five findings (2026-08-20/22)
+
+A review of the surfaces this fortnight added, against the AAA bar Phase 2b set.
+Five findings, one commit each. Two of them were the same shape from opposite
+ends — a live region that only exists once it has something to say has nothing
+to announce, because the region and its content arrive in the same render — and
+one was not an accessibility defect at all underneath: the receipt review's
+three writes were unhandled rejections, so "a refused apply says nothing" was a
+correctness bug wearing an announcement bug's clothes.
+
+| Unit | Commit |
+|---|---|
+| The nav sheet's trap counts tab stops, not focusables — a radio group is one stop | `07ca252` |
+| `aria-pressed` on a receipt match candidate — the choice was a tint and a hidden tick | `f818d0a` |
+| The reconcile panel earns its `aria-modal` — focus trap, Escape, opener restored | `55ad343` |
+| The receipt review's three writes report a refusal — two were unhandled rejections | `1a73c45` |
+| A region that appears only when it speaks announces nothing — `RouteState` and both auth pages hold theirs from the first render | `58a24ad`, `f0438c2` |
+
+### The inventory list learns the address bar (2026-08-22)
+
+Phase 8 item 2 made the Panel's cards doors, and a door needs a destination that
+can be told what to show. `/inventory` read no params and fired one hardcoded
+query; the honesty rule from that item — the card's number and the destination's
+rows are the same set — could not survive a list that filtered and paged in
+JavaScript over a page it had already truncated, which is why a filtered page
+came back short.
+
+| Unit | Commit |
+|---|---|
+| `getStockOverview` filters, sorts, pages and counts in Postgres — a filtered page came back short | `9f729d9` |
+| The inventory pages, filters, sorts and searches from the address bar; `Pagination` born with it | `25054bc` |
+| `page` capped at ten thousand — an unbounded offset was a `bigint` error, not an empty page | `40bd9b5` |
+
+### The owner's review, continued — D102 and D103 (2026-08-22)
+
+Two more of the owner's observations, and both are deletions. "Para editar el
+producto en la página de producto no tiene ningún sentido tener una pantalla
+aparte": correcting a typo meant leaving the record and losing everything else
+it showed — the stock, the batches, the price history, the rating — and coming
+back. And "las listas de compra te dejan añadir cualquier artículo con cualquier
+cantidad, existan o no": a free-text item cannot be priced, counted against the
+cupboard, matched to a receipt line, or suppressed when it is already covered,
+and each of those features carried a branch for the case where the item names
+nothing. The kindness free text bought survives where it belongs — the add form
+creates the product inline. Migrated expand → code → contract, which is why the
+three schema steps are three commits rather than one.
+
+**D102 — the edit screen absorbed.**
+
+| Unit | Commit |
+|---|---|
+| The catalogue fields edit in place on the product, with Guardar, Descartar and an inverse undo (D102) | `a8917f8` |
+| `/products/[id]/edit` becomes a `permanentRedirect`; the 476-line form and its two links go | `ed8beb6` |
+| D102 recorded — the edit screen absorbed, D92 narrowed rather than reversed | `98ec365` |
+
+**D103 — a list item is a product and a quantity.**
+
+| Unit | Commit |
+|---|---|
+| `ShoppingItem.storeId`, nullable and unread — per item, because one shop rarely covers a week | `f30bc08` |
+| Every free-text shopping item gets a product — D103's expand half, reuse before minting | `8e4bea1` |
+| A list item is a product and a quantity — D103's code half, SHOP-1 superseded | `9d4e62e` |
+| The shopping row gains an editable quantity, a shop and a prices link — all four writes queued | `d093433` |
+| D103's contract half — `productId` NOT NULL asserted before `customName` is dropped | `bfaf957` |
+| SEC-1's hole again, on `ShoppingItem.storeId` — both writes check whose store it is | `04c9690` |
+| D103's inline creation actually creates — the nested `<form>` submitted natively | `82551a3` |
+| An item added with no signal carries its name from the op's own label | `19739c2` |
+| `ShoppingItem_productId_fkey` pinned at RESTRICT — D103 left it nulling a NOT NULL column | `abf5778` |
+
+### The owner's second pass — a phone in a real hand (2026-08-19/20)
+
+Phase 8 closed on the 19th; the owner picked up their own phone the same day and
+the second pass began before the ink was dry. It started with the scanner, which
+on a real device over `tailscale serve` did not work at all and blamed the
+browser for it — the requirement is a secure context, not a missing API. What
+followed was not a defect list but a set of rules, and they are worth writing
+down because most of the sections above obey them: an icon on a button previews
+the action, never the state; anything that collapses needs a visible chevron; no
+cards except where a card is concretely justified; nothing is said twice on one
+screen; no action is duplicated from persistent navigation or offered on a tier
+that cannot perform it; and an alert exists only for something that wants
+attention, reason first, count second. The Panel took three passes at the last
+of those, recorded as one argument rather than three changes of mind: the alert
+cards restated the lists below them, the one-line summary that replaced them
+restated the same counts, and what was left underneath had always been both the
+detail and the door.
+
+| Unit | Commit |
+|---|---|
+| The scanner names the real requirement — `https://` or localhost — and `allowedDevOrigins` gains the `tailscale serve` hostname | `536a3e2`, `830b1cf` |
+| The torch icon previews the action — a dark torch offers a lit bulb, not a ban sign | `1282b25` |
+| The trolley reads as a drawer, not a heading — chevron, and the count in words | `36d5994` |
+| The Panel leads with its actions and raises only true alerts, reason before count | `21e7539` |
+| The Panel says each thing once — a sentence over the lists, the overflow note the door; A5.4 re-recorded | `5b253e2`, `3dd99ab` |
+| The shop's rows and headers shed their cards — dividers, and the row's 64px target intact | `5bd16e6` |
+| The Panel's summary sentence goes too — the sections were always the doors | `e5a3b63` |
 
 ### Phase 8 — the owner's first pass (started 2026-08-18)
 
