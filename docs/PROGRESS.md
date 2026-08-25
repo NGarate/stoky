@@ -91,6 +91,7 @@ following it would have.
 | The ± stepper mounted on the product detail — Journey 4 passes (§3 flow 3, D105) | `74cff4b`, `e13c540` |
 | A device identifier in a cookie, so the screen choice can be a server decision (D110) | `f3957c8` |
 | The screen choice per `(userId, deviceId)` — Journey 8 passes, server-first (D110) | `300f665` |
+| The starting screen is changeable from settings, and says which one it is (D111) | `295fadc` |
 
 ### Development in the image, and the phone photograph that will not decode (2026-08-25)
 
@@ -2129,3 +2130,20 @@ A5.4 leaves "whether three entry points is the right number" explicitly open and
 explicitly the owner's, so offering all three decides nothing that has not been
 decided — and what people actually choose is the first evidence that question
 has ever had.
+
+**D111 — A persistent state is a live region, not a message that appears.** The
+settings screen for the starting choice needed to confirm a write, and the first
+attempt did the obvious thing: redirect back to the page with `?saved=1` and
+render a sentence when the flag was there. It does not work — Next keeps the URL
+when a server action redirects to the route it was called from, so the flag
+never arrived. The failure mode is the one worth remembering: the write
+succeeded every time, and only the sentence about it was missing, so the screen
+looked broken while the feature worked.
+
+What replaced it is not a workaround but the rule D101 already settled: a
+persistent state belongs in a live region beside the control, and only an event
+belongs in the snackbar. The page states which screen is current, permanently
+and politely, and changing the choice changes that sentence — so the
+confirmation *is* the state, there is nothing to time out, and a reader who
+tabs back later hears the same answer as somebody looking at it. The action
+revalidates rather than redirecting.

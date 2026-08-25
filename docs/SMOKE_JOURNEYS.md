@@ -395,7 +395,7 @@ Visible outcome:
 - an `admin` or `user` account is asked once which screen it wants, and is not
   asked again on that device
 - a `kitchen` account lands on the kitchen screen without being asked
-- the choice is changeable from settings *(not yet built — see below)*
+- the choice is changeable from settings
 
 Evidence:
 
@@ -418,9 +418,12 @@ Evidence:
 - `src/__tests__/unit/landing.test.ts` covers the precedence, including the
   omission that matters — no quiet fallback to the Panel for the unasked.
 
-**What is not built yet:** the "changeable from settings" half. The row and the
-action exist, so it is a control rather than a mechanism, but until it lands a
-choice can only be changed by clearing the cookie.
+- *Changeable from settings*: `/settings/screen` shows which screen is current,
+  changes it without walking you out of settings, and announces the new answer
+  in a live region — and a second device is unaffected by the change.
+
+**Journey 8 is complete.** All three of its stated outcomes are covered, on the
+tiers that can answer them.
 
 ## Journey 9. Both languages, everywhere
 
