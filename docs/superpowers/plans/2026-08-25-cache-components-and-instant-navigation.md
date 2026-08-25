@@ -1,7 +1,9 @@
 # Cache Components and instant navigation — a measured plan
 
 Created: 2026-08-25
-Status: **measured, not landed.** The working patch is not committed.
+Status: **landed** — `2b6eba5`, with the three defects it depended on committed
+before it. The owner's decision on the nonce (keep it, block at the root) is
+recorded beside the code in `src/app/layout.tsx`.
 
 Next 16.3 ships *Instant Navigations*
 (<https://nextjs.org/blog/next-16-3-instant-navigations>): a route either
@@ -68,8 +70,10 @@ the choice is real:
   documents and that `e2e/auth.prod.spec.ts` guards, and it should not be traded
   for a navigation feel without the owner saying so.
 
-**This is the decision this plan exists to surface.** It is not an
-implementation detail and an agent should not settle it.
+**This is the decision this plan existed to surface**, and it was the owner's to
+make. **Decided 2026-08-25: keep the nonce, block at the root.** The reasoning
+now lives beside `export const instant = false` in `src/app/layout.tsx`, phrased
+as an answer rather than a to-do, so nobody reads it later as unfinished work.
 
 ---
 
@@ -138,13 +142,24 @@ still open, and the following are now *excluded* rather than suspected:
   through `RouteState`, so an empty list means the query resolved with none.
 
 What that leaves is the interesting question: **the items appeared, the queue
-reported itself drained, and the server has nothing.** Two candidates, neither
-tested — a drain that resolves by *failing* (failures move to `sync-urgent`,
-which the helper does not check before reloading, so `calm` would be empty and
-the reload would look justified), or read persistence restoring a pre-add copy
-of the list from `localStorage` after the reload. The next session should
-distinguish them before touching anything: assert `urgent` empty in the helper
-too, and read the queue's `failed` array at the moment `calm` goes quiet.
+reported itself drained, and the server has nothing.**
+
+**Answered, and the second candidate was right.** Instrumenting the helper
+settled it in one run: the queue was `{pending: [], failed: []}` — drained
+cleanly, nothing refused — and a query against `stoky_e2e` showed the list
+holding **both items**. The server was never the problem. What the page rendered
+was the persisted read cache: restored with its original `dataUpdatedAt`, inside
+the client's 30-second `staleTime`, and therefore *fresh* enough that TanStack
+Query correctly declined to ask again. Fixed in `27d8ef2`.
+
+Two smaller races followed, both the same shape and both pre-existing: unscoped
+browser selectors matching a route `<Activity>` had kept mounted, and `addStock`
+returning before its confirmation so the next navigation aborted the mutation.
+With those three fixed the suite is 135/135 with the flags on *and* off.
+
+The general lesson is worth more than the three fixes: **instant navigation did
+not introduce any of these — it removed the slack that was hiding them.** Every
+one was a race whose losing side had simply been rare.
 
 ---
 

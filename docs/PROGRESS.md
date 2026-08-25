@@ -39,6 +39,26 @@ Rules for this log:
 
 ## Done
 
+### Instant navigations, and the three races that were hiding behind slack (2026-08-25)
+
+Asked for directly: server-first, using Next 16.3's Cache Components rather than
+a client island. The flags cost two edits to build green — and then took the
+browser suite from 135 to 7 failures, which is where the value turned out to be.
+Not one of the seven was caused by the migration. Every one was a race that had
+always existed and had always been won by the slower path; a shell that renders
+instantly simply stopped giving them that slack.
+
+| Unit | Commit |
+|---|---|
+| An unread queue reports itself as saved — `hydrated`, surfaced as `data-sync` (D107) | `16306b8` |
+| A restored read cache suppressed the refetch that would have corrected it; two suite races with it (D108) | `27d8ef2` |
+| `cacheComponents` and `partialPrefetching`, the root layout blocking to keep the nonce (D109) | `2b6eba5` |
+
+The nonce question was the owner's and was put to them rather than settled: a
+per-request nonce and a prerendered shell are structurally incompatible, and the
+answer was to keep the nonce. It is written beside the code as an answer, not as
+a to-do.
+
 ### The record catches up with the work (2026-08-25)
 
 Triggered by a red CI run on `e13c540` that turned out to be TEST-5 rather than
@@ -2048,3 +2068,36 @@ say whether its rate is worse. The version split itself went to `ISSUES.md` as
 BUILD-1 rather than being resolved here, because the direction is a judgement
 sitting next to an open decision in the image pre-plan, and choosing now could
 be choosing twice.
+
+**D107 — An unread queue is not an empty one.** The offline store starts empty
+and `hydrate()` fills it in an effect, so for one paint "three changes are
+waiting" and "nothing is waiting" were the same object — and `SyncStatus`
+renders nothing for both, telling somebody with unsent work that everything is
+saved. `hydrated` is set once whether or not the device had anything on it,
+because "read it and it was empty" is a different claim from "have not read it"
+and only the first licenses the reassurance. Surfaced as `data-sync` rather than
+as a visible state: it lasts one effect, and a spinner would be worse than
+silence. The browser suite had been reading the empty region as proof the queue
+had drained, which is asking a question and taking silence for yes.
+
+**D108 — A restored answer is shown, never trusted.** The read cache restores
+each query with its original `dataUpdatedAt`, and the client's `staleTime` is 30
+seconds, so a copy written moments ago comes back *fresh* and TanStack Query
+declines to refetch it. Correct in general and wrong here: this cache exists so
+a screen opened with no signal shows what was last seen, and it must never
+become a reason not to ask when there *is* signal. It cost a shopping list that
+rendered "Lista vacía" over two items the database actually held. The restore is
+now followed by an invalidation — the cached answer still paints immediately,
+mounted queries correct it, and offline the refetch simply pauses, which is the
+whole point of having it.
+
+**D109 — The root layout blocks, and the nonce is why.** Cache Components asks
+every route to stream, cache or block. The root layout reads the locale and the
+per-request CSP nonce, both driving things with no child to wrap in `<Suspense>`
+— and while the locale could move to a pre-paint script, the nonce cannot,
+because a nonce that survives prerendering is not a nonce. That is a security
+posture against a navigation feel, so it went to the owner rather than being
+settled by whoever was typing. Decision: keep the nonce, `instant = false` at
+the root. Nine routes below still prerender. The comment beside the export is
+written as the answer, so that nobody later reads a deliberate trade as
+unfinished work.
