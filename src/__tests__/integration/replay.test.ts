@@ -220,11 +220,12 @@ describe("a queued mutation arriving more than once", () => {
   /**
    * `retry: 2` on this test and its neighbour, and on no others — TEST-5.
    *
-   * bun 1.3.14 intermittently abandons a test body at an await whose promise
-   * rejects out of a rolled-back Prisma transaction: the `catch` beside it
-   * never runs, the test's own assertion never executes, and the *expected*
-   * refusal is rendered as the failure. Diagnosed in ISSUES.md TEST-5 with a
-   * reproduction; 1.3.14 is the newest bun, so there is nothing to upgrade to.
+   * bun intermittently abandons a test body at an await whose promise rejects
+   * out of a rolled-back Prisma transaction: the `catch` beside it never runs,
+   * the test's own assertion never executes, and the *expected* refusal is
+   * rendered as the failure. Diagnosed in ISSUES.md TEST-5 with a reproduction.
+   * Upgrading is not the way out — 1.4.0 was measured against that reproduction
+   * on 2026-08-25 and still fails it, which is why this retry is still here.
    *
    * The retry is safe precisely because the scope is two tests with one
    * diagnosed external cause: a real regression in `withReplay`'s refusal

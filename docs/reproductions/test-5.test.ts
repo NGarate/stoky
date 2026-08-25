@@ -28,6 +28,12 @@ import type { Session } from "next-auth";
  *
  * A green loop proves nothing without that.
  *
+ * **Comparing two bun versions? Alternate them inside one load run.** Measured
+ * one after the other on 2026-08-25, 1.3.14 and 1.4.0 gave 2 in 24 against 11
+ * in 24, which looks decisive and is machine drift. Alternated inside a single
+ * continuous load they gave 10 in 40 against 14 in 40 — indistinguishable at
+ * this sample size. ISSUES.md TEST-5 carries both numbers and what they support.
+ *
  * The last statement of the failing test adds its name to `completed`, and an
  * `afterAll` prints the set. On a failing run it prints `COMPLETED: []` *and*
  * bun reports one fewer `expect()` call than on a passing run — the test's own

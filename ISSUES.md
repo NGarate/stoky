@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-08-18  
+**Last Updated:** 2026-08-25  
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
 (2026-08-18), which filed two new entries. Everything older is closed —
@@ -866,8 +866,9 @@ asserts afterwards. On a failing run:
 
 So execution stopped *at the rejecting `await`*: the `catch` did not run, the
 assertion did not run, and bun reported the test as failed with the error
-rendered at its origin in `replay.ts`. That is a runner defect on bun 1.3.14,
-and it is a race — which is why it is intermittent and why load brings it out.
+rendered at its origin in `replay.ts`. That is a runner defect — reproduced on
+bun 1.3.14 and again on 1.4.0 — and it is a race, which is why it is
+intermittent and why load brings it out.
 
 ## The recipe
 
@@ -882,6 +883,20 @@ for i in $(seq 1 24); do bunx bun test docs/reproductions/test-5.test.ts; done
 
 3 failures in 24 under that load; **0 in 90 on a quiet machine.** A green loop
 proves nothing, which cost an hour before the load was added.
+
+Re-measured on 2026-08-25 across two binaries, **alternated inside one
+continuous load run** rather than one after the other: 1.3.14 failed 10 times in
+40 and 1.4.0 14 times in 40, over three batches that each leaned the same way.
+Alternate them. Measured *sequentially* first, the same pair gave 2 in 24
+against 11 in 24 — which reads as "1.4.0 is five times worse" and is machine
+drift, not signal. That is the same trap this repository already recorded
+hitting on the CI container A/B, where three consecutive runs showed a 100s
+difference that twin jobs measured as 400s against 405s.
+
+The pooled difference is 25% against 35%, and a 95% interval on it spans −10 to
++30 points: forty runs an arm can establish that 1.4.0 **still reproduces** the
+defect, and cannot establish whether its rate is better, equal or worse.
+Refuting "1.4.0 doubles it" needs roughly 39 clean runs an arm.
 
 ## What this corrects
 
@@ -908,16 +923,30 @@ re-running.
 
 No mitigation has been found that does not also hide real failures. Retrying the
 job masks everything; the two reshapings of the assertion that seemed likely —
-a thunk, and `.catch()` attached synchronously — were measured and did not help.
-So the entry stands as the mitigation: recognise the signature, re-run, do not
-investigate.
+a thunk, and `.catch()` attached synchronously — were measured and did not help;
+and **upgrading the runner does not help either**, measured on 2026-08-25 and
+recorded under *What to do about it*. So the entry stands as the mitigation:
+recognise the signature, re-run, do not investigate.
 
 ## What to do about it
 
 Nothing in this repository — `withReplay` is correct and its tests are correct.
-It wants an upstream report against bun 1.3.14, and the reproduction plus the
-load recipe above are enough to write one. A version pin is the workaround if it
-starts costing more than a rerun.
+It wants an upstream report, and the reproduction plus the load recipe above are
+enough to write one. File it against **1.4.0**, the current release, and say it
+reproduces on 1.3.14 too.
+
+**A pin forward is not the workaround, and that is now measured.** bun 1.4.0
+shipped on 2026-08-20, after this entry was written, so the "nothing to upgrade
+to" that closed this paragraph stopped being true and nobody noticed for five
+days. Against the reproduction on 2026-08-25 it still fails, with the identical
+signature: `COMPLETED: []`, one `expect()` short, the refusal rendered at its
+origin. A fix would be 0.
+
+Everything *else* is unchanged under 1.4.0 — 569 unit, 602 component, 443
+integration, 0 fail, plus `check:links`, `check:contrast` and the seed's native
+argon2 — so the upgrade is available whenever it is wanted for its own reasons.
+It is simply not a remedy for this, which is why the trunk stays on 1.3.14 and
+the retry stays where it is.
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
@@ -2540,10 +2569,11 @@ This section once ranked a backlog. Everything it ranked is closed, and the
 detailed entries above are the authority — so it now just names what is open,
 which is short:
 
-- **TEST-5** — upstream (bun). Wants an issue filed against bun with the
-  reproduction in `docs/reproductions/`, not more work here. Its honest cost:
-  roughly one `verify:ci` or CI `test` job in seven goes red spuriously;
-  re-run before investigating.
+- **TEST-5** — upstream (bun). Wants an issue filed against **bun 1.4.0** with
+  the reproduction in `docs/reproductions/`, not more work here. Upgrading is
+  not the fix: 1.4.0 was measured on 2026-08-25 and still reproduces. Its
+  honest cost: roughly one `verify:ci` or CI `test` job in seven goes red
+  spuriously; re-run before investigating.
 - **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three

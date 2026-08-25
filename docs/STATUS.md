@@ -632,7 +632,8 @@ Two things that sequence surfaced, both operational rather than defects:
   tested.
 
 **One intermittent failure, diagnosed and upstream**
-- bun 1.3.14 intermittently **abandons a test body at a rejecting `await`**: the
+- bun intermittently **abandons a test body at a rejecting `await`** — measured
+  on 1.3.14 and again on 1.4.0: the
   `catch` beside it never runs, the test's own assertion never executes (one
   fewer `expect()` than a passing run), and the test is reported as failed with
   the error rendered at its origin. `withReplay` and its tests are both correct
@@ -651,11 +652,14 @@ Two things that sequence surfaced, both operational rather than defects:
   exits 1 on a run where nothing failed, and the `test` job goes red. Re-running
   the job cleared it, which is the same signature and the same remedy as before.
   So the retry fixed the pass/fail tally and not the exit code, and the honest
-  cost of TEST-5 is still roughly one CI run in seven. A version pin was the
-  documented workaround; 1.3.14 is still the newest bun as of 2026-08-12, so
-  there is nothing to pin forward to. Narrowing the exit code without also
-  hiding genuine unhandled rejections across the other 394 tests is a judgement
-  call that has not been made.
+  cost of TEST-5 is still roughly one CI run in seven — it did exactly this
+  again on run `32792826678` (`e13c540`) on 2026-08-25. A pin forward was the
+  documented workaround, and **it has been measured and does not work**: bun
+  1.4.0 shipped on 2026-08-20 and still reproduces the defect, at a rate this
+  many runs cannot tell apart from 1.3.14's. `ISSUES.md` TEST-5 carries the
+  numbers, and the interleaving the comparison turns out to need. Narrowing the
+  exit code without also hiding genuine unhandled rejections across the other
+  442 tests is a judgement call that has not been made.
 
 **Offline, honestly**
 - ~~**The service worker is not exercised by any test.**~~ **Closed.**
