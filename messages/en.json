@@ -990,5 +990,16 @@
     "undo": "Undo",
     "dismiss": "Dismiss notification",
     "announcePrefix": "Notification"
+  },
+  "start": {
+    "title": "Which screen do you want to start on?",
+    "intro": "Pick the one you use most. We will take you there whenever you open the app on this device.",
+    "shopping": "Shopping",
+    "shoppingWhat": "For the shop: what is missing, scanning, and ticking off what is in the trolley.",
+    "kitchen": "Kitchen",
+    "kitchenWhat": "For a tablet at home: what expires soon and what is running out.",
+    "dashboard": "Panel",
+    "dashboardWhat": "An overview: what needs attention, with a way through to everything else.",
+    "changeLater": "You can change it whenever you like, in Settings."
   }
 }

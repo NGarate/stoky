@@ -233,6 +233,44 @@ enum HouseholdRole {
   KITCHEN
 }
 
+/// Which screen a person starts on. The three that exist, and no fourth.
+///
+/// `DASHBOARD` is the Panel, `SHOPPING` is Screen A (REDESIGN_PLAN §3) and
+/// `KITCHEN` is Screen B (§4). Whether three entry points is the right number
+/// is DESIGN_AUDIT A5.4's still-open half, and this enum deliberately does not
+/// answer it: offering all three retires nothing, and what people actually
+/// choose is the first evidence that question has ever had.
+enum LandingScreen {
+  DASHBOARD
+  SHOPPING
+  KITCHEN
+}
+
+/// Where this person, on this device, wants to land. REDESIGN_PLAN §5.1.
+///
+/// Keyed on the pair, and that is the requirement rather than a normalisation
+/// choice: a shared tablet must not inherit the choice of whoever signed in
+/// last, and a person must not be forced into the kitchen screen on their own
+/// phone because they once picked up the house tablet.
+///
+/// `deviceId` is the cookie minted in `src/middleware.ts` — a cookie rather
+/// than `localStorage` precisely so this row can be read on the server, before
+/// anything is drawn, and the landing become a redirect instead of a flash.
+///
+/// No foreign key to User, matching `MutationReplay` above and the schema's
+/// standing rule that there are no cascades. A deleted account leaves rows
+/// keyed on a user id that no longer exists; nothing reads them, they are two
+/// short strings each, and the alternative is a cascade this schema does not
+/// have anywhere else.
+model ScreenChoice {
+  userId    String
+  deviceId  String
+  screen    LandingScreen
+  updatedAt DateTime      @updatedAt
+
+  @@id([userId, deviceId])
+}
+
 /// One record per mutation a device composed, so replaying it applies once.
 ///
 /// A shop composed in aeroplane mode is sent when the signal returns, and the

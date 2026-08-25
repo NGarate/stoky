@@ -990,5 +990,16 @@
     "undo": "Deshacer",
     "dismiss": "Descartar el aviso",
     "announcePrefix": "Aviso"
+  },
+  "start": {
+    "title": "¿Con qué pantalla quieres empezar?",
+    "intro": "Elige la que uses más. Te llevaremos a ella cada vez que abras la aplicación en este dispositivo.",
+    "shopping": "La compra",
+    "shoppingWhat": "Para el súper: qué falta, escanear y marcar lo que ya llevas.",
+    "kitchen": "La cocina",
+    "kitchenWhat": "Para una tablet en casa: qué caduca pronto y qué se está acabando.",
+    "dashboard": "El panel",
+    "dashboardWhat": "Una vista de todo: lo que necesita atención, con acceso al resto.",
+    "changeLater": "Puedes cambiarla cuando quieras en Configuración."
   }
 }
