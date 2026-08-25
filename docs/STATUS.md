@@ -35,11 +35,15 @@ Journey 4): `verify:ci` green in 90s of the 600s budget, and the browser suite
 | E2E | `bunx playwright test` | ✅ **135 pass / 0 fail, 3.7 min** (2026-08-25) — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
 
-**Use `pnpm`, not `corepack pnpm`.** On this machine corepack resolves 11.20.0
-against the `packageManager` pin of 11.19.0 and refuses to run; the plain
-binary is the pinned one. `verify-local.sh` already prefers `pnpm` and falls
-back to corepack, so the scripts are unaffected — only the commands in earlier
-versions of this file were wrong.
+~~**Use `pnpm`, not `corepack pnpm`.**~~ **Resolved by the 11.22.0 bump**
+(`5289e2b`), and re-measured here on 2026-08-25: `corepack pnpm --version`
+answers 11.22.0 and exits 0. The refusal was a mismatch, not a policy —
+corepack resolved 11.20.0 against a `packageManager` pin of 11.19.0 — and
+bumping the pin past the version corepack was reaching for removed it. Either
+command works now, which is what makes `CLAUDE.md`'s `docker compose exec app
+corepack pnpm …` correct rather than contradicted. `verify-local.sh` still
+prefers `pnpm` and falls back to corepack, so the scripts never depended on
+this either way.
 
 `pnpm verify:local` runs the first seven — **33s** of a **600s budget**,
 which the script enforces. Every step also has its own ceiling, so a hang
@@ -494,12 +498,19 @@ advisory-path pair.
 | next-intl | 4.13.4 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
-| pnpm | 11.19.0 |
+| pnpm | 11.22.0 |
 
-No known drift as of 2026-08-18 — package.json re-checked against this table
-today. `CLAUDE.md`'s stale claims — tRPC as a release candidate, a `household`
-router that never existed, a refresh token that was never implemented — were
-corrected on 2026-08-10.
+No known drift as of **2026-08-25** — every row re-read out of `package.json`
+today, not eyeballed. `CLAUDE.md`'s stale claims — tRPC as a release candidate,
+a `household` router that never existed, a refresh token that was never
+implemented — were corrected on 2026-08-10.
+
+**The pnpm row had drifted for six days, and the sentence above it said it had
+not.** `5289e2b` bumped the pin to 11.22.0 on 2026-08-19 while this table went
+on saying 11.19.0 and the paragraph went on claiming the table had been checked
+against `package.json`. A drift note is only worth the check behind it, and the
+check is cheap: read the versions out of the file rather than trusting the
+sentence that says somebody already did.
 
 **This paragraph was itself wrong until today**, and it is worth saying how: it
 claimed `CLAUDE.md` says Prisma 7.x. `CLAUDE.md:14` says Prisma 6.x, and always
@@ -747,8 +758,8 @@ per-journey evidence is in that file.
 
 ### Environment notes
 
-- Use `pnpm`, not `corepack pnpm`: corepack resolves 11.20.0 here against a
-  pin of 11.19.0 and refuses to run.
+- `pnpm` and `corepack pnpm` both work since the 11.22.0 bump; corepack's
+  refusal was a mismatch against the old 11.19.0 pin, measured gone 2026-08-25.
 - `pnpm prisma` commands need `DATABASE_URL` exported. Prisma 6 with a
   `prisma.config.ts` no longer loads `.env` itself and says so. `set -a; . ./.env; set +a`.
 - `scripts/test-integration-local.sh` stops the compose services when it

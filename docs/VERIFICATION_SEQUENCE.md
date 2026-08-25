@@ -1,13 +1,15 @@
 # Stoky Verification Sequence
 
-Updated: 2026-08-18
+Updated: 2026-08-25
 
 Use this as the source of truth for local and CI-style validation.
 
-**Use `pnpm`, not `corepack pnpm`.** On this machine corepack resolves 11.20.0
-against the `packageManager` pin of 11.19.0 and refuses to run; the plain
-binary is the pinned one. Earlier versions of this file said the opposite and
-were the reason the wrong command kept being copied.
+**`pnpm` and `corepack pnpm` both work**, since `5289e2b` bumped the pin to
+11.22.0 — re-measured 2026-08-25, `corepack pnpm --version` answers 11.22.0 and
+exits 0. Until then corepack resolved 11.20.0 against a `packageManager` pin of
+11.19.0 and refused, which is why this file used to say to avoid it; the
+mismatch is gone rather than the advice being wrong at the time. `STATUS.md`
+owns the version table.
 
 ## Command ladder
 
