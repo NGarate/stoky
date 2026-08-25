@@ -117,17 +117,50 @@ in the suite waits on, which needs to know the difference between "the shell has
 arrived" and "the data has arrived". That is a change worth making carefully,
 because getting it wrong makes every spec flaky rather than four.
 
+### What was tried next, and what it disproved (2026-08-25)
+
+The first hypothesis was that `expect(calm(page)).toBeEmpty()` — the suite's
+proof that the queue had drained — was passing against an unhydrated queue,
+because an empty region means both "everything is sent" and "nobody has looked".
+That ambiguity is **real, was fixed on its own merits, and is committed**
+(`16306b8`): `QueueState.hydrated`, surfaced as `data-sync`, with the four drain
+assertions now waiting for it.
+
+**It did not fix the four failures.** With the flags on, the same four still
+fail and the captured DOM is unchanged: `/shopping/[id]` renders "Lista vacía"
+after a helper that added two items and watched each one appear. So the cause is
+still open, and the following are now *excluded* rather than suspected:
+
+- it is not the drain assertion racing hydration — that is guarded now;
+- it is not `settle` returning on a bare shell — the page has its heading, its
+  landmarks and its empty-state text, so it rendered a real answer;
+- it is not `/shopping/[id]` confusing loading with empty — it routes `!list`
+  through `RouteState`, so an empty list means the query resolved with none.
+
+What that leaves is the interesting question: **the items appeared, the queue
+reported itself drained, and the server has nothing.** Two candidates, neither
+tested — a drain that resolves by *failing* (failures move to `sync-urgent`,
+which the helper does not check before reloading, so `calm` would be empty and
+the reload would look justified), or read persistence restoring a pre-add copy
+of the list from `localStorage` after the reload. The next session should
+distinguish them before touching anything: assert `urgent` empty in the helper
+too, and read the queue's `failed` array at the moment `calm` goes quiet.
+
 ---
 
 ## Build order
 
 Each step is independently committable and each has the gate that proves it.
 
-1. **`settle` learns to wait for data, not for quiet.** No flags changed. The
-   suite must stay green at 135 before and after — that is the whole point: the
-   fix has to be correct under today's blocking renders *and* tomorrow's
-   streamed ones. Prove it by running the suite with the flags on in a scratch
-   tree and watching the four failures go green without the flags on regressing.
+1. ~~**`settle` learns to wait for data, not for quiet.**~~ **Attempted, and it
+   was the wrong diagnosis** — see *What was tried next* above. The queue's
+   hydration ambiguity was real and is fixed (`16306b8`), the suite is still
+   135/135 without the flags, and the four failures are unchanged with them. The
+   step that replaces it is smaller and comes first: **find out where the two
+   items go.** Assert `urgent` empty in `openOwnList` and read the queue's
+   `failed` array when `calm` falls quiet; that distinguishes a drain that failed
+   from a read cache serving a pre-add list, and nothing else should be touched
+   until it does.
 2. **The three `:visible` locators**, with the comment saying why. Green at 135.
 3. **`cacheComponents: true`**, the `api/health` exports removed, `instant =
    false` on the root layout with the nonce trade written down beside it.
