@@ -776,20 +776,19 @@ taken without asking are in `docs/PROGRESS.md`.
 **What remains, in one place.** The review document (Phase 7's actual
 deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
 passes no suite can answer (the manual screen-reader pass, a week on a real
-tablet, iOS Safari on a real device); T7, the offline scan resolution; the
-§5.1 promise the 2026-08-17 journey re-audit found was never built — nothing
-remembers the screen choice per `(userId, deviceId)` (its §3 twin, the ±
-stepper, landed 2026-08-25 at `74cff4b` and Journey 4 passes); and **Phase
-8's human half** — all six of the
+tablet, iOS Safari on a real device); T7, the offline scan resolution; and
+**Phase 8's human half** — the two §3/§5.1 promises the 2026-08-17 re-audit
+found unbuilt have both landed, the ± stepper at `74cff4b` and the screen
+choice at `300f665`, so Journeys 4 and 8 pass — all six of the
 owner's observations are built and green (`70386ea` closes the last); what
 remains of the phase is its done-when, which no suite can run: the owner
 repeating the pass that produced them. All of it is in
 `REDESIGN_PLAN.md` §10, which is the list an item may only leave by being done
 or deliberately dropped.
 
-Journeys 1, 2, 3, 4, 6, 7, 9 and 10 of `docs/SMOKE_JOURNEYS.md` pass at the
-tiers a suite can answer — 4 since 2026-08-25; 5 is partial (T7); 8 waits on
-the unbuilt screen-choice promise above. Journeys 2 and 7 pass against their pre-Phase-8 shape — the owner's
+Journeys 1, 2, 3, 4, 6, 7, 8, 9 and 10 of `docs/SMOKE_JOURNEYS.md` pass at the
+tiers a suite can answer — 4 since 2026-08-25 and 8 since 2026-08-26. Only 5 is
+short of its own promise, on T7. Journeys 2 and 7 pass against their pre-Phase-8 shape — the owner's
 pass widened both on 2026-08-18, and the widened halves are not built. The
 per-journey evidence is in that file.
 

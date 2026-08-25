@@ -1,6 +1,6 @@
 # Stoky Smoke Journeys
 
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 These are the minimum user-visible journeys that should be proven before closing
 Stoky product work. They are rewritten around the two entry screens defined in
@@ -26,7 +26,7 @@ plan rather than being silently absorbed; the stepper half (Journey 4) landed
 | 5 | Scanning never dead-ends | Phase 4–6 | partial — the connected cases pass; the offline barcode is T7 |
 | 6 | A whole shop with no signal | Phase 4 | ✅ passes, except the T7 bullet |
 | 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer, including the 2026-08-18 widening (add-to-list, `941d1ed`); the week on a real tablet is unowned |
-| 8 | The screen choice is remembered per person and per device | Phase 5 | ❌ not built — nothing stores it, nothing routes by role (§10) |
+| 8 | The screen choice is remembered per person and per device | Phase 5 | ✅ passes since 2026-08-26 (`300f665`) — a device cookie, a `(userId, deviceId)` row, and a server-side redirect |
 | 9 | Both languages, everywhere | Phase 1 onwards, then every phase | ✅ against everything measured |
 | 10 | The rating answers "is this a good buy" — honestly | Phase 6 | ✅ passes |
 
@@ -383,13 +383,9 @@ about which number it is showing, or it will contradict the phone screen.
 
 ## Journey 8. The screen choice is remembered per person and per device
 
-**❌ Not built.** Both screens exist to choose between since Phase 5 — and
-nothing chooses. No `deviceId` is minted, no `(userId, deviceId)` preference
-is stored, and a KITCHEN account lands wherever the navigation sends everyone;
-`/kitchen` is simply a destination in the nav. §5.1 of the plan describes the
-mechanism in detail and no code implements any of it — found by the
-2026-08-17 re-audit, carried in §10 now. The role-based *default* half also
-does not exist, despite Phase 3 shipping the roles it would read.
+**✅ Passes since 2026-08-26 (`300f665`).** It had gone unbuilt through two
+phases, and landing everybody on `/dashboard` was part of why: nobody is
+inconvenienced by a reasonable default, so nobody builds the question.
 
 Trigger:
 Log in on a device for the first time.
@@ -399,17 +395,32 @@ Visible outcome:
 - an `admin` or `user` account is asked once which screen it wants, and is not
   asked again on that device
 - a `kitchen` account lands on the kitchen screen without being asked
-- the choice is changeable from settings
+- the choice is changeable from settings *(not yet built — see below)*
 
-Proof required:
+Evidence:
 
-- before: two accounts and two devices, no stored preference
-- action: on the house tablet, account A chooses kitchen. Account B then logs in
-  on the same tablet.
-- after: account B is asked, and is not silently placed in kitchen mode. Account
-  A opening its own phone is also asked, and is not forced into kitchen mode
-  there. The stored preference is keyed on `(userId, deviceId)`, so neither
-  inherits the other's choice.
+- `e2e/screen-choice.spec.ts`, four tests. Playwright browser **contexts** are
+  the devices: each has its own cookie jar, so each gets its own device id,
+  which is what production keys on — a truer model of two devices than two tabs
+  and cheaper than two browsers.
+- *Asked once, then not again*: a fresh account at `/` gets `/start`, chooses
+  the kitchen, and every arrival afterwards goes straight to `/kitchen`.
+- *The shared tablet*: account A chooses the kitchen on it, signs out, account B
+  registers on the same context and is **asked** rather than placed in kitchen
+  mode.
+- *The same person's own phone*: a second context signs in as A and is asked
+  again, chooses the shop, and the two devices then keep separate answers.
+- *No JavaScript*: a context with scripting disabled drives `/start` to a
+  choice, because it is three submit buttons and a server action.
+- The pair is pinned by two tests that fail **differently**: keying on the
+  account alone passes the shared-tablet test and fails the tablet-to-phone one.
+  Checked by breaking it.
+- `src/__tests__/unit/landing.test.ts` covers the precedence, including the
+  omission that matters — no quiet fallback to the Panel for the unasked.
+
+**What is not built yet:** the "changeable from settings" half. The row and the
+action exist, so it is a control rather than a mechanism, but until it lands a
+choice can only be changed by clearing the cookie.
 
 ## Journey 9. Both languages, everywhere
 

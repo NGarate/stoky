@@ -89,6 +89,8 @@ following it would have.
 | Unit | Commit |
 |---|---|
 | The ± stepper mounted on the product detail — Journey 4 passes (§3 flow 3, D105) | `74cff4b`, `e13c540` |
+| A device identifier in a cookie, so the screen choice can be a server decision (D110) | `f3957c8` |
+| The screen choice per `(userId, deviceId)` — Journey 8 passes, server-first (D110) | `300f665` |
 
 ### Development in the image, and the phone photograph that will not decode (2026-08-25)
 
@@ -2101,3 +2103,29 @@ settled by whoever was typing. Decision: keep the nonce, `instant = false` at
 the root. Nine routes below still prerender. The comment beside the export is
 written as the answer, so that nobody later reads a deliberate trade as
 unfinished work.
+
+**D110 — The device identifier is a cookie, and the landing is a redirect.**
+§5.1 asks for the screen choice to be kept per `(userId, deviceId)` with the
+device id "generated on first run and kept locally", and *locally* was read as
+`localStorage` in every earlier sketch — which forced the whole feature into a
+client island that reads storage after the first paint, lands somebody on one
+screen and then moves them. A cookie arrives with the request, so `/` reads the
+session, the cookie and one row and redirects before anything is drawn. Nobody
+sees a screen they did not pick, not even for a frame.
+
+Three consequences worth stating. It is minted in **middleware**, because that
+is the only place that can both set a cookie and let the render that follows
+read it — and the ordering inside that function is load-bearing, since writing
+to `request.cookies` is what rewrites the header Next forwards to the render.
+It is **`httpOnly`**: nothing on the client needs it, a value no script can read
+is one no injected script can exfiltrate, and it keeps the id from becoming a
+fingerprint a page could hand to somebody else. And `/start` is **three submit
+buttons and a server action** rather than a component, because it is the first
+screen somebody meets after signing in and a question that works before
+hydration is a question that always works.
+
+The enum offers all three screens rather than the two §5.1 names. `DESIGN_AUDIT`
+A5.4 leaves "whether three entry points is the right number" explicitly open and
+explicitly the owner's, so offering all three decides nothing that has not been
+decided — and what people actually choose is the first evidence that question
+has ever had.

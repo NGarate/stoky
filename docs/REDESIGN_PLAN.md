@@ -911,8 +911,9 @@ Phase 0 lifted it out of Bolsillo for exactly this) and the **screen choice
 remembered per `(userId, deviceId)`** (§5.1 — no deviceId is minted, no
 preference stored, no role-based landing). Both went into the unowned table
 below, because the rule of this list is that nothing leaves it by being
-forgotten — and both had. Journeys 4 and 8 are their measures. The stepper
-landed 2026-08-25 (`74cff4b`); the screen choice is still open.
+forgotten — and both had. Journeys 4 and 8 are their measures. **Both have now
+landed**: the stepper 2026-08-25 (`74cff4b`), the screen choice 2026-08-26
+(`300f665`), which closes the pair the re-audit found.
 
 What also remains is the week-long tablet run and the iOS pass, both listed as
 unowned below, and both things no suite can answer.
@@ -996,7 +997,7 @@ These have no phase yet. They are here so that stays visible.
 | Item | Note |
 |---|---|
 | ~~**The ± stepper — stock changes without a form (§3 flow 3)**~~ | **Done** (`74cff4b`, 2026-08-25). Mounted on the product detail for the roles `writeProcedure` admits: each press a delta through the offline queue (plus a purchase of one at the product's usual location, minus a consumption of one), the shown number the projection, the confirmation the snackbar sentence with the shared ten-second undo (D100/D105). Journey 4 passes, proven in the browser by two presses arriving as two `PURCHASE` rows of +1 |
-| **The screen choice per `(userId, deviceId)` (§5.1)** | Journey 8. Nothing mints a deviceId, stores a preference, or lands a KITCHEN account on `/kitchen` by default. Found the same day, the same way |
+| ~~**The screen choice per `(userId, deviceId)` (§5.1)**~~ | **Done** (`f3957c8`, `300f665`, 2026-08-26). A device id in a cookie rather than `localStorage` — which is what lets `/` decide on the server and redirect, with no client island and nothing to flash — a `ScreenChoice` row keyed on the pair, and `/start` asking once with three submit buttons and no JavaScript. A KITCHEN account lands on `/kitchen` unasked. Journey 8 passes; the *changeable from settings* half is a control that has not landed yet |
 | **The manual screen-reader pass** | Phase 2b's one incomplete item. Four journeys are audited against the tree; whether it *sounds* sensible is what no tool answers |
 | **A week on a real tablet** | Phase 5's own done-when for the kitchen screen. The screen and its five-minute refresh exist; whether it is still useful and still correct after seven untouched days is not something a suite can answer |
 | **iOS Safari on a real device** | Playwright's WebKit is not iOS Safari, and §5.4 defers installability on iOS grounds specifically. The queue, `localStorage` and the worker all need a pass, dated in `STATUS.md` |
