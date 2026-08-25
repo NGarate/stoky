@@ -27,9 +27,15 @@ import { pingCache } from "@/lib/rate-limit";
  * the detail from the container log, which names the component.
  */
 
-/** Never cached, never prerendered: a cached health check is not a health check. */
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+/**
+ * Never cached, never prerendered: a cached health check is not a health check.
+ *
+ * That used to be stated as `dynamic = "force-dynamic"` and `revalidate = 0`.
+ * Both are refused outright under `cacheComponents`, and both are now the
+ * default — nothing is cached unless it asks to be with `use cache`, which this
+ * handler does not and must not. The guarantee is unchanged; only the way of
+ * spelling it is gone, so the sentence above stays as the record of the intent.
+ */
 
 /** Long enough for a slow answer, short enough to fail before Docker's timeout. */
 const CHECK_TIMEOUT_MS = 2000;

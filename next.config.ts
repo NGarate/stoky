@@ -31,6 +31,14 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Cache Components (Next 16.3): dynamic by default, nothing cached unless it
+  // asks with `use cache`, and Partial Prerendering as the default behaviour.
+  cacheComponents: true,
+
+  // One reusable shell prefetched per *route* rather than one request per link.
+  // The 16.3 release calls this the second half of instant navigations.
+  partialPrefetching: true,
+
   output: "standalone",
 
   /**
