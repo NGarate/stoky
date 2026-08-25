@@ -29,6 +29,19 @@ import { createQueueStorage, type QueueStorage } from "./storage";
  * two carry different keys.
  */
 
+/**
+ * How long a queued change can still be taken back, and therefore how long it
+ * waits before being sent (§4's undo window, D100).
+ *
+ * Without the hold, "while it is still in the queue" was one network
+ * round-trip online — the undo flashed for a single render and was gone,
+ * which is no undo at all. Ten seconds: long enough to read the snackbar and
+ * change your mind, short enough that the change still lands while the person
+ * is standing there. Shared by every screen that offers a one-tap write, so
+ * the promise "Deshacer works for ten seconds" is the same promise everywhere.
+ */
+export const UNDO_HOLD_MS = 10_000;
+
 /** The five procedures a queued shop can carry. */
 export type ReplayablePath =
   | "shopping.addItem"

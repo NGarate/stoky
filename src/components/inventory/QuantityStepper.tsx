@@ -1,69 +1,99 @@
 "use client";
 
-import { useState } from "react";
-import "./quantity-stepper.css";
+import { Button } from "@/components/ui/button";
+import type { JSX } from "react";
 
 /**
- * Inline quantity stepper.
+ * Inline quantity stepper — §3 flow 3: "Add to stock — the ± stepper. No form."
  *
  * The one piece kept from the Bolsillo proposal, which was otherwise rejected
- * as a screen (see docs/DESIGN_PROPOSALS.md). It is the phone screen's way of
- * changing stock in Phase 4 of docs/REDESIGN_PLAN.md, so it is retained here
- * deliberately rather than being rediscovered later.
+ * as a screen (see docs/DESIGN_PROPOSALS.md). It sat here unmounted from
+ * Phase 0 until Journey 4 put it on the product detail.
  *
- * Adjusting stock happens on the card instead of on a separate page, which is
- * what the current dead "Añadir stock" link was reaching for. Targets are 48px
- * so it works with a thumb. The live region announces the new value, since a
- * sighted user sees the number change but a screen-reader user would not.
+ * Controlled on purpose: the value shown is the caller's projection of the
+ * server total with unsent changes folded on (`projectStockTotals`), never a
+ * count this component keeps for itself. A local count and a queued one are
+ * two copies of the same intention, and the copy is the one that drifts.
+ *
+ * The buttons are the `Button` primitive, so the 48px floor is the primitive's
+ * guarantee rather than a restated measurement — the exact drift the design
+ * system section of CLAUDE.md exists to prevent. Labels come in as props: the
+ * caller knows the product's name and unit, and a label minted here would be a
+ * string landing in a component (§5.6).
  */
 export function QuantityStepper({
-  label,
+  value,
   unit,
-  initial,
-  step = 1,
+  addLabel,
+  removeLabel,
+  onAdd,
+  onRemove,
+  removeDisabled = false,
 }: {
-  label: string;
+  /** What the screen should show: the projected total, not the server's. */
+  value: number;
   unit: string;
-  initial: number;
-  step?: number;
-}) {
-  const [value, setValue] = useState(initial);
-  const round = (n: number) => Math.round(n * 100) / 100;
-
+  /** Full accessible name for +, naming the product — "más" alone names nothing. */
+  addLabel: string;
+  /** Full accessible name for −. */
+  removeLabel: string;
+  onAdd: () => void;
+  onRemove: () => void;
+  /** True at a projected zero: taking from nothing is the server's refusal to keep. */
+  removeDisabled?: boolean;
+}): JSX.Element {
   return (
-    <div className="stepper__stepper">
-      <button
+    <div className="inline-flex items-center gap-3 rounded-lg border border-border bg-card p-2">
+      <Button
+        onClick={onRemove}
+        disabled={removeDisabled}
+        size="icon"
         type="button"
-        className="stepper__step"
-        onClick={() => setValue((v) => round(Math.max(0, v - step)))}
-        disabled={value <= 0}
-        aria-label={`Quitar ${step} ${unit} de ${label}`}
+        variant="outline"
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        <svg
+          aria-hidden="true"
+          className="h-6 w-6"
+          focusable="false"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M5 12h14"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="2.5"
+          />
         </svg>
-      </button>
+        <span className="sr-only">{removeLabel}</span>
+      </Button>
 
-      <p className="stepper__value" aria-live="polite">
-        <strong>{value}</strong>
-        <span>{unit}</span>
+      {/* Not a live region: the snackbar already announces each change as a
+          sentence with its undo, and two regions saying the same thing is the
+          same thing said twice. Sighted users see the number move. */}
+      <p
+        className="min-w-16 text-center text-2xl font-bold tabular-nums text-heading"
+        data-testid="stepper-value"
+      >
+        {value}{" "}
+        <span className="text-sm font-normal text-muted-foreground">{unit}</span>
       </p>
 
-      <button
-        type="button"
-        className="stepper__step"
-        onClick={() => setValue((v) => round(v + step))}
-        aria-label={`Añadir ${step} ${unit} a ${label}`}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <Button onClick={onAdd} size="icon" type="button" variant="outline">
+        <svg
+          aria-hidden="true"
+          className="h-6 w-6"
+          focusable="false"
+          viewBox="0 0 24 24"
+        >
           <path
             d="M12 5v14M5 12h14"
             stroke="currentColor"
-            strokeWidth="2.5"
             strokeLinecap="round"
+            strokeWidth="2.5"
           />
         </svg>
-      </button>
+        <span className="sr-only">{addLabel}</span>
+      </Button>
     </div>
   );
 }

@@ -12,6 +12,11 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
+import { QuantityStepper } from "@/components/inventory/QuantityStepper";
+import { useWriteQueue } from "@/components/offline/queue-context";
+import { UNDO_HOLD_MS } from "@/lib/offline/queue";
+import { projectStockTotals } from "@/lib/offline/project";
+import { usualLocationId } from "@/lib/inventory/usualLocation";
 import type { JSX } from "react";
 
 interface ProductDetailPageProps {
@@ -72,6 +77,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const locale = useLocale();
   const router = useRouter();
   const snackbar = useSnackbar();
+  const { state: queueState, enqueue } = useWriteQueue();
 
   // `retry: false` because the likeliest failure here is a product id that does
   // not exist, and the shared QueryClient retries three times by default —
@@ -264,6 +270,74 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     );
   }
 
+  /**
+   * The total as the screen should show it: the server's answer with the
+   * queue's unsent changes folded on. Derived at render rather than written
+   * into the cache, for the reasons `project.ts` opens with — one source, no
+   * drift, and a press made offline shows immediately. The low-stock lines
+   * read it too: two presses that lift a product past its minimum must also
+   * take the "below minimum" sentence away.
+   */
+  const shownStock =
+    projectStockTotals(
+      new Map([[product.id, product.totalStock]]),
+      queueState.pending,
+    ).get(product.id) ?? product.totalStock;
+
+  /**
+   * One press, one delta — §3 flow 3, Journey 4.
+   *
+   * Plus books a purchase of one and minus a consumption of one, so the
+   * ledger records what happened rather than a new absolute value — the
+   * property Journey 6's history depends on. Both go through the queue with
+   * the shared ten-second hold: the confirmation is the snackbar's sentence,
+   * and undo is cancelling the queued change, never a compensating write
+   * (D57 — an `addStock` to reverse a consumption fabricates an acquisition).
+   *
+   * A purchase lands where this product usually goes (`usualLocationId`,
+   * D96) — the same default the add form gives its picker — because a
+   * one-tap flow has nowhere to ask. A consumption names no location, like
+   * the kitchen's "he usado uno": the negative row is not location-specific.
+   */
+  function stepStock(direction: "add" | "remove"): void {
+    if (!product) return;
+    const label = {
+      key: direction === "add" ? "offline.addedStock" : "offline.usedUp",
+      values: { quantity: 1, unit: product.defaultUnit, name: product.name },
+    };
+    const usual = usualLocationId(product.stockEntries);
+    const queued = enqueue(
+      direction === "add"
+        ? {
+            path: "inventory.addStock",
+            input: {
+              productId: product.id,
+              quantity: 1,
+              unit: product.defaultUnit,
+              ...(usual === undefined ? {} : { locationId: usual }),
+            },
+            label,
+            holdMs: UNDO_HOLD_MS,
+          }
+        : {
+            path: "inventory.consumeStock",
+            input: {
+              productId: product.id,
+              quantity: 1,
+              unit: product.defaultUnit,
+            },
+            label,
+            holdMs: UNDO_HOLD_MS,
+          },
+    );
+
+    // Refused for want of room: the shell's own banner reports a full queue,
+    // which is a state. Claiming the change was made would be a lie.
+    if (!queued.ok) return;
+
+    snackbar.show({ kind: "undo-queued", message: label, opId: queued.id });
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <BackLink href="/products">{t("backToProducts")}</BackLink>
@@ -283,15 +357,40 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       ) : null}
 
       <h2 className="mt-6 text-lg font-semibold text-heading">{t("stockTitle")}</h2>
-      <p className="mt-2 text-2xl font-bold text-heading">
-        {t("stockValue", {
-          quantity: product.totalStock,
-          unit: product.defaultUnit,
-        })}
-      </p>
-      {product.totalStock <= 0 ? (
+      {/* §3 flow 3: changing stock is the stepper, not a form. Offered only to
+          the roles `writeProcedure` admits — plus is `addStock`, which a
+          KITCHEN account would be refused — so a kitchen tablet reads the
+          number instead of a control the server would bounce (D90's shape:
+          hiding is courtesy, the middleware is the control). */}
+      {canWrite ? (
+        <div className="mt-2">
+          <QuantityStepper
+            addLabel={t("stepperAdd", {
+              unit: product.defaultUnit,
+              name: product.name,
+            })}
+            onAdd={() => stepStock("add")}
+            onRemove={() => stepStock("remove")}
+            removeDisabled={shownStock <= 0}
+            removeLabel={t("stepperRemove", {
+              unit: product.defaultUnit,
+              name: product.name,
+            })}
+            unit={product.defaultUnit}
+            value={shownStock}
+          />
+        </div>
+      ) : (
+        <p className="mt-2 text-2xl font-bold text-heading">
+          {t("stockValue", {
+            quantity: shownStock,
+            unit: product.defaultUnit,
+          })}
+        </p>
+      )}
+      {shownStock <= 0 ? (
         <p className="mt-1 font-medium text-danger-foreground">{t("stockEmpty")}</p>
-      ) : isLowStock(product.totalStock, product.minStock) ? (
+      ) : isLowStock(shownStock, product.minStock) ? (
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
             minimum: product.minStock,

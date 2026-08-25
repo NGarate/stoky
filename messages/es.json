@@ -237,6 +237,8 @@
       "retry": "Reintentar",
       "stockTitle": "Stock actual",
       "stockValue": "{quantity} {unit}",
+      "stepperAdd": "Añadir 1 {unit} de «{name}»",
+      "stepperRemove": "Usar 1 {unit} de «{name}»",
       "stockEmpty": "No queda nada de este producto.",
       "stockLow": "Por debajo del mínimo que has fijado: {minimum} {unit}.",
       "locationsTitle": "Dónde está",

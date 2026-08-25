@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/components/offline/queue-context";
+import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { useSnackbar } from "@/components/ui/snackbar";
 import {
   projectOnListQuantities,
@@ -61,14 +62,6 @@ import type { JSX } from "react";
  * pressing it works — the snackbar takes its lifetime from the queue rather
  * than from a timer of its own.
  */
-/**
- * How long a tap can be taken back, and therefore how long it waits before
- * being sent. §4 asked for ten seconds; long enough to read the button from a
- * metre away and cross the kitchen, short enough that the change still lands
- * while the person is standing there.
- */
-const UNDO_HOLD_MS = 10_000;
-
 export default function KitchenPage(): JSX.Element {
   const t = useTranslations("kitchen");
   const { state: queue, enqueue } = useWriteQueue();

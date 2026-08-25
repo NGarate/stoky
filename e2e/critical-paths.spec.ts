@@ -623,6 +623,75 @@ test.describe("Inventory Management Flow", () => {
   });
 });
 
+test.describe("Journey 4 — stock changes without a form", () => {
+  /**
+   * §3 flow 3: on the product's own page, plus and minus change stock in
+   * place. What the browser alone can prove: the presses compose with the
+   * real queue and its ten-second hold, the confirmation carries a working
+   * undo affordance, and — the property Journey 6 depends on — the ledger
+   * receives **two purchases of one**, not one write that set the total.
+   */
+  test("the ± stepper books deltas, confirmed in words with undo", async ({ page }) => {
+    const registerPage = new RegisterPage(page);
+    const dashboardPage = new DashboardPage(page);
+    const productsPage = new ProductsPage(page);
+
+    // Its own household and its own product, so no seeded state is disturbed
+    // and no other test can disturb this one (TEST-3's lesson).
+    await registerPage.goto();
+    await registerPage.register(
+      generateTestName("E2E Stepper User"),
+      generateTestEmail("e2e-stepper"),
+      "E2ETestPassword123!",
+      generateTestName("E2E Stepper Household"),
+    );
+    await dashboardPage.expectLoaded();
+
+    await dashboardPage.navigateToProducts();
+    const productName = generateTestName("E2E Escalonable");
+    await productsPage.createProduct(productName);
+
+    await page.goto("/products");
+    await page.click(`a:has-text("${productName}")`);
+    await page.waitForURL(/\/products\/[^/]+$/);
+
+    // Before: nothing in stock, said in words — and minus is disabled, because
+    // taking from nothing is a refusal the server would have to make otherwise.
+    await expect(page.getByText(es.products.detail.stockEmpty)).toBeVisible();
+    const minus = page.getByRole("button", {
+      name: new RegExp(`^Usar 1 .+ de «${productName}»$`),
+    });
+    const plus = page.getByRole("button", {
+      name: new RegExp(`^Añadir 1 .+ de «${productName}»$`),
+    });
+    await expect(minus).toBeDisabled();
+
+    // Two presses. No form, no navigation — the URL must not move.
+    await plus.click();
+    // The confirmation is a sentence with its undo, not a dialog to answer.
+    await expect(page.getByTestId("snackbar")).toContainText("Añadiste 1");
+    await expect(
+      page.getByRole("button", { name: es.snackbar.undo }).first(),
+    ).toBeVisible();
+    await plus.click();
+
+    // The number moved in place, the empty warning went, and we never left.
+    await expect(page.getByTestId("stepper-value")).toContainText("2");
+    await expect(page.getByText(es.products.detail.stockEmpty)).toBeHidden();
+    expect(page.url()).toMatch(/\/products\/[^/]+$/);
+
+    // After the hold drains: the ledger says two purchases of +1, not one
+    // write of two. The queue holds each press ten seconds for its undo, so
+    // the rows are allowed to take that long to arrive.
+    await page.getByRole("link", { name: es.products.detail.stockHistoryLink }).click();
+    await page.waitForURL(/\/history$/);
+    await expect(
+      page.getByRole("cell", { name: es.products.history.opPURCHASE, exact: true }),
+    ).toHaveCount(2, { timeout: 30_000 });
+    await expect(page.getByRole("cell", { name: /^\+1\b/ })).toHaveCount(2);
+  });
+});
+
 test.describe("Login Flow", () => {
   test("should login with valid credentials", { tag: "@smoke" }, async ({ page }) => {
     const registerPage = new RegisterPage(page);
