@@ -72,6 +72,9 @@ their `next dev` for the per-directory lock until one killed the other. Plan:
 | webServer → the standalone production build, on the suite's own data | `8ef124c` |
 | CI's e2e job hands the suite its own URLs, one setup path | `60cb0a4` |
 | The prod config folded in — one suite, one artefact, 117 tests | `d60b1b3` |
+| `deepmerge-ts` overridden in the image's own Prisma install too — the copy pnpm audit cannot see | `0a85740` |
+| The suite names `127.0.0.1` and pipes the webServer's build output (D86) | `219b103` |
+| The suite's server binds `0.0.0.0` — Docker's exported `HOSTNAME` hid it from the probe | `f87b48a` |
 
 Isolation proven the strong way: the owner's dev server and demo data survived
 three full suite runs untouched, mid-session. The suite found a real product
@@ -97,6 +100,7 @@ TEST-5, and it is undiagnosed rather than untouched.
 
 | Unit | Commit |
 |---|---|
+| DEBT-1 — length over composition (SP 800-63B), and the 128-char cap Argon2id lacked | `d5a320b` |
 | INV-2's second half: `transferStock` guards inside its transaction | `dbb1748` |
 | DEBT-5 — sixteen indexes, measured at 12,000 rows | `1841758` |
 | DEBT-6 — services throw domain errors, translated at the boundary | `15c1a23` |
@@ -114,10 +118,269 @@ TEST-5, and it is undiagnosed rather than untouched.
 container healthcheck (`ec7b0b4`, `f238312`), and data export (`073abe8`).
 
 **The suite.** The service worker now runs under a real production build
-(`39fe0e9`); the browser suite re-seeds the fixture it spends (`6faf0cd`); the
-integration harness builds its connection from credentials that work
-(`46f767d`), which is what TEST-1 had been waiting on behind a stale note about
-Docker.
+(`39fe0e9`), and the spec that drives it is kept out of the ordinary suite by
+`testIgnore` — collected by the default config it ran against `pnpm dev`, where
+the worker never registers, and waited thirty seconds for a controller that was
+never coming (`b44fcb7`). `NAVIGATION_TIMEOUT_MS` is driven through a stubbed
+worker at the constant the file declares, against a shell navigation measured at
+14–37 ms warm and 368 ms cold — 2,500 ms is ~70× a healthy navigation, so half
+of "a guess calibrated on supermarket lie-fi" is measured and the entry says
+which half is not (`3054454`). The browser suite re-seeds the fixture it spends
+(`6faf0cd`); the integration harness builds its connection from credentials that
+work (`46f767d`), which is what TEST-1 had been waiting on behind a stale note
+about Docker.
+
+---
+
+### The pipeline reshaped — build beside the tests, publish behind them (2026-08-12, unplanned)
+
+Not in the plan, and it started as noise rather than as a project: every image
+job had ended red for days on three separate platform refusals, each one *after*
+the build, the scan and the push had already succeeded. The cost was not the red
+job — it is that a pipeline which is always red trains everyone to stop reading
+it. Clearing the refusals exposed the shape underneath: the image job gated
+nothing but its own publish and still waited for every test to finish first.
+Measured on runs `31567346179` (the old shape, every other change already in)
+against `31568215727` and `31570504804`, a green push reached a published image
+in **628s against 902s**. The figures, and what each knob was actually worth,
+are in `STATUS.md` "The pipeline".
+
+**The three platform refusals, and the finding underneath them.**
+
+| Unit | Commit |
+|---|---|
+| `actions: read` for the SARIF upload — the image job went red after shipping the image | `448ad88` |
+| The SARIF pair gated on visibility, the Trivy exit-code gate left unconditional (D80) | `a5455c1` |
+| npm removed from the production image — all seven Trivy findings were its own (D81) | `c1c0849` |
+| Provenance attestation gated the same way — the last platform refusal in the image job | `425a480` |
+
+**The pipeline held to the standards the code is held to.**
+
+| Unit | Commit |
+|---|---|
+| `scripts/check-ci.sh` — pinned actionlint over the workflow, shellcheck over `scripts/*.sh` | `9bb4b20` |
+| `persist-credentials: false` on every checkout — no job in the pipeline pushes via git | `3f37688` |
+| Bun pinned to 1.3.14 in `.bun-version`, so an upstream release cannot redden master alone | `5ec7068` |
+
+**The shape: two jobs, and a gate that decides whether either runs.**
+
+| Unit | Commit |
+|---|---|
+| The image job split — build and scan beside the tests, publish behind them | `dc68b21` |
+| The `changes` job — a docs-only push skips the image pair, never the tests | `bf14d97` |
+| `changes` diffs a full clone — the fetch it replaced left the gate a no-op | `aee25ed` |
+
+**The e2e job into Playwright's own image, and the A/B that corrected what it was worth.**
+
+| Unit | Commit |
+|---|---|
+| The e2e job runs in Playwright's pinned image — 57–136s of apt off the critical path | `f9e0887` |
+| `unzip` added to the e2e container — `setup-bun` needs it, and the seed runs on Bun | `a1bf0a6` |
+| `HOME=/root` in the e2e container — Firefox and WebKit refuse `pwuser`'s home | `2a7127e` |
+| `--shm-size` on the e2e container, kept as prevention rather than as the fix it shipped as | `9973a29` |
+| A temporary uncontainerised twin of the e2e job, to time both shapes in one run | `e591080` |
+| The twin drops the container's `unzip` step — apt on a plain runner needs sudo | `a4e4f64` |
+| The A/B answered 400s bare against 405s containerised — the twin deleted, the claim corrected | `1cf8cbb` |
+
+The last three rows are this campaign's own correction, and the reason it is
+recorded in this much detail. Three consecutive runs said the container had made
+`playwright test` ~100s slower, which is a pattern rather than variance — and it
+was wrong: twin jobs from the same commit on identically-specified runners at
+the same moment (run `31583973041`) measured 400s against 405s. Runner
+throughput had drifted over the session by as much as the effect being measured.
+The container stays for the variance it removes, not the average.
+
+The `changes` gate is worth its own line for how it failed: it originally
+*fetched* the before-commit, which cannot authenticate on a private repository
+once the checkout stops persisting the token, so it fell back to "build" — the
+safe direction, shipping nothing wrong, while skipping nothing, ever, and
+appearing to work. A gate whose failure mode is doing nothing quietly has to be
+watched being exercised.
+
+### Phase 6 — Rating
+
+Extend the Open Food Facts fields, compute, display. *Done when:* a product with
+no data and a non-food product both behave well — not just the happy path. Three
+commits, in that order, because each is useless without the one before it.
+
+| Unit | Commit |
+|---|---|
+| Open Food Facts asked for the rating's six fields; the cache prefix moved to v2 (D79) | `18e6ad6` |
+| `src/lib/rating.ts` — 60/30/10, and the honesty rules above the arithmetic (D77, D78) | `c575b49` |
+| `ProductRating` on the product detail, where the scan lands — the word leads, colour follows | `01f58c1` |
+
+**Phase 6 is complete except T7.** §6's worked example scores 25 — the bottom
+edge of poor, which is what harmless additives on a grade-e product are worth,
+and the sanity check that the arithmetic was transcribed rather than invented.
+The honesty rules run *before* the formula structurally rather than as a
+disclaimer: no data is a state the screen says out loud, absence of a verdict is
+never a clean bill, and the worst additive decides its component. What stays in
+§10 is T7 — an offline scan resolved later — because it needs local-id
+resolution, which leaks `local:` ids into the cache and into components.
+
+### Test isolation and the runner's own defects (2026-08-11/12, unplanned)
+
+Four red runs that looked like four problems and were three, none of them in the
+product. Each one made a green suite a claim about something other than the
+code: about the order bun happened to load files in, about what else was running
+against the same database, or about the runner. A suite that answers a different
+question depending on its neighbours is not a gate.
+
+| Unit | Commit |
+|---|---|
+| `test-integration-local.sh` tears down only the services it started, not those it found | `16a20b0` |
+| Every `next/navigation` mock completed (D50) — CI's file order turned an omission red | `d69a8f1` |
+| `auth.flow` stops deleting every suite's users — half of TEST-5's replay failures were this | `2069c5f` |
+| TEST-5 absorbed — `{ retry: 2 }` on the two tests bun abandons, 4 failures in 24 to 0 | `3dd3789` |
+
+The last two are one investigation, and the order matters: with the cross-suite
+deletion fixed, the user-deleted failure signature went from 2-in-24 to 0-in-24
+under identical load *while the runner defect's signature persisted*, which is
+what separated a test-suite bug from TEST-5. TEST-5 itself stays filed rather
+than closed — bun 1.3.14 is the newest bun, so there is nothing to upgrade to —
+and the retry is scoped to the two tests whose deliberate outcome is a rejected
+promise out of a rolled-back transaction. A real regression in `withReplay`'s
+refusal logic still fails deterministically and survives every attempt, which
+was verified by breaking it.
+
+### Production hardening — driving the artefact nobody had driven (2026-08-11, unplanned)
+
+Every suite was green and the deployed application could not sign anybody in.
+Auth.js v5 defaults `trustHost` to false off Vercel and refuses any request whose
+Host it cannot vouch for; `next dev` does not apply the check, and every suite
+ran against `next dev`. `/login` served perfectly the whole time, which is
+precisely why it could sit there — a failure that returns 200 looks like a
+success. Driving the image itself, on an `--internal` Docker network with a
+read-only rootfs, found receipt scanning broken in it too. This is where
+`e2e/auth.prod.spec.ts` comes from, and the argument the 2026-08-17 suite move
+later generalised to the whole suite.
+
+| Unit | Commit |
+|---|---|
+| The example `NEXTAUTH_SECRET` refused in production — sessions anyone could forge | `7051ba5` |
+| Production auth answered 500 until `trustHost` — `e2e/auth.prod.spec.ts` fails without it | `108304d` |
+| A real sign-in against the standalone artefact, under the production CSP — no violations | `f7b3539` |
+| `serverExternalPackages` unbakes tesseract.js's worker path; OCR-2 filed for the rest | `3af30a9` |
+| OCR-2 closed — tesseract.js staged whole in the image, scanning proven air-gapped | `5577b80` |
+
+**OCR-1's entry was corrected rather than left reading as a finished job:**
+baking the language model into the image was necessary and not sufficient, and
+its own caveat — that nothing had scanned a receipt *inside* the image — turned
+out to be the whole defect. The air-gapped run is also the first measurement
+behind the model choice, which had shipped reasoned but unmeasured: UPLOADING →
+NEEDS_REVIEW in under three seconds, with "LECHE ENTERA 1,19" read
+character-perfect by the 2.3 MB fast model.
+
+Unlike the other two, the signing-key refusal is not an outage, and an outage is
+what announces itself: `.env.example` publishes the placeholder in this
+repository, so an instance deployed with that line unchanged signs sessions with
+a key anybody can read and nothing about the running system looks wrong. Its
+first version broke `docker build` — `next build` sets NODE_ENV=production and
+evaluates every route module — so the guard skips `phase-production-build`,
+because trading a forged-session risk for an unbuildable image is a bad bargain.
+
+### Repository housekeeping (2026-08-11, unplanned)
+
+One commit, recorded because the fix is an index change and an index change is
+the kind that silently comes back.
+
+| Unit | Commit |
+|---|---|
+| The ralph-loop state file untracked — per-session state no checkout should inherit | `61c16ce` |
+
+The file was tracked and carries a session id and an iteration counter, so
+committing it means the next checkout inherits somebody else's half-finished
+loop — which is what its own `.local.` name says was never intended.
+
+### Phase 5 — Kitchen screen, and Screen A's layout
+
+Expiries, one-tap use, useful data — plus the two things Phase 4 handed over and
+named rather than counted: Screen A's layout and a sign-out control. Both screens
+were built the same day and deliberately together, because they share vocabulary
+and building them apart is how one product comes to wear two different words.
+
+Three things had to land first, and none of them is a screen. The queue reads a
+tRPC status to decide what to do next, so `classify.ts`'s table was only *true*
+once the database's own complaints were translated. `queue.purgeAll` and the
+shell purge were written in Phase 4 as controls for a *shared* device and nothing
+could fire them. And `KITCHEN` had been enforced on the server since Phase 3 and
+creatable only by a direct database write ever since — so a week-long run on a
+tablet under an owner's account would have proven nothing about what a kitchen
+account can reach.
+
+**The three the phase could not be run honestly without.**
+
+| Unit | Commit |
+|---|---|
+| T1 closed — `P2025` reaches the client as `NOT_FOUND`, so the queue stops retrying it | `80be873` |
+| A sign-out control on `/settings` — it fires `queue.purgeAll` and the shell purge (D50, D51) | `ab4686b` |
+| `/settings/people` creates a `KITCHEN` account — ASVS V4.1.1, plus three `/shopping` defects | `aeefa9c` |
+
+**The two screens.**
+
+| Unit | Commit |
+|---|---|
+| Screen A — `/shopping` is the shop; filing moved to `/shopping/lists` (§3, D54–D56) | `ad916d3` |
+| Screen B — `/kitchen` read from a metre away, undo cancels the queued write (D57) | `a8ce555` |
+
+**Closed on the way.**
+
+| Unit | Commit |
+|---|---|
+| A11Y-1 closed — the stock forms report what they wrote instead of redirecting | `cae2c43` |
+| Read persistence — six queries kept per account for 24 hours, never mutations (D59, D60) | `e324e00` |
+| `/settings/unsaved` — every failed change with its timestamp and its reason (D62) | `15e765f` |
+| The read-cache test asserts on an empty restore instead of throwing | `2b148a2` |
+
+Two of the decisions here reverse the obvious reading of the design, and both are
+about undo. On Screen A the trolley *is* the undo — an undo that expires is one
+you miss while reaching for the next shelf, and a mis-tick is usually noticed at
+the till — so it is permanent and lives where somebody would look anyway. On the
+kitchen screen undo cancels the still-pending write and refuses once it is in
+flight; a compensating `addStock` would record that the household acquired
+something it never did, and every downstream reader would see a fabricated event
+it cannot tell from a real one.
+
+Read persistence is the other one worth re-reading: query-core's default persists
+paused mutations and replays them on the next visit, which would have been a
+second, uncontrolled path to the server racing the queue's drain — contained by
+the idempotency key, and invisible.
+
+**Phase 5's actionable work is complete; the done-when is not met and cannot be
+met by a test.** §4 says the kitchen screen runs for a week on a real tablet
+untouched except for using things up. What exists is the screen and its
+five-minute refresh; the week is owed, and it sits in §10 next to the iOS pass
+for the same reason — naming them beats closing the phase over them.
+
+### WCAG AAA — the two criteria a machine can decide (2026-08-11, unplanned)
+
+pa11y's `WCAG2AAA` standard was run first, before deciding anything: against
+`/login` it returned 0 errors, 1 warning and 60 notices, every AAA item beginning
+"Check that…". So no tool automates the AAA half at all. What this does is
+measure the two criteria that are mechanically decidable and were missing, and
+leave the rest as a documented manual pass rather than a check that either passes
+vacuously or floods the log (D36).
+
+| Unit | Commit |
+|---|---|
+| WCAG 3.1.5 measured on both catalogues — Fernández-Huerta for Spanish (D36) | `2c21dea` |
+| WCAG 2.2.6 — the session slides on activity, and an idle one warns two minutes out (D36) | `17e7c38` |
+
+Neither is a compliance exercise. `REDESIGN_PLAN.md` states the premise as
+"anyone in a household can use this, including people with limited technical
+confidence", and nothing checked that sentence against the words the application
+shows — the Spanish corpus measures 69.0 on the INFLESZ bands, English 66.3, with
+the floors set below the measurement rather than at it. The timeout half is data
+loss, not etiquette: a fifteen-minute ceiling from sign-in ended a slow shop or a
+half-reviewed receipt at a login form.
+
+**The reading-level gate was watched fire, and only passed on the second
+threshold.** A deliberately unreadable seventeen-word sentence pasted into both
+catalogues changed nothing — too short to be judged at a twenty-word threshold,
+and one string among 515 does not move a corpus average, though it scored −47.
+At twelve words both languages go red on that probe. The honest limit is in the
+module's own docs: a formula counts syllables, not jargon, and "trigrama de
+similitud" scores well and means nothing to most people.
 
 ---
 
@@ -204,12 +467,25 @@ aeroplane mode". The second is met and the first is not: a shop today is the
 existing `/shopping/[id]`, which now works offline. The design that preceded
 the phase marked the layout as its droppable tail — a UX change riding on a
 correctness phase — and it moves to Phase 5, next to the kitchen screen it
-shares vocabulary with.
+shares vocabulary with. **It was built there the next day** (`ad916d3`,
+2026-08-11): `/shopping` became the shop — Scan on top, TO BUY with the minimum
+notch, IN THE TROLLEY folded away — and filing moved to `/shopping/lists`. The
+paragraph stays as written because it was right twice over: the layout was not
+Phase 4's, and the one piece of §3 that travelled with it and did *not* land
+next to the kitchen screen was the ± stepper, which was counted as done in §10
+without being checked and did not arrive until 2026-08-25 (`74cff4b`).
 
 Also moved to Phase 5, and uncomfortably: **a sign-out control**. There is none
 anywhere in this application, so `queue.purgeAll` and the shell-cache purge are
 security controls nothing can fire. The cache is purged on reaching `/login`,
-which is the only end-of-session signal that exists today.
+which is the only end-of-session signal that exists today. **Closed the next
+day** (`ab4686b`, 2026-08-11): `/settings` signs out, purges the queue, the
+cached shell and — once read persistence landed — the read cache with them, and
+asks first when there are unsent changes rather than deleting somebody's
+shopping in silence (D51). Left standing rather than rewritten, because "the
+security control exists and nothing in the interface can fire it" is a defect
+shape worth recognising on sight, and `signOut` was exported from
+`src/lib/auth.ts` and called nowhere for four phases.
 
 ### Phase 3 — Roles, and the security gap that outlived every phase
 
@@ -242,7 +518,7 @@ badge is asserted by nothing).
 | `/receipts/[id]/applied` built and driven; sixth dead route closed | `364528b` |
 | Every interactive element raised to the AAA target size | `e6aadea` |
 | A4.2–A4.4 measured in a browser — `e2e/a11y-structure.spec.ts`, 16 routes × 3 tiers | `225bc19` |
-| `check:links` gating CI and `verify:local` | `a0b388a` |
+| `check:links` — the checker, then the gate on CI and `verify:local` | `1ffc2df`, `a0b388a` |
 | UI-5 and I18N-1 closed: the receipts pipeline fits a phone and speaks both languages | `621185d` |
 | UI-2 and UI-4 closed: the location picker is a real listbox and offers the whole tree | `a6b01c2` |
 | A4.5 — the AAA criteria no tool checks, in `e2e/a11y-aaa.spec.ts` | `7c7206f` |
@@ -251,6 +527,7 @@ badge is asserted by nothing).
 | Two receipts in the seed; the dynamic routes audited by following links | `fe8bbcf`, `ad6cc6b` |
 | Journey states corrected; I18N-5 filed | `e93428b` |
 | A4.6 automatable half — `e2e/screen-reader.spec.ts`; A11Y-2 and UI-7 fixed | `31d5358`, `7139359` |
+| The tree audit skipped outside Chromium, where `newCDPSession` throws | `81d6f45` |
 
 **Phase 2b is complete except the human screen-reader pass**, which is the one
 piece of this phase that cannot be delegated to a machine or to an agent. Four
@@ -265,11 +542,18 @@ result sounds right to a person using it.
 | Every CI test job held to ten minutes, and the guard made to fire | `08a2153` |
 | E2E from 27 minutes to 6; two tests that asserted nothing deleted | `b64eae1` |
 | UI-8 and I18N-7 filed | `4ea3a25` |
+| `routers/receipt.ts` — 39 tests over ten procedures, 28.6% to 90.9% of functions | `ad214d9` |
+| D33–D35 — the engine axis separated from the specs, 182 tests in 5.6 min to 89 in 2.9 | `655f8af` |
 
 Not in the plan, and it should have been: the suite had reached 27 minutes for a
 full matrix, which is long enough that a healthy run and a hung one look
 identical from outside, and long enough that people stop running it. Writing a
 feature took minutes; verifying it took half an hour.
+
+The second pass, a day later, did the same thing to the browser matrix: the
+suite was not too big, it was asking the same questions in the wrong place and
+then asking each of them five times (D33, D34), and the ceiling was moved to
+five minutes so that it is a contract rather than a safety net (D35).
 
 ### Phase 2 — One design system
 
