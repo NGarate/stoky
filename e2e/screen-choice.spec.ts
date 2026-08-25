@@ -150,6 +150,63 @@ test.describe("Journey 8 — the screen choice", () => {
     await phone.close();
   });
 
+  test("is changeable from settings, per device, and says it saved", async ({
+    browser,
+  }) => {
+    // §5.1's other half. The row and the action existed before this screen did;
+    // what it adds is the only way to change your mind without clearing a
+    // cookie.
+    const tablet = await browser.newContext();
+    const page = await tablet.newPage();
+
+    const address = email("e2e-choice-settings");
+    await register(page, address);
+    await choose(page, es.start.kitchen);
+    await expect(page).toHaveURL(/\/kitchen/);
+
+    await page.goto("/settings/screen");
+    await settle(page);
+
+    // The current answer is visible before it is changed, and in words rather
+    // than by which button is filled.
+    await expect(
+      page.getByRole("button", { name: new RegExp(es.start.currentSuffix) }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: new RegExp(es.start.shopping) }).click();
+
+    // Changing a setting must not also walk you out of settings.
+    await expect(page).toHaveURL(/\/settings\/screen/);
+
+    // The confirmation is the live region's own sentence changing, which is
+    // where D101 puts a persistent state. Addressed by its text rather than by
+    // role, because the dashboard shell mounts the sync indicator's own empty
+    // `role="status"` on every screen.
+    const shown = es.start.currentlyStartingAt.replace(
+      "{screen}",
+      es.start.shopping,
+    );
+    const live = page.getByText(shown);
+    await expect(live).toBeVisible({ timeout: 30_000 });
+    // Announced, not merely shown — the only other visible change is which
+    // button is filled, which says nothing to somebody who cannot see it.
+    await expect(live).toHaveRole("status");
+
+    // And it is the choice that changed, not just the message.
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/shopping/);
+
+    // Still per device: a second device is unaffected and still unasked.
+    const phone = await browser.newContext();
+    const phonePage = await phone.newPage();
+    await signIn(phonePage, address);
+    await phonePage.goto("/");
+    await expect(phonePage).toHaveURL(/\/start/);
+
+    await tablet.close();
+    await phone.close();
+  });
+
   test("works with no JavaScript, because it is a form and a redirect", async ({
     browser,
   }) => {

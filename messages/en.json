@@ -1000,6 +1000,14 @@
     "kitchenWhat": "For a tablet at home: what expires soon and what is running out.",
     "dashboard": "Panel",
     "dashboardWhat": "An overview: what needs attention, with a way through to everything else.",
-    "changeLater": "You can change it whenever you like, in Settings."
+    "changeLater": "You can change it whenever you like, in Settings.",
+    "currentSuffix": "(the one you use now)",
+    "settingsTitle": "Starting screen",
+    "settingsDescription": "The screen you arrive at when you open the app on this device. You can choose a different one on other devices.",
+    "backToSettings": "Back to settings",
+    "settingsLink": "Starting screen",
+    "settingsLinkDescription": "Choose which screen this device starts on.",
+    "currentlyStartingAt": "Right now you start at: {screen}.",
+    "notChosenYet": "You have not chosen on this device yet."
   }
 }

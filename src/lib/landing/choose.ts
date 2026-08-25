@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEVICE_ID_COOKIE, isDeviceId } from "@/lib/device";
@@ -19,6 +20,9 @@ import { SCREEN_PATHS, isLandingScreen } from "@/lib/landing";
  * The key is the pair, which is what makes Journey 8's shared tablet work: the
  * row is (this account, this browser), so the next account to sign in here
  * finds nothing under its own key and is asked.
+ *
+ * Where it goes afterwards depends on who asked. `/start` wants the screen the
+ * person just picked; `/settings/screen` wants to stay put and say it saved.
  */
 export async function chooseScreen(formData: FormData): Promise<void> {
   const session = await auth();
@@ -44,6 +48,21 @@ export async function chooseScreen(formData: FormData): Promise<void> {
       create: { userId, deviceId, screen },
       update: { screen },
     });
+  }
+
+  // `stay` means the change was made in settings, where redirecting to the
+  // chosen screen would be a change of setting that also walks you out of
+  // settings. Revalidate instead: the page re-renders with the new answer, and
+  // the live region beside the controls announces it.
+  //
+  // Not a redirect back to the same path with a flag on it, which was tried
+  // first and does not work — Next keeps the URL when a server action redirects
+  // to the route it was called from, so the flag never arrives and the
+  // confirmation never renders. The write had happened; only the sentence about
+  // it was missing, which is the worst shape for this to fail in.
+  if (formData.get("then") === "stay") {
+    revalidatePath("/settings/screen");
+    return;
   }
 
   redirect(SCREEN_PATHS[screen]);

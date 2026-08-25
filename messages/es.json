@@ -1000,6 +1000,14 @@
     "kitchenWhat": "Para una tablet en casa: qué caduca pronto y qué se está acabando.",
     "dashboard": "El panel",
     "dashboardWhat": "Una vista de todo: lo que necesita atención, con acceso al resto.",
-    "changeLater": "Puedes cambiarla cuando quieras en Configuración."
+    "changeLater": "Puedes cambiarla cuando quieras en Configuración.",
+    "currentSuffix": "(la que usas ahora)",
+    "settingsTitle": "Pantalla de inicio",
+    "settingsDescription": "La pantalla a la que llegas al abrir la aplicación en este dispositivo. En otros dispositivos puedes elegir otra.",
+    "backToSettings": "Volver a configuración",
+    "settingsLink": "Pantalla de inicio",
+    "settingsLinkDescription": "Elige con qué pantalla empieza este dispositivo.",
+    "currentlyStartingAt": "Ahora mismo empiezas en: {screen}.",
+    "notChosenYet": "En este dispositivo todavía no has elegido."
   }
 }

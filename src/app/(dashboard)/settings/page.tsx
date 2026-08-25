@@ -42,6 +42,7 @@ export default function SettingsPage(): JSX.Element {
   const t = useTranslations("settings.hub");
   const tHousehold = useTranslations("household");
   const tOffline = useTranslations("offline");
+  const tStart = useTranslations("start");
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -74,6 +75,16 @@ export default function SettingsPage(): JSX.Element {
           </h2>
           <p className="mt-1 text-muted-foreground">
             {tHousehold("peopleDescription")}
+          </p>
+        </li>
+        <li className="rounded border border-border bg-card p-4">
+          <h2 className="text-lg font-semibold text-heading">
+            <Button asChild variant="link">
+              <Link href="/settings/screen" > {tStart("settingsLink")} </Link>
+            </Button>
+          </h2>
+          <p className="mt-1 text-muted-foreground">
+            {tStart("settingsLinkDescription")}
           </p>
         </li>
         <li className="rounded border border-border bg-card p-4">
