@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 Single source of truth for where the project actually is.
 
@@ -29,7 +29,7 @@ Journey 4): `verify:ci` green in 90s of the 600s budget, and the browser suite
 | Unit tests | `pnpm test:unit` | ✅ 569 pass / 57 files (2026-08-25) |
 | Component tests | `pnpm test:components` | ✅ 602 pass / 57 files (2026-08-25) |
 | Integration tests | `pnpm test:integration` | ✅ 443 pass / 28 files (2026-08-25) |
-| Build | `pnpm build` | ✅ 34 routes — 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm today. Not re-measured cold: a cold build deletes state a running dev server shares |
+| Build | `pnpm build` | ✅ **35 routes, 9 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`). 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
 | E2E | `bunx playwright test` | ✅ **135 pass / 0 fail, 3.7 min** (2026-08-25) — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
@@ -56,6 +56,39 @@ nine, so it fails first and names the test it was sitting on instead of the
 runner killing the job with no report. The budget exists because verification
 that takes longer stops being run, and a suite nobody runs still has to be
 maintained while telling nobody anything.
+
+### Cache Components, and what was proven about the image
+
+Landed 2026-08-25 (`2b6eba5`), both flags: `cacheComponents` for
+dynamic-by-default rendering with Partial Prerendering, and `partialPrefetching`
+for one prefetched shell per route rather than one request per link. The
+measurements, the migration and the owner's decision on the CSP nonce are in
+`docs/superpowers/plans/2026-08-25-cache-components-and-instant-navigation.md`.
+
+**The root layout blocks on purpose** (`instant = false`), because it reads the
+per-request CSP nonce and a nonce that survives prerendering is not a nonce.
+That trade was decided rather than deferred; the reasoning is beside the export.
+
+**The production image was built and run under the flags on 2026-08-26**,
+because CI never did: the image jobs were skipped on the green commit (docs
+only) and cancelled on the flags commit, so nothing had exercised
+`output: "standalone"` with `cacheComponents` until this was done by hand.
+
+| Check | Result |
+|---|---|
+| `docker build --target production` | ✅ builds |
+| Container boots against Postgres and Valkey | ✅ migrations applied, ready |
+| `/api/health` twice | ✅ `200 {"status":"ok"}`, 17–24 ms |
+| `/api/health` with Valkey stopped | ✅ `503 {"status":"degraded"}` |
+| `/api/health` after Valkey restarts | ✅ `200 {"status":"ok"}` |
+
+That last pair is the point rather than a formality. `/api/health` used to state
+its own contract with `dynamic = "force-dynamic"` and `revalidate = 0`, both of
+which Cache Components refuses outright; removing them relies on
+dynamic-by-default being real. A cached health check would have gone on saying
+"ok" while the cache was down, and the container would have looked healthy while
+it was not. It reports the outage and recovers, so the guarantee survived the
+change — measured rather than assumed.
 
 ### The pipeline
 
