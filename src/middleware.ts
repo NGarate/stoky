@@ -1,18 +1,40 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { buildCsp } from "@/lib/csp";
+import {
+  DEVICE_ID_COOKIE,
+  DEVICE_ID_MAX_AGE_S,
+  isDeviceId,
+  mintDeviceId,
+} from "@/lib/device";
 
 /**
- * Per-request Content-Security-Policy nonce.
+ * Per-request Content-Security-Policy nonce, and the device's own identifier.
  *
  * The nonce is generated here, per request, and handed to Next through the
  * request headers — Next reads the CSP header, finds the nonce, and stamps it
  * onto the scripts it emits. The directives themselves live in `@/lib/csp` so
  * they can be asserted without standing up a request.
+ *
+ * The device id is minted here for one reason: **this is the only place that
+ * can both set a cookie and let the render that follows read it.** A server
+ * component cannot set cookies, and a client component setting one would put
+ * the value out of reach of the render that needs it — which is the whole
+ * point, since it decides which screen a person lands on. See `@/lib/device`.
  */
 export function middleware(request: NextRequest): NextResponse {
   const isDev = process.env.NODE_ENV !== "production";
   const nonce = crypto.randomUUID().replaceAll("-", "");
+
+  // Before the headers are copied below, because writing to `request.cookies`
+  // rewrites the cookie header — and it is that copy the render reads. Set it
+  // afterwards and this request sees no device id, so every first visit would
+  // be decided as though the device were unknown, and only the first.
+  const existing = request.cookies.get(DEVICE_ID_COOKIE)?.value;
+  const deviceId = isDeviceId(existing) ? existing : mintDeviceId();
+  const isNewDevice = deviceId !== existing;
+  if (isNewDevice) request.cookies.set(DEVICE_ID_COOKIE, deviceId);
+
   // `upgrade-insecure-requests` is keyed on how this request actually
   // travelled: behind Traefik that is the x-forwarded-proto header TLS
   // termination writes; served directly it is the URL's own scheme. A client
@@ -30,6 +52,25 @@ export function middleware(request: NextRequest): NextResponse {
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("content-security-policy", csp);
+
+  // Only when it was actually minted. Re-setting an unchanged cookie on every
+  // request costs a `Set-Cookie` on every response and, more to the point,
+  // slides its expiry constantly — so a device would be remembered a year
+  // after its *last* visit rather than a year after its first, which is not
+  // what a year was chosen to mean.
+  if (isNewDevice) {
+    response.cookies.set(DEVICE_ID_COOKIE, deviceId, {
+      httpOnly: true,
+      sameSite: "lax",
+      // A Secure cookie on a plain-http LAN install is one the browser
+      // silently refuses to store, which would mint a new device on every
+      // request. Same reasoning as the directive above.
+      secure: isHttps,
+      path: "/",
+      maxAge: DEVICE_ID_MAX_AGE_S,
+    });
+  }
+
   return response;
 }
 
