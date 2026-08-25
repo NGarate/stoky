@@ -39,6 +39,31 @@ Rules for this log:
 
 ## Done
 
+### The record catches up with the work (2026-08-25)
+
+Triggered by a red CI run on `e13c540` that turned out to be TEST-5 rather than
+a regression. Verifying that led to the ledger below it, which had drifted
+badly: its Status table called Phases 5 and 6 complete while the Done section
+recorded neither, four campaigns had no section at all, and Phase 4's closing
+prose still named as unbuilt two things built the following day. 165 commits
+had no representation.
+
+| Unit | Commit |
+|---|---|
+| Phases 5 and 6, the CI reshape and production hardening enter the ledger; Phase 4's false prose extended rather than erased | `511dfc6` |
+| The design-system week — 115 commits, twelve campaigns, D100–D104's work | `35add07` |
+| pnpm is 11.22.0; `corepack pnpm` stopped refusing, measured rather than assumed | `fbd7f53` |
+| bun 1.4.0 measured against TEST-5 — it does not fix it, and the sequential measurement lied (D106) | `00a4586` |
+| BUILD-1 filed — the image and CI pin different bun versions, and nothing compares them | `b2b1505` |
+
+**What this cost, and the rule it argues for.** The backfill was only possible
+because the commit messages were written for a reader; every row above was
+recovered from them and then re-checked against its own diff. That is the
+cheapest version of this work and it was still two commits and a lot of
+verification. The rule the ledger already states — a row per unit, written when
+the unit lands — is not bureaucracy; skipping it for six days cost more than
+following it would have.
+
 ### The §10 tail — unowned items leaving the list by being done (from 2026-08-25)
 
 | Unit | Commit |
@@ -2002,3 +2027,24 @@ component's local count, hardcoded Spanish and hand-written CSS all went: the
 value is the queue projection, the labels are catalogue keys, and the buttons
 are the `Button` primitive so the 48px floor is inherited rather than
 restated.
+
+**D106 — A runner upgrade is measured before it is adopted, and measured
+interleaved.** TEST-5's entry said a version pin was the workaround and that
+there was nothing to pin forward to; bun 1.4.0 had shipped five days earlier, so
+the obvious move was to bump `.bun-version` and hope. Two things stopped it.
+First, measurement: 1.4.0 still reproduces the defect, so the bump fixes
+nothing — and `.bun-version` governs strictly more than the Dockerfile pin does
+(three CI jobs, the integration suite where TEST-5 lives, two quality scripts,
+the browser suite's seed), so a change that buys nothing is not free. Second,
+and worth more than the answer: **the first measurement was wrong in this
+repository's own documented way.** Run one binary after the other it gave 2 in
+24 against 11 in 24, which reads as a five-fold regression and is machine drift
+— the same trap that once made the CI container look 100s slower until twin jobs
+measured 400s against 405s. Alternated inside one continuous load the same pair
+gave 10 in 40 against 14 in 40. The rule this settles: comparing two runtimes
+means alternating them inside one load, and reporting the interval rather than
+the point estimate — forty runs an arm can say 1.4.0 still reproduces and cannot
+say whether its rate is worse. The version split itself went to `ISSUES.md` as
+BUILD-1 rather than being resolved here, because the direction is a judgement
+sitting next to an open decision in the image pre-plan, and choosing now could
+be choosing twice.
