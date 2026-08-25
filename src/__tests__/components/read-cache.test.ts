@@ -8,6 +8,7 @@ import {
   forgetPersistedReads,
   persistKey,
   persistOptions,
+  restoreThenRefresh,
 } from "@/lib/offline/persist";
 
 /**
@@ -117,6 +118,49 @@ describe("what comes back on the next visit", () => {
     expect(
       theirs.getQueryData([["inventory", "getExpiringItems"], { type: "query" }]),
     ).toBeUndefined();
+  });
+});
+
+describe("a restored answer is shown, never trusted", () => {
+  const KEY = [["inventory", "getExpiringItems"], { type: "query" }];
+
+  /**
+   * The restore carries the original `dataUpdatedAt`, so a copy written
+   * seconds ago comes back inside `staleTime` and TanStack Query correctly
+   * declines to refetch it. Correct, and wrong here: this cache is a fallback
+   * for having no signal, not a reason to stop asking when there is some.
+   *
+   * The defect it produced looked nothing like a cache — two items added to a
+   * shopping list, the queue drained, the database holding both, and a reload
+   * rendering "Lista vacía" from a copy of the server taken before the adds.
+   */
+  it("refetches what it restored, even inside staleTime", async () => {
+    const writing = new QueryClient();
+    writing.setQueryData(KEY, [{ id: "b1", name: "Leche entera" }]);
+    await persistQueryClientSave({
+      queryClient: writing,
+      ...persistOptions(USER, { throttleTime: 0 }),
+    });
+    await flushWrites();
+
+    // A client that would treat anything under half a minute old as fresh —
+    // which the copy just written is.
+    const reading = new QueryClient({
+      defaultOptions: { queries: { staleTime: 30_000 } },
+    });
+    const [unsubscribe, ready] = restoreThenRefresh(
+      reading,
+      persistOptions(USER, { throttleTime: 0 }),
+    );
+    await ready;
+    unsubscribe();
+
+    // Restored, so a screen with no signal still has something to show...
+    expect(reading.getQueryData(KEY) as unknown[]).toEqual([
+      { id: "b1", name: "Leche entera" },
+    ]);
+    // ...and marked for asking again, so a screen with signal is corrected.
+    expect(reading.getQueryState(KEY)?.isInvalidated).toBe(true);
   });
 });
 

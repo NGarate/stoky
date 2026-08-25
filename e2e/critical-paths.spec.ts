@@ -148,7 +148,7 @@ class DashboardPage {
    * still asserts the desktop navigation renders.
    */
   private async goToSection(section: "products" | "inventory") {
-    const link = this.page.locator(`nav a[href="/${section}"]`).first();
+    const link = this.page.locator(`nav a[href="/${section}"]:visible`).first();
     if (await link.isVisible().catch(() => false)) {
       await link.click();
     } else {
@@ -176,7 +176,7 @@ class ProductsPage {
   // Selectors target hrefs rather than link text. The app ships in Spanish and
   // English, so text matching would pass in one language and fail in the other.
   async clickAddProduct() {
-    await this.page.click('a[href="/products/new"]');
+    await this.page.click('a[href="/products/new"]:visible');
     await this.page.waitForURL(/\/products\/new/);
   }
 
@@ -237,7 +237,7 @@ class InventoryPage {
   }
 
   async clickAddStock() {
-    await this.page.click('a[href="/inventory/add"]');
+    await this.page.click('a[href="/inventory/add"]:visible');
     await this.page.waitForURL(/\/inventory\/add/);
   }
 
@@ -247,7 +247,7 @@ class InventoryPage {
    * lone placeholder and a silent mis-selection.
    */
   async selectProduct(productName: string) {
-    const select = this.page.locator('select[name="productId"]');
+    const select = this.page.locator('select[name="productId"]:visible');
     await select.waitFor();
     await this.page.waitForFunction(
       () =>
@@ -272,11 +272,16 @@ class InventoryPage {
   }
 
   async fillQuantity(quantity: string) {
-    await this.page.fill('input[name="quantity"], input[type="number"]', quantity);
+    await this.page.fill(
+      'input[name="quantity"]:visible, input[type="number"]:visible',
+      quantity,
+    );
   }
 
   async clickSave() {
-    await this.page.click('button[type="submit"], button:has-text("Save"), button:has-text("Guardar")');
+    await this.page.click(
+      'button[type="submit"]:visible, button:visible:has-text("Save"), button:visible:has-text("Guardar")',
+    );
   }
 
   async addStock(productName: string, quantity: string) {
@@ -284,6 +289,17 @@ class InventoryPage {
     await this.selectProduct(productName);
     await this.fillQuantity(quantity);
     await this.clickSave();
+
+    // Wait for the confirmation before returning, because that dialog is the
+    // only thing that says the write reached the server. Callers used to move
+    // straight on to the next screen, which navigated away from a mutation
+    // still in flight and aborted it — the stock never landed, and the next
+    // step failed with "solo quedan 0" as though the product were empty.
+    // It was a race the whole time; instant navigation is simply fast enough
+    // to lose it every run instead of rarely.
+    await expect(this.page.getByRole("dialog")).toBeVisible({
+      timeout: 30_000,
+    });
   }
 
   /**

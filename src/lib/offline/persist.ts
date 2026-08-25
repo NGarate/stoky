@@ -1,4 +1,5 @@
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import SuperJSON from "superjson";
 import type { Query, QueryClient } from "@tanstack/react-query";
 import type { Persister } from "@tanstack/react-query-persist-client";
@@ -167,6 +168,49 @@ export function persistOptions(userId: string, seams: PersistSeams = {}) {
       shouldDehydrateMutation: () => boolean;
     };
   };
+}
+
+/**
+ * Restore the device's copy, then ask the server anyway.
+ *
+ * The restore carries each query's original `dataUpdatedAt`, and the client's
+ * `staleTime` is 30 seconds — so anything cached in the last half minute comes
+ * back looking *fresh*, and TanStack Query does the right thing for fresh data,
+ * which is not to ask. That is the wrong right thing here: this cache exists so
+ * a screen opened with no signal shows what was last seen, and it must never
+ * become a reason not to ask when there is signal.
+ *
+ * The failure it produced looked nothing like a cache: two items were added to
+ * a shopping list, the queue drained, the database held both — and a reload
+ * rendered "Lista vacía". What was on screen was a copy of the server from
+ * before the adds, twenty seconds old and therefore "fresh".
+ *
+ * Invalidating after the restore keeps both halves. The cached answer paints
+ * immediately, mounted queries refetch and correct it, and with no signal the
+ * refetch pauses and the restored answer simply stays — which is the whole
+ * point of having it.
+ *
+ * Shaped like `persistQueryClient`: the unsubscribe first, because it must
+ * reach the caller synchronously — an account change has to stop the previous
+ * account's writer before the next one's starts — and a promise second, which
+ * settles once the restore *and* the invalidation have both happened. Nothing
+ * in the application awaits it; it exists so a test can assert on the state
+ * afterwards rather than sleeping and hoping.
+ */
+export function restoreThenRefresh(
+  queryClient: QueryClient,
+  options: ReturnType<typeof persistOptions>,
+): [() => void, Promise<void>] {
+  const [unsubscribe, restored] = persistQueryClient({
+    queryClient,
+    ...options,
+  });
+
+  const ready = restored.then(async () => {
+    await queryClient.invalidateQueries();
+  });
+
+  return [unsubscribe, ready];
 }
 
 export type { QueryClient };
