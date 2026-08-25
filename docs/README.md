@@ -188,6 +188,14 @@ The browser suite's move to isolated data and the production artefact —
 executed 2026-08-17/18. `PROGRESS.md` D82–D86 carry the decisions;
 `TEST_SETUP.md` describes the result.
 
+**[`superpowers/plans/2026-08-25-cache-components-and-instant-navigation.md`](superpowers/plans/2026-08-25-cache-components-and-instant-navigation.md)**
+Measured, not landed. What Next 16.3's Cache Components and Partial Prefetching
+cost this repository — the whole app builds green on two edits — and the one
+question an agent must not settle: a per-request CSP nonce and a prerendered
+static shell are structurally in tension. The saved patch sits beside it. Its
+most reusable finding is about `e2e/settle.ts`, which waits for quiet and would
+need to wait for data.
+
 **[`superpowers/plans/2026-08-25-development-in-the-image-preplan.md`](superpowers/plans/2026-08-25-development-in-the-image-preplan.md)**
 A **pre-plan**, not an executable one: the measurements behind moving
 development into the Docker image, and behind the open question of whether the

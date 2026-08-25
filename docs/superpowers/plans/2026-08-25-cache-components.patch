@@ -1,0 +1,86 @@
+diff --git a/e2e/critical-paths.spec.ts b/e2e/critical-paths.spec.ts
+index e141d3b..e518b97 100644
+--- a/e2e/critical-paths.spec.ts
++++ b/e2e/critical-paths.spec.ts
+@@ -148,7 +148,7 @@ class DashboardPage {
+    * still asserts the desktop navigation renders.
+    */
+   private async goToSection(section: "products" | "inventory") {
+-    const link = this.page.locator(`nav a[href="/${section}"]`).first();
++    const link = this.page.locator(`nav a[href="/${section}"]:visible`).first();
+     if (await link.isVisible().catch(() => false)) {
+       await link.click();
+     } else {
+@@ -176,7 +176,7 @@ class ProductsPage {
+   // Selectors target hrefs rather than link text. The app ships in Spanish and
+   // English, so text matching would pass in one language and fail in the other.
+   async clickAddProduct() {
+-    await this.page.click('a[href="/products/new"]');
++    await this.page.click('a[href="/products/new"]:visible');
+     await this.page.waitForURL(/\/products\/new/);
+   }
+ 
+@@ -237,7 +237,7 @@ class InventoryPage {
+   }
+ 
+   async clickAddStock() {
+-    await this.page.click('a[href="/inventory/add"]');
++    await this.page.click('a[href="/inventory/add"]:visible');
+     await this.page.waitForURL(/\/inventory\/add/);
+   }
+ 
+diff --git a/next.config.ts b/next.config.ts
+index af0b95e..8e4bf47 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -31,6 +31,14 @@ const securityHeaders = [
+ ];
+ 
+ const nextConfig: NextConfig = {
++  // Cache Components (Next 16.3): dynamic by default, nothing cached unless it
++  // asks with `use cache`, and Partial Prerendering as the default behaviour.
++  cacheComponents: true,
++
++  // One reusable shell prefetched per *route* rather than one request per link.
++  // The 16.3 release calls this the second half of instant navigations.
++  partialPrefetching: true,
++
+   output: "standalone",
+ 
+   /**
+diff --git a/src/app/api/health/route.ts b/src/app/api/health/route.ts
+index d510595..797b0ae 100644
+--- a/src/app/api/health/route.ts
++++ b/src/app/api/health/route.ts
+@@ -27,9 +27,15 @@ import { pingCache } from "@/lib/rate-limit";
+  * the detail from the container log, which names the component.
+  */
+ 
+-/** Never cached, never prerendered: a cached health check is not a health check. */
+-export const dynamic = "force-dynamic";
+-export const revalidate = 0;
++/**
++ * Never cached, never prerendered: a cached health check is not a health check.
++ *
++ * That used to be stated as `dynamic = "force-dynamic"` and `revalidate = 0`.
++ * Both are refused outright under `cacheComponents`, and both are now the
++ * default — nothing is cached unless it asks to be with `use cache`, which this
++ * handler does not and must not. The guarantee is unchanged; only the way of
++ * spelling it is gone, so the sentence above stays as the record of the intent.
++ */
+ 
+ /** Long enough for a slow answer, short enough to fail before Docker's timeout. */
+ const CHECK_TIMEOUT_MS = 2000;
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 43d51e1..732ebb2 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -23,6 +23,8 @@ export const metadata: Metadata = {
+   description: "Privacy-first household inventory management",
+ };
+ 
++export const instant = false;
++
+ export default async function RootLayout({
+   children,
+ }: Readonly<{
