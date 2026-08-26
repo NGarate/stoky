@@ -45,7 +45,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 4 | `receipt.upload` wrote an unverified `storeId` | Medium | ✅ Fixed `b1ecbdd`, verified | — |
 | 5 | CVE-2026-14456 (OpenSSL) shipped in the image | High | ✅ Fixed `ccde2e1`, verified | — |
 | 6 | `SECURITY.md` states two things about itself that are false | Medium | ✅ Corrected below, verified | — |
-| 7 | Half the restricted procedures have no behavioural refusal test | Medium | Reported | owner |
+| 7 | Half the restricted procedures have no behavioural refusal test | Medium | ✅ Verified (21 of 28), closed `bc88635` `6ef3fda` | — |
 | 8 | No server-side session revocation | High | Reported | owner |
 | 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | Reported | operator + owner |
 | 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
@@ -92,11 +92,34 @@ review found everything.** The matrix answers *may this role do this?*. It says
 nothing about *may this caller touch this row?*. That is per-resolver, and it
 was not uniform. See §2.
 
-**Reported, not verified:** of the 28 restricted procedures, roughly half have a
-test that calls them as a role that must be refused; the rest rely on the
-declaration test, which reads source text and calls nothing. The same audit
-reports that the declaration test can miss a procedure declared across two lines
-or inside a nested sub-router. Both are worth confirming before acting.
+~~**Reported, not verified:** of the 28 restricted procedures, roughly half have
+a test that calls them as a role that must be refused.~~ **Verified, and it was
+worse than reported: seven, not fourteen** (`bc88635`). The other 21 rested on
+the declaration test, which reads source text and calls nothing.
+
+All 21 are now called as a role that must be refused, and the file goes red
+when every restricted procedure is degraded to `householdProcedure` — measured
+across all nine routers rather than argued.
+
+Two things that pass came out of writing it, and both are the same lesson:
+
+- **Asserting `FORBIDDEN` would not have been enough.** `replay.ts:145` and four
+  sites in `receipt.ts` throw that same code for reasons that are not the role,
+  and seven of these procedures can raise one. A test that trips an impostor is
+  green with the guard deleted and the code cannot tell. The refusal's *message*
+  is what separates them.
+- **The tier guard runs before Zod**, so schema-invalid input also yields
+  FORBIDDEN. Valid input is not what makes these tests green — it is what makes
+  them able to go red, and it is why the fixture list is long.
+
+~~The same audit reports that the declaration test can miss a procedure declared
+across two lines or inside a nested sub-router.~~ **Verified and fixed**
+(`6ef3fda`). There are no nested sub-routers, but the two-line case is real and
+worse than "miss": the comparison is `toEqual`, so a procedure absent from the
+parse *and* absent from the table matches nothing against nothing and passes.
+Adding one to `store.ts` left the file at 14 pass, 0 fail — a procedure on the
+wrong tier with every gate green. The file now counts itself a second way and
+fails if the two disagree.
 
 ## 2. Household isolation — the class this review exists for
 
@@ -376,7 +399,7 @@ in the order they would pay off.
 | Test | Tier | Asserts |
 |---|---|---|
 | ~~Household-scoped ids are looked up~~ | unit | **Built** — `tenant-scoped-ids.test.ts` |
-| Every restricted procedure refuses the wrong role behaviourally | integration | the other half of the 28, calling each as a role that must be refused |
+| ~~Every restricted procedure refuses the wrong role behaviourally~~ | integration | **Built** — `integration/capabilities.refusals.test.ts` |
 | ~~Security headers reach a response~~ | browser | **Built** — `e2e/security-headers.spec.ts` |
 | ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
