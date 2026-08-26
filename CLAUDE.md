@@ -1,167 +1,68 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) working in this repository.
 
-## Project Overview
+**This file is loaded into every context, so it holds only what is true for
+every task.** Versions, commands, directory layouts and CI job breakdowns are
+deliberately not here: they are derivable from the repository or owned by a
+document that is kept current. Repeating them here is how they go stale, and a
+stale instruction is worse than an absent one.
 
-Stoky is a privacy-first, self-hosted household inventory management platform. It covers grocery/household inventory tracking, receipt scanning with OCR, price intelligence, and shopping list management. Primary language is Spanish (es), secondary English (en). Default currency is EUR.
+| Need | Read |
+|---|---|
+| Where the project is — gates, versions, known gaps, what is next | [`docs/STATUS.md`](docs/STATUS.md) |
+| Which document owns which question | [`docs/README.md`](docs/README.md) |
+| Getting it running | [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md) |
+| Which command to run and what it proves | [`docs/VERIFICATION_SEQUENCE.md`](docs/VERIFICATION_SEQUENCE.md) |
+| Is this defect known | [`ISSUES.md`](ISSUES.md) |
 
-**Picking this project up? Read [`docs/README.md`](docs/README.md) first.** It
-indexes the thirteen planning documents, says which one owns which question, and
-gives a three-document reading order. Then come back here for the commit and git
-rules, which are unusual in this repository.
+Stoky is a privacy-first, self-hosted household inventory platform: stock
+tracking, receipt scanning with OCR, price intelligence, shopping lists.
+**User-facing strings are Spanish (es) first**, English second; the default
+currency is EUR.
 
-For the current state of the project — which gates pass, what is unverified, and what is still missing — read `docs/STATUS.md` before planning work.
+---
 
-## Tech Stack
+## The runtime is Bun
 
-- **Frontend:** Next.js 16 (App Router), TypeScript 5.x strict, Tailwind CSS 4.x + shadcn/ui, TanStack Query v5, next-intl v4.x
-- **Backend:** tRPC v11 (stable, 11.18.0 — end-to-end type safety), Node.js 24 LTS, Prisma 6.x
-- **Auth:** Auth.js v5 (credentials provider), Argon2id, JWT with a 15-minute `maxAge` and no refresh token — see ISSUES.md before assuming a session survives longer
-- **Database:** PostgreSQL 16 (with pg_trgm for fuzzy search)
-- **Cache:** Valkey 8 (Redis-compatible)
-- **OCR:** Tesseract.js (server-side Worker thread), Sharp (image processing)
-- **Dev Tooling:** pnpm 11.x, oxlint, `react-doctor`, Bun test runner, Playwright, React Compiler (`reactCompiler: true`)
+Not Node, and not only for the test runner. `pnpm dev`, `pnpm start` and the
+production image all run Bun; `node:24-alpine` is the base image and supplies
+the tooling, nothing more. Two consequences worth having in mind before writing
+server code:
 
-## Build & Development Commands
+- Bun's own APIs are available. Image processing already uses `Bun.Image`
+  (`src/server/services/image.ts`) — `sharp` is a devDependency kept for test
+  comparisons and is not shipped.
+- The application has left Next's supported runtime, so interop defects are
+  ours to notice. `ISSUES.md` RUNTIME-1 is the open one.
 
-```bash
-# Setup
-pnpm install
-cp .env.example .env
-# The dev compose file, not the default one: `docker-compose.yml` deliberately
-# publishes no ports for db and cache, so `migrate` cannot reach them from the
-# host. `docker-compose.dev.yml` is the file that maps 5432 and 6379.
-docker compose -f docker-compose.dev.yml up -d db cache
-pnpm prisma migrate dev
-pnpm db:seed                # demo data. The E2E suite now seeds itself first, so this is for `pnpm dev`
-
-# Development
-pnpm dev                    # Start Next.js dev server (port 3000)
-
-# Or in the image, which is where development is moving. The `development`
-# target is the production base — `node:24-alpine`, because Next's standalone
-# output is started with `node server.js` — plus Bun for the test runner and
-# git for the three tests that ask the repository about itself.
-docker compose up -d --build app      # the dev server, on the compose network
-docker compose exec app corepack pnpm test:unit
-docker compose exec app corepack pnpm test:components
-
-# `--build` is not optional. Compose reuses whatever image is already tagged
-# and does not notice the Dockerfile changed, so `up -d app` after a Dockerfile
-# edit silently starts the old one — found the hard way, with a container whose
-# dev script died on `sh: bun: not found` because the image predated Bun.
-
-# After a dependency change, the anonymous `node_modules` volume outlives the
-# rebuild and holds the old tree, so pnpm reinstalls all 460 packages on start
-# — or aborts, when there is no TTY to confirm the purge. Renew it:
-docker compose up -d --build --force-recreate --renew-anon-volumes app
-
-# Or open the repository in the devcontainer (`.devcontainer/devcontainer.json`),
-# which attaches the editor to that same container so the language server reads
-# the platform's own binaries rather than the host's.
-
-# Bun is pinned twice — `.bun-version`, which CI installs, and the Dockerfile,
-# because a `FROM` cannot read a file. `src/__tests__/unit/bun-version.test.ts`
-# fails if they disagree, which they did once: the image was moved to 1.4.0
-# while CI stayed on 1.3.14, and a green pipeline was proving the suites passed
-# on a runtime nobody deploys.
-
-# Change a dependency and the image is stale — `node_modules` is baked into it,
-# so pnpm finds a lockfile it does not match and aborts rather than purging
-# without a TTY. Rebuild it: `docker compose build app`.
-
-# Quality
-pnpm lint                   # oxlint
-pnpm typecheck              # tsc --noEmit
-pnpm check:react            # react-doctor — fails on errors (not on the score)
-pnpm check:links            # every internal link points at a route that exists
-pnpm check:contrast         # every theme token pair meets WCAG AAA
-
-# Testing
-pnpm test                   # Unit + component + integration
-pnpm test:unit              # No database needed
-pnpm test:components        # No database needed (preloads happy-dom)
-pnpm test:integration       # Brings up its own db + cache
-bunx playwright test        # E2E tests
-bunx playwright test <file> # Single E2E test
-
-pnpm verify:local           # lint + typecheck + links + contrast + unit + components
-pnpm verify:ci              # the above + integration + build
-
-# Both are held to a ten-minute budget and each step to its own ceiling. An exit
-# of 124 means a step was stopped for exceeding its ceiling: it is not slow, it
-# is stuck. Override the total with VERIFY_BUDGET_SECONDS if you must.
-
-# Database
-pnpm prisma migrate dev     # Create/apply migrations
-pnpm prisma migrate deploy  # Production migration
-pnpm prisma studio          # Visual DB browser
-
-# Production
-docker compose -f docker-compose.prod.yml up -d
-```
+---
 
 ## Architecture
 
-**Single repo, single Next.js application. No monorepo.** tRPC requires colocation for end-to-end type inference. This is an enforced constraint for the entire MVP.
+**Single repo, single Next.js application. No monorepo.** tRPC needs colocation
+for end-to-end type inference. This is an enforced constraint, not a stage.
 
-### Directory Structure
+- **Feature slices.** Code is organised by domain (inventory, receipts, prices),
+  not by technical layer. `src/server/trpc/routers/` and `src/components/<domain>/`
+  follow the same split.
+- **Every tRPC procedure takes a Zod input schema**, and the shared ones live in
+  `src/lib/validations/` so client and server validate against one definition.
+- **Server Components fetch; Client Components interact.** `"use client"` is an
+  explicit boundary, not a default.
+- **Server state is TanStack Query's. Local UI state is React's. A `zustand`
+  store is neither and must not become either.** The one store that exists is
+  Phase 4's offline write queue — read from everywhere, written from outside
+  React (the `online` event, a backoff timer, another tab), and outliving the
+  components that read it. `REDESIGN_PLAN.md` §5.7 has the case and the scope. A
+  second store is a decision, not a convenience.
+- **`prisma/schema.prisma` is the single source of truth** for the data model.
+  Changing it means a migration, committed with the change.
+- **The receipt pipeline is a state machine.** Upload → OCR → parse → match →
+  review → apply, with `ReceiptStatus` enforcing the progression. Matching is
+  `pg_trgm` similarity: auto above 0.7, candidates 0.3–0.7, no match below.
 
-```
-src/
-  app/                        # Next.js App Router pages
-    (auth)/                   # Login, register (public)
-    (dashboard)/              # Authenticated layout (inventory, products, receipts, shopping, prices, settings)
-    api/trpc/[trpc]/route.ts  # tRPC HTTP handler
-  server/
-    trpc/
-      trpc.ts                 # tRPC init (context, middleware)
-      router.ts               # Root router merging all sub-routers
-      routers/                # Domain routers: auth, product, location, inventory, receipt, store, price, shopping
-    services/                 # Business logic: ocr, receiptParser, productMatcher, openFoodFacts, product-cache, errors
-  lib/
-    validations/              # Shared Zod schemas (imported by both client and server)
-    auth.ts                   # Auth.js configuration (the config is this file)
-    auth/                     # Error-message mapping only
-  components/
-    ui/                       # The design system: ItemRow, Badge, Button, Input, BackLink (see Design System below)
-    barcode/                  # Barcode scanner
-    receipt/                  # Receipt review UI
-    inventory/                # Inventory-specific components
-    dashboard/                # Dashboard widgets
-prisma/
-  schema.prisma               # Database schema (source of truth)
-  migrations/                 # Committed migration files
-  seed.ts                     # Demo data seeder
-messages/
-  es.json                     # Spanish translations (primary)
-  en.json                     # English translations
-```
-
-### Key Architectural Patterns
-
-- **Feature slices:** Code organized by domain (inventory, receipts, prices), not by technical layer
-- **tRPC as API layer:** Shared types between client/server via tRPC v11 with Superjson serialization. Every procedure requires a Zod input schema
-- **Zod schemas in `src/lib/validations/`:** Single source of truth for validation, shared between client and server
-- **Server Components for data fetching, Client Components for interactivity** (explicit `"use client"` boundaries)
-- **Server state via TanStack Query. Client state that React cannot hold lives in a `zustand` store.** Local UI state is still React's, and server data is still TanStack Query's — a store is neither of those and must not become either. The one taken so far is Phase 4's offline write queue, which is read from everywhere, written from outside React (the `online` event, a backoff timer, another tab) and outlives the components that read it. `REDESIGN_PLAN.md` §5.7 states the case and the scope; a second store is a decision, not a convenience
-- **Receipt scanning pipeline:** Upload → OCR (Tesseract.js Worker) → Parser (regex) → Matcher (pg_trgm) → Review UI → Apply (creates StockEntry + PriceRecord). Uses `ReceiptStatus` enum as a state machine with strict phase progression
-- **Product matching:** PostgreSQL `pg_trgm` similarity — auto-match >0.7, candidates 0.3–0.7, no match <0.3
-
-### Database
-
-- PostgreSQL 16 with `pg_trgm` and `uuid-ossp` extensions
-- Prisma ORM for type-safe queries and migrations
-- `prisma/schema.prisma` is the single source of truth; changes require coordination across all work streams
-- Key entities: User, Household, Product, StockEntry, StorageLocation, Store, PriceRecord, Receipt, ReceiptItem, ShoppingList, ShoppingItem
-
-### Docker Services (dev)
-
-- `app`: Next.js 16 dev server with volume mounts
-- `db`: PostgreSQL 16 (internal network only, no exposed ports)
-- `cache`: Valkey 8 (internal network only, no exposed ports)
-- Production adds Traefik v3 for TLS termination
+---
 
 ## Design System
 
@@ -170,7 +71,7 @@ section exists because nine screens grew nine ways of drawing the same list
 row, seven pills were written separately in four sizes, and 177 hardcoded
 `min-h-[48px]` declarations restated a floor the primitives already guarantee
 (`docs/DESIGN_AUDIT.md` A5.3). A new component that duplicates one of these is
-a regression, not a new feature.
+a regression, not a feature.
 
 ### The list row
 
@@ -224,123 +125,84 @@ wear two different words (ISSUES UI-11).
 ### Sizes and tokens
 
 - **Never write `min-h-[48px]` outside `src/components/ui/`.** Every primitive
-  clears the 48px floor already (PROGRESS D17, above the AAA 44).
-  Restating it means changing the floor leaves the restatements behind, which
-  is exactly the `h-10` defect `src/__tests__/components/target-size.test.tsx`
-  exists to prevent.
+  clears the 48px floor already (PROGRESS D17, above the AAA 44). Restating it
+  means changing the floor leaves the restatements behind, which is exactly the
+  `h-10` defect `src/__tests__/components/target-size.test.tsx` exists to
+  prevent.
 - **Colour comes from `src/app/globals.css` and nowhere else.** A new token
   goes in the light block, *both* dark blocks, and `@theme inline` — and needs
   a row in the `PAIRS` list of `scripts/check-contrast.ts`. That list is
   hand-written, so a token added without one is a token nothing audits and
   nothing goes red to say so.
 
-## Commit Convention
-
-Use **Conventional Commits** format:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
-
-**Scopes:** `auth`, `inventory`, `products`, `receipts`, `prices`, `shopping`, `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`
-
-Examples:
-- `feat(receipts): add OCR pipeline with Tesseract.js worker`
-- `fix(inventory): correct stock quantity aggregation query`
-- `refactor(auth): extract JWT rotation logic to separate service`
-
-## Git Workflow (trunk-based, master only)
-
-`master` is the only branch. Do not create feature branches, do not open pull
-requests, and do not leave work parked on a branch "just for review".
-
-1. `master` is the only long-lived branch — and must always be deployable
-2. Commit directly to `master` using the Conventional Commits format above
-3. Because there is no PR gate, the validation in "Agent Instructions" below is
-   the only safety net: lint, typecheck and the test suites must pass *before*
-   each commit, not after a batch of them
-4. Never commit something known-broken. If work must be paused mid-change,
-   leave it uncommitted or stash it
-5. Push when the working tree is green
-
-### Commits must be atomic and self-contained
-
-One commit, one change. This is not a style preference — without a PR gate, the
-commit is the only reviewable unit, and `git revert` is the only undo.
-
-A commit is atomic when all of these hold:
-
-- **It does exactly one thing.** A dependency bump and a doc rewrite are two
-  commits, even when the same task produced both. If the subject line needs
-  "and", split it.
-- **It stands on its own.** Checked out in isolation, it builds and its gates
-  pass. Never commit a call site in one commit and the function it calls in the
-  next.
-- **It can be reverted alone** without taking unrelated work with it.
-- **Its message explains why, not what.** The diff already says what changed.
-  Record the reasoning, the evidence it was verified, and anything surprising a
-  future reader would otherwise have to rediscover.
-
-Practical consequence: stage deliberately with `git add <path>`, never
-`git add -A` when the working tree holds more than one change. If several
-changes are already mixed in the tree, split them before committing rather than
-bundling them and apologising in the message.
+---
 
 ## Security Constraints
 
-- All tRPC procedures must have Zod input validation
-- Receipt image uploads: validate MIME type + magic bytes, re-encode with Sharp (strips EXIF), store with UUID filenames in isolated Docker volume, serve only through authenticated tRPC queries
-- Passwords: Argon2id (64MB memory, 3 iterations, ~250ms)
-- Rate limiting: 5 login attempts/15min per IP, 3 registrations/hour per IP
-- Docker: only Traefik exposes ports 80/443; PostgreSQL and Valkey have no exposed ports
-- Never use raw SQL without parameterized queries (tagged template literals)
+- Every tRPC procedure has Zod input validation.
+- **Receipt uploads:** validate MIME type *and* magic bytes, re-encode to strip
+  EXIF, store under a UUID filename in an isolated volume, serve only through
+  authenticated tRPC queries. Re-encoding goes through
+  `src/server/services/image.ts`, which is the one seam that touches image
+  bytes.
+- Passwords are Argon2id, tuned to roughly 250ms.
+- Rate limiting is per account as well as per address, and a refusal carries
+  `Retry-After`. The current limits live in the code, not here.
+- Only Traefik exposes ports. PostgreSQL and Valkey have none.
+- Never raw SQL without parameterised queries (tagged template literals). An
+  `ORDER BY` built by interpolation is the one that looks fine.
+- Never commit secrets. `.env.example` is documentation, and the application
+  refuses to start on its published `NEXTAUTH_SECRET`.
 
-## CI Pipeline (GitHub Actions)
+---
 
-Seven jobs. `quality`, `test`, `e2e` and `audit` run in parallel, each capped
-at ten minutes — the budget is for all verification, not just the browser
-suite.
+## Commit Convention
 
-- **quality**: `bash scripts/check-ci.sh` first (actionlint + shellcheck over
-  the pipeline itself), then `lint`, `typecheck`, `check:react`,
-  `check:contrast`, `check:links`
-- **test**: `test:unit`, `test:components`, `test:integration:only` (the `:only`
-  variant, because the runner supplies its own service containers)
-- **e2e**: Playwright inside the pinned `mcr.microsoft.com/playwright`
-  container — four browser projects (chromium runs everything; Mobile Safari
-  the two layout specs; firefox and webkit a four-test `@smoke` set) plus
-  `seed` and `setup` projects. The suite builds and serves the standalone
-  production artefact and migrates/seeds its own database; the workflow only
-  installs and hands it service URLs
-- **audit**: `pnpm audit --audit-level moderate`
-- **changes**: decides in ~5s whether the push could have altered the image; a
-  docs-only push skips the two image jobs, never the tests
-- **image-build** (no `needs` — runs beside the tests): Docker build and Trivy
-  scan; holds no push rights, so a failing run can waste a build but cannot
-  ship one
-- **image-publish** (needs the four test jobs, the build and `changes`):
-  rebuilds from the warm layer cache and pushes, with SBOM and provenance
-  attestation where GitHub offers them
+**Conventional Commits**, `<type>(<scope>): <description>`.
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
+`ci`, `chore`. Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`,
+`shopping`, `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
+
+## Git Workflow (trunk-based, master only)
+
+`master` is the only branch. **Do not create feature branches, do not open pull
+requests**, and do not leave work parked on a branch "just for review".
+
+Because there is no PR gate, the commit is the only reviewable unit and
+`git revert` is the only undo. That is what makes the rules below hard:
+
+- **One commit, one change.** If the subject line needs "and", split it.
+- **It stands on its own.** Checked out in isolation it builds and its gates
+  pass. Never a call site in one commit and the function it calls in the next.
+- **It can be reverted alone**, without taking unrelated work with it.
+- **The message explains why, not what.** The diff says what changed. Record
+  the reasoning, the evidence it was verified, and anything surprising a future
+  reader would otherwise rediscover.
+- **Stage deliberately with `git add <path>`.** Never `git add -A` when the tree
+  holds more than one change — it has swept a migration, and once an unrelated
+  in-progress security hole, into unrelated commits.
+- **Never commit something known-broken.** If work must pause mid-change, leave
+  it uncommitted or stash it. Push when the tree is green.
+
+---
 
 ## Agent Instructions
 
-When working with this codebase:
-
-1. **Always run lint, typecheck and `pnpm check:react`** after making changes
-2. **Check `src/components/ui/` first**, then existing patterns in similar files. Anything that renders a list row, a state pill, an action or a way back already exists — see the Design System section. Writing a second one is a regression
-3. **Follow the domain-driven structure** — add code to the appropriate domain folder
-4. **Update migrations** when changing the Prisma schema
-5. **Add tests** for new functionality
-6. **Verify Docker services are running** before testing database-dependent features
-7. **Use Spanish (es)** for user-facing strings in i18n files
-8. **Never commit secrets** — use `.env.example` for documentation
-9. **Maintain backward compatibility** — especially for database migrations
-10. **Commit all changes** directly to `master`, following the Git Workflow section above. Every commit is atomic and self-contained: one change, passing its gates on its own, revertable alone. No feature branches, no pull requests
-11. **Test all changes** — every new component, piece of logic, or modification must include appropriate tests (unit, integration, or E2E) following the Testing section standards. **A test must be able to fail** — an assertion that holds regardless of the implementation (`expect(true).toBe(true)`, or a locally-declared boolean) is not a test. If unsure, break the code deliberately and confirm the test goes red
-12. **Validate before committing** — never commit without: (a) running the full test suite (`pnpm verify:ci` and, for UI-affecting work, `bunx playwright test`), (b) verifying lint and typecheck pass, (c) manually testing the feature works correctly, and (d) assessing that no visual regressions, bugs, security threats, or degradation of project standards have been introduced
+1. **Check `src/components/ui/` before writing anything that renders.** A list
+   row, a state pill, an action, a way back — they exist. A second one is a
+   regression.
+2. **Add tests, and make sure each one can fail.** An assertion that holds
+   regardless of the implementation is not a test. Break the code deliberately
+   and confirm it goes red. This has caught five tests here that could not.
+3. **Measure rather than recall.** Every claim in the documents must be
+   reproducible by a command. Before reporting a number, check the thing you
+   measured was actually running — `docs/STATUS.md` lists the traps that have
+   produced confident wrong answers here.
+4. **Validate before committing**, not after a batch: `pnpm verify:ci`, plus
+   `bunx playwright test` for anything that renders. Then judge whether the
+   change introduced a regression, a security weakness, or a standards drift —
+   green gates are necessary, not sufficient.
+5. **Update the owning document** when a change makes it wrong. `docs/README.md`
+   says which one owns what; if two disagree, the owner wins and the other is
+   the bug.

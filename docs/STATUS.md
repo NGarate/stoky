@@ -49,8 +49,8 @@ binary you happen to be holding.
 answers 11.22.0 and exits 0. The refusal was a mismatch, not a policy —
 corepack resolved 11.20.0 against a `packageManager` pin of 11.19.0 — and
 bumping the pin past the version corepack was reaching for removed it. Either
-command works now, which is what makes `CLAUDE.md`'s `docker compose exec app
-corepack pnpm …` correct rather than contradicted. `verify-local.sh` still
+command works now, which is what makes `docs/LOCAL_BOOTSTRAP.md`'s
+`docker compose exec app corepack pnpm …` correct rather than contradicted. `verify-local.sh` still
 prefers `pnpm` and falls back to corepack, so the scripts never depended on
 this either way.
 
@@ -592,10 +592,17 @@ against `package.json`. A drift note is only worth the check behind it, and the
 check is cheap: read the versions out of the file rather than trusting the
 sentence that says somebody already did.
 
-**This paragraph was itself wrong until today**, and it is worth saying how: it
-claimed `CLAUDE.md` says Prisma 7.x. `CLAUDE.md:14` says Prisma 6.x, and always
-did. A drift note that had drifted is the exact failure this file exists to
+**This paragraph was itself wrong until 2026-08-25**, and it is worth saying
+how: it claimed `CLAUDE.md` says Prisma 7.x, when that file said 6.x and always
+had. A drift note that had drifted is the exact failure this file exists to
 prevent, and it survived because nobody re-read the source it was describing.
+
+**That whole class of drift is now closed at the source.** `CLAUDE.md` carries
+no version numbers at all since 2026-08-27 — four of the nine claims it had
+gone stale on were versions, and a file loaded into every context is the worst
+place to keep a number that changes. This table is the only owner, and it is
+read out of `package.json`, `.bun-version` and the `Dockerfile` rather than
+recalled.
 
 ---
 
