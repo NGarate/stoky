@@ -124,7 +124,17 @@ WORKDIR /app
 # Upgrading the whole index rather than naming the two packages, because naming
 # them fixes this advisory and leaves the next one to be discovered the same
 # way. `--no-cache` keeps the index out of the layer.
-RUN apk upgrade --no-cache && apk add --no-cache dumb-init
+RUN apk upgrade --no-cache && apk add --no-cache dumb-init libstdc++
+# The same shape as `development`: Node base, Bun on top. Those two diverging
+# is what this project spent an evening paying for, so they are kept identical
+# rather than each optimised alone.
+#
+# Bun is the runtime here — see the `CMD` — because the image pipeline uses
+# `Bun.Image`, and it uses `Bun.Image` because `sharp` is a native N-API module
+# that Next's standalone output cannot load under Bun. The base stays
+# `node:24-alpine` rather than becoming `oven/bun`: nothing else in this stage
+# would change, and a base swap is its own question. It costs 71 MB.
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
@@ -212,4 +222,4 @@ USER node
 
 # dumb-init reaps zombies and forwards signals, so the container stops promptly.
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "/opt/prisma/node_modules/.bin/prisma migrate deploy --schema=/app/prisma/schema.prisma && node server.js"]
+CMD ["sh", "-c", "/opt/prisma/node_modules/.bin/prisma migrate deploy --schema=/app/prisma/schema.prisma && bun server.js"]

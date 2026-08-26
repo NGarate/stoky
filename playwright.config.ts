@@ -264,7 +264,7 @@ export default defineConfig({
       "pnpm build" +
       " && cp -r .next/static .next/standalone/.next/static" +
       " && cp -r public .next/standalone/public" +
-      " && node .next/standalone/server.js",
+      " && bun .next/standalone/server.js",
     url: BASE_URL,
     reuseExistingServer: false,
     env: {
