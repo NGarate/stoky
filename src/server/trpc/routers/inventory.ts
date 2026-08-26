@@ -17,7 +17,11 @@ import type {
   StockSort,
 } from "@/lib/validations/inventory";
 // The value namespace, not only the type: `Prisma.sql` is a function.
-import { Prisma, type StockOperation } from "@prisma/client";
+import {
+  Prisma,
+  type PrismaClient,
+  type StockOperation,
+} from "@prisma/client";
 
 /** Half-open bounds on an expiry date, in the shape Prisma words them. */
 interface ExpiryWindow {
@@ -255,6 +259,41 @@ function matchingProducts(
   `;
 }
 
+/**
+ * Refuse a storage location that is not this household's.
+ *
+ * `addStock` has verified this inline since it was written; its three siblings
+ * took the same field from the same input and wrote it onto a `StockEntry`
+ * unchecked. The row lands in the caller's own household — the *product* is
+ * checked — but it points at somebody else's shelf, and `/products/[id]`
+ * renders `entry.location?.name`, so a guessed id leaks what another household
+ * calls its storage.
+ *
+ * NOT_FOUND rather than FORBIDDEN, matching `addStock` and the rest of this
+ * codebase: telling an outsider that an id exists but is not theirs confirms
+ * the id exists.
+ *
+ * Takes the transaction client where there is one, so the check and the write
+ * see the same snapshot — a location deleted between them would otherwise slip
+ * through the guard and fail at the foreign key instead.
+ */
+async function assertOwnLocation(
+  db: Pick<PrismaClient, "storageLocation"> | Prisma.TransactionClient,
+  locationId: string | null | undefined,
+  householdId: string,
+): Promise<void> {
+  if (!locationId) return;
+
+  const location = await db.storageLocation.findFirst({
+    where: { id: locationId, householdId },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Location not found" });
+  }
+}
+
 export const inventoryRouter = createTRPCRouter({
   /**
    * Every product in the household, with its net stock — one page of it.
@@ -488,6 +527,15 @@ export const inventoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
+      // Before the replay envelope, so a change composed offline is refused on
+      // the same terms as one made online — a queued write is a caller that is
+      // not a page, which is the reason SEC-1's sibling test lives where it does.
+      await assertOwnLocation(
+        ctx.db,
+        input.consumeFromLocationId ?? input.locationId,
+        ctx.householdId,
+      );
+
       return withReplay(ctx, {
         key: input.idempotencyKey,
         composedByUserId: input.composedByUserId,
@@ -603,6 +651,8 @@ export const inventoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
+      await assertOwnLocation(ctx.db, input.locationId, ctx.householdId);
+
       // Verify product exists and belongs to household
       const product = await ctx.db.product.findFirst({
         where: {
@@ -659,6 +709,11 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+
+      // Both ends. A check on one is a check somebody later assumes covers the
+      // other, and a transfer has two chances to name a shelf that is not yours.
+      await assertOwnLocation(ctx.db, input.fromLocationId, ctx.householdId);
+      await assertOwnLocation(ctx.db, input.toLocationId, ctx.householdId);
 
       if (input.fromLocationId === input.toLocationId) {
         throw new TRPCError({
