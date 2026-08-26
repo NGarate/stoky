@@ -38,6 +38,31 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  * was missing was exactly this layer.
  */
 /**
+ * Refuse a store that is not this household's.
+ *
+ * `receipt.upload` takes an optional `storeId` and writes it onto the Receipt.
+ * `price.recordPrice` verifies the identical field two files away — SEC-1 is
+ * the entry that put the check there — and this one did not, so a receipt could
+ * be filed against another household's shop. Everything the receipt later
+ * produces (its price records, the store comparison) inherits that reference.
+ */
+async function assertOwnStore(
+  storeId: string | undefined,
+  householdId: string,
+): Promise<void> {
+  if (!storeId) return;
+
+  const store = await prisma.store.findFirst({
+    where: { id: storeId, householdId },
+    select: { id: true },
+  });
+
+  if (!store) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Store not found" });
+  }
+}
+
+/**
  * Refuse a product that is not this household's.
  *
  * Both confirm procedures take a `productId` straight from the caller and write
@@ -105,6 +130,14 @@ export const receiptRouter = createTRPCRouter({
         user.id,
         "Too many receipts uploaded. Try again in a little while.",
       );
+
+      // Before the bytes are decoded, like the rate limit above it: a receipt
+      // filed against somebody else's shop should be refused without doing the
+      // work of accepting it first.
+      // Before the bytes are decoded, like the rate limit above it: a receipt
+      // filed against somebody else's shop should be refused without doing the
+      // work of accepting it first.
+      await assertOwnStore(input.storeId, householdId);
 
       // Validate MIME type
       if (!VALID_MIME_TYPES.includes(input.mimeType)) {

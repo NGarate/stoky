@@ -190,6 +190,41 @@ describe("receipt.upload — what it refuses", () => {
   // form and arbitrary bytes on disk, so they are asserted one at a time
   // rather than through one representative bad file.
 
+  it("refuses a store that belongs to another household", async () => {
+    // SEC-1's shape a third time. `price.recordPrice` verifies this identical
+    // field two files away; upload wrote it onto the Receipt unchecked, and
+    // everything the receipt later produces inherits the reference.
+    const strangersStore = await prisma.store.create({
+      data: { name: "Tienda ajena", householdId: otherHouseholdId },
+    });
+
+    await expectCode(
+      () =>
+        caller.receipt.upload({
+          fileBase64: ONE_PIXEL_PNG.toString("base64"),
+          mimeType: "image/png",
+          storeId: strangersStore.id,
+        }),
+      "NOT_FOUND",
+    );
+
+    // Refused before the bytes were written anywhere.
+    const filed = await prisma.receipt.count({
+      where: { storeId: strangersStore.id },
+    });
+    expect(filed).toBe(0);
+  });
+
+  it("still accepts the household's own store", async () => {
+    const receipt = await caller.receipt.upload({
+      fileBase64: ONE_PIXEL_PNG.toString("base64"),
+      mimeType: "image/png",
+      storeId,
+    });
+
+    expect(receipt).toBeDefined();
+  });
+
   it("refuses a MIME type that is not an image", async () => {
     await expectCode(
       () =>
