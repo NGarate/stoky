@@ -690,6 +690,118 @@ describe("receipt.getAppliedSummary", () => {
   });
 });
 
+describe("a receipt line belongs to its receipt, and its receipt to a household", () => {
+  /**
+   * Found by the Phase 7 review, and it is SEC-1's shape a second time.
+   *
+   * `confirmAll` authorises the *receipt* named in its input and then updates
+   * every `receiptItemId` in the array by bare id. The two are not the same
+   * claim: passing a receipt you own alongside line ids you do not is enough to
+   * write rows in another household, and nothing refuses it.
+   *
+   * The caller-supplied `productId` is the same defect one level down — it is
+   * written into `matchedProductId` without anyone asking whose product it is.
+   * Applying the receipt afterwards would book stock and a price against
+   * another household's catalogue.
+   */
+  it("refuses a line that belongs to another household's receipt", async () => {
+    const mine = await seedReceipt({});
+    const theirs = await seedReceipt({ household: otherHouseholdId });
+
+    await expectCode(
+      () =>
+        caller.receipt.confirmAll({
+          // A receipt this caller genuinely owns, so the household check passes.
+          receiptId: mine.receipt.id,
+          // A line from a receipt they do not.
+          items: [
+            { receiptItemId: theirs.first.id, action: "SKIP" },
+          ],
+        }),
+      "NOT_FOUND",
+    );
+
+    // And it is not merely refused — nothing was written on the way to refusing.
+    const untouched = await prisma.receiptItem.findUnique({
+      where: { id: theirs.first.id },
+    });
+    expect(untouched?.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
+    expect(untouched?.matchedProductId).toBe(productId);
+  });
+
+  it("refuses a product that belongs to another household", async () => {
+    const mine = await seedReceipt({});
+    const strangersProduct = await prisma.product.create({
+      data: {
+        name: "Producto de otro hogar",
+        householdId: otherHouseholdId,
+        defaultUnit: "unit",
+      },
+    });
+
+    await expectCode(
+      () =>
+        caller.receipt.confirmAll({
+          receiptId: mine.receipt.id,
+          items: [
+            {
+              receiptItemId: mine.second.id,
+              action: "MATCH",
+              productId: strangersProduct.id,
+            },
+          ],
+        }),
+      "NOT_FOUND",
+    );
+
+    const untouched = await prisma.receiptItem.findUnique({
+      where: { id: mine.second.id },
+    });
+    expect(untouched?.matchedProductId).toBeNull();
+  });
+
+  it("refuses the same product through confirmItem", async () => {
+    const mine = await seedReceipt({});
+    const strangersProduct = await prisma.product.create({
+      data: {
+        name: "Otro producto ajeno",
+        householdId: otherHouseholdId,
+        defaultUnit: "unit",
+      },
+    });
+
+    await expectCode(
+      () =>
+        caller.receipt.confirmItem({
+          receiptItemId: mine.second.id,
+          action: "MATCH",
+          productId: strangersProduct.id,
+        }),
+      "NOT_FOUND",
+    );
+  });
+
+  it("still lets the household confirm its own lines against its own products", async () => {
+    // The refusals above must not be a blanket denial: the ordinary path has to
+    // keep working, or the fix is just a broken feature.
+    const mine = await seedReceipt({});
+
+    const confirmed = await caller.receipt.confirmAll({
+      receiptId: mine.receipt.id,
+      items: [
+        { receiptItemId: mine.second.id, action: "MATCH", productId },
+      ],
+    });
+
+    expect(confirmed).toBeDefined();
+    const updated = await prisma.receiptItem.findUnique({
+      where: { id: mine.second.id },
+    });
+    expect(updated?.matchedProductId).toBe(productId);
+    expect(updated?.matchStatus).toBe(MatchStatus.USER_CONFIRMED);
+  });
+});
+
 describe("receipt.list", () => {
   it("returns only this household's receipts", async () => {
     await seedReceipt({});

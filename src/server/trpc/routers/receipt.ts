@@ -37,6 +37,36 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
  * services were well tested and the browser suite walked the screens, so what
  * was missing was exactly this layer.
  */
+/**
+ * Refuse a product that is not this household's.
+ *
+ * Both confirm procedures take a `productId` straight from the caller and write
+ * it into `ReceiptItem.matchedProductId`. Nobody was asking whose product it
+ * was, so a caller could point their own receipt line at another household's
+ * catalogue — and applying the receipt afterwards books stock and a price
+ * against it. This is `ISSUES.md` SEC-1's shape a second time; that entry rated
+ * it HIGH and closed it for `inventory.addStock`.
+ *
+ * NOT_FOUND rather than FORBIDDEN, deliberately and for the same reason
+ * `product.getById` does it: telling an outsider that an id exists but is not
+ * theirs confirms the id exists.
+ */
+async function assertOwnProduct(
+  productId: string | undefined,
+  householdId: string,
+): Promise<void> {
+  if (!productId) return;
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, householdId },
+    select: { id: true },
+  });
+
+  if (!product) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
+  }
+}
+
 export const receiptRouter = createTRPCRouter({
   /**
    * Takes the photograph. The only procedure here that accepts arbitrary bytes.
@@ -385,6 +415,9 @@ export const receiptRouter = createTRPCRouter({
       }
 
       let productId = input.productId;
+      if (input.action === "MATCH") {
+        await assertOwnProduct(productId, ctx.householdId);
+      }
 
       if (input.action === "CREATE" && input.customName) {
         // Create new product
@@ -458,6 +491,38 @@ export const receiptRouter = createTRPCRouter({
           code: "FORBIDDEN",
           message: "Access denied",
         });
+      }
+
+      // Every line named must belong to *this* receipt.
+      //
+      // The household check above authorises the receipt, which is a different
+      // claim from authorising the lines: passing a receipt you own alongside
+      // `receiptItemId`s you do not was enough to rewrite rows in another
+      // household. Resolved in one query rather than per item, so a fifty-line
+      // receipt costs one round trip and the refusal happens before anything is
+      // written.
+      const named = input.items.map((item) => item.receiptItemId);
+      const own = await prisma.receiptItem.findMany({
+        where: { id: { in: named }, receiptId: receipt.id },
+        select: { id: true },
+      });
+      const owned = new Set(own.map((item) => item.id));
+
+      for (const id of named) {
+        if (!owned.has(id)) {
+          // NOT_FOUND rather than FORBIDDEN: an outsider learning that a line
+          // id exists but belongs to somebody else has learned something.
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Receipt item not found",
+          });
+        }
+      }
+
+      for (const itemInput of input.items) {
+        if (itemInput.action === "MATCH") {
+          await assertOwnProduct(itemInput.productId, ctx.householdId);
+        }
       }
 
       // Confirm all items
