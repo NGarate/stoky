@@ -263,7 +263,7 @@ question. Start there; the table below is the short version.
 | [`docs/SMOKE_JOURNEYS.md`](docs/SMOKE_JOURNEYS.md) | Journeys that must work before work is called done |
 | [`docs/TEST_SETUP.md`](docs/TEST_SETUP.md) | Test database configuration and troubleshooting |
 | [`ISSUES.md`](ISSUES.md) | Open issues and technical debt |
-| [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) | Instructions for AI agents working in this repo |
+| [`CLAUDE.md`](CLAUDE.md) | Instructions for AI agents working in this repo. `AGENTS.md` is a symlink to it, so the two cannot drift |
 
 ---
 

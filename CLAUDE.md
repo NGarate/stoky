@@ -1,6 +1,9 @@
-# CLAUDE.md
+# Agent instructions
 
-Guidance for Claude Code (claude.ai/code) working in this repository.
+Read by Claude Code as `CLAUDE.md` and by other agent harnesses as `AGENTS.md`,
+which is a symlink to this file. They were two hand-maintained copies until
+2026-08-27 and had drifted into contradicting each other on an architectural
+rule; a symlink is the only arrangement in which that cannot happen again.
 
 **This file is loaded into every context, so it holds only what is true for
 every task.** Versions, commands, directory layouts and CI job breakdowns are
