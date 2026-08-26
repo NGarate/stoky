@@ -48,8 +48,8 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 7 | Half the restricted procedures have no behavioural refusal test | Medium | Reported | owner |
 | 8 | No server-side session revocation | High | Reported | owner |
 | 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | Reported | operator + owner |
-| 10 | The registration rate limit is exercised by no test | High | Reported | owner |
-| 11 | Fail-closed is unproven at every limiter call site | High | Reported | owner |
+| 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
+| 11 | Fail-closed is unproven at every limiter call site | High | ✅ Closed `7a663a1` | — |
 | 12 | Nothing asserts a security header reaches a response | High | ✅ Closed `4c6fb90` | — |
 | 13 | The upload size cap is applied after the body is in memory | High | Reported | owner |
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
@@ -149,14 +149,29 @@ the four gaps Phase 3 left and Phase 7 was to close, and they are closed.
   project supports being run behind whatever the operator already has. With no
   proxy header at all, every caller shares one bucket, which turns a per-IP
   limiter into a global one.
-- The **registration limit is exercised by no test**, because every test builds
-  its tRPC context without headers.
-- **Fail-closed is unproven at the call sites.** That `consumeRateLimit` throws
-  when Valkey is down is tested; that each caller *refuses* rather than
-  continuing is not.
+- ~~The **registration limit is exercised by no test**.~~ **Verified and
+  closed** (`33bdc14`). The finding was right about the cause: every test built
+  its tRPC context without headers, and `auth.register` meters only
+  `if (ctx.headers)`, so the limit was unreachable from the suite. Two tests now
+  drive the real router with an address — the budget is spent and the next call
+  refused with `TOO_MANY_REQUESTS`, the over-limit account is confirmed not to
+  exist (the count happens before the write, which no status code can show), and
+  a second address is unaffected. Confirmed to fail by guarding the limiter with
+  `if (false && …)`.
+- ~~**Fail-closed is unproven at the call sites.**~~ **Verified and closed**
+  (`7a663a1`), and the finding understated it. Each caller decides in its own
+  hand-written `catch`, so each needed its own test; both were confirmed by
+  making the change they exist to catch.
 
-Each is a finding with an owner rather than a fix, because the first is partly
-an operator's decision and the other two are tests somebody has to write.
+  Worth recording, because it is the failure mode this whole document is about:
+  the sign-in test **passed with the first `catch` already mutated to fail
+  open**. `authorize` consults two limits, the account one refused instead, and
+  the identical error came back. It now submits credentials that fail
+  `loginSchema`, so the procedure returns before the second limit is reached.
+  Written the obvious way, it would have been a test that could not fail.
+
+The first remains a finding with an owner rather than a fix, because it is
+partly an operator's decision.
 
 ## 4. The offline queue as an attack surface
 
@@ -302,12 +317,18 @@ Both sections are replaced in the same commit as this document.
 
 Named rather than omitted.
 
-- **The adversarial pass did not finish.** Every finding marked *Reported* above
-  is exactly that. The pass that was meant to try to break each claim of
+- **The adversarial pass did not finish.** Every finding still marked *Reported*
+  above is exactly that. The pass that was meant to try to break each claim of
   protection — and, more importantly, to check that each control's named test
   would actually fail without it — died partway. That check is the single most
   valuable thing still owed here, because a control whose test would pass
   without it is not tested.
+
+  It has since been run against §3's controls, and it earned its keep on the
+  first try: the sign-in fail-closed test passed with the control it names
+  already removed (`7a663a1`). One control, one test that could not fail, found
+  by the only method that finds them. That is a rate worth assuming holds for
+  the controls nobody has tried this on yet.
 - **Nothing was run against a deployment.** No TLS configuration, no proxy
   behaviour, no real Traefik. The per-IP finding in §3 in particular depends
   entirely on how an operator has deployed.
@@ -326,8 +347,8 @@ in the order they would pay off.
 | ~~Household-scoped ids are looked up~~ | unit | **Built** — `tenant-scoped-ids.test.ts` |
 | Every restricted procedure refuses the wrong role behaviourally | integration | the other half of the 28, calling each as a role that must be refused |
 | ~~Security headers reach a response~~ | browser | **Built** — `e2e/security-headers.spec.ts` |
-| The registration limiter refuses | integration | a context with headers, so the limiter is reachable at all |
-| Every limiter call site fails closed | integration | Valkey down means refused, not continued, at each site |
+| ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
+| ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | A successful upload does what it claims | integration | EXIF stripped, UUID filename, re-encoded bytes |
 | The image posture holds | build | `USER node`, no npm, read-only rootfs |
 
