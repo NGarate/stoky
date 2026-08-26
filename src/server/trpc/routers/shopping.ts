@@ -206,17 +206,45 @@ export const shoppingRouter = createTRPCRouter({
    * Removes a list and its items.
    *
    * Unlike `product.delete`, this one really does cascade — a shopping item has
-   * no history worth keeping and nothing else references it.
+   * no history worth keeping and nothing else references it. **The cascade is
+   * performed here, because the database does not do it**: `ShoppingItem`'s
+   * foreign key is `ON DELETE RESTRICT`, and the schema has no cascades
+   * anywhere by design.
+   *
+   * That gap was not theoretical. `shoppingList.delete` on a list with anything
+   * on it hit the constraint, and the translation turned it into `BAD_REQUEST`,
+   * *"That refers to something that does not exist"* — about a list the person
+   * was looking at. So deleting a shopping list worked only while it was empty,
+   * which is not the state a list gets deleted in. The one test it had deleted
+   * an empty one.
    */
   delete: writeProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.shoppingList.delete({
-        where: {
-          id: input.id,
-          householdId: ctx.householdId,
-        },
+      // Resolved against the household first. The item delete below is keyed on
+      // the list alone — `ShoppingItem` has no `householdId` of its own — so the
+      // ownership check has to happen before anything is removed rather than
+      // being carried by the delete's own filter, which is how the previous
+      // version did it.
+      const list = await ctx.db.shoppingList.findFirst({
+        where: { id: input.id, householdId: ctx.householdId },
+        select: { id: true },
       });
+
+      if (!list) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Shopping list not found",
+        });
+      }
+
+      // One transaction: a list whose items were removed and which then failed
+      // to delete would leave the household an empty list they had asked to be
+      // rid of, and no way to tell that from one they had just emptied.
+      await ctx.db.$transaction([
+        ctx.db.shoppingItem.deleteMany({ where: { shoppingListId: list.id } }),
+        ctx.db.shoppingList.delete({ where: { id: list.id } }),
+      ]);
 
       return { success: true };
     }),
