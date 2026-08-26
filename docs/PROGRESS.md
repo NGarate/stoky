@@ -93,6 +93,22 @@ following it would have.
 | The screen choice per `(userId, deviceId)` — Journey 8 passes, server-first (D110) | `300f665` |
 | The starting screen is changeable from settings, and says which one it is (D111) | `295fadc` |
 
+### Phase 7 — the review itself, and the class it found (2026-08-26)
+
+The phase's actual deliverable, four years of good intentions after its backlog
+closed. It found four instances of one household-isolation defect — three of
+them new — and the fourth, SEC-1, had been rated HIGH and fixed months earlier
+without anybody looking for its siblings.
+
+| Unit | Commit |
+|---|---|
+| A receipt line belongs to its receipt, and a product to a household | `26ca43a` |
+| A storage location belongs to one household, in all four stock procedures | `e7e1b0f` |
+| The base image stops waiting for a distro fix — CVE-2026-14456 shipped | `ccde2e1` |
+| A receipt is filed against its own household's shop | `b1ecbdd` |
+| A tripwire on the isolation defect, so the review is repeatable (D112) | `8bb2547` |
+| The review itself, and the two false claims it found in `SECURITY.md` | `382bf9a` |
+
 ### Development in the image, and the phone photograph that will not decode (2026-08-25)
 
 Reported from Android: tapping to upload a receipt opened a filtered gallery
@@ -2147,3 +2163,29 @@ and politely, and changing the choice changes that sentence — so the
 confirmation *is* the state, there is nothing to time out, and a reader who
 tabs back later hears the same answer as somebody looking at it. The action
 revalidates rather than redirecting.
+
+**D112 — A review that does not leave a test behind is an audit that decays.**
+Phase 7 asked for "either a passing test or a written finding with an owner",
+and the temptation with a security review is to produce a document and call the
+phase closed. The document is the smaller half. What made this one worth doing
+was noticing that the four defects were *one* defect: every instance was written
+by copying a sibling that happened not to carry the ownership check, so the
+convention was being followed — from the wrong example. A convention cannot
+catch that and a code review only catches it once.
+
+So the rule became `tenant-scoped-ids.test.ts`. Deliberately crude: it cannot
+tell a correct check from a careless one, so it is a tripwire on the *shape* of
+the mistake rather than a proof of isolation, and saying so in the file matters
+more than the rule. Its two blind spots were found by removing real guards and
+watching it stay green — it read only inline Zod, and its schema scan used the
+`m` flag, where `$` means end of line, so every schema was truncated at its
+first one. A guard with a silent blind spot is worse than no guard: it reports a
+pass it has not earned.
+
+The other half of the decision is what the review does *not* claim. Its
+adversarial pass did not finish, so every finding it could not personally
+reproduce is marked "reported" rather than folded in beside the verified ones.
+A security document that launders unverified findings into conclusions is worth
+less than no document, and the same is true in the other direction — `SECURITY.md`
+was found to be *understating* its own posture in two sections, which would have
+led an operator to conclude they could not rely on roles.

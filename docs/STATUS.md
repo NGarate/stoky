@@ -770,11 +770,10 @@ taken without asking are in `docs/PROGRESS.md`.
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
-| 7 — Security review | The backlog it owned is closed; **the review document itself is not written** |
+| 7 — Security review | ✅ **Complete** — `docs/SECURITY_REVIEW.md` (2026-08-26). Found and closed four household-isolation defects and a shipped OpenSSL CVE |
 | 8 — The owner's first pass | ✅ All six closed; the done-when — the owner repeats their pass — is the owner's to run |
 
-**What remains, in one place.** The review document (Phase 7's actual
-deliverable — the eight-point scope in `REDESIGN_PLAN.md`); the three human
+**What remains, in one place.** The three human
 passes no suite can answer (the manual screen-reader pass, a week on a real
 tablet, iOS Safari on a real device); T7, the offline scan resolution; and
 **Phase 8's human half** — the two §3/§5.1 promises the 2026-08-17 re-audit

@@ -159,6 +159,12 @@ Dependency status as of the last audit is recorded in `docs/STATUS.md` under
 
 ## Known gaps
 
+**Reviewed 2026-08-26.** `docs/SECURITY_REVIEW.md` is Phase 7's review: eight
+areas, what each is protected by and which test proves it, and the findings that
+remain with an owner. Two sections below were found to be false and are
+corrected in place rather than deleted — a wrong claim in this file is worth
+seeing, since its whole premise is that every claim is checkable.
+
 Read this section before deciding where to run Stoky. It is not a wish list; it
 is what is wrong today.
 
@@ -318,26 +324,45 @@ were both taking unbounded input on two endpoints reachable without an account,
 at 64 MB per call. A body of a few megabytes turned registration into a memory
 amplifier — the rate limiter bounds how often, not how much.
 
-### The services layer still throws bare `Error`
+### ~~The services layer still throws bare `Error`~~ — closed
 
-The routers no longer do — `ISSUES.md` DEBT-4 closed in Phase 3, and all eight
-now raise `TRPCError` with a code chosen by what the client can do about the
-condition. One layer down, `ocr`, `productMatcher`, `receiptParser` and
-`openFoodFacts` still throw plain `Error`, so a procedure that calls one still
-surfaces `INTERNAL_SERVER_ERROR` and a client cannot distinguish a missing
-receipt from a genuine server fault. `ISSUES.md` DEBT-6. That is a correctness
-problem first,
-but it also makes any future authorisation logic harder to reason about and
-harder to test. `ISSUES.md` DEBT-4.
+**Corrected 2026-08-26 by the Phase 7 review.** `ISSUES.md` DEBT-6 closed this
+and the section was not updated. `grep -c "throw new Error(" src/server/services/*.ts`
+returns **0**: `src/server/services/errors.ts` defines a `ServiceError`
+hierarchy — `NotFoundError`, `InvalidInputError`, `UpstreamError` — translated
+to tRPC codes by the same middleware that handles Prisma's, so a missing row
+from a service reaches the client as `NOT_FOUND` rather than as
+`INTERNAL_SERVER_ERROR`. The offline queue stops retrying it instead of spending
+eight attempts on it.
 
-### Household roles are decorative
+DEBT-4 closed earlier, in Phase 3: the routers raise `TRPCError` with a code
+chosen by what the client can do about the condition.
 
-`HouseholdRole` (`OWNER`, `ADMIN`, `MEMBER`) is assigned at registration and
-returned by `auth.me`, but it is checked nowhere. It is not carried in the JWT
-or the session, and there is no role-aware tRPC middleware — only
-`protectedProcedure`, which means "signed in". Any member of a household can
-perform any operation on that household's data. A role system is planned
-(`docs/REDESIGN_PLAN.md` §5.2, Phase 3); it does not exist yet.
+### ~~Household roles are decorative~~ — this section was false
+
+**Corrected 2026-08-26 by the Phase 7 review**, and it is worth leaving the
+correction visible rather than quietly deleting the claim: this is the file
+whose stated premise is that every claim is checkable against a file, and this
+one was checkable and wrong.
+
+It said the role "is checked nowhere", "is not carried in the JWT or the
+session", that "there is no role-aware tRPC middleware", and that "any member of
+a household can perform any operation on that household's data". All four were
+false, and had been since Phase 3.
+
+What is actually true: `HouseholdRole` has four values including `KITCHEN`;
+`src/types/next-auth.d.ts` declares `role` on the session non-optionally;
+`src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
+where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
+and all 60 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+pinning every one against the matrix rather than sampling. Membership and role
+are read from the database on every call rather than from the JWT, so a
+demotion takes effect on the next request.
+
+The real limit is one level down and is recorded in `docs/SECURITY_REVIEW.md`
+§2: the tier answers *may this role do this*, not *may this caller touch this
+row*, and the second was not uniform. Four instances of that were found and
+fixed; a test now fails on the shape of them.
 
 ### The accessibility audit is automated; the human half is not done
 

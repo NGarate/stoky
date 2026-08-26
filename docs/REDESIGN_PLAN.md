@@ -431,7 +431,7 @@ Each phase leaves the app usable and verifiable.
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Rating | ✅ Complete against its done-when: no-data and non-food both behave well, both tested |
-| 7 — Security review | The backlog it owned is closed; the review document itself is not written |
+| 7 — Security review | ✅ Complete. The backlog it owned is closed and the review is written — `docs/SECURITY_REVIEW.md`, which found and closed four household-isolation defects |
 | 8 — The owner's first pass | ✅ All six items closed 2026-08-18/19; the *done-when* — the owner repeats the pass — is the owner's to run |
 
 Gate results for each claim above are in `docs/STATUS.md`; the unit-by-unit
@@ -971,7 +971,7 @@ unowned below, for the same reason as the iOS pass.
 |---|---|
 | ~~INV-2~~ | **Done.** `transferStock`'s guard is inside its transaction with the product row held, matching what `consumeStock` got in Phase 4 |
 | ~~DEBT-1~~ | **Done.** Twelve characters, no composition rules, common-password and identity checks — NIST SP 800-63B §5.1.1.2 rather than the four regexes ISSUES.md proposed. And a maximum, which was missing entirely: Argon2id at 64 MB per call was taking unbounded input on two unauthenticated endpoints |
-| The review itself (§ below) | Authorisation per procedure, household isolation, rate limiting verified, the offline queue as an attack surface, uploads, sessions, dependencies, headers in production |
+| ~~The review itself (§ below)~~ | **Done** (`docs/SECURITY_REVIEW.md`, 2026-08-26). All eight areas, each with the tests that prove its controls and the findings that remain with an owner. It found four instances of one isolation defect — three of them new — fixed them, and left a test that fails on the shape of them |
 | ~~DEBT-5~~ | **Done.** Sixteen indexes, on a wider criterion than the four ISSUES.md named: every column a resolver filters or joins on, plus every single-column foreign key. Measured at 12,000 stock entries — one product's ledger, the hottest read in the application, went from a 3.6ms sequential scan to a 0.09ms index scan. The `householdId` ones are honestly labelled: on a single-household instance the planner scans the table anyway, and they are there for a shared instance and for the foreign-key checks a delete performs |
 | ~~Rate limiting's four gaps~~ | **Done**, one commit each. Sign-in is counted per account as well as per address, at 10/15min on a hashed key (NIST SP 800-63B §5.2.2); `receipt.upload` is metered at 30/hour per account, counted before the file is decoded (ASVS V11.1.4); a 429 carries `Retry-After`, read off the refusal so it cannot drift from the message (RFC 9110 §10.2.3); and refusals are logged as JSON from a tRPC middleware, so a resolver cannot forget to be audited (ASVS V7.1.3). Two things deliberately carry no `Retry-After`: the 503 from a dead Valkey, and sign-in, which answers with a redirect rather than a status |
 
