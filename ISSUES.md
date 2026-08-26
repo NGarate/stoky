@@ -12,7 +12,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6 and BUILD-1.** TEST-5 is the intermittent bun
+**Open: TEST-5, TEST-6, BUILD-1 and RUNTIME-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 is two inert mobile `test.skip`s
@@ -67,6 +67,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | 🟡 Open — needs a direction chosen |
+| RUNTIME-1 | Serving under Bun raises one unhandled rejection per request | 🟡 Open — measured, no gate sees it |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -2405,6 +2406,56 @@ afterAll(async () => {
 **Priority:** Complete before writing integration tests for Phase 1 features
 
 ---
+
+### 🟡 RUNTIME-1: Serving under Bun raises one unhandled rejection per request
+
+**Files:** the standalone artefact as served; `playwright.config.ts:267`, `Dockerfile`'s production `CMD`
+**Severity:** MEDIUM — the page renders correctly; what is lost is the log, and a Node default is now being relied on
+**Status:** OPEN — measured 2026-08-26, after the Bun migration
+
+Next interrupts prerendering when a route reaches runtime IO, and signals it
+internally with a rejected promise carrying `digest: 'NEXT_PRERENDER_INTERRUPTED'`.
+Under Node that signal is caught by Next. Under Bun it escapes to the
+process-level handler:
+
+```
+⨯ unhandledRejection: Error: Route / needs to bail out of prerendering
+  at this point because it used `crypto.getRandomValues()`.
+  digest: 'NEXT_PRERENDER_INTERRUPTED'
+```
+
+**Isolated to the runtime, one variable.** The same standalone build, the same
+generated `NEXTAUTH_SECRET`, three requests to `/login`:
+
+| Runtime | Responses | `unhandledRejection` | Bail-outs logged |
+|---|---|---|---|
+| `node .next/standalone/server.js` | 200, 200, 200 | **0** | 0 |
+| `bun .next/standalone/server.js` | 200, 200, 200 | **3** | 3 |
+
+One per request. A full browser-suite run emitted **1612 of them in 4.4
+minutes**, and the suite passed 148/148 — which is the point: every gate is
+green, because the pages render.
+
+**Why it is worth an entry rather than a shrug.**
+
+- **It costs the logs.** This project has no error tracking by deliberate
+  choice — `STATUS.md` records that every option ships a household's errors to
+  somebody else's server — so the container log *is* the monitoring. At one
+  rejection per request, a real error is a needle in a flood.
+- **It relies on a runtime difference that is not written down anywhere.** An
+  unhandled rejection terminates a Node process by default; Bun logs and
+  continues. The deployment now depends on Bun keeping that behaviour, and
+  nothing in the repository says so.
+
+**What it is not:** a rendering defect. Pages return 200 and the browser suite
+is green under Bun.
+
+**Cost of closing:** unknown, and worth measuring before choosing. The bail-out
+is Next's own control flow, so the honest options are to find why Bun does not
+catch it (an upstream question, like TEST-5), or to stop the routes reaching
+`crypto.getRandomValues()` during prerender at all — which would mean finding
+what calls it on every route, and that is the interesting half. Filed rather
+than fixed in passing (D6).
 
 ### 🟡 BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
