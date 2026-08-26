@@ -112,7 +112,19 @@ RUN mkdir -p /app/tessdata \
 # ------------------------------------------------------------ production --
 FROM node:24-alpine AS production
 WORKDIR /app
-RUN apk add --no-cache dumb-init
+# `apk upgrade` before anything else, and it is not belt and braces.
+#
+# The base image is rebuilt on its own schedule, so between a distro fixing a
+# package and Docker publishing a new `node:24-alpine` there is a window where
+# every build of this image ships the vulnerable version. Trivy fails the build
+# on HIGH, so that window is not a theoretical exposure — it is a red trunk that
+# cannot publish, which is how it was found: CVE-2026-14456 in libcrypto3 and
+# libssl3, fixed in 3.5.8-r0 while the base still carried 3.5.7-r0.
+#
+# Upgrading the whole index rather than naming the two packages, because naming
+# them fixes this advisory and leaves the next one to be discovered the same
+# way. `--no-cache` keeps the index out of the layer.
+RUN apk upgrade --no-cache && apk add --no-cache dumb-init
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
