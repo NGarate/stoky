@@ -43,9 +43,23 @@ pnpm dev                    # Start Next.js dev server (port 3000)
 # target is the production base — `node:24-alpine`, because Next's standalone
 # output is started with `node server.js` — plus Bun for the test runner and
 # git for the three tests that ask the repository about itself.
-docker compose up -d app    # the dev server, on the compose network
+docker compose up -d --build app      # the dev server, on the compose network
 docker compose exec app corepack pnpm test:unit
 docker compose exec app corepack pnpm test:components
+
+# `--build` is not optional. Compose reuses whatever image is already tagged
+# and does not notice the Dockerfile changed, so `up -d app` after a Dockerfile
+# edit silently starts the old one — found the hard way, with a container whose
+# dev script died on `sh: bun: not found` because the image predated Bun.
+
+# After a dependency change, the anonymous `node_modules` volume outlives the
+# rebuild and holds the old tree, so pnpm reinstalls all 460 packages on start
+# — or aborts, when there is no TTY to confirm the purge. Renew it:
+docker compose up -d --build --force-recreate --renew-anon-volumes app
+
+# Or open the repository in the devcontainer (`.devcontainer/devcontainer.json`),
+# which attaches the editor to that same container so the language server reads
+# the platform's own binaries rather than the host's.
 
 # Bun is pinned twice — `.bun-version`, which CI installs, and the Dockerfile,
 # because a `FROM` cannot read a file. `src/__tests__/unit/bun-version.test.ts`

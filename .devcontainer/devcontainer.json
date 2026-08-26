@@ -1,0 +1,44 @@
+// The editor attaches to the same container the suites run in.
+//
+// This is the third and last step of moving development into the image. The
+// first gave that image a test runner; the second made CI install the Bun the
+// image deploys. What was left is the editor: a language server on the host
+// reads a `node_modules` that lives in a container volume, so it resolves
+// against binaries built for a different platform than the ones the code will
+// actually load. That is the same class of gap the whole exercise is about,
+// and the last place it survived.
+//
+// It reuses `docker-compose.yml` rather than defining a second environment.
+// A devcontainer with its own Dockerfile is a fourth thing to keep in step
+// with production, which is the opposite of the point.
+{
+  "name": "Stoky",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/app",
+
+  // The container sleeps and you start the dev server yourself.
+  //
+  // `docker-compose.yml` runs `pnpm dev` as its command, which is right when
+  // you bring the service up by hand. It is wrong here: a dev server that
+  // crashes would take the container down and the editor with it, in the
+  // middle of whatever you were doing. Attached, the container's life is not
+  // tied to any one process in it.
+  "overrideCommand": true,
+
+  // Closing the editor leaves Postgres and Valkey running, deliberately. They
+  // are not only this container's: `pnpm verify:ci` on the host reaches the
+  // same two services, and tearing them down because a window closed would
+  // stop a suite somebody else was watching.
+  "shutdownAction": "none",
+
+  // Node is the base and Bun is on top, which is production's shape. Neither
+  // is installed here — the image already carries both, pinned, and installing
+  // a second copy through a devcontainer feature is how the editor comes to
+  // run a different version from the one that serves requests.
+  "features": {},
+
+  // Nothing. Which extensions somebody wants is theirs to decide, and a list
+  // here installs them silently into their editor.
+  "customizations": {}
+}
