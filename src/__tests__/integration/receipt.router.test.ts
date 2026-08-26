@@ -6,6 +6,7 @@ import { appRouter } from "@/server/trpc/router";
 import { ThrottledError } from "@/server/trpc/throttle";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
+import sharp from "sharp";
 import {
   createTestUser,
   createTestHousehold,
@@ -224,6 +225,40 @@ describe("receipt.upload — what it refuses", () => {
 
     expect(receipt).toBeDefined();
   });
+
+  it("refuses an image that is small in bytes and enormous in pixels", async () => {
+    // `SECURITY_REVIEW.md` finding 14. The size cap counts bytes; the decoding
+    // cost is in pixels, and the two are unrelated for a compressible image.
+    // This one is 64 megapixels in about 200 KB — it passes the 10 MB cap and
+    // the magic-byte check, and decoding it asks for roughly 1.5 GB.
+    //
+    // Built here rather than committed as a fixture, because a checked-in
+    // decompression bomb is a thing somebody opens by accident.
+    const bomb = await sharp({
+      create: {
+        width: 8000,
+        height: 8000,
+        channels: 3,
+        background: { r: 9, g: 9, b: 9 },
+      },
+      limitInputPixels: false,
+    })
+      .png({ compressionLevel: 6 })
+      .toBuffer();
+
+    // The premise, asserted rather than assumed: this really does slip past the
+    // byte cap, or the test proves nothing about the pixel cap.
+    expect(bomb.length).toBeLessThan(10 * 1024 * 1024);
+
+    await expectCode(
+      () =>
+        caller.receipt.upload({
+          fileBase64: bomb.toString("base64"),
+          mimeType: "image/png",
+        }),
+      "BAD_REQUEST",
+    );
+  }, 30_000);
 
   it("refuses a MIME type that is not an image", async () => {
     await expectCode(

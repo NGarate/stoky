@@ -93,8 +93,17 @@ export async function processReceiptOcr(receiptId: string): Promise<string> {
       throw new InvalidInputError("Empty image file");
     }
 
+/** Matches `receipt.upload`'s cap; see the comment there. */
+const MAX_PIXELS = 50_000_000;
+
     // Validate image before passing it to OCR to avoid worker-level crashes.
-    await sharp(imageBuffer).metadata();
+    //
+    // Bounded in pixels as well as bytes, for the reason the upload procedure
+    // states: a highly compressible image passes every byte check and expands
+    // on decode. Repeated here rather than trusted from upstream because this
+    // path also runs on a re-processed receipt, where the bytes came off disk
+    // rather than through the procedure that checked them.
+    await sharp(imageBuffer, { limitInputPixels: MAX_PIXELS }).metadata();
 
     const ocrWorker = await getWorker();
     const {

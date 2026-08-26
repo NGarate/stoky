@@ -16,6 +16,14 @@ const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 /**
+ * The other half of the size question: bytes bound what is *stored*, pixels
+ * bound what is *allocated* to decode it, and for a compressible image the two
+ * are unrelated. Fifty megapixels is past any phone camera and far short of the
+ * decompression bomb the byte cap cannot see.
+ */
+const MAX_PIXELS = 50_000_000;
+
+/**
  * Receipt scanning: a photograph in, stock and prices out.
  *
  * **A state machine, and the order is enforced rather than assumed.**
@@ -168,9 +176,16 @@ export const receiptRouter = createTRPCRouter({
       }
 
       // Re-encode with Sharp (strips EXIF, normalizes format)
+      //
+      // `limitInputPixels` because the size cap above counts bytes. A 12,000 ×
+      // 12,000 PNG of one flat colour is 446 KB — it passes the 10 MB check and
+      // the magic-byte check, and decoding it asks for gigabytes. One request,
+      // no privilege beyond a session, and the container is gone. Sharp's own
+      // default is 268 megapixels, which is far past anything a phone produces.
+      // `SECURITY_REVIEW.md` finding 14.
       let processedBuffer: Buffer;
       try {
-        processedBuffer = await sharp(buffer)
+        processedBuffer = await sharp(buffer, { limitInputPixels: MAX_PIXELS })
           .jpeg({ quality: 90, progressive: true })
           .rotate() // Auto-orient based on EXIF
           .toBuffer();
