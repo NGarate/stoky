@@ -47,9 +47,15 @@ docker compose up -d app    # the dev server, on the compose network
 docker compose exec app corepack pnpm test:unit
 docker compose exec app corepack pnpm test:components
 
-# Bun is pinned in the Dockerfile and that pin is the version of record. A
-# host with a different one is exactly the gap this closes: the answer a suite
-# gives should not depend on whose machine asked it.
+# Bun is pinned twice — `.bun-version`, which CI installs, and the Dockerfile,
+# because a `FROM` cannot read a file. `src/__tests__/unit/bun-version.test.ts`
+# fails if they disagree, which they did once: the image was moved to 1.4.0
+# while CI stayed on 1.3.14, and a green pipeline was proving the suites passed
+# on a runtime nobody deploys.
+
+# Change a dependency and the image is stale — `node_modules` is baked into it,
+# so pnpm finds a lockfile it does not match and aborts rather than purging
+# without a TTY. Rebuild it: `docker compose build app`.
 
 # Quality
 pnpm lint                   # oxlint
