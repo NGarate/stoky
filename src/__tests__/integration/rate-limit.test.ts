@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll, beforeEach } from "bun:test";
 import Redis from "ioredis";
+import { TRPCError } from "@trpc/server";
 import {
   RateLimitUnavailableError,
   accountIdentifier,
@@ -9,7 +10,8 @@ import {
   resetRateLimit,
   type RateLimit,
 } from "@/lib/rate-limit";
-import { RateLimitedSignin } from "@/lib/auth";
+import { AuthUnavailableSignin, RateLimitedSignin } from "@/lib/auth";
+import { enforceRateLimit, retryAfterSeconds } from "@/server/trpc/throttle";
 import { signInWith } from "../utils/authorize";
 import {
   cleanupTestHouseholds,
@@ -38,6 +40,30 @@ const LIMIT: RateLimit = {
 let counter = 0;
 /** A fresh identifier per test, so one test cannot spend another's budget. */
 const nextIdentifier = () => `10.0.0.${++counter}-${process.pid}`;
+
+/**
+ * Runs `body` with the limiter pointed at a cache that is not there.
+ *
+ * Port 1 is reserved and nothing listens on it, so the connection fails rather
+ * than hanging. The `closeRateLimiter()` on both sides matters more than it
+ * looks: the client is cached for the life of the process, so without dropping
+ * it first the limiter keeps using the connection it already had and the test
+ * proves nothing — and without dropping it after, every later test in the file
+ * inherits the dead one.
+ */
+async function withUnreachableCache(body: () => Promise<void>): Promise<void> {
+  const original = process.env.VALKEY_URL;
+  await closeRateLimiter();
+  process.env.VALKEY_URL = "redis://127.0.0.1:1";
+
+  try {
+    await body();
+  } finally {
+    await closeRateLimiter();
+    if (original === undefined) delete process.env.VALKEY_URL;
+    else process.env.VALKEY_URL = original;
+  }
+}
 
 const inspector = new Redis(process.env.VALKEY_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: 1,
@@ -126,24 +152,96 @@ describe("consumeRateLimit", () => {
     // The decision this suite exists to pin. An attempt that cannot be counted
     // is refused: failing open would hand an unlimited auth endpoint to anyone
     // who can take Valkey down, which is the state CRITICAL-4 describes.
-    const original = process.env.VALKEY_URL;
-    await closeRateLimiter();
-    // Port 1 is reserved and nothing listens on it.
-    process.env.VALKEY_URL = "redis://127.0.0.1:1";
+    let thrown: unknown;
 
-    try {
-      let thrown: unknown;
+    await withUnreachableCache(async () => {
       try {
         await consumeRateLimit(LIMIT, nextIdentifier());
       } catch (error) {
         thrown = error;
       }
-      expect(thrown).toBeInstanceOf(RateLimitUnavailableError);
-    } finally {
-      await closeRateLimiter();
-      if (original === undefined) delete process.env.VALKEY_URL;
-      else process.env.VALKEY_URL = original;
-    }
+    });
+
+    expect(thrown).toBeInstanceOf(RateLimitUnavailableError);
+  });
+});
+
+/**
+ * Fail-closed at the **call sites**, which is a different claim from the one
+ * above (`docs/SECURITY_REVIEW.md` finding 11).
+ *
+ * `consumeRateLimit` throwing is necessary and not sufficient. What protects the
+ * application is what each caller does with that throw, and every caller has to
+ * decide separately: `enforceRateLimit` turns it into `SERVICE_UNAVAILABLE`, and
+ * `authorize` turns it into `AuthUnavailableSignin`. Both are hand-written
+ * `catch` blocks, and a `catch` that swallowed the error instead would leave
+ * every test in this file green while the limit stopped existing.
+ *
+ * That is not a hypothetical regression, it is the tempting one: with Valkey
+ * down nobody can sign in, and the obvious way to "fix" that outage is to let
+ * the attempt through. These tests are what makes that a deliberate change
+ * rather than a quiet one.
+ */
+describe("what a call site does when it cannot count", () => {
+  it("refuses through enforceRateLimit rather than allowing the call", async () => {
+    let thrown: unknown;
+
+    await withUnreachableCache(async () => {
+      try {
+        await enforceRateLimit(LIMIT, nextIdentifier(), "never reached");
+      } catch (error) {
+        thrown = error;
+      }
+    });
+
+    // `undefined` here is the fail-open regression: the helper returned
+    // normally and the procedure behind it would have gone ahead.
+    expect(thrown).toBeInstanceOf(TRPCError);
+    const refusal = thrown as TRPCError;
+
+    // Not `TOO_MANY_REQUESTS`, because the two mean different things to Phase
+    // 4's write queue and to the person reading the message: one says you did
+    // too much, the other says the service is broken.
+    expect(refusal.code).toBe("SERVICE_UNAVAILABLE");
+
+    // And it carries no `ThrottledError`, so no `Retry-After` is invented for a
+    // cache whose return nothing here can predict. `throttle.ts` says that in
+    // prose; this is what holds it to it.
+    expect(retryAfterSeconds([refusal])).toBeNull();
+  });
+
+  it("refuses a sign-in it cannot count", async () => {
+    // The other call site, and the one that matters most: `authorize` is the
+    // application's only credential-verification path, so a `catch` that let
+    // this through would be unlimited password guessing for as long as Valkey
+    // is down.
+    //
+    // **Malformed credentials deliberately.** `authorize` consults two limits —
+    // per address before parsing, per account after — and with the cache down
+    // both throw. Written with a well-formed address this test passed with the
+    // first `catch` block replaced by a fail-open, because the second one
+    // refused instead and produced the same error. A body that fails
+    // `loginSchema` returns before the account limit is reached, which is what
+    // makes this about the first call site rather than about either.
+    //
+    // The second call site is left as defence in depth rather than covered
+    // here: reaching it requires the address limit to have succeeded and the
+    // account limit to then fail, which is a cache that died between two
+    // commands, not a state this suite can produce.
+    let thrown: unknown;
+
+    await withUnreachableCache(async () => {
+      try {
+        await signInWith({ email: "not an address", password: "" });
+      } catch (error) {
+        thrown = error;
+      }
+    });
+
+    // Not `RateLimitedSignin`: the two produce different messages, and telling
+    // somebody they have tried too often when the cache is down sends them
+    // away to wait instead of to the operator.
+    expect(thrown).toBeInstanceOf(AuthUnavailableSignin);
   });
 });
 
