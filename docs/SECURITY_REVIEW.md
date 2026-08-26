@@ -53,7 +53,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 12 | Nothing asserts a security header reaches a response | High | ✅ Closed `4c6fb90` | — |
 | 13 | The upload size cap is applied after the body is in memory | High | ✅ Verified, corrected `74788ab` | — |
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
-| 15 | No test ever performs a *successful* upload | Medium | Reported | owner |
+| 15 | No test ever performs a *successful* upload | Medium | ✅ Verified, refined, closed `5d49d99` `76f5c80` | — |
 | 16 | Uploaded images are never deleted | Medium | Reported | owner |
 | 17 | A published image is never re-scanned | Medium | Reported | operator |
 | 18 | The request-body ceiling sat below the documented upload limit | Medium | ✅ Fixed `74788ab`, verified | — |
@@ -263,9 +263,31 @@ this review — a store ownership check.
   sites, including the OCR path, which runs on bytes that came off disk rather
   than through the procedure that checked them.
 
-Also reported: no test performs a *successful* upload, so the four positive
-claims `SECURITY.md` makes about this path are unproven; and uploaded images are
-never deleted, since no `receipt.delete` exists.
+~~Also reported: no test performs a *successful* upload, so the four positive
+claims `SECURITY.md` makes about this path are unproven.~~ **Verified with a
+correction, and closed** (`76f5c80`, `5d49d99`).
+
+One test did perform a successful upload and asserted `expect(receipt)
+.toBeDefined()` — the call did not throw, and nothing else. So the four claims
+were unproven exactly as reported, for a reason the finding had slightly wrong.
+
+They are now proven in two places, deliberately: `unit/image-reencode.test.ts`
+holds the re-encoder to its four promises — EXIF gone including the GPS block,
+format normalised, orientation baked into the pixels, the pixel bound enforced
+— and `integration/receipt.upload.test.ts` holds the *procedure* to what it
+writes. Those are different claims. A correct re-encoder whose output is not
+the thing written to disk passes the first and fails the second, which is what
+one of the mutations does.
+
+Worth noting what had no test at all: `src/server/services/image.ts`, the
+module carrying two of `CLAUDE.md`'s upload requirements and the fix for
+finding 14 — and freshly rewritten from `sharp` to `Bun.Image`, so a different
+library was making the same four promises with nothing watching.
+
+Also reported, and still open: uploaded images are never deleted, since no
+`receipt.delete` exists. The suite had its own instance of it —
+`uploads/receipts/` held 48 orphaned household directories from previous runs.
+The new file cleans up after itself; the product side is finding 16.
 
 ## 6. Session handling
 
@@ -403,7 +425,7 @@ in the order they would pay off.
 | ~~Security headers reach a response~~ | browser | **Built** — `e2e/security-headers.spec.ts` |
 | ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
-| A successful upload does what it claims | integration | EXIF stripped, UUID filename, re-encoded bytes |
+| ~~A successful upload does what it claims~~ | integration | **Built** — `integration/receipt.upload.test.ts` |
 | The image posture holds | build | `USER node`, no npm, read-only rootfs |
 
 ---
