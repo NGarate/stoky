@@ -12,13 +12,19 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6, BUILD-1 and RUNTIME-1.** TEST-5 is the intermittent bun
+**Open: TEST-5, TEST-6 and RUNTIME-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 is two inert mobile `test.skip`s
-whose stated reason names a phase that closed. BUILD-1 is the image and CI
-pinning different bun versions with nothing comparing them, found while taking
-that measurement. PRICE-1 came out of the
+whose stated reason names a phase that closed. RUNTIME-1 is the unhandled
+rejection Bun raises once per request and Node does not, which costs the logs
+this project uses instead of error tracking.
+
+**BUILD-1 closed on 2026-08-26** (`e2a6a8e`), in the direction its own entry
+advised against: `.bun-version` went forward to 1.4.0 on the owner's
+instruction, and a test now compares it with the Dockerfile. The entry keeps
+the argument it made, because the concern that motivated it — TEST-5's rate
+under 1.4.0 — is untouched by the move. PRICE-1 came out of the
 owner's first pass on 2026-08-18; UI-10 and PRICE-1, filed the same day,
 closed the same day (`d7c178d`, `4bbb82d`). UI-11, found verifying the third
 unit in the browser, closed with the design-system extraction that gave it
@@ -66,7 +72,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
-| BUILD-1 | The image and CI pin different bun versions, and nothing compares them | 🟡 Open — needs a direction chosen |
+| BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | RUNTIME-1 | Serving under Bun raises one unhandled rejection per request | 🟡 Open — measured, no gate sees it |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
@@ -2490,11 +2496,14 @@ attempting the prerender and interrupting it, which is the normal path.
 Filed rather than fixed in passing (D6), and now with enough detail to write the
 upstream report from.
 
-### 🟡 BUILD-1: The image and CI pin different bun versions, and nothing compares them
+### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
-**Files:** `Dockerfile:40`, `.bun-version`
+**Files:** `Dockerfile:40`, `.bun-version`, `src/__tests__/unit/bun-version.test.ts`
 **Severity:** LOW — no gate is wrong today; the hazard is that neither can go red
-**Status:** OPEN — found 2026-08-25 while measuring 1.4.0 against TEST-5
+**Status:** RESOLVED `e2a6a8e` — found 2026-08-25, closed 2026-08-26. **The
+direction taken is the one this entry argued against**, and the argument below
+is left standing rather than rewritten to agree with what happened. See
+*How it was closed* at the end.
 
 `.bun-version` says `1.3.14` and `Dockerfile:40` says `oven/bun:1.4.0-alpine`.
 CI's three `setup-bun` steps read the first; `docker compose exec app` runs the
@@ -2535,6 +2544,38 @@ the shape to copy. Filed rather than fixed in passing (D6), because choosing the
 direction is a judgement, and it sits next to Open decision 1 of the image
 pre-plan (whether CI moves into the image at all), which would retire
 `.bun-version` entirely and make the question moot.
+
+## How it was closed, and what that leaves
+
+`.bun-version` moved **forward to 1.4.0** — the option this entry investigated
+and did not recommend. It was the owner's explicit instruction, given while
+deciding the Bun runtime migration, and it is recorded here as a choice rather
+than as an oversight so that reversing it is a one-line decision and not an
+archaeology exercise.
+
+**What the choice buys.** The two numbers agree, and
+`src/__tests__/unit/bun-version.test.ts` asserts it — which is the check this
+entry asked for, in the shape it named: the Playwright pin's fail-fast
+assertion. It also fails if the tag goes back to something floating. Verified
+red by putting `1.3.14` back. And the deployed runtime is now Bun itself
+(`b81102d`), so the image's pin governs what serves requests; aligning CI to it
+rather than the reverse follows from that.
+
+**What the choice does not answer, and this entry still means.** 1.4.0
+reproduces TEST-5, so nothing about the flake is fixed by the move.
+`.bun-version` governs strictly more than the Dockerfile pin did — three CI
+jobs, the integration suite where TEST-5 lives, `check:contrast`,
+`check:links`, and the seed the browser suite depends on — and the measurements
+could not exclude that 1.4.0's failure rate is *worse*, with all three batches
+leaning that way. If TEST-5's rate rises after this, the first thing to try is
+one line back to `1.3.14` in both files.
+
+**One paragraph above is now out of date and is corrected here rather than
+edited away.** It said CI never builds the stage the Dockerfile pin lives in,
+so the image's runner reaches no gate. `defd147` changed that: `quality` and
+`test` build `target: development` and run their suites inside it, so the
+image's bun now runs both. Measured before the change landed — `quality` green
+in the image, and `test` at 609 unit, 611 component, 486 integration.
 
 ### 🟡 TEST-6: Two inert mobile skips cite a phase that closed
 

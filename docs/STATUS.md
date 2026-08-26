@@ -15,24 +15,33 @@ say what measured it.
 Measured on 2026-08-17/18 against a live PostgreSQL and Valkey — at
 `443718d` after Phase 6, the CI campaign and the browser suite's move to the
 production artefact, and re-measured at `70386ea`, Phase 8's closing commit.
-The four suite rows were re-measured 2026-08-25 at `74cff4b` (the stepper —
-Journey 4): `verify:ci` green in 90s of the 600s budget, and the browser suite
-135 pass / 0 fail in 3.7 min.
+The four suite rows were re-measured **2026-08-26** on this machine, after the
+Bun migration and the move of development into the image: 620 / 611 / 494, and
+the browser suite 148 pass / 0 fail against a Bun-served standalone build.
+
+The same three suites were also run **inside the development image** the day
+they moved there (`defd147`, at 609 / 611 / 486 — fewer, because the commits
+that added `bun-version.test.ts` and `devcontainer.test.ts` came after). That
+is what `scripts/ci-in-image.sh` does and what CI's `quality` and `test` jobs
+now call. One caveat that only in-image running exposes: the host's own `bun`
+is whatever the developer installed — 1.3.14 here — while `.bun-version` and
+the image say 1.4.0. `bun-version.test.ts` compares the two files, not the
+binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — ~270 files, 101 rules |
+| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — 363 files, 101 rules (2026-08-26) |
 | Typecheck | `pnpm typecheck` | ✅ clean |
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `pnpm check:links` | ✅ 108 links against 33 routes, none broken |
-| Contrast | `pnpm check:contrast` | ✅ 60 checks over 27 tokens × 2 themes, all AAA |
-| Unit tests | `pnpm test:unit` | ✅ 569 pass / 57 files (2026-08-25) |
-| Component tests | `pnpm test:components` | ✅ 602 pass / 57 files (2026-08-25) |
-| Integration tests | `pnpm test:integration` | ✅ 443 pass / 28 files (2026-08-25) |
+| Internal links | `pnpm check:links` | ✅ 123 links against 35 routes, none broken (2026-08-26) |
+| Contrast | `pnpm check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-26) |
+| Unit tests | `pnpm test:unit` | ✅ 620 pass / 67 files (2026-08-26) |
+| Component tests | `pnpm test:components` | ✅ 611 pass / 57 files (2026-08-26) |
+| Integration tests | `pnpm test:integration` | ✅ 494 pass / 32 files (2026-08-26) |
 | Build | `pnpm build` | ✅ **35 routes, 9 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`). 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **135 pass / 0 fail, 3.7 min** (2026-08-25) — against the standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail** (2026-08-26) — against a **Bun-served** standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
 
 ~~**Use `pnpm`, not `corepack pnpm`.**~~ **Resolved by the 11.22.0 bump**
@@ -161,12 +170,20 @@ repository's red runs actually were. Verified able to fail in both halves —
 an injected `SC2168` and an `env` context in `runs-on:` were each caught, then
 reverted.
 
-**Bun is pinned** in `.bun-version` (1.3.14), read by CI through
-`bun-version-file`. Unpinned, `setup-bun` resolved to whatever had shipped most
-recently, so a Bun release could turn the trunk red with nothing to revert.
-1.3.14 is what CI was already resolving, so the pin changed no behaviour — it
-made the version reviewable. It is also still the newest Bun as of 2026-08-12,
-which is what TEST-5 below turns on.
+**Bun is pinned** in `.bun-version` (**1.4.0** since 2026-08-26; 1.3.14
+before), read by CI through `bun-version-file` where `setup-bun` still runs.
+Unpinned, `setup-bun` resolved to whatever had shipped most recently, so a Bun
+release could turn the trunk red with nothing to revert; the pin made the
+version reviewable.
+
+The pin now has a second job, and a test enforcing it. Bun is the **runtime**
+as of `b81102d`, so the Dockerfile installs its own copy, and for a day the two
+numbers disagreed — CI proving the suites passed on a runtime nobody deployed.
+`src/__tests__/unit/bun-version.test.ts` compares `.bun-version` against the
+Dockerfile's tag and fails if they drift, in the same shape as the Playwright
+pin's assertion. That closed `ISSUES.md` BUILD-1, **in the direction that
+entry recommended against** — read it before moving the number again; the
+concern was TEST-5's rate under 1.4.0, which the alignment does not address.
 
 No job in the pipeline pushes via git, so no checkout persists the workflow
 token any more.
@@ -532,9 +549,23 @@ advisory-path pair.
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
 | pnpm | 11.22.0 |
+| bun | 1.4.0 — `.bun-version` and `Dockerfile:40`, compared by a test |
+| node | 24-alpine — the base image for all four stages; **no longer the runtime** |
+| sharp | 0.35.3, **devDependency only** — not shipped, not loaded at runtime |
 
-No known drift as of **2026-08-25** — every row re-read out of `package.json`
-today, not eyeballed. `CLAUDE.md`'s stale claims — tRPC as a release candidate,
+**The runtime changed on 2026-08-26 and this is the row that says so.** `next
+dev` and `next start` run under `bun --bun` (`b81102d`), the production image
+serves with `bun server.js`, and image processing went from `sharp` to
+`Bun.Image` behind `src/server/services/image.ts`. `sharp` stays installed
+because the HEIC investigation in the pre-plan still needs it for comparison;
+`next.config.ts` excludes it and `@img/*` from output file tracing so it cannot
+reach the standalone artefact. Two consequences worth knowing before changing
+anything here: the application has left Next's supported runtime, and phone
+HEIC uploads are still refused — `Bun.Image` wants an OS codec Alpine does not
+carry.
+
+No known drift as of **2026-08-26** — every row re-read out of `package.json`,
+`.bun-version` and the `Dockerfile` today, not eyeballed. `CLAUDE.md`'s stale claims — tRPC as a release candidate,
 a `household` router that never existed, a refresh token that was never
 implemented — were corrected on 2026-08-10.
 
@@ -675,7 +706,7 @@ Two things that sequence surfaced, both operational rather than defects:
 - It reproduces **only under load**: 3 failures in 24 with another suite running
   against the same database, 0 in 90 on a quiet machine. `docs/reproductions/`
   carries a self-contained file and the recipe. **TEST-5** in `ISSUES.md`
-  (open alongside TEST-6 and PRICE-1), and it
+  (open alongside TEST-6 and RUNTIME-1; PRICE-1 closed on 2026-08-18), and it
   wants an upstream report rather than work here.
 - **The `retry: 2` mitigation does not make CI green, and this is new.**
   Measured on run `31568215727`: the retry did its job — the test passed on
@@ -751,6 +782,30 @@ Two things that sequence surfaced, both operational rather than defects:
   it loads modules it only partly exercises on purpose (D25). No tier covers
   `src/app/**`; those routes are reached only by the browser suite.
 - No visual regression coverage.
+- ~~**The gates run on a toolchain nobody deploys.**~~ **Closed 2026-08-26.**
+  `quality` and `test` now build the image's `development` stage and run inside
+  it (`scripts/ci-in-image.sh`, wired by `defd147`), CI and the image share one
+  pinned Bun (`e2a6a8e`), and `.devcontainer/` attaches the editor to the same
+  container (`b5200da`). This was not hypothetical: `sharp` on the host decoded
+  what `sharp` in the image could not, and an afternoon of HEIC investigation
+  ran the wrong way round because of it. `e2e` stays in Microsoft's Playwright
+  image, deliberately — it needs browsers, not this application's runtime. **The
+  workflow wiring itself is unverified**: `actionlint` and `shellcheck` pass and
+  the script was run here, but the first real pipeline run is the proof.
+- **Phone HEIC uploads are still refused, and the door is narrower than it was.**
+  Measured on four real files across both platforms: the bundled `sharp` binary
+  carries AV1 but no `de265`, and `Bun.Image` wants an OS codec Alpine does not
+  provide. Moving to `Bun.Image` closed the runtime gap and left this one open —
+  the remaining route, Alpine's `vips-heif`, now means reintroducing a library
+  this work just removed. It is the one question
+  `docs/superpowers/plans/2026-08-25-development-in-the-image-preplan.md` leaves
+  standing; nothing in that file chose a door.
+- **Bun raises an unhandled rejection per request that Node consumes** —
+  `ISSUES.md` RUNTIME-1. Measured: 0 under Node against 3 under Bun for the same
+  three requests, and 1612 across a full suite run. No response changes and no
+  gate fails, which is exactly what makes it expensive — with no error tracking
+  (bullet above), the logs are what this project has, and spurious rejections at
+  that volume are enough to bury a real one.
 
 ---
 
@@ -795,8 +850,11 @@ per-journey evidence is in that file.
 
 - `pnpm` and `corepack pnpm` both work since the 11.22.0 bump; corepack's
   refusal was a mismatch against the old 11.19.0 pin, measured gone 2026-08-25.
-- `pnpm prisma` commands need `DATABASE_URL` exported. Prisma 6 with a
-  `prisma.config.ts` no longer loads `.env` itself and says so. `set -a; . ./.env; set +a`.
+- ~~`pnpm prisma` commands need `DATABASE_URL` exported.~~ **Fixed** by
+  `6d5d3c3`: `prisma.config.ts` calls `process.loadEnvFile(".env")` itself. Its
+  own presence is what made Prisma 6 stop doing that, so the file that caused
+  the problem is the file that solves it. It does not overwrite variables
+  already set, so a CI-provided `DATABASE_URL` still wins.
 - `scripts/test-integration-local.sh` stops the compose services when it
   finishes unless `KEEP_TEST_SERVICES=1`. Running it and then `db:seed` fails
   with "can't reach database" for that reason and no other.

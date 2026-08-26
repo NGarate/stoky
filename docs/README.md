@@ -200,8 +200,11 @@ need to wait for data.
 A **pre-plan**, not an executable one: the measurements behind moving
 development into the Docker image, and behind the open question of whether the
 server should run on Bun. Fourteen numbered runs with what each established,
-and an explicit list of what is still unknown. Stage 1 landed (`dc06795`); the
-rest is undecided. Read it before proposing either change.
+and an explicit list of what is still unknown. **All three stages have since
+landed** and the Bun migration was taken; the file records what each run
+established and what it did not, including the one thing the migration made
+worse (`ISSUES.md` RUNTIME-1). Read it before proposing anything about the
+image, the runtime, or HEIC — which is still shut.
 
 ---
 

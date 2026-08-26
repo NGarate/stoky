@@ -6,16 +6,27 @@
 > and `c1f5248` stopped shipping `sharp` at all. Unknown 1 below is answered —
 > **148 of 148 browser tests pass** against a Bun-served production build, so
 > `sharp` was the only thing that broke. One new gap opened; it is recorded
-> under "What is NOT known" as item 6. Stages 2 and 3 of the container work
-> are still untouched, and the HEIC question is unchanged.
+> under "What is NOT known" as item 6, and is filed as `ISSUES.md` RUNTIME-1.
 >
-> **PRE-PLAN — not executable.** This is the evidence and the shape of the
-> work, written before the plan so the decisions are taken on measurements
-> rather than on recollection. One stage has already landed (`dc06795`); the
-> rest is undecided and is deliberately written as questions with prices
-> rather than as tasks with checkboxes. Do not hand this to an executing
-> agent. When the open decisions below are answered, this becomes an
-> implementation plan and this file becomes its historical record.
+> **All three stages are now done.** Stage 2 landed as `e2a6a8e` — CI and the
+> deployed image share one Bun, asserted by a test — and `defd147`, which moves
+> `quality` and `test` inside the image itself. Stage 3 is `b5200da`, the
+> devcontainer. Open decision 1 is answered: CI moved. Decision 2 stands as
+> taken — HEIC is a separate change, and is unchanged and still shut on Alpine.
+>
+> **One thing here is not verified and cannot be from this machine.** The
+> GitHub Actions wiring in `defd147` has `actionlint` and `shellcheck` behind
+> it and nothing else; the script it calls was run here, but the workflow was
+> not. The first pipeline run is the verification.
+>
+> **PRE-PLAN — and now the record of what came of it.** Everything below the
+> header is as written on 2026-08-25: the evidence and the shape of the work,
+> deliberately phrased as questions with prices rather than as tasks with
+> checkboxes, so the decisions would be taken on measurements rather than on
+> recollection. It is left that way. The decisions have since been answered —
+> by the commits named above — and each answer is recorded beside the question
+> it answers rather than replacing it, because what a measurement ruled out is
+> as useful to the next reader as what it chose.
 
 **Written:** 2026-08-25. Every number below was produced by a command on this
 machine or in a container on it, on that date, and says which.
@@ -169,6 +180,10 @@ Written out because the value of this document is the line between the two.
    it does not say one could be provided.
 4. **Performance.** Nothing in this document measures it. The case for Bun
    here rests on closing a gap, not on a benchmark that has not been taken.
+5. **`Bun.SQL`.** Raised as a motivation for the migration. It is not a
+   runtime change: it would replace Prisma, which `CLAUDE.md` calls the single
+   source of truth and from which the migrations and every type derive. It
+   belongs to its own conversation and is out of scope here.
 6. **Why Bun surfaces a rejection Node consumes.** Next starts a prerender of
    `/`, which always bails out because `auth()` reaches for
    `crypto.getRandomValues()`. Under Node that bail-out never appears; under
@@ -178,10 +193,6 @@ Written out because the value of this document is the line between the two.
    with `connection()` was tried and changed nothing, so it was reverted. This
    is Bun/Next interop, not application code, and it is the one thing the
    migration made worse.
-5. **`Bun.SQL`.** Raised as a motivation for the migration. It is not a
-   runtime change: it would replace Prisma, which `CLAUDE.md` calls the single
-   source of truth and from which the migrations and every type derive. It
-   belongs to its own conversation and is out of scope here.
 
 ---
 
@@ -192,14 +203,23 @@ Written out because the value of this document is the line between the two.
 | Stage | What | State |
 |---|---|---|
 | 1 | The image can run the suites | **landed**, `dc06795` |
-| 2 | CI runs its suites on that image | not started |
-| 3 | The editor works against it (`devcontainer.json`) | not started |
+| 2 | CI runs its suites on that image | **landed**, `e2a6a8e` + `defd147` |
+| 3 | The editor works against it (`devcontainer.json`) | **landed**, `b5200da` |
 
-Stage 2 is the one that matters most and is easiest to skip. Today `quality`
-and `test` run on `ubuntu-latest` with the runner's toolchain; only `e2e` uses
-a container, and it is Microsoft's Playwright image rather than this project's.
-**If development moves into the image and CI does not, the gap is not closed —
-it moves.**
+Stage 2 was the one that mattered most and was easiest to skip — if development
+moves into the image and CI does not, the gap is not closed, it moves. It went
+in two parts, and the first was a defect this work had itself created:
+`.bun-version` said 1.3.14 while the image said 1.4.0, so CI was proving the
+suites passed on a runtime nobody deployed. `e2a6a8e` aligned them and asserted
+it; `defd147` then moved both jobs inside the image. `e2e` still runs in
+Microsoft's Playwright image, which is correct — it needs browsers, not this
+application's runtime.
+
+Two things stage 2 turned up that only running it would have shown: oxlint dies
+inside the bare image on `node_modules/tesseract.js: Is a directory`, because
+`.dockerignore` excludes `.gitignore` and it has no ignore file to honour; and
+the rate-limit test fails against a shared dev Valkey on counters an earlier run
+left behind. Both are in `scripts/ci-in-image.sh`.
 
 Stage 3 is friction, not risk: the TypeScript language server reads a
 `node_modules` that would live in a container volume.
@@ -237,15 +257,27 @@ is not on it.
 
 ## Open decisions
 
-1. **Stage 2 — does CI move to the image?** Recommended yes; without it the
-   principle that motivates all of this is only half applied.
-2. **Is the Bun runtime pursued at all?** The evidence says the crack is
-   narrow and probably closeable. The cost is coupling image processing to a
-   Bun global and leaving Next's supported runtime.
-3. **If yes, is the verification experiment run first?** Recommended yes. It
-   is one browser-suite run and it answers unknown 1.
-4. **HEIC, after the above — which door?** Only one can be taken and they
-   point at different infrastructure.
+All four were answered between 2026-08-25 and 2026-08-26. The questions stand
+as asked; the answers are appended.
+
+1. ~~**Stage 2 — does CI move to the image?**~~ **Yes.** `e2a6a8e` put CI and
+   the deployed image on one Bun and asserted it; `defd147` moved `quality`
+   and `test` inside the image. `e2e` deliberately stays in Microsoft's
+   Playwright image: it needs browsers, not this application's runtime.
+2. ~~**Is the Bun runtime pursued at all?**~~ **Yes** — the owner's decision,
+   taken with the cost in view. The crack closed: `b81102d` moved image
+   handling to `Bun.Image` and `c1f5248` stopped shipping `sharp`. The price
+   named here was paid as named — image processing now depends on a Bun global
+   (which is why `src/server/services/image.ts` exists as a seam), and the
+   application has left Next's supported runtime. RUNTIME-1 is the bill.
+3. ~~**Is the verification experiment run first?**~~ **Yes**, and it was worth
+   the run: 148 of 148, which is what made decision 2 safe to take rather than
+   hope.
+4. **HEIC — which door?** *Still open.* Nothing here chose one, and the
+   migration narrowed the choice rather than settling it: `Bun.Image` needs an
+   OS codec Alpine does not carry (unknown 3), so the `vips-heif` door now
+   means reintroducing a library this work just removed. Phone HEIC uploads
+   still fail. This is the one question the whole document leaves standing.
 
 ---
 
