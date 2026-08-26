@@ -140,6 +140,38 @@ function declaredProcedures(file: string): Record<string, string> {
   return found;
 }
 
+/**
+ * The same count, taken a second way, on purpose.
+ *
+ * The parser above demands exactly two spaces of indentation and the whole
+ * declaration on one line. That is true of every procedure written so far, and
+ * it is not a rule anything enforces — so a procedure written as
+ *
+ * ```ts
+ *   somethingNew:
+ *     householdProcedure
+ * ```
+ *
+ * is invisible to it. And invisible is the one failure this file cannot
+ * survive: the comparison below is `toEqual`, so a procedure missing from the
+ * parse *and* missing from the table matches an absence with an absence and
+ * passes. The check that exists to make adding a procedure a decision would
+ * quietly not apply to it.
+ *
+ * Measured rather than imagined: adding such a procedure to `store.ts` left
+ * this file at 14 pass, 0 fail.
+ *
+ * So the loose pattern allows any indentation and a line break after the colon,
+ * and the test below asserts the two agree. It cannot say what the tier is —
+ * that is still the strict parser's job — only that nothing was skipped.
+ */
+function looseProcedureCount(file: string): number {
+  const source = readFileSync(join(ROUTER_DIR, file), "utf8");
+  const pattern =
+    /\b(\w+):\s*(public|protected|household|write|admin)Procedure\b/g;
+  return [...source.matchAll(pattern)].length;
+}
+
 describe("capability matrix", () => {
   it("has a table entry for every router file", () => {
     const files = readdirSync(ROUTER_DIR).filter((f) => f.endsWith(".ts"));
@@ -151,6 +183,18 @@ describe("capability matrix", () => {
       expect(declaredProcedures(file)).toEqual(expected);
     });
   }
+
+  it("sees every procedure, however it happens to be written", () => {
+    // Without this, a procedure the strict parser cannot see is absent from
+    // both sides of the `toEqual` above and passes by matching nothing against
+    // nothing. See `looseProcedureCount` for why that is not hypothetical.
+    for (const file of Object.keys(EXPECTED)) {
+      expect(
+        Object.keys(declaredProcedures(file)).length,
+        `${file}: a procedure is declared in a shape the matrix check cannot read`,
+      ).toBe(looseProcedureCount(file));
+    }
+  });
 
   it("gives KITCHEN read access and nothing else", () => {
     expect(CAPABILITY_ROLES.read).toContain("KITCHEN");
