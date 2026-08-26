@@ -1,5 +1,14 @@
 # Development in the image, and the Bun runtime question — PRE-PLAN
 
+> **PARTLY EXECUTED, 2026-08-26.** The Bun migration in this file was taken
+> and it worked: `a120517` consolidated image handling into one module,
+> `b81102d` moved the runtime to Bun and the image pipeline to `Bun.Image`,
+> and `c1f5248` stopped shipping `sharp` at all. Unknown 1 below is answered —
+> **148 of 148 browser tests pass** against a Bun-served production build, so
+> `sharp` was the only thing that broke. One new gap opened; it is recorded
+> under "What is NOT known" as item 6. Stages 2 and 3 of the container work
+> are still untouched, and the HEIC question is unchanged.
+>
 > **PRE-PLAN — not executable.** This is the evidence and the shape of the
 > work, written before the plan so the decisions are taken on measurements
 > rather than on recollection. One stage has already landed (`dc06795`); the
@@ -126,16 +135,32 @@ call is needed at all. Test 13 is the proof.
 `src/server/trpc/routers/receipt.ts` and one `metadata()` probe in
 `src/server/services/ocr.ts` that transforms nothing.
 
+### Executing it — 2026-08-26
+
+| # | What was run | Result |
+|---|---|---|
+| 15 | The 144-megapixel bomb through `new Bun.Image(buf, { maxPixels })` | **refused**: "input exceeds maxPixels limit"; an ordinary photograph is not |
+| 16 | **The full browser suite against a Bun-served standalone** | **148 of 148 passed** |
+| 17 | The production image built, run on the compose network | migrations applied; `/api/health`, `/login`, `/register` all **200**; `bun 1.4.0` as pid 1 |
+| 18 | `sharp` excluded from tracing, rebuilt | standalone 128 MB → **110 MB**, image 828 MB → **800 MB**, no `@img` package left |
+
+**A third correction, and this one nearly cost a security control.** In the
+room I said `Bun.Image` had no pixel bound, having looked for one on the
+prototype. It is a **constructor option**, `maxPixels`, and it makes Sharp's
+promise exactly: checked after the header is read, before any buffer is
+allocated. Had that mistake been trusted instead of re-checked, the migration
+would have quietly dropped `SECURITY_REVIEW.md` finding 14 — a control added
+the day before. Run 15 is the check.
+
 ---
 
 ## What is NOT known
 
 Written out because the value of this document is the line between the two.
 
-1. **Whether sharp is the only thing that breaks under Bun.** Run 9 left 8
-   tests unrun and 2 errors outside any test, and one `3.3.5` failure on
-   `/inventory/add` whose cause was not established. Removing sharp may
-   uncover more. The way to know is to re-run after the swap, not to assume.
+1. ~~**Whether sharp is the only thing that breaks under Bun.**~~
+   **Answered 2026-08-26.** It was. Run 16: with `sharp` gone, 148 of 148
+   browser tests pass against a Bun-served production build.
 2. **Whether Alpine's `vips-heif` is enough for `sharp`.** Run 6 used the
    `vips` CLI. Building `sharp` against the system libvips is a further step
    and was not attempted.
@@ -144,6 +169,15 @@ Written out because the value of this document is the line between the two.
    it does not say one could be provided.
 4. **Performance.** Nothing in this document measures it. The case for Bun
    here rests on closing a gap, not on a benchmark that has not been taken.
+6. **Why Bun surfaces a rejection Node consumes.** Next starts a prerender of
+   `/`, which always bails out because `auth()` reaches for
+   `crypto.getRandomValues()`. Under Node that bail-out never appears; under
+   Bun it arrives as an unhandled rejection — 73 in one suite run, twice per
+   request to `/`. No response changes and no gate fails, but 73 spurious
+   rejections are enough to bury a real one. Declaring the dependency up front
+   with `connection()` was tried and changed nothing, so it was reverted. This
+   is Bun/Next interop, not application code, and it is the one thing the
+   migration made worse.
 5. **`Bun.SQL`.** Raised as a motivation for the migration. It is not a
    runtime change: it would replace Prisma, which `CLAUDE.md` calls the single
    source of truth and from which the migrations and every type derive. It
