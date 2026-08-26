@@ -52,7 +52,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 11 | Fail-closed is unproven at every limiter call site | High | Reported | owner |
 | 12 | Nothing asserts a security header reaches a response | High | ✅ Closed `4c6fb90` | — |
 | 13 | The upload size cap is applied after the body is in memory | High | Reported | owner |
-| 14 | The size cap counts bytes; decoding cost is in pixels | High | Reported | owner |
+| 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
 | 15 | No test ever performs a *successful* upload | Medium | Reported | owner |
 | 16 | Uploaded images are never deleted | Medium | Reported | owner |
 | 17 | A published image is never re-scanned | Medium | Reported | operator |
@@ -186,10 +186,13 @@ this review — a store ownership check.
 - The **10 MB cap is applied after the whole body is in memory** and after JSON
   parsing, because the image arrives base64 in a tRPC payload. The cap therefore
   bounds what is stored, not what is allocated.
-- The **cap counts bytes; the decoding cost is in pixels.** A small, highly
-  compressible image passes every check and expands on decode. Sharp has
-  `limitInputPixels` for exactly this; whether it is set has not been confirmed
-  here.
+- ~~The **cap counts bytes; the decoding cost is in pixels.**~~ **Verified and
+  fixed** (`69c1bd5`). Neither Sharp call site set `limitInputPixels`, and
+  Sharp's own default of 268 megapixels was not helping. Measured: a 12,000 ×
+  12,000 PNG of one flat colour is **446 KB** — past the byte cap, past the
+  magic-byte check, and gigabytes to decode. Bounded at 50 megapixels at both
+  sites, including the OCR path, which runs on bytes that came off disk rather
+  than through the procedure that checked them.
 
 Also reported: no test performs a *successful* upload, so the four positive
 claims `SECURITY.md` makes about this path are unproven; and uploaded images are
@@ -310,8 +313,6 @@ Named rather than omitted.
   entirely on how an operator has deployed.
 - **The read path of household isolation.** The tripwire covers writes. Ten
   queries were flagged as unconfirmed on the read side and have not been swept.
-- **Whether `limitInputPixels` is set on Sharp**, which decides §5's second
-  finding.
 - **iOS Safari, a real tablet, and a screen-reader pass** — three human passes
   §10 still owes. None is a security pass, and none substitutes for one.
 

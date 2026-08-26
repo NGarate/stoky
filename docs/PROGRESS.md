@@ -109,6 +109,8 @@ without anybody looking for its siblings.
 | A tripwire on the isolation defect, so the review is repeatable (D112) | `8bb2547` |
 | The review itself, and the two false claims it found in `SECURITY.md` | `8081104` |
 | The security headers asserted on a real response — finding 12 closed | `4c6fb90`, `082c189` |
+| A sha guard that cannot answer on a shallow clone says so (D113) | `5995ace`, `88f5fe8` |
+| Image decoding bounded in pixels — finding 14, a 446 KB bomb | `69c1bd5` |
 
 ### Development in the image, and the phone photograph that will not decode (2026-08-25)
 
