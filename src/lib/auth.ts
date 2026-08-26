@@ -1,5 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
-import type { NextAuthConfig } from "next-auth";
+import { connection } from "next/server";
+import type { NextAuthConfig, Session } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import * as argon2 from "argon2";
@@ -255,4 +256,44 @@ export const authConfig: NextAuthConfig = {
   },
 };
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+const { handlers, auth: readSession, signIn, signOut } = NextAuth(authConfig);
+
+export { handlers, signIn, signOut };
+
+/**
+ * The session — and the reason this wraps NextAuth's own `auth` rather than
+ * re-exporting it.
+ *
+ * **Reading the session is request data, so a caller of this can never
+ * prerender.** Cache Components requires that to be *declared*, and until it
+ * is, Next starts a prerender, reaches `crypto.getRandomValues()` inside
+ * NextAuth, and aborts by throwing. Node consumed that rejection silently;
+ * Bun — the runtime since `b81102d` — reports it, once per request per route,
+ * 1612 across a suite run (`ISSUES.md` RUNTIME-1). Nothing was ever wrong with
+ * the responses. The cost was the log: this project has no error tracking, so
+ * the log is what it has, and spurious rejections at that volume bury a real
+ * one.
+ *
+ * `await connection()` is Next's own answer, and it belongs **here** rather
+ * than at the nine call sites. Fixing them one at a time was tried first and
+ * is how the diagnosis went wrong twice: the error names only the first site
+ * that trips it, so each fix reveals the next and reads as no progress at all.
+ * It also leaves the next `await auth()` somebody writes free to reintroduce
+ * the defect in silence.
+ *
+ * It costs no prerendering. Measured either side of the change: the same eight
+ * routes are Partial Prerender, because the root layout is already
+ * request-bound by the CSP nonce and nothing above these callers was
+ * prerendering to begin with.
+ *
+ * The wrapper is deliberately zero-argument, and its return type is written
+ * out rather than inferred. NextAuth's `auth` is four overloads — a route
+ * wrapper, a `(req, res)` handler, a middleware — and `ReturnType` picks the
+ * middleware, which typechecks here and turns `session.user` into an error at
+ * all nine call sites. Nothing has ever used those shapes; a narrower export
+ * is one fewer to keep dynamic-safe.
+ */
+export async function auth(): Promise<Session | null> {
+  await connection();
+  return readSession();
+}

@@ -19,6 +19,22 @@ import type { Metadata } from "next";
  * It carries its own `<main>` and `<h1>`: this route is outside the dashboard
  * layout, and the root layout supplies neither.
  */
+/**
+ * This route blocks, for the same reason the root layout does.
+ *
+ * Its translations come from `src/i18n/request.ts`, which asks the signed-in
+ * account for its language before falling back to the cookie — so rendering
+ * this page reads the session, and reading the session is request data
+ * (`src/lib/auth.ts`). There is no child to wrap in `<Suspense>`: the page is
+ * a heading, a paragraph and a link, and streaming three strings would trade a
+ * prerender it cannot have for a placeholder nobody benefits from.
+ *
+ * Blocking costs nothing here. This document is served by the service worker
+ * from its precache when the network is gone; the worker holds a rendered
+ * response, so what Next would or would not have prerendered never enters it.
+ */
+export const instant = false;
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("offlinePage");
   return { title: t("title") };
