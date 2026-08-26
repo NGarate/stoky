@@ -50,7 +50,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | Reported | operator + owner |
 | 10 | The registration rate limit is exercised by no test | High | Reported | owner |
 | 11 | Fail-closed is unproven at every limiter call site | High | Reported | owner |
-| 12 | Nothing asserts a security header reaches a response | High | Reported | owner |
+| 12 | Nothing asserts a security header reaches a response | High | ✅ Closed `4c6fb90` | — |
 | 13 | The upload size cap is applied after the body is in memory | High | Reported | owner |
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | Reported | owner |
 | 15 | No test ever performs a *successful* upload | Medium | Reported | owner |
@@ -247,11 +247,23 @@ Components migration deliberately: the root layout blocks (`instant = false`)
 because a nonce that survives prerendering is not a nonce, and that trade was
 put to the owner and decided.
 
-**Reported, not verified, and it is the gap that surprises most:** **nothing
-asserts that any security header reaches a response.** The whole layer — the CSP
-and the six static headers in `next.config.ts` — is verified by reading. Also
-reported: prefetch requests skip the middleware by its own matcher, and eight of
-the thirteen production directives are unaudited.
+**Verified, and closed** (`4c6fb90`). The finding was real: the whole layer —
+the CSP and the six static headers in `next.config.ts` — was verified by
+reading. `csp.test.ts` exercises `buildCsp()` in isolation and never touches a
+response, and nothing named `X-Frame-Options`, HSTS or the other four.
+
+Checking says they all arrive, so this was *unasserted* rather than broken.
+`e2e/security-headers.spec.ts` now pins them against the standalone production
+build, including the three that a cheaper tier could not see: that the nonce
+differs between two requests — which is what `instant = false` on the root
+layout exists to protect, so if they ever match that trade has silently been
+lost — that `unsafe-eval` is absent in production, and that
+`upgrade-insecure-requests` is absent over plain http, which is the defect that
+once killed every tRPC call for a Safari user on a LAN install.
+
+**Still reported, not verified:** prefetch requests skip the middleware by its
+own matcher, and eight of the thirteen production directives remain unaudited —
+though the new spec now asserts six of them are present.
 
 ---
 
@@ -312,7 +324,7 @@ in the order they would pay off.
 |---|---|---|
 | ~~Household-scoped ids are looked up~~ | unit | **Built** — `tenant-scoped-ids.test.ts` |
 | Every restricted procedure refuses the wrong role behaviourally | integration | the other half of the 28, calling each as a role that must be refused |
-| Security headers reach a response | browser | the CSP and the six static headers, on a production build |
+| ~~Security headers reach a response~~ | browser | **Built** — `e2e/security-headers.spec.ts` |
 | The registration limiter refuses | integration | a context with headers, so the limiter is reachable at all |
 | Every limiter call site fails closed | integration | Valkey down means refused, not continued, at each site |
 | A successful upload does what it claims | integration | EXIF stripped, UUID filename, re-encoded bytes |
