@@ -7,11 +7,15 @@ import {
   closeRateLimiter,
   loginAccountRateLimit,
   consumeRateLimit,
+  registerRateLimit,
   resetRateLimit,
   type RateLimit,
 } from "@/lib/rate-limit";
 import { AuthUnavailableSignin, RateLimitedSignin } from "@/lib/auth";
 import { enforceRateLimit, retryAfterSeconds } from "@/server/trpc/throttle";
+import { appRouter } from "@/server/trpc/router";
+import { createTRPCContext } from "@/server/trpc/trpc";
+import { prisma } from "@/lib/prisma";
 import { signInWith } from "../utils/authorize";
 import {
   cleanupTestHouseholds,
@@ -331,5 +335,101 @@ describe("the per-account limit, through authorize", () => {
       await cleanupTestUsers(email);
       await cleanupTestHouseholds(`Rate Limit Household ${process.pid}`);
     }
+  });
+});
+
+/**
+ * The registration limit, through the router that serves it
+ * (`docs/SECURITY_REVIEW.md` finding 10).
+ *
+ * `CLAUDE.md` specifies 3 registrations per hour per IP, and until now the only
+ * thing asserting that number was a unit test reading `registerRateLimit()`.
+ * That test passes whether or not the limit is wired into anything: it would
+ * have stayed green through the entire `enforceRateLimit` call being deleted
+ * from `auth.register`. The property worth pinning is that *registering* stops,
+ * so registering is what this drives — same reasoning as the sign-in block
+ * above.
+ *
+ * Two attempts rather than the configured three, because each allowed one costs
+ * a real Argon2id hash at 64 MB. The number under test is the environment's, and
+ * the default is asserted separately in the unit suite.
+ */
+describe("the registration limit, through the router", () => {
+  const ATTEMPTS = 2;
+  const original = process.env.RATE_LIMIT_REGISTER_ATTEMPTS;
+  /** Shared by every account this block creates, so cleanup is one call. */
+  const PREFIX = `register-throttle-${process.pid}`;
+  const PASSWORD = "cocina despensa nevera";
+
+  beforeEach(async () => {
+    process.env.RATE_LIMIT_REGISTER_ATTEMPTS = String(ATTEMPTS);
+    const keys = await inspector.keys(`${registerRateLimit().prefix}:*`);
+    if (keys.length > 0) await inspector.del(...keys);
+  });
+
+  afterAll(async () => {
+    if (original === undefined) delete process.env.RATE_LIMIT_REGISTER_ATTEMPTS;
+    else process.env.RATE_LIMIT_REGISTER_ATTEMPTS = original;
+    await cleanupTestUsers(PREFIX);
+  });
+
+  /**
+   * A caller carrying an address, which is the whole point: `auth.register`
+   * meters only `if (ctx.headers)`, so a context without them — what the rest of
+   * the integration suite builds — skips the limit entirely and would make this
+   * block assert nothing.
+   */
+  async function callerFrom(address: string) {
+    const ctx = await createTRPCContext({
+      session: null,
+      headers: new Headers({ "x-forwarded-for": address }),
+    });
+    return appRouter.createCaller(ctx);
+  }
+
+  const account = (suffix: string) => ({
+    email: `${PREFIX}.${suffix}@example.com`,
+    name: "Throttle Test",
+    password: PASSWORD,
+  });
+
+  it("stops after the configured number from one address", async () => {
+    const caller = await callerFrom(nextIdentifier());
+
+    for (let i = 0; i < ATTEMPTS; i++) {
+      const result = await caller.auth.register(account(String(i)));
+      expect(result.success).toBe(true);
+    }
+
+    const over = account("over");
+    let thrown: unknown;
+    try {
+      await caller.auth.register(over);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(TRPCError);
+    expect((thrown as TRPCError).code).toBe("TOO_MANY_REQUESTS");
+
+    // Counted *before* anything is created, which is the half of the claim a
+    // status code cannot make. If the limit ran after the write, the endpoint
+    // would still be a way to fill the user table and to make the server spend
+    // 250ms of Argon2id per call on demand.
+    expect(await prisma.user.findUnique({ where: { email: over.email } })).toBeNull();
+  });
+
+  it("counts each address separately, so one abuser does not close the door", async () => {
+    // A shared counter would mean anyone who spends the budget locks out every
+    // other household trying to sign up that hour — a denial of service handed
+    // out by the control meant to prevent one.
+    const spender = await callerFrom(nextIdentifier());
+    for (let i = 0; i < ATTEMPTS; i++) {
+      await spender.auth.register(account(`spender-${i}`));
+    }
+    await expect(spender.auth.register(account("spender-over"))).rejects.toThrow();
+
+    const bystander = await callerFrom(nextIdentifier());
+    expect((await bystander.auth.register(account("bystander"))).success).toBe(true);
   });
 });
