@@ -66,7 +66,6 @@
     "react-dropzone": "^14.4.1",
     "recharts": "^2.15.4",
     "server-only": "^0.0.1",
-    "sharp": "^0.35.3",
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
@@ -89,6 +88,7 @@
     "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1",
-    "react-doctor": "0.9.11"
+    "react-doctor": "0.9.11",
+    "sharp": "^0.35.3"
   }
 }

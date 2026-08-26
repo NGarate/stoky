@@ -63,6 +63,38 @@ const nextConfig: NextConfig = {
    */
   serverExternalPackages: ["tesseract.js"],
 
+  /**
+   * `sharp` is not shipped, because nothing can reach it.
+   *
+   * Next traces it into the standalone output whenever it is installed — 19 MB
+   * of native image library — for one reason: the built-in Image Optimization
+   * endpoint, `/_next/image`, which only exists for `next/image`. This
+   * application does not use `next/image` anywhere, has no `images` config,
+   * and since the Bun migration no longer uses `sharp` itself: the receipt
+   * pipeline is `Bun.Image`.
+   *
+   * The production target is treated as the security boundary, and a native
+   * decoder sitting in it for a route that cannot be reached is surface with
+   * no purpose. `sharp` stays installed for the test suite, which uses it to
+   * build the decompression bomb that proves the pixel bound — a fixture
+   * nobody should commit — and that is why it is a devDependency now.
+   *
+   * What survives is the pnpm symlink at `node_modules/sharp`, now dangling:
+   * the 18 MB it pointed at is gone and the link is not. Excluding the link
+   * as well was tried and does not work — tracing decides what is copied, and
+   * the link is rebuilt from the layout rather than copied. Left as it is and
+   * written down here, because a config line that changes nothing is worse
+   * than a symlink that resolves to nothing.
+   *
+   * The condition that makes this safe is asserted rather than remembered:
+   * `src/__tests__/unit/next-image.test.ts` fails if anything imports
+   * `next/image`, because the optimiser would then need the library this line
+   * removes.
+   */
+  outputFileTracingExcludes: {
+    "*": ["node_modules/.pnpm/**/sharp/**", "node_modules/.pnpm/**/@img/**"],
+  },
+
 
   // The React Compiler memoises what we would otherwise have to remember to
   // memoise. On in full mode rather than `annotation`, because opt-in
