@@ -134,9 +134,6 @@ export const receiptRouter = createTRPCRouter({
       // Before the bytes are decoded, like the rate limit above it: a receipt
       // filed against somebody else's shop should be refused without doing the
       // work of accepting it first.
-      // Before the bytes are decoded, like the rate limit above it: a receipt
-      // filed against somebody else's shop should be refused without doing the
-      // work of accepting it first.
       await assertOwnStore(input.storeId, householdId);
 
       // Validate MIME type
