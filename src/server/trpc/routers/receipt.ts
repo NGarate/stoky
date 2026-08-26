@@ -10,10 +10,13 @@ import { matchReceiptItems, getItemCandidates } from "@/server/services/productM
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
 import { reencodeAsJpeg } from "@/server/services/image";
-import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
+import {
+  MAX_RECEIPT_BASE64_LENGTH,
+  MAX_RECEIPT_BYTES,
+  RECEIPT_IMAGE_TYPES,
+} from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 /**
  * Receipt scanning: a photograph in, stock and prices out.
@@ -112,7 +115,11 @@ export const receiptRouter = createTRPCRouter({
   upload: writeProcedure
     .input(
       z.object({
-        fileBase64: z.string(),
+        // Bounded here as well as after decoding, so an oversized body is
+        // refused by validation rather than by allocating a second copy of it
+        // as a Buffer first. The check below still stands: this bounds the
+        // encoded length, that bounds what the bytes actually came to.
+        fileBase64: z.string().max(MAX_RECEIPT_BASE64_LENGTH),
         mimeType: z.string(),
         storeId: z.string().optional(),
         purchaseDate: z.date().optional(),
@@ -148,7 +155,7 @@ export const receiptRouter = createTRPCRouter({
       const buffer = Buffer.from(input.fileBase64, "base64");
 
       // Validate file size
-      if (buffer.length > MAX_FILE_SIZE) {
+      if (buffer.length > MAX_RECEIPT_BYTES) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "File size exceeds 10MB limit",

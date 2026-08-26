@@ -27,6 +27,45 @@ export const RECEIPT_IMAGE_TYPES = [
   "image/webp",
 ] as const;
 
+/**
+ * The largest receipt photograph the server will accept, in bytes.
+ *
+ * Here for the same reason the type list is: both ends need the same answer,
+ * and the number is quoted at the person in a message.
+ */
+export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * What that becomes on the wire, and the number that actually constrains
+ * things.
+ *
+ * The photograph is base64'd into a JSON body — `readAsDataURL` in the upload
+ * page, `fileBase64` in the router — so four bytes leave for every three that
+ * go in. Ten megabytes of image is **13.98 MB of request**.
+ *
+ * That matters because Next caps a request body at
+ * `experimental.proxyClientMaxBodySize` whenever a middleware is configured,
+ * and this application's matcher covers every route including `/api/trpc`. At
+ * the 10 MiB default the cap sat *below* the inflated size of the file this
+ * module says is allowed, which had two consequences, both measured against a
+ * running server:
+ *
+ * - a photograph over about 7.5 MiB — well inside the documented limit — came
+ *   back as `JSON Parse error: Unterminated string`, because the body was
+ *   truncated before anything read it. A person with a phone photograph got a
+ *   parser's opinion of it;
+ * - and the router's own size check could never fire at all. To exceed
+ *   `MAX_RECEIPT_BYTES` after decoding, a body has to be larger than this
+ *   constant, and such a body was cut off first. A size limit no request can
+ *   reach is not a limit.
+ *
+ * `next.config.ts` now sets that cap from this number rather than taking the
+ * default, and `src/__tests__/unit/upload-body-limit.test.ts` asserts the two
+ * still agree — because they are in different files and nothing else would
+ * say so.
+ */
+export const MAX_RECEIPT_BASE64_LENGTH = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4;
+
 export const receiptStatusSchema = z.enum([
   "UPLOADING",
   "PROCESSING",

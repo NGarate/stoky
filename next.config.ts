@@ -41,6 +41,27 @@ const nextConfig: NextConfig = {
 
   output: "standalone",
 
+  experimental: {
+    /**
+     * Room for the largest receipt photograph, once base64 has inflated it.
+     *
+     * Next caps a request body at this value whenever a middleware is
+     * configured, and `src/middleware.ts` matches every route including
+     * `/api/trpc`. The default is 10 MiB, which is *below* the 13.98 MB a
+     * 10 MB photograph becomes on the wire — so the documented limit could
+     * not be reached and the router's own size check could never fire. See
+     * `src/lib/validations/receipt.ts` for the measurements.
+     *
+     * 15 MiB: 13.98 MB of base64 plus the JSON envelope, with headroom. Not
+     * a number to raise casually — it is the ceiling on what an unauthenticated
+     * caller can make this server hold while it parses a body, which is why it
+     * is set to what the feature needs rather than to something comfortable.
+     * `upload-body-limit.test.ts` fails if it drops below what the feature
+     * needs.
+     */
+    proxyClientMaxBodySize: 15 * 1024 * 1024,
+  },
+
   /**
    * Packages Next must not bundle into the server chunks.
    *

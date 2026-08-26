@@ -299,6 +299,21 @@ describe("receipt.upload — what it refuses", () => {
   it("refuses a file over the 10MB limit", async () => {
     // Built as a valid PNG header followed by padding, so it is the size check
     // that refuses it and not the magic-byte check standing in for it.
+    //
+    // **This test passed while the limit was unreachable over HTTP**, and it is
+    // worth saying so where somebody will read it. A caller built here reaches
+    // the procedure in-process, with no request and therefore no request body;
+    // a browser sends the photograph base64'd in JSON, and Next truncated any
+    // body over 10 MiB before the router saw it — which is *less* than a 10 MB
+    // photograph becomes once encoded. So this assertion was true at the tier
+    // it runs in and could not be reached at the tier that matters.
+    // `unit/upload-body-limit.test.ts` is what now holds the two numbers
+    // together; this one is unchanged and still worth having.
+    //
+    // What refuses it is now the schema bound rather than the length check
+    // below it: both answer BAD_REQUEST. The length check is not redundant —
+    // the encoded bound admits two more bytes than the decoded one does — but
+    // it is no longer what this test exercises.
     const oversize = Buffer.concat([
       ONE_PIXEL_PNG,
       Buffer.alloc(10 * 1024 * 1024 + 1, 0),
