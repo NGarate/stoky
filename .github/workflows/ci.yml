@@ -54,44 +54,25 @@ jobs:
       - name: Lint the pipeline itself
         run: bash scripts/check-ci.sh
 
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      # Pinned via .bun-version rather than left to float: unpinned, this
-      # resolves to whatever Bun released last night, which can turn the trunk
-      # red with no commit to blame and no revert that fixes it. The file is
-      # the single place a Bun upgrade happens, deliberately.
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: .bun-version
-
-      # --trust-lockfile skips re-verifying each entry against minimumReleaseAge.
-      # That check belongs to resolution time; CI installs a committed, reviewed
-      # lockfile, and without it CI breaks for a day whenever a dependency publishes.
-      - run: pnpm install --frozen-lockfile --trust-lockfile
-      - run: pnpm db:generate
-
-      - run: pnpm lint
-      - run: pnpm typecheck
-
-      # Security, correctness, performance and accessibility rules that neither
-      # oxlint nor tsc looks for. Gates on errors only: the score is a number
-      # nobody has agreed to, and a gate on one either blocks every commit or
-      # gets raised until it means nothing. `--no-telemetry` because this
-      # project does not send its source health to a third party to satisfy a
-      # gate.
-      - name: React doctor
-        run: pnpm check:react
-
-      - name: WCAG AAA contrast
-        run: pnpm check:contrast
-
-      # Three manual audits missed a dead route each, always because the call
-      # site used a template literal rather than a string. This does not.
-      - name: Internal links
-        run: pnpm check:links
+      # Every gate below this line runs inside this project's own development
+      # image, not on the runner's toolchain.
+      #
+      # A gate that passes on a toolchain nobody deploys proves less than it
+      # looks like it does, and this repository has the receipt: `sharp` on a
+      # developer's host decoded what `sharp` in the image could not, and an
+      # afternoon of HEIC investigation ran the wrong way round because of it.
+      # The runner was a third toolchain again — pnpm, Node and Bun installed
+      # by three actions, none of them the ones that serve requests.
+      #
+      # The image is built here rather than pulled: `container:` needs a
+      # registry, which needs `packages: write` and a job ordering, and neither
+      # buys anything a build does not. The layers that matter cache; only
+      # `COPY . .` and `prisma generate` re-run per commit.
+      #
+      # `scripts/ci-in-image.sh` is the same script a developer runs, and
+      # `check-ci.sh` above shellchecks it.
+      - name: Lint, types, contrast — in the image
+        run: bash scripts/ci-in-image.sh quality
 
   # ----------------------------------------------------------------- tests --
   test:
@@ -128,27 +109,23 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: .bun-version
-
-      - run: pnpm install --frozen-lockfile --trust-lockfile
-      - run: pnpm db:generate
-
-      # Applying migrations to an empty database is itself a test. A migration
-      # that only works against an already-prepared database is one that fails
-      # on someone's first install — exactly what happened with pg_trgm.
-      - name: Apply migrations to a fresh database
-        run: pnpm prisma migrate deploy
-
-      - run: pnpm test:unit
-      - run: pnpm test:components
-      - run: pnpm test:integration:only
+      # The three suites inside the development image, for the reason the
+      # quality job states. This is the job where it matters most: these
+      # suites import `@prisma/client`, decode images through `Bun.Image` and
+      # load the native modules the deployed process loads.
+      #
+      # Migrations run inside it too, against the empty service database.
+      # Applying them to an empty database is itself a test: a migration that
+      # only works on an already-prepared one fails on somebody's first
+      # install, which is what happened with pg_trgm.
+      #
+      # `--network host` in the script, so the container reaches the service
+      # containers through the ports published above. Their own db and Valkey
+      # are fresh per job, which is what keeps the rate-limit test honest —
+      # run locally against a shared Valkey it fails on somebody else's
+      # leftover counters, and that is the environment rather than the code.
+      - name: Unit, component, integration — in the image
+        run: bash scripts/ci-in-image.sh test
 
   # ------------------------------------------------------------------- e2e --
   e2e:
