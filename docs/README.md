@@ -5,7 +5,7 @@ Updated: 2026-08-27
 **If you are an agent or a person picking this project up, start here.**
 
 There are eleven documents, plus three executed implementation plans kept as
-records and one pre-plan with a question still open. That is a lot, and it is
+records, one pre-plan with a question still open, and one plan not yet started. That is a lot, and it is
 deliberate: an earlier revision had six
 overlapping status files that contradicted each other, and a fake test suite
 survived five months inside the gap between them. The rule that replaced them
@@ -218,6 +218,15 @@ landed** and the Bun migration was taken; the file records what each run
 established and what it did not, including the one thing the migration made
 worse (`ISSUES.md` RUNTIME-1). Read it before proposing anything about the
 image, the runtime, or HEIC — which is still shut.
+
+**[`superpowers/plans/2026-08-27-finishing-the-bun-migration.md`](superpowers/plans/2026-08-27-finishing-the-bun-migration.md)**
+**Not started.** What is left of the Bun migration once the migration itself is
+deployed: why `sharp` is still installed, why swapping it out of the tests is not
+one-for-one (`Bun.Image.metadata()` returns no EXIF — measured on both pinned
+versions), the byte-scan that replaces the assertion it would delete, the HEIC
+decision that keeps the dependency alive regardless, and the Node ties that
+remain in a running container. Says in order which steps are available now and
+which are blocked on an experiment nobody has run.
 
 ---
 
