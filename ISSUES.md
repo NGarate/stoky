@@ -2555,6 +2555,28 @@ So the remaining work is the `AbortError` family, it is Bun/Next interop rather
 than application code, and the argument above for why it is worth an entry —
 the log is this project's only monitoring — applies to it unchanged.
 
+**What it is not**, measured 2026-08-26 against the standalone artefact under
+Bun. These are negative results and they are the useful half of the report,
+because each one is a hypothesis somebody would otherwise spend an afternoon on:
+
+| Tried | AbortErrors |
+|---|---|
+| 39 ordinary requests over 13 routes | 0 |
+| 10 requests abandoned mid-flight (`curl --max-time 0.05`) | 0 |
+| 10 RSC requests (`RSC: 1`) | 0 |
+| 10 RSC **prefetch** requests (`Next-Router-Prefetch: 1`) | 0 |
+
+So it is not a client hanging up, and not the router prefetch that
+`partialPrefetching` enables — the two obvious candidates. Nothing in `src/`
+aborts anything server-side; the one `AbortController`
+(`src/lib/offline/sender.ts:48`) is the offline queue's send timeout and runs in
+the browser.
+
+What *does* reproduce it is the browser suite, at a steady **~10–12 per test**
+across two sample sizes (250 over 21 tests, ~1500 over 148) and from the seed
+project onwards. Every one of those tests is signed in and none of the probes
+above were, which is the next thing to vary.
+
 Filed rather than fixed in passing (D6), and now with enough detail to write the
 upstream report from.
 
