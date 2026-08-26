@@ -1,13 +1,20 @@
 # Stoky Local Bootstrap
 
-Updated: 2026-08-09
+Updated: 2026-08-27
 
 This is the shortest supported path from clone to a running local app.
+
+There are two of them. **Prefer the container** — it is the same image that
+serves production, and the gap between "works here" and "works there" is where
+this project has lost the most time. The host path is kept because it is faster
+to iterate in, not because it is more correct.
 
 ## Host prerequisites
 
 - Docker with the daemon running
-- Node.js 24 LTS
+- Node.js 24 — for `pnpm` and the tooling, not for running the app
+- **Bun**, at the version in `.bun-version`. `pnpm dev` and `pnpm start` both run
+  `bun --bun`, so without it the fast path below dies on `bun: not found`
 - `pnpm`, or `corepack` if `pnpm` is not installed globally
 
 The repo currently works with `corepack pnpm` and the bootstrap script now
@@ -29,6 +36,40 @@ Or use the repo helper:
 ```bash
 bash scripts/dev-local.sh
 ```
+
+## The container path, which is the one to prefer
+
+```bash
+docker compose up -d --build app      # the dev server, on the compose network
+docker compose exec app corepack pnpm test:unit
+docker compose exec app corepack pnpm test:components
+```
+
+Or open the repository in the devcontainer (`.devcontainer/devcontainer.json`),
+which attaches the editor to that same container so the language server reads
+the platform's own binaries rather than the host's. That is the whole point: a
+language server resolving against a `node_modules` built for a different
+platform is the same class of gap as a suite that passes where nobody deploys.
+
+Three traps, each of which cost an afternoon:
+
+- **`--build` is not optional.** Compose reuses whatever image is already tagged
+  and does not notice the Dockerfile changed, so `up -d app` after a Dockerfile
+  edit silently starts the old one. Found with a container whose dev script died
+  on `sh: bun: not found`, because the image predated Bun.
+- **After a dependency change, the anonymous `node_modules` volume outlives the
+  rebuild** and holds the old tree, so pnpm reinstalls everything on start — or
+  aborts, when there is no TTY to confirm the purge. Renew it:
+  `docker compose up -d --build --force-recreate --renew-anon-volumes app`.
+- **Change a dependency and the image is stale.** `node_modules` is baked into
+  it, so pnpm finds a lockfile it does not match and aborts rather than purging
+  without a TTY. `docker compose build app`.
+
+**Bun is pinned twice** — in `.bun-version`, which CI installs, and in the
+Dockerfile, because a `FROM` cannot read a file.
+`src/__tests__/unit/bun-version.test.ts` fails if they disagree, which they did
+once: the image moved to 1.4.0 while CI stayed on 1.3.14, and a green pipeline
+was proving the suites passed on a runtime nobody deploys.
 
 ## Optional seeded bootstrap
 
