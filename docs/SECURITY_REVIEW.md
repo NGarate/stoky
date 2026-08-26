@@ -226,6 +226,12 @@ this review — a store ownership check.
   could never fire. **Fixed** (`74788ab`) — finding 18, and it is not a
   vulnerability: it is a control that did not exist and a feature that did not
   work, found by going after one that did.
+
+  The ceiling has to exist somewhere, so above it the reply is still a parse
+  error. `005ec2c` refuses an oversized photograph in the browser instead,
+  before the encode and before the request — because the server genuinely
+  cannot answer this one. A body it never received in full is not something it
+  can write a sentence about, and the sentence is what the person needs.
 - ~~The **cap counts bytes; the decoding cost is in pixels.**~~ **Verified and
   fixed** (`69c1bd5`). Neither Sharp call site set `limitInputPixels`, and
   Sharp's own default of 268 megapixels was not helping. Measured: a 12,000 ×
