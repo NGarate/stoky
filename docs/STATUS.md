@@ -800,12 +800,18 @@ Two things that sequence surfaced, both operational rather than defects:
   this work just removed. It is the one question
   `docs/superpowers/plans/2026-08-25-development-in-the-image-preplan.md` leaves
   standing; nothing in that file chose a door.
-- **Bun raises an unhandled rejection per request that Node consumes** —
-  `ISSUES.md` RUNTIME-1. Measured: 0 under Node against 3 under Bun for the same
-  three requests, and 1612 across a full suite run. No response changes and no
-  gate fails, which is exactly what makes it expensive — with no error tracking
-  (bullet above), the logs are what this project has, and spurious rejections at
-  that volume are enough to bury a real one.
+- **Bun raises unhandled rejections that Node consumes** — `ISSUES.md`
+  RUNTIME-1, **half closed on 2026-08-26**. It was two causes filed as one. The
+  prerender chain — every route calling `auth()`, Auth.js minting a CSRF token
+  with `crypto.getRandomValues()` merely to read a session — is fixed by
+  `d0e7566`: `auth()` now declares that reading a session is request data, so
+  Next attempts no prerender to interrupt. Thirteen dev-server routes, 13 errors
+  before and 0 after, at no cost in prerendering. What remains is an
+  `AbortError` out of `node:async_hooks` when a client abandons an in-flight
+  request — ~1500 in a browser-suite run, and **pre-dating the fix**: the same
+  21-test subset raised 250 on master and 253 after. No response changes and no
+  gate fails, which is what makes it expensive — with no error tracking (bullet
+  above), the logs are what this project has.
 
 ---
 

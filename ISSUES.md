@@ -17,8 +17,11 @@ failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 is two inert mobile `test.skip`s
 whose stated reason names a phase that closed. RUNTIME-1 is the unhandled
-rejection Bun raises once per request and Node does not, which costs the logs
-this project uses instead of error tracking.
+rejections Bun raises and Node does not, which cost the logs this project uses
+instead of error tracking. It turned out to be **two** causes filed as one: the
+prerender chain through `auth()` is fixed (`d0e7566`, which also corrects the
+entry's conclusion that it was not ours to fix), and the `AbortError` family —
+the larger number — is untouched.
 
 **BUILD-1 closed on 2026-08-26** (`e2a6a8e`), in the direction its own entry
 advised against: `.bun-version` went forward to 1.4.0 on the owner's
@@ -73,7 +76,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
-| RUNTIME-1 | Serving under Bun raises one unhandled rejection per request | 🟡 Open — measured, no gate sees it |
+| RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -2413,11 +2416,16 @@ afterAll(async () => {
 
 ---
 
-### 🟡 RUNTIME-1: Serving under Bun raises one unhandled rejection per request
+### 🟡 RUNTIME-1: Serving under Bun raises unhandled rejections Node does not
 
 **Files:** the standalone artefact as served; `playwright.config.ts:267`, `Dockerfile`'s production `CMD`
 **Severity:** MEDIUM — the page renders correctly; what is lost is the log, and a Node default is now being relied on
-**Status:** OPEN — measured 2026-08-26, after the Bun migration
+**Status:** PARTLY CLOSED — measured 2026-08-26, re-measured the same day.
+**This entry described two causes as one.** The `crypto.getRandomValues()` half
+is fixed (`d0e7566`); the `AbortError` half is untouched and is the larger
+number. Both measurements are at the end, and one of them contradicts the table
+below. The original analysis is left standing — it is right about the chain it
+traces, and wrong in its conclusion, and both are worth keeping.
 
 Next interrupts prerendering when a route reaches runtime IO, and signals it
 internally with a rejected promise carrying `digest: 'NEXT_PRERENDER_INTERRUPTED'`.
@@ -2483,15 +2491,69 @@ page uses the root layout, and not `/api/health`, because route handlers do not
 prerender.** Confirmed by request — `/offline`, the most minimal page in the
 application, raises it too.
 
-**So it is not ours to fix by changing the feature.** The `auth()` call is a
-decided behaviour, and removing it would revert the language following the
-account. The two real options are both upstream: Bun catching a rejection Next
-expects to catch, or Auth.js not minting a CSRF token merely to read a session.
-Between them, the second looks like the smaller and more defensible report.
+~~**So it is not ours to fix by changing the feature.**~~ **That conclusion was
+wrong, and it is worth saying why rather than deleting it.** It reasoned from
+two options — Bun catching what Next expects to catch, or Auth.js not minting a
+token to read a session — and both are upstream, so it stopped. The third
+option was in the error message all along: Next asks for the dependency to be
+*declared*, with `await connection()`, and then attempts no prerender to
+interrupt. The paragraph below weighed `instant = false` and rejected it
+correctly; it never asked what else the message offered.
 
 **What this does *not* mean:** that `instant = false` on the root layout is
 failing. That marks the segment as allowed to block; it does not stop Next
 attempting the prerender and interrupting it, which is the normal path.
+
+---
+
+## Half closed, and the measurements that split it
+
+**`d0e7566` puts `await connection()` in `src/lib/auth.ts`**, so `auth()`
+declares that reading a session is request data. Not at the nine call sites: the
+error names only the first site that trips it, so fixing them one at a time
+reads as no progress — `page.tsx` fixed and the identical message reappears
+against `RootLayout`, that fixed and it is nine dashboard routes. That is why an
+earlier attempt recorded `connection()` as changing nothing. It had changed
+exactly one of two, and only the last line of the stack said so.
+
+It costs no prerendering: the same eight routes are Partial Prerender either
+side, because the root layout is already request-bound by the CSP nonce.
+
+**Dev server, thirteen routes, one request each:**
+
+| | `crypto.getRandomValues()` errors |
+|---|---|
+| before | 13 — one per route, every request |
+| after | **0** |
+
+**And here is where this entry disagrees with itself.** The table above says the
+standalone artefact under Bun raised 3 rejections for 3 requests to `/login`.
+Re-measured on 2026-08-26 with 39 requests across 13 routes, the standalone
+build raised **0 — on master as well as on the fix**. That is not a result of
+anything changed since: master was rebuilt and measured on its own. Under
+`next build` the prerender happens once, at build time; the dev server retries
+it per request, which is where the per-request shape comes from. Whatever
+produced the original table, it was not the same experiment, and it is recorded
+as unreconciled rather than quietly corrected.
+
+**What is left is a different error, and it is the larger number.** A full
+browser-suite run raises ~1500 of these:
+
+```
+⨯ unhandledRejection: Error [AbortError]: The operation was aborted.
+    at abort ([native code])   sourceURL: 'node:async_hooks'
+```
+
+They arrive when a client abandons an in-flight request, which a browser suite
+does constantly and `curl` never does — which is why the standalone measurement
+above sees none of them. **They pre-date the fix and are unrelated to it:** the
+same 21-test chromium subset raised **250 on master and 253 with `d0e7566`**,
+and 0 `crypto` errors in both. Attributing the whole 1612 to the prerender chain
+was the error this entry is being corrected for.
+
+So the remaining work is the `AbortError` family, it is Bun/Next interop rather
+than application code, and the argument above for why it is worth an entry —
+the log is this project's only monitoring — applies to it unchanged.
 
 Filed rather than fixed in passing (D6), and now with enough detail to write the
 upstream report from.
