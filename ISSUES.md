@@ -2450,12 +2450,45 @@ green, because the pages render.
 **What it is not:** a rendering defect. Pages return 200 and the browser suite
 is green under Bun.
 
-**Cost of closing:** unknown, and worth measuring before choosing. The bail-out
-is Next's own control flow, so the honest options are to find why Bun does not
-catch it (an upstream question, like TEST-5), or to stop the routes reaching
-`crypto.getRandomValues()` during prerender at all — which would mean finding
-what calls it on every route, and that is the interesting half. Filed rather
-than fixed in passing (D6).
+**The cause, traced rather than guessed.** The stack is minified and names no
+application frame, so it was resolved through the chunk's own source map
+(`@jridgewell/trace-mapping` over `.next/server/chunks/ssr/*.js.map`). The three
+frames are all Auth.js:
+
+```
+cx -> @auth/core/lib/utils/web.js:87
+cy -> @auth/core/lib/actions/callback/oauth/csrf-token.js:30
+cL -> @auth/core/lib/init.js:106
+```
+
+**Auth.js mints a CSRF token during initialisation, using
+`crypto.getRandomValues()`.** The chain to every page is:
+
+1. the root layout calls `getLocale()`;
+2. `src/i18n/request.ts:51` calls `auth()` — this is what makes the language
+   follow the account rather than the browser (`265e2f8`);
+3. Auth.js initialises, and mints the token;
+4. Cache Components sees unrepeatable IO during the prerender attempt and
+   raises `NEXT_PRERENDER_INTERRUPTED`;
+5. Node's Next catches that signal. Bun's does not.
+
+That also explains the shape of it exactly: **every page route, because every
+page uses the root layout, and not `/api/health`, because route handlers do not
+prerender.** Confirmed by request — `/offline`, the most minimal page in the
+application, raises it too.
+
+**So it is not ours to fix by changing the feature.** The `auth()` call is a
+decided behaviour, and removing it would revert the language following the
+account. The two real options are both upstream: Bun catching a rejection Next
+expects to catch, or Auth.js not minting a CSRF token merely to read a session.
+Between them, the second looks like the smaller and more defensible report.
+
+**What this does *not* mean:** that `instant = false` on the root layout is
+failing. That marks the segment as allowed to block; it does not stop Next
+attempting the prerender and interrupting it, which is the normal path.
+
+Filed rather than fixed in passing (D6), and now with enough detail to write the
+upstream report from.
 
 ### 🟡 BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
