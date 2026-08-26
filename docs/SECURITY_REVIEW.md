@@ -51,11 +51,19 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
 | 11 | Fail-closed is unproven at every limiter call site | High | ✅ Closed `7a663a1` | — |
 | 12 | Nothing asserts a security header reaches a response | High | ✅ Closed `4c6fb90` | — |
-| 13 | The upload size cap is applied after the body is in memory | High | Reported | owner |
+| 13 | The upload size cap is applied after the body is in memory | High | ✅ Verified, corrected `74788ab` | — |
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
 | 15 | No test ever performs a *successful* upload | Medium | Reported | owner |
 | 16 | Uploaded images are never deleted | Medium | Reported | owner |
 | 17 | A published image is never re-scanned | Medium | Reported | operator |
+| 18 | The request-body ceiling sat below the documented upload limit | Medium | ✅ Fixed `74788ab`, verified | — |
+
+Finding 18 was not on the list this review set out with. It came out of
+measuring finding 13 instead of reading it, and it is the only entry here that
+is a broken feature rather than a weak control — a 10 MB photograph could not
+be uploaded, and the size check meant to refuse an 11 MB one was unreachable.
+It is kept in this table because of where it was hiding: a framework default,
+below the last line of code anybody in this repository had written.
 
 Nothing here is rated critical. Two findings were reported as critical by an
 audit and are recorded above at high: they are the same defect as #1 and #2,
@@ -198,9 +206,26 @@ this review — a store ownership check.
 
 **Reported, not verified, and the two worth acting on:**
 
-- The **10 MB cap is applied after the whole body is in memory** and after JSON
-  parsing, because the image arrives base64 in a tRPC payload. The cap therefore
-  bounds what is stored, not what is allocated.
+- ~~The **10 MB cap is applied after the whole body is in memory**.~~
+  **Verified, half right, and the half it got wrong was the more interesting
+  one** (`74788ab`).
+
+  Right about the mechanism: the image arrives base64 in a tRPC payload, so the
+  cap runs after the body is read and JSON-parsed. Wrong about the consequence.
+  Allocation is *not* unbounded — Next caps a request body at
+  `experimental.proxyClientMaxBodySize` whenever a middleware is configured, and
+  this application's matcher covers `/api/trpc`. Measured on a running server:
+  10,000,080 bytes parsed, 10,485,840 did not.
+
+  What the measurement found instead is finding 18. The lesson worth keeping is
+  that the audit reasoned from the application's code and stopped at its edge;
+  the number that governed the behaviour was a framework default nothing in this
+  repository mentioned.
+- **The request-body ceiling sat below the documented upload limit**, so the
+  10 MB the product promises could not be sent and the router's own size check
+  could never fire. **Fixed** (`74788ab`) — finding 18, and it is not a
+  vulnerability: it is a control that did not exist and a feature that did not
+  work, found by going after one that did.
 - ~~The **cap counts bytes; the decoding cost is in pixels.**~~ **Verified and
   fixed** (`69c1bd5`). Neither Sharp call site set `limitInputPixels`, and
   Sharp's own default of 268 megapixels was not helping. Measured: a 12,000 ×
