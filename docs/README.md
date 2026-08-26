@@ -1,11 +1,11 @@
 # Index of the planning documents
 
-Updated: 2026-08-18
+Updated: 2026-08-27
 
 **If you are an agent or a person picking this project up, start here.**
 
-There are thirteen documents, plus two executed implementation plans kept as
-records and one pre-plan waiting on a decision. That is a lot, and it is
+There are eleven documents, plus three executed implementation plans kept as
+records and one pre-plan with a question still open. That is a lot, and it is
 deliberate: an earlier revision had six
 overlapping status files that contradicted each other, and a fake test suite
 survived five months inside the gap between them. The rule that replaced them
@@ -49,6 +49,7 @@ document.
 | What must work before calling a slice done? | `SMOKE_JOURNEYS.md` |
 | What is the interface supposed to look like, and what is wrong with it? | `DESIGN_AUDIT.md` |
 | What is the threat model, and what is hardened? | `SECURITY.md` |
+| What did the security review find, and what is still open? | `SECURITY_REVIEW.md` |
 | How do I get this running? | `LOCAL_BOOTSTRAP.md` |
 | Which command do I run, and what does it prove? | `VERIFICATION_SEQUENCE.md` |
 | How are the test suites configured? | `TEST_SETUP.md` |
@@ -158,6 +159,13 @@ Written so that every claim is checkable against a file. Hold it to that: it has
 carried a false claim before, and a security document that overstates the
 posture is worse than none.
 
+**[`SECURITY_REVIEW.md`](SECURITY_REVIEW.md)**
+Phase 7's deliverable: the review itself, finding by finding, each either closed
+with its commit or written up with an owner. `SECURITY.md` says what the posture
+*is*; this says what was looked for, what was found, and which findings are
+still open and whose they are. Four are, at the time of writing — two of them
+the operator's rather than the code's.
+
 **[`VERIFICATION_SEQUENCE.md`](VERIFICATION_SEQUENCE.md)**
 The command ladder, what each gate proves, the environment each needs, and the
 current measurements. **Note the time budgets** — the ladder has ten minutes and
@@ -193,8 +201,9 @@ executed 2026-08-17/18. `PROGRESS.md` D82–D86 carry the decisions;
 `TEST_SETUP.md` describes the result.
 
 **[`superpowers/plans/2026-08-25-cache-components-and-instant-navigation.md`](superpowers/plans/2026-08-25-cache-components-and-instant-navigation.md)**
-Measured, not landed. What Next 16.3's Cache Components and Partial Prefetching
-cost this repository — the whole app builds green on two edits — and the one
+**Landed** (`2b6eba5`) — the index called this "measured, not landed" until
+2026-08-27, which had been false since the day it shipped. What Next 16.3's
+Cache Components and Partial Prefetching cost this repository — the whole app builds green on two edits — and the one
 question an agent must not settle: a per-request CSP nonce and a prerendered
 static shell are structurally in tension. The saved patch sits beside it. Its
 most reusable finding is about `e2e/settle.ts`, which waits for quiet and would
@@ -203,7 +212,7 @@ need to wait for data.
 **[`superpowers/plans/2026-08-25-development-in-the-image-preplan.md`](superpowers/plans/2026-08-25-development-in-the-image-preplan.md)**
 A **pre-plan**, not an executable one: the measurements behind moving
 development into the Docker image, and behind the open question of whether the
-server should run on Bun. Fourteen numbered runs with what each established,
+server should run on Bun. Eighteen numbered runs with what each established,
 and an explicit list of what is still unknown. **All three stages have since
 landed** and the Bun migration was taken; the file records what each run
 established and what it did not, including the one thing the migration made
