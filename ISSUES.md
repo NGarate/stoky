@@ -2519,22 +2519,26 @@ exactly one of two, and only the last line of the stack said so.
 It costs no prerendering: the same eight routes are Partial Prerender either
 side, because the root layout is already request-bound by the CSP nonce.
 
-**Dev server, thirteen routes, one request each:**
+**Measured either side of `d0e7566`, on both servers:**
 
-| | `crypto.getRandomValues()` errors |
-|---|---|
-| before | 13 — one per route, every request |
-| after | **0** |
+| | dev server, 13 routes | standalone under Bun, 39 requests |
+|---|---|---|
+| before | 13 — one per route, every request | **50** |
+| after | **0** | **0** |
 
-**And here is where this entry disagrees with itself.** The table above says the
-standalone artefact under Bun raised 3 rejections for 3 requests to `/login`.
-Re-measured on 2026-08-26 with 39 requests across 13 routes, the standalone
-build raised **0 — on master as well as on the fix**. That is not a result of
-anything changed since: master was rebuilt and measured on its own. Under
-`next build` the prerender happens once, at build time; the dev server retries
-it per request, which is where the per-request shape comes from. Whatever
-produced the original table, it was not the same experiment, and it is recorded
-as unreconciled rather than quietly corrected.
+The 50 are the exact error this entry describes, on every page route:
+`Route /login needs to bail out of prerendering … because it used
+crypto.getRandomValues()`. **So the table at the top of this entry was right,
+and production is fixed, not just the developer's console.**
+
+*An earlier revision of this section claimed the standalone artefact raised 0 on
+master too, and called the entry's own table unreconciled. That was measured
+against a server that had refused to start — the probe used `.env`, whose
+`NEXTAUTH_SECRET` is still the example value, and `src/lib/auth/secret.ts`
+correctly refuses to boot on it. Every request answered `000` and the log
+counted zero of everything. The guard worked; the measurement did not check
+whether the thing it was measuring was running. Recorded in `STATUS.md` under
+the traps that have made measurements wrong here.*
 
 **What is left is a different error, and it is the larger number.** A full
 browser-suite run raises ~1500 of these:
@@ -2556,8 +2560,9 @@ than application code, and the argument above for why it is worth an entry —
 the log is this project's only monitoring — applies to it unchanged.
 
 **What it is not**, measured 2026-08-26 against the standalone artefact under
-Bun. These are negative results and they are the useful half of the report,
-because each one is a hypothesis somebody would otherwise spend an afternoon on:
+Bun, **each probe re-run after confirming the server answers 200**. These are
+negative results and they are the useful half of the report, because each one is
+a hypothesis somebody would otherwise spend an afternoon on:
 
 | Tried | AbortErrors |
 |---|---|

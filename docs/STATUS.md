@@ -366,6 +366,22 @@ These are recorded because each one produced a confident, wrong number.
    instant `Load failed` / connection-refused, which reads as anything except
    what it is. The suite names `127.0.0.1` everywhere now (D86). The tell was
    a 4 ms failure: nothing real fails that fast.
+9. **A server that refused to start reports zero of everything.** Counting
+   unhandled rejections in the standalone artefact (RUNTIME-1), four probes came
+   back clean and were written up as negative results. The server had exited at
+   boot: they used `.env`, whose `NEXTAUTH_SECRET` is still the example value,
+   and `src/lib/auth/secret.ts` correctly refuses to start on it. Every request
+   answered `000` and the log was empty because nothing had run. It produced the
+   confident, wrong conclusion that the fix helped only the dev server, when the
+   real before/after in production is 50 rejections against 0. **The guard was
+   working; the probe never asked whether its subject was alive.** Assert a 200
+   before counting anything, and treat an all-zero result from a new harness as
+   a claim about the harness until proven otherwise.
+10. **Truncating a log the server still holds open does not empty it.** `: > log`
+   between runs leaves the writer's file offset where it was, so the file fills
+   with NUL padding and `grep` switches to binary mode and stops printing
+   counts. Use a fresh filename per run; `grep -a` rescues a file already
+   ruined.
 
 ---
 
@@ -805,8 +821,10 @@ Two things that sequence surfaced, both operational rather than defects:
   prerender chain — every route calling `auth()`, Auth.js minting a CSRF token
   with `crypto.getRandomValues()` merely to read a session — is fixed by
   `d0e7566`: `auth()` now declares that reading a session is request data, so
-  Next attempts no prerender to interrupt. Thirteen dev-server routes, 13 errors
-  before and 0 after, at no cost in prerendering. What remains is an
+  Next attempts no prerender to interrupt. Measured on both servers and at no
+  cost in prerendering — 13 dev-server routes go from 13 errors to 0, and the
+  standalone artefact under Bun from **50 rejections over 39 requests to 0**, so
+  production is fixed and not just the console. What remains is an
   `AbortError` out of `node:async_hooks` when a client abandons an in-flight
   request — ~1500 in a browser-suite run, and **pre-dating the fix**: the same
   21-test subset raised 250 on master and 253 after. No response changes and no
