@@ -21,6 +21,14 @@ import { join } from "node:path";
  * Reachability, not existence. `git cat-file -t` says `382bf9a` is a commit,
  * because it is: an orphan in the reflog is still an object. The question worth
  * asking is whether it is on a branch, because that is what survives a clone.
+ *
+ * **Skipped on a shallow clone, and that is not a cop-out.** CI checks out at
+ * depth 1 — only the `changes` job asks for full history — so `git log --all`
+ * there sees exactly one commit and every one of the 310 shas would report as
+ * dangling. A guard that fails for a reason unrelated to what it guards is a
+ * guard people learn to ignore. This one earns its keep locally, in
+ * `verify:local`, which is before the push rather than after it, and that is
+ * where a bad sha is written in the first place.
  */
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
@@ -58,6 +66,24 @@ describe("the shas the documents cite", () => {
   });
 
   it("all resolve to a commit on a branch", () => {
+    // A depth-1 checkout has one commit and no way to answer this. Asserting
+    // anything there would be asserting the clone depth.
+    const shallow =
+      execFileSync("git", ["rev-parse", "--is-shallow-repository"], {
+        cwd: ROOT,
+        encoding: "utf8",
+      }).trim() === "true";
+
+    if (shallow) {
+      // Said out loud rather than skipped silently, so a run that proved
+      // nothing does not read as a run that proved something.
+      console.warn(
+        "ledger-shas: shallow clone, reachability not checked (see the docblock)",
+      );
+      expect(shallow).toBe(true);
+      return;
+    }
+
     // `--all` rather than `HEAD`: a sha on any branch or tag survives a clone,
     // and one that is only in this machine's reflog does not.
     const reachable = new Set(
