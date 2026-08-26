@@ -3,25 +3,17 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
 import { ReceiptStatus, MatchStatus, StockOperation } from "@prisma/client";
-import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { processReceiptOcr } from "@/server/services/ocr";
 import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
 import { matchReceiptItems, getItemCandidates } from "@/server/services/productMatcher";
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
+import { reencodeAsJpeg } from "@/server/services/image";
 import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-
-/**
- * The other half of the size question: bytes bound what is *stored*, pixels
- * bound what is *allocated* to decode it, and for a compressible image the two
- * are unrelated. Fifty megapixels is past any phone camera and far short of the
- * decompression bomb the byte cap cannot see.
- */
-const MAX_PIXELS = 50_000_000;
 
 /**
  * Receipt scanning: a photograph in, stock and prices out.
@@ -175,20 +167,13 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      // Re-encode with Sharp (strips EXIF, normalizes format)
-      //
-      // `limitInputPixels` because the size cap above counts bytes. A 12,000 ×
-      // 12,000 PNG of one flat colour is 446 KB — it passes the 10 MB check and
-      // the magic-byte check, and decoding it asks for gigabytes. One request,
-      // no privilege beyond a session, and the container is gone. Sharp's own
-      // default is 268 megapixels, which is far past anything a phone produces.
-      // `SECURITY_REVIEW.md` finding 14.
+      // Normalised to a JPEG this server produced: the format stops being
+      // whatever was sent, the EXIF goes, and the orientation is applied to
+      // the pixels. Bounded in pixels as well as bytes — see the module,
+      // which the OCR path reads the same bound from.
       let processedBuffer: Buffer;
       try {
-        processedBuffer = await sharp(buffer, { limitInputPixels: MAX_PIXELS })
-          .jpeg({ quality: 90, progressive: true })
-          .rotate() // Auto-orient based on EXIF
-          .toBuffer();
+        processedBuffer = await reencodeAsJpeg(buffer);
       } catch {
         throw new TRPCError({
           code: "BAD_REQUEST",
