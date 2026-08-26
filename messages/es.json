@@ -570,6 +570,7 @@
     "itemCount": "{count, plural, one {# producto} other {# productos}}",
     "uploadingHint": "Subiendo el ticket... Espera un momento.",
     "uploadError": "No se ha podido subir el ticket. Inténtalo otra vez.",
+    "uploadTooLarge": "Esa foto ocupa {size} MB y el máximo son {max} MB. Haz otra con menos resolución o recórtala.",
     "processingFailed": "Error al procesar el ticket. Intenta subirlo de nuevo.",
     "retry": "Intentar de nuevo",
     "processed": "¡Ticket procesado! {count, plural, one {# producto encontrado} other {# productos encontrados}}.",

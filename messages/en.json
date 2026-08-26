@@ -570,6 +570,7 @@
     "itemCount": "{count, plural, one {# item} other {# items}}",
     "uploadingHint": "Uploading the receipt... Hold on a moment.",
     "uploadError": "The receipt could not be uploaded. Try again.",
+    "uploadTooLarge": "That photo is {size} MB and the maximum is {max} MB. Take another at a lower resolution, or crop it.",
     "processingFailed": "The receipt could not be processed. Try uploading it again.",
     "retry": "Try again",
     "processed": "Receipt processed! {count, plural, one {# item found} other {# items found}}.",

@@ -5,30 +5,62 @@ import { useDropzone } from "react-dropzone";
 import { useTranslations } from "next-intl";
 import { Upload, Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
+import { MAX_RECEIPT_BYTES, RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 
 interface UploadZoneProps {
   onUpload: (file: File) => void;
   isUploading?: boolean;
 }
 
+/** Bytes as the megabytes a person recognises, to one decimal. */
+function inMegabytes(bytes: number): number {
+  return Math.round((bytes / (1024 * 1024)) * 10) / 10;
+}
+
 export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
   const t = useTranslations("receipts");
   const [preview, setPreview] = useState<string | null>(null);
+  const [tooLarge, setTooLarge] = useState<number | null>(null);
+
+  /**
+   * The one place a chosen file is accepted, whichever way it was chosen.
+   *
+   * **The size is refused here rather than by the server, because the server
+   * cannot answer.** The photograph is base64'd into the request body — four
+   * bytes for every three — and Next truncates a body over
+   * `experimental.proxyClientMaxBodySize` before any procedure reads it. What
+   * comes back is `JSON Parse error: Unterminated string`, which tells somebody
+   * holding a phone nothing at all. The server's own check still exists and
+   * still refuses; it just has no way to be the thing that explains it.
+   *
+   * Nothing is previewed and `onUpload` is not called, so a refused photograph
+   * costs no encode and no request.
+   */
+  const accept = useCallback(
+    (file: File) => {
+      if (file.size > MAX_RECEIPT_BYTES) {
+        setTooLarge(file.size);
+        setPreview(null);
+        return;
+      }
+
+      setTooLarge(null);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      onUpload(file);
+    },
+    [onUpload],
+  );
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-        onUpload(file);
-      }
+      if (file) accept(file);
     },
-    [onUpload],
+    [accept],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -58,14 +90,10 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
     input.capture = "environment";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-        onUpload(file);
-      }
+      // Through the same gate as the dropzone. It used to repeat the read, the
+      // preview and the call, which is how a check added to one path misses the
+      // other — and this is the path a phone actually uses.
+      if (file) accept(file);
     };
     input.click();
   };
@@ -76,6 +104,29 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
 
   return (
     <div className="space-y-4">
+      {/* Rendered whether or not it has anything to say, and `sr-only` when it
+          does not. A live region inserted at the moment it speaks is the case
+          screen readers may skip (WCAG 4.1.3) — the login form learned that the
+          hard way and this follows it, including `role="status"` as the
+          fallback role. Polite, because `SyncStatus` owns the one assertive
+          region in this application. */}
+      <p
+        aria-live="polite"
+        className={
+          tooLarge === null
+            ? "sr-only"
+            : "rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
+        }
+        role="status"
+      >
+        {tooLarge === null
+          ? ""
+          : t("uploadTooLarge", {
+              size: inMegabytes(tooLarge),
+              max: inMegabytes(MAX_RECEIPT_BYTES),
+            })}
+      </p>
+
       {preview ? (
         <div className="relative">
           <img
