@@ -31,7 +31,7 @@ Rules for this log:
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Rating | ✅ Complete, except T7 (offline scan resolution), which stays in §10 |
-| 7 — Security review | ✅ The backlog it owned is closed; the review itself is not written |
+| 7 — Security review | ✅ Complete — `docs/SECURITY_REVIEW.md`, which found and closed four isolation defects |
 | — Browser-suite isolation and production parity (unplanned) | ✅ Complete |
 | 8 — The owner's first pass | ✅ All six closed (`d7c178d`, `8114501`, `cf18b52`, `4bbb82d`, `941d1ed`, `70386ea`); the done-when — the owner's re-pass — is the owner's to run |
 
@@ -107,7 +107,8 @@ without anybody looking for its siblings.
 | The base image stops waiting for a distro fix — CVE-2026-14456 shipped | `ccde2e1` |
 | A receipt is filed against its own household's shop | `b1ecbdd` |
 | A tripwire on the isolation defect, so the review is repeatable (D112) | `8bb2547` |
-| The review itself, and the two false claims it found in `SECURITY.md` | `382bf9a` |
+| The review itself, and the two false claims it found in `SECURITY.md` | `8081104` |
+| The security headers asserted on a real response — finding 12 closed | `4c6fb90`, `082c189` |
 
 ### Development in the image, and the phone photograph that will not decode (2026-08-25)
 
@@ -2189,3 +2190,17 @@ A security document that launders unverified findings into conclusions is worth
 less than no document, and the same is true in the other direction — `SECURITY.md`
 was found to be *understating* its own posture in two sections, which would have
 led an operator to conclude they could not rely on roles.
+
+**D113 — Never compute a commit's own sha before amending it.** The Phase 7
+ledger row cited `382bf9a`, which is a real git object and is on no branch: the
+sha was read from `HEAD`, written into the file, and then the commit was amended
+to include that file — which produced a different commit and orphaned the one
+named. The row pointed at something a `git gc` will delete, in the file whose
+entire job is to let somebody find the change later.
+
+Nothing catches this. `check:links` validates internal links, not shas, and a
+seven-character hex string looks equally plausible whether or not it resolves.
+The rule is simply to record the sha in a *following* commit rather than in the
+one being described, which costs one extra commit and cannot be got wrong. It is
+the same shape as `74cff4b`/`e13c540`, where the code and its paperwork were two
+commits on purpose.
