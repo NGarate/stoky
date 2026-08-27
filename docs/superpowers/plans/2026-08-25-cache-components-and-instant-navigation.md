@@ -37,7 +37,7 @@ builds green on two edits.**
 | 2 | No `runtime = "edge"`, no `dynamicParams`, no `experimental_ppr`, no `generateStaticParams` returning `[]` | grep across `src/` — the four other things the migration guide says break |
 | 3 | The only `Date.now()` in a rendered path is a client component's lazy `useState` initialiser | `products/[id]/page.tsx:208`. Sync IO in a *server* prerender is a build error `instant = false` cannot clear; this one is not in one |
 | 4 | With those two exports removed the build fails on exactly one route: `/_not-found` | `blocking-prerender-dynamic` |
-| 5 | With `instant = false` on the root layout the build passes, and **9 of 35 routes become Partial Prerender** | the `[id]` routes: prices, products ×4, receipts ×2, shopping |
+| 5 | With `instant = false` on the root layout the build passes, and ~~**9**~~ **8 of 35 routes become Partial Prerender** | the `[id]` routes: prices, products ×4, receipts ×2, shopping — which is eight, as the list beside the number always said. The ninth was the `◐ (Partial Prerender)` legend line, counted as a route. Re-counted 2026-08-27 |
 | 6 | `pnpm verify:ci` is green under both flags | 569 unit / 602 component / 443 integration / build, 107s |
 | 7 | ~~Next 16 also wants `middleware.ts` renamed to `proxy.ts`~~ | **Done 2026-08-27.** Renamed by hand rather than with the codemod, because the change is one file, one function name and eleven references, and a canary codemod is a larger blast radius than the edit |
 

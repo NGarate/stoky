@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-26
+Updated: 2026-08-27
 
 Single source of truth for where the project actually is.
 
@@ -15,9 +15,11 @@ say what measured it.
 Measured on 2026-08-17/18 against a live PostgreSQL and Valkey — at
 `443718d` after Phase 6, the CI campaign and the browser suite's move to the
 production artefact, and re-measured at `70386ea`, Phase 8's closing commit.
-The four suite rows were re-measured **2026-08-26** on this machine, after the
-Bun migration and the move of development into the image: 620 / 611 / 494, and
-the browser suite 148 pass / 0 fail against a Bun-served standalone build.
+The four suite rows were re-measured **2026-08-27** on this machine: 650 / 611
+/ 494, and the browser suite 148 pass / 0 fail against a Bun-served standalone
+build. The unit tier grew 30 tests and 5 files that day — the sharp import
+guard, the JPEG marker walker, the EXIF writer, the PNG builder and the upload
+body limit.
 
 The same three suites were also run **inside the development image** the day
 they moved there (`defd147`, at 609 / 611 / 486 — fewer, because the commits
@@ -30,18 +32,18 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — 363 files, 101 rules (2026-08-26) |
+| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — 371 files, 101 rules (2026-08-27) |
 | Typecheck | `pnpm typecheck` | ✅ clean |
 | React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `pnpm check:links` | ✅ 123 links against 35 routes, none broken (2026-08-26) |
 | Contrast | `pnpm check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-26) |
-| Unit tests | `pnpm test:unit` | ✅ 620 pass / 67 files (2026-08-26) |
-| Component tests | `pnpm test:components` | ✅ 611 pass / 57 files (2026-08-26) |
-| Integration tests | `pnpm test:integration` | ✅ 494 pass / 32 files (2026-08-26) |
-| Build | `pnpm build` | ✅ **35 routes, 9 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`). 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
+| Unit tests | `pnpm test:unit` | ✅ 650 pass / 72 files (2026-08-27) |
+| Component tests | `pnpm test:components` | ✅ 611 pass / 57 files (2026-08-27) |
+| Integration tests | `pnpm test:integration` | ✅ 494 pass / 32 files (2026-08-27) |
+| Build | `pnpm build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail** (2026-08-26) — against a **Bun-served** standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail** (2026-08-27) — against a **Bun-served** standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
 
 ~~**Use `pnpm`, not `corepack pnpm`.**~~ **Resolved by the 11.22.0 bump**
@@ -77,6 +79,20 @@ measurements, the migration and the owner's decision on the CSP nonce are in
 **The root layout blocks on purpose** (`instant = false`), because it reads the
 per-request CSP nonce and a nonce that survives prerendering is not a nonce.
 That trade was decided rather than deferred; the reasoning is beside the export.
+
+**Eight routes are Partial Prerender, not nine.** Both this file and the plan
+said nine, and the plan's own list gave it away: it enumerated prices,
+products ×4, receipts ×2 and shopping, which is eight. The ninth was the
+legend line — `◐  (Partial Prerender)` — counted as a route by whatever grep
+produced the number. Re-counted from the build output on 2026-08-27.
+
+**`partialPrefetching` also has a cost, and it is recorded rather than
+implied.** Under Bun, each completed router prefetch raises one unhandled
+`AbortError` — roughly ten per page load, in the only monitoring this project
+has. Node raises none on the identical artefact, so it is an interop defect
+this configuration exposes. The owner chose to keep the feature on 2026-08-27;
+`ISSUES.md` RUNTIME-1 has the one-line reproduction and stays open for the
+upstream report.
 
 **The production image was built and run under the flags on 2026-08-26**,
 because CI never did: the image jobs were skipped on the green commit (docs
