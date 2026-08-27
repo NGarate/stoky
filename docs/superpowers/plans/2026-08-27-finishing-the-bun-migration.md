@@ -173,6 +173,38 @@ That guard is worth writing *before* any of the conversion work, because it is
 five minutes, it is useful whether or not sharp is ever removed, and it is the
 only item here that closes a hole rather than tidying one.
 
+**Written** (`92156c9`). It matches the three import spellings rather than the
+word, because two files in `src/` explain sharp in prose and a guard that goes
+red on an explanation gets deleted. It also pins the other half of the pair —
+the trace exclusion, and sharp's place in `devDependencies` — since an import
+ban is pointless without the exclusion and a change to either is a decision
+about the other.
+
+### And a correction to the target above
+
+**"Sharp becomes unreferenced" is the wrong goal, and the conversion work is
+what showed it.** After step 4 the library is imported by exactly two files:
+`unit/jpeg-markers.test.ts` and `unit/exif-writer.test.ts`. Both exist *to
+disagree with it* — one proves the byte readers give sharp's answers, the other
+proves the EXIF writer produces something sharp can read back.
+
+Removing sharp from those is not a smaller dependency. It is deleting the only
+check that this repository's hand-written TIFF and PNG are anything more than
+bytes it believes in on its own authority, which is precisely the "stops
+testing while still passing" failure §1 already warns about for the bomb
+fixture.
+
+So the honest end state is: **sharp stays in `devDependencies` as a
+cross-check, and is referenced nowhere else.** That is reached. What it costs is
+19 MB of `pnpm install` in development and nothing in production. What it buys
+is that two hand-written binary formats are continuously checked against a real
+implementation.
+
+This makes the HEIC decision below **independent of whether sharp is
+installed** — it was the last reason sharp had to *ship*, and it is still a
+decision, but it is no longer the thing standing between the repository and a
+smaller dependency list.
+
 ---
 
 ## 2. HEIC is why sharp is still installed, and it is shut
@@ -250,24 +282,29 @@ independent of everything else here.
 3. ~~**Run the missing experiment**: does a hand-built PNG bomb still trigger the
    `maxPixels` refusal?~~ **Done, and it does** — 68 bytes, with the control case
    that makes the answer evidence rather than a coincidence. See §1.
-4. **Convert the three test files** — byte-scan for EXIF, committed or
-   hand-built fixtures. Sharp becomes unreferenced but stays installed.
-   **Assertions done, fixtures half done.**
+4. ~~**Convert the three test files** — byte-scan for EXIF, committed or
+   hand-built fixtures. Sharp becomes unreferenced but stays installed.~~
+   **Done** (`758f472`, `7f795fc`, `80c2d23`, `ec14fd9`, `00a3b07`), with one
+   correction to its own goal.
 
-   Done: every *assertion* across all three files reads bytes instead of asking
-   sharp (`758f472`, `7f795fc`, `ec14fd9`), and the decompression bomb is
-   hand-assembled, which frees `receipt.router.test.ts` of the import entirely
-   (`80c2d23`). The walker grew two readers beyond the plan's twelve-line EXIF
-   scan — see below.
+   Every assertion reads bytes; every fixture is hand-assembled — PNGs from
+   `../utils/png`, EXIF from `../utils/exif` writing real TIFF, and the base
+   JPEG from `reencodeAsJpeg(pngOf(w, h))` on the runtime that ships.
 
-   Left: sharp still *builds* fixtures in three files, all of them JPEGs
-   carrying EXIF. Replacing those needs committed bytes or a hand-written TIFF
-   IFD writer; the PNG side is already built (`../utils/png.ts`). Only after
-   that is sharp unreferenced.
+   Sharp is **not** unreferenced, and should not be. It survives in exactly two
+   files whose job is to disagree with it. See §1's correction: removing it
+   there deletes the only check that the hand-written formats are more than
+   bytes this repository believes in on its own authority.
 
-   **`unit/jpeg-markers.test.ts` must keep its sharp import regardless.** Its
-   job is to prove the walker and sharp agree, and an agreement test with one
-   party removed is not a cheaper version of itself.
+   Three things the conversion turned up, each of which would have produced a
+   test that passed while testing nothing:
+   - `Bun.Image` **normalises orientation while decoding**, so it cannot be the
+     instrument for a test about whether orientation was baked in;
+   - the strict bomb control belongs at the unit tier, because through
+     `receipt.upload` a bomb and a malformed image are both `BAD_REQUEST`;
+   - a token `IDAT` passes the header check and fails the decode, so "accepted"
+     depends on which of the two a test actually exercises.
+
 5. **HEIC decision** (pre-plan, open decision 4). Until it is taken, sharp stays
    in `package.json` whether or not anything imports it, and saying so in the
    file is better than leaving a dependency nobody can explain.
