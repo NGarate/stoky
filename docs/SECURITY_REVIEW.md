@@ -47,7 +47,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 6 | `SECURITY.md` states two things about itself that are false | Medium | ✅ Corrected below, verified | — |
 | 7 | Half the restricted procedures have no behavioural refusal test | Medium | ✅ Verified (21 of 28), closed `bc88635` `6ef3fda` | — |
 | 8 | No server-side session revocation | High | Reported | owner |
-| 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | Reported | operator + owner |
+| 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | ✅ Verified, documented; the remedy is a decision | operator + owner |
 | 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
 | 11 | Fail-closed is unproven at every limiter call site | High | ✅ Closed `7a663a1` | — |
 | 12 | Nothing asserts a security header reaches a response | High | ✅ Closed `4c6fb90` | — |
@@ -175,11 +175,22 @@ the four gaps Phase 3 left and Phase 7 was to close, and they are closed.
 
 **Reported, not verified, and the strongest set in this review:**
 
-- The **per-IP key is attacker-controlled** on any deployment without a
-  header-sanitising proxy — the documented Traefik setup does sanitise, but the
-  project supports being run behind whatever the operator already has. With no
-  proxy header at all, every caller shares one bucket, which turns a per-IP
-  limiter into a global one.
+- ~~The **per-IP key is attacker-controlled** on any deployment without a
+  header-sanitising proxy.~~ **Verified, and the second half of that sentence was
+  the wrong worry.** With no proxy header at all every caller shares the
+  `unknown` bucket, which over-restricts and is safe. The real exposure is a
+  caller who *sends* the header: measured, `X-Forwarded-For: 1.2.3.4` is counted
+  against `1.2.3.4` and `9.9.9.9` gets a fresh counter, because with one entry
+  the last hop is the only hop. `X-Real-IP` is trusted the same way.
+
+  Not a defect in the code — HTTP gives it nothing to tell a proxy's entry from
+  a client's — so it is a **deployment requirement**, now stated as one in
+  `SECURITY.md` instead of implied by a parenthetical that called the last hop
+  unforgeable. `unit/rate-limit.test.ts` pins the behaviour under "what the
+  identifier cannot know", so changing the trust model means changing those
+  tests and that paragraph together. The remedy — a trusted-proxy allowlist, or
+  refusing to start without one — is a decision with costs and stays with the
+  operator and the owner.
 - ~~The **registration limit is exercised by no test**.~~ **Verified and
   closed** (`33bdc14`). The finding was right about the cause: every test built
   its tRPC context without headers, and `auth.register` meters only

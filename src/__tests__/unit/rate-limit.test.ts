@@ -58,6 +58,65 @@ describe("rateLimitIdentifier", () => {
   });
 });
 
+/**
+ * What this function cannot do, pinned so nobody has to rediscover it —
+ * `docs/SECURITY_REVIEW.md` finding 9.
+ *
+ * The tests above establish that the *last* hop is taken, and describe it as
+ * the entry a client cannot forge. That is true behind a proxy that appends,
+ * and **false when the application is reachable directly**: then the whole
+ * header is whatever the caller typed, the last hop is the only hop, and a
+ * caller who varies it gets a fresh counter every request.
+ *
+ * This is not a defect in the function. HTTP gives it nothing to tell "the
+ * proxy wrote this" from "the client wrote this" — the distinction lives in the
+ * deployment, not in the header. What these tests do is stop the requirement
+ * being invisible: they state the exposure as behaviour, so it cannot be
+ * discovered later as a surprise, and they go red if somebody changes the trust
+ * model without changing `SECURITY.md` with it.
+ *
+ * The remedy is an owner's decision and is not taken here: an allowlist of
+ * trusted proxy addresses, refusing to start without one, or accepting the
+ * exposure and documenting the deployment requirement — which is what is done
+ * for now.
+ */
+describe("what the identifier cannot know", () => {
+  it("honours a header the caller wrote, when nothing has appended to it", () => {
+    // One entry means the last hop *is* the first hop. Nothing here can tell
+    // that apart from a proxy's own single entry.
+    expect(rateLimitIdentifier(new Headers({ "x-forwarded-for": "1.2.3.4" }))).toBe(
+      "1.2.3.4",
+    );
+  });
+
+  it("gives a caller who varies it a fresh bucket every time", () => {
+    // The whole per-IP limit, defeated by a header, on any deployment that
+    // exposes the app without a proxy in front of it.
+    const first = rateLimitIdentifier(new Headers({ "x-forwarded-for": "1.2.3.4" }));
+    const second = rateLimitIdentifier(new Headers({ "x-forwarded-for": "9.9.9.9" }));
+
+    expect(first).not.toBe(second);
+  });
+
+  it("trusts X-Real-IP the same way, and for the same reason", () => {
+    // The fallback is not safer than the header it falls back from; it is the
+    // same trust placed in a different name.
+    expect(rateLimitIdentifier(new Headers({ "x-real-ip": "5.5.5.5" }))).toBe(
+      "5.5.5.5",
+    );
+  });
+
+  it("is bounded by the per-account limit, which is what makes this survivable", () => {
+    // Not a property of this function — a property of the pair. Sign-in also
+    // counts per account on a hashed key (NIST SP 800-63B §5.2.2), so a caller
+    // with unlimited addresses still buys only ten attempts per account per
+    // window. That is the reason this exposure is a documented requirement
+    // rather than an open door.
+    expect(loginAccountRateLimit().attempts).toBe(10);
+    expect(loginAccountRateLimit().prefix).not.toBe(loginRateLimit().prefix);
+  });
+});
+
 describe("accountIdentifier", () => {
   it("does not put the address in the key", () => {
     // The property worth having: a `KEYS rl:login:acct:*` on Valkey — which in

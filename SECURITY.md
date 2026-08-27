@@ -207,10 +207,31 @@ What is still open, and worth knowing before publishing an instance:
   needs credentials first, and those calls read rows rather than start OCR —
   but it is not nothing on a shared household instance.
 - **The identifier is an IP address**, read from the last hop of
-  `X-Forwarded-For` (the entry the proxy in front of the app writes, and the
-  only one a client cannot forge). Everyone behind one NAT therefore shares a
-  bucket. An attacker with a range of addresses gets one bucket per address,
-  which is what the per-account limit above exists to bound.
+  `X-Forwarded-For`. Everyone behind one NAT therefore shares a bucket. An
+  attacker with a range of addresses gets one bucket per address, which is what
+  the per-account limit above exists to bound.
+- **That makes a proxy a requirement, not a recommendation.** The last hop is
+  the entry a client cannot forge *only when something in front of the app
+  appends to the header*. Reachable directly, the whole header is whatever the
+  caller sent — measured, not inferred: a request carrying
+  `X-Forwarded-For: 1.2.3.4` is counted against `1.2.3.4`, and one carrying
+  `9.9.9.9` gets a fresh counter. `X-Real-IP` is trusted the same way and for
+  the same reason. Nothing in the header distinguishes a proxy's entry from a
+  client's, so nothing in the application can either.
+
+  **So: do not expose this application without a reverse proxy that sets
+  `X-Forwarded-For` itself.** `docker-compose.prod.yml` puts Traefik in front and
+  Traefik does. A deployment that publishes the container's port directly has a
+  per-IP limit an attacker turns off with one header — bounded only by the
+  per-account limit above, which is what keeps that from being an open door
+  rather than what makes it safe.
+
+  Recorded as a deployment requirement rather than fixed, because the fixes are
+  choices with costs — an allowlist of trusted proxy addresses, or refusing to
+  start without one — and they are the operator's and the owner's to make.
+  `src/__tests__/unit/rate-limit.test.ts` pins the current behaviour under
+  "what the identifier cannot know", so changing the trust model means changing
+  those tests and this paragraph together.
 - **A refusal says how long to wait.** A 429 from tRPC carries `Retry-After`,
   read off the refusal rather than recomputed, so the header and the message
   cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
