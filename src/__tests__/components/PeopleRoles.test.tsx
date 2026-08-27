@@ -40,20 +40,32 @@ function MemberRow({
   role,
   onSave,
   onRemove,
+  onRevoke = () => {},
 }: {
   name: string;
   role: Role;
   onSave: (role: Role) => void;
   onRemove: () => void;
+  onRevoke?: () => void;
 }): JSX.Element {
   const [pending, setPending] = useState<Role>(role);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   return (
     <ul>
       <ItemRow
         actions={
-          confirming ? (
+          confirmingRevoke ? (
+            <div role="group" aria-label={`¿Cerrar todas las sesiones de ${name}?`}>
+              <Button onClick={onRevoke} type="button">
+                Sí, cerrar sus sesiones
+              </Button>
+              <Button onClick={() => setConfirmingRevoke(false)} type="button" variant="outline">
+                Cancelar
+              </Button>
+            </div>
+          ) : confirming ? (
             <div role="group" aria-label={`¿Quitar a ${name} del hogar?`}>
               <Button onClick={onRemove} type="button" variant="destructive">
                 Sí, quitar del hogar
@@ -85,6 +97,9 @@ function MemberRow({
                   Guardar el rol
                 </Button>
               </form>
+              <Button onClick={() => setConfirmingRevoke(true)} type="button" variant="outline">
+                Cerrar sus sesiones
+              </Button>
               <Button onClick={() => setConfirming(true)} type="button" variant="outline">
                 Quitar del hogar
               </Button>
@@ -192,5 +207,64 @@ describe("removing a member", () => {
     expect(onRemove).toHaveBeenCalledTimes(0);
     // The controls are back, which is what "cancel" has to mean.
     expect(screen.getByLabelText("Rol de Ana")).toBeInTheDocument();
+  });
+});
+
+describe("ending a member's sessions", () => {
+  it("asks before doing it, like a removal", async () => {
+    const onRevoke = mock(() => {});
+    renderWithIntl(
+      <MemberRow
+        name="Ana"
+        onRemove={() => {}}
+        onRevoke={onRevoke}
+        onSave={() => {}}
+        role="KITCHEN"
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sus sesiones" }));
+
+    expect(onRevoke).toHaveBeenCalledTimes(0);
+    expect(
+      screen.getByRole("group", { name: "¿Cerrar todas las sesiones de Ana?" }),
+    ).toBeInTheDocument();
+  });
+
+  it("is a different act from removing them, offered separately", async () => {
+    // "They left" and "their phone was stolen" are different problems. A
+    // household offered only a removal would delete somebody to answer the
+    // second, which is why both buttons sit in the row.
+    renderWithIntl(
+      <MemberRow name="Ana" onRemove={() => {}} onSave={() => {}} role="KITCHEN" />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Cerrar sus sesiones" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quitar del hogar" })).toBeInTheDocument();
+  });
+
+  it("ends them on the second answer", async () => {
+    const onRevoke = mock(() => {});
+    renderWithIntl(
+      <MemberRow
+        name="Ana"
+        onRemove={() => {}}
+        onRevoke={onRevoke}
+        onSave={() => {}}
+        role="KITCHEN"
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sus sesiones" }));
+    const confirm = screen.getByRole("group", {
+      name: "¿Cerrar todas las sesiones de Ana?",
+    });
+    await userEvent.click(
+      within(confirm).getByRole("button", { name: "Sí, cerrar sus sesiones" }),
+    );
+
+    expect(onRevoke).toHaveBeenCalledTimes(1);
   });
 });

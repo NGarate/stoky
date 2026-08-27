@@ -905,7 +905,15 @@
     "removeDone": "{name} no longer belongs to this household.",
     "removeFailedLastOwner": "The household would have no owner. Make somebody else an owner before removing this one.",
     "removeFailedNotOwner": "Only an owner may remove another owner.",
-    "removeFailed": "They could not be removed. Try again."
+    "removeFailed": "They could not be removed. Try again.",
+    "revokeButton": "End their sessions",
+    "revokeConfirmTitle": "End all of {name}'s sessions?",
+    "revokeConfirmBody": "They stay in the household and can sign in again with their password. What ends is every device where they are signed in right now — this is the answer to \"the tablet has been lost\".",
+    "revokeConfirm": "Yes, end their sessions",
+    "revokeCancel": "Cancel",
+    "revokeDone": "{name}'s sessions have been ended.",
+    "revokeFailedNotOwner": "Only an owner may end another owner's sessions.",
+    "revokeFailed": "Their sessions could not be ended. Try again."
   },
   "session": {
     "expiringIn": "Your session will close in {minutes} min after being idle. Anything unsaved will be lost.",

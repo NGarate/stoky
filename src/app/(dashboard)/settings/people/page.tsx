@@ -75,6 +75,7 @@ export default function PeoplePage(): JSX.Element {
    */
   const [pendingRole, setPendingRole] = useState<Record<string, HouseholdRole>>({});
   const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
   const [rowFailure, setRowFailure] = useState<{ id: string; message: string } | null>(
     null,
   );
@@ -121,6 +122,29 @@ export default function PeoplePage(): JSX.Element {
     },
     onError: (error, variables) => {
       setRowFailure({ id: variables.userId, message: refusalMessage(error, "role") });
+    },
+  });
+
+  const revokeSessions = api.household.revokeMemberSessions.useMutation({
+    onSuccess: (_result, variables) => {
+      const target = members.data?.find((candidate) => candidate.id === variables.userId);
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "household.revokeDone",
+          values: { name: target?.name ?? "" },
+        },
+      });
+      setRowFailure(null);
+      setConfirmingRevoke(null);
+    },
+    onError: (error, variables) => {
+      const code =
+        error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+      setRowFailure({
+        id: variables.userId,
+        message: code === "FORBIDDEN" ? t("revokeFailedNotOwner") : t("revokeFailed"),
+      });
     },
   });
 
@@ -182,7 +206,44 @@ export default function PeoplePage(): JSX.Element {
             title={member.name}
             actions={
               <div className="w-full">
-                {confirmingRemoval === member.id ? (
+                {confirmingRevoke === member.id ? (
+                  /* Asked twice like a removal, and for the same reason: it
+                     cannot be undone from here. Not `destructive` though —
+                     nothing is destroyed, and the copy says so. Somebody who
+                     has lost a device should not be made to feel they are
+                     deleting the person. */
+                  <div
+                    role="group"
+                    aria-label={t("revokeConfirmTitle", { name: member.name })}
+                    className="rounded border border-border bg-muted p-3"
+                  >
+                    <p className="font-semibold text-foreground">
+                      {t("revokeConfirmTitle", { name: member.name })}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t("revokeConfirmBody")}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Button
+                        disabled={revokeSessions.isPending}
+                        onClick={() => revokeSessions.mutate({ userId: member.id })}
+                        type="button"
+                      >
+                        {t("revokeConfirm")}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setConfirmingRevoke(null);
+                          setRowFailure(null);
+                        }}
+                        type="button"
+                        variant="outline"
+                      >
+                        {t("revokeCancel")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : confirmingRemoval === member.id ? (
                 /* The same shape `product.delete` uses: asked twice, in the
                    audited danger pair, as a group a screen reader can announce
                    whole. A removal is not undoable from this screen. */
@@ -276,6 +337,21 @@ export default function PeoplePage(): JSX.Element {
                       {updateRole.isPending ? t("roleSaving") : t("roleSave")}
                     </Button>
                   </form>
+
+                  {/* Two different problems, two different acts. "They left"
+                      is a removal; "their phone was stolen" is this, and
+                      offering only the first would make a household delete
+                      somebody to answer the second. */}
+                  <Button
+                    onClick={() => {
+                      setConfirmingRevoke(member.id);
+                      setRowFailure(null);
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("revokeButton")}
+                  </Button>
 
                   <Button
                     onClick={() => {
