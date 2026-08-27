@@ -335,6 +335,12 @@ Still a finding with an owner, and now a sharper one: it is not only "should
 there be revocation" but "there is no member management at all", which is a
 product gap the review found by trying to write a test for the mitigation.
 
+**The second half now has a home.** A household admin panel — list the members,
+change a role, remove one — was added to `REDESIGN_PLAN.md` §10's unowned table
+on 2026-08-27. It does not need new revocation machinery: the mechanism is
+already there and proven, and what is missing is the way to trigger it. Whether
+sessions should *also* be revocable independently of membership stays open.
+
 ## 7. Dependency and image posture
 
 **Verified today:**
