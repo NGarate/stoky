@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { readFile, rm } from "node:fs/promises";
 import sharp from "sharp";
+import { exifPayload, hasExif, isJpeg } from "../utils/jpeg";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +31,11 @@ import {
  * The file it writes is deleted afterwards. `uploads/receipts/` had 48 orphaned
  * household directories from previous runs when this was written, which is the
  * suite's own small instance of finding 16.
+ *
+ * `sharp` remains only to *build* the photograph, because `Bun.Image` has no
+ * `create`. Nothing here asks it about a result: EXIF and the JPEG marker are
+ * read out of the file's own bytes by `../utils/jpeg`, which is the runtime
+ * this application actually deploys on rather than a second opinion.
  */
 
 const HOUSEHOLD = "Upload Artefact Household";
@@ -146,7 +152,7 @@ describe("what is in the file", () => {
     expect(onDisk[0]).toBe(0xff);
     expect(onDisk[1]).toBe(0xd8);
     expect(onDisk[2]).toBe(0xff);
-    expect((await sharp(onDisk).metadata()).format).toBe("jpeg");
+    expect(isJpeg(onDisk)).toBe(true);
   });
 
   it("carries none of the metadata the photograph arrived with", async () => {
@@ -156,12 +162,14 @@ describe("what is in the file", () => {
     const source = await photographWithExif();
 
     // The premise: the thing being uploaded really does carry metadata.
-    expect((await sharp(source).metadata()).exif).toBeDefined();
+    expect(hasExif(source)).toBe(true);
+    expect(exifPayload(source).length).toBeGreaterThan(0);
 
     const { imagePath } = await upload();
     const onDisk = await readFile(imagePath);
 
-    expect((await sharp(onDisk).metadata()).exif).toBeUndefined();
+    expect(hasExif(onDisk)).toBe(false);
+    expect(exifPayload(onDisk).length).toBe(0);
     expect(onDisk.toString("latin1")).not.toContain("ArtefactPhone");
   });
 
