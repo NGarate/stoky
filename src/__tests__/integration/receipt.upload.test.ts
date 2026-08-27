@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { readFile, rm } from "node:fs/promises";
-import sharp from "sharp";
 import { exifPayload, hasExif, isJpeg } from "../utils/jpeg";
+import { withExif } from "../utils/exif";
+import { pngOf } from "../utils/png";
+import { reencodeAsJpeg } from "@/server/services/image";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -32,10 +34,10 @@ import {
  * household directories from previous runs when this was written, which is the
  * suite's own small instance of finding 16.
  *
- * `sharp` remains only to *build* the photograph, because `Bun.Image` has no
- * `create`. Nothing here asks it about a result: EXIF and the JPEG marker are
- * read out of the file's own bytes by `../utils/jpeg`, which is the runtime
- * this application actually deploys on rather than a second opinion.
+ * **No `sharp` at all now**, in either role. EXIF and the JPEG marker are read
+ * out of the file's own bytes by `../utils/jpeg`, and the photograph is
+ * assembled by `../utils/png` and `../utils/exif` — both of which are held to
+ * sharp's answers in their own unit tests, which is where that check belongs.
  */
 
 const HOUSEHOLD = "Upload Artefact Household";
@@ -48,27 +50,26 @@ let householdId: string;
 /** Everything written during this file, removed in `afterAll` whatever happens. */
 const written: string[] = [];
 
-/** A JPEG carrying what a phone attaches, so "stripped" can mean something. */
+/**
+ * A JPEG carrying what a phone attaches, so "stripped" can mean something.
+ *
+ * Built with no `sharp`: a hand-assembled PNG, re-encoded to JPEG by the
+ * runtime that ships, with an `APP1` segment spliced in after `SOI`. The
+ * builders are checked against sharp in `unit/exif-writer.test.ts` and
+ * `unit/png-builder.test.ts`, so these are not bytes only this repository
+ * believes in.
+ *
+ * `reencodeAsJpeg` appears in the fixture and is also the thing under test
+ * downstream — but not for the same property. What it strips here is nothing;
+ * the metadata is added afterwards, and the premise that it is really there is
+ * asserted before the stripping is.
+ */
 async function photographWithExif(): Promise<Buffer> {
-  // Copied out of sharp's pooled buffer: `Bun.Image` refuses a resizable one,
-  // and the router's own `Buffer.from(base64)` is never pooled. See
-  // `unit/image-reencode.test.ts` for the full story.
-  return Buffer.from(
-    await sharp({
-      create: {
-        width: 60,
-        height: 40,
-        channels: 3,
-        background: { r: 200, g: 180, b: 160 },
-      },
-    })
-      .jpeg()
-      .withExif({
-        IFD0: { Copyright: "Upload Artefact Test", Make: "ArtefactPhone" },
-        IFD3: { GPSLatitudeRef: "N", GPSLongitudeRef: "W" },
-      })
-      .toBuffer(),
-  );
+  return withExif(await reencodeAsJpeg(pngOf(60, 40)), {
+    copyright: "Upload Artefact Test",
+    make: "ArtefactPhone",
+    gps: { latitudeRef: "N", longitudeRef: "W" },
+  });
 }
 
 async function upload(): Promise<{ id: string; imagePath: string }> {

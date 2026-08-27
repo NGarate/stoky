@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
-import sharp from "sharp";
 import { MAX_PIXELS, readImageMetadata, reencodeAsJpeg } from "@/server/services/image";
+import { withExif } from "../utils/exif";
+import { pngClaiming, pngOf } from "../utils/png";
 import {
   exifOrientation,
   exifPayload,
@@ -32,54 +33,32 @@ import {
  * library's opinion of them. `unit/jpeg-markers.test.ts` holds the walker to
  * sharp's answers so the swap is a fact rather than a hope.
  *
- * `sharp` still *builds* the fixtures, because `Bun.Image` has no `create` —
- * its statics are all clipboard. That is the fixture half of
- * `docs/superpowers/plans/2026-08-27-finishing-the-bun-migration.md` §1 and is
- * deliberately not this file's business yet.
- *
- * ## The buffer trap, recorded so nobody rediscovers it
- *
- * `sharp`'s `.toBuffer()` hands back a Buffer over a pooled, resizable
- * `ArrayBuffer`, and `Bun.Image` refuses one: *"resizable / shared ArrayBuffer
- * is not supported"*. That is a fixture problem and **not** a product one — the
- * router feeds it `Buffer.from(fileBase64, "base64")`, which is fixed-length
- * and unpooled, confirmed by reading `.buffer.byteLength` and `.byteOffset` off
- * a real one. Every fixture here is copied through `fixedLength` for that
- * reason; without it these tests fail for a reason that says nothing about the
- * code.
+ * **And nothing builds its fixtures with `sharp` any more either.** `pngOf`
+ * assembles a valid PNG, `reencodeAsJpeg` turns it into a valid JPEG on the
+ * runtime that ships, and `withExif` splices the metadata in — the way a camera
+ * does. `unit/exif-writer.test.ts` and `unit/png-builder.test.ts` hold both
+ * builders to what sharp reads back, so the fixtures are checked against a
+ * second opinion in one place rather than depending on one everywhere.
  */
 
-/** A copy backed by its own fixed-length ArrayBuffer. See the docblock. */
-function fixedLength(buffer: Buffer): Buffer {
-  return Buffer.from(buffer);
-}
-
-/** A small JPEG, optionally carrying the metadata a phone attaches. */
-async function photograph(
-  options: { gps?: boolean } = {},
-): Promise<Buffer> {
-  const image = sharp({
-    create: {
-      width: 40,
-      height: 20,
-      channels: 3,
-      background: { r: 10, g: 20, b: 30 },
-    },
-  }).jpeg();
-
-  return fixedLength(
-    await image
-      .withExif({
-        IFD0: { Copyright: "Stoky Test", Make: "TestPhone", Model: "TestModel" },
-        // `IFD3` is where EXIF keeps GPS, and it is the block this control
-        // exists for: a photograph of a receipt is taken where the household
-        // shops, and often where it lives.
-        ...(options.gps
-          ? { IFD3: { GPSLatitudeRef: "N", GPSLongitudeRef: "W" } }
-          : {}),
-      })
-      .toBuffer(),
-  );
+/**
+ * A small JPEG, optionally carrying the metadata a phone attaches.
+ *
+ * No `sharp` anywhere: `pngOf` assembles a valid PNG, `reencodeAsJpeg` turns it
+ * into a valid JPEG using the runtime that ships, and `withExif` splices the
+ * `APP1` segment in after `SOI` — which is where a camera puts it.
+ * `unit/exif-writer.test.ts` holds that writer to what sharp reads back, so
+ * these are not bytes only this repository believes in.
+ */
+async function photograph(options: { gps?: boolean } = {}): Promise<Buffer> {
+  return withExif(await reencodeAsJpeg(pngOf(40, 20)), {
+    copyright: "Stoky Test",
+    make: "TestPhone",
+    model: "TestModel",
+    // The block this control exists for: a photograph of a receipt is taken
+    // where the household shops, and often where it lives.
+    ...(options.gps ? { gps: { latitudeRef: "N", longitudeRef: "W" } } : {}),
+  });
 }
 
 /**
@@ -154,13 +133,7 @@ describe("the format", () => {
   it("stops being whatever was sent", async () => {
     // A PNG in. What lands on disk is a JPEG this server produced, which is the
     // point of re-encoding at all: the bytes are ours rather than a caller's.
-    const png = fixedLength(
-      await sharp({
-        create: { width: 30, height: 30, channels: 3, background: { r: 1, g: 2, b: 3 } },
-      })
-        .png()
-        .toBuffer(),
-    );
+    const png = pngOf(30, 30);
 
     const output = await reencodeAsJpeg(png);
 
@@ -190,14 +163,9 @@ describe("orientation", () => {
     // source and the output — through that lens the two are identical and this
     // test proves nothing. SOF describes the pixels that are actually encoded,
     // which is the question being asked.
-    const landscape = fixedLength(
-      await sharp({
-        create: { width: 120, height: 60, channels: 3, background: { r: 5, g: 5, b: 5 } },
-      })
-        .withMetadata({ orientation: 6 })
-        .jpeg()
-        .toBuffer(),
-    );
+    const landscape = withExif(await reencodeAsJpeg(pngOf(120, 60)), {
+      orientation: 6,
+    });
 
     // The premise: the source really is stored landscape and really is tagged.
     expect(jpegDimensions(landscape)).toEqual({ width: 120, height: 60 });
@@ -222,19 +190,7 @@ describe("the pixel bound", () => {
     // `SECURITY_REVIEW.md` finding 14, from the other side. 9000 × 9000 is 81
     // megapixels in a couple of hundred kilobytes: under any byte cap, and
     // gigabytes to decode.
-    const bomb = fixedLength(
-      await sharp({
-        create: {
-          width: 9000,
-          height: 9000,
-          channels: 3,
-          background: { r: 9, g: 9, b: 9 },
-        },
-        limitInputPixels: false,
-      })
-        .png({ compressionLevel: 6 })
-        .toBuffer(),
-    );
+    const bomb = pngClaiming(9000, 9000);
 
     // The premise that makes this finding what it is: it is *small*.
     expect(bomb.length).toBeLessThan(2 * 1024 * 1024);
@@ -253,20 +209,9 @@ describe("the pixel bound", () => {
   it("still accepts a photograph a phone would actually take", async () => {
     // The half that stops the bound from being set by lowering it to nothing.
     // 4000 × 3000 is 12 megapixels, which is an ordinary camera.
-    const photograph = fixedLength(
-      await sharp({
-        create: {
-          width: 4000,
-          height: 3000,
-          channels: 3,
-          background: { r: 120, g: 120, b: 120 },
-        },
-      })
-        .jpeg()
-        .toBuffer(),
-    );
+    const twelveMegapixels = pngOf(4000, 3000);
 
-    const output = await reencodeAsJpeg(photograph);
+    const output = await reencodeAsJpeg(twelveMegapixels);
 
     expect((await readImageMetadata(output)).width).toBe(4000);
   });
