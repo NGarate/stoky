@@ -36,13 +36,19 @@ Verified: 148/148 browser tests against a Bun-served standalone build, and
 `package.json:92` still carries `"sharp": "^0.35.3"` as a devDependency. Three
 test files import it:
 
-| File | What it does with sharp |
-|---|---|
-| `src/__tests__/unit/image-reencode.test.ts` | builds fixtures **and** reads EXIF back |
-| `src/__tests__/integration/receipt.upload.test.ts` | builds a fixture, then asserts format and EXIF on what was stored |
-| `src/__tests__/integration/receipt.router.test.ts` | builds the decompression-bomb fixture |
+| File | What it does with sharp | Now |
+|---|---|---|
+| `src/__tests__/unit/image-reencode.test.ts` | builds fixtures **and** reads EXIF back | no sharp |
+| `src/__tests__/integration/receipt.upload.test.ts` | builds a fixture, then asserts format and EXIF on what was stored | no sharp |
+| `src/__tests__/integration/receipt.router.test.ts` | builds the decompression-bomb fixture | no sharp |
 
 So sharp is doing **two** jobs, and they have different answers.
+
+**Both are answered, and the third column is why the count did not go to zero.**
+Sharp is now imported by two files that did not exist when this was written —
+`unit/jpeg-markers.test.ts` and `unit/exif-writer.test.ts` — whose entire job is
+to check the replacements against it. See the correction at the end of this
+section: that is the intended end state, not a leftover.
 
 ### The assertion job: `Bun.Image` cannot see EXIF
 
