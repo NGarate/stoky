@@ -345,6 +345,34 @@ describe("the household itself — admin tier", () => {
 
     expect(await prisma.user.count({ where: { householdId } })).toBe(before);
   });
+
+  it("refuses either of them the member management, and changes nobody", async () => {
+    // Added with the procedures themselves, because the whole point of this
+    // file is that a restricted procedure without a behavioural refusal is a
+    // declaration rather than a control — and two new admin procedures with no
+    // row here would reopen `SECURITY_REVIEW.md` finding 7 by exactly two.
+    //
+    // The target is the kitchen account: a real member of this household, so
+    // the refusal cannot be the `NOT_FOUND` that a foreign id would produce.
+    for (const [role, caller] of [
+      ["kitchen", kitchen],
+      ["member", member],
+    ] as const) {
+      await expectTierRefusal(`household.updateRole as ${role}`, () =>
+        caller.household.updateRole({ userId: kitchenUserId, role: "ADMIN" }),
+      );
+      await expectTierRefusal(`household.removeMember as ${role}`, () =>
+        caller.household.removeMember({ userId: kitchenUserId }),
+      );
+    }
+
+    const target = await prisma.user.findUniqueOrThrow({
+      where: { id: kitchenUserId },
+      select: { role: true, householdId: true },
+    });
+    expect(target.role).toBe("KITCHEN");
+    expect(target.householdId).toBe(householdId);
+  });
 });
 
 describe("the household's settings — admin tier", () => {

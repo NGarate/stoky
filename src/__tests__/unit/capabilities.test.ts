@@ -39,11 +39,18 @@ const EXPECTED: Record<string, Record<string, string>> = {
   "household.ts": {
     current: "protectedProcedure",
     create: "protectedProcedure",
-    // The other two are admin: the matrix puts "invite people" and "see
-    // account data and emails" there, and a kitchen tablet left on a counter
-    // must not list the household's email addresses to whoever picks it up.
+    // The rest are admin: the matrix puts "invite people" and "see account
+    // data and emails" there, and a kitchen tablet left on a counter must not
+    // list the household's email addresses to whoever picks it up.
     members: "adminProcedure",
     addMember: "adminProcedure",
+    // Changing who may do what, and who is in the household at all, is the
+    // same authority as inviting — stricter if anything. The tier is not the
+    // whole guard here: only an *owner* may grant or revoke ownership, and
+    // that distinction is inside the resolver, because a tier cannot see who
+    // is asking. `integration/household.roles.test.ts` holds both.
+    updateRole: "adminProcedure",
+    removeMember: "adminProcedure",
   },
   "inventory.ts": {
     getStockOverview: "householdProcedure",

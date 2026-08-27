@@ -2,7 +2,13 @@ import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
-import { addMemberSchema, householdSchema } from "@/lib/validations/household";
+import type { HouseholdRole } from "@prisma/client";
+import {
+  addMemberSchema,
+  householdSchema,
+  removeMemberSchema,
+  updateMemberRoleSchema,
+} from "@/lib/validations/household";
 
 /**
  * The household an account belongs to.
@@ -16,6 +22,90 @@ import { addMemberSchema, householdSchema } from "@/lib/validations/household";
  * threw and the pages sat on a loading skeleton for ever, with nothing saying
  * why and no way forward.
  */
+/**
+ * The member this call names, or `NOT_FOUND`.
+ *
+ * Scoped by `householdId` in the same query rather than looked up and then
+ * checked: an id that is not this household's narrows to nothing, so there is
+ * no window in which the row is in hand and unauthorised. This is the class
+ * `SECURITY_REVIEW.md` §2 found four times, and the reason it is a helper is
+ * that both procedures below need exactly the same guard.
+ *
+ * `NOT_FOUND` rather than `FORBIDDEN`, matching `product.getById`: telling an
+ * outsider that an id exists but is not theirs confirms the id exists.
+ */
+async function memberOfHousehold(
+  userId: string,
+  householdId: string,
+): Promise<{ id: string; role: HouseholdRole }> {
+  const member = await prisma.user.findFirst({
+    where: { id: userId, householdId },
+    select: { id: true, role: true },
+  });
+
+  if (!member) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
+  }
+
+  return member;
+}
+
+/**
+ * Only an `OWNER` may act on an `OWNER`, or hand out `OWNER`.
+ *
+ * Without this an `ADMIN` could demote every owner and take the household,
+ * which is a privilege escalation dressed as member management. It is the same
+ * reasoning `addMemberSchema` uses to refuse creating an admin out of nothing,
+ * applied to the procedure that *can* promote — the schema cannot enforce it
+ * because the schema cannot see who is asking.
+ */
+function assertMayActOnOwner(
+  actor: HouseholdRole,
+  target: HouseholdRole,
+  becoming?: HouseholdRole,
+): void {
+  const touchesOwnership = target === "OWNER" || becoming === "OWNER";
+
+  if (touchesOwnership && actor !== "OWNER") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only an owner may change who owns this household",
+    });
+  }
+}
+
+/**
+ * The household keeps at least one owner.
+ *
+ * The invariant that stops a household being locked out of itself — by an
+ * owner demoting themselves, or by the last owner being removed. Counted
+ * excluding the member being changed, because that member is the one about to
+ * stop being an owner.
+ *
+ * `CONFLICT` rather than `FORBIDDEN`: nothing is wrong with who is asking, and
+ * the answer is not "you may not" but "not while you are the last one" — which
+ * is a state the caller can resolve by promoting somebody first.
+ */
+async function assertAnOwnerRemains(
+  householdId: string,
+  target: { id: string; role: HouseholdRole },
+  becoming: HouseholdRole | null,
+): Promise<void> {
+  if (target.role !== "OWNER" || becoming === "OWNER") return;
+
+  const others = await prisma.user.count({
+    where: { householdId, role: "OWNER", id: { not: target.id } },
+  });
+
+  if (others === 0) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "This household would have no owner. Make somebody else an owner first.",
+    });
+  }
+}
+
 export const householdRouter = createTRPCRouter({
   /** The caller's household, or null. Never throws for the missing case. */
   current: protectedProcedure.query(async ({ ctx }) => {
@@ -135,5 +225,63 @@ export const householdRouter = createTRPCRouter({
       });
 
       return user;
+    }),
+  /**
+   * Change what an existing member may do.
+   *
+   * The procedure `addMemberSchema` says promotion deserves. Three guards, and
+   * each one is a way a household could otherwise lose control of itself:
+   * the member must be **this** household's, only an owner may grant or revoke
+   * ownership, and the household must keep an owner.
+   *
+   * **It takes effect on the very next request, with no sign-out.**
+   * `householdProcedure` re-reads `role` from the database on every call and
+   * ignores the token — `integration/session.freshness.test.ts` proves it — so
+   * a demotion is as immediate as the session machinery allows. That is what
+   * makes this useful before session revocation exists (`REDESIGN_PLAN.md` §10).
+   */
+  updateRole: adminProcedure
+    .input(updateMemberRoleSchema)
+    .mutation(async ({ ctx, input }) => {
+      const member = await memberOfHousehold(input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role, input.role);
+      await assertAnOwnerRemains(ctx.householdId, member, input.role);
+
+      return prisma.user.update({
+        where: { id: member.id },
+        data: { role: input.role },
+        select: { id: true, name: true, email: true, role: true },
+      });
+    }),
+
+  /**
+   * Remove somebody from the household.
+   *
+   * Sets `householdId` to null rather than deleting the account — see
+   * `removeMemberSchema` for why. The same three guards as `updateRole`, and
+   * the same immediacy: the next request that member makes gets
+   * `PRECONDITION_FAILED` from `householdProcedure`, because it re-reads the
+   * household too.
+   *
+   * **This is the nearest thing to session revocation this application has**,
+   * and it is not a substitute for it: it ends a member's access to *this
+   * household*, not their session. Removing somebody does not sign them out
+   * anywhere else, and there is nowhere else. See §10.
+   */
+  removeMember: adminProcedure
+    .input(removeMemberSchema)
+    .mutation(async ({ ctx, input }) => {
+      const member = await memberOfHousehold(input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+      await assertAnOwnerRemains(ctx.householdId, member, null);
+
+      await prisma.user.update({
+        where: { id: member.id },
+        data: { householdId: null },
+      });
+
+      return { success: true };
     }),
 });
