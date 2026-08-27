@@ -46,7 +46,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 5 | CVE-2026-14456 (OpenSSL) shipped in the image | High | ✅ Fixed `ccde2e1`, verified | — |
 | 6 | `SECURITY.md` states two things about itself that are false | Medium | ✅ Corrected below, verified | — |
 | 7 | Half the restricted procedures have no behavioural refusal test | Medium | ✅ Verified (21 of 28), closed `bc88635` `6ef3fda` | — |
-| 8 | No server-side session revocation | High | Reported | owner |
+| 8 | No server-side session revocation | High | ✅ Verified, sharpened; the remedy is a decision | owner |
 | 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | ✅ Verified, documented; the remedy is a decision | operator + owner |
 | 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
 | 11 | Fail-closed is unproven at every limiter call site | High | ✅ Closed `7a663a1` | — |
@@ -306,16 +306,34 @@ The new file cleans up after itself; the product side is finding 16.
 sign-out purges the queue and the cached shell and asks before discarding unsent
 changes, and an idle session warns before it ends.
 
-**Reported, not verified, and the one with real consequences for the product's
-own premise:** there is **no server-side session revocation**. A kitchen tablet
-holds a long-lived session by design; if it walks out of the house, nothing ends
-that session from inside the application. The 15-minute token bounds it, and a
-role change bites on the next request — so the exposure is smaller than it
-sounds — but "I have lost the tablet" has no answer beyond changing the signing
-key, which signs everybody out.
+~~**Reported, not verified**~~ **— verified 2026-08-27, and the exposure is
+larger than this said.** There is no server-side session revocation. A kitchen
+tablet holds a long-lived session by design; if it walks out of the house,
+nothing ends that session from inside the application.
 
-That is a finding with an owner, not a defect to fix in passing: it is a feature
-decision about what a household can do when a device is lost.
+The mitigation named here — "a role change bites on the next request" — is
+**true and unreachable**. `householdProcedure` really does re-read `householdId`
+and `role` from the database and ignore what the token claims, and
+`integration/session.freshness.test.ts` now proves it: a token claiming OWNER
+against a KITCHEN row is refused, a demotion written mid-session bites on the
+very next call, and a deleted account's token stops working immediately.
+
+But **nothing in the product can perform any of those changes.**
+`householdRouter` is `current`, `create`, `members`, `addMember` — there is no
+way to remove a member and no way to change a role. Every state change those
+tests make needs a direct database write. So "I have lost the tablet" has no
+answer from inside the application at all, not even a partial one, and the
+15-minute token is the whole of the bound.
+
+**And the mitigation had no test.** Replacing that query with the token's own
+values — an obvious optimisation, one fewer database round trip per request —
+leaves `integration/capabilities.test.ts` at 9 pass / 0 fail. Measured, by doing
+it. The existing suite would not have noticed the only thing this application
+can do about a session it wants to stop trusting; the new file fails all four.
+
+Still a finding with an owner, and now a sharper one: it is not only "should
+there be revocation" but "there is no member management at all", which is a
+product gap the review found by trying to write a test for the mitigation.
 
 ## 7. Dependency and image posture
 
