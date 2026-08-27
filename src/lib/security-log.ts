@@ -29,6 +29,12 @@ export type SecurityEvent =
   | "auth.signin.failed"
   | "auth.signin.throttled"
   | "auth.unavailable"
+  // A session refused because it was issued before the account's revocation
+  // line. Worth a line of its own rather than folding into `access.denied`: it
+  // is the only event here that somebody *asked for*, and an operator reading
+  // a household's log should be able to tell "they revoked their sessions"
+  // from "somebody was refused".
+  | "auth.session.revoked"
   | "access.denied"
   | "request.throttled";
 

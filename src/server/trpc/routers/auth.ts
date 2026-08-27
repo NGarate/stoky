@@ -185,6 +185,34 @@ export const authRouter = createTRPCRouter({
     }),
 
   /**
+   * End every session this account has, including the one asking.
+   *
+   * There is no server-side session record, so this does not delete anything —
+   * it moves a line in time. `User.sessionsValidFrom` becomes now, and
+   * `src/lib/auth.ts`'s `jwt` callback refuses every token issued before it,
+   * which makes Auth.js clear the cookie on the next session read.
+   *
+   * **Including the one asking**, which is what "everywhere" has to mean: a
+   * person who thinks a session is loose cannot be asked to guess which one.
+   * The screen says so before the button is pressed.
+   *
+   * `protectedProcedure`, not `householdProcedure`: an account with no
+   * household still has sessions, and needing a household to end them would
+   * put the control out of reach of exactly the account that has least else.
+   */
+  revokeMySessions: protectedProcedure.mutation(async ({ ctx }) => {
+    // `updateMany`, so a session whose account has since been deleted records
+    // nothing rather than throwing P2025 — the same reasoning as
+    // `setSnackbarDuration` above.
+    await prisma.user.updateMany({
+      where: { id: ctx.session.user.id },
+      data: { sessionsValidFrom: new Date() },
+    });
+
+    return { success: true };
+  }),
+
+  /**
    * Does nothing, on purpose, and is not how anybody signs out.
    *
    * The session is a JWT with no server-side record, so there is nothing here

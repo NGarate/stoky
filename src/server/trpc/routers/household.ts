@@ -284,4 +284,37 @@ export const householdRouter = createTRPCRouter({
 
       return { success: true };
     }),
+
+  /**
+   * End every session a member of this household has.
+   *
+   * The other half of what §10 asked for, and the reason the admin panel
+   * exists: "the kitchen tablet has walked out of the house" needs an answer
+   * that is not "wait fifteen minutes and hope nobody touches it" — an active
+   * session slides forward on `updateAge` indefinitely.
+   *
+   * The same two guards as the rest of member management: the member must be
+   * **this** household's, and only an owner may act on an owner. There is no
+   * last-owner guard here and there should not be — ending somebody's sessions
+   * does not change who owns anything, and refusing to sign out the last owner
+   * would be refusing exactly the person most likely to have lost a device.
+   *
+   * Removing a member ends their access to this household; this ends their
+   * sessions. They are different acts and the screen offers both, because
+   * "they left" and "their phone was stolen" are different problems.
+   */
+  revokeMemberSessions: adminProcedure
+    .input(removeMemberSchema)
+    .mutation(async ({ ctx, input }) => {
+      const member = await memberOfHousehold(input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+
+      await prisma.user.update({
+        where: { id: member.id },
+        data: { sessionsValidFrom: new Date() },
+      });
+
+      return { success: true };
+    }),
 });

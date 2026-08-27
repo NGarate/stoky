@@ -32,6 +32,10 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // matrix has no column for "how long you need to read a message". It is
     // nobody's household data.
     setSnackbarDuration: "protectedProcedure",
+    // An account with no household still has sessions, and needing one to end
+    // them would put the control out of reach of the account that has least
+    // else. `protectedProcedure` for the same reason as the row above.
+    revokeMySessions: "protectedProcedure",
   },
   // Reachable by an account with no household, which is the whole reason it
   // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the
@@ -51,6 +55,9 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // is asking. `integration/household.roles.test.ts` holds both.
     updateRole: "adminProcedure",
     removeMember: "adminProcedure",
+    // Ending somebody else's sessions is the same authority as removing them,
+    // and a strictly smaller act — it changes nothing about the household.
+    revokeMemberSessions: "adminProcedure",
   },
   "inventory.ts": {
     getStockOverview: "householdProcedure",

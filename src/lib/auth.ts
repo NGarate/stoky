@@ -260,11 +260,62 @@ export const authConfig: NextAuthConfig = {
     updateAge: 5 * 60,
   },
   callbacks: {
+    /**
+     * Where session revocation happens, and the only place it can.
+     *
+     * Returning `null` here makes Auth.js clear the session cookies — see
+     * `@auth/core/lib/actions/session.js`, which pushes `sessionStore.clean()`
+     * on exactly that. There is no server-side session record to delete, so a
+     * line in time is the whole mechanism: a token issued before
+     * `User.sessionsValidFrom` is refused.
+     *
+     * **It has to be here rather than beside the role check in
+     * `householdProcedure`.** `/api/auth/session` re-issues the token through
+     * Auth.js's own route, nowhere near tRPC, so a revocation enforced only at
+     * the procedure tier would leave a revoked session sliding forward for
+     * ever on `updateAge`.
+     *
+     * The ordering works because this runs *before* the re-issue.
+     * `jwt.encode` calls `.setIssuedAt()`, so `iat` moves forward every five
+     * minutes on an active session — but it moves forward only after this
+     * callback has let the token through, so a revocation set at any moment
+     * catches the very next read.
+     *
+     * **Skipped on sign-in**, where `user` is present and `iat` does not exist
+     * yet: the token is built here and stamped afterwards. Signing in again is
+     * how somebody comes back from a revocation, so refusing that would make
+     * the feature a lockout.
+     *
+     * The cost is one query per session read — once per page render, since the
+     * root layout reads the session for the locale. That is the same order as
+     * the membership query `householdProcedure` already makes per call, and it
+     * is what buys the ability to end a session at all.
+     */
     jwt: async ({ token, user }) => {
       if (user) {
         token.householdId = user.householdId;
         token.role = user.role;
+        return token;
       }
+
+      const issuedAt = typeof token.iat === "number" ? token.iat * 1000 : null;
+      if (issuedAt === null) return token;
+
+      const account = await prisma.user.findUnique({
+        where: { id: token.sub as string },
+        select: { sessionsValidFrom: true },
+      });
+
+      // A token whose account is gone is not this callback's business —
+      // `householdProcedure` answers that, and refusing here would turn every
+      // deleted account into a confusing sign-out loop rather than a refusal.
+      if (!account?.sessionsValidFrom) return token;
+
+      if (issuedAt < account.sessionsValidFrom.getTime()) {
+        logSecurityEvent("auth.session.revoked", { userId: token.sub as string });
+        return null;
+      }
+
       return token;
     },
     session: async ({ session, token }) => {
