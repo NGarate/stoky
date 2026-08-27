@@ -1,6 +1,13 @@
 import { describe, it, expect } from "bun:test";
 import sharp from "sharp";
-import { MAX_PIXELS, reencodeAsJpeg } from "@/server/services/image";
+import { MAX_PIXELS, readImageMetadata, reencodeAsJpeg } from "@/server/services/image";
+import {
+  exifOrientation,
+  exifPayload,
+  hasExif,
+  isJpeg,
+  jpegDimensions,
+} from "../utils/jpeg";
 
 /**
  * What `reencodeAsJpeg` promises, asserted instead of described.
@@ -18,9 +25,17 @@ import { MAX_PIXELS, reencodeAsJpeg } from "@/server/services/image";
  * same four promises, with no test that would notice if one of them stopped
  * being true.
  *
- * `sharp` is used to *build* the fixtures and to read the results, which is
- * exactly the right division: it is a devDependency kept for the test suite,
- * and having the two libraries disagree is how a defect shows.
+ * **Nothing here asks `sharp` about a result any more.** EXIF, the frame's
+ * stored dimensions and the orientation tag are all read out of the file's own
+ * marker chain (`../utils/jpeg`), which is both sharp-free and the better
+ * question: it reads the bytes the server produced rather than a second
+ * library's opinion of them. `unit/jpeg-markers.test.ts` holds the walker to
+ * sharp's answers so the swap is a fact rather than a hope.
+ *
+ * `sharp` still *builds* the fixtures, because `Bun.Image` has no `create` —
+ * its statics are all clipboard. That is the fixture half of
+ * `docs/superpowers/plans/2026-08-27-finishing-the-bun-migration.md` §1 and is
+ * deliberately not this file's business yet.
  *
  * ## The buffer trap, recorded so nobody rediscovers it
  *
@@ -67,9 +82,16 @@ async function photograph(
   );
 }
 
-/** The EXIF payload a decoder finds, or an empty buffer if there is none. */
-async function exifOf(image: Buffer): Promise<Buffer> {
-  return (await sharp(image).metadata()).exif ?? Buffer.alloc(0);
+/**
+ * The EXIF payload, read out of the file's own marker chain.
+ *
+ * `../utils/jpeg` rather than sharp: `Bun.Image` cannot see EXIF at all, and
+ * this reads the bytes the server produced instead of asking a second library
+ * what it makes of them. `unit/jpeg-markers.test.ts` holds the two to the same
+ * answers.
+ */
+function exifOf(image: Buffer): Buffer {
+  return exifPayload(image);
 }
 
 const photographWithExif = () => photograph({ gps: true });
@@ -81,17 +103,17 @@ describe("the metadata a photograph arrives with", () => {
     // failure mode this whole suite keeps finding elsewhere.
     const source = await photographWithExif();
 
-    expect(source.includes(Buffer.from("Exif"))).toBe(true);
-    expect((await sharp(source).metadata()).exif).toBeDefined();
+    expect(hasExif(source)).toBe(true);
+    expect(exifOf(source).length).toBeGreaterThan(0);
   });
 
   it("is gone after the re-encode", async () => {
     const output = await reencodeAsJpeg(await photographWithExif());
 
-    // Both ways of asking, because they can disagree: the marker is a byte
-    // sequence in the file, and `exif` is what a decoder makes of it.
-    expect(output.includes(Buffer.from("Exif"))).toBe(false);
-    expect((await sharp(output).metadata()).exif).toBeUndefined();
+    // Both ways of asking, because they can disagree: whether an APP1 segment
+    // carrying EXIF is present at all, and whether it has any payload.
+    expect(hasExif(output)).toBe(false);
+    expect(exifOf(output).length).toBe(0);
   });
 
   it("takes the GPS block with it", async () => {
@@ -108,12 +130,12 @@ describe("the metadata a photograph arrives with", () => {
     const withoutGps = await photograph({ gps: false });
 
     expect(
-      (await exifOf(withGps)).length,
+      exifOf(withGps).length,
       "the fixture carries no GPS, so this test would prove nothing",
-    ).toBeGreaterThan((await exifOf(withoutGps)).length);
+    ).toBeGreaterThan(exifOf(withoutGps).length);
 
     // And the whole payload goes, which is what takes the GPS with it.
-    expect((await exifOf(await reencodeAsJpeg(withGps))).length).toBe(0);
+    expect(exifOf(await reencodeAsJpeg(withGps)).length).toBe(0);
   });
 
   it("leaves nothing identifying the camera in the bytes", async () => {
@@ -142,7 +164,7 @@ describe("the format", () => {
 
     const output = await reencodeAsJpeg(png);
 
-    expect((await sharp(output).metadata()).format).toBe("jpeg");
+    expect(isJpeg(output)).toBe(true);
   });
 
   it("produces different bytes from the ones it was given", async () => {
@@ -162,6 +184,12 @@ describe("orientation", () => {
     // OCR sideways. `Bun.Image` does this while decoding via `autoOrient`,
     // where `sharp` needed an explicit `.rotate()`; the behaviour survived the
     // migration and this is what keeps it.
+    //
+    // **Read from the frame header, not from a decoder.** `Bun.Image` applies
+    // the tag while decoding, so it reports the *displayed* size for both the
+    // source and the output — through that lens the two are identical and this
+    // test proves nothing. SOF describes the pixels that are actually encoded,
+    // which is the question being asked.
     const landscape = fixedLength(
       await sharp({
         create: { width: 120, height: 60, channels: 3, background: { r: 5, g: 5, b: 5 } },
@@ -171,18 +199,15 @@ describe("orientation", () => {
         .toBuffer(),
     );
 
-    // The premise: the source really is 120 × 60 and really is tagged.
-    const source = await sharp(landscape).metadata();
-    expect(source.width).toBe(120);
-    expect(source.height).toBe(60);
-    expect(source.orientation).toBe(6);
+    // The premise: the source really is stored landscape and really is tagged.
+    expect(jpegDimensions(landscape)).toEqual({ width: 120, height: 60 });
+    expect(exifOrientation(landscape)).toBe(6);
 
-    const output = await sharp(await reencodeAsJpeg(landscape)).metadata();
+    const output = await reencodeAsJpeg(landscape);
 
-    // Turned, and with nothing left to turn it again.
-    expect(output.width).toBe(60);
-    expect(output.height).toBe(120);
-    expect(output.orientation).toBeUndefined();
+    // Turned in the pixels, with nothing left to turn it again.
+    expect(jpegDimensions(output)).toEqual({ width: 60, height: 120 });
+    expect(exifOrientation(output)).toBeNull();
   });
 });
 
@@ -243,6 +268,6 @@ describe("the pixel bound", () => {
 
     const output = await reencodeAsJpeg(photograph);
 
-    expect((await sharp(output).metadata()).width).toBe(4000);
+    expect((await readImageMetadata(output)).width).toBe(4000);
   });
 });

@@ -116,3 +116,69 @@ export function exifPayload(buffer: Buffer): Buffer {
 export function isJpeg(buffer: Buffer): boolean {
   return buffer.length > 2 && buffer[0] === 0xff && buffer[1] === SOI;
 }
+
+/**
+ * Every start-of-frame marker. `C4`, `C8` and `CC` are in the range and are not
+ * frames — they define Huffman tables, an extension and arithmetic coding.
+ */
+const SOF_MARKERS = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+]);
+
+/**
+ * The dimensions **as stored**, which is not what a decoder reports.
+ *
+ * `Bun.Image.metadata()` applies EXIF orientation while decoding, so it answers
+ * with the *displayed* size: a 120 × 60 frame tagged "rotate 90" comes back as
+ * 60 × 120. That is the right answer for almost every purpose and the wrong one
+ * for a test asking whether the rotation was baked into the pixels — through
+ * that lens, before and after look identical and the assertion proves nothing.
+ *
+ * `sharp` could see both because it reports the raw frame plus the tag. Nothing
+ * in the shipped runtime can, so the frame header is read here: SOF gives
+ * `[precision:1][height:2][width:2][components:1]`, and it describes the pixels
+ * that are actually encoded.
+ */
+export function jpegDimensions(buffer: Buffer): { width: number; height: number } {
+  for (const segment of jpegSegments(buffer)) {
+    if (!SOF_MARKERS.has(segment.marker)) continue;
+    return {
+      height: buffer.readUInt16BE(segment.start + 1),
+      width: buffer.readUInt16BE(segment.start + 3),
+    };
+  }
+  throw new Error("No start-of-frame marker: not a JPEG this can measure");
+}
+
+/**
+ * The EXIF orientation tag, or null when there is none.
+ *
+ * Tag `0x0112` in IFD0. The EXIF payload opens with `Exif\0\0`, then a TIFF
+ * header whose first two bytes give the byte order — `II` little-endian or
+ * `MM` big-endian — and every offset inside is relative to that header rather
+ * than to the file.
+ */
+export function exifOrientation(buffer: Buffer): number | null {
+  const payload = exifPayload(buffer);
+  if (payload.length < 14) return null;
+
+  const tiff = payload.subarray(EXIF_HEADER.length);
+  const little = tiff.subarray(0, 2).toString("latin1") === "II";
+  const u16 = (at: number) => (little ? tiff.readUInt16LE(at) : tiff.readUInt16BE(at));
+  const u32 = (at: number) => (little ? tiff.readUInt32LE(at) : tiff.readUInt32BE(at));
+
+  const ifd0 = u32(4);
+  if (ifd0 + 2 > tiff.length) return null;
+
+  const entries = u16(ifd0);
+  for (let index = 0; index < entries; index++) {
+    const entry = ifd0 + 2 + index * 12;
+    if (entry + 12 > tiff.length) break;
+    if (u16(entry) === 0x0112) {
+      // A SHORT, so the value sits in the first two bytes of the value field.
+      return u16(entry + 8);
+    }
+  }
+
+  return null;
+}
