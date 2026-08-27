@@ -377,6 +377,15 @@ These are recorded because each one produced a confident, wrong number.
    working; the probe never asked whether its subject was alive.** Assert a 200
    before counting anything, and treat an all-zero result from a new harness as
    a claim about the harness until proven otherwise.
+
+   **And a 200 is not enough**, which the same investigation demonstrated a day
+   later. A probe server printed `EADDRINUSE` and exited, while `curl` answered
+   `200` on that port — a `next-server` left over from something else was
+   holding it. The prescribed remedy above would have passed, and every count
+   would have been read from a log the answering server never wrote. So the
+   check is not "does the port answer" but **"did the process I started say it
+   was ready"**: grep the server's own log for its ready line, and pick a port
+   after confirming nothing already holds it.
 10. **Truncating a log the server still holds open does not empty it.** `: > log`
    between runs leaves the writer's file offset where it was, so the file fills
    with NUL padding and `grep` switches to binary mode and stops printing
