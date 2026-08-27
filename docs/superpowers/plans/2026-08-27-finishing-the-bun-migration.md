@@ -73,6 +73,27 @@ This is arguably the better assertion rather than a grudging substitute: it read
 the bytes the server produced, instead of asking a second library what it thinks
 of them.
 
+**Built, and it needed two readers the plan had not anticipated**
+(`src/__tests__/utils/jpeg.ts`, `758f472`). The EXIF scan is as described. The
+orientation assertion, however, **cannot be converted the obvious way**:
+
+`Bun.Image` applies EXIF orientation *while decoding*, so `metadata()` reports
+the **displayed** size. A source stored 120 × 60 and tagged "rotate 90" comes
+back 60 × 120 — identical to its own re-encoded output. Swapping
+`sharp(...).metadata()` for `readImageMetadata` there leaves a test that passes
+because both sides agree, having quietly stopped comparing anything.
+
+So the walker also reads `SOF` for the frame's **stored** dimensions and tag
+`0x0112` out of IFD0 for the orientation itself. The resulting assertion is
+stronger than the one it replaces: the source is stored 120 × 60 *with* a tag
+and the output 60 × 120 *without* one, which says "baked into the pixels"
+directly instead of inferring it from a decoder's summary.
+
+Worth generalising: `Bun.Image.metadata()` being a three-key summary is not only
+a missing-EXIF problem. It is a *normalising* reader, and a test that compares an
+image before and after a normalisation cannot use the normaliser as its
+instrument.
+
 ### The fixture job: there is no `Bun.Image.create`
 
 `Bun.Image`'s statics are `backend`, `clipboardChangeCount`, `fromClipboard`,
@@ -231,7 +252,22 @@ independent of everything else here.
    that makes the answer evidence rather than a coincidence. See §1.
 4. **Convert the three test files** — byte-scan for EXIF, committed or
    hand-built fixtures. Sharp becomes unreferenced but stays installed.
-   **Unblocked.**
+   **Assertions done, fixtures half done.**
+
+   Done: every *assertion* across all three files reads bytes instead of asking
+   sharp (`758f472`, `7f795fc`, `ec14fd9`), and the decompression bomb is
+   hand-assembled, which frees `receipt.router.test.ts` of the import entirely
+   (`80c2d23`). The walker grew two readers beyond the plan's twelve-line EXIF
+   scan — see below.
+
+   Left: sharp still *builds* fixtures in three files, all of them JPEGs
+   carrying EXIF. Replacing those needs committed bytes or a hand-written TIFF
+   IFD writer; the PNG side is already built (`../utils/png.ts`). Only after
+   that is sharp unreferenced.
+
+   **`unit/jpeg-markers.test.ts` must keep its sharp import regardless.** Its
+   job is to prove the walker and sharp agree, and an agreement test with one
+   party removed is not a cheaper version of itself.
 5. **HEIC decision** (pre-plan, open decision 4). Until it is taken, sharp stays
    in `package.json` whether or not anything imports it, and saying so in the
    file is better than leaving a dependency nobody can explain.
