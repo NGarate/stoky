@@ -39,6 +39,64 @@ Rules for this log:
 
 ## Done
 
+### Sharp's last job, the proxy rename, and a defect that was ours to expose (2026-08-27)
+
+The Bun migration's tail, from
+`docs/superpowers/plans/2026-08-27-finishing-the-bun-migration.md`. Steps 1
+through 4 are done and the plan's own step 4 goal turned out to be wrong (D114).
+
+**The guard first, because it was the only item closing a hole.** Nothing that
+ships may import `sharp` — `next.config.ts` excludes it from the standalone
+output, so an import works in development, passes every gate, and fails in
+production with the exact error that made this application leave the library.
+A build cannot notice. It matches the three import spellings rather than the
+word, because two files discuss sharp in prose and a guard that goes red on an
+explanation gets deleted.
+
+**The experiment the plan named as blocking everything.** A hand-built PNG whose
+IHDR claims 9000 × 9000 over sixteen deflated zero bytes — **68 bytes** — is
+refused with `input exceeds maxPixels limit`, the same refusal a 200 KB
+sharp-built fixture triggers. The control is what makes it evidence: the
+*identical* 68 bytes declaring 60 × 40 are accepted, so "refused because the
+payload is nothing" is not an available explanation.
+
+**Then the conversion**, which needed two readers the plan had not anticipated.
+`Bun.Image` applies EXIF orientation *while decoding*, so it reports the
+displayed size — a source stored 120 × 60 with a rotate tag comes back 60 × 120,
+identical to its own output. Converting that assertion the obvious way leaves a
+test that passes because both sides agree, having stopped comparing anything.
+Reading `SOF` for the stored frame and tag `0x0112` for the orientation gives a
+*stronger* assertion than the one it replaced. Generalised: **a normalising
+reader cannot be the instrument for a test about whether the normalisation
+happened.**
+
+**`middleware.ts` became `proxy.ts`** (D115), and the healthcheck moved to
+`bun -e` — the last Node process in a running container — verified by letting
+Docker run it: healthy against real dependencies, unhealthy with the cache
+pointed at a dead port.
+
+**TEST-6 closed** (D116) after eight tests were run at a phone viewport for the
+first time: 4 failed, all four on locators, 8 of 8 after.
+
+**RUNTIME-1's `AbortError` was reproduced and localised**, and the reproduction
+is a script that exits non-zero unless bun raises and node does not. It corrected
+the entry twice. The first model — the browser cancels prefetches, each
+cancellation raises — was wrong: prefetches that *complete* raise, cancelled ones
+raise nothing. The second — `partialPrefetching` is the trigger — was also
+wrong: the option decides whether a browser ever sends `next-router-prefetch: 3`,
+and sending that header by hand raises with the option removed. The option
+governs the client; the defect is in the server either way, which is better news
+for the upstream report than either wrong version.
+
+**Four probe failures paid for that**, each producing a confident wrong answer
+first, and all four are `STATUS.md` trap 9 wearing a new face: a server that had
+refused to boot, a port held by somebody else's process, a redirect nobody
+followed, and a listener that was not rendering. The last one is the sharpest —
+the process printed `✓ Ready`, bound the port, and refused every render, because
+the probe's secret was 30 characters against a 32-character floor. The readiness
+loop was waiting on curl's *exit code*, which a 500 satisfies as well as a 200.
+
+
 ### Instant navigations, and the three races that were hiding behind slack (2026-08-25)
 
 Asked for directly: server-first, using Next 16.3's Cache Components rather than
@@ -2206,3 +2264,48 @@ The rule is simply to record the sha in a *following* commit rather than in the
 one being described, which costs one extra commit and cannot be got wrong. It is
 the same shape as `74cff4b`/`e13c540`, where the code and its paperwork were two
 commits on purpose.
+
+**D114 — Sharp stays installed, as a cross-check, and "unreferenced" was the
+wrong target.** The Bun migration plan's step 4 said sharp would become
+unreferenced once the image tests stopped needing it. Doing the work showed the
+goal was wrong. After the conversion it is imported by exactly two files —
+`unit/jpeg-markers.test.ts` and `unit/exif-writer.test.ts` — and both exist *to
+disagree with it*: one proves the hand-written JPEG marker readers give sharp's
+answers, the other that the hand-written TIFF is something sharp can read back.
+
+Removing it there is not a smaller dependency, it is deleting the only check
+that this repository's hand-assembled binary formats are more than bytes it
+believes in on its own authority. That is the same "stops testing while still
+passing" failure the plan already warned about for the bomb fixture. So: sharp
+stays in `devDependencies`, referenced nowhere else, costing 19 MB of
+development install and nothing in production. The HEIC question becomes
+independent of it — HEIC was the last reason sharp had to *ship*, which is a
+different question from whether it is installed.
+
+**D115 — The `middleware` → `proxy` rename was done by hand, and verified on a
+served response rather than on a build.** Next 16 deprecates the filename and
+offers `npx @next/codemod@canary middleware-to-proxy`. The change is one file,
+one function name and eleven references; a canary codemod is a larger blast
+radius than the edit it would make.
+
+The verification is the part worth recording. **A build that finds the file is
+not a proxy that runs.** Had Next not recognised it, nothing would have failed —
+it would simply not have run, taking the per-request CSP nonce and the device
+cookie with it, silently, with the deprecation warning gone and every gate
+green. So it was checked on a served response: two requests to `/login`
+returning different nonces, and `set-cookie: stoky_device=…` present.
+
+**D116 — TEST-6 closed by fixing the tests, not by changing what runs where.**
+Two inert mobile skips cited a phase that closed. Deleting them was the obvious
+move and would have turned the suite red: run those eight tests at a phone
+viewport and four fail. All four were the harness — `text=` and `a:has-text()`
+locators matching the row's three action links and a hidden `aria-live` region,
+eight elements, with `.first()` taking whichever the DOM ordered first.
+
+The alternative was to add the file to the Mobile Safari project and let the
+matrix grow. D33 scoped that project to the two layout specs deliberately, and
+this does not overturn it: the locators are precise now (`getByRole` with
+`exact`), the tests pass 8 of 8 on a phone, and they still run on chromium only.
+What changed is that the scoping is a choice rather than a wall. The locator
+fragility was latent on chromium too — it passed there by luck of DOM order
+rather than by aiming at anything.
