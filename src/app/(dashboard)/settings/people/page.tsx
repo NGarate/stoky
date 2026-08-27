@@ -6,12 +6,14 @@ import { TRPCClientError } from "@trpc/client";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Badge } from "@/components/ui/badge";
 import { RadioOption } from "@/components/ui/radio-option";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BackLink } from "@/components/ui/back-link";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
+import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
 
 /**
@@ -64,6 +66,83 @@ export default function PeoplePage(): JSX.Element {
     },
   });
 
+  /**
+   * The row being changed, and the row being removed — one at a time.
+   *
+   * Keyed by member id rather than held per row, because a row is a `map`
+   * callback and cannot hold state of its own. `null` means "nobody", which is
+   * the resting state for both.
+   */
+  const [pendingRole, setPendingRole] = useState<Record<string, HouseholdRole>>({});
+  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
+  const [rowFailure, setRowFailure] = useState<{ id: string; message: string } | null>(
+    null,
+  );
+
+  /**
+   * The server's refusal, in words this household can act on.
+   *
+   * The two that matter are not errors in the usual sense — they are the
+   * invariants doing their job, and each has something the reader can *do*.
+   * `CONFLICT` is the last owner and the answer is to promote somebody first;
+   * `FORBIDDEN` is an admin reaching for ownership, and the answer is to ask an
+   * owner. Falling back to a generic sentence for anything else, because a
+   * message invented for an unknown failure is worse than one that admits it.
+   */
+  function refusalMessage(error: unknown, kind: "role" | "remove"): string {
+    const code =
+      error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
+
+    if (code === "CONFLICT") {
+      return kind === "role" ? t("roleFailedLastOwner") : t("removeFailedLastOwner");
+    }
+    if (code === "FORBIDDEN") {
+      return kind === "role" ? t("roleFailedNotOwner") : t("removeFailedNotOwner");
+    }
+    return kind === "role" ? t("roleFailed") : t("removeFailed");
+  }
+
+  const updateRole = api.household.updateRole.useMutation({
+    onSuccess: (member) => {
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "household.roleDone",
+          values: { name: member.name, role: t(`role${member.role}`) },
+        },
+      });
+      setRowFailure(null);
+      setPendingRole((current) => {
+        const next = { ...current };
+        delete next[member.id];
+        return next;
+      });
+      void utils.household.members.invalidate();
+    },
+    onError: (error, variables) => {
+      setRowFailure({ id: variables.userId, message: refusalMessage(error, "role") });
+    },
+  });
+
+  const removeMember = api.household.removeMember.useMutation({
+    onSuccess: (_result, variables) => {
+      const removed = members.data?.find((candidate) => candidate.id === variables.userId);
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "household.removeDone",
+          values: { name: removed?.name ?? "" },
+        },
+      });
+      setRowFailure(null);
+      setConfirmingRemoval(null);
+      void utils.household.members.invalidate();
+    },
+    onError: (error, variables) => {
+      setRowFailure({ id: variables.userId, message: refusalMessage(error, "remove") });
+    },
+  });
+
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     if (!name.trim() || !email.trim() || password.length < 8) return;
@@ -101,6 +180,132 @@ export default function PeoplePage(): JSX.Element {
             /* The role in words. Never a colour or a letter. */
             status={<Badge tone="neutral">{t(`role${member.role}`)}</Badge>}
             title={member.name}
+            actions={
+              <div className="w-full">
+                {confirmingRemoval === member.id ? (
+                /* The same shape `product.delete` uses: asked twice, in the
+                   audited danger pair, as a group a screen reader can announce
+                   whole. A removal is not undoable from this screen. */
+                <div
+                  role="group"
+                  aria-label={t("removeConfirmTitle", { name: member.name })}
+                  className="rounded border border-danger-foreground bg-danger p-3"
+                >
+                  <p className="font-semibold text-danger-foreground">
+                    {t("removeConfirmTitle", { name: member.name })}
+                  </p>
+                  <p className="mt-1 text-sm text-danger-foreground">
+                    {t("removeConfirmBody")}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <Button
+                      disabled={removeMember.isPending}
+                      onClick={() => removeMember.mutate({ userId: member.id })}
+                      type="button"
+                      variant="destructive"
+                    >
+                      {t("removeConfirm")}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setConfirmingRemoval(null);
+                        setRowFailure(null);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      {t("removeCancel")}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-end gap-3">
+                  <form
+                    className="flex flex-wrap items-end gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const chosen = pendingRole[member.id];
+                      if (!chosen || chosen === member.role) return;
+                      updateRole.mutate({ userId: member.id, role: chosen });
+                    }}
+                  >
+                    <div>
+                      {/* Labelled with the member's name, because four rows of
+                          "Rol" tell a screen reader which control it is and not
+                          whose. */}
+                      <label
+                        className="block text-sm font-medium text-foreground"
+                        htmlFor={`${fieldId}-role-${member.id}`}
+                      >
+                        {t("roleFor", { name: member.name })}
+                      </label>
+                      {/* The primitive, not a hand-styled `select`. It already
+                          clears the 48px floor, and restating that here is what
+                          `unit/target-floor.test.ts` exists to refuse — it
+                          caught this exact line. */}
+                      <Select
+                        className="mt-1"
+                        id={`${fieldId}-role-${member.id}`}
+                        onChange={(event) =>
+                          setPendingRole((current) => ({
+                            ...current,
+                            [member.id]: event.target.value as HouseholdRole,
+                          }))
+                        }
+                        value={pendingRole[member.id] ?? member.role}
+                      >
+                        {(["OWNER", "ADMIN", "MEMBER", "KITCHEN"] as const).map(
+                          (option) => (
+                            <option key={option} value={option}>
+                              {t(`role${option}`)}
+                            </option>
+                          ),
+                        )}
+                      </Select>
+                    </div>
+                    {/* Nothing is applied by touching the select. A role change
+                        can lock a household out of itself, so it takes a
+                        deliberate second act. */}
+                    <Button
+                      disabled={
+                        updateRole.isPending ||
+                        (pendingRole[member.id] ?? member.role) === member.role
+                      }
+                      type="submit"
+                    >
+                      {updateRole.isPending ? t("roleSaving") : t("roleSave")}
+                    </Button>
+                  </form>
+
+                  <Button
+                    onClick={() => {
+                      setConfirmingRemoval(member.id);
+                      setRowFailure(null);
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("removeButton")}
+                  </Button>
+                  </div>
+                )}
+
+                {/* Always rendered, `sr-only` when empty: a live region created
+                    at the moment it speaks is the case a screen reader may skip
+                    (WCAG 4.1.3), which the login form learned the hard way. */}
+                <p
+                  aria-live="polite"
+                  className={
+                    rowFailure?.id === member.id
+                      ? "mt-2 rounded-xl border border-danger-foreground bg-danger px-4 py-3 text-sm text-danger-foreground"
+                      : "sr-only"
+                  }
+                  role="status"
+                >
+                  {rowFailure?.id === member.id ? rowFailure.message : ""}
+                </p>
+              </div>
+            }
           />
         ))}
       </ul>
