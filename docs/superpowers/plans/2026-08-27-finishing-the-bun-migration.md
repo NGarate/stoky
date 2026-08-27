@@ -87,11 +87,34 @@ come from somewhere else:
   no data, and that is a hand-written PNG IHDR rather than anything a library
   offers.
 
-**Not attempted, and therefore not known:** whether a hand-built PNG bomb
-reproduces the `maxPixels` refusal the current fixture triggers. That is the one
-experiment this section is missing, and it should be run before the bomb test is
-touched — a security test that stops testing while still passing is worse than
-one that is deleted.
+~~**Not attempted, and therefore not known:** whether a hand-built PNG bomb
+reproduces the `maxPixels` refusal the current fixture triggers.~~ **Run on
+2026-08-27, and it does.** Step 4 is unblocked.
+
+A PNG signature, an IHDR declaring 9000 × 9000 with its CRC, a token `IDAT`
+holding a deflate stream of sixteen zero bytes, and an `IEND` — **68 bytes in
+total** — is refused with `Image: input exceeds maxPixels limit`, the same
+refusal the 200 KB sharp-built fixture triggers today.
+
+Three cases were run, because the first alone would not have been evidence:
+
+| Case | Declared | Bytes | Result |
+|---|---|---|---|
+| A — huge header, token IDAT | 9000 × 9000 (81 MP) | 68 | refused, `exceeds maxPixels limit` |
+| B — small header, **same token IDAT** | 60 × 40 | 68 | **accepted**, `{"width":60,"height":40,"format":"png"}` |
+| C — genuinely valid small PNG | 60 × 40 | 87 | accepted |
+
+**B is the case that makes A mean something.** Without it, a refusal in A is
+equally well explained by the IDAT being sixteen bytes of nothing rather than by
+the pixel count — and a bomb fixture that is refused for being malformed is a
+security test that has stopped testing while still passing, which is the outcome
+this section was written to avoid. B holds the malformed data fixed and changes
+only the declared canvas.
+
+It also settles a claim `src/server/services/image.ts` makes in prose: that the
+bound is checked "after the header is read and before any pixel buffer is
+allocated". Sixty-eight bytes containing no pixel data at all are enough to
+trigger it, so the check cannot be happening after a decode.
 
 ### A trap that will be hit during the conversion
 
@@ -203,18 +226,21 @@ independent of everything else here.
    exists today and does not depend on any decision below.
 2. **The healthcheck to `bun -e`** — independent, one line, removes the last
    Node process from a running container.
-3. **Run the missing experiment**: does a hand-built PNG bomb still trigger the
-   `maxPixels` refusal? Everything in §1's fixture work is blocked on the answer,
-   and guessing it risks a security test that passes without testing.
+3. ~~**Run the missing experiment**: does a hand-built PNG bomb still trigger the
+   `maxPixels` refusal?~~ **Done, and it does** — 68 bytes, with the control case
+   that makes the answer evidence rather than a coincidence. See §1.
 4. **Convert the three test files** — byte-scan for EXIF, committed or
    hand-built fixtures. Sharp becomes unreferenced but stays installed.
+   **Unblocked.**
 5. **HEIC decision** (pre-plan, open decision 4). Until it is taken, sharp stays
    in `package.json` whether or not anything imports it, and saying so in the
    file is better than leaving a dependency nobody can explain.
 6. **RUNTIME-1's `AbortError`** — its own investigation, upstream-shaped.
 
-Steps 1, 2 and 3 are available now and independent of each other. Step 4 needs
-3. Step 5 is a decision, not a task.
+~~Steps 1, 2 and 3 are available now and independent of each other. Step 4 needs
+3.~~ Steps 1, 2 and 3 are done (`92156c9`, the healthcheck, and the experiment
+above), so **step 4 is the next thing anyone can pick up**. Step 5 is a
+decision, not a task.
 
 ---
 
