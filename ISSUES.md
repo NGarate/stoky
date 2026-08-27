@@ -2605,9 +2605,8 @@ the correspondence is exact: **11 AbortErrors, 11 requests the browser reports
 as `net::ERR_ABORTED`**, one for one.
 
 **They are router prefetches.** Every one is `<route>?_rsc=…` carrying
-`next-router-prefetch: 3` — one per navigation link. Next prefetches the links,
-the browser cancels most of them, and each cancellation leaves an unhandled
-`AbortError` on the Bun server. The count tracks the links on the page:
+`next-router-prefetch: 3` — one per navigation link. The count tracks the links
+on the page:
 
 | Page | links | prefetches | browser aborts | AbortErrors |
 |---|---|---|---|---|
@@ -2618,13 +2617,72 @@ the browser cancels most of them, and each cancellation leaves an unhandled
 `/login` is not signed in and still produces one, which settles the earlier
 hypothesis from the other direction.
 
-**Why four `curl` probes missed it.** One reason is small and one is not. The
-small one: the earlier prefetch probe sent `Next-Router-Prefetch: 1`, and a
-browser sends `3`. The large one is that fixing that changes nothing — replaying
-the exact request shape and aborting mid-flight still gives **0**. It is not the
-request, it is *how* a browser aborts: cancelling one `fetch` on a shared
-keep-alive connection is not the same event as closing the socket, which is all
-`curl --max-time` can do.
+~~Next prefetches the links, the browser cancels most of them, and each
+cancellation leaves an unhandled `AbortError`.~~ **That reading was wrong, and
+the table above is why it was believable.** On `/dashboard` the browser
+cancelled 9 requests and the server raised 11 rejections, which looked close
+enough to be one-for-one. It is not — the two numbers are independent and
+happened to be similar.
+
+**What actually produces one is a prefetch that *completes*.** Isolated in
+separate runs against the same server:
+
+| Ten `next-router-prefetch: 3` requests | AbortErrors |
+|---|---|
+| completed, bodies drained | **+10** |
+| completed, bodies never read | **+10** |
+| aborted mid-flight after 2 ms | **0** |
+
+The abort was never the cause. Cancelling is if anything *protective*: a request
+the client drops before the server finishes raises nothing.
+
+**The narrowest shape that reproduces it**, one request at a time:
+
+| Request | AbortErrors |
+|---|---|
+| plain page | 0 |
+| `RSC: 1` alone | 0 |
+| `RSC: 1` + `Next-Router-Prefetch: 3` | **1** |
+| the same without a state tree | **1** |
+| `RSC: 1` + `Next-Router-Prefetch: 1` | 0 — and answers **404** |
+
+That last row explains the earlier probe completely: `1` is not a prefetch kind
+this version accepts, so the request it sent never reached the path at all.
+
+**And the runtime is the variable.** The same artefact, the same client, the
+same five requests, served by `node .next/standalone/server.js`: **0 on every
+row**, and 0 for the ten-request case. So this is a Bun/Next interop defect that
+our configuration exposes, not a defect in the configuration.
+
+**And `curl` reproduces it after all** — the reason it did not is the whole
+lesson of this entry repeating itself.
+
+`curl` appeared immune while `fetch()` raised one every time, from Bun *and*
+Node. The two were compared against an echo server: the only header differences
+were `user-agent`, `connection` and `accept-encoding`, and `curl` still raised 0
+when given Bun's user-agent, an explicit keep-alive, two requests on one
+connection, and each of `gzip`, `br`, `zstd` and all four at once.
+
+Then the status was printed instead of discarded. **`curl` was getting a 307.**
+A prefetch to `/inventory` redirects, `fetch()` follows redirects by default and
+`curl` without `-L` does not, so every `curl` probe ever run against this — the
+four in the original report included — measured a redirect that rendered
+nothing. `-o /dev/null` without `-w` is what hid it.
+
+So the reproduction is one line:
+
+```
+curl -sL -H 'RSC: 1' -H 'Next-Router-Prefetch: 3' http://127.0.0.1:PORT/inventory
+```
+
+One unhandled `AbortError` under `bun .next/standalone/server.js`, none under
+`node`. That is the upstream report, and it needs no browser, no session and no
+suite.
+
+The same mistake, three times in three days: a probe that never checked what it
+was actually measuring. First a server that had refused to boot, then a port
+held by somebody else's server, now a redirect nobody looked at. `STATUS.md`
+trap 9 has both earlier ones; this is the third face of it.
 
 ### The trigger is `partialPrefetching`, and it is ours
 
