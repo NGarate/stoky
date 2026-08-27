@@ -906,7 +906,9 @@ taken without asking are in `docs/PROGRESS.md`.
 passes no suite can answer (the manual screen-reader pass, a week on a real
 tablet, iOS Safari on a real device); **a household admin panel** — members and
 roles, added to §10's unowned table on 2026-08-27, because a household can add a
-member today and can never remove one or change a role; T7, the offline scan
+member today and can never remove one or change a role; **session revocation**,
+by the account itself and by an admin from that panel, which answers the one
+question `SECURITY_REVIEW.md` finding 8 left open; T7, the offline scan
 resolution; and
 **Phase 8's human half** — the two §3/§5.1 promises the 2026-08-17 re-audit
 found unbuilt have both landed, the ± stepper at `74cff4b` and the screen

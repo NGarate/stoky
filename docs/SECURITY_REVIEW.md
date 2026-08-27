@@ -46,7 +46,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 5 | CVE-2026-14456 (OpenSSL) shipped in the image | High | ✅ Fixed `ccde2e1`, verified | — |
 | 6 | `SECURITY.md` states two things about itself that are false | Medium | ✅ Corrected below, verified | — |
 | 7 | Half the restricted procedures have no behavioural refusal test | Medium | ✅ Verified (21 of 28), closed `bc88635` `6ef3fda` | — |
-| 8 | No server-side session revocation | High | ✅ Verified, sharpened; the remedy is a decision | owner |
+| 8 | No server-side session revocation | High | ✅ Verified; remedy decided 2026-08-27, planned in §10 | owner |
 | 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | ✅ Verified, documented; the remedy is a decision | operator + owner |
 | 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
 | 11 | Fail-closed is unproven at every limiter call site | High | ✅ Closed `7a663a1` | — |
@@ -335,11 +335,25 @@ Still a finding with an owner, and now a sharper one: it is not only "should
 there be revocation" but "there is no member management at all", which is a
 product gap the review found by trying to write a test for the mitigation.
 
-**The second half now has a home.** A household admin panel — list the members,
-change a role, remove one — was added to `REDESIGN_PLAN.md` §10's unowned table
-on 2026-08-27. It does not need new revocation machinery: the mechanism is
-already there and proven, and what is missing is the way to trigger it. Whether
-sessions should *also* be revocable independently of membership stays open.
+**Both halves now have homes, and the open question is answered.** Two entries
+went into `REDESIGN_PLAN.md` §10's unowned table on 2026-08-27:
+
+- **A household admin panel** — list the members, change a role, remove one. It
+  needs no new revocation machinery: the mechanism is already there and proven,
+  and what is missing is the way to trigger it.
+- **Session revocation**, by the account itself and by an admin from that panel.
+  ~~Whether sessions should also be revocable stays open.~~ **Answered: yes.**
+
+The second one does need new machinery, and the entry carries the three things
+that are not obvious from this section. **The 15-minute token is not a bound on
+a session in use** — `maxAge` is 15 minutes of *inactivity* and `updateAge`
+slides it every 5, so an active tablet renews indefinitely and the expiry only
+bites on a device nobody is worried about. **The check cannot live only in the
+procedure tier**, because `/api/auth/session` re-issues the token through
+Auth.js's own route and a revocation enforced beside the role check would leave
+a revoked session sliding forever. And **coarse revocation is one column**,
+where per-session revocation needs a record per session — with `stoky_device`
+already supplying a stable per-browser identifier if that is the direction.
 
 ## 7. Dependency and image posture
 
