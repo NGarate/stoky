@@ -77,7 +77,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
-| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `TBD` — the adapter is gone, so the default is right |
+| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
