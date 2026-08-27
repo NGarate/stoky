@@ -89,10 +89,10 @@ Verified against the files named in each row.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
   HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
 
-### Application headers — `next.config.ts` and `src/middleware.ts`
+### Application headers — `next.config.ts` and `src/proxy.ts`
 
 - Content-Security-Policy carries a **per-request nonce** generated in
-  `src/middleware.ts`, with `strict-dynamic`, `object-src 'none'`,
+  `src/proxy.ts`, with `strict-dynamic`, `object-src 'none'`,
   `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'`.
   `'unsafe-eval'` is added in development only, for hot reloading.
   `upgrade-insecure-requests` is sent **only when the request itself arrived

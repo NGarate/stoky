@@ -55,7 +55,7 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
-  // The per-request CSP nonce minted in src/middleware.ts. Without it the
+  // The per-request CSP nonce minted in src/proxy.ts. Without it the
   // inline script below is blocked and the chosen theme flashes on every load.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 

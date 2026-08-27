@@ -8,7 +8,7 @@
  * `'unsafe-inline'` to make that go away leaves a header that reads as
  * protection while allowing exactly the injection CSP exists to stop.
  *
- * Extracted from `src/middleware.ts` so its directives are assertable without
+ * Extracted from `src/proxy.ts` so its directives are assertable without
  * standing up a request.
  */
 export function buildCsp(

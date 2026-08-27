@@ -1,14 +1,14 @@
 import { describe, it, expect } from "bun:test";
 import { NextRequest } from "next/server";
-import { middleware } from "@/middleware";
+import { proxy } from "@/proxy";
 import { DEVICE_ID_COOKIE, isDeviceId } from "@/lib/device";
 
 /**
- * The middleware's half of Journey 8: minting the device id, and — the part
+ * The proxy's half of Journey 8: minting the device id, and — the part
  * that is easy to get wrong and impossible to notice — making it readable by
  * the render that follows on the very same request.
  *
- * Next carries the middleware's view of the request to the render in
+ * Next carries the proxy's view of the request to the render in
  * `x-middleware-request-*` headers, and the render's `cookies()` reads those.
  * So a device id set only on the *response* would reach the browser and be
  * invisible to the render that needed it, and the symptom would be a first
@@ -30,7 +30,7 @@ function setCookie(response: Response): string {
 
 describe("a device with no id yet", () => {
   it("is given one the render can already read", () => {
-    const response = middleware(new NextRequest("https://example.test/"));
+    const response = proxy(new NextRequest("https://example.test/"));
 
     const forwarded = forwardedCookie(response);
     const value = /stoky_device=([^;]+)/.exec(forwarded)?.[1];
@@ -42,7 +42,7 @@ describe("a device with no id yet", () => {
   });
 
   it("is sent a cookie no script can read and no other site can trigger", () => {
-    const header = setCookie(middleware(new NextRequest("https://example.test/")));
+    const header = setCookie(proxy(new NextRequest("https://example.test/")));
 
     expect(header).toContain("HttpOnly");
     expect(header).toContain("SameSite=lax");
@@ -56,11 +56,11 @@ describe("a device with no id yet", () => {
     // project is reachable over plain http on a LAN, and a Secure cookie there
     // is one the browser silently refuses to store — which would mint a new
     // device on every single request.
-    expect(setCookie(middleware(new NextRequest("https://example.test/")))).toContain(
+    expect(setCookie(proxy(new NextRequest("https://example.test/")))).toContain(
       "Secure",
     );
     expect(
-      setCookie(middleware(new NextRequest("http://192.168.8.20/"))),
+      setCookie(proxy(new NextRequest("http://192.168.8.20/"))),
     ).not.toContain("Secure");
   });
 });
@@ -73,7 +73,7 @@ describe("a device that already has one", () => {
   }
 
   it("keeps it, and is not sent it again", () => {
-    const response = middleware(withCookie(KNOWN));
+    const response = proxy(withCookie(KNOWN));
 
     expect(forwardedCookie(response)).toContain(`${DEVICE_ID_COOKIE}=${KNOWN}`);
     // Re-setting an unchanged cookie would slide its expiry on every request,
@@ -84,7 +84,7 @@ describe("a device that already has one", () => {
 
   it("replaces a value it did not mint", () => {
     // The value is attacker-controlled and becomes half of a database key.
-    const response = middleware(withCookie("'; drop table \"User\"; --"));
+    const response = proxy(withCookie("'; drop table \"User\"; --"));
 
     const value = /stoky_device=([^;]+)/.exec(forwardedCookie(response))?.[1];
     expect(isDeviceId(value)).toBe(true);
@@ -97,8 +97,8 @@ describe("what it did not stop doing", () => {
     // The device id shares this function with the nonce, and the nonce is what
     // stops the login form being a dead page. Regressing it while adding a
     // cookie is exactly the accident worth pinning.
-    const first = middleware(new NextRequest("https://example.test/"));
-    const second = middleware(new NextRequest("https://example.test/"));
+    const first = proxy(new NextRequest("https://example.test/"));
+    const second = proxy(new NextRequest("https://example.test/"));
 
     const nonceOf = (r: Response) =>
       r.headers.get("x-middleware-request-x-nonce") ?? "";

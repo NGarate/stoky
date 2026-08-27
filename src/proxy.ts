@@ -11,6 +11,13 @@ import {
 /**
  * Per-request Content-Security-Policy nonce, and the device's own identifier.
  *
+ * **`proxy`, not `middleware`.** Next 16 renamed the convention and deprecates
+ * the old filename with a build warning; the function has to be named for the
+ * file it lives in, or Next refuses it. Nothing else about it changed — the
+ * `config.matcher` below is unchanged, and the request headers Next carries to
+ * the render are still `x-middleware-request-*`, which is why the tests that
+ * read them did not move with it.
+ *
  * The nonce is generated here, per request, and handed to Next through the
  * request headers — Next reads the CSP header, finds the nonce, and stamps it
  * onto the scripts it emits. The directives themselves live in `@/lib/csp` so
@@ -22,7 +29,7 @@ import {
  * the value out of reach of the render that needs it — which is the whole
  * point, since it decides which screen a person lands on. See `@/lib/device`.
  */
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const isDev = process.env.NODE_ENV !== "production";
   const nonce = crypto.randomUUID().replaceAll("-", "");
 

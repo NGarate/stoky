@@ -6,7 +6,7 @@ import { test, expect, type APIResponse } from "@playwright/test";
  *
  * **The review found this whole layer verified by reading.** `csp.test.ts`
  * exercises `buildCsp()` in isolation and never touches a response;
- * `middleware-device.test.ts` asserts the header on the middleware's return
+ * `proxy-device.test.ts` asserts the header on the proxy's return
  * value, which is the function's output rather than what a browser receives.
  * Nothing anywhere named `X-Frame-Options`, HSTS or the other four. A header
  * that is configured and not delivered looks exactly like a header that is
@@ -133,14 +133,14 @@ test.describe("the service worker's own policy", () => {
   test("is its own, and is not cached", async ({ request }) => {
     // A nonce'd page policy applied to the worker becomes the *worker's*
     // policy, and the worker has no page to inherit from — so `/sw.js` is
-    // excluded from the middleware matcher and given its own in the config.
+    // excluded from the proxy's matcher and given its own in the config.
     const response = await request.get("/sw.js");
     expect(response.status()).toBe(200);
 
     const csp = headerOf(response, "content-security-policy");
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain("script-src 'self'");
-    // No nonce: the middleware does not run for this path, and a nonce here
+    // No nonce: the proxy does not run for this path, and a nonce here
     // would mean it had started to.
     expect(csp).not.toContain("nonce-");
 

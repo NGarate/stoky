@@ -39,7 +39,7 @@ builds green on two edits.**
 | 4 | With those two exports removed the build fails on exactly one route: `/_not-found` | `blocking-prerender-dynamic` |
 | 5 | With `instant = false` on the root layout the build passes, and **9 of 35 routes become Partial Prerender** | the `[id]` routes: prices, products ×4, receipts ×2, shopping |
 | 6 | `pnpm verify:ci` is green under both flags | 569 unit / 602 component / 443 integration / build, 107s |
-| 7 | Next 16 also wants `middleware.ts` renamed to `proxy.ts` | build warning, `middleware-to-proxy` codemod — unrelated to this, worth its own commit |
+| 7 | ~~Next 16 also wants `middleware.ts` renamed to `proxy.ts`~~ | **Done 2026-08-27.** Renamed by hand rather than with the codemod, because the change is one file, one function name and eleven references, and a canary codemod is a larger blast radius than the edit |
 
 ## Finding 4 is the interesting one: the CSP nonce and the static shell are in tension
 
@@ -50,7 +50,7 @@ runtime values:
 - `await getLocale()` — next-intl, which reads the `locale` cookie *and* queries
   `User.locale`;
 - `(await headers()).get("x-nonce")` — the per-request CSP nonce minted in
-  `src/middleware.ts`.
+  `src/proxy.ts` (`src/middleware.ts` when this was written).
 
 Both drive things with no child to wrap in `<Suspense>`: `<html lang>` and a
 `<script nonce>` in `<head>`. The migration guide names this case exactly, and

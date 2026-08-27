@@ -84,7 +84,7 @@ describe("what the worker must not weaken", () => {
 
 describe("the middleware's matcher", () => {
   const source = readFileSync(
-    join(import.meta.dir, "../../middleware.ts"),
+    join(import.meta.dir, "../../proxy.ts"),
     "utf8",
   );
 

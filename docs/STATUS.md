@@ -470,7 +470,7 @@ possibly with the phone in a pocket, so the sync indicator carries it and the
 dialog opens when the person chooses. A KITCHEN account is told who can fix it
 rather than shown a control the server would refuse. `REDESIGN_PLAN.md` §5.5.3.
 
-**Security posture.** Per-request CSP nonce in `src/middleware.ts` with
+**Security posture.** Per-request CSP nonce in `src/proxy.ts` with
 `strict-dynamic`, `worker-src` and `child-src` named explicitly, and `/sw.js`
 excluded from the matcher so the page policy does not become the worker's. CI pins every action by SHA, scans the image with Trivy before
 pushing it, fails on critical or high findings, and attaches an SBOM and a

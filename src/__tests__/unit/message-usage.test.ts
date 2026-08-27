@@ -112,7 +112,7 @@ function labelKeysIn(file: string): Usage[] {
 
   return [...source.matchAll(pattern)]
     .map((match) => match[1] as string)
-    // `key:` is a common property name — an HTTP header in `middleware.ts`, a
+    // `key:` is a common property name — an HTTP header in `proxy.ts`, a
     // sentinel in `LocationPicker`. A catalogue key is always
     // `namespace.name`, dotted and camelCase, so that shape is the filter.
     // The cost of being wrong here is one direction only: a key this misses

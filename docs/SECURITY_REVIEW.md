@@ -332,7 +332,7 @@ anybody in.
 
 ## 8. Headers in production
 
-**Verified:** the CSP carries a per-request nonce minted in `src/middleware.ts`,
+**Verified:** the CSP carries a per-request nonce minted in `src/proxy.ts`,
 with `strict-dynamic`, and the production policy has no `unsafe-eval`.
 `e2e/auth.prod.spec.ts` signs in against the standalone artefact and asserts no
 CSP violation reaches the console — which is what caught the

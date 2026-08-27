@@ -6,7 +6,7 @@ const withNextIntl = createNextIntlPlugin();
 // Security headers that do not vary per request.
 //
 // Content-Security-Policy is NOT here: it carries a per-request nonce and is set
-// in src/middleware.ts. A static CSP strict enough to be worth having blocks
+// in src/proxy.ts. A static CSP strict enough to be worth having blocks
 // Next's inline bootstrap scripts, which stops hydration and silently breaks the
 // login form.
 //
@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
      * Room for the largest receipt photograph, once base64 has inflated it.
      *
      * Next caps a request body at this value whenever a middleware is
-     * configured, and `src/middleware.ts` matches every route including
+     * configured, and `src/proxy.ts` matches every route including
      * `/api/trpc`. The default is 10 MiB, which is *below* the 13.98 MB a
      * 10 MB photograph becomes on the wire — so the documented limit could
      * not be reached and the router's own size check could never fire. See
