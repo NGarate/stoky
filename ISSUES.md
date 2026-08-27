@@ -12,7 +12,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: AUTH-1, TEST-5 and RUNTIME-1.** TEST-5 is the intermittent bun
+**Open: TEST-5 and RUNTIME-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
@@ -77,7 +77,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
-| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | 🟡 Open — measured; `strategy: "jwt"` is load-bearing |
+| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `TBD` — the adapter is gone, so the default is right |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
@@ -2778,11 +2778,11 @@ rather than on curl's exit code, it confirms the process it started is the one
 answering, and it supplies a secret long enough for the server to render.
 Filed rather than fixed in passing (D6).
 
-### 🟡 AUTH-1: An inert adapter picks a session strategy the schema cannot serve
+### ✅ AUTH-1: An inert adapter picks a session strategy the schema cannot serve
 
 **Files:** `src/lib/auth.ts:71` (the adapter), `:210` (`strategy: "jwt"`), `prisma/schema.prisma`
 **Severity:** MEDIUM — nothing is wrong today; the hazard is that the thing holding it together looks removable
-**Status:** OPEN — found 2026-08-27 while answering "why Auth.js rather than NextAuth, and could the JWT be managed server-side"
+**Status:** RESOLVED 2026-08-27, same day — found while answering "why Auth.js rather than NextAuth, and could the JWT be managed server-side". See *How it closed*.
 
 `authConfig` sets `adapter: PrismaAdapter(prisma)`. With credentials sign-in and
 a JWT strategy the adapter does **no work**: `@auth/core`'s credentials branch
@@ -2813,13 +2813,39 @@ Not a crash. An application that answers sign-in successfully and then has no
 session — the failure mode that is hardest to notice, produced by deleting a
 line that looks like a comment about a default.
 
-**Cost of closing:** either delete the adapter, since it does nothing, or give
-the schema the three models it implies. The first is smaller and is probably
-right while sign-in is credentials-only; the second is what a move to
-server-side sessions would need anyway, and `REDESIGN_PLAN.md` §10 now carries
-session revocation. Deciding between them is the same decision, so it is filed
-rather than fixed in passing (D6). The line is commented in place meanwhile, so
-the next reader cannot mistake it for tidy-up.
+~~**Cost of closing:** either delete the adapter … Deciding between them is the
+same decision, so it is filed rather than fixed in passing (D6).~~
+
+---
+
+## How it closed
+
+**The decision dissolved when it was measured.** The two options were not
+alternatives. Adding `Session`, `Account` and `VerificationToken` buys nothing
+while sign-in is credentials-only, because credentials can never use a database
+session — the branch above mints a JWT unconditionally. They would matter for an
+OAuth provider, which can bring them when it arrives.
+
+So the adapter went. Measured on the standalone artefact before touching
+anything else:
+
+| | With adapter + explicit `"jwt"` | With adapter, no explicit strategy | **No adapter** |
+|---|---|---|---|
+| sign-in | 302, cookie set | 302, cookie set | 302, cookie set |
+| `/api/auth/session` | the session | **`null`** | the session |
+| adapter errors | 0 | one per read | **0** |
+
+With no adapter, `"jwt"` is the *default* rather than an override, so the trap
+is gone rather than commented. `@auth/prisma-adapter` left `package.json` with
+it — nothing else imported it.
+
+The comment in its place explains why there is no adapter, and that adding one
+back is a schema change rather than a config change. That is the half worth
+keeping: the hazard was never the adapter, it was that an adapter silently
+chooses a strategy.
+
+Verified: typecheck, lint, verify:local, `auth.flow` + `capabilities` +
+`session.freshness` at 36 pass, and `bunx playwright test` 148/148.
 
 **What this is not.** It is not an argument for or against JWT sessions. Auth.js
 gives no choice here: credentials sign-in always produces a JWT.

@@ -1,7 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import { connection } from "next/server";
 import type { NextAuthConfig, Session } from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import * as argon2 from "argon2";
 import type { HouseholdRole } from "@prisma/client";
@@ -70,31 +69,31 @@ export const authConfig: NextAuthConfig = {
   trustHost: true,
 
   /**
-   * Inert, and **load-bearing anyway** — do not remove either half of this
-   * without the other.
+   * **There is deliberately no `adapter`.**
    *
-   * Sign-in is the credentials provider, and `@auth/core`'s credentials branch
-   * mints and encodes a JWT unconditionally: it never calls the adapter, so
-   * nothing here persists a session. The adapter does no work.
+   * There was one — `PrismaAdapter(prisma)` — and it did nothing.
+   * `@auth/core`'s credentials branch mints and encodes a JWT unconditionally
+   * and never calls an adapter, so no session was ever persisted through it.
    *
-   * But `@auth/core/lib/init.js` reads
-   * `strategy: config.adapter ? "database" : "jwt"`. **The presence of an
-   * adapter is what picks the default strategy**, and `prisma.session` does not
-   * exist — the schema has no `Session`, `Account` or `VerificationToken`
-   * model, because nothing ever needed one.
+   * Removing it was not tidying. `@auth/core/lib/init.js` reads
+   * `strategy: config.adapter ? "database" : "jwt"`: **an adapter's presence
+   * picks the default strategy**, and this schema has no `Session`, `Account`
+   * or `VerificationToken` model. So `session.strategy: "jwt"` below was the
+   * only thing overriding a default the configuration could not survive, while
+   * reading like a restatement of one. Deleting that line — plausible
+   * tidy-up — left sign-in answering 302 and setting a cookie while every
+   * session read failed with `prisma.session.findUnique is undefined` and
+   * `/api/auth/session` returned `null`. Measured, 2026-08-27, ISSUES.md
+   * AUTH-1.
    *
-   * So `session.strategy: "jwt"` below is not documentation of a default. It is
-   * the only thing overriding a default this configuration cannot survive.
-   * Measured 2026-08-27 by removing that one line and serving the artefact:
-   * sign-in still answers 302 and still sets a session cookie, while every
-   * session read fails with `AdapterError: prisma.session.findUnique is
-   * undefined` and `/api/auth/session` returns `null`. Not a crash — an
-   * application that looks signed in and has no session.
+   * With no adapter, `"jwt"` is the default rather than an override, and the
+   * trap is gone rather than commented.
    *
-   * Two ways out, neither taken here: delete the adapter, or give the schema
-   * the tables it implies. ISSUES.md AUTH-1.
+   * **Adding an adapter back is a schema change, not a config change.** It
+   * would need those three models, and it buys nothing while sign-in is
+   * credentials-only, because credentials can never use a database session. An
+   * OAuth provider is the case that would want one, and it can bring them.
    */
-  adapter: PrismaAdapter(prisma),
   providers: [
     Credentials({
       credentials: {
