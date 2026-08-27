@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import { pngClaiming, pngOf } from "../utils/png";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@prisma/client";
 import { appRouter } from "@/server/trpc/router";
 import { ThrottledError } from "@/server/trpc/throttle";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
-import sharp from "sharp";
 import {
   createTestUser,
   createTestHousehold,
@@ -229,26 +229,33 @@ describe("receipt.upload — what it refuses", () => {
   it("refuses an image that is small in bytes and enormous in pixels", async () => {
     // `SECURITY_REVIEW.md` finding 14. The size cap counts bytes; the decoding
     // cost is in pixels, and the two are unrelated for a compressible image.
-    // This one is 64 megapixels in about 200 KB — it passes the 10 MB cap and
-    // the magic-byte check, and decoding it asks for roughly 1.5 GB.
+    // This one declares 81 megapixels in 68 bytes — it passes the 10 MB cap and
+    // the magic-byte check, and decoding it would ask for gigabytes.
     //
-    // Built here rather than committed as a fixture, because a checked-in
-    // decompression bomb is a thing somebody opens by accident.
-    const bomb = await sharp({
-      create: {
-        width: 8000,
-        height: 8000,
-        channels: 3,
-        background: { r: 9, g: 9, b: 9 },
-      },
-      limitInputPixels: false,
-    })
-      .png({ compressionLevel: 6 })
-      .toBuffer();
+    // Assembled here rather than committed as a fixture, because a checked-in
+    // decompression bomb is a thing somebody opens by accident. Hand-built
+    // rather than made with sharp, because `Bun.Image` has no `create` and this
+    // file is the last thing in the suite that needed the library at all.
+    const bomb = pngClaiming(9000, 9000);
 
     // The premise, asserted rather than assumed: this really does slip past the
     // byte cap, or the test proves nothing about the pixel cap.
     expect(bomb.length).toBeLessThan(10 * 1024 * 1024);
+
+    // The control, so the refusal below is not just "hand-assembled PNGs are
+    // rejected": a genuinely valid one from the same builder is accepted by
+    // this same procedure.
+    //
+    // It cannot be the *tighter* control — the same token `IDAT` under a small
+    // header — because that one is refused too, at the decode rather than at
+    // the bound, and this procedure answers BAD_REQUEST to both. Telling those
+    // two apart needs the error message, and that is asserted in
+    // `unit/png-builder.test.ts` where the message is in reach.
+    const accepted = await caller.receipt.upload({
+      fileBase64: pngOf(60, 40).toString("base64"),
+      mimeType: "image/png",
+    });
+    expect(accepted.id).toBeDefined();
 
     await expectCode(
       () =>
