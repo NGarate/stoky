@@ -214,8 +214,12 @@ RUN mkdir -p /app/uploads/receipts && chown -R node:node /app/uploads
 #
 # `start_period` is 30s rather than 20s to match: the first request now waits
 # on Prisma's first connection, which the login page did not.
+# `bun`, not `node`: this was the only Node process left in a *running*
+# container, and the runtime the container actually depends on is the one it
+# runs the server with. All three branches were checked under Bun rather than
+# assumed — unreachable exits 1, a 200 exits 0, a 500 exits 1.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 EXPOSE 3000
 USER node
