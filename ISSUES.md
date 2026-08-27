@@ -2579,11 +2579,97 @@ the browser.
 
 What *does* reproduce it is the browser suite, at a steady **~10–12 per test**
 across two sample sizes (250 over 21 tests, ~1500 over 148) and from the seed
-project onwards. Every one of those tests is signed in and none of the probes
-above were, which is the next thing to vary.
+project onwards. ~~Every one of those tests is signed in and none of the probes
+above were, which is the next thing to vary.~~
+
+---
+
+## Reproduced and localised, 2026-08-27
+
+**Being signed in was not the variable.** With a session verified to work —
+`/dashboard` answering 200 rather than redirecting — 39 page requests, 13 RSC,
+13 prefetch and 5 tRPC calls produced **0**. That hypothesis is dead.
+
+What separates the browser suite from `curl` is that a browser *prefetches*.
+Driving a real browser at the same server, instrumented per phase:
+
+| Phase | AbortErrors |
+|---|---|
+| launch browser, new context, new page | 0 |
+| `goto /dashboard` (networkidle) | **+11** |
+| `goto /inventory` (networkidle) | **+10** |
+| close page, close context, close browser | 0 |
+
+So it is not Playwright's lifecycle and not teardown — it is the page load. And
+the correspondence is exact: **11 AbortErrors, 11 requests the browser reports
+as `net::ERR_ABORTED`**, one for one.
+
+**They are router prefetches.** Every one is `<route>?_rsc=…` carrying
+`next-router-prefetch: 3` — one per navigation link. Next prefetches the links,
+the browser cancels most of them, and each cancellation leaves an unhandled
+`AbortError` on the Bun server. The count tracks the links on the page:
+
+| Page | links | prefetches | browser aborts | AbortErrors |
+|---|---|---|---|---|
+| `/login` (unauthenticated) | 1 | 2 | 1 | **1** |
+| `/kitchen` | 15 | 14 | 7 | **7** |
+| `/dashboard` | 27 | 25 | 9 | **11** |
+
+`/login` is not signed in and still produces one, which settles the earlier
+hypothesis from the other direction.
+
+**Why four `curl` probes missed it.** One reason is small and one is not. The
+small one: the earlier prefetch probe sent `Next-Router-Prefetch: 1`, and a
+browser sends `3`. The large one is that fixing that changes nothing — replaying
+the exact request shape and aborting mid-flight still gives **0**. It is not the
+request, it is *how* a browser aborts: cancelling one `fetch` on a shared
+keep-alive connection is not the same event as closing the socket, which is all
+`curl --max-time` can do.
+
+### The trigger is `partialPrefetching`, and it is ours
+
+Rebuilt with `experimental.partialPrefetching` removed and measured the same
+three pages on a second server:
+
+| Page | prefetches (on → off) | browser aborts | AbortErrors |
+|---|---|---|---|
+| `/login` | 2 → 2 | 1 → **0** | 1 → **0** |
+| `/kitchen` | 14 → 14 | 7 → **1** | 7 → **0** |
+| `/dashboard` | 25 → 28 | 9 → **1** | 11 → **0** |
+
+The same prefetches are still *issued*. What changes is that the browser stops
+cancelling them, and the flood goes to zero.
+
+**So this is not a pre-existing Bun/Next interop defect that happened to be
+noticed here.** `partialPrefetching` landed in `2b6eba5` on 2026-08-25 and this
+entry was filed on 2026-08-26, 27 commits later — so **every measurement above,
+including the "250 on master" baseline, was taken with the option on**. It
+pre-dates the `crypto` fix, which is what made it look older than it is; it does
+not pre-date the configuration that causes it.
+
+### The decision, which is the owner's
+
+`partialPrefetching` is Next 16.3's instant-navigation half — one reusable shell
+prefetched per route rather than one request per link — and it was turned on
+deliberately. Against it: the container log is this project's only monitoring by
+choice, and ~10 rejections per page load is a flood a real error hides in.
+
+Three answers, none obviously right:
+
+1. **Keep it and accept the log noise.** The pages render, the suite is green,
+   and the cost is monitoring nobody can read.
+2. **Turn it off.** Clean log, and the feature goes with it.
+3. **Keep it and handle the rejection.** A narrow `unhandledRejection` filter
+   that drops an `AbortError` from an abandoned request and logs everything
+   else. This is the same shape as `d0e7566` — telling the runtime something
+   true rather than turning a feature off — but a filter that is one word too
+   broad silently eats real errors, which is the failure this entry is about.
+
+Not taken here. Recorded so the choice is made rather than defaulted into.
 
 Filed rather than fixed in passing (D6), and now with enough detail to write the
-upstream report from.
+upstream report from — and with the local trigger identified, which changes what
+that report should say.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
