@@ -12,18 +12,20 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, TEST-6 and RUNTIME-1.** TEST-5 is the intermittent bun
+**Open: TEST-5 and RUNTIME-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
-and does not fix it. TEST-6 is two inert mobile `test.skip`s
-whose stated reason names a phase that closed; running them on a phone viewport
-fails four of eight, all four on locators rather than on anything the product
-does. RUNTIME-1 is the unhandled
+and does not fix it. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
+failed four, all four on locators rather than on anything the product does, and
+they pass 8 of 8 now. RUNTIME-1 is the unhandled
 rejections Bun raises and Node does not, which cost the logs this project uses
 instead of error tracking. It turned out to be **two** causes filed as one: the
 prerender chain through `auth()` is fixed (`d0e7566`, which also corrects the
 entry's conclusion that it was not ours to fix), and the `AbortError` family —
-the larger number — is untouched.
+the larger number — is reproduced and localised but not fixed: one per completed
+router prefetch under Bun, none under Node on the identical artefact, and a
+one-line `curl -sL` reproduces it. `partialPrefetching` is what exposes it and
+stays on by the owner's decision.
 
 **BUILD-1 closed on 2026-08-26** (`e2a6a8e`), in the direction its own entry
 advised against: `.bun-version` went forward to 1.4.0 on the owner's
@@ -76,7 +78,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
-| TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open — run on mobile 2026-08-27: 4 of 8 fail, all harness, no product defect |
+| TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
@@ -2828,11 +2830,11 @@ so the image's runner reaches no gate. `defd147` changed that: `quality` and
 image's bun now runs both. Measured before the change landed — `quality` green
 in the image, and `test` at 609 unit, 611 component, 486 integration.
 
-### 🟡 TEST-6: Two inert mobile skips cite a phase that closed
+### ✅ TEST-6: Two inert mobile skips cite a phase that closed
 
 **File:** `e2e/critical-paths.spec.ts:370,422`
 **Severity:** LOW — suite hygiene, not a product defect
-**Status:** OPEN — found 2026-08-17 while re-auditing the journeys
+**Status:** RESOLVED 2026-08-27 — found 2026-08-17 while re-auditing the journeys. See *How it closed* at the end.
 
 Both guards read `test.skip(({ isMobile }) => Boolean(isMobile), "Phone UI is
 Phase 4")` and date from D9, when the dashboard had no mobile navigation and
@@ -2903,10 +2905,35 @@ warning naming whichever product holds it. After the create succeeds, that query
 about it. The control doing its job, one moment after it was useful.
 
 So **all four failures are the harness**, with no real-defect candidate left.
-Closing this is: give the page objects locators that survive a phone viewport,
-fix the `/inventory/consume` navigation race, delete the two guards, and state
-the D33 scoping where the tests are. Still open, and now open with a
-measurement instead of a question.
+
+---
+
+## How it closed
+
+All four things it needed, and the measurement either side.
+
+**The locators.** `text=${name}` and `a:has-text(name)` matched the row's three
+action links — "Ajustar de «X»", "Historial de «X»", "Precios de «X»" — and a
+hidden `aria-live` region, eight elements in all, and `.first()` took whichever
+the DOM ordered first. They are `getByRole("link", { name, exact: true })` now,
+which is the row's title link and only that. This was a latent fragility on
+chromium too: it passed there by luck of DOM order, not by aiming at anything.
+
+**The navigation race.** Dismissing the stock dialog starts a client navigation
+back to `/inventory/add`, and a `goto` issued into that window dies. Worth
+recording that `waitForLoadState()` does **not** fix it — the app's navigation
+begins after the current load has settled, so the wait returns before there is
+anything to wait for. Waiting for the URL it is heading to is what lands it.
+
+**The guards** are deleted, and the comment in their place says what is actually
+true: no project with `isMobile` matches this file, Mobile Safari runs the two
+layout specs, and that is D33's deliberate scoping rather than a phase that
+never got cleaned up.
+
+**Re-measured the same way**: 4 failed / 4 passed before, **8 passed / 0 failed**
+after. The scoping is unchanged — these still run on chromium only — so what
+the fix buys is that the scoping is now a choice rather than a wall. Full suite
+148/148 with the mobile project untouched.
 
 *(The mistake is the same shape as the probe traps in `STATUS.md` trap 9:
 reading what was expected instead of what was there. A truncated string is not
