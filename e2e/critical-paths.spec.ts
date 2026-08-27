@@ -225,7 +225,15 @@ class ProductsPage {
   }
 
   async expectProductInList(name: string) {
-    await expect(this.page.locator(`text=${name}`).first()).toBeVisible();
+    // `exact`, and by role. A `text=` locator matches the row's three action
+    // links — "Ajustar de «X»", "Historial de «X»", "Precios de «X»" — and the
+    // hidden `aria-live` region that names a product too, so `.first()` was
+    // picking whichever the DOM happened to order first. It resolved to eight
+    // elements at a phone viewport and to a hidden one first (ISSUES.md
+    // TEST-6). Only the row's title link is named exactly the product.
+    await expect(
+      this.page.getByRole("link", { name, exact: true }),
+    ).toBeVisible();
   }
 }
 
@@ -325,6 +333,17 @@ class InventoryPage {
       await expect(dialog).toBeHidden();
     }
     if (!this.page.url().includes("/inventory/consume")) {
+      // Dismissing the dialog starts a client navigation of its own — back to
+      // `/inventory/add`, the form it confirmed — and a `goto` issued into that
+      // window dies with "interrupted by another navigation". `waitForLoadState`
+      // is not enough: the app's navigation begins *after* the current load has
+      // settled, so the wait returns before there is anything to wait for.
+      // Waiting for the URL it is heading to is what actually lands it. Caught,
+      // because on a desktop viewport it has usually happened already
+      // (ISSUES.md TEST-6).
+      await this.page
+        .waitForURL(/\/inventory\/add/, { timeout: 2000 })
+        .catch(() => {});
       await this.page.goto("/inventory/consume");
     }
     await this.page.waitForURL(/\/inventory\/consume/);
@@ -407,7 +426,16 @@ test.describe("Onboarding Flow", () => {
 
 test.describe("Product Creation Flow", () => {
   // Same reason as Inventory Management: see the note there.
-  test.skip(({ isMobile }) => Boolean(isMobile), "Phone UI is Phase 4");
+  // Not skipped on mobile any more, and not run there either: no project with
+  // `isMobile` matches this file at all. Mobile Safari runs the two layout
+  // specs and nothing else, which is D33's deliberate scoping — one engine's
+  // worth of phone-width layout coverage rather than a matrix. The guard that
+  // used to sit here cited "Phone UI is Phase 4", a phase that closed, and
+  // could not fire either way (ISSUES.md TEST-6).
+  //
+  // The eight tests in these two describes were run at an iPhone 12 viewport
+  // once, on 2026-08-27, to find out what the guard had been hiding: four
+  // failed, all four on locators, none on anything the product does.
 
   test("should create product and verify in list", async ({ page }) => {
     const registerPage = new RegisterPage(page);
@@ -468,7 +496,7 @@ test.describe("Product Creation Flow", () => {
 
     // Start where a person would: the product's own page, reached by its name.
     await page.goto("/products");
-    await page.click(`a:has-text("${originalName}")`);
+    await page.getByRole("link", { name: originalName, exact: true }).click();
     await page.waitForURL(/\/products\/[^/]+$/);
 
     // No second screen to go to: the fields are edited where they are read.
@@ -515,7 +543,7 @@ test.describe("Product Creation Flow", () => {
     await productsPage.createProduct(productName);
 
     await page.goto("/products");
-    await page.click(`a:has-text("${productName}")`);
+    await page.getByRole("link", { name: productName, exact: true }).click();
     await page.waitForURL(/\/products\/[^/]+$/);
 
     // Two presses, deliberately: the first opens the confirmation that names
@@ -539,7 +567,7 @@ test.describe("Product Creation Flow", () => {
     // And the catalogue no longer lists it.
     await page.goto("/products");
     await settle(page);
-    await expect(page.locator(`a:has-text("${productName}")`)).toHaveCount(0);
+    await expect(page.getByRole("link", { name: productName, exact: true })).toHaveCount(0);
   });
 
   test("should require authentication for product pages", async ({ page }) => {
@@ -558,7 +586,16 @@ test.describe("Inventory Management Flow", () => {
   // is Phase 4 of docs/REDESIGN_PLAN.md; until then, running them on a phone
   // viewport measures an absence rather than a regression. Remove this skip as
   // part of that phase — it is the point at which they should start passing.
-  test.skip(({ isMobile }) => Boolean(isMobile), "Phone UI is Phase 4");
+  // Not skipped on mobile any more, and not run there either: no project with
+  // `isMobile` matches this file at all. Mobile Safari runs the two layout
+  // specs and nothing else, which is D33's deliberate scoping — one engine's
+  // worth of phone-width layout coverage rather than a matrix. The guard that
+  // used to sit here cited "Phone UI is Phase 4", a phase that closed, and
+  // could not fire either way (ISSUES.md TEST-6).
+  //
+  // The eight tests in these two describes were run at an iPhone 12 viewport
+  // once, on 2026-08-27, to find out what the guard had been hiding: four
+  // failed, all four on locators, none on anything the product does.
 
   test("should add stock to product", { tag: "@smoke" }, async ({ page }) => {
     const registerPage = new RegisterPage(page);
@@ -668,7 +705,7 @@ test.describe("Journey 4 — stock changes without a form", () => {
     await productsPage.createProduct(productName);
 
     await page.goto("/products");
-    await page.click(`a:has-text("${productName}")`);
+    await page.getByRole("link", { name: productName, exact: true }).click();
     await page.waitForURL(/\/products\/[^/]+$/);
 
     // Before: nothing in stock, said in words — and minus is disabled, because
