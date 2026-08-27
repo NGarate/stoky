@@ -12,7 +12,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5 and RUNTIME-1.** TEST-5 is the intermittent bun
+**Open: AUTH-1, TEST-5 and RUNTIME-1.** TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
@@ -77,6 +77,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
+| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | 🟡 Open — measured; `strategy: "jwt"` is load-bearing |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
@@ -2776,6 +2777,52 @@ confident wrong answer first: it follows redirects, it waits on the HTTP status
 rather than on curl's exit code, it confirms the process it started is the one
 answering, and it supplies a secret long enough for the server to render.
 Filed rather than fixed in passing (D6).
+
+### 🟡 AUTH-1: An inert adapter picks a session strategy the schema cannot serve
+
+**Files:** `src/lib/auth.ts:71` (the adapter), `:210` (`strategy: "jwt"`), `prisma/schema.prisma`
+**Severity:** MEDIUM — nothing is wrong today; the hazard is that the thing holding it together looks removable
+**Status:** OPEN — found 2026-08-27 while answering "why Auth.js rather than NextAuth, and could the JWT be managed server-side"
+
+`authConfig` sets `adapter: PrismaAdapter(prisma)`. With credentials sign-in and
+a JWT strategy the adapter does **no work**: `@auth/core`'s credentials branch
+calls `callbacks.jwt` and `jwt.encode` unconditionally and never reaches it.
+Nothing persists a session, and the schema has no `Session`, `Account` or
+`VerificationToken` model — it never needed one.
+
+**But `@auth/core/lib/init.js` reads:**
+
+```js
+strategy: config.adapter ? "database" : "jwt",
+```
+
+The presence of an adapter picks the default strategy. So `session.strategy:
+"jwt"` is not restating a default — it is overriding one this configuration
+cannot survive, and it reads like documentation.
+
+**Measured rather than reasoned.** With that single line removed and the
+standalone artefact rebuilt and served:
+
+| | Result |
+|---|---|
+| sign-in | **302, and it sets a session cookie** |
+| every session read | `AdapterError` / `SessionTokenError`, cause `prisma.session.findUnique is undefined` |
+| `/api/auth/session` | `null` |
+
+Not a crash. An application that answers sign-in successfully and then has no
+session — the failure mode that is hardest to notice, produced by deleting a
+line that looks like a comment about a default.
+
+**Cost of closing:** either delete the adapter, since it does nothing, or give
+the schema the three models it implies. The first is smaller and is probably
+right while sign-in is credentials-only; the second is what a move to
+server-side sessions would need anyway, and `REDESIGN_PLAN.md` §10 now carries
+session revocation. Deciding between them is the same decision, so it is filed
+rather than fixed in passing (D6). The line is commented in place meanwhile, so
+the next reader cannot mistake it for tidy-up.
+
+**What this is not.** It is not an argument for or against JWT sessions. Auth.js
+gives no choice here: credentials sign-in always produces a JWT.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
