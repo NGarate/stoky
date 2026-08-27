@@ -2688,7 +2688,7 @@ was actually measuring. First a server that had refused to boot, then a port
 held by somebody else's server, now a redirect nobody looked at. `STATUS.md`
 trap 9 has both earlier ones; this is the third face of it.
 
-### The trigger is `partialPrefetching`, and it is ours
+### `partialPrefetching` decides what the client asks for, not what the server does
 
 Rebuilt with `experimental.partialPrefetching` removed and measured the same
 three pages on a second server:
@@ -2699,15 +2699,34 @@ three pages on a second server:
 | `/kitchen` | 14 → 14 | 7 → **1** | 7 → **0** |
 | `/dashboard` | 25 → 28 | 9 → **1** | 11 → **0** |
 
-The same prefetches are still *issued*. What changes is that they stop raising
-anything server-side, and the flood goes to zero.
+~~The same prefetches are still issued. What changes is that they stop raising
+anything server-side.~~ ~~**So this is not a pre-existing interop defect that
+happened to be noticed here.**~~ **Both wrong, and the reproduction script
+found it.** `docs/reproductions/runtime-1-abort.sh` reproduces on a build with
+the option **removed** — 10 of 10 under bun, 0 under node.
 
-**So this is not a pre-existing Bun/Next interop defect that happened to be
-noticed here.** `partialPrefetching` landed in `2b6eba5` on 2026-08-25 and this
-entry was filed on 2026-08-26, 27 commits later — so **every measurement above,
-including the "250 on master" baseline, was taken with the option on**. It
-pre-dates the `crypto` fix, which is what made it look older than it is; it does
-not pre-date the configuration that causes it.
+The prefetches are not the same. With the option off the router sends a
+different *kind*: `next-router-prefetch: 1`, 28 of them on `/dashboard`, and the
+server raises nothing. With it on it sends kind `3`, and every completed one
+raises. Send kind `3` by hand and it raises whether or not the option is
+configured.
+
+So the shape is:
+
+| | client sends | server raises (bun) |
+|---|---|---|
+| `partialPrefetching: true` | `next-router-prefetch: 3` | one per completed request |
+| `partialPrefetching` absent | `next-router-prefetch: 1` | none |
+| either, header sent by hand | `3` | one per completed request |
+
+**The option governs the client; the defect is in the server either way.** That
+is better news for the report than the earlier reading: a maintainer needs no
+configuration to see it, only the header.
+
+What remains true is the dating. `partialPrefetching` landed in `2b6eba5` on
+2026-08-25 and this entry was filed on 2026-08-26, so every measurement in it —
+including the "250 on master" baseline — was taken with the option on, and the
+flood is not older than the option. The *defect* is.
 
 ### The decision: `partialPrefetching` stays on
 
@@ -2745,9 +2764,18 @@ What that decides, and what it does not:
   upstream report has an answer: a filter written against a confirmed cause can
   be narrow, and one written now would be guessing at what to match.
 
-Still open, and the remaining work is the upstream report — which now needs no
-browser, no session and no suite, only the one-line `curl -sL` above and the
-two runtimes side by side. Filed rather than fixed in passing (D6).
+Still open, and the remaining work is the upstream report.
+`docs/reproductions/runtime-1-abort.sh` is what it should be written from: it
+serves the same artefact under both runtimes, sends the requests, counts, and
+**exits non-zero unless bun raises and node does not** — a check rather than a
+printout. It needs no browser, no session and no suite, and no configuration
+either.
+
+Four things it does that four earlier probes did not, each of which produced a
+confident wrong answer first: it follows redirects, it waits on the HTTP status
+rather than on curl's exit code, it confirms the process it started is the one
+answering, and it supplies a secret long enough for the server to render.
+Filed rather than fixed in passing (D6).
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
