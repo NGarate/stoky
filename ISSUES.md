@@ -16,7 +16,8 @@ UI-9.
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 is two inert mobile `test.skip`s
-whose stated reason names a phase that closed. RUNTIME-1 is the unhandled
+whose stated reason names a phase that closed; running them on a phone viewport
+fails four of eight, on locators rather than on anything the product does. RUNTIME-1 is the unhandled
 rejections Bun raises and Node does not, which cost the logs this project uses
 instead of error tracking. It turned out to be **two** causes filed as one: the
 prerender chain through `auth()` is fixed (`d0e7566`, which also corrects the
@@ -74,7 +75,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
-| TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open |
+| TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open — run on mobile 2026-08-27: 4 of 8 fail, all harness |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
@@ -2851,6 +2852,50 @@ guards citing a dead reason.
 the D33 scoping where the tests are, or run the two describes on a mobile
 project once to see whether anything actually fails. Filed rather than fixed
 in passing (D6).
+
+---
+
+## Run on a mobile project, 2026-08-27: four of eight fail
+
+The second option, taken. `critical-paths.spec.ts` was temporarily added to the
+Mobile Safari project and both guards removed, so the eight tests in those two
+describes ran at an iPhone 12 viewport for the first time.
+
+**4 passed, 4 failed.** So deleting the guards on their own would have turned
+the suite red, which is the answer this entry needed and could not have been
+reasoned to.
+
+**But the failures are the harness, not the product**, and the evidence is a
+screenshot rather than an inference. `test-failed-1.png` for "should create
+product and verify in list" shows the phone screen rendering exactly what it
+should: the "Productos" heading, both actions, the product's own card with its
+title link, its `Sin stock` badge, its stock, brand and category, its Ajustar /
+Historial / Precios row, and the bottom navigation. Nothing is missing and
+nothing is cut off.
+
+What fails is how the tests look for it:
+
+| Test | Why it fails |
+|---|---|
+| create product and verify in list | `locator('text=' + name).first()` matches **8** elements; the first in DOM order is a hidden `role="status"` region, not the product |
+| edit a product | `a:has-text(name)` resolves to 8, clicks the first, times out |
+| delete an unused product | same |
+| consume stock from product | `page.goto("/inventory/consume")` interrupted by a navigation to `/inventory/add` |
+
+The first three are one defect in the page objects: a text locator that was
+unambiguous when these ran only on chromium is not unambiguous now, and
+`.first()` picks whichever the DOM happens to order first.
+
+**One thing is not explained and is not being written off.** The status region
+the locator caught reads *"Ya tienes «E2E Test Product …» con ese nombre"* — a
+duplicate-name refusal, which means the create was submitted **twice**. Only one
+product exists afterwards, so the server refused the second correctly. Whether
+that is a double submit at a phone viewport or something the test itself does is
+unknown, and it is the one candidate here for a real defect.
+
+**So closing this is more than deleting two guards**: the page objects need
+locators that survive a phone viewport, and the double submit needs an answer
+first. Still open, and now open with a measurement instead of a question.
 
 ### ✅ TEST-2: Mock external API calls in tests
 
