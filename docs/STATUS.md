@@ -386,6 +386,24 @@ These are recorded because each one produced a confident, wrong number.
    check is not "does the port answer" but **"did the process I started say it
    was ready"**: grep the server's own log for its ready line, and pick a port
    after confirming nothing already holds it.
+
+   **Nor is the ready line**, which is the fourth face of the same mistake and
+   the subtlest. Checking whether the `proxy` rename had kept the CSP nonce
+   alive, a probe reported no nonce and no cookie — which reads exactly like the
+   rename having broken it. It had not. The probe's `NEXTAUTH_SECRET` was 30
+   characters against a 32-character floor, so the server bound the port,
+   printed `✓ Ready`, and then refused to render every request. Ready is about
+   the listener; the render is a separate thing that can fail on its own.
+
+   The readiness loop is where it hid: `until curl -s -o /dev/null …` waits on
+   curl's **exit code**, and a 500 satisfies that exactly as well as a 200 does.
+   **Wait on the status**, and read it out loud:
+   `until [ "$(curl -s -o /dev/null -w '%{http_code}' …)" = "200" ]`.
+
+   Four faces now, all the same shape: a server that never booted, a port held
+   by somebody else, a redirect nobody followed, and a listener that was not
+   rendering. The probe has to check what it is measuring, and each time the
+   check that was sufficient last time was not.
 10. **Truncating a log the server still holds open does not empty it.** `: > log`
    between runs leaves the writer's file offset where it was, so the file fills
    with NUL padding and `grep` switches to binary mode and stops printing
