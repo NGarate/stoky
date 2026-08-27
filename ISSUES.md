@@ -17,7 +17,8 @@ failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 is two inert mobile `test.skip`s
 whose stated reason names a phase that closed; running them on a phone viewport
-fails four of eight, on locators rather than on anything the product does. RUNTIME-1 is the unhandled
+fails four of eight, all four on locators rather than on anything the product
+does. RUNTIME-1 is the unhandled
 rejections Bun raises and Node does not, which cost the logs this project uses
 instead of error tracking. It turned out to be **two** causes filed as one: the
 prerender chain through `auth()` is fixed (`d0e7566`, which also corrects the
@@ -75,7 +76,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
-| TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open — run on mobile 2026-08-27: 4 of 8 fail, all harness |
+| TEST-6 | Two inert mobile skips cite a phase that closed | 🟡 Open — run on mobile 2026-08-27: 4 of 8 fail, all harness, no product defect |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
@@ -2886,16 +2887,30 @@ The first three are one defect in the page objects: a text locator that was
 unambiguous when these ran only on chromium is not unambiguous now, and
 `.first()` picks whichever the DOM happens to order first.
 
-**One thing is not explained and is not being written off.** The status region
+~~**One thing is not explained and is not being written off.** The status region
 the locator caught reads *"Ya tienes «E2E Test Product …» con ese nombre"* — a
-duplicate-name refusal, which means the create was submitted **twice**. Only one
-product exists afterwards, so the server refused the second correctly. Whether
-that is a double submit at a phone viewport or something the test itself does is
-unknown, and it is the one candidate here for a real defect.
+duplicate-name refusal, which means the create was submitted **twice**.~~
+**Wrong, and wrong in a way worth naming.** The captured text was truncated —
+`Ya tienes «E2E Test Product …» con es…` — and "con es…" was completed from
+assumption as *"con ese nombre"*. The key is `products.new.barcodeTakenBy`:
+**"con este código de barras"**. Nothing about a name, and nothing about a
+second submit.
 
-**So closing this is more than deleting two guards**: the page objects need
-locators that survive a phone viewport, and the double submit needs an answer
-first. Still open, and now open with a measurement instead of a question.
+What it actually is: `products/new/page.tsx:132` runs a live
+`product.getByBarcode` query on the typed barcode, and `takenBy` renders a
+warning naming whichever product holds it. After the create succeeds, that query
+— still mounted — finds the product just created with that barcode and warns
+about it. The control doing its job, one moment after it was useful.
+
+So **all four failures are the harness**, with no real-defect candidate left.
+Closing this is: give the page objects locators that survive a phone viewport,
+fix the `/inventory/consume` navigation race, delete the two guards, and state
+the D33 scoping where the tests are. Still open, and now open with a
+measurement instead of a question.
+
+*(The mistake is the same shape as the probe traps in `STATUS.md` trap 9:
+reading what was expected instead of what was there. A truncated string is not
+evidence until the key is looked up.)*
 
 ### ✅ TEST-2: Mock external API calls in tests
 
