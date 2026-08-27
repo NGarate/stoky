@@ -2695,8 +2695,8 @@ three pages on a second server:
 | `/kitchen` | 14 → 14 | 7 → **1** | 7 → **0** |
 | `/dashboard` | 25 → 28 | 9 → **1** | 11 → **0** |
 
-The same prefetches are still *issued*. What changes is that the browser stops
-cancelling them, and the flood goes to zero.
+The same prefetches are still *issued*. What changes is that they stop raising
+anything server-side, and the flood goes to zero.
 
 **So this is not a pre-existing Bun/Next interop defect that happened to be
 noticed here.** `partialPrefetching` landed in `2b6eba5` on 2026-08-25 and this
@@ -2705,14 +2705,14 @@ including the "250 on master" baseline, was taken with the option on**. It
 pre-dates the `crypto` fix, which is what made it look older than it is; it does
 not pre-date the configuration that causes it.
 
-### The decision, which is the owner's
+### The decision: `partialPrefetching` stays on
 
 `partialPrefetching` is Next 16.3's instant-navigation half — one reusable shell
 prefetched per route rather than one request per link — and it was turned on
 deliberately. Against it: the container log is this project's only monitoring by
 choice, and ~10 rejections per page load is a flood a real error hides in.
 
-Three answers, none obviously right:
+Three answers were put to the owner:
 
 1. **Keep it and accept the log noise.** The pages render, the suite is green,
    and the cost is monitoring nobody can read.
@@ -2723,11 +2723,27 @@ Three answers, none obviously right:
    true rather than turning a feature off — but a filter that is one word too
    broad silently eats real errors, which is the failure this entry is about.
 
-Not taken here. Recorded so the choice is made rather than defaulted into.
+**Answered 2026-08-27: keep it.** `next.config.ts:40` is unchanged and has
+carried `partialPrefetching: true` since `2b6eba5`; the decision cost no code,
+which is the point of having asked before writing any.
 
-Filed rather than fixed in passing (D6), and now with enough detail to write the
-upstream report from — and with the local trigger identified, which changes what
-that report should say.
+What that decides, and what it does not:
+
+- **The feature is not the defect.** Node serves the identical artefact and the
+  identical requests with zero rejections, so what our configuration does is
+  *expose* a Bun/Next interop bug, not cause one. Turning it off would have hidden
+  a real defect and lost a real feature.
+- **The log cost is accepted, and it is the live one.** Roughly ten rejections
+  per page load, in the only monitoring this project has. Anyone reading a
+  container log needs to know these are noise — which is why this entry stays
+  open rather than being closed as "decided".
+- **Option 3 is deferred, not rejected.** It stops being speculative once the
+  upstream report has an answer: a filter written against a confirmed cause can
+  be narrow, and one written now would be guessing at what to match.
+
+Still open, and the remaining work is the upstream report — which now needs no
+browser, no session and no suite, only the one-line `curl -sL` above and the
+two runtimes side by side. Filed rather than fixed in passing (D6).
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
