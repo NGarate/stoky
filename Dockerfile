@@ -59,6 +59,14 @@ WORKDIR /app
 # suite with a hole in it.
 RUN apk add --no-cache libstdc++ git
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+# `bunx` too, and as a link rather than a second 74 MB copy — the oven image
+# ships it as one to the same binary. It is not decoration: this is the image
+# the `test` CI job runs `scripts/ci-in-image.sh` in, and that script invokes
+# `bunx prisma migrate deploy` because prisma is a binary rather than a script.
+# Without this line the job dies at `sh: bunx: not found`, exit 127 — measured,
+# which is how it was found, because the production image needs no `bunx` and
+# building that one proved nothing about this one.
+RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # The Prisma client is generated, not installed: `deps` runs `bun install`,
