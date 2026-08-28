@@ -3,11 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { signOutAction } from "@/lib/auth/actions";
-import { useWriteQueue } from "@/components/offline/queue-context";
-import { forgetCachedShell } from "@/lib/sw/register";
-import { forgetPersistedReads } from "@/lib/offline/persist";
-import { useComposer } from "@/components/offline/Composer";
+import { useEndSession } from "@/components/session/use-end-session";
 import type { JSX } from "react";
 
 /**
@@ -31,29 +27,11 @@ import type { JSX } from "react";
  */
 export function SignOutButton(): JSX.Element {
   const t = useTranslations("session");
-  const { state, flush, purgeAll } = useWriteQueue();
-  const { userId } = useComposer();
+  // No `before`: signing out of this device asks the server for nothing. The
+  // purge sequence is shared with "end every session" — see `useEndSession`.
+  const { pending, working, leave, sendThenLeave } = useEndSession();
   const [asking, setAsking] = useState(false);
-  const [working, setWorking] = useState(false);
   const titleId = useId();
-
-  const pending = state.pending.length;
-
-  async function leave(): Promise<void> {
-    setWorking(true);
-    // The queue and the cached shell belong to this account. Both go before
-    // the redirect, because after it this component no longer exists.
-    purgeAll();
-    forgetPersistedReads(userId);
-    forgetCachedShell();
-    await signOutAction();
-  }
-
-  async function sendThenLeave(): Promise<void> {
-    setWorking(true);
-    await flush();
-    await leave();
-  }
 
   if (!asking) {
     return (

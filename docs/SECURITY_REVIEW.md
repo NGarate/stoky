@@ -46,7 +46,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 5 | CVE-2026-14456 (OpenSSL) shipped in the image | High | ✅ Fixed `ccde2e1`, verified | — |
 | 6 | `SECURITY.md` states two things about itself that are false | Medium | ✅ Corrected below, verified | — |
 | 7 | Half the restricted procedures have no behavioural refusal test | Medium | ✅ Verified (21 of 28), closed `bc88635` `6ef3fda` | — |
-| 8 | No server-side session revocation | High | ✅ Verified; remedy decided 2026-08-27, planned in §10 | owner |
+| 8 | No server-side session revocation | High | ✅ **Closed.** `sessionsValidFrom` on `User`, enforced in the `jwt` callback where re-issue happens rather than beside the role check; both halves built — an admin ends a member's sessions from `/settings/people`, an account ends its own from `/settings` | — |
 | 9 | The per-IP rate-limit key is attacker-controlled without a sanitising proxy | High | ✅ Verified, documented; the remedy is a decision | operator + owner |
 | 10 | The registration rate limit is exercised by no test | High | ✅ Closed `33bdc14` | — |
 | 11 | Fail-closed is unproven at every limiter call site | High | ✅ Closed `7a663a1` | — |

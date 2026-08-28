@@ -7,6 +7,7 @@ import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
 import { SignOutButton } from "@/components/session/SignOutButton";
+import { RevokeSessionsButton } from "@/components/session/RevokeSessionsButton";
 import type { JSX } from "react";
 
 /**
@@ -106,11 +107,21 @@ export default function SettingsPage(): JSX.Element {
         <ExportButton />
       </section>
 
-      {/* Last, because it is the one action here that ends the visit — and
-          first-class, because on a shared device it is the control that
-          matters most. */}
+      {/* The two actions that end the visit, cheapest first — and both
+          first-class, because on a shared device they are the controls that
+          matter most.
+
+          Two sections rather than one, so the expensive one is never a mis-tap
+          away from the routine one: signing out ends this device's visit, and
+          the second makes every device this account is signed in on ask for a
+          password again. Their copy carries that distinction; neither restates
+          the other's. */}
       <section className="mt-8 rounded border border-border bg-card p-4">
         <SignOutButton />
+      </section>
+
+      <section className="mt-4 rounded border border-border bg-card p-4">
+        <RevokeSessionsButton />
       </section>
 
       {/* The only place in the application these are offered. They used to be

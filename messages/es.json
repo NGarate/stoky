@@ -927,7 +927,18 @@
     "signOutDiscard": "Cerrar sesión y descartarlos",
     "signOutCancel": "Seguir aquí",
     "signOutWorking": "Cerrando sesión...",
-    "signOutShared": "Cierra la sesión al terminar si este dispositivo lo usa más gente."
+    "signOutShared": "Cierra la sesión al terminar si este dispositivo lo usa más gente.",
+    "revokeAll": "Cerrar la sesión en todos los dispositivos",
+    "revokeAllWhy": "Úsalo si pierdes un dispositivo o crees que alguien más entra con tu cuenta.",
+    "revokeAllTitle": "¿Cerrar la sesión en todos los dispositivos?",
+    "revokeAllClean": "Se cerrará también aquí. Tendrás que entrar de nuevo en cada dispositivo. No hay nada sin enviar.",
+    "revokeAllPending": "{count, plural, one {Queda # cambio sin enviar} other {Quedan # cambios sin enviar}}. Se cerrará también aquí y se perderán.",
+    "revokeAllSendFirst": "Enviar y cerrarlas todas",
+    "revokeAllDiscard": "Cerrarlas todas y descartarlos",
+    "revokeAllConfirm": "Sí, cerrarlas todas",
+    "revokeAllCancel": "Seguir aquí",
+    "revokeAllWorking": "Cerrando sesiones...",
+    "revokeAllFailed": "No se han podido cerrar. Sigues dentro y tus otros dispositivos también."
   },
   "offline": {
     "nothingSavedTitle": "Aquí todavía no hay nada guardado",

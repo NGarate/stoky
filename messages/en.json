@@ -927,7 +927,18 @@
     "signOutDiscard": "Sign out and discard them",
     "signOutCancel": "Stay here",
     "signOutWorking": "Signing out...",
-    "signOutShared": "Sign out when you are done if other people use this device."
+    "signOutShared": "Sign out when you are done if other people use this device.",
+    "revokeAll": "Sign out on every device",
+    "revokeAllWhy": "Use this if you lose a device, or think someone else is using your account.",
+    "revokeAllTitle": "Sign out on every device?",
+    "revokeAllClean": "This device included. You will sign in again on each one. Nothing is unsent.",
+    "revokeAllPending": "{count, plural, one {# change is unsent} other {# changes are unsent}}. This device is included, and they will be lost.",
+    "revokeAllSendFirst": "Send, then sign out everywhere",
+    "revokeAllDiscard": "Sign out everywhere and discard them",
+    "revokeAllConfirm": "Yes, sign out everywhere",
+    "revokeAllCancel": "Stay here",
+    "revokeAllWorking": "Signing out...",
+    "revokeAllFailed": "Could not sign out. You are still signed in, and so are your other devices."
   },
   "offline": {
     "nothingSavedTitle": "Nothing saved here yet",
