@@ -938,7 +938,11 @@
     "revokeAllConfirm": "Sí, cerrarlas todas",
     "revokeAllCancel": "Seguir aquí",
     "revokeAllWorking": "Cerrando sesiones...",
-    "revokeAllFailed": "No se han podido cerrar. Sigues dentro y tus otros dispositivos también."
+    "revokeAllFailed": "No se han podido cerrar. Sigues dentro y tus otros dispositivos también.",
+    "signOutFailedUnsent": "No se ha podido enviar todo. No se ha cerrado la sesión y tus cambios siguen aquí. Vuelve a intentarlo en unos segundos.",
+    "signOutFailedAfter": "Se han borrado los datos de este dispositivo, pero la sesión no se ha cerrado. Recarga la página y ciérrala otra vez.",
+    "revokeAllFailedUnsent": "No se ha podido enviar todo. No se ha cerrado ninguna sesión y tus cambios siguen aquí. Vuelve a intentarlo en unos segundos.",
+    "revokeAllFailedAfter": "Se han cerrado tus sesiones, pero este dispositivo no ha terminado de salir. Recarga la página."
   },
   "offline": {
     "nothingSavedTitle": "Aquí todavía no hay nada guardado",

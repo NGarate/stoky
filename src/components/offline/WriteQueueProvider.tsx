@@ -159,7 +159,12 @@ export function WriteQueueProvider({
         drain();
       },
       discard: (id) => queue.discard(id),
-      flush: () => queue.drain(),
+      // Read back from the queue rather than from `state`: `state` is this
+      // render's snapshot and the drain just changed it.
+      flush: async () => {
+        await queue.drain();
+        return queue.getState().pending.length;
+      },
       purgeAll: () => queue.purgeAll(),
     }),
     [state, queue, drain],

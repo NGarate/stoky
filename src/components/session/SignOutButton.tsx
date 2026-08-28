@@ -3,7 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useEndSession } from "@/components/session/use-end-session";
+import {
+  useEndSession,
+  EndSessionError,
+  type EndSessionPhase,
+} from "@/components/session/use-end-session";
 import type { JSX } from "react";
 
 /**
@@ -31,7 +35,27 @@ export function SignOutButton(): JSX.Element {
   // purge sequence is shared with "end every session" — see `useEndSession`.
   const { pending, working, leave, sendThenLeave } = useEndSession();
   const [asking, setAsking] = useState(false);
+  const [failed, setFailed] = useState<EndSessionPhase | null>(null);
   const titleId = useId();
+
+  /**
+   * These used to be `void leave()`, which discarded the rejection.
+   *
+   * Two of them are not theoretical. `sendThenLeave` now refuses when the queue
+   * could not be emptied — a change still inside its undo window is enough —
+   * and it used to purge those writes instead. And `signOutAction` is a POST,
+   * so on the shared tablet this control exists for it rejects with the local
+   * data already gone and the cookie still valid. Both need saying; an
+   * unhandled rejection says it to the console.
+   */
+  async function run(sequence: () => Promise<void>): Promise<void> {
+    setFailed(null);
+    try {
+      await sequence();
+    } catch (error) {
+      setFailed(error instanceof EndSessionError ? error.phase : "local");
+    }
+  }
 
   if (!asking) {
     return (
@@ -62,11 +86,17 @@ export function SignOutButton(): JSX.Element {
         {pending > 0 ? t("signOutPending", { count: pending }) : t("signOutClean")}
       </p>
 
+      {failed !== null ? (
+        <p className="mt-2 text-sm font-semibold text-warn-foreground" role="alert">
+          {t(failed === "unsent" ? "signOutFailedUnsent" : "signOutFailedAfter")}
+        </p>
+      ) : null}
+
       <div className="mt-4 flex flex-wrap gap-2">
         {pending > 0 ? (
           <Button
             disabled={working}
-            onClick={() => void sendThenLeave()}
+            onClick={() => void run(sendThenLeave)}
             type="button"
           >
             {working ? t("signOutWorking") : t("signOutSendFirst")}
@@ -75,7 +105,7 @@ export function SignOutButton(): JSX.Element {
 
         <Button
           disabled={working}
-          onClick={() => void leave()}
+          onClick={() => void run(leave)}
           type="button"
         >
           {working

@@ -26,8 +26,14 @@ import type { QueuedOp } from "@/lib/offline/queue";
 /** What happened, in the order it happened — the subject of the revoke suite. */
 let steps: string[] = [];
 
+/** Whether the sign-out POST fails — the shared-tablet case, a dropped Wi-Fi. */
+let signOutFails = false;
+/** What `flush()` reports as still unsent. A drain can send nothing and resolve. */
+let unsentAfterFlush = 0;
+
 const signOutAction = mock(async () => {
   steps.push("signOut");
+  if (signOutFails) throw new Error("the sign-out POST failed");
 });
 const postMessage = mock((_message: string) => {
   steps.push("purgeShell");
@@ -37,6 +43,7 @@ const purgeAll = mock(() => {
 });
 const flush = mock(async () => {
   steps.push("flush");
+  return unsentAfterFlush;
 });
 
 let pending: QueuedOp[] = [];
@@ -130,6 +137,8 @@ beforeEach(() => {
   pending = [];
   steps = [];
   serverRefuses = false;
+  signOutFails = false;
+  unsentAfterFlush = 0;
 });
 
 afterEach(cleanup);
@@ -367,5 +376,121 @@ describe("ending every session: both catalogues", () => {
     expect(
       screen.getByRole("group", { name: "Sign out on every device?" }),
     ).toHaveTextContent("This device included");
+  });
+});
+
+/**
+ * The two failures that used to be silent, found by reviewing this work rather
+ * than by a suite.
+ *
+ * Both are about the same mistaken belief: that a promise resolving means the
+ * thing it stood for happened.
+ *
+ * - **`flush()` resolving does not mean the queue was sent.** `drain()` returns
+ *   without sending when another drain is in flight, when the session has
+ *   expired, and — the everyday one — when the head is still inside its undo
+ *   window. Leaving on that alone purged exactly the changes somebody had just
+ *   pressed a button to send.
+ * - **`signOutAction` is a POST and can reject**, after the purge has already
+ *   run. Nothing can undo that, so the least the screen can do is stop claiming
+ *   it worked. It used to be called as `void leave()`, which discarded the
+ *   rejection entirely.
+ */
+describe("when sending first does not empty the queue", () => {
+  beforeEach(() => {
+    pending = [op("a"), op("b")];
+    unsentAfterFlush = 2;
+  });
+
+  it("discards nothing and does not sign out, from the sign-out control", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
+    );
+
+    expect(steps).toEqual(["flush"]);
+    expect(purgeAll).not.toHaveBeenCalled();
+    expect(signOutAction).not.toHaveBeenCalled();
+  });
+
+  it("says the changes are still here, rather than nothing", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("tus cambios siguen aquí");
+  });
+
+  it("leaves the controls usable, so sending can be tried again", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    const send = screen.getByRole("button", { name: "Enviar y cerrar sesión" });
+    await userEvent.click(send);
+
+    expect(send).not.toBeDisabled();
+  });
+
+  it("refuses the same way from the revoke control, and revokes nothing", async () => {
+    renderWithIntl(<RevokeSessionsButton />);
+    const confirm = await openRevokeConfirm();
+    await userEvent.click(
+      within(confirm).getByRole("button", { name: "Enviar y cerrarlas todas" }),
+    );
+
+    expect(steps).toEqual(["flush"]);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "No se ha cerrado ninguna sesión",
+    );
+  });
+});
+
+describe("when signing out fails after the purge", () => {
+  beforeEach(() => {
+    signOutFails = true;
+  });
+
+  it("does not claim it worked, and says the data is already gone", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+    );
+
+    // The purge did happen — that is the point of saying so rather than
+    // offering a retry that cannot put it back.
+    expect(purgeAll).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "la sesión no se ha cerrado",
+    );
+  });
+
+  it("re-enables the controls rather than sitting on a dead spinner", async () => {
+    // `working` used to be cleared only when the server write refused, so any
+    // failure after that point left every button — cancel included — disabled
+    // with no way out but a reload.
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    const commit = screen.getAllByRole("button", {
+      name: "Cerrar sesión",
+    })[0] as HTMLElement;
+    await userEvent.click(commit);
+
+    expect(screen.getByRole("button", { name: "Seguir aquí" })).not.toBeDisabled();
+  });
+
+  it("tells the revoke control that the sessions *were* ended", async () => {
+    // The opposite fact from a server refusal, and the one that matters most on
+    // this control: saying "you are still signed in everywhere" here would tell
+    // somebody their lost phone still has access when it does not.
+    renderWithIntl(<RevokeSessionsButton />);
+    const confirm = await openRevokeConfirm();
+    await userEvent.click(
+      within(confirm).getByRole("button", { name: "Sí, cerrarlas todas" }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Se han cerrado tus sesiones");
   });
 });

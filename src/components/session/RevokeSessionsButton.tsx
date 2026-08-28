@@ -4,7 +4,11 @@ import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
-import { useEndSession } from "@/components/session/use-end-session";
+import {
+  useEndSession,
+  EndSessionError,
+  type EndSessionPhase,
+} from "@/components/session/use-end-session";
 import type { JSX } from "react";
 
 /**
@@ -36,24 +40,37 @@ import type { JSX } from "react";
  */
 export function RevokeSessionsButton(): JSX.Element {
   const t = useTranslations("session");
-  const revoke = api.auth.revokeMySessions.useMutation();
+  const revoke = api.auth.revokeMySessions.useMutation({
+    // **`always`, not the client's `online` default.** Offline, an `online`
+    // mutation is *paused* rather than rejected — `src/lib/offline/persist.ts`
+    // says so in as many words — and `mutateAsync`'s promise then never
+    // settles. This sequence awaits it, so the panel would sit at "Cerrando
+    // sesiones..." with every button disabled, including cancel, showing no
+    // failure and revoking nothing; and the mutation would fire unannounced
+    // when the network came back. Somebody who has just lost a phone is owed a
+    // refusal they can read and retry, not a spinner.
+    networkMode: "always",
+  });
   const { pending, working, leave, sendThenLeave } = useEndSession(() =>
     revoke.mutateAsync(),
   );
   const [asking, setAsking] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<EndSessionPhase | null>(null);
   const titleId = useId();
 
   async function run(sequence: () => Promise<void>): Promise<void> {
-    setFailed(false);
+    setFailed(null);
     try {
       await sequence();
-    } catch {
-      // Reachable only when the server refused: `useEndSession` re-throws
-      // before discarding anything, so the person is still signed in here and
-      // their other sessions are still live. Saying "it failed" is the whole
-      // point — a silent catch would leave them believing it worked.
-      setFailed(true);
+    } catch (error) {
+      // **Which half failed decides what is true**, and the two are opposites.
+      // A `server` or `unsent` failure means nothing happened and the person is
+      // still signed in everywhere; a `local` one means every session *was*
+      // ended and only signing out here did not finish. One message for both
+      // would tell half of the people who see it the reverse of their
+      // situation — and on this control the reverse is "your lost phone is
+      // still signed in".
+      setFailed(error instanceof EndSessionError ? error.phase : "server");
     }
   }
 
@@ -81,9 +98,15 @@ export function RevokeSessionsButton(): JSX.Element {
         {pending > 0 ? t("revokeAllPending", { count: pending }) : t("revokeAllClean")}
       </p>
 
-      {failed ? (
+      {failed !== null ? (
         <p className="mt-2 text-sm font-semibold text-warn-foreground" role="alert">
-          {t("revokeAllFailed")}
+          {t(
+            failed === "local"
+              ? "revokeAllFailedAfter"
+              : failed === "unsent"
+                ? "revokeAllFailedUnsent"
+                : "revokeAllFailed",
+          )}
         </p>
       ) : null}
 

@@ -938,7 +938,11 @@
     "revokeAllConfirm": "Yes, sign out everywhere",
     "revokeAllCancel": "Stay here",
     "revokeAllWorking": "Signing out...",
-    "revokeAllFailed": "Could not sign out. You are still signed in, and so are your other devices."
+    "revokeAllFailed": "Could not sign out. You are still signed in, and so are your other devices.",
+    "signOutFailedUnsent": "Not everything could be sent. You are still signed in and your changes are still here. Try again in a few seconds.",
+    "signOutFailedAfter": "This device's data was cleared, but the session was not ended. Reload the page and sign out again.",
+    "revokeAllFailedUnsent": "Not everything could be sent. No session was ended and your changes are still here. Try again in a few seconds.",
+    "revokeAllFailedAfter": "Your sessions were ended, but this device did not finish signing out. Reload the page."
   },
   "offline": {
     "nothingSavedTitle": "Nothing saved here yet",

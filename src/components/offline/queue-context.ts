@@ -34,8 +34,19 @@ export interface WriteQueueValue {
   holdRemainingMs: (id: string) => number;
   retry: (id: string) => void;
   discard: (id: string) => void;
-  /** Send everything now and resolve when the queue has settled. */
-  flush: () => Promise<void>;
+  /**
+   * Send what can be sent, and resolve with **how many writes are still
+   * unsent**.
+   *
+   * The count is the whole point, and this used to resolve with nothing. A
+   * drain returns without sending in three ordinary states — another drain is
+   * already in flight, the session has expired (`needs-signin` keeps
+   * everything deliberately), or the head is still inside its undo window — so
+   * "the promise resolved" and "the queue is empty" are different facts. The
+   * one caller treated them as the same and purged unsent changes somebody had
+   * just asked it to send.
+   */
+  flush: () => Promise<number>;
   /** Take this account's changes off the device. Sign-out only. */
   purgeAll: () => void;
 }
