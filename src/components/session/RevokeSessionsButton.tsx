@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import {
@@ -57,6 +57,21 @@ export function RevokeSessionsButton(): JSX.Element {
   const [asking, setAsking] = useState(false);
   const [failed, setFailed] = useState<EndSessionPhase | null>(null);
   const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The confirmation takes focus when it opens.
+   *
+   * Opening it unmounts the button that was focused, which sends focus to
+   * `<body>`: a keyboard user loses their place, and a screen reader announces
+   * nothing at all — so the panel that just asked a question is one nobody was
+   * told about. `Dialog` solves this for modals with `panelRef.current.focus()`
+   * on a `tabIndex={-1}` panel; this is the same technique for the inline
+   * shape, which these controls use deliberately rather than as a modal.
+   */
+  useEffect(() => {
+    if (asking) panelRef.current?.focus();
+  }, [asking]);
 
   async function run(sequence: () => Promise<void>): Promise<void> {
     setFailed(null);
@@ -89,7 +104,9 @@ export function RevokeSessionsButton(): JSX.Element {
     <div
       aria-labelledby={titleId}
       className="rounded-lg border border-warn-foreground bg-warn p-4"
+      ref={panelRef}
       role="group"
+      tabIndex={-1}
     >
       <h3 className="font-semibold text-warn-foreground" id={titleId}>
         {t("revokeAllTitle")}

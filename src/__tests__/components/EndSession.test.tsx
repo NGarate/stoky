@@ -4,6 +4,8 @@ import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import { useComposer } from "@/components/offline/Composer";
+import { persistKey } from "@/lib/offline/persist";
 import type { QueuedOp } from "@/lib/offline/queue";
 
 /**
@@ -492,5 +494,97 @@ describe("when signing out fails after the purge", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent("Se han cerrado tus sesiones");
+  });
+});
+
+describe("the persisted reads, which nothing was watching", () => {
+  /**
+   * The third of the hook's three purges, and the one no assertion could see.
+   *
+   * The ordering test enumerates `revoke`, `purgeQueue`, `purgeShell` and
+   * `signOut` — because those are the mocked seams — while
+   * `forgetPersistedReads` is deliberately *not* mocked, for the D50 reason the
+   * top of this file gives. The consequence was that deleting that line from
+   * `useEndSession` left every gate green, and what it deletes is one account's
+   * cached reads staying on a shared device after they sign out.
+   *
+   * Asserted through its real effect rather than a spy, which is also the
+   * stronger claim: the key is gone from `localStorage`, not merely that a
+   * function of that name was entered.
+   */
+  /**
+   * Whose key, asked at run time rather than assumed.
+   *
+   * `TEST_COMPOSER.userId` is the answer only when this file runs alone.
+   * `AddStockLayers.test.tsx` mocks `@/components/offline/Composer` for the
+   * whole process (D50), so in a full run the hook sees that file's `"u1"` and
+   * clears a different key — this test passed in isolation and failed in the
+   * suite until it stopped guessing. Measured, not reasoned about.
+   */
+  function effectiveUserId(): string {
+    let seen = "";
+    function Probe(): null {
+      seen = useComposer().userId;
+      return null;
+    }
+    renderWithIntl(<Probe />);
+    cleanup();
+    return seen;
+  }
+
+  it("takes this account's cached reads off the device", async () => {
+    const key = persistKey(effectiveUserId());
+    window.localStorage.setItem(key, JSON.stringify({ anything: true }));
+    expect(window.localStorage.getItem(key)).not.toBeNull();
+
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+    );
+
+    expect(window.localStorage.getItem(key)).toBeNull();
+  });
+
+  it("leaves them alone when the sequence refuses", async () => {
+    // The other half: a refusal must discard nothing, and this purge is part of
+    // "nothing".
+    pending = [op("a")];
+    unsentAfterFlush = 1;
+    const key = persistKey(effectiveUserId());
+    window.localStorage.setItem(key, JSON.stringify({ anything: true }));
+
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enviar y cerrar sesión" }),
+    );
+
+    expect(window.localStorage.getItem(key)).not.toBeNull();
+    window.localStorage.removeItem(key);
+  });
+});
+
+describe("where focus goes when the question appears", () => {
+  /**
+   * Opening the confirmation unmounts the button that was focused. Without
+   * moving focus deliberately it lands on `<body>`: a keyboard user loses their
+   * place mid-page, and a screen reader is told nothing — the panel that just
+   * asked whether to end every session is one nobody announced.
+   */
+  it("moves to the panel that is now asking, on the revoke control", async () => {
+    renderWithIntl(<RevokeSessionsButton />);
+    const confirm = await openRevokeConfirm();
+
+    expect(document.activeElement).toBe(confirm);
+  });
+
+  it("moves to the panel on the sign-out control too", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("group", { name: "¿Cerrar sesión?" }),
+    );
   });
 });

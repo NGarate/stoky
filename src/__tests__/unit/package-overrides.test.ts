@@ -61,22 +61,62 @@ function resolvedVersion(name: string): string | null {
   return at <= 0 ? null : descriptor.slice(at + 1);
 }
 
-/** True when `version` is at or above the floor in a `^x.y.z` range. */
+/** -1, 0 or 1, comparing two `x.y.z` versions numerically. */
+function compare(a: string, b: string): number {
+  const parts = (v: string) => v.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const [aMajor = 0, aMinor = 0, aPatch = 0] = parts(a);
+  const [bMajor = 0, bMinor = 0, bPatch = 0] = parts(b);
+  if (aMajor !== bMajor) return aMajor < bMajor ? -1 : 1;
+  if (aMinor !== bMinor) return aMinor < bMinor ? -1 : 1;
+  if (aPatch !== bPatch) return aPatch < bPatch ? -1 : 1;
+  return 0;
+}
+
+/**
+ * Whether `version` satisfies `range`, for the two forms this file may see.
+ *
+ * The operator is honoured rather than stripped. An earlier version removed a
+ * leading `>=` and then still demanded the majors match, so a `>=8.0.0` range
+ * satisfied by 9.0.1 would have been reported as "the override did not take" —
+ * a red gate describing the opposite of what happened. Nothing here uses `>=`
+ * today, which is exactly why it would have gone unnoticed until somebody added
+ * one; an unknown operator throws rather than guessing.
+ */
 function satisfiesFloor(version: string, range: string): boolean {
-  const floor = range.replace(/^[\^~>=]+/, "");
-  const asNumbers = (v: string) => v.split(".").map((part) => Number.parseInt(part, 10));
-  const [vMajor = 0, vMinor = 0, vPatch = 0] = asNumbers(version);
-  const [fMajor = 0, fMinor = 0, fPatch = 0] = asNumbers(floor);
-  if (vMajor !== fMajor) return false;
-  if (vMinor !== fMinor) return vMinor > fMinor;
-  return vPatch >= fPatch;
+  const caret = /^\^(.+)$/.exec(range);
+  if (caret) {
+    const floor = caret[1] as string;
+    // A caret range pins the major deliberately — that is what makes the
+    // deepmerge-ts entry a decision rather than a drift.
+    return version.split(".")[0] === floor.split(".")[0] && compare(version, floor) >= 0;
+  }
+
+  const atLeast = /^>=\s*(.+)$/.exec(range);
+  if (atLeast) return compare(version, atLeast[1] as string) >= 0;
+
+  throw new Error(
+    `package-overrides.test.ts cannot read the range "${range}". Teach it that operator rather than loosening the check.`,
+  );
 }
 
 describe("the dependency overrides", () => {
-  it("are declared at all", () => {
-    // A guard against the migration's other silent failure: the keys simply not
-    // being carried across. `pnpm-workspace.yaml` held them until 2026-08-28.
-    expect(Object.keys(manifest.overrides ?? {}).length).toBeGreaterThan(0);
+  it("are exactly the five that were carried across, by name", () => {
+    // `toEqual` on the whole set, not a count and not a loop over whatever
+    // happens to be declared.
+    //
+    // Every other assertion here iterates `manifest.overrides`, so deleting an
+    // entry deletes its own check — the most obvious way a security override
+    // stops taking effect was the one thing invisible to this file. Naming them
+    // makes removing one a decision, the same shape as the capability matrix in
+    // `capabilities.test.ts`. Adding one is a decision too: it fails here until
+    // `docs/STATUS.md` § Dependency security says why it exists.
+    expect(Object.keys(manifest.overrides ?? {}).sort()).toEqual([
+      "deepmerge-ts",
+      "defu",
+      "effect",
+      "lodash",
+      "nanoid",
+    ]);
   });
 
   it("use no key pnpm would understand and bun would ignore", () => {
