@@ -43,7 +43,7 @@ binary you happen to be holding.
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail in 4.2 min** (2026-08-28, at `f643550`) — against a **Bun-served** standalone production build, on the suite's own database, from a tree Bun also *installed*. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail in 4.1 min** (2026-08-28, at `d5edc0c`) — against a **Bun-served** standalone production build, on the suite's own database, from a tree Bun also *installed*. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `bun audit` | ✅ clean — 586 packages, 2026-08-28, run in `oven/bun:1.4.0-alpine` because it answers from `bun.lock` and the host's Bun is older than the one that wrote it. It was **2 high** for five days; see *Dependency security* |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
@@ -427,6 +427,18 @@ These are recorded because each one produced a confident, wrong number.
    with NUL padding and `grep` switches to binary mode and stops printing
    counts. Use a fresh filename per run; `grep -a` rescues a file already
    ruined.
+11. **Green on the host proves nothing about the image, and the difference can
+   be one binary.** The Dockerfile copied `/usr/local/bin/bun` and not `bunx`,
+   so `scripts/ci-in-image.sh test` — which the `test` CI job runs — died at
+   `sh: bunx: not found` before a single suite executed, while all three suites
+   were green locally, where `bunx` is on the PATH. Building the *production*
+   image proved nothing either: it needs no `bunx`. Fixed at `6202adc`; the
+   general lesson is that the only evidence about a stage is running that stage.
+12. **A git worktree is not a repository once it is mounted into a container.**
+   Its `.git` is a file pointing at a path outside the mount, so every test that
+   asks the repository about itself fails with `fatal: not a git repository` —
+   two of them here, looking exactly like a broken suite. Verify the image with
+   a real clone; CI checks one out, so CI never sees this.
 
 ---
 
