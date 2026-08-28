@@ -56,10 +56,14 @@ and resolves an unpinned tree nobody reviewed. Only `--frozen-lockfile` turns
 that into an error. Local development therefore wants bun at or above the
 pinned version, or the development image.
 
-`bun run verify:local` runs the first seven — **33s** of a **600s budget**,
-which the script enforces. Every step also has its own ceiling, so a hang
-fails as a hang rather than as a long wait. `verify:ci` adds integration and
-build, and ran in 83–92s across three invocations on 2026-08-17/18.
+`bun run verify:local` runs the first seven — **56s** of a **600s budget**
+(2026-08-28, on a Bun-installed tree; it was 33s under pnpm with roughly 200
+fewer tests, so this is not a cost the package manager introduced). The script
+enforces the budget, and every step has its own ceiling, so a hang fails as a
+hang rather than as a long wait. `verify:ci` adds integration and build, and
+ran in 83–92s across three invocations on 2026-08-17/18 — not re-measured,
+because its build step needs a tree without the uncommitted `next.config.ts`
+work in it.
 
 **Ten minutes is the contract for all verification**, not just the browser
 suite. Every CI test job is capped at ten; Playwright's own `globalTimeout` is
