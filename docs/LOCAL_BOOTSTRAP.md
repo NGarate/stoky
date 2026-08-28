@@ -58,7 +58,7 @@ the platform's own binaries rather than the host's. That is the whole point: a
 language server resolving against a `node_modules` built for a different
 platform is the same class of gap as a suite that passes where nobody deploys.
 
-Three traps, each of which cost an afternoon:
+Four traps, each of which cost an afternoon:
 
 - **`--build` is not optional.** Compose reuses whatever image is already tagged
   and does not notice the Dockerfile changed, so `up -d app` after a Dockerfile
@@ -78,6 +78,16 @@ Three traps, each of which cost an afternoon:
   `bun install --frozen-lockfile`, so a `package.json` edited without its
   `bun.lock` fails there with "lockfile had changes, but lockfile is frozen"
   rather than resolving something nobody pinned.
+- **The dev image needs its source mounted; it does not carry a working one.**
+  `docker run` on the `development` target without compose's `.:/app` starts and
+  reports `✓ Ready`, then answers 500 on any page that touches auth, with
+  `Failed to load external module argon2-…: Cannot find module`. Measured
+  2026-08-28 on the image both before and after the move to Bun, so it is not
+  something the package manager changed, and measured *not* to happen through
+  compose, where the same image serves `/login` in 200. The mechanism is not
+  understood and is not worth chasing: the supported way to run this image is
+  `docker compose up app`, and the note exists so that a debugging `docker run`
+  is not mistaken for a broken application.
 
 **Bun is pinned twice** — in `.bun-version`, which CI installs, and in the
 Dockerfile, because a `FROM` cannot read a file.
