@@ -68,6 +68,31 @@ runner killing the job with no report. The budget exists because verification
 that takes longer stops being run, and a suite nobody runs still has to be
 maintained while telling nobody anything.
 
+### The production image, run rather than inspected
+
+**2026-08-28, at `e9bca55`, after the move to Bun as the package manager.** The
+build gate says the artefact compiles and the Dockerfile's own assertions say
+three OCR paths exist. Neither says it runs, and the defect this project has
+actually shipped — OCR-2 — was a `Cannot find module` that only appeared when a
+deployed household scanned a receipt. So the container was started:
+
+| Asked | Answer |
+|---|---|
+| `require("tesseract.js")` and spawn a worker, inside the image | both succeed — the computed 13-package closure resolves through the worker's own `require` chain, which is the thing OCR-2 broke |
+| `/api/health` | 200 `{"status":"ok"}` |
+| `/login`, `/register` | 200, 78 KB and 80 KB of HTML |
+| Docker's own health check | `healthy` |
+| `Cannot find module`, `AbortError`, refusal to start, in the log | none |
+
+Two traps this run walked into, both the probe rather than the image. **Docker
+Desktop puts `--network host` in its VM**, so a `curl` from the machine gets
+`000` while the container's own health check passes — the container is right and
+the probe cannot reach it. And **the first run refused to start**, correctly:
+`.env` carries the published `NEXTAUTH_SECRET` from `.env.example`, which
+`src/lib/auth/secret.ts` allows in development on purpose and refuses in
+production. The image sets `NODE_ENV=production`, so it refused; a generated
+secret is what the table above was measured with.
+
 ### Cache Components, and what was proven about the image
 
 Landed 2026-08-25 (`2b6eba5`), both flags: `cacheComponents` for
