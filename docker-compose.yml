@@ -51,7 +51,7 @@ services:
         condition: service_healthy
     networks:
       - stoky
-    command: pnpm dev
+    command: bun run dev
 
 volumes:
   postgres_data:

@@ -1,7 +1,7 @@
 /**
  * Demo data seeder.
  *
- * Run with `corepack pnpm db:seed` (or `bash scripts/dev-local.sh --seed`).
+ * Run with `bun run db:seed` (or `bash scripts/dev-local.sh --seed`).
  *
  * The dataset is shaped to exercise the journeys in `docs/SMOKE_JOURNEYS.md`:
  * an inventory with healthy, low and expiring stock; products below their

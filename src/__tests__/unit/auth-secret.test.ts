@@ -58,7 +58,7 @@ describe("in production", () => {
 describe("everywhere else", () => {
   it("allows anything in development", () => {
     // Refusing here would trade a risk nobody faces for an obstacle everybody
-    // does. The suites and `pnpm dev` use whatever is to hand.
+    // does. The suites and `bun run dev` use whatever is to hand.
     expect(secretProblem(PLACEHOLDER_SECRET, "development")).toBeNull();
     expect(secretProblem(undefined, "test")).toBeNull();
     expect(secretProblem("x", undefined)).toBeNull();

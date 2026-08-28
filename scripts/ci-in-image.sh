@@ -54,20 +54,24 @@ docker build --target development --tag "$IMAGE_TAG" .
 
 case "$SUITE" in
   quality)
-    COMMANDS='corepack pnpm lint \
-      && corepack pnpm typecheck \
-      && corepack pnpm check:react \
-      && corepack pnpm check:contrast \
-      && corepack pnpm check:links'
+    COMMANDS='bun run lint \
+      && bun run typecheck \
+      && bun run check:react \
+      && bun run check:contrast \
+      && bun run check:links'
     ;;
   test)
     # Migrations first, against an empty database. A migration that only works
     # on an already-prepared one is a migration that fails on somebody's first
     # install — which is what happened with pg_trgm.
-    COMMANDS='corepack pnpm prisma migrate deploy \
-      && corepack pnpm test:unit \
-      && corepack pnpm test:components \
-      && corepack pnpm test:integration:only'
+    #
+    # `bunx prisma`, because prisma is a binary rather than a script; and
+    # `bun run test:*` rather than `bun test:*`, because the bare form would
+    # invoke Bun's own runner and sweep every suite at once.
+    COMMANDS='bunx prisma migrate deploy \
+      && bun run test:unit \
+      && bun run test:components \
+      && bun run test:integration:only'
     ;;
 esac
 

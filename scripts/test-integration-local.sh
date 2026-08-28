@@ -10,7 +10,6 @@ set -euo pipefail
 COMPOSE_FILE="docker-compose.dev.yml"
 MAX_WAIT=60
 KEEP_SERVICES=false
-PNPM_CMD=()
 TEST_DB_NAME="${TEST_DB_NAME:-stoky_test}"
 
 # The credentials the *running container* answers to, taken from the same place
@@ -52,12 +51,9 @@ if [[ "${KEEP_TEST_SERVICES:-}" == "1" || "${KEEP_TEST_SERVICES:-}" == "true" ]]
   KEEP_SERVICES=true
 fi
 
-if command -v pnpm >/dev/null 2>&1; then
-  PNPM_CMD=(pnpm)
-elif command -v corepack >/dev/null 2>&1; then
-  PNPM_CMD=(corepack pnpm)
-else
-  echo "Error: pnpm not found. Install pnpm or enable corepack."
+if ! command -v bun >/dev/null 2>&1; then
+  echo "Error: bun not found. Install it from https://bun.sh, or run this suite"
+  echo "in the development image: bash scripts/ci-in-image.sh test"
   exit 1
 fi
 
@@ -148,7 +144,9 @@ export VALKEY_URL="${VALKEY_URL:-redis://localhost:6379}"
 export NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-test-secret}"
 
 echo "Applying database migrations..."
-"${PNPM_CMD[@]}" prisma migrate deploy
+# `bunx`, not `bun run`: prisma is a binary in node_modules/.bin, not a script
+# in package.json, and `bun run prisma` would look for the latter and find none.
+bunx prisma migrate deploy
 
 if [ "${1:-}" = "--" ]; then
   shift

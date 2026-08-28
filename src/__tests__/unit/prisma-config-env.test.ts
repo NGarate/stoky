@@ -10,7 +10,7 @@ import { join } from "node:path";
  * ("Prisma config detected, skipping environment variable loading") — so every
  * `prisma migrate`/`db push`/`validate` fails with a missing DATABASE_URL
  * unless the config file takes over that job. Nothing else exercises this:
- * `pnpm dev` and the test suites get their environment from Next.js or Bun,
+ * `bun run dev` and the test suites get their environment from Next.js or Bun,
  * both of which load `.env` regardless. Only the Prisma CLI takes this path.
  *
  * These tests spawn `node`, not `bun`, deliberately: Bun auto-loads `.env`

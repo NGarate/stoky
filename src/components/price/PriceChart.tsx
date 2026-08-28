@@ -74,7 +74,7 @@ export function PriceChart({
       const date = new Date(item.date).toLocaleDateString(locale);
       // `??=` rather than this reads better and the React Compiler does not
       // support it — it declines to optimise the whole component and
-      // `pnpm check:react` fails on the syntax.
+      // `bun run check:react` fails on the syntax.
       if (!acc[date]) acc[date] = { date };
       acc[date][item.storeName ?? unknownStore] = item.price;
       return acc;

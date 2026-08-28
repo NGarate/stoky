@@ -4,17 +4,21 @@ import { test, expect, type Page } from "@playwright/test";
  * The service worker, actually running — the gap `REDESIGN_PLAN.md` §10 names.
  *
  * `registerServiceWorker` returns early unless `NODE_ENV` is `production`, and
- * the browser suite runs against `pnpm dev`. So the whole of Phase 4's
+ * the browser suite runs against `bun run dev`. So the whole of Phase 4's
  * foundation — install, activate, precache, the fetch handler, the offline
  * fallback — had never been executed by any test. Its *source* is checked in
  * the component tier: that `classify` refuses what it should, that the file is
  * not gitignored, that `register.ts` guards an insecure origin. That the thing
  * works was, until now, an assumption.
  *
- * **A separate config on purpose.** This needs a real `next build`, served by
- * the standalone server the Docker image runs — a minute before the first test,
- * which the ordinary suite's five-minute budget cannot absorb, and a budget
- * that is not enforced is not a budget. `pnpm test:e2e:sw` runs it.
+ * **It needs a real `next build`**, served by the standalone server the Docker
+ * image runs. That once justified a config of its own — a minute before the
+ * first test, which the ordinary suite's budget could not absorb. That config
+ * was deleted on 2026-08-17 when the whole suite moved to serving the
+ * standalone build, so the cost is paid once for everything and this file is
+ * simply part of `bunx playwright test`. It is listed in `CHROMIUM_ONLY`, which
+ * the other projects take as `testIgnore`: a question about the deployed
+ * artefact has one engine's answer, not five.
  *
  * **Chromium only**, because these are Chrome DevTools Protocol operations —
  * `setOffline` on the context is Playwright's, but the worker lifecycle

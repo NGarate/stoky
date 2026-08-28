@@ -18,7 +18,7 @@
 #     set -a; . ./.env; set +a
 #     bash docs/reproductions/runtime-1-abort.sh
 #
-# It needs a built standalone artefact (`pnpm build`), a reachable PostgreSQL
+# It needs a built standalone artefact (`bun run build`), a reachable PostgreSQL
 # and Valkey, and both runtimes on PATH. It builds nothing: a build inside a
 # measurement hides what is being measured.
 #
@@ -58,7 +58,7 @@ fail() {
   exit 1
 }
 
-[ -f "$ARTEFACT" ] || fail "no standalone build at $ARTEFACT — run 'pnpm build' first"
+[ -f "$ARTEFACT" ] || fail "no standalone build at $ARTEFACT — run 'bun run build' first"
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL is unset — 'set -a; . ./.env; set +a'"
 [ -n "${VALKEY_URL:-}" ] || fail "VALKEY_URL is unset — 'set -a; . ./.env; set +a'"
 command -v bun >/dev/null || fail "bun is not on PATH"

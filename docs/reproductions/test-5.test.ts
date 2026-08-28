@@ -11,7 +11,7 @@ import type { Session } from "next-auth";
  * A self-contained reproduction of ISSUES.md TEST-5.
  *
  * **Not part of any suite.** It lives outside `src/__tests__` on purpose:
- * `pnpm test:*` targets that directory, so nothing collects this. Run it by
+ * `bun run test:*` targets that directory, so nothing collects this. Run it by
  * hand, in a loop, against a database:
  *
  * ```bash

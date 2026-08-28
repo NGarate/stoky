@@ -19,7 +19,7 @@
 
   // The container sleeps and you start the dev server yourself.
   //
-  // `docker-compose.yml` runs `pnpm dev` as its command, which is right when
+  // `docker-compose.yml` runs `bun run dev` as its command, which is right when
   // you bring the service up by hand. It is wrong here: a dev server that
   // crashes would take the container down and the editor with it, in the
   // middle of whatever you were doing. Attached, the container's life is not
@@ -27,7 +27,7 @@
   "overrideCommand": true,
 
   // Closing the editor leaves Postgres and Valkey running, deliberately. They
-  // are not only this container's: `pnpm verify:ci` on the host reaches the
+  // are not only this container's: `bun run verify:ci` on the host reaches the
   // same two services, and tearing them down because a window closed would
   // stop a suite somebody else was watching.
   "shutdownAction": "none",

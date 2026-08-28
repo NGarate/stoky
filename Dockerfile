@@ -8,37 +8,48 @@
 # freeze the Alpine security updates that arrive in node:24-alpine rebuilds; the
 # Trivy gate in CI is what catches a base image that has gone stale.
 
+# ----------------------------------------------------------------- bun --
+#
+# Declared first because every stage below needs it: Bun is the package manager
+# now as well as the test runner. Pinned to a version rather than to
+# `1-alpine`, because a floating tag would change the installer *and* the test
+# runner underneath a green suite.
+#
+# This pin is the version of record. The host may have another — it had 1.3.14
+# when this landed — and that is the point of installing in the image: neither
+# the answer a suite gives nor the tree an install resolves should depend on
+# whose laptop asked.
+FROM oven/bun:1.4.0-alpine AS bun
+
 # ---------------------------------------------------------------- deps --
 FROM node:24-alpine AS deps
 # argon2 and @swc/core compile native bindings, so the toolchain is needed here.
-# It stays in this stage and never reaches production.
-RUN apk add --no-cache libc6-compat python3 make g++
+# It stays in this stage and never reaches production. libstdc++ because Bun
+# links against it and the Node Alpine image does not carry it.
+RUN apk add --no-cache libc6-compat python3 make g++ libstdc++
 WORKDIR /app
-# corepack honours the packageManager field, so the build uses the same pnpm
-# version as the lockfile instead of whatever `npm i -g pnpm` resolves today.
-RUN corepack enable
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN corepack pnpm install --frozen-lockfile --trust-lockfile
+# Node stays the base even though Bun does the installing, because the install
+# scripts are Node programs: argon2 runs `node-gyp-build`, prisma and
+# @prisma/client run `node` postinstalls, @parcel/watcher builds from source.
+# An `oven/bun` base here would break all four at once, and quietly — Bun skips
+# a script it cannot run rather than failing.
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+COPY package.json bun.lock ./
+# `--frozen-lockfile` for the reason pnpm had it: a build free to rewrite the
+# lockfile is a build that can ship a tree nobody resolved. The lifecycle
+# scripts those four packages need are allowed by `trustedDependencies` in
+# package.json — Bun blocks them by default, exactly as pnpm did.
+RUN bun install --frozen-lockfile
 
 # ----------------------------------------------------------- development --
 #
 # The image people actually develop in. It is the production base with the
 # test runner added, and that ordering is the point: the runtime here is Node,
 # exactly as it is in production, because Next's standalone output is started
-# with `node server.js`. Bun is a *tool* this repository uses to run tests, not
-# a runtime it adopts — basing this stage on `oven/bun` would have the dev
-# server running under Bun and the deployed one under Node, which is a wider
-# gap than the one containerising development is meant to close.
-#
-# Pinned to a version rather than to `1-alpine`. A floating tag means a rebuild
-# can change the test runner underneath a green suite.
-#
-# This pin is the version of record from here on. The host may have another —
-# it had 1.3.14 when this landed — and that is the point of moving development
-# into the image: the answer a suite gives should not depend on whose laptop
-# asked it.
-FROM oven/bun:1.4.0-alpine AS bun
-
+# with `node server.js`. Bun is a *tool* this repository uses — to install and
+# to run tests — not a runtime it adopts. Basing this stage on `oven/bun` would
+# have the dev server running under Bun and the deployed one under Node, which
+# is a wider gap than the one containerising development is meant to close.
 FROM node:24-alpine AS development
 WORKDIR /app
 # libstdc++ because Bun links against it and the Node Alpine image does not
@@ -48,28 +59,34 @@ WORKDIR /app
 # suite with a hole in it.
 RUN apk add --no-cache libstdc++ git
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
-RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# The Prisma client is generated, not installed: `deps` runs `pnpm install`,
+# The Prisma client is generated, not installed: `deps` runs `bun install`,
 # which leaves `@prisma/client` uninitialised. Without this every suite that
 # imports it fails on "did not initialize yet" — measured, three unit files
 # before this line existed.
-RUN corepack pnpm db:generate
+RUN bun run db:generate
 ENV NODE_ENV=development
 EXPOSE 3000
-CMD ["corepack", "pnpm", "dev"]
+# `bun run dev`, never `bun dev`: `bun <name>` would look for a file, and
+# `bun test` — the shape this invites — is Bun's own runner, which would sweep
+# the integration suite with no database up instead of running the script.
+CMD ["bun", "run", "dev"]
 
 # --------------------------------------------------------------- builder --
 FROM node:24-alpine AS builder
 WORKDIR /app
-RUN corepack enable
+RUN apk add --no-cache libstdc++
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN corepack pnpm prisma generate
-RUN corepack pnpm build
+# Both run under Node, not Bun: `bun run` executes the binary in node_modules/
+# .bin, and those carry a `#!/usr/bin/env node` shebang. The runtime that
+# builds the artefact stays the runtime that serves it.
+RUN bun run db:generate
+RUN bun run build
 
 # The Spanish OCR model, fetched once here rather than at runtime — ISSUES.md
 # OCR-1. `createWorker("spa")` with no `langPath` downloads this from jsdelivr
@@ -98,10 +115,22 @@ RUN corepack pnpm build
 # with `Cannot find module` — receipt scanning simply did not work when
 # deployed. `outputFileTracingIncludes` was tried and did not take.
 #
-# `cp -rL` dereferences the pnpm symlinks, so the staged tree is self-contained;
-# the directory name keeps its version so the production COPY below lands it
-# exactly where the standalone output's symlinks already point.
-RUN mkdir -p /opt/ocr && cp -rL /app/node_modules/.pnpm/tesseract.js@*/ /opt/ocr/
+# Under pnpm this was a single `cp -rL` of `.pnpm/tesseract.js@*/`, which worked
+# by a property of that layout: the directory held the package plus symlinks to
+# its dependencies, so dereferencing recursively produced the whole closure for
+# free. Bun's layout is flat and has no `.pnpm/`, so the closure is *computed*
+# here rather than copied.
+#
+# Thirteen packages, not the nine tesseract.js declares: `node-fetch` pulls
+# `tr46`, `webidl-conversions` and `whatwg-url`. Those three are exactly what a
+# hand-written list loses — and losing them reproduces OCR-2, which is invisible
+# until a deployed household scans a receipt. Hence the walk, and hence the
+# throw: a dependency Bun did not hoist fails the build here rather than
+# shipping a tree that is quietly missing it.
+RUN mkdir -p /opt/ocr \
+    && node -e "const fs=require('fs'),p=require('path'),r='/app/node_modules',s=new Set();(function v(n){if(s.has(n))return;s.add(n);const f=p.join(r,n,'package.json');if(!fs.existsSync(f))throw new Error('not hoisted, OCR closure incomplete: '+n);for(const d of Object.keys(JSON.parse(fs.readFileSync(f,'utf8')).dependencies||{}))v(d)})('tesseract.js');console.log([...s].join('\n'))" > /tmp/ocr-closure \
+    && cd /app/node_modules \
+    && while read -r d; do cp -rL "$d" /opt/ocr/; done < /tmp/ocr-closure
 
 ARG TESSDATA_SPA_SHA256=6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
 RUN mkdir -p /app/tessdata \
@@ -150,19 +179,25 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/tessdata ./tessdata
 ENV TESSDATA_PATH=/app/tessdata
 
-# The complete tesseract.js staged above, replacing the partial copy tracing
-# produced (OCR-2). The traced tree has to go first: it holds *symlinks* where
-# the staged tree has real directories, and COPY cannot overwrite one with the
-# other — the build fails with "cannot copy to non-directory".
-RUN rm -rf /app/node_modules/.pnpm/tesseract.js@*
-# Into `.pnpm/`, so the version-named directory inside `/opt/ocr` lands where
-# the standalone output's own symlinks already point.
-COPY --from=builder /opt/ocr/ ./node_modules/.pnpm/
+# The complete tesseract.js closure staged above, replacing the partial copy
+# tracing produced (OCR-2). Straight into `node_modules/`, because Bun's layout
+# and the standalone output's are both flat — the `.pnpm/` indirection this
+# used to need is gone with pnpm.
+#
+# The traced tree still has to go first, for the reason it always did: COPY
+# cannot overwrite a directory with a file or the reverse, and tracing may have
+# left a partial one behind.
+RUN rm -rf /app/node_modules/tesseract.js /app/node_modules/tesseract.js-core
+COPY --from=builder /opt/ocr/ ./node_modules/
 # Build-time assertions on the two files whose absence broke scanning: the
 # worker's own `require('..')` target, and the WASM engine. A wrong path here
-# must fail the build, not the first scan of a deployed household.
-RUN test -f /app/node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js/src/worker-script/index.js \
-    && test -d /app/node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js-core
+# must fail the build, not the first scan of a deployed household. The third
+# line is new and is the one the flat layout makes necessary — `whatwg-url` is
+# the deepest package in the closure, so its presence is what says the walk ran
+# rather than a first level being copied.
+RUN test -f /app/node_modules/tesseract.js/src/worker-script/index.js \
+    && test -d /app/node_modules/tesseract.js-core \
+    && test -d /app/node_modules/whatwg-url
 
 # The entrypoint runs `prisma migrate deploy`. Previously it did so through
 # `npx`, with no prisma package in the image — which meant every container

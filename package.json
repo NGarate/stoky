@@ -15,7 +15,7 @@
     "check:react": "react-doctor . --no-telemetry --no-warnings --blocking error --max-duration 120",
     "check:contrast": "bun scripts/check-contrast.ts",
     "check:links": "bun scripts/check-links.ts",
-    "test": "pnpm test:unit && pnpm test:components && pnpm test:integration",
+    "test": "bun run test:unit && bun run test:components && bun run test:integration",
     "test:unit": "bun test src/__tests__/unit",
     "test:components": "bun test --preload ./src/__tests__/setup/register-dom.ts src/__tests__/components",
     "test:integration": "bash scripts/test-integration-local.sh",
@@ -33,7 +33,6 @@
   ],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@11.22.0",
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-dialog": "^1.1.23",
@@ -41,7 +40,7 @@
     "@radix-ui/react-toast": "^1.2.23",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/query-sync-storage-persister": "5.101.4",
-    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query": "5.101.4",
     "@tanstack/react-query-persist-client": "5.101.4",
     "@thewirv/react-barcode-scanner": "^3.4.0",
     "@trpc/client": "^11.18.0",
@@ -89,5 +88,22 @@
     "playwright": "^1.62.1",
     "react-doctor": "0.9.11",
     "sharp": "^0.35.3"
+  },
+  "trustedDependencies": [
+    "@parcel/watcher",
+    "@prisma/client",
+    "@prisma/engines",
+    "@swc/core",
+    "argon2",
+    "prisma",
+    "sharp",
+    "tesseract.js"
+  ],
+  "overrides": {
+    "lodash": "^4.18.1",
+    "effect": "^3.22.1",
+    "defu": "^6.1.7",
+    "nanoid": "^3.3.18",
+    "deepmerge-ts": "^8.0.0"
   }
 }

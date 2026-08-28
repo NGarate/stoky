@@ -100,12 +100,13 @@ const nextConfig: NextConfig = {
    * build the decompression bomb that proves the pixel bound — a fixture
    * nobody should commit — and that is why it is a devDependency now.
    *
-   * What survives is the pnpm symlink at `node_modules/sharp`, now dangling:
-   * the 18 MB it pointed at is gone and the link is not. Excluding the link
-   * as well was tried and does not work — tracing decides what is copied, and
-   * the link is rebuilt from the layout rather than copied. Left as it is and
-   * written down here, because a config line that changes nothing is worse
-   * than a symlink that resolves to nothing.
+   * These patterns are flat because Bun's layout is. Under pnpm they read
+   * `node_modules/.pnpm/**\/sharp/**`, and moving package managers without
+   * rewriting them is not a no-op that leaves a stale comment behind — a
+   * pattern that matches nothing excludes nothing. Measured on the first image
+   * built after the move: `node_modules/@img` was back at **36.6 MB**, inside
+   * the stage this project treats as its security boundary, with no route able
+   * to reach it.
    *
    * The condition that makes this safe is asserted rather than remembered:
    * `src/__tests__/unit/next-image.test.ts` fails if anything imports
@@ -113,7 +114,7 @@ const nextConfig: NextConfig = {
    * removes.
    */
   outputFileTracingExcludes: {
-    "*": ["node_modules/.pnpm/**/sharp/**", "node_modules/.pnpm/**/@img/**"],
+    "*": ["node_modules/sharp/**", "node_modules/@img/**"],
   },
 
 

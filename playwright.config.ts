@@ -242,11 +242,11 @@ export default defineConfig({
    * A real production build, served the way the image serves it, on the
    * suite's own data.
    *
-   * `pnpm dev` sat here until 2026-08-17, and cost three things at once: the
-   * suite tested a server nobody deploys — which is how broken production
+   * The dev server sat here until 2026-08-17, and cost three things at once:
+   * the suite tested a server nobody deploys — which is how broken production
    * auth once shipped under green suites, since `next dev` applies neither
    * `trustHost` nor the production CSP (docs/STATUS.md) — it fought the
-   * developer's own `pnpm dev` for Next's per-directory single-instance lock,
+   * developer's own `bun run dev` for Next's per-directory single-instance lock,
    * which took a mid-run suite's server down for real that day, and it read
    * the developer's database. The standalone server takes no lock, reads
    * `stoky_e2e`, and is the artefact a self-hosted install actually runs.
@@ -261,7 +261,7 @@ export default defineConfig({
    */
   webServer: {
     command:
-      "pnpm build" +
+      "bun run build" +
       " && cp -r .next/static .next/standalone/.next/static" +
       " && cp -r public .next/standalone/public" +
       " && bun .next/standalone/server.js",

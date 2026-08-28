@@ -231,19 +231,19 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      # Node stays, because the Playwright driver and the `node -p` check below
+      # are Node programs. Only the package manager moved.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
       # The image ships browsers, not a general toolchain, and it has no
       # `unzip` — which setup-bun needs, because Bun is released as a .zip.
       # Without it the job died at "Unable to locate executable file: unzip"
       # before installing anything.
       #
-      # Bun is not optional here: `prisma.config.ts` seeds through
-      # `bun run prisma/seed.ts`, and the seed is what the browser suite reads.
-      # One package, a couple of seconds, against the 136 the image removes.
+      # Bun is not optional here, and now it is the installer as well:
+      # `prisma.config.ts` seeds through `bun run prisma/seed.ts`, and the seed
+      # is what the browser suite reads.
       - name: unzip, which setup-bun needs and the image does not ship
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip
 
@@ -251,16 +251,27 @@ jobs:
         with:
           bun-version-file: .bun-version
 
+      # setup-node's `cache: pnpm` left with pnpm, and setup-bun caches only the
+      # Bun executable — its `no-cache` input is about the binary, not the
+      # dependency tree. Without this step every run of this job fetches the
+      # whole tree again, inside a ten-minute budget. Keyed on the lockfile, so
+      # a dependency change misses and nothing else does.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-store-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-store-${{ runner.os }}-
+
       # argon2 and sharp both resolve to prebuilt binaries on linux-x64
       # (argon2 through its `prebuilds/` directory, sharp through
       # `@img/sharp-linux-x64`), so nothing here compiles and the image needs
       # no build toolchain.
-      - run: pnpm install --frozen-lockfile --trust-lockfile
-      # `pnpm build` inside Playwright's webServer needs the generated client.
+      - run: bun install --frozen-lockfile
+      # The build inside Playwright's webServer needs the generated client.
       # Migrate and seed are gone from here: the suite's own `seed` project
       # does both against its database, so a second copy in the workflow was a
       # second thing to keep in step.
-      - run: pnpm db:generate
+      - run: bun run db:generate
 
       # The browsers come from the image, so the one thing that can go wrong is
       # the image and the driver disagreeing about which browsers those are.
@@ -279,7 +290,7 @@ jobs:
       # `--project` is not narrowed here: the projects that skip the tier sweeps
       # do so in playwright.config.ts, so CI and a local run execute the same
       # matrix. A flag would let the two drift.
-      - run: pnpm exec playwright test
+      - run: bunx playwright test
         env:
           PLAYWRIGHT_PORT: "3000"
 
@@ -299,18 +310,20 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile --trust-lockfile
+          bun-version-file: .bun-version
 
       # Dependabot's automatic pull requests are off, because they open branches
       # and this repository is trunk-only. Its alerts stay on for visibility, and
       # this job is what actually blocks a vulnerable dependency tree.
-      - name: pnpm audit
-        run: pnpm audit --audit-level moderate
+      #
+      # No install, and no Node: `bun audit` answers from `bun.lock` alone.
+      # Measured on this tree under the pinned 1.4.0 — 586 packages checked in
+      # 393ms — where `pnpm audit` needed a populated store first. That deletes
+      # a whole dependency install from the pipeline rather than porting it.
+      - name: bun audit
+        run: bun audit --audit-level moderate
 
   # ---------------------------------------------------------------- changes --
   # Whether this push touched anything that can reach the image. A docs-only

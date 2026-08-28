@@ -78,7 +78,7 @@ export function assertUsableSecret(
   // runtime secret and should not be one: the image is environment-independent
   // and receives its secret when the container starts.
   //
-  // Found by building. The first version of this file failed `pnpm build` on a
+  // Found by building. The first version of this file failed `bun run build` on a
   // developer machine and would have broken the production image outright,
   // which is a worse outage than the one it prevents.
   if (phase === "phase-production-build") return;

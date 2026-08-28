@@ -11,7 +11,7 @@ set -euo pipefail
 WITH_INTEGRATION=false
 WITH_BUILD=false
 WITH_E2E=false
-PNPM_CMD=()
+RUN_CMD=()
 
 for arg in "$@"; do
   case "$arg" in
@@ -31,14 +31,15 @@ for arg in "$@"; do
   esac
 done
 
-if command -v pnpm >/dev/null 2>&1; then
-  PNPM_CMD=(pnpm)
-elif command -v corepack >/dev/null 2>&1; then
-  PNPM_CMD=(corepack pnpm)
-else
-  echo "Error: pnpm not found. Install pnpm or enable corepack."
+if ! command -v bun >/dev/null 2>&1; then
+  echo "Error: bun not found. Install it from https://bun.sh, or run the gates"
+  echo "in the development image: bash scripts/ci-in-image.sh quality"
   exit 1
 fi
+# `bun run <script>`, never `bun <script>`: the bare form looks for a *file*,
+# and `bun test` is Bun's own runner, which would sweep the integration suite
+# with no database up instead of running the script of that name.
+RUN_CMD=(bun run)
 
 # The whole ladder is held to a budget, and every step to a ceiling.
 #
@@ -98,20 +99,20 @@ report_budget() {
   fi
 }
 
-run_step "Lint" 120 "${PNPM_CMD[@]}" lint
-run_step "Typecheck" 180 "${PNPM_CMD[@]}" typecheck
-run_step "React doctor" 120 "${PNPM_CMD[@]}" check:react
-run_step "Internal links" 120 "${PNPM_CMD[@]}" check:links
-run_step "Contrast" 120 "${PNPM_CMD[@]}" check:contrast
-run_step "Unit tests" 120 "${PNPM_CMD[@]}" test:unit
-run_step "Component tests" 180 "${PNPM_CMD[@]}" test:components
+run_step "Lint" 120 "${RUN_CMD[@]}" lint
+run_step "Typecheck" 180 "${RUN_CMD[@]}" typecheck
+run_step "React doctor" 120 "${RUN_CMD[@]}" check:react
+run_step "Internal links" 120 "${RUN_CMD[@]}" check:links
+run_step "Contrast" 120 "${RUN_CMD[@]}" check:contrast
+run_step "Unit tests" 120 "${RUN_CMD[@]}" test:unit
+run_step "Component tests" 180 "${RUN_CMD[@]}" test:components
 
 if $WITH_INTEGRATION; then
-  run_step "Integration tests" 300 "${PNPM_CMD[@]}" test:integration
+  run_step "Integration tests" 300 "${RUN_CMD[@]}" test:integration
 fi
 
 if $WITH_BUILD; then
-  run_step "Build" 300 "${PNPM_CMD[@]}" build
+  run_step "Build" 300 "${RUN_CMD[@]}" build
 fi
 
 if $WITH_E2E; then

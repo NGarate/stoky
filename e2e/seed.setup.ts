@@ -23,7 +23,7 @@ const run = promisify(execFile);
  *
  * So the fixture is restored instead. Since 2026-08-17 that restoration — and
  * everything else the suite does — happens in the suite's **own database**,
- * `stoky_e2e`, never the one a developer's `pnpm dev` is reading. The seed
+ * `stoky_e2e`, never the one a developer's `bun run dev` is reading. The seed
  * used to run against the shared dev database, scoped to the demo household,
  * and that scoping was not enough: it reset the household the owner was
  * actively testing with. See `e2e/db-url.ts`.
@@ -40,7 +40,7 @@ setup("seed the demo household", async () => {
   // the committed migrations; on an already-migrated database it is a no-op.
   // Doing it here rather than in a workflow step means local and CI runs have
   // one setup path, and a fresh clone needs no manual step.
-  const migrate = await run("pnpm", ["prisma", "migrate", "deploy"], {
+  const migrate = await run("bunx", ["prisma", "migrate", "deploy"], {
     env,
     timeout: 120_000,
   }).catch((error: unknown) => ({ stdout: "", stderr: String(error) }));
@@ -51,9 +51,9 @@ setup("seed the demo household", async () => {
   ).toMatch(/have been applied|No pending migrations|up to date/);
 
   // No `cwd`: Playwright's loader hands this file to CommonJS, where
-  // `import.meta` is a syntax error, and `pnpm` walks up to the nearest
+  // `import.meta` is a syntax error, and `bun run` walks up to the nearest
   // package.json on its own — so the inherited working directory is enough.
-  const result = await run("pnpm", ["db:seed"], {
+  const result = await run("bun", ["run", "db:seed"], {
     env,
     // A seed that hangs must not eat the suite's whole budget.
     timeout: 120_000,
@@ -61,7 +61,7 @@ setup("seed the demo household", async () => {
 
   expect(
     result.stdout,
-    "`pnpm db:seed` did not report success. The browser suite needs the demo " +
+    "`bun run db:seed` did not report success. The browser suite needs the demo " +
       `household, and every run consumes part of it.\n${result.stderr}`,
   ).toContain("seed command has been executed");
 });

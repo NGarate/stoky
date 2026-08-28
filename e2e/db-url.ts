@@ -2,7 +2,7 @@
  * The browser suite's own database and cache, derived in one place.
  *
  * The suite seeds itself and *spends* the fixture, so it must never point at
- * the database a developer's `pnpm dev` is using — on 2026-08-17 it reset the
+ * the database a developer's `bun run dev` is using — on 2026-08-17 it reset the
  * demo household underneath the owner mid-test. The rule since: the suite owns
  * `stoky_e2e` (created and migrated by `e2e/seed.setup.ts`) and Valkey db
  * index 1, and the developer's data is out of reach by construction.

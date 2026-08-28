@@ -49,7 +49,7 @@ import es from "../messages/es.json";
  * and it confirms one receipt line per run. Confirming is irreversible through
  * the interface and the seed lays down three confirmable lines, so after three
  * runs the review journey stops having anything to confirm and says so rather
- * than passing quietly. `pnpm prisma db seed` is the reset.
+ * than passing quietly. `bunx prisma db seed` is the reset.
  */
 
 /* ------------------------------------------------------------- the tree -- */
@@ -687,7 +687,7 @@ test.describe("Screen-reader journeys", () => {
       const reviewable = await withPendingItems(page);
       expect(
         reviewable,
-        "no receipt in the list still has an item to confirm. Re-run `pnpm prisma db seed`: " +
+        "no receipt in the list still has an item to confirm. Re-run `bunx prisma db seed`: " +
           "confirming is a write, and the fixture holds three confirmable lines.",
       ).not.toBeNull();
 

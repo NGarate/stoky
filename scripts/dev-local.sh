@@ -24,7 +24,6 @@ COMPOSE_FILE="docker-compose.dev.yml"
 MAX_WAIT=60  # seconds to wait for healthy services
 SEED=false
 START_APP=true
-PNPM_CMD=()
 
 for arg in "$@"; do
     case "$arg" in
@@ -72,15 +71,28 @@ if ! docker info >/dev/null 2>&1; then
 fi
 ok "Docker daemon is running"
 
-if command_exists pnpm; then
-    PNPM_CMD=(pnpm)
-    ok "pnpm found ($(pnpm --version))"
-elif command_exists corepack; then
-    PNPM_CMD=(corepack pnpm)
-    ok "pnpm will be resolved through corepack"
-else
-    fail "pnpm is not installed and corepack is unavailable. Install pnpm or enable corepack."
+if ! command_exists bun; then
+    fail "bun is not installed. Install it from https://bun.sh, or develop in the image (docs/LOCAL_BOOTSTRAP.md)."
 fi
+
+# The version check corepack used to make unnecessary.
+#
+# `packageManager` pinned pnpm and corepack enforced it, so everyone installed
+# with the same manager. Bun has no corepack, and the failure it leaves behind
+# is quiet in the direction that matters: `bun.lock` is written by the version
+# in `.bun-version`, and an *older* bun reports "Unknown lockfile version",
+# prints "Ignoring lockfile", and then resolves a tree nobody pinned. Only
+# `--frozen-lockfile` turns that into an error, and this script does not use it.
+#
+# So the comparison happens here, before anything installs. `sort -V` rather
+# than a numeric compare, because "1.10.0" is newer than "1.4.0" and a string
+# or float comparison says the opposite.
+PINNED_BUN="$(cat "$(cd "$(dirname "$0")/.." && pwd)/.bun-version")"
+INSTALLED_BUN="$(bun --version)"
+if [ "$(printf '%s\n%s\n' "$PINNED_BUN" "$INSTALLED_BUN" | sort -V | head -1)" != "$PINNED_BUN" ]; then
+    fail "bun $INSTALLED_BUN is older than the pinned $PINNED_BUN, and cannot read bun.lock. Run 'bun upgrade', or develop in the image (docs/LOCAL_BOOTSTRAP.md)."
+fi
+ok "bun found ($INSTALLED_BUN, pinned $PINNED_BUN)"
 
 # ---------------------------------------------------------------------------
 # Environment file
@@ -154,10 +166,10 @@ fi
 header "Installing dependencies"
 
 if [ ! -d node_modules ]; then
-    "${PNPM_CMD[@]}" install
+    bun install
     ok "Dependencies installed"
 else
-    ok "node_modules already exists (run 'corepack pnpm install' to update)"
+    ok "node_modules already exists (run 'bun install' to update)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -165,10 +177,10 @@ fi
 # ---------------------------------------------------------------------------
 header "Running database migrations"
 
-"${PNPM_CMD[@]}" prisma generate
+bunx prisma generate
 ok "Prisma client generated"
 
-"${PNPM_CMD[@]}" prisma migrate dev
+bunx prisma migrate dev
 ok "Migrations applied"
 
 # ---------------------------------------------------------------------------
@@ -176,7 +188,7 @@ ok "Migrations applied"
 # ---------------------------------------------------------------------------
 if $SEED; then
     header "Seeding database"
-"${PNPM_CMD[@]}" prisma db seed
+    bunx prisma db seed
     ok "Database seeded"
 fi
 
@@ -193,16 +205,16 @@ echo "    PostgreSQL  localhost:5432  (Docker)"
 echo "    Valkey      localhost:6379  (Docker)"
 echo ""
 echo -e "  ${BLUE}Useful commands:${NC}"
-echo "    pnpm dev:services        Start Docker services"
-echo "    pnpm dev:services:down   Stop Docker services"
-echo "    pnpm dev:services:logs   Tail service logs"
-echo "    pnpm prisma studio       Visual DB browser"
+echo "    bun run dev:services        Start Docker services"
+echo "    bun run dev:services:down   Stop Docker services"
+echo "    bun run dev:services:logs   Tail service logs"
+echo "    bunx prisma studio          Visual DB browser"
 echo ""
 
 if $START_APP; then
     header "Starting Next.js dev server"
-    exec "${PNPM_CMD[@]}" dev
+    exec bun run dev
 else
-    echo -e "  Run ${YELLOW}corepack pnpm dev${NC} to start the Next.js dev server."
+    echo -e "  Run ${YELLOW}bun run dev${NC} to start the Next.js dev server."
     echo ""
 fi

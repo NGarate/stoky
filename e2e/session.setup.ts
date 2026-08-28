@@ -29,7 +29,7 @@ setup("sign in", async ({ page }) => {
   await expect(
     page,
     `Could not sign in as ${DEMO_EMAIL}. The demo account comes from the seed — ` +
-      "run `pnpm db:seed` and try again.",
+      "run `bun run db:seed` and try again.",
   ).toHaveURL(/\/dashboard/, { timeout: 30_000 });
 
   await page.context().storageState({ path: SESSION_FILE });

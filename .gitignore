@@ -1,8 +1,13 @@
 # Dependencies
 node_modules/
-.pnpm-store/
 .pnp
 .pnp.js
+# Nothing writes this any more — the package manager is Bun, whose store is in
+# `~/.bun`, outside the repository. It stays ignored because the directory
+# itself does not disappear when the tool does: a working copy from before
+# 2026-08-28 still holds one, and it is on the order of a gigabyte. Un-ignoring
+# it would put that in front of the next `git add`.
+.pnpm-store/
 
 # Build outputs
 .next/
@@ -22,7 +27,6 @@ build/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 lerna-debug.log*
 
 # Testing
