@@ -1,15 +1,17 @@
 # Stoky Verification Sequence
 
-Updated: 2026-08-25
+Updated: 2026-08-28
 
 Use this as the source of truth for local and CI-style validation.
 
-**`pnpm` and `corepack pnpm` both work**, since `5289e2b` bumped the pin to
-11.22.0 — re-measured 2026-08-25, `corepack pnpm --version` answers 11.22.0 and
-exits 0. Until then corepack resolved 11.20.0 against a `packageManager` pin of
-11.19.0 and refused, which is why this file used to say to avoid it; the
-mismatch is gone rather than the advice being wrong at the time. `STATUS.md`
-owns the version table.
+**Every command here needs bun, at or above the version `.bun-version` pins.**
+`scripts/verify-local.sh` and `scripts/test-integration-local.sh` refuse at once
+when it is missing, and there is no fallback to another package manager to catch
+them. The pin matters even when an install appears to succeed: `bun.lock` is
+written by the pinned version, and an older bun reports `Unknown lockfile
+version`, ignores it and resolves an unpinned tree rather than stopping — only
+`--frozen-lockfile` turns that into an error. `STATUS.md` owns the version
+table.
 
 ## Command ladder
 
@@ -18,18 +20,18 @@ owns the version table.
 Runs the checks that should stay cheap enough for most iteration loops:
 
 ```bash
-pnpm verify:local
+bun run verify:local
 ```
 
 Seven steps:
 
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm check:react` — react-doctor, gating on errors, not the score
-- `pnpm check:links` — every internal link points at a route that exists
-- `pnpm check:contrast` — every theme token pair meets WCAG AAA
-- `pnpm test:unit`
-- `pnpm test:components`
+- `bun run lint`
+- `bun run typecheck`
+- `bun run check:react` — react-doctor, gating on errors, not the score
+- `bun run check:links` — every internal link points at a route that exists
+- `bun run check:contrast` — every theme token pair meets WCAG AAA
+- `bun run test:unit`
+- `bun run test:components`
 
 **It is held to a budget.** The whole ladder has ten minutes and every step its
 own ceiling. An exit status of **124** means a step was stopped for exceeding
@@ -46,11 +48,11 @@ while telling nobody anything.
 Runs the heavier checks that prove the repo is closer to mergeable state:
 
 ```bash
-pnpm verify:ci
+bun run verify:ci
 ```
 
-This runs the fast gate plus `pnpm test:integration` (which brings up its own
-database and cache) and `pnpm build`.
+This runs the fast gate plus `bun run test:integration` (which brings up its own
+database and cache) and `bun run build`.
 
 ### 3. Critical-path browser smoke
 
@@ -69,7 +71,7 @@ bunx playwright test e2e/critical-paths.spec.ts
   standalone production artefact, serves it on port 3100 (`PLAYWRIGHT_PORT`
   overrides), and runs against the suite's **own database and cache** —
   `stoky_e2e` and Valkey db 1, derived in `e2e/db-url.ts`. Do not start a
-  server for it, and do not stop your own `pnpm dev`: they coexist by
+  server for it, and do not stop your own `bun run dev`: they coexist by
   construction. `reuseExistingServer` is off, so a taken port fails loudly
   rather than adopting a foreign server.
 - **Export the environment first**: `set -a; . ./.env; set +a`. The suite
@@ -77,7 +79,7 @@ bunx playwright test e2e/critical-paths.spec.ts
   with a message naming the variables.
 - **The suite seeds itself**, into its own database — a `seed` project runs
   `prisma migrate deploy` (creating `stoky_e2e` on first contact) and
-  `pnpm db:seed` on every invocation, because the suite *spends* the fixture:
+  `bun run db:seed` on every invocation, because the suite *spends* the fixture:
   confirming a receipt line is a write, and there are three of them.
 
 ## Evidence to capture
@@ -90,8 +92,9 @@ bunx playwright test e2e/critical-paths.spec.ts
 
 ## Current validation notes
 
-Last measured 2026-08-19 at `70386ea`. See `docs/STATUS.md` for the full
-table; if the two disagree, STATUS is the one that gets re-measured.
+Last measured 2026-08-19 at `70386ea`, before the move to bun, so each gate is
+recorded under the command that ran it at the time. See `docs/STATUS.md` for the
+full table; if the two disagree, STATUS is the one that gets re-measured.
 
 - `pnpm lint` — 0 warnings, 0 errors across ~270 files
 - `pnpm typecheck` — green
@@ -129,11 +132,10 @@ Workaround, if a browser needs reinstalling: let `playwright install` download
 reports 100%, then extract by hand into
 `~/.cache/ms-playwright/<browser>-<revision>/` and `touch` the
 `INSTALLATION_COMPLETE` marker beside it. Revisions must match the ones in
-`node_modules/.pnpm/playwright-core@<version>/.../browsers.json` — currently
-chromium 1234, firefox 1538, webkit 2336 for Playwright 1.62.1. These change on
-every Playwright bump, so re-check after one. Do not install with
-`bunx playwright`; that resolves a newer Playwright and fetches revisions this
-project cannot use.
+`node_modules/playwright-core/browsers.json` — currently chromium 1234, firefox
+1538, webkit 2336 for Playwright 1.62.1. These change on every Playwright bump,
+so re-check after one. Do not install with `bunx playwright`; that resolves a
+newer Playwright and fetches revisions this project cannot use.
 
 WebKit additionally needs system libraries, installed once with root:
 
@@ -155,10 +157,11 @@ Two environment traps on this machine:
   before the group was granted will not have it. Re-login, or prefix with
   `sg docker -c "..."`.
 - Port 3000 is occupied by an unrelated application, and 3001 is routinely this
-  project's own `pnpm dev`. The suite's default of 3100 avoids both; pass
+  project's own `bun run dev`. The suite's default of 3100 avoids both; pass
   `PLAYWRIGHT_PORT` if something has taken that too.
 
-`test:components` must be run through the pnpm script. It passes
+`test:components` must be run through the package.json script,
+`bun run test:components`. It passes
 `--preload ./src/__tests__/setup/register-dom.ts`, which installs the happy-dom
 globals; invoking `bun test src/__tests__/components` directly fails with no
 `document`.

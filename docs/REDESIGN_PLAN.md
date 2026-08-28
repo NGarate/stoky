@@ -406,7 +406,7 @@ credit is part of the work. The Yuka name appears nowhere in the interface.
 ## 8. Accessibility
 
 Keeps the level the proposals reached: **WCAG AAA contrast**, enforced by
-`pnpm check:contrast` (60 checks against the tokens in `globals.css` — 54
+`bun run check:contrast` (60 checks against the tokens in `globals.css` — 54
 from Phase 2 until UI-10 added the hero surface; 140 while it measured the
 five prototypes). Extended with 48px targets, state never by
 colour alone, a real one-metre readability test for the kitchen screen, and
@@ -470,7 +470,7 @@ files is what let a fake test suite survive five months; that must not grow back
 | `ISSUES.md` | Point each open item at the phase that closes it, so the two documents cannot drift. |
 | `docs/STATUS.md` | Keep — it is the gate record. Re-point "what to do next" at these phases. |
 
-*Done when:* `pnpm verify:ci` is green; no dependency is declared without being
+*Done when:* `bun run verify:ci` is green; no dependency is declared without being
 imported; no document contradicts this plan or another document; and every
 claim in `docs/STATUS.md` is still reproducible by running the command next to
 it.
@@ -671,10 +671,10 @@ choosing a tool before the problem exists.
    and `reactCompiler: true` in `next.config.ts`. *Done when:* the build passes
    with it on, every suite is still green, and `STATUS.md` records the build
    time before and after rather than asserting the cost is small.
-2. **`react-doctor` as a gate** — `pnpm check:react`, in `verify:local`,
-   `verify:ci` and the `quality` CI job. Not `pnpm doctor`: pnpm has a
-   built-in command of that name, and it wins, so the script never runs and
-   the gate passes on everything. *Done when:* it fails on an error and passes on warnings,
+2. **`react-doctor` as a gate** — `bun run check:react`, in `verify:local`,
+   `verify:ci` and the `quality` CI job. Not `pnpm doctor`: pnpm, the installer
+   at the time, had a built-in command of that name, and it won, so the script
+   never ran and the gate passed on everything. *Done when:* it fails on an error and passes on warnings,
    the baseline is recorded, and the error it already found is closed.
 3. **The write queue moves into a `zustand` store.** *Done when:* the queue's
    consumers subscribe to what they read rather than to the whole queue, the
@@ -756,7 +756,7 @@ Scope, in order of how much damage a mistake would do:
 6. **Session handling.** Kitchen tablets hold a long-lived session by design;
    check what that session can reach if the device is stolen, and that a role
    change or removal takes effect without waiting for expiry.
-7. **Dependency and image posture.** `pnpm audit` clean, Trivy clean, base image
+7. **Dependency and image posture.** `bun audit` clean, Trivy clean, base image
    current, no secret ever committed.
 8. **Headers in production.** The CSP is verified against a production build,
    not just dev — the nonce path differs.
@@ -1001,7 +1001,7 @@ These have no phase yet. They are here so that stays visible.
 | **The manual screen-reader pass** | Phase 2b's one incomplete item. Four journeys are audited against the tree; whether it *sounds* sensible is what no tool answers |
 | **A week on a real tablet** | Phase 5's own done-when for the kitchen screen. The screen and its five-minute refresh exist; whether it is still useful and still correct after seven untouched days is not something a suite can answer |
 | **iOS Safari on a real device** | Playwright's WebKit is not iOS Safari, and §5.4 defers installability on iOS grounds specifically. The queue, `localStorage` and the worker all need a pass, dated in `STATUS.md` |
-| ~~**The service worker under a production build**~~ | **Done.** `pnpm test:e2e:sw` builds, serves the standalone artefact the image runs, and drives five assertions through a real worker: it registers and claims, `install` precaches `/offline`, the static cache holds real hashed chunks, an offline navigation is served from cache, and an uncached route falls back to the offline document. Its own config, because a `next build` is a minute the five-minute suite budget cannot absorb |
+| ~~**The service worker under a production build**~~ | **Done.** It builds, serves the standalone artefact the image runs, and drives five assertions through a real worker: it registers and claims, `install` precaches `/offline`, the static cache holds real hashed chunks, an offline navigation is served from cache, and an uncached route falls back to the offline document. It had its own config at the time, because a `next build` was a minute the five-minute suite budget could not absorb; that config was folded into the main one on 2026-08-17, when the whole suite moved to serving the standalone build |
 | `public/sw.js`'s 2,500 ms navigation timeout | **Half measured.** A shell navigation on the production build answers in 14–37 ms warm and 368 ms on the first cold hit, so 2,500 ms is ~70× a healthy navigation and ~7× the worst first load — it cannot be firing on an unremarkable connection, and a unit test now drives the fallback through the timeout at the constant the file declares. Whether 2,500 ms is the right moment to give up on a connection that is present but hopeless is still a judgement about how long somebody will stare at a blank screen, and no local measurement produces it |
 | Cross-tab drain locking | Absent on purpose: two tabs draining at once is *safe*, because the same key applies once. An efficiency question, not a correctness one |
 | ~~DEBT-6~~ | **Done.** Three domain errors in the services and a translator on the same middleware that handles Prisma's. The decision this was waiting on went to domain errors rather than `TRPCError`, because `processReceiptOcr` runs from a background task with no client to give a status to |

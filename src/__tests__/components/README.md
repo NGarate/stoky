@@ -6,7 +6,7 @@ into a DOM and asserts on what a user would see or do.
 ## Running
 
 ```bash
-corepack pnpm test:components
+bun run test:components
 ```
 
 The script preloads `src/__tests__/setup/register-dom.ts`, which registers the

@@ -52,17 +52,17 @@ Before running tests, ensure you have:
 
 ```bash
 # 1. Install dependencies
-pnpm install
+bun install
 
 # 2. Run fast suites (no DB required)
-pnpm test:unit
-pnpm test:components
+bun run test:unit
+bun run test:components
 
 # 3. Run integration tests (starts local DB/cache from this repo)
-pnpm test:integration
+bun run test:integration
 
 # 4. Run full test suite
-pnpm test
+bun run test
 
 # 5. Run E2E tests
 bunx playwright test
@@ -82,7 +82,7 @@ docker compose -f docker-compose.dev.yml up -d db cache
 Or let the integration runner manage them automatically:
 
 ```bash
-pnpm test:integration
+bun run test:integration
 ```
 
 The runner recreates an isolated PostgreSQL database (`stoky_test`) on every run.
@@ -90,12 +90,12 @@ Tests connect from the host to `localhost:5432` and `localhost:6379`.
 
 ### Without Docker
 
-`pnpm test:integration` runs `scripts/test-integration-local.sh`, which brings up
-its own containers **and overwrites `DATABASE_URL`** — so a hand-set value in
-`.env` is ignored and the steps below will appear to do nothing.
+`bun run test:integration` runs `scripts/test-integration-local.sh`, which
+brings up its own containers **and overwrites `DATABASE_URL`** — so a hand-set
+value in `.env` is ignored and the steps below will appear to do nothing.
 
 To point the integration tests at a database you manage yourself, use
-`pnpm test:integration:only`, which runs the suite directly against whatever
+`bun run test:integration:only`, which runs the suite directly against whatever
 `DATABASE_URL` is set to. That is also what CI uses, because the runner supplies
 its own service containers.
 
@@ -115,27 +115,27 @@ DATABASE_URL="postgresql://stoky_test:test_password@localhost:5432/stoky_test?sc
 
 ### Unit Tests
 ```bash
-pnpm test:unit
+bun run test:unit
 ```
 
 ### Component + Utility Tests
 ```bash
-pnpm test:components
+bun run test:components
 ```
 
 ### Integration Tests
 ```bash
-pnpm test:integration
+bun run test:integration
 ```
 
 ### Single Test File
 ```bash
-pnpm test:integration -- src/__tests__/integration/auth.flow.test.ts
+bun run test:integration -- src/__tests__/integration/auth.flow.test.ts
 ```
 
 ### Keep DB/Cache Running After Tests
 ```bash
-KEEP_TEST_SERVICES=true pnpm test:integration
+KEEP_TEST_SERVICES=true bun run test:integration
 ```
 
 ### E2E Tests
@@ -158,7 +158,7 @@ bunx playwright test --headed
 `e2e/db-url.ts` from `DATABASE_URL`/`VALKEY_URL`, or taken verbatim from
 `E2E_DATABASE_URL`/`E2E_VALKEY_URL` (what CI sets). A `seed` project runs
 `prisma migrate deploy` (which creates the database on first contact) and
-`pnpm db:seed` against it; a `setup` project signs in as the demo account;
+`bun run db:seed` against it; a `setup` project signs in as the demo account;
 every browser project depends on both, so there is nothing to run first.
 
 It re-seeds on *every* invocation rather than once, because the suite spends
@@ -168,8 +168,8 @@ shared dev database scoped to the demo household, and that scoping was not
 enough: it reset the household the owner was actively testing with. The suite
 can now be run at any time without touching anything a person is using.
 
-**It serves the production artefact.** The `webServer` runs `pnpm build` and
-then `node .next/standalone/server.js` — the same thing the Docker image runs —
+**It serves the production artefact.** The `webServer` runs `bun run build` and
+then `bun .next/standalone/server.js` — the same thing the Docker image runs —
 on port **3100** by default (`PLAYWRIGHT_PORT` overrides). `next dev` sat there
 until 2026-08-17 and hid an entire defect class: production auth broken under
 green suites, and `upgrade-insecure-requests` killing every fetch on WebKit
@@ -178,7 +178,7 @@ faster than dev compiled, so the suite's wall clock barely moved.
 
 **Do not start a server for it, and do not stop yours.** `reuseExistingServer`
 is off, so the suite never adopts a foreign server — a taken port fails loudly
-instead. Your own `pnpm dev` and the suite coexist: different port, different
+instead. Your own `bun run dev` and the suite coexist: different port, different
 database, and the standalone server takes no `next dev` single-instance lock.
 The environment must be exported first (`set -a; . ./.env; set +a`), or the
 config refuses with a message naming the variables it needs.
@@ -229,7 +229,7 @@ For GitHub Actions, use:
   env:
     NEXTAUTH_SECRET: test-secret
   run: |
-    pnpm test:integration
+    bun run test:integration
 ```
 
 ## Troubleshooting
@@ -240,8 +240,8 @@ For GitHub Actions, use:
 - Verify database exists: `psql -U postgres -l`
 
 ### "Prisma schema not found" error
-- Run migrations: `pnpm prisma migrate deploy`
-- Generate client: `pnpm prisma generate`
+- Run migrations: `bunx prisma migrate deploy`
+- Generate client: `bunx prisma generate`
 
 ### E2E tests fail with connection refused
 - The suite starts its own server — do not start one for it, and do not point
@@ -258,8 +258,17 @@ files that tier loads, so the three numbers must never be added into a project
 figure. `docs/STATUS.md` carries the current numbers.
 
 ```bash
-bun test --coverage
+bun test --coverage src/__tests__/unit
+bun test --coverage --preload ./src/__tests__/setup/register-dom.ts src/__tests__/components
+bun test --coverage src/__tests__/integration
 ```
+
+A path per tier, and not a bare `bun test --coverage`, which would contradict
+the paragraph above it: one invocation over everything produces a single
+denominator and hides exactly the distinction this section exists to make. It
+would also fail — the component tier needs the `register-dom` preload the
+`test:components` script carries, and the integration tier needs the database
+`test:integration` starts.
 
 ## Writing New Tests
 

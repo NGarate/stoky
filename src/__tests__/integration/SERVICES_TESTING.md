@@ -218,14 +218,20 @@ This document provides comprehensive documentation for the OCR pipeline and busi
 
 ### Test Runner: Bun
 ```bash
-# Run all tests
-bun test
+# Run all tests. `bun run test`, not `bun test`: the bare form is Bun's own
+# runner over the whole repository, which loads the component tests without the
+# happy-dom preload the `test:components` script passes — they fail on
+# `document is not defined` — and the integration tests without the database
+# `test:integration` starts.
+bun run test
 
-# Run specific test file
+# Run specific test file. Here the bare runner is right: these need the
+# services up, and nothing else.
 bun test src/__tests__/integration/ocr.pipeline.test.ts
 
-# Run with coverage
-bun test --coverage
+# Run with coverage, per tier. A whole-repository coverage figure would mix
+# three different denominators — see docs/TEST_SETUP.md.
+bun test --coverage src/__tests__/integration/
 ```
 
 ### Database Requirements
@@ -269,10 +275,10 @@ bun test --coverage
 docker compose up -d db cache
 
 # Install dependencies
-pnpm install
+bun install
 
 # Generate Prisma client
-pnpm prisma generate
+bunx prisma generate
 ```
 
 ### Execute Tests
@@ -296,20 +302,22 @@ bun test src/__tests__/integration/performance.error.test.ts
 ### GitHub Actions Pipeline
 The tests are integrated into the CI pipeline:
 
-1. **Quality Check**:
+1. **Quality Check**, likewise in the image — the job runs five gates, not two,
+   and `bun run lint` on its own is the local shorthand rather than what CI does:
    ```bash
-   pnpm lint
-   pnpm typecheck
+   bash scripts/ci-in-image.sh quality
    ```
 
-2. **Test Execution**:
+2. **Test Execution**: what the pipeline actually runs, which is the suites
+   inside this project's own development image rather than on the runner's
+   toolchain — see `.github/workflows/ci.yml`.
    ```bash
-   bun test
+   bash scripts/ci-in-image.sh test
    ```
 
-3. **Coverage Report**:
+3. **Coverage Report**, per tier, because the denominators differ:
    ```bash
-   bun test --coverage
+   bun test --coverage src/__tests__/integration/
    ```
 
 ### Pre-commit Hooks
@@ -361,8 +369,8 @@ chmod -R 755 src/__tests__/
 **Missing Dependencies**:
 ```bash
 # Reinstall dependencies
-pnpm install
-pnpm prisma generate
+bun install
+bunx prisma generate
 ```
 
 ### Debug Mode

@@ -115,7 +115,7 @@ borders and gauge fills under 1.4.11. It reported **140 checks across 5 designs 
 2 themes, all passing**. The gate outlived the prototypes: Phase 2 repointed it
 at `src/app/globals.css`, where it now runs 54 checks over the one shipped
 palette. It runs in the quality job of `.github/workflows/ci.yml` as
-`pnpm check:contrast`, and the same standard carries into the two real screens.
+`bun run check:contrast`, and the same standard carries into the two real screens.
 
 **A real defect surfaced that the test suite could not see.** Building against
 `src/app/globals.css` exposed that it defines only `--background` and

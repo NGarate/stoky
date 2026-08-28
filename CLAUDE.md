@@ -28,10 +28,10 @@ currency is EUR.
 
 ## The runtime is Bun
 
-Not Node, and not only for the test runner. `pnpm dev`, `pnpm start` and the
-production image all run Bun; `node:24-alpine` is the base image and supplies
-the tooling, nothing more. Two consequences worth having in mind before writing
-server code:
+Not Node, and not only for the test runner. `bun run dev`, `bun run start` and
+the production image all run Bun; `node:24-alpine` is the base image and
+supplies the tooling, nothing more. Two consequences worth having in mind
+before writing server code:
 
 - Bun's own APIs are available. Image processing already uses `Bun.Image`
   (`src/server/services/image.ts`) — `sharp` is a devDependency kept for test
@@ -202,7 +202,7 @@ Because there is no PR gate, the commit is the only reviewable unit and
    reproducible by a command. Before reporting a number, check the thing you
    measured was actually running — `docs/STATUS.md` lists the traps that have
    produced confident wrong answers here.
-4. **Validate before committing**, not after a batch: `pnpm verify:ci`, plus
+4. **Validate before committing**, not after a batch: `bun run verify:ci`, plus
    `bunx playwright test` for anything that renders. Then judge whether the
    change introduced a regression, a security weakness, or a standards drift —
    green gates are necessary, not sufficient.

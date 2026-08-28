@@ -121,7 +121,7 @@ The integration tests require a PostgreSQL database. Run:
 docker compose up -d db
 
 # Run migrations
-pnpm prisma migrate dev
+bunx prisma migrate dev
 
 # Run the tests
 bun test src/__tests__/integration/routers.test.ts
@@ -196,9 +196,11 @@ bun test src/__tests__/integration/routers.test.ts
 # With coverage (if available)
 bun test --coverage src/__tests__/integration/routers.test.ts
 
-# Specific router
-bun test -- --grep "Auth Router"
-bun test -- --grep "Product Router"
+# Specific router. `-t` is Bun's name filter; there is no `--grep`, and passing
+# one after `--` is read as a *filename* filter that matches nothing, runs no
+# tests and exits 0 — a green result meaning "found nothing to run".
+bun test -t "Auth Router" src/__tests__/integration/routers.test.ts
+bun test -t "Product Router" src/__tests__/integration/routers.test.ts
 ```
 
 ---

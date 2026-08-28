@@ -1,6 +1,6 @@
 # Stoky Local Bootstrap
 
-Updated: 2026-08-27
+Updated: 2026-08-28
 
 This is the shortest supported path from clone to a running local app.
 
@@ -12,23 +12,30 @@ to iterate in, not because it is more correct.
 ## Host prerequisites
 
 - Docker with the daemon running
-- Node.js 24 — for `pnpm` and the tooling, not for running the app
-- **Bun**, at the version in `.bun-version`. `pnpm dev` and `pnpm start` both run
-  `bun --bun`, so without it the fast path below dies on `bun: not found`
-- `pnpm`, or `corepack` if `pnpm` is not installed globally
+- Node.js 24 — the install scripts `bun install` runs are Node programs
+  (`argon2`, Prisma, `@parcel/watcher`), so installing still needs it; running
+  the app does not
+- **Bun**, at the version in `.bun-version`. It is the package manager as well
+  as the runtime — `bun run dev` and `bun run start` both run `bun --bun` — so
+  without it nothing below works, starting with `bun: not found`
 
-The repo currently works with `corepack pnpm` and the bootstrap script now
-falls back to it automatically.
+That version is a floor, not a suggestion, and nothing enforces it for you any
+more. `bun.lock` is lockfileVersion 2, written by the pinned Bun; an older one
+reports *Unknown lockfile version*, prints *Ignoring lockfile*, and then
+resolves a tree nobody pinned, because only `--frozen-lockfile` turns that into
+an error. `scripts/dev-local.sh` compares `bun --version` against
+`.bun-version` before it installs anything, which is the only check left —
+`bun upgrade`, or develop in the image, if it refuses.
 
 ## Fast path
 
 ```bash
-corepack pnpm install
+bun install
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up -d db cache
-corepack pnpm prisma generate
-corepack pnpm prisma migrate dev
-corepack pnpm dev
+bunx prisma generate
+bunx prisma migrate dev
+bun run dev
 ```
 
 Or use the repo helper:
@@ -41,8 +48,8 @@ bash scripts/dev-local.sh
 
 ```bash
 docker compose up -d --build app      # the dev server, on the compose network
-docker compose exec app corepack pnpm test:unit
-docker compose exec app corepack pnpm test:components
+docker compose exec app bun run test:unit
+docker compose exec app bun run test:components
 ```
 
 Or open the repository in the devcontainer (`.devcontainer/devcontainer.json`),
@@ -58,12 +65,19 @@ Three traps, each of which cost an afternoon:
   edit silently starts the old one. Found with a container whose dev script died
   on `sh: bun: not found`, because the image predated Bun.
 - **After a dependency change, the anonymous `node_modules` volume outlives the
-  rebuild** and holds the old tree, so pnpm reinstalls everything on start — or
-  aborts, when there is no TTY to confirm the purge. Renew it:
+  rebuild** and holds the old tree. Under pnpm this announced itself — it
+  reinstalled on start, or aborted asking for a TTY to confirm a purge. Since
+  the move to Bun on 2026-08-28 **nothing announces it**: the container's
+  command is `bun run dev`, which starts Next and installs nothing, so a stale
+  tree simply runs. The symptom is a module that is missing or the wrong
+  version, at the point of use rather than at start-up. Renew the volume:
   `docker compose up -d --build --force-recreate --renew-anon-volumes app`.
 - **Change a dependency and the image is stale.** `node_modules` is baked into
-  it, so pnpm finds a lockfile it does not match and aborts rather than purging
-  without a TTY. `docker compose build app`.
+  it. Rebuilding is the fix — `docker compose build app` — and the rebuild is
+  where a half-made change is caught: the `deps` stage runs
+  `bun install --frozen-lockfile`, so a `package.json` edited without its
+  `bun.lock` fails there with "lockfile had changes, but lockfile is frozen"
+  rather than resolving something nobody pinned.
 
 **Bun is pinned twice** — in `.bun-version`, which CI installs, and in the
 Dockerfile, because a `FROM` cannot read a file.
@@ -82,8 +96,8 @@ bash scripts/dev-local.sh --seed
 Bootstrap is only considered complete when all of the following are true:
 
 1. `docker compose -f docker-compose.dev.yml ps` shows healthy `db` and `cache`
-2. `corepack pnpm prisma generate` succeeds
-3. `corepack pnpm prisma migrate dev` succeeds
+2. `bunx prisma generate` succeeds
+3. `bunx prisma migrate dev` succeeds
 4. the Next dev server responds on `http://localhost:3000`
 5. `/login` and `/register` render without server errors
 

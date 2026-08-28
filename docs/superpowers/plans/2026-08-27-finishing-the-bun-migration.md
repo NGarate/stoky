@@ -167,7 +167,7 @@ Being honest about the size of the prize:
 - **Nothing in production.** `outputFileTracingExcludes` already works: the
   standalone artefact carries `node_modules/sharp` as a **dangling symlink of 0
   bytes**, `@img/*` is absent entirely, and the 19 MB of `libvips` does not ship.
-- **19 MB and its install time** off the dev image and every `pnpm install`.
+- **19 MB and its install time** off the dev image and every `bun install`.
 - **The real prize is the premise.** Nothing prevents somebody importing sharp
   into `src/` tomorrow. It would work in development, pass every gate, and fail
   in production — where the trace exclusion has removed it — with
@@ -202,7 +202,7 @@ fixture.
 
 So the honest end state is: **sharp stays in `devDependencies` as a
 cross-check, and is referenced nowhere else.** That is reached. What it costs is
-19 MB of `pnpm install` in development and nothing in production. What it buys
+19 MB of `bun install` in development and nothing in production. What it buys
 is that two hand-written binary formats are continuously checked against a real
 implementation.
 
@@ -270,7 +270,7 @@ is not true.
 | `Dockerfile:218` | healthcheck runs `node -e "fetch(…)"` | **Yes, cheaply.** It is the only Node process in a *running* container. `bun -e` is a one-line change, and it removes the container's dependency on a runtime it otherwise only stores |
 | `Dockerfile:184,188` | `node -p` / `node -e` at build time to read and patch `package.json` | **No.** Build-time only, on a stage that has Node regardless |
 | `Dockerfile:204` | `chown -R node:node` on the uploads volume | **No.** The user, not the runtime |
-| `.github/workflows/ci.yml:235,250,303` | `e2e` and `audit` install Node and Bun on the runner | **No.** `e2e` correctly runs in Microsoft's Playwright image — it needs browsers, not this application's runtime — and `audit` needs only a package manager |
+| `.github/workflows/ci.yml` | `e2e` and `audit` install Node and Bun on the runner | ~~**No.**~~ **Half of it went with pnpm** (step 7 below). `e2e` still installs both and correctly so — it runs in Microsoft's Playwright image and needs browsers, and the Playwright driver is a Node program. `audit` now installs *neither*: `bun audit` answers from `bun.lock` with no `node_modules` and no Node, so the job is checkout, setup-bun, audit. The row's reasoning was right and its conclusion was wrong — "needs only a package manager" was true of pnpm and stopped being true |
 | base image | `node:24-alpine` for all four stages | **No, and this was decided.** The owner chose it: Bun runs on top, and there is no more suitable base |
 
 Only the first row is a change. It is small enough to be a single commit and
@@ -315,6 +315,42 @@ independent of everything else here.
    in `package.json` whether or not anything imports it, and saying so in the
    file is better than leaving a dependency nobody can explain.
 6. **RUNTIME-1's `AbortError`** — its own investigation, upstream-shaped.
+7. ~~**The package manager**~~ **Done.** Not in this plan when it was written:
+   the runtime had moved and pnpm had stayed, which the owner called out as
+   making no sense. It was not a rename, and the four things it turned up are
+   worth keeping because each was silent:
+
+   - **pnpm's parent-scoped `overrides` are a no-op under Bun**, not an error.
+     `"@prisma/config>effect"` matches no package, installs the version the
+     override existed to prevent, and exits 0. Copied across unchanged it
+     restored GHSA-ggr8-5vv4-36mx; only `bun audit` noticed. They are global
+     now, which is equivalent here because each has a single dependant, and
+     `src/__tests__/unit/package-overrides.test.ts` fails on a key containing
+     `>` so the shape cannot come back.
+   - **`node_modules/.pnpm/**` appears in two places that are not comments**,
+     and both broke quietly. `next.config.ts` excluded sharp from the standalone
+     output by that path, so with a flat tree it excluded nothing and put 36.6 MB
+     of native decoder back inside the production stage — measured, 850 MB
+     against 794 MB once the patterns were flattened. The Dockerfile staged the
+     OCR worker with one `cp -rL` of `.pnpm/tesseract.js@*/`, which worked
+     because that directory carries symlinks to the package's dependencies and
+     dereferencing recursively produced the whole closure for free. Bun has no
+     such directory. The closure is now computed at build time and is **13
+     packages, not the 9 tesseract.js declares** — `node-fetch` pulls `tr46`,
+     `webidl-conversions` and `whatwg-url`, which is exactly what a hand-written
+     list drops, and dropping them is OCR-2 all over again.
+   - **`@tanstack/react-query` had to be pinned exactly.** Bun resolved
+     `^5.101.4` to 5.102.8 while the two persisters pin `query-core` at 5.101.4,
+     giving two copies whose `QueryClient` are not assignable across a private
+     field — six `tsc` errors that look like a type bug and are a resolution bug.
+   - **corepack is gone and nothing replaces it.** `bun.lock` is
+     `lockfileVersion: 2`, written by the pinned 1.4.0; an older Bun prints
+     "Unknown lockfile version", then "Ignoring lockfile", and resolves an
+     unpinned tree — silent unless `--frozen-lockfile` is passed, which a
+     developer typing `bun install` does not. So local development now needs Bun
+     at or above `.bun-version`, `scripts/dev-local.sh` checks it before
+     installing, and `bun-version.test.ts` asserts the committed lockfile's
+     format.
 
 ~~Steps 1, 2 and 3 are available now and independent of each other. Step 4 needs
 3.~~ Steps 1, 2 and 3 are done (`92156c9`, the healthcheck, and the experiment

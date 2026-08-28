@@ -219,7 +219,7 @@ export default function LoginPage() {
 
 **Resolution:** `prisma/migrations/20260213234844` is committed, together with
 `migration_lock.toml`. A seeder now also exists at `prisma/seed.ts`, wired to
-`corepack pnpm db:seed` through the `prisma.seed` key in `package.json`.
+`bun run db:seed` through the `prisma.seed` key in `package.json`.
 
 **Original report follows.**
 
@@ -362,7 +362,7 @@ if (attempts > 5) {
 **Status:** RESOLVED in Phase 1 — and it was six routes, not four.
 `/products/[id]` and `/receipts/[id]/applied` surfaced while building the first
 four, both missed by three manual audits because their call sites use template
-literals. `corepack pnpm check:links` now gates CI: 74 links against 24 routes,
+literals. `bun run check:links` now gates CI: 74 links against 24 routes,
 none broken. No `test.fixme` remains in `e2e/`.
 
 **Original report follows.**
@@ -933,12 +933,12 @@ looked convincing until the next measurement.
 
 ## What it costs, which is more than a rerun
 
-**`pnpm verify:ci` fails roughly one run in seven because of this**, and that is
-the gate `CLAUDE.md` requires to pass before every commit. Getting a clean full
-run on 2026-08-11 took three attempts. CI's `test` job will do the same, and the
-failure will look like a defect in the replay layer to anybody who has not read
-this entry — which is the cost worth counting, rather than the seconds spent
-re-running.
+**`bun run verify:ci` fails roughly one run in seven because of this**, and that
+is the gate `CLAUDE.md` requires to pass before every commit. Getting a clean
+full run on 2026-08-11 took three attempts. CI's `test` job will do the same,
+and the failure will look like a defect in the replay layer to anybody who has
+not read this entry — which is the cost worth counting, rather than the seconds
+spent re-running.
 
 No mitigation has been found that does not also hide real failures. Retrying the
 job masks everything; the two reshapings of the assertion that seemed likely —
@@ -2124,7 +2124,7 @@ Re-seeding and running the low-stock test alone passes.
 Not caused by Phase 3 — nothing in it touches stock — but Phase 3's run is
 where it surfaced, and it will keep surfacing: the pollution persists in the
 database until someone re-seeds, so once it has happened the low-stock test
-fails on *every* subsequent run until `pnpm db:seed` is run again.
+fails on *every* subsequent run until `bun run db:seed` is run again.
 
 Three fixes worth considering, in ascending order of cost: have the
 screen-reader journey create its own product rather than take the first one;
@@ -2360,7 +2360,7 @@ says so where it asserts them.
 **Status:** PARTLY ADDRESSED
 
 **Resolution so far:** `scripts/test-integration-local.sh` (run by
-`corepack pnpm test:integration`) brings up the repo's own `db` and `cache`
+`bun run test:integration`) brings up the repo's own `db` and `cache`
 services and recreates an isolated `stoky_test` database on every run. See
 `docs/TEST_SETUP.md`.
 
@@ -3166,7 +3166,7 @@ troubleshooting. `prisma/seed.ts` makes the seeding step real.
 **Suggested Addition:**
 Create `docs/setup.md` or expand README with:
 
-1. Prerequisites (Node.js 24, Docker, pnpm)
+1. Prerequisites (Node.js 24, Docker, Bun)
 2. Environment variable explanations
 3. Step-by-step setup commands
 4. Troubleshooting guide

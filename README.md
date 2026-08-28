@@ -40,7 +40,8 @@ PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Auth.js v5 (Argon2id) ·
 Tailwind CSS 4 · TanStack Query v5 · next-intl v4 ·
 Tesseract.js · Sharp
 
-Tooling: pnpm 11, oxlint, Bun test runner, Playwright, Docker Compose.
+Tooling: Bun 1.4 (package manager and test runner), oxlint, Playwright,
+Docker Compose.
 
 **Single repository, single Next.js application — not a monorepo.** tRPC needs
 client and server colocated for end-to-end type inference. This is an enforced
@@ -57,18 +58,18 @@ constraint for the MVP.
   `sudo usermod -aG docker $USER && newgrp docker` — see
   [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md).
 - **Node.js 24 LTS**
-- **pnpm**, or `corepack` (every command below works with `corepack pnpm`)
-- **Bun**, for the test suites
+- **Bun**, at the version in `.bun-version` — it installs the dependencies,
+  runs the app and runs the test suites. An older one cannot read `bun.lock`
 
 ### Setup
 
 ```bash
-corepack pnpm install
+bun install
 cp .env.example .env                                  # then set NEXTAUTH_SECRET
 docker compose -f docker-compose.dev.yml up -d db cache
-corepack pnpm prisma generate
-corepack pnpm prisma migrate dev
-corepack pnpm dev
+bunx prisma generate
+bunx prisma migrate dev
+bun run dev
 ```
 
 Generate a secret for `.env` with `openssl rand -base64 32`.
@@ -84,7 +85,7 @@ The app runs at <http://localhost:3000>.
 ### Demo data
 
 ```bash
-corepack pnpm db:seed
+bun run db:seed
 ```
 
 Creates the household *Hogar Demo* with six products (three deliberately below
@@ -110,10 +111,10 @@ Re-running the seed is safe — it clears the demo household first.
 ### Development
 
 ```bash
-corepack pnpm dev                  # dev server on :3000
-corepack pnpm dev:services         # start db + cache
-corepack pnpm dev:services:down    # stop them
-corepack pnpm prisma studio        # visual database browser
+bun run dev                  # dev server on :3000
+bun run dev:services         # start db + cache
+bun run dev:services:down    # stop them
+bunx prisma studio           # visual database browser
 ```
 
 ### Verification
@@ -123,30 +124,31 @@ Run these in order of cost — see
 gate proves.
 
 ```bash
-corepack pnpm verify:local         # lint + typecheck + unit + component tests
-corepack pnpm verify:ci            # the above + integration tests + build
+bun run verify:local         # lint + typecheck + unit + component tests
+bun run verify:ci            # the above + integration tests + build
 bunx playwright test e2e/critical-paths.spec.ts
 ```
 
 Individually:
 
 ```bash
-corepack pnpm lint                 # oxlint
-corepack pnpm typecheck            # tsc --noEmit
-corepack pnpm test:unit            # no database needed
-corepack pnpm test:components      # no database needed
-corepack pnpm test:integration     # brings up its own db + cache
+bun run lint                 # oxlint
+bun run typecheck            # tsc --noEmit
+bun run test:unit            # no database needed
+bun run test:components      # no database needed
+bun run test:integration     # brings up its own db + cache
 ```
 
-`test:components` must run through the pnpm script — it preloads the happy-dom
-environment. `bun test src/__tests__/components` on its own will fail.
+`test:components` must run through `bun run test:components` — the script
+preloads the happy-dom environment. `bun test src/__tests__/components` on its
+own will fail.
 
 ### Database
 
 ```bash
-corepack pnpm prisma migrate dev     # create + apply a migration
-corepack pnpm prisma migrate deploy  # apply in production
-corepack pnpm db:seed                # demo data
+bunx prisma migrate dev        # create + apply a migration
+bunx prisma migrate deploy     # apply in production
+bun run db:seed                # demo data
 ```
 
 `prisma/schema.prisma` is the single source of truth. Never edit a migration
@@ -235,7 +237,7 @@ fix(inventory): correct stock quantity aggregation query
 Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`, `shopping`,
 `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
 
-Before every commit: `corepack pnpm verify:ci` must pass, new behaviour needs
+Before every commit: `bun run verify:ci` must pass, new behaviour needs
 tests, and user-facing strings go in `messages/es.json` first.
 
 **Tests must be able to fail.** An assertion that holds regardless of the code

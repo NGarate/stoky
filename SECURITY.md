@@ -138,7 +138,8 @@ Verified against the files named in each row.
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
   can be moved and a SHA cannot.
-- `pnpm audit --audit-level moderate` runs as its own job and fails the build.
+- `bun audit --audit-level moderate` runs as its own job and fails the build. It
+  answers from `bun.lock` alone, so the job installs nothing.
 - The image is built and **loaded locally, then scanned by Trivy before it is
   pushed** — scanning after publication would be the wrong order. Results are
   uploaded as SARIF, and a separate step fails the job on CRITICAL or HIGH
@@ -392,8 +393,8 @@ executed. That stopped being true in Phase 2b and the section was not updated �
 in the one document whose whole premise is that every claim is checkable against
 a file, which is the worst place for it.
 
-What runs today: `pnpm check:contrast` enforces WCAG AAA on the token pairs, and
-four Playwright suites enforce the rest — axe at the full AAA rule set over
+What runs today: `bun run check:contrast` enforces WCAG AAA on the token pairs,
+and four Playwright suites enforce the rest — axe at the full AAA rule set over
 every route in both themes at three viewport tiers, target size and heading
 order measured in CSS pixels, the criteria no tool decides (1.4.8, 2.4.9, 3.3.5,
 reduced motion), and a walk of the accessibility tree across four journeys.

@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-27
+Updated: 2026-08-28
 
 Single source of truth for where the project actually is.
 
@@ -32,31 +32,31 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `pnpm lint` | ✅ 0 warnings, 0 errors — 371 files, 101 rules (2026-08-27) |
-| Typecheck | `pnpm typecheck` | ✅ clean |
-| React | `pnpm check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `pnpm check:links` | ✅ 123 links against 35 routes, none broken (2026-08-26) |
-| Contrast | `pnpm check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-26) |
-| Unit tests | `pnpm test:unit` | ✅ 650 pass / 72 files (2026-08-27) |
-| Component tests | `pnpm test:components` | ✅ 611 pass / 57 files (2026-08-27) |
-| Integration tests | `pnpm test:integration` | ✅ 494 pass / 32 files (2026-08-27) |
-| Build | `pnpm build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
-| Migration | `pnpm prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
-| Seed | `pnpm db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail** (2026-08-27) — against a **Bun-served** standalone production build, on the suite's own database. See *End-to-end* below: the suite changed shape on 2026-08-17 |
-| Dependency audit | `pnpm audit` | ✅ clean again — it was **2 high** for five days; see *Dependency security* |
+| Lint | `bun run lint` | ✅ 0 warnings, 0 errors — 376 files, 101 rules (2026-08-28) |
+| Typecheck | `bun run typecheck` | ✅ clean |
+| React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
+| Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
+| Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
+| Unit tests | `bun run test:unit` | ✅ 661 pass / 73 files (2026-08-28) |
+| Component tests | `bun run test:components` | ✅ 621 pass / 58 files (2026-08-28) |
+| Integration tests | `bun run test:integration` | ✅ 518 pass / 35 files (2026-08-28) |
+| Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
+| Migration | `bunx prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
+| Seed | `bun run db:seed` | ✅ idempotent across re-runs |
+| E2E | `bunx playwright test` | ✅ **148 pass / 0 fail in 4.2 min** (2026-08-28, at `f643550`) — against a **Bun-served** standalone production build, on the suite's own database, from a tree Bun also *installed*. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| Dependency audit | `bun audit` | ✅ clean — 586 packages, 2026-08-28, run in `oven/bun:1.4.0-alpine` because it answers from `bun.lock` and the host's Bun is older than the one that wrote it. It was **2 high** for five days; see *Dependency security* |
 
-~~**Use `pnpm`, not `corepack pnpm`.**~~ **Resolved by the 11.22.0 bump**
-(`5289e2b`), and re-measured here on 2026-08-25: `corepack pnpm --version`
-answers 11.22.0 and exits 0. The refusal was a mismatch, not a policy —
-corepack resolved 11.20.0 against a `packageManager` pin of 11.19.0 — and
-bumping the pin past the version corepack was reaching for removed it. Either
-command works now, which is what makes `docs/LOCAL_BOOTSTRAP.md`'s
-`docker compose exec app corepack pnpm …` correct rather than contradicted. `verify-local.sh` still
-prefers `pnpm` and falls back to corepack, so the scripts never depended on
-this either way.
+**Nothing enforces the installer version any more.** corepack left with pnpm,
+and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
+single check is `scripts/dev-local.sh` comparing `bun --version` against
+`.bun-version` before it installs. It earns its place because bun is quiet in
+the direction that matters: `bun.lock` is lockfileVersion 2, written by 1.4.0,
+and an older bun prints "Unknown lockfile version", then "Ignoring lockfile",
+and resolves an unpinned tree nobody reviewed. Only `--frozen-lockfile` turns
+that into an error. Local development therefore wants bun at or above the
+pinned version, or the development image.
 
-`pnpm verify:local` runs the first seven — **33s** of a **600s budget**,
+`bun run verify:local` runs the first seven — **33s** of a **600s budget**,
 which the script enforces. Every step also has its own ceiling, so a hang
 fails as a hang rather than as a long wait. `verify:ci` adds integration and
 build, and ran in 83–92s across three invocations on 2026-08-17/18.
@@ -137,8 +137,10 @@ Re-measured 2026-08-18 on run `32075663881`, the first green run with the
 standalone-artefact suite: green push → published image **627s** — e2e 563s
 (of which 157s is the post-step pnpm-cache save, and only 313s is Playwright),
 image build 195s warm beside it, publish 59s. The verification inside `e2e`
-got faster; the job's tail grew a cache save. If that tail ever matters, it is
-a workflow knob, not a test problem.
+got faster; the job's tail grew a cache save — `~/.bun/install/cache` through
+`actions/cache` since the migration, because `setup-node`'s `cache: pnpm` left
+with pnpm and `setup-bun` caches the executable rather than the tree. If that
+tail ever matters, it is a workflow knob, not a test problem.
 
 `e2e` no longer installs browsers — it runs in `mcr.microsoft.com/playwright`,
 pinned and asserted against `package.json` — which took its setup from 106–193s
@@ -560,7 +562,7 @@ a good checklist and a bad gate, so neither tool is in CI.
 
 ## Dependency security
 
-`pnpm audit` → **no known vulnerabilities** — again. It was clean on
+`bun audit` → **no known vulnerabilities** — again. The tree was clean on
 2026-08-12, **2 high** when re-measured on 2026-08-17 (the world moved while
 the repository did not: nanoid <3.3.18 under postcss, GHSA-2v37-7h3g-55p8, and
 deepmerge-ts <8.0.0 under @prisma/config, GHSA-ggr8-5vv4-36mx), and clean
@@ -579,19 +581,21 @@ managers, two override maps — worth remembering the next time one of these
 "is fixed".
 
 The original clearing (57 → 0, 2026-08-10) changed no source; every direct
-dependency stayed within its major. Overrides are scoped to the single parent
-that pulls them — `recharts>lodash`, not a bare `lodash`.
+dependency stayed within its major. The overrides were scoped to the single
+parent that pulled them — `recharts>lodash`, not a bare `lodash` — for as long
+as pnpm was the thing resolving them.
 
-**The overrides live in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11
-stopped reading the `pnpm` field in `package.json`; it warns once and ignores
-it. Had they been left there, four advisories would have silently returned on
-the next install. pnpm 11 also refuses lockfile entries published in the last 24
-hours (`minimumReleaseAge`); CI passes `--trust-lockfile`, which is the
-documented case — the lockfile is committed and reviewed, so the age check has
-already done its job at resolution time.
+**The five overrides live in `package.json`'s `overrides` now, and they are
+global rather than parent-scoped.** They had to be rewritten rather than
+carried across from `pnpm-workspace.yaml`, because pnpm's `parent>child` key is
+a **silent no-op** under bun: it matches no package, it warns about nothing,
+and the install that looks like it worked has quietly resolved the vulnerable
+version again. lodash, effect, defu, nanoid and deepmerge-ts are pinned
+wherever they appear, which is wider than the advisories strictly need and the
+direction an override should err in.
 
-GitHub's Dependabot count is higher than pnpm's because it counts one alert per
-advisory-path pair.
+GitHub's Dependabot count is higher than `bun audit`'s because it counts one
+alert per advisory-path pair.
 
 ---
 
@@ -607,8 +611,7 @@ advisory-path pair.
 | next-intl | 4.13.4 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
-| pnpm | 11.22.0 |
-| bun | 1.4.0 — `.bun-version` and `Dockerfile:40`, compared by a test |
+| bun | 1.4.0 — `.bun-version` and `Dockerfile:40`, compared by a test; the runtime, the test runner and the installer |
 | node | 24-alpine — the base image for all four stages; **no longer the runtime** |
 | sharp | 0.35.3, **devDependency only** — not shipped, not loaded at runtime |
 
@@ -628,12 +631,13 @@ No known drift as of **2026-08-26** — every row re-read out of `package.json`,
 a `household` router that never existed, a refresh token that was never
 implemented — were corrected on 2026-08-10.
 
-**The pnpm row had drifted for six days, and the sentence above it said it had
-not.** `5289e2b` bumped the pin to 11.22.0 on 2026-08-19 while this table went
-on saying 11.19.0 and the paragraph went on claiming the table had been checked
-against `package.json`. A drift note is only worth the check behind it, and the
-check is cheap: read the versions out of the file rather than trusting the
-sentence that says somebody already did.
+**The pnpm row, which this table carried until pnpm left, had drifted for six
+days, and the sentence above it said it had not.** `5289e2b` bumped the pin to
+11.22.0 on 2026-08-19 while this table went on saying 11.19.0 and the paragraph
+went on claiming the table had been checked against `package.json`. A drift
+note is only worth the check behind it, and the check is cheap: read the
+versions out of the file rather than trusting the sentence that says somebody
+already did.
 
 **This paragraph was itself wrong until 2026-08-25**, and it is worth saying
 how: it claimed `CLAUDE.md` says Prisma 7.x, when that file said 6.x and always
@@ -927,8 +931,6 @@ per-journey evidence is in that file.
 
 ### Environment notes
 
-- `pnpm` and `corepack pnpm` both work since the 11.22.0 bump; corepack's
-  refusal was a mismatch against the old 11.19.0 pin, measured gone 2026-08-25.
 - ~~`pnpm prisma` commands need `DATABASE_URL` exported.~~ **Fixed** by
   `6d5d3c3`: `prisma.config.ts` calls `process.loadEnvFile(".env")` itself. Its
   own presence is what made Prisma 6 stop doing that, so the file that caused
@@ -941,7 +943,7 @@ per-journey evidence is in that file.
 - The `docker` group includes this user, but a login session started before that
   change will not have it. Re-login, or prefix with `sg docker -c "..."`.
 - Port 3000 is occupied on this machine by an unrelated application, and 3001
-  is routinely this project's own `pnpm dev`. The browser suite defaults to
+  is routinely this project's own `bun run dev`. The browser suite defaults to
   3100 and no longer conflicts with either — it may be run while a dev server
   is up, and touches neither its port nor its data.
 - Next refuses a second dev server from the same directory — `next dev` only.
