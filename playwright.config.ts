@@ -48,6 +48,10 @@ const CHROMIUM_ONLY = [
   // artefact, not about an engine — one engine's answer is the answer.
   "**/auth.prod.spec.ts",
   "**/service-worker.prod.spec.ts",
+  // Whether the server refuses a token it already issued has one engine's
+  // answer, and this one costs two browser contexts and two registrations to
+  // ask. Running it five times would buy nothing.
+  "**/session-revocation.spec.ts",
 ];
 
 /**
