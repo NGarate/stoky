@@ -1,7 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
-import { prisma } from "@/lib/prisma";
 import {
   priceRecordSchema,
   priceHistorySchema,
@@ -31,7 +30,7 @@ export const priceRouter = createTRPCRouter({
     .input(priceRecordSchema)
     .mutation(async ({ ctx, input }) => {
       // Verify product belongs to household
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
           householdId: ctx.householdId,
@@ -46,7 +45,7 @@ export const priceRouter = createTRPCRouter({
       }
 
       // Verify store belongs to household
-      const store = await prisma.store.findFirst({
+      const store = await ctx.db.store.findFirst({
         where: {
           id: input.storeId,
           householdId: ctx.householdId,
@@ -60,7 +59,7 @@ export const priceRouter = createTRPCRouter({
         });
       }
 
-      const priceRecord = await prisma.priceRecord.create({
+      const priceRecord = await ctx.db.priceRecord.create({
         data: {
           ...input,
         },
@@ -76,7 +75,7 @@ export const priceRouter = createTRPCRouter({
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - input.days);
 
-      const history = await prisma.priceRecord.findMany({
+      const history = await ctx.db.priceRecord.findMany({
         where: {
           productId: input.productId,
           ...(input.storeId && { storeId: input.storeId }),
@@ -103,7 +102,7 @@ export const priceRouter = createTRPCRouter({
     .input(z.object({ productId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Get latest price per store for the product
-      const latestPrices = await prisma.priceRecord.findMany({
+      const latestPrices = await ctx.db.priceRecord.findMany({
         where: {
           productId: input.productId,
           product: {
@@ -146,7 +145,7 @@ export const priceRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const products = await prisma.product.findMany({
+      const products = await ctx.db.product.findMany({
         where: {
           householdId: ctx.householdId,
           ...(input.search && {

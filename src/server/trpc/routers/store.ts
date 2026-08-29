@@ -1,7 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
-import { prisma } from "@/lib/prisma";
 import {
   storeSchema,
   updateStoreSchema,
@@ -24,7 +23,7 @@ export const storeRouter = createTRPCRouter({
   list: householdProcedure
     .input(storeQuerySchema)
     .query(async ({ ctx, input }) => {
-      const stores = await prisma.store.findMany({
+      const stores = await ctx.db.store.findMany({
         where: {
           householdId: ctx.householdId,
           ...(input.search && {
@@ -45,7 +44,7 @@ export const storeRouter = createTRPCRouter({
   create: adminProcedure
     .input(storeSchema)
     .mutation(async ({ ctx, input }) => {
-      const store = await prisma.store.create({
+      const store = await ctx.db.store.create({
         data: {
           ...input,
           householdId: ctx.householdId,
@@ -61,7 +60,7 @@ export const storeRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
-      const store = await prisma.store.update({
+      const store = await ctx.db.store.update({
         where: {
           id,
           householdId: ctx.householdId,
@@ -92,7 +91,7 @@ export const storeRouter = createTRPCRouter({
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const store = await prisma.store.findFirst({
+      const store = await ctx.db.store.findFirst({
         where: {
           id: input.id,
           householdId: ctx.householdId,
@@ -107,8 +106,8 @@ export const storeRouter = createTRPCRouter({
       }
 
       const [priceRecords, receipts] = await Promise.all([
-        prisma.priceRecord.count({ where: { storeId: input.id } }),
-        prisma.receipt.count({ where: { storeId: input.id } }),
+        ctx.db.priceRecord.count({ where: { storeId: input.id } }),
+        ctx.db.receipt.count({ where: { storeId: input.id } }),
       ]);
 
       const blocking = [
@@ -123,7 +122,7 @@ export const storeRouter = createTRPCRouter({
         });
       }
 
-      await prisma.store.delete({ where: { id: input.id } });
+      await ctx.db.store.delete({ where: { id: input.id } });
 
       return { success: true };
     }),

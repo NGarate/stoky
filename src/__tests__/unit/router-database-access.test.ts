@@ -59,13 +59,7 @@ describe("the routers not yet converted", () => {
     // list fails here, which is the reminder to decide whether it now needs
     // the same guarantee.
     expect(stillImporting).toEqual([
-      "auth.ts",
-      "household.ts",
-      "location.ts",
-      "price.ts",
-      "product.ts",
       "receipt.ts",
-      "store.ts",
     ]);
   });
 });

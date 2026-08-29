@@ -1,7 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { prisma } from "@/lib/prisma";
 import * as argon2 from "argon2";
 import { registerSchema } from "@/lib/validations/auth";
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
@@ -59,7 +58,7 @@ export const authRouter = createTRPCRouter({
       }
 
       // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
+      const existingUser = await ctx.db.user.findUnique({
         where: { email },
       });
 
@@ -80,7 +79,7 @@ export const authRouter = createTRPCRouter({
       // Create household if provided
       let householdId: string | undefined;
       if (householdName) {
-        const household = await prisma.household.create({
+        const household = await ctx.db.household.create({
           data: {
             name: householdName,
           },
@@ -89,7 +88,7 @@ export const authRouter = createTRPCRouter({
       }
 
       // Create user
-      const user = await prisma.user.create({
+      const user = await ctx.db.user.create({
         data: {
           email,
           name,
@@ -128,7 +127,7 @@ export const authRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const userId = ctx.session.user.id;
 
-      const user = await prisma.user.findUnique({
+      const user = await ctx.db.user.findUnique({
         where: { id: userId },
         include: {
           household: true,
@@ -176,7 +175,7 @@ export const authRouter = createTRPCRouter({
       // `updateMany`, so a session whose account has since been deleted
       // records nothing rather than throwing P2025. Failing to store a
       // preference must not become an error the reader has to act on.
-      await prisma.user.updateMany({
+      await ctx.db.user.updateMany({
         where: { id: ctx.session.user.id },
         data: { snackbarDuration: input.snackbarDuration },
       });
@@ -204,7 +203,7 @@ export const authRouter = createTRPCRouter({
     // `updateMany`, so a session whose account has since been deleted records
     // nothing rather than throwing P2025 — the same reasoning as
     // `setSnackbarDuration` above.
-    await prisma.user.updateMany({
+    await ctx.db.user.updateMany({
       where: { id: ctx.session.user.id },
       data: { sessionsValidFrom: new Date() },
     });

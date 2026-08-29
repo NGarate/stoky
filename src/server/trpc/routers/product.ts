@@ -6,7 +6,6 @@ import {
   householdProcedure,
   writeProcedure,
 } from "../trpc";
-import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
 import {
   productSchema,
@@ -47,7 +46,7 @@ export const productRouter = createTRPCRouter({
         }),
       };
 
-      const products = await prisma.product.findMany({
+      const products = await ctx.db.product.findMany({
         where,
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
@@ -96,7 +95,7 @@ export const productRouter = createTRPCRouter({
   getById: householdProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const product = await prisma.product.findFirst({
+      const product = await ctx.db.product.findFirst({
         where: {
           id: input.id,
           householdId: ctx.householdId,
@@ -146,7 +145,7 @@ export const productRouter = createTRPCRouter({
   getByBarcode: householdProcedure
     .input(productByBarcodeSchema)
     .query(async ({ ctx, input }) => {
-      const product = await prisma.product.findUnique({
+      const product = await ctx.db.product.findUnique({
         where: {
           barcode_householdId: {
             barcode: input.barcode,
@@ -186,7 +185,7 @@ export const productRouter = createTRPCRouter({
    * is a door people open has to be the real one (Phase 8 item 2).
    */
   count: householdProcedure.query(({ ctx }) => {
-    return prisma.product.count({
+    return ctx.db.product.count({
       where: { householdId: ctx.householdId },
     });
   }),
@@ -195,7 +194,7 @@ export const productRouter = createTRPCRouter({
   create: writeProcedure
     .input(productSchema)
     .mutation(async ({ ctx, input }) => {
-      const product = await prisma.product.create({
+      const product = await ctx.db.product.create({
         data: {
           ...input,
           householdId: ctx.householdId,
@@ -211,7 +210,7 @@ export const productRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
-      const existingProduct = await prisma.product.findFirst({
+      const existingProduct = await ctx.db.product.findFirst({
         where: {
           id,
           householdId: ctx.householdId,
@@ -225,7 +224,7 @@ export const productRouter = createTRPCRouter({
         });
       }
 
-      const product = await prisma.product.update({
+      const product = await ctx.db.product.update({
         where: { id },
         data,
       });
@@ -257,7 +256,7 @@ export const productRouter = createTRPCRouter({
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const existingProduct = await prisma.product.findFirst({
+      const existingProduct = await ctx.db.product.findFirst({
         where: {
           id: input.id,
           householdId: ctx.householdId,
@@ -275,10 +274,10 @@ export const productRouter = createTRPCRouter({
       // number is what makes the message useful.
       const [stockEntries, priceRecords, receiptItems, shoppingItems] =
         await Promise.all([
-          prisma.stockEntry.count({ where: { productId: input.id } }),
-          prisma.priceRecord.count({ where: { productId: input.id } }),
-          prisma.receiptItem.count({ where: { matchedProductId: input.id } }),
-          prisma.shoppingItem.count({ where: { productId: input.id } }),
+          ctx.db.stockEntry.count({ where: { productId: input.id } }),
+          ctx.db.priceRecord.count({ where: { productId: input.id } }),
+          ctx.db.receiptItem.count({ where: { matchedProductId: input.id } }),
+          ctx.db.shoppingItem.count({ where: { productId: input.id } }),
         ]);
 
       const blocking = [
@@ -295,7 +294,7 @@ export const productRouter = createTRPCRouter({
         });
       }
 
-      await prisma.product.delete({
+      await ctx.db.product.delete({
         where: { id: input.id },
       });
 
@@ -318,7 +317,7 @@ export const productRouter = createTRPCRouter({
     .input(productSearchSchema)
     .query(async ({ ctx, input }) => {
       // Use pg_trgm similarity search
-      const products = await prisma.$queryRaw`
+      const products = await ctx.db.$queryRaw`
         SELECT 
           id, name, barcode, brand, category, "defaultUnit", "minStock",
           similarity(name, ${input.query}) as similarity
@@ -361,7 +360,7 @@ export const productRouter = createTRPCRouter({
     .input(productByBarcodeSchema)
     .mutation(async ({ ctx, input }) => {
       // First, check if product already exists in local database
-      const existingProduct = await prisma.product.findUnique({
+      const existingProduct = await ctx.db.product.findUnique({
         where: {
           barcode_householdId: {
             barcode: input.barcode,
@@ -408,7 +407,7 @@ export const productRouter = createTRPCRouter({
         : null;
 
       // Create product from OFF data
-      const newProduct = await prisma.product.create({
+      const newProduct = await ctx.db.product.create({
         data: {
           name: offProduct.product_name || `Product ${input.barcode}`,
           barcode: input.barcode,

@@ -1,8 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
-import { prisma } from "@/lib/prisma";
-import type { HouseholdRole } from "@prisma/client";
+import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
   householdSchema,
@@ -35,10 +34,11 @@ import {
  * outsider that an id exists but is not theirs confirms the id exists.
  */
 async function memberOfHousehold(
+  db: PrismaClient | Prisma.TransactionClient,
   userId: string,
   householdId: string,
 ): Promise<{ id: string; role: HouseholdRole }> {
-  const member = await prisma.user.findFirst({
+  const member = await db.user.findFirst({
     where: { id: userId, householdId },
     select: { id: true, role: true },
   });
@@ -87,13 +87,14 @@ function assertMayActOnOwner(
  * is a state the caller can resolve by promoting somebody first.
  */
 async function assertAnOwnerRemains(
+  db: PrismaClient | Prisma.TransactionClient,
   householdId: string,
   target: { id: string; role: HouseholdRole },
   becoming: HouseholdRole | null,
 ): Promise<void> {
   if (target.role !== "OWNER" || becoming === "OWNER") return;
 
-  const others = await prisma.user.count({
+  const others = await db.user.count({
     where: { householdId, role: "OWNER", id: { not: target.id } },
   });
 
@@ -109,7 +110,7 @@ async function assertAnOwnerRemains(
 export const householdRouter = createTRPCRouter({
   /** The caller's household, or null. Never throws for the missing case. */
   current: protectedProcedure.query(async ({ ctx }) => {
-    const user = await prisma.user.findUnique({
+    const user = await ctx.db.user.findUnique({
       where: { id: ctx.session.user.id },
       select: { role: true, household: { select: { id: true, name: true } } },
     });
@@ -138,7 +139,7 @@ export const householdRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      const existing = await prisma.user.findUnique({
+      const existing = await ctx.db.user.findUnique({
         where: { id: userId },
         select: { householdId: true },
       });
@@ -160,7 +161,7 @@ export const householdRouter = createTRPCRouter({
       // One transaction: a household with no members is invisible in the
       // interface and unreachable by anyone, so a half-applied create would
       // leave a row nothing can ever clean up.
-      const household = await prisma.$transaction(async (tx) => {
+      const household = await ctx.db.$transaction(async (tx) => {
         const created = await tx.household.create({ data: { name: input.name } });
         await tx.user.update({
           where: { id: userId },
@@ -180,7 +181,7 @@ export const householdRouter = createTRPCRouter({
    * household's email addresses to whoever picks it up.
    */
   members: adminProcedure.query(async ({ ctx }) => {
-    return prisma.user.findMany({
+    return ctx.db.user.findMany({
       where: { householdId: ctx.householdId },
       select: { id: true, name: true, email: true, role: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -213,7 +214,7 @@ export const householdRouter = createTRPCRouter({
         timeCost: 3,
       });
 
-      const user = await prisma.user.create({
+      const user = await ctx.db.user.create({
         data: {
           name: input.name,
           email: input.email,
@@ -243,12 +244,12 @@ export const householdRouter = createTRPCRouter({
   updateRole: adminProcedure
     .input(updateMemberRoleSchema)
     .mutation(async ({ ctx, input }) => {
-      const member = await memberOfHousehold(input.userId, ctx.householdId);
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
 
       assertMayActOnOwner(ctx.role, member.role, input.role);
-      await assertAnOwnerRemains(ctx.householdId, member, input.role);
+      await assertAnOwnerRemains(ctx.db, ctx.householdId, member, input.role);
 
-      return prisma.user.update({
+      return ctx.db.user.update({
         where: { id: member.id },
         data: { role: input.role },
         select: { id: true, name: true, email: true, role: true },
@@ -272,12 +273,12 @@ export const householdRouter = createTRPCRouter({
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
-      const member = await memberOfHousehold(input.userId, ctx.householdId);
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
 
       assertMayActOnOwner(ctx.role, member.role);
-      await assertAnOwnerRemains(ctx.householdId, member, null);
+      await assertAnOwnerRemains(ctx.db, ctx.householdId, member, null);
 
-      await prisma.user.update({
+      await ctx.db.user.update({
         where: { id: member.id },
         data: { householdId: null },
       });
@@ -306,11 +307,11 @@ export const householdRouter = createTRPCRouter({
   revokeMemberSessions: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
-      const member = await memberOfHousehold(input.userId, ctx.householdId);
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
 
       assertMayActOnOwner(ctx.role, member.role);
 
-      await prisma.user.update({
+      await ctx.db.user.update({
         where: { id: member.id },
         data: { sessionsValidFrom: new Date() },
       });

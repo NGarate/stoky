@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
-import { prisma } from "@/lib/prisma";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import {
   storageLocationSchema,
   updateStorageLocationSchema,
@@ -40,7 +40,7 @@ export interface LocationTreeNode {
 export const locationRouter = createTRPCRouter({
   /** Every location, flat and alphabetical. What a picker needs. */
   list: householdProcedure.query(async ({ ctx }) => {
-    const locations = await prisma.storageLocation.findMany({
+    const locations = await ctx.db.storageLocation.findMany({
       where: {
         householdId: ctx.householdId,
       },
@@ -81,7 +81,7 @@ export const locationRouter = createTRPCRouter({
    * stops being a compiler error and becomes an empty list on a screen.
    */
   getTree: householdProcedure.query(async ({ ctx }): Promise<LocationTreeNode[]> => {
-    const allLocations = await prisma.storageLocation.findMany({
+    const allLocations = await ctx.db.storageLocation.findMany({
       where: {
         householdId: ctx.householdId,
       },
@@ -138,7 +138,7 @@ export const locationRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Verify parent exists if provided
       if (input.parentId) {
-        const parent = await prisma.storageLocation.findFirst({
+        const parent = await ctx.db.storageLocation.findFirst({
           where: {
             id: input.parentId,
             householdId: ctx.householdId,
@@ -153,7 +153,7 @@ export const locationRouter = createTRPCRouter({
         }
       }
 
-      const location = await prisma.storageLocation.create({
+      const location = await ctx.db.storageLocation.create({
         data: {
           name: input.name,
           parentId: input.parentId,
@@ -174,7 +174,7 @@ export const locationRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
-      const existingLocation = await prisma.storageLocation.findFirst({
+      const existingLocation = await ctx.db.storageLocation.findFirst({
         where: {
           id,
           householdId: ctx.householdId,
@@ -197,7 +197,7 @@ export const locationRouter = createTRPCRouter({
           });
         }
 
-        const parent = await prisma.storageLocation.findFirst({
+        const parent = await ctx.db.storageLocation.findFirst({
           where: {
             id: data.parentId,
             householdId: ctx.householdId,
@@ -212,7 +212,7 @@ export const locationRouter = createTRPCRouter({
         }
 
         // Check if parent is a descendant of this location (would create cycle)
-        const isDescendant = await checkIsDescendant(id, data.parentId);
+        const isDescendant = await checkIsDescendant(ctx.db, id, data.parentId);
         if (isDescendant) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -221,7 +221,7 @@ export const locationRouter = createTRPCRouter({
         }
       }
 
-      const location = await prisma.storageLocation.update({
+      const location = await ctx.db.storageLocation.update({
         where: { id },
         data,
         include: {
@@ -244,7 +244,7 @@ export const locationRouter = createTRPCRouter({
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const location = await prisma.storageLocation.findFirst({
+      const location = await ctx.db.storageLocation.findFirst({
         where: {
           id: input.id,
           householdId: ctx.householdId,
@@ -278,7 +278,7 @@ export const locationRouter = createTRPCRouter({
         });
       }
 
-      await prisma.storageLocation.delete({
+      await ctx.db.storageLocation.delete({
         where: { id: input.id },
       });
 
@@ -287,10 +287,11 @@ export const locationRouter = createTRPCRouter({
 });
 
 async function checkIsDescendant(
+  db: PrismaClient | Prisma.TransactionClient,
   ancestorId: string,
   potentialDescendantId: string
 ): Promise<boolean> {
-  const descendant = await prisma.storageLocation.findUnique({
+  const descendant = await db.storageLocation.findUnique({
     where: { id: potentialDescendantId },
     select: { parentId: true },
   });
@@ -299,5 +300,5 @@ async function checkIsDescendant(
   if (descendant.parentId === ancestorId) return true;
   if (!descendant.parentId) return false;
 
-  return checkIsDescendant(ancestorId, descendant.parentId);
+  return checkIsDescendant(db, ancestorId, descendant.parentId);
 }
