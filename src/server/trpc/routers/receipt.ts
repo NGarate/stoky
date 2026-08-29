@@ -644,9 +644,15 @@ export const receiptRouter = createTRPCRouter({
           });
         }
 
-        // Read the lines inside the transaction, after the claim: a confirmItem
-        // racing this call lands before or after the whole apply, never between
-        // the read and the writes.
+        // Read the lines inside the transaction, after the claim, so two
+        // applies serialise and the lines the loop walks are one consistent
+        // snapshot of each other. That is all it buys: nothing locks the item
+        // rows, so a confirmItem racing an individual line can still commit
+        // between this read and the writes below, and the entry would record
+        // the pre-edit line. The review chose to document that window rather
+        // than lock it away — closing it needs confirmItem to re-check the
+        // receipt status inside its own transaction, which is a decision, not
+        // a wording fix.
         const items = await tx.receiptItem.findMany({
           where: { receiptId: receipt.id },
           include: { matchedProduct: true },
