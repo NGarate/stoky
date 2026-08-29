@@ -135,9 +135,12 @@ describe("the list and the sources agree", () => {
   });
 
   it("finds withReplay in exactly the two routers that should hold it", () => {
-    // Call syntax, not the bare word: a comment naming the helper — as one in
-    // receipt.ts does, on purpose, to describe the claim-row pattern without
-    // tripping this scan — must not count as a router holding it.
+    // Call syntax, not the bare word: routers that discuss withReplay in a
+    // comment without calling it avoid naming it at all, for exactly this
+    // reason — receipt.ts's claim-row comment names it only indirectly
+    // ("Named indirectly on purpose: ... greps the routers for that helper's
+    // name"). Matching call syntax means a future comment that does name it
+    // outright still can't trip this scan.
     const holders = ["auth", "household", "inventory", "location", "price",
       "product", "receipt", "shopping", "store"]
       .filter((name) =>
