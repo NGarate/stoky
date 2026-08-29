@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import { ReceiptStatus, MatchStatus, StockOperation } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { processReceiptOcr } from "@/server/services/ocr";
@@ -50,12 +51,13 @@ const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
  * produces (its price records, the store comparison) inherits that reference.
  */
 async function assertOwnStore(
+  db: PrismaClient | Prisma.TransactionClient,
   storeId: string | undefined,
   householdId: string,
 ): Promise<void> {
   if (!storeId) return;
 
-  const store = await prisma.store.findFirst({
+  const store = await db.store.findFirst({
     where: { id: storeId, householdId },
     select: { id: true },
   });
@@ -80,12 +82,13 @@ async function assertOwnStore(
  * theirs confirms the id exists.
  */
 async function assertOwnProduct(
+  db: PrismaClient | Prisma.TransactionClient,
   productId: string | undefined,
   householdId: string,
 ): Promise<void> {
   if (!productId) return;
 
-  const product = await prisma.product.findFirst({
+  const product = await db.product.findFirst({
     where: { id: productId, householdId },
     select: { id: true },
   });
@@ -141,7 +144,7 @@ export const receiptRouter = createTRPCRouter({
       // Before the bytes are decoded, like the rate limit above it: a receipt
       // filed against somebody else's shop should be refused without doing the
       // work of accepting it first.
-      await assertOwnStore(input.storeId, householdId);
+      await assertOwnStore(ctx.db, input.storeId, householdId);
 
       // Validate MIME type
       if (!VALID_MIME_TYPES.includes(input.mimeType)) {
@@ -198,7 +201,7 @@ export const receiptRouter = createTRPCRouter({
       await fs.promises.writeFile(filePath, processedBuffer);
 
       // Create receipt record
-      const receipt = await prisma.receipt.create({
+      const receipt = await ctx.db.receipt.create({
         data: {
           imagePath: filePath,
           householdId,
@@ -226,7 +229,7 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           items: {
@@ -277,7 +280,7 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
       });
 
@@ -317,7 +320,7 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
       });
 
@@ -352,7 +355,7 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           items: {
@@ -414,7 +417,7 @@ export const receiptRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       
-      const item = await prisma.receiptItem.findFirst({
+      const item = await ctx.db.receiptItem.findFirst({
         where: {
           id: input.receiptItemId,
           receipt: { householdId: ctx.householdId },
@@ -436,12 +439,12 @@ export const receiptRouter = createTRPCRouter({
 
       let productId = input.productId;
       if (input.action === "MATCH") {
-        await assertOwnProduct(productId, ctx.householdId);
+        await assertOwnProduct(ctx.db, productId, ctx.householdId);
       }
 
       if (input.action === "CREATE" && input.customName) {
         // Create new product
-        const newProduct = await prisma.product.create({
+        const newProduct = await ctx.db.product.create({
           data: {
             name: input.customName,
             householdId: item.receipt.householdId,
@@ -451,7 +454,7 @@ export const receiptRouter = createTRPCRouter({
         productId = newProduct.id;
       }
 
-      await prisma.receiptItem.update({
+      await ctx.db.receiptItem.update({
         where: { id: input.receiptItemId },
         data: {
           matchedProductId: input.action === "SKIP" ? null : productId,
@@ -495,7 +498,7 @@ export const receiptRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
       });
 
@@ -518,7 +521,7 @@ export const receiptRouter = createTRPCRouter({
       // receipt costs one round trip and the refusal happens before anything is
       // written.
       const named = input.items.map((item) => item.receiptItemId);
-      const own = await prisma.receiptItem.findMany({
+      const own = await ctx.db.receiptItem.findMany({
         where: { id: { in: named }, receiptId: receipt.id },
         select: { id: true },
       });
@@ -537,7 +540,7 @@ export const receiptRouter = createTRPCRouter({
 
       for (const itemInput of input.items) {
         if (itemInput.action === "MATCH") {
-          await assertOwnProduct(itemInput.productId, ctx.householdId);
+          await assertOwnProduct(ctx.db, itemInput.productId, ctx.householdId);
         }
       }
 
@@ -546,7 +549,7 @@ export const receiptRouter = createTRPCRouter({
         let productId = itemInput.productId;
 
         if (itemInput.action === "CREATE" && itemInput.customName) {
-          const newProduct = await prisma.product.create({
+          const newProduct = await ctx.db.product.create({
             data: {
               name: itemInput.customName,
               householdId: receipt.householdId,
@@ -556,7 +559,7 @@ export const receiptRouter = createTRPCRouter({
           productId = newProduct.id;
         }
 
-        await prisma.receiptItem.update({
+        await ctx.db.receiptItem.update({
           where: { id: itemInput.receiptItemId },
           data: {
             matchedProductId: itemInput.action === "SKIP" ? null : productId,
@@ -571,7 +574,7 @@ export const receiptRouter = createTRPCRouter({
       }
 
       // Update receipt status to CONFIRMED
-      await prisma.receipt.update({
+      await ctx.db.receipt.update({
         where: { id: input.receiptId },
         data: { status: ReceiptStatus.CONFIRMED },
       });
@@ -597,7 +600,7 @@ export const receiptRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
       
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           items: {
@@ -638,7 +641,7 @@ export const receiptRouter = createTRPCRouter({
         }
 
         // Create stock entry
-        const stockEntry = await prisma.stockEntry.create({
+        const stockEntry = await ctx.db.stockEntry.create({
           data: {
             productId: item.matchedProductId,
             quantity: item.parsedQuantity ?? 1,
@@ -653,7 +656,7 @@ export const receiptRouter = createTRPCRouter({
 
         // Create price record
         if (item.parsedPrice && receipt.storeId) {
-          const priceRecord = await prisma.priceRecord.create({
+          const priceRecord = await ctx.db.priceRecord.create({
             data: {
               productId: item.matchedProductId,
               storeId: receipt.storeId,
@@ -669,7 +672,7 @@ export const receiptRouter = createTRPCRouter({
       }
 
       // Update receipt status to APPLIED
-      await prisma.receipt.update({
+      await ctx.db.receipt.update({
         where: { id: input.receiptId },
         data: { status: ReceiptStatus.APPLIED },
       });
@@ -693,7 +696,7 @@ export const receiptRouter = createTRPCRouter({
   getAppliedSummary: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const receipt = await prisma.receipt.findFirst({
+      const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           // The confirmation page names the shop the stock came from, and the
@@ -732,12 +735,12 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      const stockEntries = await prisma.stockEntry.findMany({
+      const stockEntries = await ctx.db.stockEntry.findMany({
         where: { receiptItemId: { in: receipt.items.map((i) => i.id) } },
         include: { product: true },
       });
 
-      const priceRecords = await prisma.priceRecord.findMany({
+      const priceRecords = await ctx.db.priceRecord.findMany({
         where: { receiptId: receipt.id },
         include: { product: true, store: true },
       });
@@ -779,7 +782,7 @@ export const receiptRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const receipts = await prisma.receipt.findMany({
+      const receipts = await ctx.db.receipt.findMany({
         where: {
           householdId: ctx.householdId,
           ...(input.status && { status: input.status }),
@@ -826,6 +829,9 @@ async function validateImageMagicBytes(
   );
 }
 
+// The one deliberate use of the module import in this file: this runs after
+// the upload's response, with no request context to carry a db. Everything
+// inside a procedure takes ctx.db (trpc.ts:24-38 explains why).
 async function processReceiptAsync(receiptId: string): Promise<void> {
   try {
     // Run OCR
