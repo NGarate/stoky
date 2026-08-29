@@ -51,8 +51,17 @@ for end-to-end type inference. This is an enforced constraint, not a stage.
   follow the same split.
 - **Every tRPC procedure takes a Zod input schema**, and the shared ones live in
   `src/lib/validations/` so client and server validate against one definition.
-- **Server Components fetch; Client Components interact.** `"use client"` is an
-  explicit boundary, not a default.
+- **Client Components fetch, through tRPC + TanStack Query — because offline is
+  a requirement, not a preference.** A screen that must work with no signal (the
+  Phase 4 write queue, the persisted reads in `src/lib/offline/`) cannot be born
+  on a server that is exactly what's absent, so the dashboard routes are client
+  components and the server's job is the data, not the render. Server Components
+  are the deliberate exception: the landing/start screens and anything that must
+  work without JavaScript, which reach the server through Server Actions
+  (`src/lib/landing/choose.ts`, `src/lib/auth/actions.ts`, the locale cookie) —
+  the one sanctioned surface beside tRPC, for no-JS flows only. There is no
+  server-side tRPC caller; do not reintroduce one, or move a dashboard page to
+  SSR, without revisiting the offline design (`REDESIGN_PLAN.md` §5).
 - **Server state is TanStack Query's. Local UI state is React's. A `zustand`
   store is neither and must not become either.** The one store that exists is
   Phase 4's offline write queue — read from everywhere, written from outside
@@ -146,8 +155,9 @@ wear two different words (ISSUES UI-11).
 - **Receipt uploads:** validate MIME type *and* magic bytes, re-encode to strip
   EXIF, store under a UUID filename in an isolated volume, serve only through
   authenticated tRPC queries. Re-encoding goes through
-  `src/server/services/image.ts`, which is the one seam that touches image
-  bytes.
+  `src/server/services/image.ts`, the one seam that *transforms* image bytes;
+  the upload procedure itself (`receipt.ts`) validates magic bytes and writes
+  the re-encoded file, and nothing else touches them.
 - Passwords are Argon2id, tuned to roughly 250ms.
 - Rate limiting is per account as well as per address, and a refusal carries
   `Retry-After`. The current limits live in the code, not here.
