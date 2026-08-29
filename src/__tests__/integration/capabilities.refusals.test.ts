@@ -568,9 +568,8 @@ describe("receipts — write tier", () => {
   });
 
   it("refuses a kitchen account the pipeline steps", async () => {
-    // All three receipts belong to the kitchen account's own household, which
-    // is what keeps `receipt.ts`'s "Access denied" — also FORBIDDEN — out of
-    // the way. The message assertion is what proves it stayed out.
+    // All three receipts belong to the kitchen account's own household, so the
+    // refusal being asserted can only come from the tier middleware.
     await expectTierRefusal("receipt.parseReceipt", () =>
       kitchen.receipt.parseReceipt({ receiptId: reviewReceiptId }),
     );

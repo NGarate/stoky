@@ -29,7 +29,7 @@ import {
  * different failure and the third is the one no interface reveals:
  *
  * - the row is missing → NOT_FOUND
- * - the row belongs to another household → FORBIDDEN, and nothing read
+ * - the row belongs to another household → NOT_FOUND, and nothing read
  * - the happy path leaves the database in the state the next screen assumes
  *
  * **What this deliberately does not cover.** `upload`'s success path calls
@@ -463,12 +463,12 @@ describe("receipt.getStatus", () => {
     );
   });
 
-  it("is FORBIDDEN for another household's receipt", async () => {
+  it("is NOT_FOUND for another household's receipt, so the id's existence is not confirmed", async () => {
     const { receipt } = await seedReceipt({});
 
     await expectCode(
       () => outsider.receipt.getStatus({ receiptId: receipt.id }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
   });
 });
@@ -483,7 +483,7 @@ describe("receipt.getReceiptWithItems", () => {
     expect(result.items).toHaveLength(2);
   });
 
-  it("is NOT_FOUND, then FORBIDDEN, for the two ways it can be unreachable", async () => {
+  it("is NOT_FOUND for both ways it can be unreachable, so the id's existence is not confirmed", async () => {
     await expectCode(
       () => caller.receipt.getReceiptWithItems({ receiptId: "does-not-exist" }),
       "NOT_FOUND",
@@ -492,7 +492,7 @@ describe("receipt.getReceiptWithItems", () => {
     const { receipt } = await seedReceipt({});
     await expectCode(
       () => outsider.receipt.getReceiptWithItems({ receiptId: receipt.id }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
   });
 });
@@ -554,12 +554,12 @@ describe("receipt.confirmItem", () => {
     );
   });
 
-  it("is FORBIDDEN for another household's line, and changes nothing", async () => {
+  it("is NOT_FOUND for another household's line, so the id's existence is not confirmed, and changes nothing", async () => {
     const { first } = await seedReceipt({});
 
     await expectCode(
       () => outsider.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
 
     const item = await prisma.receiptItem.findUnique({ where: { id: first.id } });
@@ -610,7 +610,7 @@ describe("receipt.confirmAll", () => {
     expect(updated?.status).toBe(ReceiptStatus.CONFIRMED);
   });
 
-  it("is FORBIDDEN for another household, and does not move its status", async () => {
+  it("is NOT_FOUND for another household, so the id's existence is not confirmed, and does not move its status", async () => {
     const { receipt, first } = await seedReceipt({});
 
     await expectCode(
@@ -619,7 +619,7 @@ describe("receipt.confirmAll", () => {
           receiptId: receipt.id,
           items: [{ receiptItemId: first.id, action: "SKIP" }],
         }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
 
     const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
@@ -719,12 +719,12 @@ describe("receipt.applyReceipt", () => {
     expect(result.priceRecordsCreated).toBe(0);
   });
 
-  it("is FORBIDDEN for another household, and writes no stock", async () => {
+  it("is NOT_FOUND for another household, so the id's existence is not confirmed, and writes no stock", async () => {
     const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
 
     await expectCode(
       () => outsider.receipt.applyReceipt({ receiptId: receipt.id }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
 
     expect(await prisma.stockEntry.count({ where: { productId } })).toBe(0);
@@ -772,12 +772,12 @@ describe("receipt.getAppliedSummary", () => {
     expect(summary.items).toHaveLength(1);
   });
 
-  it("is FORBIDDEN for another household", async () => {
+  it("is NOT_FOUND for another household, so the id's existence is not confirmed", async () => {
     const { receipt } = await seedReceipt({ status: ReceiptStatus.APPLIED });
 
     await expectCode(
       () => outsider.receipt.getAppliedSummary({ receiptId: receipt.id }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
   });
 });
@@ -953,12 +953,12 @@ describe("receipt.parseReceipt and matchItems — their guards", () => {
     );
   });
 
-  it("parseReceipt is FORBIDDEN for another household", async () => {
+  it("parseReceipt is NOT_FOUND for another household, so the id's existence is not confirmed", async () => {
     const { receipt } = await seedReceipt({ status: ReceiptStatus.PROCESSING });
 
     await expectCode(
       () => outsider.receipt.parseReceipt({ receiptId: receipt.id }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
   });
 
@@ -973,7 +973,7 @@ describe("receipt.parseReceipt and matchItems — their guards", () => {
     );
   });
 
-  it("matchItems is NOT_FOUND, and FORBIDDEN for another household", async () => {
+  it("matchItems is NOT_FOUND for a missing receipt and for another household's, so the id's existence is not confirmed", async () => {
     await expectCode(
       () => caller.receipt.matchItems({ receiptId: "does-not-exist" }),
       "NOT_FOUND",
@@ -982,7 +982,7 @@ describe("receipt.parseReceipt and matchItems — their guards", () => {
     const { receipt } = await seedReceipt({ status: ReceiptStatus.PARSED });
     await expectCode(
       () => outsider.receipt.matchItems({ receiptId: receipt.id }),
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
   });
 

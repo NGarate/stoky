@@ -226,8 +226,8 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           items: {
             select: {
@@ -239,16 +239,12 @@ export const receiptRouter = createTRPCRouter({
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -281,21 +277,17 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -325,21 +317,17 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -364,8 +352,8 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           items: {
             include: {
@@ -377,16 +365,12 @@ export const receiptRouter = createTRPCRouter({
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -430,24 +414,23 @@ export const receiptRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       
-      const item = await prisma.receiptItem.findUnique({
-        where: { id: input.receiptItemId },
+      const item = await prisma.receiptItem.findFirst({
+        where: {
+          id: input.receiptItemId,
+          receipt: { householdId: ctx.householdId },
+        },
         include: {
           receipt: true,
         },
       });
 
       if (!item) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt item not found",
-        });
-      }
-
-      if (item.receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -512,21 +495,17 @@ export const receiptRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -618,8 +597,8 @@ export const receiptRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
       
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           items: {
             include: {
@@ -631,16 +610,12 @@ export const receiptRouter = createTRPCRouter({
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 
@@ -718,8 +693,8 @@ export const receiptRouter = createTRPCRouter({
   getAppliedSummary: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: input.receiptId },
+      const receipt = await prisma.receipt.findFirst({
+        where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
           // The confirmation page names the shop the stock came from, and the
           // store is the only field on the receipt it cannot derive.
@@ -748,16 +723,12 @@ export const receiptRouter = createTRPCRouter({
       });
 
       if (!receipt) {
+        // NOT_FOUND for "not yours" as well as "not there", like every other
+        // router: confirming an id exists is information (see assertOwnProduct
+        // above).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Receipt not found",
-        });
-      }
-
-      if (receipt.householdId !== ctx.householdId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
         });
       }
 

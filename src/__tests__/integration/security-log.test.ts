@@ -28,8 +28,11 @@ type Caller = ReturnType<typeof appRouter.createCaller>;
 let outsider: Caller;
 let kitchen: Caller;
 let anonymous: Caller;
+let admin: Caller;
 let receiptId: string;
 let outsiderId: string;
+let ownerId: string;
+let adminId: string;
 
 /** Every line the code under test wrote, parsed. */
 let lines: Record<string, string>[] = [];
@@ -69,13 +72,24 @@ beforeAll(async () => {
     householdId: household.id,
     role: "KITCHEN",
   });
+  const adminUser = await createTestUser({
+    email: generateTestEmail("seclog-admin"),
+    name: "Security Log Admin",
+    householdId: household.id,
+    role: "ADMIN",
+  });
 
   outsiderId = stranger.id;
+  ownerId = owner.id;
+  adminId = adminUser.id;
   outsider = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession(stranger) }),
   );
   kitchen = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession(tablet) }),
+  );
+  admin = appRouter.createCaller(
+    await createTRPCContext({ session: createMockSession(adminUser) }),
   );
   anonymous = appRouter.createCaller(await createTRPCContext({ session: null }));
 
@@ -101,19 +115,28 @@ afterAll(async () => {
 beforeEach(capture);
 
 describe("a refusal a resolver made", () => {
+  // Moved off receipt.getReceiptWithItems: the receipt router now answers a
+  // cross-household id with NOT_FOUND (see "what is not an incident" below),
+  // which securityEvents deliberately does not log, so it no longer has a
+  // resolver-thrown FORBIDDEN to serve as this example. household.ts's
+  // assertMayActOnOwner still throws one directly from a resolver body.
   it("is recorded, though the resolver knows nothing about logging", async () => {
-    // A reach into another household's receipt: the event an owner would most
-    // want to find in the log, and the one thrown furthest from any middleware.
-    await expect(outsider.receipt.getReceiptWithItems({ receiptId })).rejects.toThrow();
+    // An admin reaching for an owner's sessions: assertMayActOnOwner refuses
+    // it in the resolver body, with no middleware involved.
+    await expect(
+      admin.household.revokeMemberSessions({ userId: ownerId }),
+    ).rejects.toThrow();
 
     const denial = lines.find((line) => line.event === "access.denied");
     expect(denial).toBeDefined();
-    expect(denial?.path).toBe("receipt.getReceiptWithItems");
-    expect(denial?.userId).toBe(outsiderId);
+    expect(denial?.path).toBe("household.revokeMemberSessions");
+    expect(denial?.userId).toBe(adminId);
   });
 
   it("names the code it was refused with", async () => {
-    await expect(outsider.receipt.getReceiptWithItems({ receiptId })).rejects.toThrow();
+    await expect(
+      admin.household.revokeMemberSessions({ userId: ownerId }),
+    ).rejects.toThrow();
 
     // FORBIDDEN and UNAUTHORIZED are different incidents: one is somebody
     // signed in reaching past their household, the other is nobody at all.
