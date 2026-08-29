@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { pngClaiming, pngOf } from "../utils/png";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { appRouter } from "@/server/trpc/router";
 import { ThrottledError } from "@/server/trpc/throttle";
 import { createTRPCContext } from "@/server/trpc/trpc";
@@ -58,6 +59,7 @@ let kitchen: Caller;
 async function callerFor(
   household: string,
   role: "OWNER" | "KITCHEN",
+  db?: PrismaClient,
 ): Promise<{ caller: Caller; userId: string }> {
   const user = await createTestUser({
     email: generateTestEmail(`receipt-${role.toLowerCase()}`),
@@ -65,8 +67,33 @@ async function callerFor(
     householdId: household,
     role,
   });
-  const ctx = await createTRPCContext({ session: createMockSession(user) });
+  // `db` is how the rollback test hands the router a client whose second write
+  // throws; production passes nothing and gets the singleton.
+  const ctx = await createTRPCContext({ session: createMockSession(user), db });
   return { caller: appRouter.createCaller(ctx), userId: user.id };
+}
+
+/**
+ * A client that fails exactly where the price record is written.
+ *
+ * The same injection `inventory.purchase-atomicity.test.ts` uses, and for the
+ * same reason: `PriceRecord` has no constraint an input could violate, so there
+ * is no receipt that makes the second write fail on its own. An extension is
+ * carried by the transaction client too, which is the point — the failure
+ * lands *inside* the transaction, where a rollback either happens or does not.
+ */
+function clientThatCannotWritePrices(): PrismaClient {
+  return prisma.$extends({
+    query: {
+      priceRecord: {
+        create() {
+          throw new Error("price write failed");
+        },
+      },
+    },
+    // An extended client is a superset of `PrismaClient`; the context types the
+    // field as the plain one because that is what production passes.
+  }) as unknown as PrismaClient;
 }
 
 /** A receipt with two parsed lines, at whatever status the test needs. */
@@ -737,6 +764,101 @@ describe("receipt.applyReceipt", () => {
       () => kitchen.receipt.applyReceipt({ receiptId: receipt.id }),
       "FORBIDDEN",
     );
+  });
+
+  it("applies exactly once under two concurrent calls", async () => {
+    // Two people pressing Apply on the kitchen tablet and the phone, or one
+    // person pressing it twice on a slow connection. The status check at the
+    // top of the resolver is a read, and both calls did it before either wrote,
+    // so both passed it and every line was booked twice.
+    //
+    // Deterministic regardless of interleaving: the claim is an UPDATE filtered
+    // on CONFIRMED, so of the two exactly one matches the row and the other
+    // sees zero rows — either because it queued behind the winner's lock and
+    // re-read an APPLIED row, or because it arrived after the commit.
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    const lines = await prisma.receiptItem.findMany({
+      where: { receiptId: receipt.id },
+      select: { id: true },
+    });
+    const appliable = await prisma.receiptItem.count({
+      where: {
+        receiptId: receipt.id,
+        matchedProductId: { not: null },
+        matchStatus: { not: MatchStatus.SKIPPED },
+      },
+    });
+
+    const results = await Promise.allSettled([
+      caller.receipt.applyReceipt({ receiptId: receipt.id }),
+      caller.receipt.applyReceipt({ receiptId: receipt.id }),
+    ]);
+
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+
+    // The loser refused *on the claim*. Asserting the code matters: a deadlock
+    // or a unique-constraint violation would also leave one call standing, and
+    // that would be a different defect wearing this test's green.
+    const refusal = results.find((r) => r.status === "rejected")?.reason;
+    expect(refusal).toBeInstanceOf(TRPCError);
+    expect((refusal as TRPCError).code).toBe("BAD_REQUEST");
+
+    // `StockEntry.receiptItemId` is a bare column and not a relation, so the
+    // entries are counted through the line ids — the shape `getAppliedSummary`
+    // uses two procedures down.
+    expect(
+      await prisma.stockEntry.count({
+        where: { receiptItemId: { in: lines.map((line) => line.id) } },
+      }),
+    ).toBe(appliable);
+    expect(
+      await prisma.priceRecord.count({ where: { receiptId: receipt.id } }),
+    ).toBe(appliable);
+  });
+
+  it("rolls the status back when a write inside fails, so a retry is safe", async () => {
+    // The crash-mid-loop half. Unwrapped, the stock entries before the failure
+    // were already committed and the receipt was still CONFIRMED — so the
+    // obvious thing to do next, press Apply again, booked them a second time.
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    const lines = await prisma.receiptItem.findMany({
+      where: { receiptId: receipt.id },
+      select: { id: true },
+    });
+    const entryCount = () =>
+      prisma.stockEntry.count({
+        where: { receiptItemId: { in: lines.map((line) => line.id) } },
+      });
+
+    const { caller: failing } = await callerFor(
+      householdId,
+      "OWNER",
+      clientThatCannotWritePrices(),
+    );
+
+    let thrown: unknown;
+    try {
+      await failing.receipt.applyReceipt({ receiptId: receipt.id });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeDefined();
+
+    // Nothing half-written: the stock entry created before the price write went
+    // down with it, and the status never left CONFIRMED.
+    expect(await entryCount()).toBe(0);
+    expect(
+      await prisma.priceRecord.count({ where: { receiptId: receipt.id } }),
+    ).toBe(0);
+    const after = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    expect(after?.status).toBe(ReceiptStatus.CONFIRMED);
+
+    // Which is what "safe to retry" means, and the only assertion that proves
+    // the rollback was complete rather than merely partial: the same receipt
+    // applies once, cleanly, on a healthy client.
+    const result = await caller.receipt.applyReceipt({ receiptId: receipt.id });
+    expect(result.stockEntriesCreated).toBe(1);
+    expect(await entryCount()).toBe(1);
   });
 });
 

@@ -588,8 +588,9 @@ export const receiptRouter = createTRPCRouter({
    *
    * Everything above this is bookkeeping about a photograph. This writes a
    * `StockEntry` per confirmed line and a `PriceRecord` where there is a store,
-   * in one transaction, and moves the receipt to APPLIED so it cannot be
-   * applied twice.
+   * in one transaction — which this docstring claimed for months before it was
+   * true; the 2026-08-29 review is what made it true — and moves the receipt to
+   * APPLIED so it cannot be applied twice.
    *
    * **No store means no prices**, silently as far as the data is concerned —
    * a `PriceRecord` with nowhere attached says nothing — so the applied summary
@@ -599,17 +600,10 @@ export const receiptRouter = createTRPCRouter({
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
-      
+
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
-          items: {
-            include: {
-              matchedProduct: true,
-            },
-          },
-          store: true,
-        },
+        select: { id: true, storeId: true, status: true },
       });
 
       if (!receipt) {
@@ -629,59 +623,76 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      const createdStockEntries = [];
-      const createdPriceRecords = [];
+      const applied = await ctx.db.$transaction(async (tx) => {
+        // The claim is the guard. An UPDATE filtered on CONFIRMED flips the
+        // status and takes the row lock in one statement, so of two concurrent
+        // applies exactly one matches; the loser sees count 0 and refuses. The
+        // check above is a courtesy for a fast error message — this is the one
+        // that holds. Same shape as the replay claim in `replay.ts`, where the
+        // claim row is the lock. (Named indirectly on purpose: the meta-test in
+        // `replayable.test.ts` greps the routers for that helper's name as a
+        // bare substring, and a comment naming it would read as a use of it.)
+        const claimed = await tx.receipt.updateMany({
+          where: { id: receipt.id, status: ReceiptStatus.CONFIRMED },
+          data: { status: ReceiptStatus.APPLIED },
+        });
 
-      for (const item of receipt.items) {
-        if (
-          !item.matchedProductId ||
-          item.matchStatus === MatchStatus.SKIPPED
-        ) {
-          continue;
+        if (claimed.count === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Receipt must be confirmed before applying",
+          });
         }
 
-        // Create stock entry
-        const stockEntry = await ctx.db.stockEntry.create({
-          data: {
-            productId: item.matchedProductId,
-            quantity: item.parsedQuantity ?? 1,
-            unit: item.matchedProduct?.defaultUnit || "unit",
-            operationType: StockOperation.PURCHASE,
-            receiptItemId: item.id,
-            createdBy: user.id,
-            locationId: null,
-          },
+        // Read the lines inside the transaction, after the claim: a confirmItem
+        // racing this call lands before or after the whole apply, never between
+        // the read and the writes.
+        const items = await tx.receiptItem.findMany({
+          where: { receiptId: receipt.id },
+          include: { matchedProduct: true },
         });
-        createdStockEntries.push(stockEntry);
 
-        // Create price record
-        if (item.parsedPrice && receipt.storeId) {
-          const priceRecord = await ctx.db.priceRecord.create({
+        let stockEntriesCreated = 0;
+        let priceRecordsCreated = 0;
+
+        for (const item of items) {
+          if (!item.matchedProductId || item.matchStatus === MatchStatus.SKIPPED) {
+            continue;
+          }
+
+          await tx.stockEntry.create({
             data: {
               productId: item.matchedProductId,
-              storeId: receipt.storeId,
-              price: item.parsedPrice,
-              currency: "EUR",
-              unit: item.matchedProduct?.defaultUnit || "unit",
               quantity: item.parsedQuantity ?? 1,
-              receiptId: receipt.id,
+              unit: item.matchedProduct?.defaultUnit || "unit",
+              operationType: StockOperation.PURCHASE,
+              receiptItemId: item.id,
+              createdBy: user.id,
+              locationId: null,
             },
           });
-          createdPriceRecords.push(priceRecord);
-        }
-      }
+          stockEntriesCreated += 1;
 
-      // Update receipt status to APPLIED
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
-        data: { status: ReceiptStatus.APPLIED },
+          if (item.parsedPrice && receipt.storeId) {
+            await tx.priceRecord.create({
+              data: {
+                productId: item.matchedProductId,
+                storeId: receipt.storeId,
+                price: item.parsedPrice,
+                currency: "EUR",
+                unit: item.matchedProduct?.defaultUnit || "unit",
+                quantity: item.parsedQuantity ?? 1,
+                receiptId: receipt.id,
+              },
+            });
+            priceRecordsCreated += 1;
+          }
+        }
+
+        return { stockEntriesCreated, priceRecordsCreated };
       });
 
-      return {
-        success: true,
-        stockEntriesCreated: createdStockEntries.length,
-        priceRecordsCreated: createdPriceRecords.length,
-      };
+      return { success: true, ...applied };
     }),
 
   // F12: Get applied summary
