@@ -272,51 +272,58 @@ export async function saveParsedItems(
     throw new NotFoundError("Receipt not found");
   }
 
-  // Update receipt with parsed metadata
-  await prisma.receipt.update({
-    where: { id: receiptId },
-    data: {
-      purchaseDate: parsed.purchaseDate,
-      totalAmount: parsed.totalAmount,
-      status: ReceiptStatus.PARSED,
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    // Replace, never append: this ran once per upload until the 2026-08-29
+    // review asked what a second run does — it doubled every line, and a
+    // doubled line double-books stock on apply.
+    await tx.receiptItem.deleteMany({ where: { receiptId } });
 
-  // Find or create store
-  if (parsed.storeName) {
-    const existingStore = await prisma.store.findFirst({
-      where: {
-        name: { equals: parsed.storeName, mode: "insensitive" },
-        householdId: receipt.householdId,
+    // Update receipt with parsed metadata
+    await tx.receipt.update({
+      where: { id: receiptId },
+      data: {
+        purchaseDate: parsed.purchaseDate,
+        totalAmount: parsed.totalAmount,
+        status: ReceiptStatus.PARSED,
       },
     });
 
-    const store =
-      existingStore ??
-      (await prisma.store.create({
-        data: {
-          name: parsed.storeName,
+    // Find or create store
+    if (parsed.storeName) {
+      const existingStore = await tx.store.findFirst({
+        where: {
+          name: { equals: parsed.storeName, mode: "insensitive" },
           householdId: receipt.householdId,
         },
-      }));
+      });
 
-    await prisma.receipt.update({
-      where: { id: receiptId },
-      data: { storeId: store.id },
-    });
-  }
+      const store =
+        existingStore ??
+        (await tx.store.create({
+          data: {
+            name: parsed.storeName,
+            householdId: receipt.householdId,
+          },
+        }));
 
-  // Create receipt items
-  for (const item of parsed.items) {
-    await prisma.receiptItem.create({
-      data: {
-        receiptId,
-        rawText: item.rawText,
-        parsedName: item.parsedName,
-        parsedPrice: item.parsedPrice,
-        parsedQuantity: item.parsedQuantity ?? 1,
-        matchStatus: MatchStatus.PENDING,
-      },
-    });
-  }
+      await tx.receipt.update({
+        where: { id: receiptId },
+        data: { storeId: store.id },
+      });
+    }
+
+    // Create receipt items
+    for (const item of parsed.items) {
+      await tx.receiptItem.create({
+        data: {
+          receiptId,
+          rawText: item.rawText,
+          parsedName: item.parsedName,
+          parsedPrice: item.parsedPrice,
+          parsedQuantity: item.parsedQuantity ?? 1,
+          matchStatus: MatchStatus.PENDING,
+        },
+      });
+    }
+  });
 }

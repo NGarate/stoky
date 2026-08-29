@@ -220,8 +220,8 @@ beforeAll(async () => {
   });
   emptyListId = emptyList.id;
 
-  // NEEDS_REVIEW with `rawOcrText`, so `parseReceipt` and `matchItems` have
-  // something to work on if the guard is ever removed.
+  // NEEDS_REVIEW with `rawOcrText`, matching what `processReceiptAsync`
+  // leaves behind after OCR — the state the confirmation refusals below need.
   const reviewReceipt = await prisma.receipt.create({
     data: {
       imagePath: `uploads/receipts/${householdId}/refusal-matrix.jpg`,
@@ -565,17 +565,6 @@ describe("receipts — write tier", () => {
     );
 
     expect(await prisma.receipt.count({ where: { householdId } })).toBe(before);
-  });
-
-  it("refuses a kitchen account the pipeline steps", async () => {
-    // All three receipts belong to the kitchen account's own household, so the
-    // refusal being asserted can only come from the tier middleware.
-    await expectTierRefusal("receipt.parseReceipt", () =>
-      kitchen.receipt.parseReceipt({ receiptId: reviewReceiptId }),
-    );
-    await expectTierRefusal("receipt.matchItems", () =>
-      kitchen.receipt.matchItems({ receiptId: reviewReceiptId }),
-    );
   });
 
   it("refuses a kitchen account the confirmations, and changes no line", async () => {

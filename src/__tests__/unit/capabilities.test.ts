@@ -104,8 +104,6 @@ const EXPECTED: Record<string, Record<string, string>> = {
     getAppliedSummary: "householdProcedure",
     list: "householdProcedure",
     upload: "writeProcedure",
-    parseReceipt: "writeProcedure",
-    matchItems: "writeProcedure",
     confirmItem: "writeProcedure",
     confirmAll: "writeProcedure",
     applyReceipt: "writeProcedure",

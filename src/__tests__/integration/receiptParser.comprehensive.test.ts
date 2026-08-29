@@ -625,5 +625,40 @@ Leche semi desnatada 1L 1,25
 
       expect(item?.rawText).toContain("Leche");
     });
+
+    it("replaces the lines, so running twice is running once", async () => {
+      const ocrText = `TIENDA
+Leche 1,25
+Pan 0,95
+`;
+
+      const receiptDir = join(testDir, randomUUID());
+      await mkdir(receiptDir, { recursive: true });
+      cleanupDirs.push(receiptDir);
+
+      const imagePath = join(receiptDir, "receipt.jpg");
+      await writeFile(imagePath, Buffer.from("fake"));
+
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath,
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+
+      const parsed = parseReceiptText(ocrText);
+
+      await saveParsedItems(receipt.id, parsed);
+      await saveParsedItems(receipt.id, parsed);
+
+      const count = await prisma.receiptItem.count({
+        where: { receiptId: receipt.id },
+      });
+      // Not doubled: a second run over the same OCR text replaces the lines
+      // it produced last time rather than appending a second copy of them.
+      expect(count).toBe(parsed.items.length);
+    });
   });
 });

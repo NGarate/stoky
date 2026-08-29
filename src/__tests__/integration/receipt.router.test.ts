@@ -19,12 +19,12 @@ import {
 /**
  * The receipt router, procedure by procedure.
  *
- * It is the largest router in the project — ten procedures over 686 lines —
- * and it was the least covered: 28.6% of its functions and 19.5% of its lines,
- * against 90% for the integration tier as a whole. The pipeline's *services*
- * were well tested and the browser suite walked the screens, so what was
- * missing was the layer in between: the procedures' own guards, state
- * transitions and side effects.
+ * It is the largest router in the project — eight procedures — and it was
+ * the least covered: 28.6% of its functions and 19.5% of its lines, against
+ * 90% for the integration tier as a whole. The pipeline's *services* were
+ * well tested and the browser suite walked the screens, so what was missing
+ * was the layer in between: the procedures' own guards, state transitions
+ * and side effects.
  *
  * Every procedure here is exercised for three things, because each is a
  * different failure and the third is the one no interface reveals:
@@ -36,10 +36,11 @@ import {
  * **What this deliberately does not cover.** `upload`'s success path calls
  * `processReceiptAsync`, which starts Tesseract; on a fresh container that
  * fetches language data from a CDN (ISSUES.md OCR-1) and would put an
- * unbounded network wait inside a suite held to ten minutes. `parseReceipt`
- * and `matchItems` have the same problem past their guards. So their refusal
- * branches are covered — which is where the file-upload security lives — and
- * their success paths belong to the browser suite until OCR-1 is closed.
+ * unbounded network wait inside a suite held to ten minutes. So that branch
+ * belongs to the browser suite until OCR-1 is closed. (`parseReceipt` and
+ * `matchItems`, the two procedures that used to have the same problem, are
+ * gone: nothing called them — the pipeline runs through
+ * `processReceiptAsync` — and the dead write surface went with its tests.)
  */
 
 const HOUSEHOLD = "Receipt Router Household";
@@ -1148,57 +1149,3 @@ describe("receipt.list", () => {
   });
 });
 
-describe("receipt.parseReceipt and matchItems — their guards", () => {
-  it("parseReceipt is NOT_FOUND for a receipt that does not exist", async () => {
-    await expectCode(
-      () => caller.receipt.parseReceipt({ receiptId: "does-not-exist" }),
-      "NOT_FOUND",
-    );
-  });
-
-  it("parseReceipt is NOT_FOUND for another household, so the id's existence is not confirmed", async () => {
-    const { receipt } = await seedReceipt({ status: ReceiptStatus.PROCESSING });
-
-    await expectCode(
-      () => outsider.receipt.parseReceipt({ receiptId: receipt.id }),
-      "NOT_FOUND",
-    );
-  });
-
-  it("parseReceipt refuses a receipt whose OCR has not run", async () => {
-    // The phase order the ReceiptStatus state machine exists to enforce:
-    // there is nothing to parse until OCR has produced text.
-    const { receipt } = await seedReceipt({ status: ReceiptStatus.UPLOADING });
-
-    await expectCode(
-      () => caller.receipt.parseReceipt({ receiptId: receipt.id }),
-      "BAD_REQUEST",
-    );
-  });
-
-  it("matchItems is NOT_FOUND for a missing receipt and for another household's, so the id's existence is not confirmed", async () => {
-    await expectCode(
-      () => caller.receipt.matchItems({ receiptId: "does-not-exist" }),
-      "NOT_FOUND",
-    );
-
-    const { receipt } = await seedReceipt({ status: ReceiptStatus.PARSED });
-    await expectCode(
-      () => outsider.receipt.matchItems({ receiptId: receipt.id }),
-      "NOT_FOUND",
-    );
-  });
-
-  it("refuses a kitchen account on both", async () => {
-    const { receipt } = await seedReceipt({ status: ReceiptStatus.PARSED });
-
-    await expectCode(
-      () => kitchen.receipt.parseReceipt({ receiptId: receipt.id }),
-      "FORBIDDEN",
-    );
-    await expectCode(
-      () => kitchen.receipt.matchItems({ receiptId: receipt.id }),
-      "FORBIDDEN",
-    );
-  });
-});
