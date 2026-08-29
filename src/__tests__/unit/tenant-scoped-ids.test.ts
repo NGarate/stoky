@@ -113,6 +113,25 @@ const SCOPED: Record<string, RegExp> = {
 };
 
 /**
+ * Strip comments before a body is tested against `SCOPED`, so prose satisfies
+ * nothing.
+ *
+ * A bare identifier like `assertOwnProduct` in `SCOPED` matches a comment
+ * naming the helper — `// (see assertOwnProduct above)` — exactly as readily
+ * as a real call. That is not hypothetical: every NOT_FOUND block receipt.ts
+ * grew during the review carries that phrase, and with it in place this file
+ * stayed green after the real `assertOwnProduct(...)` call was deleted from
+ * `confirmItem`. Comments are removed from the body once, here, rather than
+ * fixed by tightening each alternative to call syntax, because a call pasted
+ * into a comment for documentation — `// calls assertOwnProduct(id, hh)` —
+ * would still satisfy a `name\(` pattern; stripping the comment first closes
+ * both.
+ */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
+/**
  * Procedures that take one of these fields and legitimately do not look it up,
  * with the reason. A path with no reason is indistinguishable from one nobody
  * looked at.
@@ -187,13 +206,14 @@ describe("a caller-supplied id is looked up before it is written", () => {
         if (ALLOWED[name]) continue;
 
         const surface = inputSurface(body);
+        const code = withoutComments(body);
 
         for (const [field, lookup] of Object.entries(SCOPED)) {
           // Only the fields this procedure actually accepts from the caller —
           // declared inline or in a shared schema it names.
           const accepts = new RegExp(`\\b${field}: z\\.`).test(surface);
           if (!accepts) continue;
-          if (lookup.test(body)) continue;
+          if (lookup.test(code)) continue;
 
           unchecked.push(`${name} accepts ${field} and never looks it up`);
         }

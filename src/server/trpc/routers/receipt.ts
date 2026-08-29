@@ -509,7 +509,9 @@ export const receiptRouter = createTRPCRouter({
       for (const itemInput of input.items) {
         // The same action-narrowed logic as `confirmItem`, and it has to stay
         // the same: a decision means the same thing whichever button submitted
-        // it.
+        // it. Same product/action narrowing only, though: unlike `confirmItem`,
+        // this path never touches `matchConfidence`, so the bulk update below
+        // leaves whatever figure the matcher already wrote in place.
         let productId: string | null = null;
 
         if (itemInput.action === "MATCH") {

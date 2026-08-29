@@ -135,10 +135,13 @@ describe("the list and the sources agree", () => {
   });
 
   it("finds withReplay in exactly the two routers that should hold it", () => {
+    // Call syntax, not the bare word: a comment naming the helper — as one in
+    // receipt.ts does, on purpose, to describe the claim-row pattern without
+    // tripping this scan — must not count as a router holding it.
     const holders = ["auth", "household", "inventory", "location", "price",
       "product", "receipt", "shopping", "store"]
       .filter((name) =>
-        readFileSync(join(ROUTERS, `${name}.ts`), "utf8").includes("withReplay"),
+        readFileSync(join(ROUTERS, `${name}.ts`), "utf8").includes("withReplay("),
       );
 
     expect(holders).toEqual(["inventory", "shopping"]);
