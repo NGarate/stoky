@@ -81,12 +81,40 @@ export const receiptUploadSchema = z.object({
   purchaseDate: z.date().optional(),
 });
 
-export const receiptItemMatchSchema = z.object({
-  receiptItemId: z.string(),
-  productId: z.string().optional(),
-  customName: z.string().optional(),
-  action: z.enum(["MATCH", "CREATE", "SKIP"]),
-});
+/**
+ * One line of a receipt review, decided.
+ *
+ * **A union rather than a flat object with two optional fields**, because the
+ * flat shape let one action carry another's field and the router read it. A
+ * `CREATE` with a `productId` and no `customName` missed the ownership check —
+ * which only ran for `MATCH` — *and* the create branch — which only ran when a
+ * `customName` was there — and the caller's unchecked id went straight into
+ * `ReceiptItem.matchedProductId`. Applying the receipt afterwards books stock
+ * and a price against whatever product that was, in whatever household
+ * (`ISSUES.md` SEC-1's shape). A `MATCH` with no `productId` was the mirror
+ * image: nothing to check, so the line was marked reviewed against nothing.
+ *
+ * Discriminating on `action` makes both unrepresentable rather than guarded:
+ * there is no `productId` field on the CREATE branch for a caller to fill, and
+ * the MATCH branch does not parse without one. The router narrows on `action`
+ * and TypeScript gives it exactly the fields that action has.
+ */
+export const receiptItemMatchSchema = z.discriminatedUnion("action", [
+  z.object({
+    receiptItemId: z.string(),
+    action: z.literal("MATCH"),
+    productId: z.string().min(1),
+  }),
+  z.object({
+    receiptItemId: z.string(),
+    action: z.literal("CREATE"),
+    customName: z.string().trim().min(1),
+  }),
+  z.object({
+    receiptItemId: z.string(),
+    action: z.literal("SKIP"),
+  }),
+]);
 
 export const receiptConfirmSchema = z.object({
   receiptId: z.string(),

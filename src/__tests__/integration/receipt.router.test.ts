@@ -574,6 +574,59 @@ describe("receipt.confirmItem", () => {
     expect(item?.matchedProductId).toBeNull();
   });
 
+  it("CREATE cannot smuggle a foreign productId (the SEC-1 shape)", async () => {
+    // The flat `{action, productId?, customName?}` input let one action carry
+    // another's field: CREATE with a productId and no customName missed the
+    // ownership check (which only ran for MATCH) *and* the create branch
+    // (which only ran when customName was present), so the unchecked foreign
+    // id went straight into matchedProductId — and applying the receipt books
+    // stock and a price against another household's product.
+    const { second } = await seedReceipt({});
+    const strangersProduct = await prisma.product.create({
+      data: {
+        name: "Producto de contrabando",
+        householdId: otherHouseholdId,
+        defaultUnit: "unit",
+      },
+    });
+
+    await expectCode(
+      () =>
+        caller.receipt.confirmItem({
+          receiptItemId: second.id,
+          action: "CREATE",
+          // A discriminated union has no productId field on CREATE: this input
+          // must be refused at validation, never read. `as never` because the
+          // inferred input type refuses it too — the point is that a caller who
+          // never saw the types is refused as well.
+          productId: strangersProduct.id,
+        } as never),
+      "BAD_REQUEST",
+    );
+
+    const line = await prisma.receiptItem.findUnique({ where: { id: second.id } });
+    expect(line?.matchedProductId).toBeNull();
+  });
+
+  it("MATCH without a productId is refused, not silently half-confirmed", async () => {
+    // The other half of the same looseness. `assertOwnProduct` returned early
+    // on a missing id, so the line was marked USER_CONFIRMED with nothing to
+    // confirm it against — a reviewed-looking row that applies no stock.
+    const { second } = await seedReceipt({});
+
+    await expectCode(
+      () =>
+        caller.receipt.confirmItem({
+          receiptItemId: second.id,
+          action: "MATCH",
+        } as never),
+      "BAD_REQUEST",
+    );
+
+    const line = await prisma.receiptItem.findUnique({ where: { id: second.id } });
+    expect(line?.matchStatus).toBe(MatchStatus.PENDING);
+  });
+
   it("is NOT_FOUND for an item that does not exist", async () => {
     await expectCode(
       () => caller.receipt.confirmItem({ receiptItemId: "does-not-exist", action: "SKIP" }),
@@ -651,6 +704,34 @@ describe("receipt.confirmAll", () => {
 
     const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
     expect(updated?.status).toBe(ReceiptStatus.NEEDS_REVIEW);
+  });
+});
+
+describe("the review has edges", () => {
+  it("an APPLIED receipt is closed for review, so it cannot be re-applied", async () => {
+    // Neither confirm procedure looked at the receipt's status, and
+    // `confirmAll` ends by writing CONFIRMED unconditionally. So an APPLIED
+    // receipt could be dragged back to CONFIRMED and applied a second time,
+    // booking every line's stock and price twice.
+    const { receipt, first } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    await caller.receipt.applyReceipt({ receiptId: receipt.id });
+
+    await expectCode(
+      () => caller.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" }),
+      "BAD_REQUEST",
+    );
+    await expectCode(
+      () =>
+        caller.receipt.confirmAll({
+          receiptId: receipt.id,
+          items: [{ receiptItemId: first.id, action: "SKIP" }],
+        }),
+      "BAD_REQUEST",
+    );
+
+    const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    // The status write at the end of `confirmAll` is what the guard makes safe.
+    expect(updated?.status).toBe(ReceiptStatus.APPLIED);
   });
 });
 

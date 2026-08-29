@@ -128,11 +128,18 @@ export default function ReviewPage() {
   // wanted to. Nothing here needs the promise; the callbacks above do the
   // work.
   const handleConfirmAll = (): void => {
-    const itemsToConfirm = receipt.items.map((item) => ({
-      receiptItemId: item.id,
-      action: (item.matchedProductId ? "MATCH" : "SKIP") as "MATCH" | "CREATE" | "SKIP",
-      productId: item.matchedProductId || undefined,
-    }));
+    // Built per action rather than as one object with optional fields: a
+    // decision is a MATCH *with* a product or a SKIP without one, and the
+    // server's schema is now a union that says so.
+    const itemsToConfirm = receipt.items.map((item) =>
+      item.matchedProductId
+        ? {
+            receiptItemId: item.id,
+            action: "MATCH" as const,
+            productId: item.matchedProductId,
+          }
+        : { receiptItemId: item.id, action: "SKIP" as const },
+    );
 
     confirmAllMutation.mutate({ receiptId, items: itemsToConfirm });
   };
@@ -231,13 +238,27 @@ export default function ReviewPage() {
                   ...item,
                   candidates: item.candidates || [],
                 }}
+                // One call per action, because each action carries different
+                // fields. The guards mirror what ReviewCard already ensures —
+                // it only emits MATCH from a selected candidate and CREATE
+                // from a non-empty trimmed name — so they are a type narrowing
+                // rather than a second opinion.
                 onConfirm={(action, productId, customName) => {
-                  confirmItemMutation.mutate({
-                    receiptItemId: item.id,
-                    action,
-                    productId,
-                    customName,
-                  });
+                  if (action === "MATCH" && productId) {
+                    confirmItemMutation.mutate({
+                      receiptItemId: item.id,
+                      action,
+                      productId,
+                    });
+                  } else if (action === "CREATE" && customName) {
+                    confirmItemMutation.mutate({
+                      receiptItemId: item.id,
+                      action,
+                      customName,
+                    });
+                  } else if (action === "SKIP") {
+                    confirmItemMutation.mutate({ receiptItemId: item.id, action });
+                  }
                 }}
               />
             ))}

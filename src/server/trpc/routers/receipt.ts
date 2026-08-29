@@ -15,6 +15,7 @@ import {
   MAX_RECEIPT_BASE64_LENGTH,
   MAX_RECEIPT_BYTES,
   RECEIPT_IMAGE_TYPES,
+  receiptItemMatchSchema,
 } from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
@@ -80,14 +81,19 @@ async function assertOwnStore(
  * NOT_FOUND rather than FORBIDDEN, deliberately and for the same reason
  * `product.getById` does it: telling an outsider that an id exists but is not
  * theirs confirms the id exists.
+ *
+ * **`productId` is required and there is no if-absent-return.** There was one,
+ * and it was the injection's accomplice: the callers passed
+ * `input.productId` from a shape where it was optional, so an absent id meant
+ * "checked" rather than "refused". The union upstream now guarantees a MATCH
+ * carries one, and this signature is what makes a caller that forgets a
+ * compile error rather than a silent pass.
  */
 async function assertOwnProduct(
   db: PrismaClient | Prisma.TransactionClient,
-  productId: string | undefined,
+  productId: string,
   householdId: string,
 ): Promise<void> {
-  if (!productId) return;
-
   const product = await db.product.findFirst({
     where: { id: productId, householdId },
     select: { id: true },
@@ -95,6 +101,33 @@ async function assertOwnProduct(
 
   if (!product) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
+  }
+}
+
+/**
+ * Refuse a receipt that is not open to being reviewed.
+ *
+ * A line may be settled while its receipt is under review, and re-settled while
+ * it is CONFIRMED but not yet applied — going back and changing your mind is
+ * part of reviewing. **APPLIED is the point of no return**, and it was not
+ * guarded at all: `confirmAll` ends by writing CONFIRMED whatever it found, so
+ * an applied receipt could be dragged back and applied a second time, booking
+ * every line's stock and price twice. The states before NEEDS_REVIEW have no
+ * lines worth settling and FAILED has nothing to settle them for.
+ *
+ * A function rather than two copies of the condition, because the two
+ * procedures being allowed to drift on which states are open is the defect one
+ * level up from the one this closes.
+ */
+function assertOpenForReview(status: ReceiptStatus): void {
+  if (
+    status !== ReceiptStatus.NEEDS_REVIEW &&
+    status !== ReceiptStatus.CONFIRMED
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Receipt is not open for review",
+    });
   }
 }
 
@@ -405,18 +438,23 @@ export const receiptRouter = createTRPCRouter({
    * card kept its button and the pending count kept its number. The reasonable
    * response to a button that does nothing is to press it again, so the defect
    * cost a second write every time (ISSUES.md A11Y-2, UI-7).
+   *
+   * The input is now the shared review-decision schema from
+   * `src/lib/validations/receipt.ts`, which this router had been carrying a
+   * looser inlined copy of instead of importing. What that copy cost is in the
+   * schema's own docstring.
+   *
+   * (Named by file rather than by identifier, for the same reason `applyReceipt`
+   * names its claim helper indirectly. `tenant-scoped-ids.test.ts` slices a
+   * procedure's source from its own name to the *next* one, so this comment
+   * counts as `getReceiptWithItems`'s body — and the identifier here would
+   * credit that read with an input field it does not take, which the scan then
+   * reports as an unchecked id.)
    */
   confirmItem: writeProcedure
-    .input(
-      z.object({
-        receiptItemId: z.string(),
-        action: z.enum(["MATCH", "CREATE", "SKIP"]),
-        productId: z.string().optional(),
-        customName: z.string().optional(),
-      }),
-    )
+    .input(receiptItemMatchSchema)
     .mutation(async ({ ctx, input }) => {
-      
+
       const item = await ctx.db.receiptItem.findFirst({
         where: {
           id: input.receiptItemId,
@@ -437,17 +475,21 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      let productId = input.productId;
-      if (input.action === "MATCH") {
-        await assertOwnProduct(ctx.db, productId, ctx.householdId);
-      }
+      assertOpenForReview(item.receipt.status);
 
-      if (input.action === "CREATE" && input.customName) {
-        // Create new product
+      // Narrowed by the discriminated union, so each branch reads only the
+      // fields its action has — and SKIP falls through to a null product,
+      // which detaches whatever the matcher had put there.
+      let productId: string | null = null;
+      if (input.action === "MATCH") {
+        await assertOwnProduct(ctx.db, input.productId, ctx.householdId);
+        productId = input.productId;
+      }
+      if (input.action === "CREATE") {
         const newProduct = await ctx.db.product.create({
           data: {
             name: input.customName,
-            householdId: item.receipt.householdId,
+            householdId: ctx.householdId,
             defaultUnit: "unit",
           },
         });
@@ -457,7 +499,7 @@ export const receiptRouter = createTRPCRouter({
       await ctx.db.receiptItem.update({
         where: { id: input.receiptItemId },
         data: {
-          matchedProductId: input.action === "SKIP" ? null : productId,
+          matchedProductId: productId,
           matchStatus:
             input.action === "SKIP"
               ? MatchStatus.SKIPPED
@@ -486,18 +528,11 @@ export const receiptRouter = createTRPCRouter({
     .input(
       z.object({
         receiptId: z.string(),
-        items: z.array(
-          z.object({
-            receiptItemId: z.string(),
-            action: z.enum(["MATCH", "CREATE", "SKIP"]),
-            productId: z.string().optional(),
-            customName: z.string().optional(),
-          }),
-        ),
+        items: z.array(receiptItemMatchSchema),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      
+
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
       });
@@ -511,6 +546,8 @@ export const receiptRouter = createTRPCRouter({
           message: "Receipt not found",
         });
       }
+
+      assertOpenForReview(receipt.status);
 
       // Every line named must belong to *this* receipt.
       //
@@ -546,13 +583,20 @@ export const receiptRouter = createTRPCRouter({
 
       // Confirm all items
       for (const itemInput of input.items) {
-        let productId = itemInput.productId;
+        // The same action-narrowed logic as `confirmItem`, and it has to stay
+        // the same: a decision means the same thing whichever button submitted
+        // it.
+        let productId: string | null = null;
 
-        if (itemInput.action === "CREATE" && itemInput.customName) {
+        if (itemInput.action === "MATCH") {
+          productId = itemInput.productId;
+        }
+
+        if (itemInput.action === "CREATE") {
           const newProduct = await ctx.db.product.create({
             data: {
               name: itemInput.customName,
-              householdId: receipt.householdId,
+              householdId: ctx.householdId,
               defaultUnit: "unit",
             },
           });
@@ -562,7 +606,7 @@ export const receiptRouter = createTRPCRouter({
         await ctx.db.receiptItem.update({
           where: { id: itemInput.receiptItemId },
           data: {
-            matchedProductId: itemInput.action === "SKIP" ? null : productId,
+            matchedProductId: productId,
             matchStatus:
               itemInput.action === "SKIP"
                 ? MatchStatus.SKIPPED
@@ -573,7 +617,8 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      // Update receipt status to CONFIRMED
+      // Unconditional, and safe only because of the guard at the top: this
+      // write is what used to take an APPLIED receipt backwards.
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
         data: { status: ReceiptStatus.CONFIRMED },
