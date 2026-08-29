@@ -178,6 +178,10 @@ const nextConfig: NextConfig = {
     "100.87.171.28",
     "100.80.50.6",
     "100.124.170.3",
+    // Extendable without editing the repository: an extra origin for this
+    // machine only (e.g. a different tailnet's hostname) comes from the
+    // environment.
+    ...(process.env.DEV_ALLOWED_ORIGIN ? [process.env.DEV_ALLOWED_ORIGIN] : []),
   ],
 };
 
