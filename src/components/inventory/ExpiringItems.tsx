@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 
 interface ExpiringItemsProps {
@@ -15,6 +16,8 @@ export function ExpiringItems({
   showExpired = true,
   maxItems = 10,
 }: ExpiringItemsProps) {
+  const t = useTranslations("inventory.expiring");
+
   const { data: expiringItems, isLoading: loadingExpiring } =
     api.inventory.getExpiringItems.useQuery({ days });
 
@@ -27,7 +30,7 @@ export function ExpiringItems({
     return (
       <div className="rounded-lg border border-border bg-card p-4 shadow">
         <h2 className="text-lg font-semibold mb-4 text-heading">
-          Productos próximos a caducar
+          {t("title")}
         </h2>
         <div className="space-y-2">
           {['loading-skeleton-1', 'loading-skeleton-2', 'loading-skeleton-3'].map((key) => (
@@ -50,8 +53,8 @@ export function ExpiringItems({
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
-            <title>Todo correcto</title>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -59,9 +62,7 @@ export function ExpiringItems({
               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <p className="text-ok-foreground">
-            No hay productos caducados ni próximos a caducar
-          </p>
+          <p className="text-ok-foreground">{t("allClear")}</p>
         </div>
       </div>
     );
@@ -81,8 +82,8 @@ export function ExpiringItems({
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <title>Alerta</title>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -91,7 +92,7 @@ export function ExpiringItems({
               />
             </svg>
             <h2 className="font-semibold text-danger-foreground">
-              Productos caducados ({expiredItems?.length})
+              {t("expiredHeading", { count: expiredItems?.length ?? 0 })}
             </h2>
           </div>
           <ul className="space-y-2">
@@ -106,19 +107,19 @@ export function ExpiringItems({
                   </Button>
                   {item.location && (
                     <span className="text-sm text-muted-foreground">
-                      en {item.location.name}
+                      {t("inLocation", { location: item.location.name })}
                     </span>
                   )}
                 </div>
                 <span className="text-sm font-medium text-danger-foreground">
-                  Hace {item.daysExpired} días
+                  {t("daysAgo", { days: item.daysExpired })}
                 </span>
               </li>
             ))}
           </ul>
           {expiredItems && expiredItems.length > maxItems && (
             <p className="mt-2 text-sm text-danger-foreground">
-              Y {expiredItems.length - maxItems} más...
+              {t("more", { count: expiredItems.length - maxItems })}
             </p>
           )}
         </div>
@@ -133,8 +134,8 @@ export function ExpiringItems({
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <title>Advertencia</title>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -143,7 +144,7 @@ export function ExpiringItems({
               />
             </svg>
             <h2 className="font-semibold text-warn-foreground">
-              Caducan en los próximos {days} días ({expiringItems?.length})
+              {t("expiringHeading", { days, count: expiringItems?.length ?? 0 })}
             </h2>
           </div>
           <ul className="space-y-2">
@@ -167,7 +168,7 @@ export function ExpiringItems({
                   </Link>
                   {item.location && (
                     <span className="text-sm text-muted-foreground">
-                      en {item.location.name}
+                      {t("inLocation", { location: item.location.name })}
                     </span>
                   )}
                 </div>
@@ -178,18 +179,14 @@ export function ExpiringItems({
                       : "text-warn-foreground"
                   }`}
                 >
-                  {item.daysUntilExpiry === 0
-                    ? "Hoy"
-                    : item.daysUntilExpiry === 1
-                      ? "Mañana"
-                      : `En ${item.daysUntilExpiry} días`}
+                  {t("until", { days: item.daysUntilExpiry })}
                 </span>
               </li>
             ))}
           </ul>
           {expiringItems && expiringItems.length > maxItems && (
             <p className="mt-2 text-sm text-warn-foreground">
-              Y {expiringItems.length - maxItems} más...
+              {t("more", { count: expiringItems.length - maxItems })}
             </p>
           )}
         </div>

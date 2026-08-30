@@ -538,7 +538,17 @@
     "pagerLabel": "Inventory pages",
     "pageStatus": "Page {page} of {pages}",
     "pagePastEnd": "This page does not exist. The list ends at page {pages}.",
-    "goToLastPage": "Go to the last page"
+    "goToLastPage": "Go to the last page",
+    "expiring": {
+      "title": "Products expiring soon",
+      "allClear": "Nothing has expired or is about to",
+      "expiredHeading": "{count, plural, one {Expired product (#)} other {Expired products (#)}}",
+      "expiringHeading": "{count, plural, one {Expiring in the next {days} days (#)} other {Expiring in the next {days} days (#)}}",
+      "inLocation": "in {location}",
+      "daysAgo": "{days, plural, one {# day ago} other {# days ago}}",
+      "until": "{days, plural, =0 {Today} =1 {Tomorrow} other {In # days}}",
+      "more": "{count, plural, one {And # more…} other {And # more…}}"
+    }
   },
   "receipts": {
     "title": "Receipts",
