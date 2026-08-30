@@ -97,10 +97,16 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
     identical NOT_FOUND. Pre-existing (not introduced by the closure work), and
     the same prose/code discordance class REV-1 chased — the next sweep's first
     stop.
-16. **Dead exports in `validations/receipt.ts`:** `receiptConfirmSchema` (still
+16. ~~**Dead exports in `validations/receipt.ts`:** `receiptConfirmSchema` (still
     carrying `applyToInventory` from an older design), `ReceiptConfirmInput`
     and `ReceiptItemMatchInput` have zero importers. Delete or re-point when the
-    receipt validations are next touched.
+    receipt validations are next touched.~~ **Done 2026-08-31**, and the dead
+    set was wider than this entry recorded: `receiptStatusSchema`,
+    `receiptUploadSchema` (which lacked the upload's actual `fileBase64` and
+    `mimeType` fields — dead *and* wrong), `receiptQuerySchema`,
+    `ReceiptUploadInput` and `ReceiptQueryInput` also had zero importers and
+    went too. What remains is exactly what is imported: the two size
+    constants, the type list, and `receiptItemMatchSchema`.
 
 ## Cosmetic and observations
 

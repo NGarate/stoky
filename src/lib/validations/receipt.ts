@@ -66,21 +66,6 @@ export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
  */
 export const MAX_RECEIPT_BASE64_LENGTH = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4;
 
-export const receiptStatusSchema = z.enum([
-  "UPLOADING",
-  "PROCESSING",
-  "PARSED",
-  "NEEDS_REVIEW",
-  "CONFIRMED",
-  "APPLIED",
-  "FAILED",
-]);
-
-export const receiptUploadSchema = z.object({
-  storeId: z.string().optional(),
-  purchaseDate: z.date().optional(),
-});
-
 /**
  * One line of a receipt review, decided.
  *
@@ -115,20 +100,3 @@ export const receiptItemMatchSchema = z.discriminatedUnion("action", [
     action: z.literal("SKIP"),
   }),
 ]);
-
-export const receiptConfirmSchema = z.object({
-  receiptId: z.string(),
-  items: z.array(receiptItemMatchSchema),
-  applyToInventory: z.boolean().default(true),
-});
-
-export const receiptQuerySchema = z.object({
-  status: receiptStatusSchema.optional(),
-  limit: z.number().default(20),
-  cursor: z.string().optional(),
-});
-
-export type ReceiptUploadInput = z.infer<typeof receiptUploadSchema>;
-export type ReceiptItemMatchInput = z.infer<typeof receiptItemMatchSchema>;
-export type ReceiptConfirmInput = z.infer<typeof receiptConfirmSchema>;
-export type ReceiptQueryInput = z.infer<typeof receiptQuerySchema>;
