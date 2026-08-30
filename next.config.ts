@@ -166,22 +166,17 @@ const nextConfig: NextConfig = {
     // Convenience for testing from a phone on the same network. Narrow this to
     // specific addresses if the network is not trusted.
     "192.168.8.*",
-    // Tailscale. The hostname is what `tailscale serve` presents when it
-    // proxies https://pop-os.<tailnet>.ts.net to this dev server — the route
-    // that exists because the camera API only lives in secure contexts, and
-    // serve is the one HTTPS door a phone can walk through without trusting a
-    // hand-made certificate. The first IP is this machine's own address, since
-    // that is the Host the browser requests over plain HTTP; the others are
-    // other nodes on the tailnet, kept for when the server is reached through
-    // them.
-    "pop-os.fold-vibe.ts.net",
-    "100.87.171.28",
-    "100.80.50.6",
-    "100.124.170.3",
-    // Extendable without editing the repository: an extra origin for this
-    // machine only (e.g. a different tailnet's hostname) comes from the
-    // environment.
-    ...(process.env.DEV_ALLOWED_ORIGIN ? [process.env.DEV_ALLOWED_ORIGIN] : []),
+    // Machine-specific origins come from the environment, not the repository
+    // (DEFERRED.md item 21: a developer's tailnet hostname does not belong in
+    // git). Comma-separated in .env — the usual entries are a `tailscale
+    // serve` hostname, the route that exists because the camera API only
+    // lives in secure contexts and serve is the one HTTPS door a phone can
+    // walk through without trusting a hand-made certificate, plus the tailnet
+    // IPs the server is reached through over plain HTTP.
+    ...(process.env.DEV_ALLOWED_ORIGIN ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
   ],
 };
 

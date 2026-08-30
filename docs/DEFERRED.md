@@ -154,14 +154,22 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
 
 ## Owner decisions — deferred to a person, not to a later commit
 
-21. **The Tailscale hostname and tailnet IPs stay committed in
+21. ~~**The Tailscale hostname and tailnet IPs stay committed in
     `next.config.ts`.** They predate the review, carry a reasoned comment, and
     were kept as a deliberate owner decision the closure work declined to
     overturn. The review's original position was that a developer's hostname
     does not belong in a repository; the new `DEV_ALLOWED_ORIGIN` env hook makes
-    removing them cheap if the owner agrees.
-22. **Cross-household receipt probes no longer appear in the security log.**
+    removing them cheap if the owner agrees.~~ **Done 2026-08-31 — the owner
+    agreed.** The four entries moved to `DEV_ALLOWED_ORIGIN`, which now takes
+    a comma-separated list; `.env.example` documents the shape, and the
+    rationale (camera API, `tailscale serve` as the HTTPS door) stayed in the
+    config comment where the next tailnet user will look.
+22. ~~**Cross-household receipt probes no longer appear in the security log.**
     The router now answers NOT_FOUND (uniform with every other router, and the
     id-existence leak is closed), and `securityEvents` deliberately does not log
     NOT_FOUND. If probe visibility is ever wanted, log scoped-lookup misses at
-    the middleware — do not re-split the refusal codes.
+    the middleware — do not re-split the refusal codes.~~ **Dropped 2026-08-31,
+    by the owner:** uniform refusals beat probe telemetry for a self-hosted
+    household deployment, so invisibility is the decision, not a gap. The
+    reversal path stands as written — middleware-level logging of scoped-lookup
+    misses, never a re-split of the refusal codes.
