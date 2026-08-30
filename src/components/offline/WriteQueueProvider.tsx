@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { api } from "@/lib/trpc/client";
 import { useComposer } from "./Composer";
-import { WriteQueueContext, type WriteQueueValue } from "./queue-context";
+import { WriteQueueContext, type WriteQueueValue } from "@/lib/offline/queue-context";
 import { openWriteQueue, type WriteQueue } from "@/lib/offline/queue";
 import { createOperationSender } from "@/lib/offline/sender";
 import type { JSX, ReactNode } from "react";

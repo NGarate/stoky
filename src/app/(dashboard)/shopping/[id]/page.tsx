@@ -11,7 +11,7 @@ import { CreateProductInline } from "@/components/receipt/CreateProductInline";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { projectShoppingItems } from "@/lib/offline/project";
 

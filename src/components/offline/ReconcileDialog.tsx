@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tabbableWithin } from "@/lib/focus";
 import { api } from "@/lib/trpc/client";
-import { useWriteQueue } from "./queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
 

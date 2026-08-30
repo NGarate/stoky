@@ -6,7 +6,7 @@ import { useId } from "react";
 import { Trash2 } from "lucide-react";
 
 import { Select } from "@/components/ui/select";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

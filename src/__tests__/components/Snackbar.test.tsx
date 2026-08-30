@@ -24,7 +24,7 @@ import { renderWithIntl } from "../utils/render";
 const cancel = mock((_id: string) => true);
 let holdRemaining = 10_000;
 
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },

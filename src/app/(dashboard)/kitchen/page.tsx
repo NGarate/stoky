@@ -7,7 +7,7 @@ import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { useSnackbar } from "@/components/ui/snackbar";
 import {

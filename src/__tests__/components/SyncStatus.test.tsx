@@ -32,7 +32,7 @@ let productQuery: unknown = {
   error: null,
 };
 
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   // A real context as well as the hook. `mock.module` replaces the module for
   // the whole process, and `WriteQueueProvider` renders
   // `WriteQueueContext.Provider` — so a mock that omits it turns the provider

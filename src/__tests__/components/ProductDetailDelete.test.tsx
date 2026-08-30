@@ -50,7 +50,7 @@ mock.module("next/navigation", () => ({
 // The real snackbar rather than a stub of it: `mock.module` replaces a module
 // for the whole bun process, so stubbing this one reaches every other suite
 // that renders the real provider.
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },

@@ -41,7 +41,7 @@ const idleMutation = { mutate: noop, isPending: false };
 // feedback outside the shell is a bug. The real one rather than a stub:
 // `mock.module` replaces a module process-wide and would reach
 // `Snackbar.test.tsx`.
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },

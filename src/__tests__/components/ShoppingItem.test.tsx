@@ -7,7 +7,7 @@ import { renderWithIntl } from "../utils/render";
 
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   // A real context as well as the hook. `mock.module` replaces the module for
   // the whole process, and `WriteQueueProvider` renders
   // `WriteQueueContext.Provider` — so a mock that omits it turns the provider

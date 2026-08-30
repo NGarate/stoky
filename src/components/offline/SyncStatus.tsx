@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { syncStatus, isUrgent } from "@/lib/offline/status";
-import { useWriteQueue } from "./queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { ReconcileDialog } from "./ReconcileDialog";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { JSX } from "react";

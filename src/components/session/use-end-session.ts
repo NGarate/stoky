@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signOutAction } from "@/lib/auth/actions";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { forgetCachedShell } from "@/lib/sw/register";
 import { forgetPersistedReads } from "@/lib/offline/persist";
 import { useComposer } from "@/components/offline/Composer";

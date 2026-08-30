@@ -27,7 +27,7 @@ const { createMemoryStorage } = await import("@/lib/offline/storage");
 /**
  * The queue is driven directly rather than through `useWriteQueue`.
  *
- * Other suites mock `@/components/offline/queue-context` to render a component
+ * Other suites mock `@/lib/offline/queue-context` to render a component
  * in isolation, and `mock.module` replaces a module for the whole process — so
  * reading the hook here would read whichever mock happened to load first.
  * Everything this suite asks about is observable on the queue itself.

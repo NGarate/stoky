@@ -19,6 +19,10 @@ import type {
  *
  * It is also the shape this should have had anyway: a consumer that needs the
  * hook has no business importing the provider.
+ *
+ * Lives in lib/ rather than components/offline/ because ui/ primitives (the
+ * snackbar's undo) consume it, and a design-system primitive must not depend
+ * on a feature slice — lib is the layer both may stand on.
  */
 export interface WriteQueueValue {
   state: QueueState;

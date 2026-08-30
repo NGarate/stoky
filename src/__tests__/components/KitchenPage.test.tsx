@@ -39,7 +39,7 @@ let pending: QueuedOp[] = [];
 let expiringStub: Record<string, unknown>;
 let stockStub: Record<string, unknown>;
 
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending, failed: [], status: "idle", full: false },

@@ -13,7 +13,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import {
   DURATION_MS,
   getServerSnackbarDurationSnapshot,

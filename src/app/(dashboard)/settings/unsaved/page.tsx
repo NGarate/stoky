@@ -4,7 +4,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { BackLink } from "@/components/ui/back-link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 import type { JSX } from "react";

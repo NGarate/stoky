@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import { QuantityStepper } from "@/components/inventory/QuantityStepper";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { projectStockTotals } from "@/lib/offline/project";
 import { usualLocationId } from "@/lib/inventory/usualLocation";

@@ -69,7 +69,7 @@ mock.module("next/navigation", () => ({
 // order bun happened to load them in. Rendering the real provider is both
 // immune to that and a stronger assertion: it proves the sentence reaches the
 // screen rather than that a function was called.
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },

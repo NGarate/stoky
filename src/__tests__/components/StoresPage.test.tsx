@@ -58,7 +58,7 @@ function mutation(record: unknown[], result?: unknown) {
 // The real snackbar rather than a stub: `mock.module` replaces a module for
 // the whole bun process, so stubbing it here would also replace the component
 // `Snackbar.test.tsx` renders.
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },

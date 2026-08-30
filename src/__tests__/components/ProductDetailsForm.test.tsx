@@ -19,7 +19,7 @@ let updateFails = false;
 const invalidated: string[] = [];
 let barcodeHolder: { id: string; name: string } | null = null;
 
-mock.module("@/components/offline/queue-context", () => ({
+mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
     state: { pending: [], failed: [], status: "idle", full: false },

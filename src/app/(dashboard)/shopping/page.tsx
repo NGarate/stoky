@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
-import { useWriteQueue } from "@/components/offline/queue-context";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 import type { JSX } from "react";
 
