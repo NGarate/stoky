@@ -610,9 +610,10 @@ export const receiptRouter = createTRPCRouter({
         // applies exactly one matches; the loser sees count 0 and refuses. The
         // check above is a courtesy for a fast error message — this is the one
         // that holds. Same shape as the replay claim in `replay.ts`, where the
-        // claim row is the lock. (Named indirectly on purpose: the meta-test in
-        // `replayable.test.ts` greps the routers for that helper's name as a
-        // bare substring, and a comment naming it would read as a use of it.)
+        // claim row is the lock. (Named indirectly on purpose — for reading
+        // flow, not because it has to be: the meta-test in `replayable.test.ts`
+        // matches call syntax rather than the bare name, so a comment that
+        // spelled the helper out would no longer read as a use of it.)
         const claimed = await tx.receipt.updateMany({
           where: { id: receipt.id, status: ReceiptStatus.CONFIRMED },
           data: { status: ReceiptStatus.APPLIED },

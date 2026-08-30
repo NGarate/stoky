@@ -252,7 +252,7 @@ export const shoppingRouter = createTRPCRouter({
     }),
 
   /**
-   * Puts something on a list, either a product or free text.
+   * Puts a product on a list — always a product, never free text (D103).
    *
    * Replayable: this is the one a person does while standing in front of the
    * shelf that reminded them.
@@ -279,8 +279,8 @@ export const shoppingRouter = createTRPCRouter({
         });
       }
 
-      // The product must be the household's own — the store two checks up
-      // had the same rule and lacked it once (see the router docblock).
+      // The product must be the household's own — the store check right below
+      // has the same rule and lacked it once (see the router docblock).
       const product = await ctx.db.product.findFirst({
         where: {
           id: input.productId,
@@ -578,8 +578,8 @@ export const shoppingRouter = createTRPCRouter({
    * along for context rather than as a way to navigate.
    *
    * Each item also carries its product's current stock and minimum, or null
-   * where there is no product or no minimum — that null is what tells the
-   * screen whether to draw the notch, so it is not an oversight.
+   * where there is no minimum — that null is what tells the screen whether to
+   * draw the notch, so it is not an oversight.
    */
   getBuyList: householdProcedure.query(async ({ ctx }) => {
     const items = await ctx.db.shoppingItem.findMany({
