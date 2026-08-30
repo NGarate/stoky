@@ -558,6 +558,7 @@
     "review": "Review receipt",
     "store": "Store",
     "purchaseDate": "Purchase date",
+    "uploadedAt": "Uploaded",
     "totalAmount": "Total amount",
     "items": "Items",
     "matchProduct": "Match product",

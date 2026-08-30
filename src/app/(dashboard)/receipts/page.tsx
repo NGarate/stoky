@@ -112,10 +112,18 @@ export default function ReceiptsPage() {
               href={receiptHref(receipt)}
               key={receipt.id}
               meta={[
-                {
-                  label: t("purchaseDate"),
-                  value: dateFormat.format(receipt.createdAt),
-                },
+                // The label follows the data: purchaseDate is optional at upload, and for
+                // months this row showed createdAt under "Fecha de compra" — a receipt
+                // scanned a week late lied about when the shopping happened.
+                receipt.purchaseDate
+                  ? {
+                      label: t("purchaseDate"),
+                      value: dateFormat.format(receipt.purchaseDate),
+                    }
+                  : {
+                      label: t("uploadedAt"),
+                      value: dateFormat.format(receipt.createdAt),
+                    },
                 ...(receipt.totalAmount
                   ? [
                       {
