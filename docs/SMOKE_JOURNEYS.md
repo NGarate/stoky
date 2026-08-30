@@ -65,9 +65,10 @@ They are two doors onto the same data, not two applications.
 **People and devices**
 
 - **role**: `admin`, `user` or `kitchen` (§5.2). A kitchen account can look,
-  use one up — and, once Phase 8 lands the 2026-08-18 amendment (D88), write
-  down what is needed: start a list, add an item. Least privilege, enforced on
-  the server; until Phase 8, the enforced shape is still look-and-use-one-up.
+  use one up — and, since the 2026-08-18 amendment (D88) landed at `941d1ed`,
+  write down what is needed: start a list, add an item. Least privilege,
+  enforced on the server; Journey 2 carries the widened shape and its mirror
+  check.
 - **device**: the screen choice is stored per `(userId, deviceId)`, with the
   `deviceId` generated on first run and kept locally (§5.1).
 - **pending change**: a mutation composed offline and waiting to replay. Pending

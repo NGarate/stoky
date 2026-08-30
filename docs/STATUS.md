@@ -972,9 +972,10 @@ or deliberately dropped.
 
 Journeys 1, 2, 3, 4, 6, 7, 8, 9 and 10 of `docs/SMOKE_JOURNEYS.md` pass at the
 tiers a suite can answer — 4 since 2026-08-25 and 8 since 2026-08-26. Only 5 is
-short of its own promise, on T7. Journeys 2 and 7 pass against their pre-Phase-8 shape — the owner's
-pass widened both on 2026-08-18, and the widened halves are not built. The
-per-journey evidence is in that file.
+short of its own promise, on T7. Journeys 2 and 7 pass in their widened
+2026-08-18 shape — the owner's amendments landed at `941d1ed` (D88): a kitchen
+account can start a list and add an item, and every running-out row carries a
+one-tap add-to-list. The per-journey evidence is in that file.
 
 ### Environment notes
 
