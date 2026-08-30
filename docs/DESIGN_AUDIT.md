@@ -5,10 +5,14 @@ Date: 2026-08-09 · Actions revised 2026-08-10
 **This header said "Plan only. Nothing here has been implemented."** It is kept
 here, corrected, because it was false for a month while every action below
 carried a done marker — and a reader who believed line 3 would have discarded
-all of them. A0 through A4.5 are done and their markers are accurate. A4.6 is
-half done: its automated half is `e2e/screen-reader.spec.ts`, and the human
-screen-reader pass is still owed. In §5, A5.1 and A5.2 are done and were never
-marked; A5.3 and A5.4 are the only actions genuinely still open.
+all of them. A0 through A4.5 are done and their markers are accurate — A0 and
+A1.4 carried no marker until 2026-08-31, though both had long been the CI
+gates `check:links` and `check:contrast`. A4.6 is half done: its automated
+half is `e2e/screen-reader.spec.ts`, and the human screen-reader pass is
+still owed. In §5, A5.1 and A5.2 are done and were never marked; A5.3 closed
+2026-08-22 (its entry records the 142 → 13 count and the test that holds it);
+A5.4's remaining half — whether three entry points is the right number — is
+the one action genuinely still open.
 
 Scope: every route, mobile-first, WCAG **AAA**, with user-chosen theme and
 language.
@@ -51,8 +55,9 @@ the household and a receipt that has not been applied with a message rather than
 a crash, and the receipts list now sends an applied receipt there instead of to
 `/receipts/upload`, so the route is reachable and not only redirected to once.
 
-**Action A0.** Add the check above to CI as a script, so a link to a route that
-does not exist fails the build. It has caught two dead routes that three manual
+~~**Action A0.**~~ **Done** — `bun run check:links` gates CI (123 links
+against 35 routes at the 2026-08-28 count), so a link to a route that does
+not exist fails the build. It has caught two dead routes that three manual
 passes missed, and it costs nothing to run.
 
 ---
@@ -76,9 +81,9 @@ component that did this was part of the design lab and was deleted with it.
 - ~~**A1.3**~~ **Done.** Reachable from every screen, including **before
   sign-in**. Someone whose system is set to light but who needs dark for a visual
   reason must not have to log in first.
-- **A1.4** Extend `scripts/check-contrast.ts` to assert AAA for both themes on
-  the tokens actually used per route, which it already does, and keep it as the
-  gate. Do not hand-check colours.
+- ~~**A1.4**~~ **Done** — `check:contrast` is the gate (78 checks over 37
+  tokens × 2 themes, all AAA at the 2026-08-28 measurement), asserting both
+  themes on the tokens. No colour is hand-checked.
 
 ---
 
