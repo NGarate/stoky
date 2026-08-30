@@ -117,11 +117,13 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
     They were two drafts of the same explanation, one predating the flat-list
     decision's wording; merged into one that keeps each's unique half (§3's
     question, the null-minStock notch).
-15. **`store.ts`'s delete docblock claims "the row is read first now, so the
+15. ~~**`store.ts`'s delete docblock claims "the row is read first now, so the
     two are different answers"** while "not yours" and "not there" produce the
     identical NOT_FOUND. Pre-existing (not introduced by the closure work), and
     the same prose/code discordance class REV-1 chased — the next sweep's first
-    stop.
+    stop.~~ **Done 2026-08-31.** The docblock now says what the read-first is
+    actually for (the reference counting speaking before the foreign key) and
+    that the uniform NOT_FOUND is the id-existence rule, not an oversight.
 16. ~~**Dead exports in `validations/receipt.ts`:** `receiptConfirmSchema` (still
     carrying `applyToInventory` from an older design), `ReceiptConfirmInput`
     and `ReceiptItemMatchInput` have zero importers. Delete or re-point when the

@@ -84,9 +84,11 @@ export const storeRouter = createTRPCRouter({
    * to something that does not exist" (ISSUES.md PROD-1's second instance).
    *
    * It also used to rely on `where: { id, householdId }` to scope the delete,
-   * which does refuse another household's store — but as a "not found" with no
-   * distinction between "not yours" and "not there". The row is read first now,
-   * so the two are different answers.
+   * which does refuse another household's store. The row is read first now so
+   * the reference counting and its CONFLICT can speak before the foreign key
+   * gets a say — but "not yours" and "not there" are still the same
+   * NOT_FOUND, on purpose: confirming that an id exists is information, the
+   * rule every router here follows.
    */
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
