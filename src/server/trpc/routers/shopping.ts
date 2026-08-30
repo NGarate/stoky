@@ -27,12 +27,14 @@ import { withReplay } from "../replay";
  * may send each of them twice, so they carry an `idempotencyKey` and apply once
  * (`src/server/trpc/replay.ts`).
  *
- * An item always references a `Product`. Free text was accepted until 2026-08-22
- * and cost more than it gave — see `src/lib/validations/shopping.ts`.
- * Free text is what a shopping list is for — nobody wants to create a product
- * record to remember to buy stamps. The "exactly" is enforced by
- * `addShoppingItemSchema`; it was not, and an item with neither used to arrive
- * on the phone screen as an empty row that could still be ticked (SHOP-1).
+ * An item always references a `Product` (D103, 2026-08-22). Free text read
+ * like the obvious kindness and cost more than it gave: an item naming
+ * nothing the household knows cannot be priced, counted against stock,
+ * matched to a receipt line, or suppressed when it is already covered. The
+ * kindness moved to the add form, which creates the product inline — the
+ * schema (`src/lib/validations/shopping.ts`) is where the rule is enforced,
+ * and an item with neither field once reached the phone screen as a tickable
+ * empty row (SHOP-1).
  */
 /**
  * A store this household owns, or a refusal — before anything is written.
@@ -277,21 +279,20 @@ export const shoppingRouter = createTRPCRouter({
         });
       }
 
-      // If productId is provided, verify it belongs to household
-      if (input.productId) {
-        const product = await ctx.db.product.findFirst({
-          where: {
-            id: input.productId,
-            householdId: ctx.householdId,
-          },
-        });
+      // The product must be the household's own — the store two checks up
+      // had the same rule and lacked it once (see the router docblock).
+      const product = await ctx.db.product.findFirst({
+        where: {
+          id: input.productId,
+          householdId: ctx.householdId,
+        },
+      });
 
-        if (!product) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Product not found",
-          });
-        }
+      if (!product) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Product not found",
+        });
       }
 
       await assertStoreIsOurs(ctx, input.storeId);
@@ -608,8 +609,8 @@ export const shoppingRouter = createTRPCRouter({
         productId: item.productId,
         listId: item.shoppingList.id,
         listName: item.shoppingList.name,
-        // Null when the item is free text or the product has no minimum: the
-        // screen shows a bar only where there is a notch to show it against.
+        // Null when the product has no minimum: the screen shows a bar only
+        // where there is a notch to show it against.
         stock,
         minStock: product?.minStock ?? null,
       };

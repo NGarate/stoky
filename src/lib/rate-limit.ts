@@ -113,9 +113,9 @@ export function registerRateLimit(): RateLimit {
  * Receipt uploads, per account.
  *
  * OWASP ASVS V11.1.4 asks for anti-automation on expensive operations, and
- * this is the expensive one: up to 10 MB decoded, re-encoded through Sharp,
- * written to a volume, then handed to Tesseract. One call is seconds of CPU
- * and a file on disk.
+ * this is the expensive one: up to 10 MB decoded, re-encoded through
+ * `Bun.Image`, written to a volume, then handed to Tesseract. One call is
+ * seconds of CPU and a file on disk.
  *
  * Thirty an hour is well past what a person does — a month of receipts caught
  * up in one sitting is under it, and a weekly shop is three — while capping an

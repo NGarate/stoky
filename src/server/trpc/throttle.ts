@@ -14,9 +14,9 @@ import {
  * for the second case — sign-in and registration, counted per address — and
  * everything else in the application was unmetered. That is defensible for a
  * query that reads a row. It is not defensible for receipt upload, which
- * decodes up to 10 MB, re-encodes it through Sharp, writes it to a volume and
- * then starts Tesseract: one call is seconds of CPU and a file on disk, and
- * nothing stopped an account from making them in a loop.
+ * decodes up to 10 MB, re-encodes it through `Bun.Image`, writes it to a
+ * volume and then starts Tesseract: one call is seconds of CPU and a file on
+ * disk, and nothing stopped an account from making them in a loop.
  *
  * **Counted per account, not per address.** The caller here is already
  * authenticated, so the address adds nothing — an account is the thing that

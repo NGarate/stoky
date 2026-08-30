@@ -136,15 +136,16 @@ export const receiptRouter = createTRPCRouter({
    * Takes the photograph. The only procedure here that accepts arbitrary bytes.
    *
    * Every check `CLAUDE.md` requires is on this path and in this order: MIME
-   * type, size, magic bytes, then a re-encode through Sharp that strips EXIF
-   * and normalises the format — so what lands on disk is an image this server
-   * produced rather than a file a caller supplied. The name is a UUID, in a
-   * per-household directory, served only through an authenticated query.
+   * type, size, magic bytes, then a re-encode through `Bun.Image`
+   * (`src/server/services/image.ts`) that strips EXIF and normalises the
+   * format — so what lands on disk is an image this server produced rather
+   * than a file a caller supplied. The name is a UUID, in a per-household
+   * directory, served only through an authenticated query.
    *
    * Metered at 30 per account per hour, counted *before* the base64 is decoded
-   * (ASVS V11.1.4): one call is up to 10 MB decoded, a Sharp re-encode, a file,
-   * and then Tesseract. A refused upload still spends budget, or sending
-   * rubbish would be the cheap way in.
+   * (ASVS V11.1.4): one call is up to 10 MB decoded, a `Bun.Image` re-encode,
+   * a file, and then Tesseract. A refused upload still spends budget, or
+   * sending rubbish would be the cheap way in.
    *
    * Returns as soon as the file is written; OCR runs after the response.
    */
@@ -251,7 +252,6 @@ export const receiptRouter = createTRPCRouter({
       return receipt;
     }),
 
-  // F8: Get receipt processing status
   /**
    * Where a receipt has got to. What the upload screen polls.
    *
@@ -261,7 +261,6 @@ export const receiptRouter = createTRPCRouter({
   getStatus: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
@@ -301,7 +300,6 @@ export const receiptRouter = createTRPCRouter({
       };
     }),
 
-  // F11: Get receipt with items and candidates
   /**
    * A receipt with its lines and each line's candidates — the review screen.
    *
@@ -311,7 +309,6 @@ export const receiptRouter = createTRPCRouter({
   getReceiptWithItems: householdProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
         include: {
@@ -354,7 +351,6 @@ export const receiptRouter = createTRPCRouter({
       };
     }),
 
-  // F11: Confirm match for single item
   /**
    * Settles one line, and refetches the page that shows it.
    *
@@ -378,7 +374,6 @@ export const receiptRouter = createTRPCRouter({
   confirmItem: writeProcedure
     .input(receiptItemMatchSchema)
     .mutation(async ({ ctx, input }) => {
-
       const item = await ctx.db.receiptItem.findFirst({
         where: {
           id: input.receiptItemId,
@@ -437,7 +432,6 @@ export const receiptRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // F11: Confirm all items at once
   /**
    * Settles the remaining lines at once — the NEEDS_REVIEW → CONFIRMED edge.
    *
@@ -456,7 +450,6 @@ export const receiptRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
       });
@@ -553,7 +546,6 @@ export const receiptRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // F12: Apply receipt to inventory
   /**
    * The one that touches the inventory — the CONFIRMED → APPLIED edge.
    *
@@ -672,7 +664,6 @@ export const receiptRouter = createTRPCRouter({
       return { success: true, ...applied };
     }),
 
-  // F12: Get applied summary
   /**
    * What a receipt changed, after the fact.
    *
