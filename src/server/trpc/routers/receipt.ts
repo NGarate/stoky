@@ -536,12 +536,30 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
-      // Unconditional, and safe only because of the guard at the top: this
-      // write is what used to take an APPLIED receipt backwards.
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
+      // The same claim shape `applyReceipt` uses, and here for the same
+      // reason: the guard at the top only *read* the status, so an apply
+      // committing between that read and this write was dragged back to
+      // CONFIRMED and applied a second time. Filtered on the review states,
+      // this write refuses a receipt that left them, under any interleaving.
+      // The line updates above are not covered — an apply landing mid-loop may
+      // still have kept lines settled underneath it — but the status edge is
+      // what a double-apply needs, and the status edge holds.
+      const claimed = await ctx.db.receipt.updateMany({
+        where: {
+          id: input.receiptId,
+          status: {
+            in: [ReceiptStatus.NEEDS_REVIEW, ReceiptStatus.CONFIRMED],
+          },
+        },
         data: { status: ReceiptStatus.CONFIRMED },
       });
+
+      if (claimed.count === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Receipt is not open for review",
+        });
+      }
 
       return { success: true };
     }),

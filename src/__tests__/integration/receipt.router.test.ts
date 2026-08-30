@@ -709,6 +709,19 @@ describe("receipt.confirmAll", () => {
 });
 
 describe("the review has edges", () => {
+  it("a CONFIRMED receipt is still open, so changing your mind before applying works", async () => {
+    // The deliberate half of the guard: CONFIRMED is not the point of no
+    // return, APPLIED is. Pinned so that narrowing `assertOpenForReview` to
+    // NEEDS_REVIEW alone — which reads like a tightening — goes red here.
+    const { first } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+
+    await caller.receipt.confirmItem({ receiptItemId: first.id, action: "SKIP" });
+
+    const item = await prisma.receiptItem.findUnique({ where: { id: first.id } });
+    expect(item?.matchStatus).toBe(MatchStatus.SKIPPED);
+    expect(item?.matchedProductId).toBeNull();
+  });
+
   it("an APPLIED receipt is closed for review, so it cannot be re-applied", async () => {
     // Neither confirm procedure looked at the receipt's status, and
     // `confirmAll` ends by writing CONFIRMED unconditionally. So an APPLIED
