@@ -52,10 +52,12 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    `receipt.router.test.ts` and `inventory.purchase-atomicity.test.ts` (body and
    comment). Extract to `src/__tests__/utils/` when a third injection site
    appears — not before.
-7. **`receiptItemId` accepts the empty string** in the review-decision union
+7. ~~**`receiptItemId` accepts the empty string** in the review-decision union
    (`validations/receipt.ts`). It falls through to the household-scoped lookup
    and NOT_FOUND, so it is harmless; `.min(1)` would match the treatment
-   `productId` received.
+   `productId` received.~~ **Done 2026-08-31.** `.min(1)` on all three
+   branches, pinned by `unit/receipt.validation.test.ts` — verified red with
+   the constraint reverted.
 8. **The review page's `onConfirm` else-if chain silently swallows an
    impossible combination** (MATCH without a product, CREATE without a name).
    `ReviewCard`'s own guards make the branches unreachable today; the silence is

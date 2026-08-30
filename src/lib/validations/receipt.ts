@@ -101,17 +101,17 @@ export const receiptUploadSchema = z.object({
  */
 export const receiptItemMatchSchema = z.discriminatedUnion("action", [
   z.object({
-    receiptItemId: z.string(),
+    receiptItemId: z.string().min(1),
     action: z.literal("MATCH"),
     productId: z.string().min(1),
   }),
   z.object({
-    receiptItemId: z.string(),
+    receiptItemId: z.string().min(1),
     action: z.literal("CREATE"),
     customName: z.string().trim().min(1),
   }),
   z.object({
-    receiptItemId: z.string(),
+    receiptItemId: z.string().min(1),
     action: z.literal("SKIP"),
   }),
 ]);
