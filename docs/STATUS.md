@@ -339,11 +339,11 @@ prize was variance off the critical path more than the average; and the
 container briefly looked 100s slower against drifting runners until twin jobs
 on the same commit measured 400s vs 405s (`31583973041`).
 
-Two `test.skip`s remain in `critical-paths.spec.ts`, scoped to phone viewports
-"because the phone UI is Phase 4" — and both are now **inert**: since the
-matrix stopped multiplying (D33), no mobile project runs that spec at all, so
-the guards can never fire, and the phase they name has closed. Filed as
-TEST-6 rather than deleted in passing.
+The two `test.skip`s that sat in `critical-paths.spec.ts`, scoped to phone
+viewports "because the phone UI is Phase 4", were filed as TEST-6 rather than
+deleted in passing — and closed on 2026-08-27 (`bcd1e74`): run at a phone
+viewport the failures were all locators, nothing the product does, and the
+spec passes 8 of 8 there now.
 
 ### Which tier answers which question
 

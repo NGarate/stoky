@@ -3217,11 +3217,11 @@ which is short:
   not the fix: 1.4.0 was measured on 2026-08-25 and still reproduces. Its
   honest cost: roughly one `verify:ci` or CI `test` job in seven goes red
   spuriously; re-run before investigating.
-- **TEST-6** — two inert mobile skips citing a closed phase; delete or restate.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
-  lives in `docs/REDESIGN_PLAN.md` §10: the Phase 7 review document, the three
-  manual passes, T7, the ± stepper, the per-device screen choice — and now
-  Phase 8, the owner's first pass, which owned UI-11.
+  lives in `docs/REDESIGN_PLAN.md` §10: the three manual passes, T7, and
+  Phase 8's done-when — the owner repeating their pass. The Phase 7 review
+  document, the ± stepper, the per-device screen choice and TEST-6, which this
+  list once carried, have all closed; the entries above name the commits.
 
 ---
 

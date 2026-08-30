@@ -86,9 +86,10 @@ Receipts and price history keep their meaning but no longer have a journey — s
 `ISSUES.md` UI-1 — `/products/new`, `/inventory/add`, `/inventory/consume` and
 `/settings` were linked from the interface and all four 404'd. All of them now
 exist and are driven by `e2e/critical-paths.spec.ts`, whose four `test.fixme`
-tests were removed rather than left as a promise. Two `test.skip`s remain in
-that file, citing "Phase 4" — both inert and both stale since the matrix
-stopped running the spec on mobile projects; filed as TEST-6.
+tests were removed rather than left as a promise. The two `test.skip`s that
+remained in that file, citing "Phase 4", were filed as TEST-6 and closed on
+2026-08-27 (`bcd1e74`): run at a phone viewport the failures were all
+locators, nothing the product does, and the spec passes 8 of 8 there now.
 
 This is the bridge journey. It proves the existing routers are reachable by a
 person before either new screen is built, and it is the journey Phase 1 is
