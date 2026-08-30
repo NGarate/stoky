@@ -101,6 +101,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-10 | The auth hero panels are painted with the action colour | ✅ Resolved (`d7c178d`) |
 | UI-11 | A run-out product with a minimum is labelled low, not out | ✅ Resolved 2026-08-20 |
 | PRICE-1 | No UI path can create a price record | ✅ Resolved (`4bbb82d`) |
+| REV-1 | 2026-08-29 review: receipt pipeline discordances (apply untransacted, review edge-less, CREATE injection, append-on-reparse) | ✅ Resolved (this plan's commits) |
 
 ---
 
@@ -3172,6 +3173,36 @@ Create `docs/setup.md` or expand README with:
 4. Troubleshooting guide
 
 **Priority:** Complete before onboarding new developers
+
+---
+
+### ✅ REV-1: The receipt router's prose promised what its code did not do
+
+**Files:** `src/server/trpc/routers/receipt.ts`, `src/lib/validations/receipt.ts`,
+`src/server/services/receiptParser.ts`
+**Severity:** HIGH (the CREATE injection was cross-household; the rest
+double-booked stock)
+**Status:** RESOLVED — the discordance-closure plan
+(`docs/superpowers/plans/2026-08-29-discordance-closure.md`)
+
+A full-codebase review found the receipt router a generation behind the
+codebase's own conventions: `applyReceipt` claimed "in one transaction" over
+sequential unwrapped writes; the state machine was enforced on one edge of
+six, so `confirmAll` could drag APPLIED back to CONFIRMED for a double
+apply; `action: "CREATE"` with a foreign `productId` and no `customName`
+bypassed both the ownership check and the create branch (SEC-1's shape, a
+third time); `saveParsedItems` appended, doubling lines on any re-parse; and
+its lookups answered foreign ids with FORBIDDEN, confirming they exist. Each
+is closed by a commit that made the prose true rather than deleting the
+promise, except `parseReceipt`/`matchItems`, which were dead public surface
+and are gone. One window stays deliberately open and documented in
+`applyReceipt`'s comment: a `confirmItem` racing an apply on an individual
+line can land between the items read and the entry writes — closing it needs
+confirmItem to re-check status inside its own transaction, a decision this
+pass did not take. The pattern worth keeping: every one of these hid in the
+one router whose comments were written before the conventions were, and the
+review found them by diffing prose against code — a false docblock is a
+defect here, not a nuisance.
 
 ---
 

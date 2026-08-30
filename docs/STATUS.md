@@ -475,10 +475,13 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **59 procedures** — a count
-that has moved four times (44 → 45 → 55 → 59) as phases closed and the export
-router arrived, which is why `capabilities.test.ts` asserts it structurally
-instead of anyone trusting a document. 10 Zod validation modules. 6 service
+`shopping`) merged in `src/server/trpc/router.ts`, **62 procedures** — a count
+that has moved six times (44 → 45 → 55 → 59 → 64 → 62: it reached 64
+unrecorded while this file said 59, which is the drift this sentence exists to
+prevent, and fell to 62 when the two dead pipeline procedures were deleted) as
+phases closed and the export router arrived, which is why
+`capabilities.test.ts` asserts it structurally instead of anyone trusting a
+document. 10 Zod validation modules. 6 service
 modules: `ocr`, `receiptParser`, `productMatcher`, `openFoodFacts`,
 `product-cache`, `errors` — plus `src/lib/rating.ts`, the pure module behind
 Phase 6.
@@ -512,9 +515,12 @@ of a table. The five newest pages are Phase 5's: `/kitchen`, `/shopping` as
 Screen A (the list manager moved to `/shopping/lists`), `/settings/people`,
 and `/settings/unsaved`.
 
-**Design system — one, and it is in CSS.** 26 tokens under `@theme` in
-`src/app/globals.css`, light and dark, with a three-state System/Light/Dark
-control and a language control on every surface. `src/components/ui/` holds
+**Design system — one, and it is in CSS.** 37 tokens under `@theme` in
+`src/app/globals.css` — this line said 26 while line 39 of this same file said
+37; measured by `awk '/@theme inline/,/^}/' src/app/globals.css | grep -c --
+'--'`, so the two now agree — light and dark, with a three-state
+System/Light/Dark control and a language control on every surface.
+`src/components/ui/` holds
 `button`, `input`, `ThemeControl`, `LocaleSwitcher`, `PreferencesCluster`.
 Everything else is Tailwind against the tokens — the earlier plan to install
 ~23 shadcn primitives was not followed, and no page has needed them.
@@ -531,7 +537,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 59 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 62 procedures assigned. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request rather than whenever the 15-minute
 token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
