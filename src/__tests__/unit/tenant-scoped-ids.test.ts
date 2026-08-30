@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { withoutComments } from "../utils/without-comments";
 
 /**
  * Every caller-supplied id that names a household-scoped row must be looked up
@@ -112,24 +113,15 @@ const SCOPED: Record<string, RegExp> = {
   receiptItemId: /receiptItem\.(findFirst|findUnique|findMany)/,
 };
 
-/**
- * Strip comments before a body is tested against `SCOPED`, so prose satisfies
- * nothing.
- *
- * A bare identifier like `assertOwnProduct` in `SCOPED` matches a comment
- * naming the helper — `// (see assertOwnProduct above)` — exactly as readily
- * as a real call. That is not hypothetical: every NOT_FOUND block receipt.ts
- * grew during the review carries that phrase, and with it in place this file
- * stayed green after the real `assertOwnProduct(...)` call was deleted from
- * `confirmItem`. Comments are removed from the body once, here, rather than
- * fixed by tightening each alternative to call syntax, because a call pasted
- * into a comment for documentation — `// calls assertOwnProduct(id, hh)` —
- * would still satisfy a `name\(` pattern; stripping the comment first closes
- * both.
- */
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-}
+// Bodies are stripped of comments before they are tested against `SCOPED`,
+// so prose satisfies nothing: a bare identifier in `SCOPED` matches
+// `// (see assertOwnProduct above)` as readily as a real call — most of the
+// NOT_FOUND blocks receipt.ts grew during the review carry that phrase
+// (confirmAll's per-line refusal words it differently) — and with the
+// comments in place this file stayed green after the real
+// `assertOwnProduct(...)` call was deleted from `confirmItem`. The stripper
+// itself, its string-literal handling and its stated limits live in
+// `../utils/without-comments`, shared with `replayable.test.ts`.
 
 /**
  * Procedures that take one of these fields and legitimately do not look it up,

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { appRouter } from "@/server/trpc/router";
 import type { AnyProcedure } from "@trpc/server";
+import { withoutComments } from "../utils/without-comments";
 
 /**
  * Which procedures a queued shop may replay, as a recorded decision.
@@ -125,7 +126,7 @@ describe("the list and the sources agree", () => {
     const found: string[] = [];
 
     for (const file of ["inventory.ts", "shopping.ts"]) {
-      const source = readFileSync(join(ROUTERS, file), "utf8");
+      const source = withoutComments(readFileSync(join(ROUTERS, file), "utf8"));
       for (const match of source.matchAll(/procedure: "([\w.]+)"/g)) {
         found.push(match[1] as string);
       }
@@ -135,16 +136,17 @@ describe("the list and the sources agree", () => {
   });
 
   it("finds withReplay in exactly the two routers that should hold it", () => {
-    // Call syntax, not the bare word: routers that discuss withReplay in a
-    // comment without calling it avoid naming it at all, for exactly this
-    // reason — receipt.ts's claim-row comment names it only indirectly
-    // ("Named indirectly on purpose: ... greps the routers for that helper's
-    // name"). Matching call syntax means a future comment that does name it
-    // outright still can't trip this scan.
+    // Comments are stripped before the scan, so a comment that names the
+    // helper — or spells its whole call syntax out — can neither hide a
+    // router from this list nor falsely add one. Call syntax rather than the
+    // bare word stays as the pattern: it is what distinguishes a use from a
+    // string that merely contains the name.
     const holders = ["auth", "household", "inventory", "location", "price",
       "product", "receipt", "shopping", "store"]
       .filter((name) =>
-        readFileSync(join(ROUTERS, `${name}.ts`), "utf8").includes("withReplay("),
+        withoutComments(
+          readFileSync(join(ROUTERS, `${name}.ts`), "utf8"),
+        ).includes("withReplay("),
       );
 
     expect(holders).toEqual(["inventory", "shopping"]);

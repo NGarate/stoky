@@ -76,23 +76,32 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
 
 ## Meta-test hardening
 
-9. **`withoutComments()` in `tenant-scoped-ids.test.ts` does not handle `//` or
+9. ~~**`withoutComments()` in `tenant-scoped-ids.test.ts` does not handle `//` or
    `/*` inside string literals.** A URL in an error message would have its tail
    stripped and could swallow following code from the scan. No such literal
-   exists in the routers today; documented in the helper's own docblock.
-10. **The replayable scan matches `withReplay(` anywhere — including a
+   exists in the routers today; documented in the helper's own docblock.~~
+   **Done 2026-08-31**, together with 10–12 — one seam. The helper moved to
+   `src/__tests__/utils/without-comments.ts` as a string-tracking scanner
+   with its own unit tests (4 of 8 go red against the old regexes); its one
+   remaining limit — regex literals — is stated in its docblock.
+10. ~~**The replayable scan matches `withReplay(` anywhere — including a
     comment.** The inverse fragility of the one it fixed: a comment spelling the
     call syntax would falsely count as a use and break the exact-list assertion.
     The routers' convention (name it indirectly in prose) avoids this; a
-    comment-stripping pass like item 9's helper would close it properly.
-11. **`replayable.test.ts` (~line 140) quotes the old `receipt.ts` sentence
+    comment-stripping pass like item 9's helper would close it properly.~~
+    **Done 2026-08-31.** Both of `replayable.test.ts`'s scans strip comments
+    first; proven by planting `// … withReplay(ctx, {` in `price.ts` and
+    watching the exact-list assertion stay green.
+11. ~~**`replayable.test.ts` (~line 140) quotes the old `receipt.ts` sentence
     verbatim** ("greps the routers for that helper's name") — the receipt.ts
     side was reworded at `712b14c` and the quoting side was not. Cosmetic; the
     assertion logic is unaffected. One-line reword next time someone is in the
-    file.
-12. **`tenant-scoped-ids.test.ts`'s docstring says "every NOT_FOUND block …
+    file.~~ **Done 2026-08-31** — the comment was rewritten for the stripped
+    scan and no longer quotes anything.
+12. ~~**`tenant-scoped-ids.test.ts`'s docstring says "every NOT_FOUND block …
     carries that phrase"** — slightly overbroad; `confirmAll`'s per-line block
-    carries a different comment. Illustrative prose in a test file.
+    carries a different comment. Illustrative prose in a test file.~~
+    **Done 2026-08-31** — now "most of", naming the exception.
 
 ## Stale prose and dead code, found in passing
 
