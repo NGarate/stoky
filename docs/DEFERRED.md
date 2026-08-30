@@ -48,11 +48,14 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    P2028 → INTERNAL_SERVER_ERROR instead of the clean BAD_REQUEST the tests
    pin. Never a double-book — the failure mode is an error. `createMany` per
    model would shrink both the winner's duration and the loser's wait.
-5. **The rollback test asserts `toBeDefined`, not the injected message.** Any
+5. ~~**The rollback test asserts `toBeDefined`, not the injected message.** Any
    earlier refusal would leave zero entries and green the assertions without the
    transaction ever opening. Latent, not live — the fixtures preclude it — and
    the retry-succeeds assertion already proves the rollback. Close with
-   `toContain("price write failed")`.
+   `toContain("price write failed")`.~~ **Done 2026-08-31.** Proven live by
+   the exact scenario the entry described: with the seed status moved to
+   NEEDS_REVIEW the old assertion stayed satisfied on the early refusal and
+   the new one went red on the message.
 6. **`clientThatCannotWritePrices` is duplicated verbatim** in
    `receipt.router.test.ts` and `inventory.purchase-atomicity.test.ts` (body and
    comment). Extract to `src/__tests__/utils/` when a third injection site

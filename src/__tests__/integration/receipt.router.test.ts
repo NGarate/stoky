@@ -937,7 +937,11 @@ describe("receipt.applyReceipt", () => {
     } catch (error) {
       thrown = error;
     }
-    expect(thrown).toBeDefined();
+    // The *injected* failure, by message — any earlier refusal (a status
+    // guard, a claim miss) would also leave zero entries and would have
+    // greened a bare toBeDefined without the transaction ever opening.
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain("price write failed");
 
     // Nothing half-written: the stock entry created before the price write went
     // down with it, and the status never left CONFIRMED.
