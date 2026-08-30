@@ -105,12 +105,18 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
 
 ## Stale prose and dead code, found in passing
 
-13. **`getBuyList` still defends against a null product** (`product?.name`,
+13. ~~**`getBuyList` still defends against a null product** (`product?.name`,
     `product?.minStock`, a `product ? … : null` branch) though D103 made
     `productId` required with an FK — the branches are dead. Removing them is a
-    behavior-neutral cleanup that wants its own small commit.
-14. **A stacked pair of docblocks sits above `getBuyList`** — which block
-    belongs to what needs an actual read, not a hotfix.
+    behavior-neutral cleanup that wants its own small commit.~~ **Done
+    2026-08-31**, with 14 — the dead branches and the docblocks were one
+    read of the same function. `stock` and `unit` narrowed from nullable to
+    always-present in the return type, which is the truth D103 created.
+14. ~~**A stacked pair of docblocks sits above `getBuyList`** — which block
+    belongs to what needs an actual read, not a hotfix.~~ **Done 2026-08-31.**
+    They were two drafts of the same explanation, one predating the flat-list
+    decision's wording; merged into one that keeps each's unique half (§3's
+    question, the null-minStock notch).
 15. **`store.ts`'s delete docblock claims "the row is read first now, so the
     two are different answers"** while "not yours" and "not there" produce the
     identical NOT_FOUND. Pre-existing (not introduced by the closure work), and
