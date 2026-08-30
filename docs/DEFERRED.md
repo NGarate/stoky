@@ -66,11 +66,13 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    `productId` received.~~ **Done 2026-08-31.** `.min(1)` on all three
    branches, pinned by `unit/receipt.validation.test.ts` — verified red with
    the constraint reverted.
-8. **The review page's `onConfirm` else-if chain silently swallows an
+8. ~~**The review page's `onConfirm` else-if chain silently swallows an
    impossible combination** (MATCH without a product, CREATE without a name).
    `ReviewCard`'s own guards make the branches unreachable today; the silence is
    the failure mode if those guards ever move. A dev-only throw in the final
-   else would convert silence to noise.
+   else would convert silence to noise.~~ **Done 2026-08-31** — the final else
+   throws outside production, naming the action. No test: the branch is
+   unreachable by construction, which is the point of the guard.
 
 ## Meta-test hardening
 

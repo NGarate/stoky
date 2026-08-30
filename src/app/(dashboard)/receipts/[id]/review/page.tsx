@@ -258,6 +258,14 @@ export default function ReviewPage() {
                     });
                   } else if (action === "SKIP") {
                     confirmItemMutation.mutate({ receiptItemId: item.id, action });
+                  } else if (process.env.NODE_ENV !== "production") {
+                    // Unreachable while ReviewCard's guards hold. If they ever
+                    // move, a decision silently dropped here would read as a
+                    // button that does nothing — the shape of A11Y-2 — so in
+                    // development it is noise instead.
+                    throw new Error(
+                      `ReviewCard emitted ${action} without its required field`,
+                    );
                   }
                 }}
               />
