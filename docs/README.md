@@ -1,10 +1,10 @@
 # Index of the planning documents
 
-Updated: 2026-08-27
+Updated: 2026-08-30
 
 **If you are an agent or a person picking this project up, start here.**
 
-There are eleven documents, plus three executed implementation plans kept as
+There are twelve documents, plus four executed implementation plans kept as
 records, one pre-plan with a question still open, and one plan not yet started. That is a lot, and it is
 deliberate: an earlier revision had six
 overlapping status files that contradicted each other, and a fake test suite
@@ -46,6 +46,7 @@ document.
 | Why was this built this way? | `PROGRESS.md` (Decisions) |
 | What comes next, and what does done mean? | `REDESIGN_PLAN.md` |
 | Is this defect known? Is it fixed? | `ISSUES.md` |
+| What did the 2026-08-29 review find and deliberately not fix? | `DEFERRED.md` |
 | What must work before calling a slice done? | `SMOKE_JOURNEYS.md` |
 | What is the interface supposed to look like, and what is wrong with it? | `DESIGN_AUDIT.md` |
 | What is the threat model, and what is hardened? | `SECURITY.md` |
@@ -149,6 +150,14 @@ Phase 5 pages) and **A5.4** (what `/dashboard` becomes — half-decided
 2026-08-18: the Panel stays; the 2026-08-19 second pass replaced its doors
 with a one-line summary over the lists, which are the doors themselves;
 whether three entry points is the right number is the half still open).
+
+**[`DEFERRED.md`](DEFERRED.md)**
+What the 2026-08-29 full-codebase review found and deliberately did not fix —
+each item with why it was deferred and what would close it. The Critical and
+Important findings themselves are `ISSUES.md` REV-1; this holds the tail. Its
+rule mirrors §10's: an item leaves by being done, promoted to `ISSUES.md`, or
+dropped in writing — never by being forgotten. Two of its items are owner
+decisions, not code.
 
 **[`SECURITY.md`](SECURITY.md)**
 The threat model for a self-hosted deployment, what is already hardened
