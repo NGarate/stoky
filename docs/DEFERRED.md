@@ -33,10 +33,15 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    partially settled with the status unmoved. Honest in the code comment
    (`receipt.ts`, above the claim). Close by wrapping the loop and the claim in
    one transaction if partial settlement ever bites.
-3. **`applyReceipt`'s claim filters on `id` + `status` but not `householdId`.**
+3. ~~**`applyReceipt`'s claim filters on `id` + `status` but not `householdId`.**
    The id comes from a household-scoped `findFirst` in the same resolver, so
    this is belt-and-braces only; adding `householdId` to the `updateMany` where
-   would make the write self-scoping like the rest of the router. One line.
+   would make the write self-scoping like the rest of the router. One line.~~
+   **Done 2026-08-31**, and `confirmAll`'s claim — the same shape, which this
+   entry did not name — got the same filter in the same commit. No test can
+   reach the difference (the ids are household-scoped upstream), so none was
+   written; the tenant-scope suite still passes both ways, which is the point
+   of belt-and-braces.
 4. **A long receipt's apply holds the row lock for the whole loop.** The loser
    of two concurrent applies blocks for the winner's duration; under load and
    Prisma's 5s interactive-transaction default, a double-tap could surface as

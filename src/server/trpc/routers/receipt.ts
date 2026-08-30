@@ -544,9 +544,13 @@ export const receiptRouter = createTRPCRouter({
       // The line updates above are not covered — an apply landing mid-loop may
       // still have kept lines settled underneath it — but the status edge is
       // what a double-apply needs, and the status edge holds.
+      // householdId for the same belt-and-braces reason as applyReceipt's
+      // claim: the id was resolved household-scoped above, and the write
+      // being self-scoping means that stays true wherever the id came from.
       const claimed = await ctx.db.receipt.updateMany({
         where: {
           id: input.receiptId,
+          householdId: ctx.householdId,
           status: {
             in: [ReceiptStatus.NEEDS_REVIEW, ReceiptStatus.CONFIRMED],
           },
@@ -614,8 +618,16 @@ export const receiptRouter = createTRPCRouter({
         // flow, not because it has to be: the meta-test in `replayable.test.ts`
         // matches call syntax rather than the bare name, so a comment that
         // spelled the helper out would no longer read as a use of it.)
+        // householdId is belt-and-braces — the id came from a
+        // household-scoped findFirst above — but it makes the write
+        // self-scoping like the rest of the router, so the guarantee no
+        // longer depends on where the id was resolved.
         const claimed = await tx.receipt.updateMany({
-          where: { id: receipt.id, status: ReceiptStatus.CONFIRMED },
+          where: {
+            id: receipt.id,
+            householdId: ctx.householdId,
+            status: ReceiptStatus.CONFIRMED,
+          },
           data: { status: ReceiptStatus.APPLIED },
         });
 
