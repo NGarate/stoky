@@ -394,42 +394,67 @@ export const receiptRouter = createTRPCRouter({
         });
       }
 
+      // A courtesy fast refusal for the common case; the check that holds is
+      // the locked one inside the transaction below.
       assertOpenForReview(item.receipt.status);
 
-      // Narrowed by the discriminated union, so each branch reads only the
-      // fields its action has — and SKIP falls through to a null product,
-      // which detaches whatever the matcher had put there.
-      let productId: string | null = null;
-      if (input.action === "MATCH") {
-        await assertOwnProduct(ctx.db, input.productId, ctx.householdId);
-        productId = input.productId;
-      }
-      if (input.action === "CREATE") {
-        const newProduct = await ctx.db.product.create({
+      return ctx.db.$transaction(async (tx) => {
+        // Re-check under the receipt row lock. The read above can go stale:
+        // an apply committing between it and the write below would leave
+        // this edit under an APPLIED receipt, disagreeing with the stock the
+        // apply booked from the pre-edit line — the window the 2026-08-29
+        // review documented rather than closed. FOR UPDATE serialises this
+        // settlement against the apply's claim whichever way the race goes:
+        // an apply in flight holds the row, so this blocks and then refuses
+        // on APPLIED; a settlement in flight holds it, so the apply's claim
+        // waits and its line read sees the finished edit.
+        const rows = await tx.$queryRaw<{ status: ReceiptStatus }[]>`
+          SELECT status FROM "Receipt" WHERE id = ${item.receiptId} FOR UPDATE
+        `;
+        const current = rows[0];
+        if (!current) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Receipt not found",
+          });
+        }
+        assertOpenForReview(current.status);
+
+        // Narrowed by the discriminated union, so each branch reads only the
+        // fields its action has — and SKIP falls through to a null product,
+        // which detaches whatever the matcher had put there.
+        let productId: string | null = null;
+        if (input.action === "MATCH") {
+          await assertOwnProduct(tx, input.productId, ctx.householdId);
+          productId = input.productId;
+        }
+        if (input.action === "CREATE") {
+          const newProduct = await tx.product.create({
+            data: {
+              name: input.customName,
+              householdId: ctx.householdId,
+              defaultUnit: "unit",
+            },
+          });
+          productId = newProduct.id;
+        }
+
+        await tx.receiptItem.update({
+          where: { id: input.receiptItemId },
           data: {
-            name: input.customName,
-            householdId: ctx.householdId,
-            defaultUnit: "unit",
+            matchedProductId: productId,
+            matchStatus:
+              input.action === "SKIP"
+                ? MatchStatus.SKIPPED
+                : input.action === "CREATE"
+                  ? MatchStatus.USER_CREATED
+                  : MatchStatus.USER_CONFIRMED,
+            matchConfidence: input.action === "MATCH" ? 1.0 : null,
           },
         });
-        productId = newProduct.id;
-      }
 
-      await ctx.db.receiptItem.update({
-        where: { id: input.receiptItemId },
-        data: {
-          matchedProductId: productId,
-          matchStatus:
-            input.action === "SKIP"
-              ? MatchStatus.SKIPPED
-              : input.action === "CREATE"
-                ? MatchStatus.USER_CREATED
-                : MatchStatus.USER_CONFIRMED,
-          matchConfidence: input.action === "MATCH" ? 1.0 : null,
-        },
+        return { success: true };
       });
-
-      return { success: true };
     }),
 
   /**
@@ -648,13 +673,13 @@ export const receiptRouter = createTRPCRouter({
 
         // Read the lines inside the transaction, after the claim, so two
         // applies serialise and the lines the loop walks are one consistent
-        // snapshot of each other. That is all it buys: nothing locks the item
-        // rows, so a confirmItem racing an individual line can still commit
-        // between this read and the writes below, and the entry would record
-        // the pre-edit line. The review chose to document that window rather
-        // than lock it away — closing it needs confirmItem to re-check the
-        // receipt status inside its own transaction, which is a decision, not
-        // a wording fix.
+        // snapshot of each other. A confirmItem racing an individual line is
+        // serialised too, from its own side: it takes FOR UPDATE on this
+        // receipt row and re-checks the status under the lock, so it either
+        // commits before this claim — and the read below sees the finished
+        // edit — or blocks on it and refuses on APPLIED. The 2026-08-29
+        // review had documented that window rather than closed it; closed
+        // 2026-08-31 (DEFERRED.md item 1).
         const items = await tx.receiptItem.findMany({
           where: { receiptId: receipt.id },
           include: { matchedProduct: true },

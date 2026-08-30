@@ -19,14 +19,20 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
 
 ## Receipt pipeline — belt-and-braces
 
-1. **The per-line confirmItem-vs-apply window is open, on purpose.**
+1. ~~**The per-line confirmItem-vs-apply window is open, on purpose.**
    `applyReceipt` reads the lines inside its transaction after the status claim,
    but nothing locks the `ReceiptItem` rows — a `confirmItem` racing an apply on
    an individual line can commit between the read and the entry writes, so the
    entry records the pre-edit line. Stated in `applyReceipt`'s own comment and in
    REV-1. Closing it needs `confirmItem` to re-check status inside its own
    transaction — a design decision, not a patch. The status edge (no double
-   apply) holds regardless.
+   apply) holds regardless.~~ **Done 2026-08-31 — the decision was taken.**
+   `confirmItem` re-checks the status under `SELECT … FOR UPDATE` on the
+   receipt row inside its own transaction (the INV-2 lock shape), so the race
+   serialises whichever way it goes: the settlement commits before the apply's
+   claim and is read by it, or blocks on it and refuses on APPLIED. Pinned by
+   a forced-interleaving test — the confirming client pauses on its stale
+   read while a healthy caller applies — verified red twice without the lock.
 2. ~~**`confirmAll`'s per-line updates are not in a transaction.** The final
    status write is a claim (refuses a receipt that left the review states), so
    the double-apply edge holds — but a crash or race mid-loop can leave lines

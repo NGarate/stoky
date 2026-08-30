@@ -3195,11 +3195,12 @@ third time); `saveParsedItems` appended, doubling lines on any re-parse; and
 its lookups answered foreign ids with FORBIDDEN, confirming they exist. Each
 is closed by a commit that made the prose true rather than deleting the
 promise, except `parseReceipt`/`matchItems`, which were dead public surface
-and are gone. One window stays deliberately open and documented in
-`applyReceipt`'s comment: a `confirmItem` racing an apply on an individual
-line can land between the items read and the entry writes — closing it needs
-confirmItem to re-check status inside its own transaction, a decision this
-pass did not take. The pattern worth keeping: every one of these hid in the
+and are gone. The one window that stayed deliberately open — a `confirmItem`
+racing an apply on an individual line could land between the items read and
+the entry writes — closed on 2026-08-31 (DEFERRED.md item 1): `confirmItem`
+re-checks the status under `FOR UPDATE` on the receipt row inside its own
+transaction, pinned by a forced-interleaving test verified red twice without
+the lock. The pattern worth keeping: every one of these hid in the
 one router whose comments were written before the conventions were, and the
 review found them by diffing prose against code — a false docblock is a
 defect here, not a nuisance.

@@ -801,6 +801,67 @@ describe("the review has edges", () => {
     // The status write at the end of `confirmAll` is what the guard makes safe.
     expect(updated?.status).toBe(ReceiptStatus.APPLIED);
   });
+
+  it("a confirmItem racing an apply cannot edit a line the apply already booked", async () => {
+    // DEFERRED.md item 1, the window REV-1 documented rather than closed:
+    // confirmItem read the status, an apply committed, and the line update
+    // landed anyway — an edit under an APPLIED receipt, disagreeing with the
+    // stock the apply had just booked from the pre-edit line.
+    //
+    // The interleaving is forced rather than hoped for, the way the INV-2
+    // tests force theirs: the confirming caller's client pauses after it has
+    // read the item and its receipt — exactly the moment the status check
+    // goes stale — while a healthy caller applies the receipt to completion.
+    const { receipt, first } = await seedReceipt({
+      status: ReceiptStatus.CONFIRMED,
+    });
+
+    let readTheReceipt = false;
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pausing = prisma.$extends({
+      query: {
+        receiptItem: {
+          async findFirst({ args, query }) {
+            const row = await query(args);
+            readTheReceipt = true;
+            await gate;
+            return row;
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
+    const { caller: slow } = await callerFor(householdId, "OWNER", pausing);
+
+    const inFlight = slow.receipt
+      .confirmItem({ receiptItemId: first.id, action: "SKIP" })
+      .then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+
+    // Observable rather than guessed, like the INV-2 tests: wait until the
+    // stale read has actually happened before applying.
+    for (let i = 0; i < 200 && !readTheReceipt; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(readTheReceipt).toBe(true);
+
+    await caller.receipt.applyReceipt({ receiptId: receipt.id });
+    release();
+
+    const outcome = await inFlight;
+    expect("error" in outcome).toBe(true);
+    expect((outcome as { error: unknown }).error).toBeInstanceOf(TRPCError);
+    expect(((outcome as { error: TRPCError }).error).code).toBe("BAD_REQUEST");
+
+    // The line the apply booked stock from is exactly as it booked it.
+    const line = await prisma.receiptItem.findUnique({ where: { id: first.id } });
+    expect(line?.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
+    expect(line?.matchedProductId).toBe(productId);
+  });
 });
 
 describe("receipt.applyReceipt", () => {
