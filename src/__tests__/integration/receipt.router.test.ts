@@ -706,6 +706,60 @@ describe("receipt.confirmAll", () => {
     const updated = await prisma.receipt.findUnique({ where: { id: receipt.id } });
     expect(updated?.status).toBe(ReceiptStatus.NEEDS_REVIEW);
   });
+
+  it("settles nothing when a line update fails mid-loop", async () => {
+    // DEFERRED.md item 2: the per-line updates and the status claim are one
+    // transaction. Before it, a crash between two updates left the first
+    // line settled with the status unmoved — half a review, silently, and
+    // nothing on screen to say which half.
+    const { receipt, first, second } = await seedReceipt({
+      matchStatus: MatchStatus.PENDING,
+    });
+
+    let updates = 0;
+    const failsOnTheSecondLine = prisma.$extends({
+      query: {
+        receiptItem: {
+          update({ args, query }) {
+            updates += 1;
+            if (updates === 2) throw new Error("second line write failed");
+            return query(args);
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
+    const { caller: failing } = await callerFor(
+      householdId,
+      "OWNER",
+      failsOnTheSecondLine,
+    );
+
+    let thrown: unknown;
+    try {
+      await failing.receipt.confirmAll({
+        receiptId: receipt.id,
+        items: [
+          { receiptItemId: first.id, action: "SKIP" },
+          { receiptItemId: second.id, action: "SKIP" },
+        ],
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain("second line write failed");
+
+    // Nothing half-settled: the first line's SKIP went down with the second
+    // line's failure, and the status never moved.
+    const lines = await prisma.receiptItem.findMany({
+      where: { receiptId: receipt.id },
+    });
+    for (const line of lines) {
+      expect(line.matchStatus).toBe(MatchStatus.PENDING);
+    }
+    const after = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+    expect(after?.status).toBe(ReceiptStatus.NEEDS_REVIEW);
+  });
 });
 
 describe("the review has edges", () => {

@@ -27,12 +27,16 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    REV-1. Closing it needs `confirmItem` to re-check status inside its own
    transaction — a design decision, not a patch. The status edge (no double
    apply) holds regardless.
-2. **`confirmAll`'s per-line updates are not in a transaction.** The final
+2. ~~**`confirmAll`'s per-line updates are not in a transaction.** The final
    status write is a claim (refuses a receipt that left the review states), so
    the double-apply edge holds — but a crash or race mid-loop can leave lines
    partially settled with the status unmoved. Honest in the code comment
    (`receipt.ts`, above the claim). Close by wrapping the loop and the claim in
-   one transaction if partial settlement ever bites.
+   one transaction if partial settlement ever bites.~~ **Done 2026-08-31** —
+   the loop and the claim are one transaction, and a claim refusal now rolls
+   the settlements back too. Pinned by "settles nothing when a line update
+   fails mid-loop", verified failing first: the first line came back SKIPPED
+   under the untransacted code.
 3. ~~**`applyReceipt`'s claim filters on `id` + `status` but not `householdId`.**
    The id comes from a household-scoped `findFirst` in the same resolver, so
    this is belt-and-braces only; adding `householdId` to the `updateMany` where

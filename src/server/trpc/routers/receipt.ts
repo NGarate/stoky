@@ -498,72 +498,80 @@ export const receiptRouter = createTRPCRouter({
         }
       }
 
-      // Confirm all items
-      for (const itemInput of input.items) {
-        // The same action-narrowed logic as `confirmItem`, and it has to stay
-        // the same: a decision means the same thing whichever button submitted
-        // it. Same product/action narrowing only, though: unlike `confirmItem`,
-        // this path never touches `matchConfidence`, so the bulk update below
-        // leaves whatever figure the matcher already wrote in place.
-        let productId: string | null = null;
+      // One transaction for the line updates and the status claim, so a
+      // crash or refusal mid-loop settles nothing rather than some: every
+      // decision lands together with the CONFIRMED write, or none does.
+      // Before this, a failure between two updates left the first line
+      // settled with the status unmoved — half a review, silently.
+      await ctx.db.$transaction(async (tx) => {
+        for (const itemInput of input.items) {
+          // The same action-narrowed logic as `confirmItem`, and it has to
+          // stay the same: a decision means the same thing whichever button
+          // submitted it. Same product/action narrowing only, though: unlike
+          // `confirmItem`, this path never touches `matchConfidence`, so the
+          // bulk update below leaves whatever figure the matcher already
+          // wrote in place.
+          let productId: string | null = null;
 
-        if (itemInput.action === "MATCH") {
-          productId = itemInput.productId;
-        }
+          if (itemInput.action === "MATCH") {
+            productId = itemInput.productId;
+          }
 
-        if (itemInput.action === "CREATE") {
-          const newProduct = await ctx.db.product.create({
+          if (itemInput.action === "CREATE") {
+            const newProduct = await tx.product.create({
+              data: {
+                name: itemInput.customName,
+                householdId: ctx.householdId,
+                defaultUnit: "unit",
+              },
+            });
+            productId = newProduct.id;
+          }
+
+          await tx.receiptItem.update({
+            where: { id: itemInput.receiptItemId },
             data: {
-              name: itemInput.customName,
-              householdId: ctx.householdId,
-              defaultUnit: "unit",
+              matchedProductId: productId,
+              matchStatus:
+                itemInput.action === "SKIP"
+                  ? MatchStatus.SKIPPED
+                  : itemInput.action === "CREATE"
+                    ? MatchStatus.USER_CREATED
+                    : MatchStatus.USER_CONFIRMED,
             },
           });
-          productId = newProduct.id;
         }
 
-        await ctx.db.receiptItem.update({
-          where: { id: itemInput.receiptItemId },
-          data: {
-            matchedProductId: productId,
-            matchStatus:
-              itemInput.action === "SKIP"
-                ? MatchStatus.SKIPPED
-                : itemInput.action === "CREATE"
-                  ? MatchStatus.USER_CREATED
-                  : MatchStatus.USER_CONFIRMED,
+        // The same claim shape `applyReceipt` uses, and here for the same
+        // reason: the guard at the top only *read* the status, so an apply
+        // committing between that read and this write was dragged back to
+        // CONFIRMED and applied a second time. Filtered on the review
+        // states, this write refuses a receipt that left them, under any
+        // interleaving — and since the loop above is in this transaction, a
+        // refusal here rolls the settlements back too, so an apply landing
+        // mid-loop no longer keeps lines settled underneath it.
+        // householdId for the same belt-and-braces reason as applyReceipt's
+        // claim: the id was resolved household-scoped above, and the write
+        // being self-scoping means that stays true wherever the id came
+        // from.
+        const claimed = await tx.receipt.updateMany({
+          where: {
+            id: input.receiptId,
+            householdId: ctx.householdId,
+            status: {
+              in: [ReceiptStatus.NEEDS_REVIEW, ReceiptStatus.CONFIRMED],
+            },
           },
+          data: { status: ReceiptStatus.CONFIRMED },
         });
-      }
 
-      // The same claim shape `applyReceipt` uses, and here for the same
-      // reason: the guard at the top only *read* the status, so an apply
-      // committing between that read and this write was dragged back to
-      // CONFIRMED and applied a second time. Filtered on the review states,
-      // this write refuses a receipt that left them, under any interleaving.
-      // The line updates above are not covered — an apply landing mid-loop may
-      // still have kept lines settled underneath it — but the status edge is
-      // what a double-apply needs, and the status edge holds.
-      // householdId for the same belt-and-braces reason as applyReceipt's
-      // claim: the id was resolved household-scoped above, and the write
-      // being self-scoping means that stays true wherever the id came from.
-      const claimed = await ctx.db.receipt.updateMany({
-        where: {
-          id: input.receiptId,
-          householdId: ctx.householdId,
-          status: {
-            in: [ReceiptStatus.NEEDS_REVIEW, ReceiptStatus.CONFIRMED],
-          },
-        },
-        data: { status: ReceiptStatus.CONFIRMED },
+        if (claimed.count === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Receipt is not open for review",
+          });
+        }
       });
-
-      if (claimed.count === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Receipt is not open for review",
-        });
-      }
 
       return { success: true };
     }),
