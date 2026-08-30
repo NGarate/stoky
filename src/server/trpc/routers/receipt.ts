@@ -685,42 +685,52 @@ export const receiptRouter = createTRPCRouter({
           include: { matchedProduct: true },
         });
 
-        let stockEntriesCreated = 0;
-        let priceRecordsCreated = 0;
+        // One createMany per model rather than a create per line: the claim
+        // above holds this receipt's row lock for the whole transaction, so
+        // a fifty-line receipt paying a round trip per line held the loser
+        // of a concurrent double-tap for the loop's whole duration — long
+        // enough, under load and Prisma's 5s interactive-transaction
+        // default, to surface as P2028 rather than the clean BAD_REQUEST
+        // the claim intends. Two statements shrink both the winner's hold
+        // and the loser's wait; the rows written are the same.
+        const appliable = items.filter(
+          (item): item is (typeof items)[number] & { matchedProductId: string } =>
+            !!item.matchedProductId && item.matchStatus !== MatchStatus.SKIPPED,
+        );
 
-        for (const item of items) {
-          if (!item.matchedProductId || item.matchStatus === MatchStatus.SKIPPED) {
-            continue;
-          }
+        const { count: stockEntriesCreated } = await tx.stockEntry.createMany({
+          data: appliable.map((item) => ({
+            productId: item.matchedProductId,
+            quantity: item.parsedQuantity ?? 1,
+            unit: item.matchedProduct?.defaultUnit || "unit",
+            operationType: StockOperation.PURCHASE,
+            receiptItemId: item.id,
+            createdBy: user.id,
+            locationId: null,
+          })),
+        });
 
-          await tx.stockEntry.create({
-            data: {
-              productId: item.matchedProductId,
-              quantity: item.parsedQuantity ?? 1,
-              unit: item.matchedProduct?.defaultUnit || "unit",
-              operationType: StockOperation.PURCHASE,
-              receiptItemId: item.id,
-              createdBy: user.id,
-              locationId: null,
-            },
-          });
-          stockEntriesCreated += 1;
-
-          if (item.parsedPrice && receipt.storeId) {
-            await tx.priceRecord.create({
-              data: {
-                productId: item.matchedProductId,
-                storeId: receipt.storeId,
-                price: item.parsedPrice,
-                currency: "EUR",
-                unit: item.matchedProduct?.defaultUnit || "unit",
-                quantity: item.parsedQuantity ?? 1,
-                receiptId: receipt.id,
-              },
-            });
-            priceRecordsCreated += 1;
-          }
-        }
+        // Truthy on parsedPrice, as the per-line version was: a parsed price
+        // of zero records nothing, deliberately.
+        const storeId = receipt.storeId;
+        const priced =
+          storeId === null
+            ? []
+            : appliable.filter(
+                (item): item is (typeof appliable)[number] & { parsedPrice: number } =>
+                  !!item.parsedPrice,
+              );
+        const { count: priceRecordsCreated } = await tx.priceRecord.createMany({
+          data: priced.map((item) => ({
+            productId: item.matchedProductId,
+            storeId: storeId as string,
+            price: item.parsedPrice,
+            currency: "EUR",
+            unit: item.matchedProduct?.defaultUnit || "unit",
+            quantity: item.parsedQuantity ?? 1,
+            receiptId: receipt.id,
+          })),
+        });
 
         return { stockEntriesCreated, priceRecordsCreated };
       });

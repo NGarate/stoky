@@ -52,12 +52,15 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    reach the difference (the ids are household-scoped upstream), so none was
    written; the tenant-scope suite still passes both ways, which is the point
    of belt-and-braces.
-4. **A long receipt's apply holds the row lock for the whole loop.** The loser
+4. ~~**A long receipt's apply holds the row lock for the whole loop.** The loser
    of two concurrent applies blocks for the winner's duration; under load and
    Prisma's 5s interactive-transaction default, a double-tap could surface as
    P2028 → INTERNAL_SERVER_ERROR instead of the clean BAD_REQUEST the tests
    pin. Never a double-book — the failure mode is an error. `createMany` per
-   model would shrink both the winner's duration and the loser's wait.
+   model would shrink both the winner's duration and the loser's wait.~~
+   **Done 2026-08-31** — one `createMany` per model, same rows, same truthy
+   price rule (a parsed price of zero still records nothing). The rollback
+   injection moved to `createMany` with it and still proves the rollback.
 5. ~~**The rollback test asserts `toBeDefined`, not the injected message.** Any
    earlier refusal would leave zero entries and green the assertions without the
    transaction ever opening. Latent, not live — the fixtures preclude it — and
@@ -66,10 +69,12 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
    the exact scenario the entry described: with the seed status moved to
    NEEDS_REVIEW the old assertion stayed satisfied on the early refusal and
    the new one went red on the message.
-6. **`clientThatCannotWritePrices` is duplicated verbatim** in
-   `receipt.router.test.ts` and `inventory.purchase-atomicity.test.ts` (body and
-   comment). Extract to `src/__tests__/utils/` when a third injection site
-   appears — not before.
+6. **`clientThatCannotWritePrices` is duplicated** in
+   `receipt.router.test.ts` and `inventory.purchase-atomicity.test.ts`.
+   Extract to `src/__tests__/utils/` when a third injection site appears —
+   not before. (No longer verbatim since item 4: the receipt copy hooks
+   `createMany`, the statement `applyReceipt` now issues, while the atomicity
+   copy still hooks the `create` that `addStock` issues.)
 7. ~~**`receiptItemId` accepts the empty string** in the review-decision union
    (`validations/receipt.ts`). It falls through to the household-scoped lookup
    and NOT_FOUND, so it is harmless; `.min(1)` would match the treatment

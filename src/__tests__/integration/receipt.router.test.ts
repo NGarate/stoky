@@ -75,19 +75,23 @@ async function callerFor(
 }
 
 /**
- * A client that fails exactly where the price record is written.
+ * A client that fails exactly where the price records are written.
  *
- * The same injection `inventory.purchase-atomicity.test.ts` uses, and for the
- * same reason: `PriceRecord` has no constraint an input could violate, so there
- * is no receipt that makes the second write fail on its own. An extension is
- * carried by the transaction client too, which is the point — the failure
- * lands *inside* the transaction, where a rollback either happens or does not.
+ * The same injection idea `inventory.purchase-atomicity.test.ts` uses, and
+ * for the same reason: `PriceRecord` has no constraint an input could
+ * violate, so there is no receipt that makes the second write fail on its
+ * own. An extension is carried by the transaction client too, which is the
+ * point — the failure lands *inside* the transaction, where a rollback
+ * either happens or does not. Hooked on `createMany` because that is the
+ * statement `applyReceipt` issues since the writes were batched (DEFERRED.md
+ * item 4); the atomicity test's copy still hooks `create`, which is what
+ * `addStock` issues — no longer verbatim twins, each pinned to its subject.
  */
 function clientThatCannotWritePrices(): PrismaClient {
   return prisma.$extends({
     query: {
       priceRecord: {
-        create() {
+        createMany() {
           throw new Error("price write failed");
         },
       },
