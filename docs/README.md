@@ -145,12 +145,11 @@ Numbered actions A0–A5.4 with done markers. Explains the three viewport tiers,
 the two breakpoints, and why tablet is the least dense rather than a small
 desktop.
 
-Still open: **A5.3** (the routes do not use the shared primitives, and the
-hardcoded copies of the target-size floor have grown from 74 to 100 with the
-Phase 5 pages) and **A5.4** (what `/dashboard` becomes — half-decided
-2026-08-18: the Panel stays; the 2026-08-19 second pass replaced its doors
-with a one-line summary over the lists, which are the doors themselves;
-whether three entry points is the right number is the half still open).
+Every numbered action is now closed: **A5.3** closed 2026-08-22 (the hardcoded
+target-size floors went 142 → 13, held by `target-floor.test.ts`) and **A5.4**
+closed 2026-09-01 (the entry point is the person's configurable choice among
+the main screens — D117). What remains is the **human screen-reader pass** that
+§5 describes, which no marker can grant.
 
 **[`DEFERRED.md`](DEFERRED.md)**
 What the 2026-08-29 full-codebase review found and deliberately did not fix —
