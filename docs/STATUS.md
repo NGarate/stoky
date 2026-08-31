@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-08-28
+Updated: 2026-09-01
 
 Single source of truth for where the project actually is.
 
@@ -37,13 +37,13 @@ binary you happen to be holding.
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
 | Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
-| Unit tests | `bun run test:unit` | ✅ 661 pass / 73 files (2026-08-28) |
-| Component tests | `bun run test:components` | ✅ 621 pass / 58 files (2026-08-28) |
-| Integration tests | `bun run test:integration` | ✅ 518 pass / 35 files (2026-08-28) |
+| Unit tests | `bun run test:unit` | ✅ 689 pass / 76 files (2026-09-01) |
+| Component tests | `bun run test:components` | ✅ 652 pass / 56 files (2026-09-01) |
+| Integration tests | `bun run test:integration` | ✅ 540 pass / 37 files (2026-09-01) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **150 pass / 0 fail in 4.3 min** (2026-08-28, at `0f2ec8a`) — against a **Bun-served** standalone production build, on the suite's own database, from a tree Bun also *installed*. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **153 pass / 0 fail in 4.3 min** (2026-09-01) — against a **Bun-served** standalone production build, on the suite's own database, from a tree Bun also *installed*. 150 → 153 with the two T7 offline-scan scenarios and the prefetch body-cap probe. See *End-to-end* below: the suite changed shape on 2026-08-17 |
 | Dependency audit | `bun audit` | ✅ clean — 586 packages, 2026-08-28, run in `oven/bun:1.4.0-alpine` because it answers from `bun.lock` and the host's Bun is older than the one that wrote it. It was **2 high** for five days; see *Dependency security* |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
