@@ -721,7 +721,8 @@ no data and a non-food product both behave well — not just the happy path.
 month-old entries are not served as complete), the pure module (honesty rules
 before arithmetic, worst additive dominates, absence of a verdict is not a
 clean bill), and the display on the detail screen the scan lands on. Journey
-10 is its measure. T7 — an offline scan resolved later — stays in §10.
+10 is its measure. T7 — an offline scan resolved later — was deferred to §10,
+and landed there on 2026-09-01.
 
 ### Phase 7 — Security review
 
@@ -963,7 +964,7 @@ unowned below, for the same reason as the iOS pass.
 | ~~The rating itself (§6)~~ | **Done**, three commits: the fields (with a versioned cache so month-old entries are not served as complete), the pure module (honesty rules before arithmetic, worst additive dominates, absence of a verdict is not a clean bill), and the display on the detail screen the scan already lands on. §6's worked example scores 25 — the bottom edge of poor, which is what harmless additives on a grade-e product are worth |
 | ~~DEBT-3~~ | **Done.** Valkey-backed and shared across replicas, failing open — a cache it cannot reach means asking Open Food Facts, which is what a miss already means |
 | ~~OCR-1~~ | **Done.** The model is baked into the image, pinned and checksummed, and `TESSDATA_PATH` points the worker at it — so a scan needs no network. A smaller model than the CDN's default, which is a reasoned trade rather than a measured one: nothing here measures OCR accuracy |
-| T7 — an offline scan resolved later | Journey 5's "never a dead end". Needs local-id resolution, which leaks `local:` ids into the cache and into components |
+| ~~T7 — an offline scan resolved later~~ | **Done 2026-09-01**, four commits — and the `local:`-id leak that deferred it was designed out rather than solved: the queue carries a **scan, not a product** (`product.resolveScan`, a sixth replayable path), so the barcode is what waits and the real server-minted id is the only one that ever exists. On drain it resolves to a local hit, an Open Food Facts create, or a review question — a form prefilled with the barcode — so Journey 5 never dead-ends. Proven in `e2e/offline-shop.spec.ts` |
 
 ### Phase 7 — security review
 

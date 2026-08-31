@@ -23,8 +23,8 @@ plan rather than being silently absorbed; the stepper half (Journey 4) landed
 | 2 | A kitchen account is refused a write by the server | Phase 3 | ✅ passes, including the 2026-08-18 widening (D88, `941d1ed`): the two list writes changed sides and the suite asserts the rows they leave behind |
 | 3 | The phone screen answers "what do I need to buy" | Phase 4–5 | ✅ passes |
 | 4 | Stock changes without a form | Phase 4–5 | ✅ passes since 2026-08-25 (`74cff4b`) — the stepper is mounted on the product detail and the browser proves two presses arrive as two deltas |
-| 5 | Scanning never dead-ends | Phase 4–6 | partial — the connected cases pass; the offline barcode is T7 |
-| 6 | A whole shop with no signal | Phase 4 | ✅ passes, except the T7 bullet |
+| 5 | Scanning never dead-ends | Phase 4–6 | ✅ passes — T7 landed 2026-09-01, so the offline barcode is queued and resolved later |
+| 6 | A whole shop with no signal | Phase 4 | ✅ passes, T7 bullet included since 2026-09-01 |
 | 7 | The kitchen screen answers "what should we eat first" | Phase 5 | ✅ at the tiers a suite can answer, including the 2026-08-18 widening (add-to-list, `941d1ed`); the week on a real tablet is unowned |
 | 8 | The screen choice is remembered per person and per device | Phase 5 | ✅ passes since 2026-08-26 (`300f665`) — a device cookie, a `(userId, deviceId)` row, and a server-side redirect |
 | 9 | Both languages, everywhere | Phase 1 onwards, then every phase | ✅ against everything measured |
@@ -252,14 +252,19 @@ Evidence:
 
 ## Journey 5. Scanning never dead-ends
 
-**Partial.** The connected cases pass: a known product opens its detail — with
-the Phase 6 rating on it — and an unknown barcode reaches a creation form
-prefilled from Open Food Facts, or empty with the barcode filled in when OFF
-has nothing (the scan flow speaks from the catalogue since `a3dbfa6`). What is
-**not** built is the no-signal case this journey's title promises: a barcode
-scanned offline is not queued and resolved later. That is **T7** in the plan's
-§10, deferred from Phase 6 because local-id resolution leaks `local:` ids into
-the cache and components.
+**Passes as of 2026-09-01** — T7 landed, so the no-signal case this journey's
+title promises is built. The connected cases already passed: a known product
+opens its detail with the Phase 6 rating, and an unknown barcode reaches a
+creation form prefilled from Open Food Facts, or empty with the barcode filled
+in when OFF has nothing (the scan flow speaks from the catalogue since
+`a3dbfa6`). The offline case now works as a queued *scan* rather than a queued
+product — the `local:`-id leak that deferred it from Phase 6 is avoided
+structurally, because the queue carries only the barcode and the real product
+is minted server-side at drain time (`product.resolveScan`, an offline-queue
+op). An unknown barcode scanned offline is queued, and on reconnect either
+resolves silently (OFF knows it, or the household already does) or surfaces as
+a review question — a form prefilled with the barcode — never a dead end.
+Proven by `e2e/offline-shop.spec.ts` "An offline scan, resolved later (T7)".
 
 Trigger:
 Tap Scan on the phone screen and read a barcode.
@@ -291,9 +296,11 @@ Proof required:
 `e2e/offline-shop.spec.ts` proves it end to end: a shop composed in aeroplane
 mode, shown as done, applied exactly once on reconnect, including across a
 lost reply where both attempts carry the same idempotency key, and unsent
-changes surviving a reload. **One bullet below is not met**: "a scanned
-barcode is queued and enriched later" is T7, the same gap Journey 5 names.
-The service worker half runs under a real production build in
+changes surviving a reload. **The last bullet — "a scanned barcode is queued
+and enriched later" — is met as of 2026-09-01**, when T7 landed: the same spec
+scans an unknown barcode offline and watches it become a review question on
+reconnect, and scans a known one and watches it resolve silently. The service
+worker half runs under a real production build in
 `e2e/service-worker.prod.spec.ts`, part of the ordinary suite since 2026-08-17.
 
 Trigger:

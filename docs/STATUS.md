@@ -949,7 +949,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 4 — Offline, and a shop that survives it | ✅ Complete against its done-when |
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
-| 6 — Product rating | ✅ Complete against its done-when, except T7 (offline scan resolution) |
+| 6 — Product rating | ✅ Complete against its done-when — T7 (offline scan resolution) landed 2026-09-01 |
 | 7 — Security review | ✅ **Complete** — `docs/SECURITY_REVIEW.md` (2026-08-26). Found and closed four household-isolation defects and a shipped OpenSSL CVE |
 | 8 — The owner's first pass | ✅ All six closed; the done-when — the owner repeats their pass — is the owner's to run |
 
@@ -959,8 +959,9 @@ tablet, iOS Safari on a real device); ~~a household admin panel~~ and ~~session
 revocation~~ — **both landed**: members and roles at `cdab308`, and revocation
 in both halves, an admin ending a member's sessions from that panel and an
 account ending its own from `/settings`. That closes the question
-`SECURITY_REVIEW.md` finding 8 left open. T7, the offline scan
-resolution; and
+`SECURITY_REVIEW.md` finding 8 left open. ~~T7, the offline scan
+resolution~~ **landed 2026-09-01** — a queued scan rather than a queued
+product, so Journeys 5 and 6 pass in full. And
 **Phase 8's human half** — the two §3/§5.1 promises the 2026-08-17 re-audit
 found unbuilt have both landed, the ± stepper at `74cff4b` and the screen
 choice at `300f665`, so Journeys 4 and 8 pass — all six of the
@@ -970,9 +971,9 @@ repeating the pass that produced them. All of it is in
 `REDESIGN_PLAN.md` §10, which is the list an item may only leave by being done
 or deliberately dropped.
 
-Journeys 1, 2, 3, 4, 6, 7, 8, 9 and 10 of `docs/SMOKE_JOURNEYS.md` pass at the
-tiers a suite can answer — 4 since 2026-08-25 and 8 since 2026-08-26. Only 5 is
-short of its own promise, on T7. Journeys 2 and 7 pass in their widened
+All ten journeys of `docs/SMOKE_JOURNEYS.md` pass at the tiers a suite can
+answer — 4 since 2026-08-25, 8 since 2026-08-26, and 5 since 2026-09-01, when
+T7 closed the offline scan it had been short on. Journeys 2 and 7 pass in their widened
 2026-08-18 shape — the owner's amendments landed at `941d1ed` (D88): a kitchen
 account can start a list and add an item, and every running-out row carries a
 one-tap add-to-list. The per-journey evidence is in that file.

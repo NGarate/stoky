@@ -286,6 +286,112 @@ test.describe("Screen A, with no signal", () => {
   });
 });
 
+test.describe("An offline scan, resolved later (T7)", () => {
+  test.use({ storageState: SESSION_FILE });
+
+  test("an unknown barcode is queued, asks to be named, and the form is prefilled", async ({
+    page,
+    context,
+  }) => {
+    // A barcode with no product anywhere. resolveScan calls Open Food Facts on
+    // drain; whether OFF is unreachable or simply does not know this code, the
+    // service returns null and the scan lands as needs-review — deterministic
+    // either way. Going offline while *on* the scan page keeps the service
+    // worker out of it (a navigation offline is the worker's test, not this).
+    const unknown = "9990000000017";
+
+    await page.goto("/products/scan");
+    await queueReady(page);
+
+    await context.setOffline(true);
+    await page.getByPlaceholder(es.products.scan.manualPlaceholder).fill(unknown);
+    await page.getByRole("button", { name: es.products.scan.manualSubmit }).click();
+
+    // Queued, said in words, still on the scan page — not a dead end.
+    await expect(calm(page)).toContainText(/sin (enviar|conexión)/i, {
+      timeout: 15_000,
+    });
+
+    await context.setOffline(false);
+
+    // On reconnect the scan drains, OFF cannot name it, and the indicator
+    // turns the refusal into a question rather than a failure.
+    const nameIt = urgent(page).getByRole("link", {
+      name: es.offline.nameIt,
+    });
+    await expect(nameIt).toBeVisible({ timeout: 30_000 });
+
+    await nameIt.click();
+    await page.waitForURL(/\/products\/new\?/);
+    await settle(page);
+
+    // The barcode carried into the form.
+    await expect(page.getByLabel(es.products.new.barcodeLabel)).toHaveValue(
+      unknown,
+    );
+
+    await page.getByLabel(es.products.new.nameLabel).fill("Producto del ticket");
+    await page
+      .getByRole("button", { name: es.products.new.submit })
+      .click();
+
+    // Wait for the create to actually succeed before leaving — its onSuccess
+    // is what discards the queued scan, and navigating away mid-flight would
+    // abort it.
+    await expect(
+      page.getByText(
+        es.products.new.successCreated.replace("{name}", "Producto del ticket"),
+      ),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // The review question clears because the queued scan is discarded on a
+    // successful create.
+    await page.goto("/products/scan");
+    await queueReady(page);
+    await expect(urgent(page)).toBeEmpty({ timeout: 20_000 });
+
+    // The product exists in the catalogue.
+    await page.goto("/products");
+    await settle(page);
+    await expect(
+      page.getByText("Producto del ticket", { exact: false }).first(),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a barcode the household already has resolves silently", async ({
+    page,
+    context,
+  }) => {
+    // A seeded barcode is already a product, so resolveScan short-circuits to
+    // the local row on drain: nothing is created, the queue empties, and no
+    // review question is ever raised.
+    const known = "8410000678901";
+
+    await page.goto("/products/scan");
+    await queueReady(page);
+
+    const before = await page.evaluate(async () => {
+      const res = await fetch("/api/health");
+      return res.ok;
+    });
+    expect(before).toBe(true);
+
+    await context.setOffline(true);
+    await page.getByPlaceholder(es.products.scan.manualPlaceholder).fill(known);
+    await page.getByRole("button", { name: es.products.scan.manualSubmit }).click();
+    await expect(calm(page)).toContainText(/sin (enviar|conexión)/i, {
+      timeout: 15_000,
+    });
+
+    await context.setOffline(false);
+
+    // Drains to nothing — no review, no failure.
+    await queueReady(page);
+    await expect(calm(page)).toBeEmpty({ timeout: 30_000 });
+    await expect(urgent(page)).toBeEmpty();
+  });
+});
+
 test.describe("The offline page", () => {
   test("is readable with no JavaScript at all", async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
