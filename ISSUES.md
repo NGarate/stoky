@@ -999,7 +999,10 @@ recognise the signature, re-run, do not investigate.
 Nothing in this repository — `withReplay` is correct and its tests are correct.
 It wants an upstream report, and the reproduction plus the load recipe above are
 enough to write one. File it against **1.4.0**, the current release, and say it
-reproduces on 1.3.14 too.
+reproduces on 1.3.14 too. **A ready-to-file draft is
+`docs/reproductions/test-5-upstream-report.md`** (2026-08-31), alongside the
+self-contained `test-5.test.ts` — paste it, trim the internal references, and
+attach the file. Not yet filed: the issue URL goes here once it is.
 
 **A pin forward is not the workaround, and that is now measured.** bun 1.4.0
 shipped on 2026-08-20, after this entry was written, so the "nothing to upgrade
@@ -2729,7 +2732,10 @@ curl -sL -H 'RSC: 1' -H 'Next-Router-Prefetch: 3' http://127.0.0.1:PORT/inventor
 
 One unhandled `AbortError` under `bun .next/standalone/server.js`, none under
 `node`. That is the upstream report, and it needs no browser, no session and no
-suite.
+suite. **A ready-to-file draft is
+`docs/reproductions/runtime-1-upstream-report.md`** (2026-08-31), alongside the
+self-checking `runtime-1-abort.sh` — re-run on 2026-08-31, still 10/0. Not yet
+filed against Bun; the issue URL goes here once it is.
 
 The same mistake, three times in three days: a probe that never checked what it
 was actually measuring. First a server that had refused to boot, then a port
