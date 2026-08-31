@@ -6,14 +6,48 @@ import {
   householdProcedure,
   writeProcedure,
 } from "../trpc";
-import { openFoodFacts } from "@/server/services/openFoodFacts";
+import type { Prisma } from "@prisma/client";
+import {
+  openFoodFacts,
+  type OpenFoodFactsProduct,
+} from "@/server/services/openFoodFacts";
+import { withReplay } from "@/server/trpc/replay";
 import {
   productSchema,
   updateProductSchema,
   productSearchSchema,
   productByBarcodeSchema,
   productPaginationSchema,
+  resolveScanSchema,
 } from "@/lib/validations/product";
+
+/**
+ * The columns an Open Food Facts hit becomes on a new `Product`.
+ *
+ * Extracted so `scanBarcode` (connected) and `resolveScan` (drained from the
+ * offline queue) map an OFF product to a row the same way — the two producing
+ * different products from the same barcode is the drift this closes.
+ */
+function productFromOff(
+  offProduct: OpenFoodFactsProduct,
+  barcode: string,
+  householdId: string,
+): Prisma.ProductCreateInput {
+  const category = offProduct.categories
+    ? offProduct.categories.split(",").map((c) => c.trim())[0]
+    : null;
+
+  return {
+    name: offProduct.product_name || `Product ${barcode}`,
+    barcode,
+    brand: offProduct.brands || null,
+    category,
+    imageUrl: offProduct.image_url || offProduct.image_front_url || null,
+    defaultUnit: openFoodFacts.extractUnit(offProduct.quantity),
+    openFoodFactsData: offProduct,
+    household: { connect: { id: householdId } },
+  };
+}
 
 /**
  * The catalogue: what this household *can* have, as distinct from what it has.
@@ -401,23 +435,9 @@ export const productRouter = createTRPCRouter({
         };
       }
 
-      // Extract categories
-      const categories = offProduct.categories
-        ? offProduct.categories.split(",").map((c) => c.trim())[0]
-        : null;
-
-      // Create product from OFF data
+      // Create product from OFF data, mapped the same way `resolveScan` maps it.
       const newProduct = await ctx.db.product.create({
-        data: {
-          name: offProduct.product_name || `Product ${input.barcode}`,
-          barcode: input.barcode,
-          brand: offProduct.brands || null,
-          category: categories,
-          imageUrl: offProduct.image_url || offProduct.image_front_url || null,
-          defaultUnit: openFoodFacts.extractUnit(offProduct.quantity),
-          openFoodFactsData: offProduct,
-          householdId: ctx.householdId,
-        },
+        data: productFromOff(offProduct, input.barcode, ctx.householdId),
       });
 
       return {
@@ -427,5 +447,87 @@ export const productRouter = createTRPCRouter({
         },
         source: "open_food_facts" as const,
       };
+    }),
+
+  /**
+   * A barcode scanned offline, resolved on reconnect (T7).
+   *
+   * The replayable twin of `scanBarcode`, drained one at a time from the write
+   * queue. The queue carries only the barcode, so the product — with its real,
+   * server-minted id — is created here, at drain time; no provisional `local:`
+   * id ever reaches a component or the query cache, which is the hazard that
+   * kept this out of Phase 6.
+   *
+   * Three outcomes, each deliberate:
+   *
+   * - **the barcode is already a product** (a replay after a lost reply, or a
+   *   second scan of the same code): return it, claim no key, write nothing —
+   *   the local lookup short-circuits before the envelope;
+   * - **Open Food Facts knows it**: create the product under `withReplay`, so a
+   *   replay answers from the record rather than making a second row;
+   * - **nobody knows it**: `NOT_FOUND`, thrown *before* any key is claimed, so
+   *   a retry of the same key can still succeed once OFF recovers — and the
+   *   client turns that into the review question (a form prefilled with the
+   *   barcode) rather than a dead end.
+   *
+   * `scanBarcode` stays NOT_REPLAYABLE on purpose: it fetches OFF *inside* the
+   * resolver with no envelope. This one fetches OFF *before* the transaction,
+   * so `withReplay` never holds a pooled connection across a third-party
+   * request — the reason `scanBarcode` could not simply gain an envelope.
+   */
+  resolveScan: writeProcedure
+    .input(resolveScanSchema)
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.product.findUnique({
+        where: {
+          barcode_householdId: {
+            barcode: input.barcode,
+            householdId: ctx.householdId,
+          },
+        },
+      });
+
+      if (existing) {
+        return { product: existing, source: "local" as const };
+      }
+
+      // Before the transaction, so the envelope never wraps a network call.
+      // The service fails open — an outage and an unknown barcode both return
+      // null — which is exactly the connected behaviour: both land the person
+      // on the create form.
+      const offProduct = await openFoodFacts.getProductByBarcode(input.barcode);
+
+      if (!offProduct) {
+        // Thrown before withReplay claims the key, so a retry after OFF
+        // recovers is not refused as a reused key.
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Barcode not found",
+        });
+      }
+
+      return withReplay(ctx, {
+        key: input.idempotencyKey,
+        composedByUserId: input.composedByUserId,
+        procedure: "product.resolveScan",
+        input,
+        apply: (tx) =>
+          tx.product.create({
+            data: productFromOff(offProduct, input.barcode, ctx.householdId),
+          }),
+        ids: (product) => [product.id],
+        reread: async (db, ids) => {
+          const product = await db.product.findUnique({
+            where: { id: ids[0] ?? "" },
+          });
+          if (!product) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Product not found",
+            });
+          }
+          return product;
+        },
+      }).then((product) => ({ product, source: "open_food_facts" as const }));
     }),
 });

@@ -97,6 +97,9 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // household's decision, not any member's.
     delete: "adminProcedure",
     scanBarcode: "writeProcedure",
+    // T7: the replayable scan. writeProcedure like scanBarcode, so a KITCHEN
+    // account cannot create a product by scanning offline any more than online.
+    resolveScan: "writeProcedure",
   },
   "receipt.ts": {
     getStatus: "householdProcedure",

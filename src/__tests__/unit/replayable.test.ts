@@ -19,13 +19,14 @@ import { withoutComments } from "../utils/without-comments";
  * the same question of a browser.
  */
 
-/** The five writes a shop composes. Everything else is deliberately excluded. */
+/** The writes a device can compose offline. Everything else is excluded. */
 const REPLAYABLE = [
   "shopping.addItem",
   "shopping.updateItem",
   "shopping.removeItem",
   "inventory.addStock",
   "inventory.consumeStock",
+  "product.resolveScan",
 ] as const;
 
 /**
@@ -33,10 +34,12 @@ const REPLAYABLE = [
  *
  * `adjustStock` and `transferStock` are absolute-valued or depend on state at
  * the moment they apply, so replaying one is not the same as applying it once.
- * `product.scanBarcode` makes an outbound Open Food Facts call, and holding a
- * pooled connection across a third-party network request inside a transaction
- * is a hazard the other four do not have. `receipt.upload` carries bytes,
- * which the queue's storage cannot hold.
+ * `product.scanBarcode` makes an outbound Open Food Facts call *inside* the
+ * resolver, and holding a pooled connection across a third-party request in a
+ * transaction is a hazard the others do not have — which is exactly why
+ * `resolveScan`, the replayable scan, fetches OFF *before* `withReplay` rather
+ * than gaining an envelope here. `receipt.upload` carries bytes, which the
+ * queue's storage cannot hold.
  */
 const NOT_REPLAYABLE = [
   "inventory.adjustStock",
@@ -125,7 +128,7 @@ describe("the list and the sources agree", () => {
   it("finds no replayable procedure the list does not name", () => {
     const found: string[] = [];
 
-    for (const file of ["inventory.ts", "shopping.ts"]) {
+    for (const file of ["inventory.ts", "shopping.ts", "product.ts"]) {
       const source = withoutComments(readFileSync(join(ROUTERS, file), "utf8"));
       for (const match of source.matchAll(/procedure: "([\w.]+)"/g)) {
         found.push(match[1] as string);
@@ -135,12 +138,13 @@ describe("the list and the sources agree", () => {
     expect(found.sort()).toEqual([...REPLAYABLE].sort());
   });
 
-  it("finds withReplay in exactly the two routers that should hold it", () => {
+  it("finds withReplay in exactly the three routers that should hold it", () => {
     // Comments are stripped before the scan, so a comment that names the
     // helper — or spells its whole call syntax out — can neither hide a
     // router from this list nor falsely add one. Call syntax rather than the
     // bare word stays as the pattern: it is what distinguishes a use from a
-    // string that merely contains the name.
+    // string that merely contains the name. `product` joined the list with
+    // resolveScan (T7).
     const holders = ["auth", "household", "inventory", "location", "price",
       "product", "receipt", "shopping", "store"]
       .filter((name) =>
@@ -149,6 +153,6 @@ describe("the list and the sources agree", () => {
         ).includes("withReplay("),
       );
 
-    expect(holders).toEqual(["inventory", "shopping"]);
+    expect(holders).toEqual(["inventory", "product", "shopping"]);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { replayable } from "./idempotency";
 
 export const productSchema = z.object({
   name: z.string().min(1),
@@ -35,6 +36,18 @@ export const productByBarcodeSchema = z.object({
   barcode: z.string(),
 });
 
+/**
+ * A barcode scanned offline, resolved on reconnect (T7).
+ *
+ * The same barcode `scanBarcode` takes, plus the replay envelope — because
+ * unlike `scanBarcode`, this one is drained from the offline queue, so it must
+ * be idempotent. It is a queued *scan*, never a queued product: the queue
+ * carries a barcode, and the real product (with its server-minted id) comes
+ * into being only when the scan resolves, so no provisional id ever reaches a
+ * component or the query cache.
+ */
+export const resolveScanSchema = productByBarcodeSchema.merge(replayable);
+
 export const productPaginationSchema = z.object({
   cursor: z.string().optional(),
   limit: z.number().min(1).max(100).default(20),
@@ -51,5 +64,6 @@ export type ProductInput = z.infer<typeof productSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export type ProductSearchInput = z.infer<typeof productSearchSchema>;
 export type ProductByBarcodeInput = z.infer<typeof productByBarcodeSchema>;
+export type ResolveScanInput = z.infer<typeof resolveScanSchema>;
 export type ProductPaginationInput = z.infer<typeof productPaginationSchema>;
 export type ProductListInput = z.infer<typeof productListSchema>;
