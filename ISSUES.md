@@ -102,6 +102,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UI-11 | A run-out product with a minimum is labelled low, not out | ✅ Resolved 2026-08-20 |
 | PRICE-1 | No UI path can create a price record | ✅ Resolved (`4bbb82d`) |
 | REV-1 | 2026-08-29 review: receipt pipeline discordances (apply untransacted, review edge-less, CREATE injection, append-on-reparse) | ✅ Resolved (this plan's commits) |
+| SEC-2 | `consumeStock` guards `?? ` but writes `\|\|`, so an empty `consumeFromLocationId` writes an unchecked `locationId` | ✅ Resolved 2026-08-31 |
 
 ---
 
@@ -567,6 +568,51 @@ reverted.
 
 **Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
 until the number means what the screen says it means.
+
+---
+
+### ✅ SEC-2: `consumeStock` guarded one location id and wrote another
+
+**File:** `src/server/trpc/routers/inventory.ts` (`consumeStock`)
+**Severity:** MEDIUM — cross-household reference on a written row
+**Status:** RESOLVED 2026-08-31 — found by the Phase D read-path sweep of the
+2026-08-29 review's "reported, not verified" set
+
+The guard and the write resolved the consumed location with different
+operators. The guard checked `input.consumeFromLocationId ?? input.locationId`
+(inventory.ts:535); the write stored `input.consumeFromLocationId ||
+input.locationId` (inventory.ts:609). Neither field forbids the empty string.
+
+They agree on `undefined`, and disagree on `""`. A caller sending
+`{ consumeFromLocationId: "", locationId: <another household's location id> }`:
+
+- guard: `"" ?? locationId` is `""` — `assertOwnLocation` returns early on a
+  falsy id and checks nothing;
+- availability filter: `"" ? … : undefined` is `undefined` — the draw-down
+  reads the whole product, so the quantity guard passes;
+- write: `"" || locationId` is `locationId` — the **foreign** id, which no
+  code checked, is written onto the `StockEntry`, and the response includes
+  `location: true`, so its name comes back.
+
+The row lands in the caller's own household (the *product* is checked), so it
+is SEC-1's shape at lower severity — a reference to a stranger's
+`StorageLocation`, which `/products/[id]` renders — but it is a caller-chosen
+foreign id reaching a written row, which is exactly the class the review's
+read-path sweep existed to find. Reachable by a KITCHEN account and through the
+offline replay queue; the UI never sends the field
+(`inventory/consume/page.tsx`), which is why nothing had exercised it.
+
+**Resolution.** The guard resolves the location with `||`, the same operator as
+the write, so it checks precisely the id that can be written. Pinned by
+`inventory.location-isolation.test.ts` "consumeStock refuses a foreign
+locationId hidden behind an empty consumeFromLocationId", verified failing
+first: the call succeeded and wrote the foreign id under the `?? ` guard.
+
+`transferStock` and `adjustStock` were checked in the same pass and do not
+share the shape — each guards and writes the same expression. The tenant-scope
+tripwire could not have caught this: it asserts only that `assertOwnLocation`
+*appears* in the body, which is its stated "cannot tell a correct check from a
+careless one" limit.
 
 ---
 

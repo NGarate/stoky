@@ -160,9 +160,19 @@ green — it read only inline Zod, and its schema scan truncated every schema at
 its first line. Both are recorded in the file, because a guard with a silent
 blind spot reports a pass it has not earned.
 
-**Reported, not verified:** the same audit lists ten queries whose household
+~~**Reported, not verified:** the same audit lists ten queries whose household
 scoping it could not confirm by reading. The tripwire covers the *write* path;
-reads are a separate sweep and have not been done.
+reads are a separate sweep and have not been done.~~ **Swept 2026-08-31.**
+Every read in the exemption set is genuinely household-scoped — quoted
+where-clause by where-clause — and the ones that had no cross-household test
+now have one (`ISSUES.md` SEC-2's neighbours in the isolation suites). Two
+exemption keys named procedures that do not exist (`price.getPriceHistory`,
+`price.compareStores`) and were removed; `product.delete`'s exemption reason
+misdescribed which query scopes it and was corrected. **The sweep also found a
+real defect the write-path tripwire structurally could not — `consumeStock`
+guarded one location id with `?? ` and wrote another with `||`, filed and
+fixed as `ISSUES.md` SEC-2** — which is the sweep earning its place rather than
+confirming a null result.
 
 ## 3. Rate limiting
 

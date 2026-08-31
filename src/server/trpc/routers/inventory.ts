@@ -530,9 +530,15 @@ export const inventoryRouter = createTRPCRouter({
       // Before the replay envelope, so a change composed offline is refused on
       // the same terms as one made online — a queued write is a caller that is
       // not a page, which is the reason SEC-1's sibling test lives where it does.
+      //
+      // `||`, not `??`, so this resolves to exactly what the write below
+      // resolves to (`consumeFromLocationId || locationId`): the two diverged
+      // on the empty string, where `??` kept `""` and short-circuited the
+      // guard while `||` fell the write through to an unchecked `locationId`.
+      // The guard must check the id that will actually be written.
       await assertOwnLocation(
         ctx.db,
-        input.consumeFromLocationId ?? input.locationId,
+        input.consumeFromLocationId || input.locationId,
         ctx.householdId,
       );
 

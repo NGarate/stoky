@@ -145,6 +145,34 @@ describe("a storage location belongs to one household", () => {
     expect(leaked).toBe(0);
   });
 
+  it("consumeStock refuses a foreign locationId hidden behind an empty consumeFromLocationId", async () => {
+    // The guard resolved `consumeFromLocationId ?? locationId` while the write
+    // resolved `consumeFromLocationId || locationId`. The two disagree on the
+    // empty string: `?? ` keeps `""` (so the guard checked nothing — an empty
+    // id short-circuits assertOwnLocation), while `||` discards it, so the
+    // write fell through to `locationId` — never checked, because the guard
+    // thought it was looking at `""`. A queued or hand-built consumption could
+    // then file the caller's stock against a stranger's shelf.
+    await giveStock(5);
+    const api = await callerFor(A);
+
+    const error = await refusal(() =>
+      api.inventory.consumeStock({
+        ...envelope(A.userId),
+        productId: A.productId,
+        quantity: 1,
+        unit: "L",
+        consumeFromLocationId: "",
+        locationId: B.locationId,
+      }),
+    );
+
+    expect(error.code).toBe("NOT_FOUND");
+    expect(
+      await prisma.stockEntry.count({ where: { locationId: B.locationId } }),
+    ).toBe(0);
+  });
+
   it("adjustStock refuses one that does not", async () => {
     const api = await callerFor(A);
 
