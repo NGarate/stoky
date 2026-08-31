@@ -241,6 +241,13 @@ RUN PRISMA_VERSION="$(node -p "require('/app/package.json').dependencies.prisma.
     # shipped container, which is worth having on its own.
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
+# Prove npm is actually gone, in the shape of the OCR-path assertions above: a
+# build-time failure here beats shipping a package manager and its vendored
+# advisories because a later edit reintroduced one. SECURITY_REVIEW §7's
+# posture check, behavioural half; the text half is image-posture.test.ts.
+RUN ! command -v npm && ! command -v npx \
+    && test ! -d /usr/local/lib/node_modules/npm
+
 # Receipt uploads are written by the app at runtime. The directory used to be
 # created as root and then handed to an unprivileged user, so the first upload
 # failed with EACCES. Create it with the right owner instead.

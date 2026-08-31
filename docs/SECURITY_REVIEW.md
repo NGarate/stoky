@@ -401,9 +401,19 @@ This is the one place the review found the gate working rather than missing: the
 advisory was published, the next push went red, and the trunk could not ship
 until it was fixed.
 
-**Reported, not verified:** nothing in the image posture is enforced by a test —
-`USER node`, the npm removal, the read-only rootfs are all true and all
-unasserted; a published image is never re-scanned, so an advisory affecting a
+~~**Reported, not verified:** nothing in the image posture is enforced by a
+test — `USER node`, the npm removal, the read-only rootfs are all true and all
+unasserted;~~ **The posture is now asserted, 2026-08-31.** The text half is
+`unit/image-posture.test.ts` (in the shape of `bun-version`/`ocr-tessdata`): the
+production stage runs `USER node` and never returns to root, deletes npm in the
+same `RUN` that installed with it, health-checks `/api/health` not the port, and
+keeps `/app/uploads` chownable; and `docker-compose.prod.yml`'s app service is
+`read_only: true` with only its three writable exceptions. The behavioural half
+for npm is a build-time `RUN ! command -v npm` assertion in the production stage,
+in the shape of the OCR-path assertions, so a reintroduced package manager fails
+`docker build`. `USER node` and read-only holding on the running container stay
+the CI image job's to prove, on the image it is about to scan. **Still open:** a
+published image is never re-scanned, so an advisory affecting a
 shipped image is only noticed on the next push; and the placeholder-secret guard
 does not stop the container, which reports healthy while refusing to sign
 anybody in.
@@ -534,7 +544,7 @@ in the order they would pay off.
 | ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~A successful upload does what it claims~~ | integration | **Built** — `integration/receipt.upload.test.ts` |
-| The image posture holds | build | `USER node`, no npm, read-only rootfs |
+| ~~The image posture holds~~ | build | **Built** — `unit/image-posture.test.ts` (text) + a `RUN ! command -v npm` in the Dockerfile (build); `USER node`/read-only on the running image stay the CI image job's |
 
 ---
 
