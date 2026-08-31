@@ -2309,3 +2309,18 @@ this does not overturn it: the locators are precise now (`getByRole` with
 What changed is that the scoping is a choice rather than a wall. The locator
 fragility was latent on chromium too — it passed there by luck of DOM order
 rather than by aiming at anything.
+
+**D117 — A5.4 closed: how many entry points is the person's choice, not the
+design's.** DESIGN_AUDIT A5.4's last open half was "whether three entry points
+is the right number" — `/dashboard` beside `/shopping` and `/kitchen`. The
+owner settled it on 2026-09-01: *the entry point should be user-configurable
+from the main screens.* The decision needed no code, because that is exactly
+what the per-device screen choice already does (Journey 8, §5.1). `landingPath`
+(`src/lib/landing.ts`) sends a person to whatever `LandingScreen` they chose on
+this device; `ScreenChoiceForm` offers all three at `/start` (asked once) and
+`/settings/screen` (changeable); and the root `/` honours the choice. Nobody
+lands on `/dashboard` unless they picked it, so it is not a third door imposed
+on anyone — it is one of three the person may choose between. The question "two
+doors or three?" dissolves: it is however many the person wants to be able to
+land on, and they choose which. The Panel's own shape (its cards reduced to
+pre-filtered sections over the three 2026-08-18/19/22 passes) is unchanged.

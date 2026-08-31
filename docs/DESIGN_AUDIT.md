@@ -11,8 +11,10 @@ gates `check:links` and `check:contrast`. A4.6 is half done: its automated
 half is `e2e/screen-reader.spec.ts`, and the human screen-reader pass is
 still owed. In §5, A5.1 and A5.2 are done and were never marked; A5.3 closed
 2026-08-22 (its entry records the 142 → 13 count and the test that holds it);
-A5.4's remaining half — whether three entry points is the right number — is
-the one action genuinely still open.
+and A5.4 closed 2026-09-01 — the entry point is the person's configurable
+choice among the main screens (D117). Every numbered action is now closed; what
+remains is the human screen-reader pass A4.6's §5 describes, which no marker can
+grant.
 
 Scope: every route, mobile-first, WCAG **AAA**, with user-chosen theme and
 language.
@@ -474,11 +476,19 @@ not enumerate them.
   of the 74 that do. Change the floor and 74 call sites keep the old value,
   which is precisely the shape of the `h-10` defect that guard exists to
   prevent.
-- **A5.4 — decidable now.** Both screens exist (Phases 4–5 closed): `/shopping`
-  is Screen A and `/kitchen` is Screen B, and `/dashboard` still sits beside
-  them. Three entry points competing for the same job is a worse outcome than
-  the placeholder; what `/dashboard` becomes is a product decision waiting on
-  its owner, not on any phase.
+- ~~**A5.4 — decidable now.**~~ **Closed 2026-09-01.** Both screens exist
+  (Phases 4–5 closed): `/shopping` is Screen A and `/kitchen` is Screen B, and
+  `/dashboard` sits beside them. The open half — *whether three entry points is
+  the right number* — was settled by the owner: **the entry point is the
+  user's, configurable among the main screens.** That is not new work — it is
+  what the per-device screen choice already does (Journey 8, §5.1): `landingPath`
+  (`src/lib/landing.ts`) sends a person to whatever they chose on this device,
+  all three of `SHOPPING` / `KITCHEN` / `DASHBOARD` are pickable at `/start` and
+  changeable at `/settings/screen`, and nobody lands on `/dashboard` unless they
+  chose it. So the answer to "three doors, or two?" is "as many as the person
+  wants — they pick the one they land on." The three stay; none is imposed. The
+  Panel's own shape settled in the three passes below is unchanged (PROGRESS
+  D117).
 
   **Owner input, 2026-08-18.** The owner's first pass answered half of this:
   the Panel stays, and its stat cards become doors — each links to a list
