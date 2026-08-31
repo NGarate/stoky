@@ -27,6 +27,7 @@ import type { JSX } from "react";
 /** Why it is not going to be sent again, in words rather than a code. */
 const REASON_KEY: Record<FailureReason, string> = {
   "needs-reconciliation": "reasonNeedsReconciliation",
+  "needs-review": "reasonNeedsReview",
   "wrong-household": "reasonWrongHousehold",
   refused: "reasonRefused",
   gone: "reasonGone",

@@ -153,6 +153,42 @@ describe("a refused consumption", () => {
   });
 });
 
+describe("an offline scan of an unknown barcode", () => {
+  it("is kept for review, and the drain moves past it", async () => {
+    // T7: OFF cannot name the barcode → NOT_FOUND. Not a failure; a question.
+    // The scan lands in `failed` as needs-review and the change behind it
+    // still sends, so one unnameable scan does not block a shop.
+    const sent: string[] = [];
+    const queue = open(async (op) => {
+      if (op.path === "product.resolveScan") throw refusal(404);
+      sent.push(String(op.input.id));
+    });
+
+    queue.enqueue({
+      path: "product.resolveScan",
+      input: { barcode: "8410000999999" },
+      label: { key: "offline.scannedBarcode", values: { barcode: "8410000999999" } },
+    });
+    queue.enqueue({ ...tick(), input: { id: "after" } });
+    await queue.drain();
+
+    expect(queue.getState().failed[0]?.reason).toBe("needs-review");
+    expect(sent).toEqual(["after"]);
+    expect(queue.getState().pending).toHaveLength(0);
+  });
+
+  it("does not treat a NOT_FOUND on anything else as reviewable", async () => {
+    const queue = open(async () => {
+      throw refusal(404);
+    });
+
+    queue.enqueue(tick("shopping.removeItem"));
+    await queue.drain();
+
+    expect(queue.getState().failed[0]?.reason).toBe("refused");
+  });
+});
+
 describe("a session that ended while the phone was in a pocket", () => {
   it("stops sending and keeps everything", async () => {
     const send = mock(async () => {

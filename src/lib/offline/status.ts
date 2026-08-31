@@ -20,6 +20,7 @@ export type SyncState =
   | "syncing"
   | "needs-signin"
   | "needs-reconciliation"
+  | "needs-review"
   | "failed"
   | "full"
   | "unrepresented";
@@ -37,7 +38,9 @@ export function syncStatus(queue: QueueState): SyncSummary {
     const toReconcile = failed.filter(
       (op) => op.reason === "needs-reconciliation",
     );
-    const otherFailures = failed.length - toReconcile.length;
+    const toReview = failed.filter((op) => op.reason === "needs-review");
+    const otherFailures =
+      failed.length - toReconcile.length - toReview.length;
 
     // Ordered by what someone has to do about it, hardest first. A session that
     // ended blocks everything else, so it is said first even when other things
@@ -47,6 +50,9 @@ export function syncStatus(queue: QueueState): SyncSummary {
     }
     if (toReconcile.length > 0) {
       return { state: "needs-reconciliation", count: toReconcile.length };
+    }
+    if (toReview.length > 0) {
+      return { state: "needs-review", count: toReview.length };
     }
     if (otherFailures > 0) {
       return { state: "failed", count: otherFailures };
@@ -78,6 +84,7 @@ export function isUrgent(state: SyncState): boolean {
   return (
     state === "needs-signin" ||
     state === "needs-reconciliation" ||
+    state === "needs-review" ||
     state === "failed" ||
     state === "full" ||
     state === "unrepresented"

@@ -17,6 +17,10 @@ import { TRPCClientError } from "@trpc/client";
  *   retry; say so, by name.
  * - **reconcile** — a special case of permanent that is not a failure at all.
  *   See below.
+ * - **review** — a queued scan of a barcode nobody knows yet (T7). Also not a
+ *   failure: the person scanned something real, and only they can name it. The
+ *   sync indicator asks the question and a form opens prefilled with the
+ *   barcode, the same shape as reconcile — allow the intent, ask the human.
  *
  * **Reconcile is the one worth reading.** Stock has a floor: two people who
  * each use the last unit cannot both be right, so the second to reach the
@@ -29,7 +33,8 @@ export type MutationOutcome =
   | "transient"
   | "auth"
   | "permanent"
-  | "reconcile";
+  | "reconcile"
+  | "review";
 
 /** The HTTP status the server answered with, if it answered at all. */
 export function httpStatusOf(error: unknown): number | null {
@@ -62,6 +67,15 @@ export function receivedResponse(error: unknown): boolean {
  */
 const RECONCILABLE = new Set(["inventory.consumeStock"]);
 
+/**
+ * Procedures whose NOT_FOUND is a question for a person rather than a dead end.
+ *
+ * Only `resolveScan` has one: a barcode Open Food Facts does not know is not a
+ * failed request, it is one the person must name. Elsewhere a 404 on a queued
+ * write is a genuine "gone" and stays permanent.
+ */
+const REVIEWABLE = new Set(["product.resolveScan"]);
+
 /** Statuses that mean "the server is busy or the network is not", not "no". */
 const RETRYABLE_STATUSES = new Set([408, 425, 429]);
 
@@ -81,6 +95,7 @@ export function classifyMutationError(
   if (RETRYABLE_STATUSES.has(status)) return "transient";
 
   if (status === 409 && RECONCILABLE.has(path)) return "reconcile";
+  if (status === 404 && REVIEWABLE.has(path)) return "review";
 
   return "permanent";
 }

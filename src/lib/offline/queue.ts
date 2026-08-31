@@ -42,13 +42,14 @@ import { createQueueStorage, type QueueStorage } from "./storage";
  */
 export const UNDO_HOLD_MS = 10_000;
 
-/** The five procedures a queued shop can carry. */
+/** The procedures a queued shop can carry. */
 export type ReplayablePath =
   | "shopping.addItem"
   | "shopping.updateItem"
   | "shopping.removeItem"
   | "inventory.addStock"
-  | "inventory.consumeStock";
+  | "inventory.consumeStock"
+  | "product.resolveScan";
 
 /**
  * What the interface calls a change, as a catalogue key and its values.
@@ -93,9 +94,15 @@ export interface QueuedOp {
  * each use the last unit cannot both be right — but the second one *did* take
  * the milk, and only a person who can see the shelf knows what is actually
  * there. §5.5.3: allow and reconcile, never discard.
+ *
+ * `needs-review` is the same shape for T7: a barcode scanned offline that Open
+ * Food Facts cannot name is not a failed scan, it is one waiting for a person
+ * to name it. Both sit in `failed` because the drain is done with them, and
+ * both are surfaced as a question rather than an error.
  */
 export type FailureReason =
   | "needs-reconciliation"
+  | "needs-review"
   | "wrong-household"
   | "refused"
   | "gone"
@@ -234,6 +241,8 @@ function reasonFor(error: unknown, path: ReplayablePath): FailureReason | null {
   switch (classifyMutationError(error, path)) {
     case "reconcile":
       return "needs-reconciliation";
+    case "review":
+      return "needs-review";
     case "permanent":
       return "refused";
     default:

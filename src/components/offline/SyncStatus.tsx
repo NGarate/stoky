@@ -39,8 +39,10 @@ export function SyncStatus(): JSX.Element {
   const toReconcile = state.failed.filter(
     (op) => op.reason === "needs-reconciliation",
   );
+  const toReview = state.failed.filter((op) => op.reason === "needs-review");
   const otherFailures = state.failed.filter(
-    (op) => op.reason !== "needs-reconciliation",
+    (op) =>
+      op.reason !== "needs-reconciliation" && op.reason !== "needs-review",
   );
 
   const message =
@@ -54,11 +56,13 @@ export function SyncStatus(): JSX.Element {
             ? t("needsSignin")
             : summary.state === "needs-reconciliation"
               ? t("needsReconciliation", { count: summary.count })
-              : summary.state === "failed"
-                ? t("failed", { count: summary.count })
-                : summary.state === "full"
-                  ? t("full")
-                  : t("unrepresented");
+              : summary.state === "needs-review"
+                ? t("needsReview", { count: summary.count })
+                : summary.state === "failed"
+                  ? t("failed", { count: summary.count })
+                  : summary.state === "full"
+                    ? t("full")
+                    : t("unrepresented");
 
   return (
     // `data-sync` separates "the device has been read and there is nothing
@@ -104,6 +108,32 @@ export function SyncStatus(): JSX.Element {
                       type="button"
                     >
                       {t("review")}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {toReview.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {toReview.map((op) => (
+                  <li key={op.id} className="flex flex-wrap items-center gap-2">
+                    <span className="flex-1">
+                      {t(op.label.key.replace("offline.", ""), op.label.values)}
+                    </span>
+                    {/* The barcode carries into the create form, which
+                        discards this queued scan once the product is named. */}
+                    <Button asChild type="button">
+                      <Link
+                        href={`/products/new?barcode=${encodeURIComponent(
+                          String(op.input.barcode ?? ""),
+                        )}&pendingScan=${op.id}`}
+                      >
+                        {t("nameIt")}
+                      </Link>
+                    </Button>
+                    <Button onClick={() => discard(op.id)} type="button">
+                      {t("discard")}
                     </Button>
                   </li>
                 ))}

@@ -127,3 +127,31 @@ describe("a refused consumption", () => {
     );
   });
 });
+
+describe("an unresolvable offline scan", () => {
+  it("asks for review rather than being reported as gone", () => {
+    // T7: a barcode Open Food Facts cannot name comes back NOT_FOUND, but the
+    // person scanned something real — so it is a question, not a dead 404.
+    expect(classifyMutationError(refusal(404), "product.resolveScan")).toBe(
+      "review",
+    );
+  });
+
+  it("is the only 404 that means that", () => {
+    // A NOT_FOUND on any other queued write is a genuine "gone" — a row
+    // deleted out from under a queued edit — with nothing to review.
+    for (const other of [
+      "shopping.updateItem",
+      "shopping.removeItem",
+      "inventory.consumeStock",
+    ]) {
+      expect(classifyMutationError(refusal(404), other)).toBe("permanent");
+    }
+  });
+
+  it("still defers to the session on a 401", () => {
+    expect(classifyMutationError(refusal(401), "product.resolveScan")).toBe(
+      "auth",
+    );
+  });
+});

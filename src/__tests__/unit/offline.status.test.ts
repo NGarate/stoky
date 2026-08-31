@@ -31,6 +31,7 @@ function failed(id: string, reason: FailedOp["reason"]): FailedOp {
 
 const REASONS: FailedOp["reason"][] = [
   "needs-reconciliation",
+  "needs-review",
   "wrong-household",
   "refused",
   "gone",
@@ -159,12 +160,33 @@ describe("what it says, and in which order", () => {
 
     expect(syncStatus(state)).toEqual({ state: "failed", count: 2 });
   });
+
+  it("names a scan waiting for review, and counts only those", () => {
+    const state: QueueState = {
+      ...base,
+      failed: [failed("f1", "needs-review"), failed("f2", "refused")],
+    };
+
+    // Ahead of an ordinary failure, behind a stock disagreement — a scan to
+    // name is a question, like reconcile, and both come before "it failed".
+    expect(syncStatus(state)).toEqual({ state: "needs-review", count: 1 });
+  });
+
+  it("puts a stock disagreement ahead of a scan to review", () => {
+    const state: QueueState = {
+      ...base,
+      failed: [failed("f1", "needs-review"), failed("f2", "needs-reconciliation")],
+    };
+
+    expect(syncStatus(state).state).toBe("needs-reconciliation");
+  });
 });
 
 describe("which live region a state belongs in", () => {
   const urgent: SyncState[] = [
     "needs-signin",
     "needs-reconciliation",
+    "needs-review",
     "failed",
     "full",
     "unrepresented",
@@ -185,6 +207,7 @@ describe("which live region a state belongs in", () => {
         "failed",
         "full",
         "needs-reconciliation",
+        "needs-review",
         "needs-signin",
         "pending",
         "synced",

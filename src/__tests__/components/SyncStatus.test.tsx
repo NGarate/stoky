@@ -242,6 +242,46 @@ describe("a change that did not save", () => {
   });
 });
 
+describe("a scanned barcode nobody knows yet", () => {
+  function scan(id: string): FailedOp {
+    return {
+      ...op(id),
+      path: "product.resolveScan",
+      input: { barcode: "8410000999999" },
+      label: {
+        key: "offline.scannedBarcode",
+        values: { barcode: "8410000999999" },
+      },
+      reason: "needs-review",
+    };
+  }
+
+  it("offers to name it, with the barcode carried into the create form", () => {
+    queueState = { ...queueState, failed: [scan("s1")] };
+    renderWithIntl(<SyncStatus />);
+
+    // The review question, not a retry: a scan the server could not resolve is
+    // named, not re-sent.
+    const link = screen.getByRole("link", { name: "Ponle nombre" });
+    expect(link).toHaveAttribute(
+      "href",
+      "/products/new?barcode=8410000999999&pendingScan=s1",
+    );
+    // No retry button for it — retry would only 404 again.
+    expect(
+      screen.queryByRole("button", { name: "Reintentar" }),
+    ).toBeNull();
+  });
+
+  it("still lets it be discarded", async () => {
+    queueState = { ...queueState, failed: [scan("s1")] };
+    renderWithIntl(<SyncStatus />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(discard).toHaveBeenCalledWith("s1");
+  });
+});
+
 describe("a refused consumption", () => {
   beforeEach(() => {
     queueState = {
