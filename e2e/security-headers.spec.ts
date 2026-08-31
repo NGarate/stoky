@@ -1,4 +1,5 @@
 import { test, expect, type APIResponse } from "@playwright/test";
+import { SESSION_FILE } from "./session";
 
 /**
  * Every security header, asserted on a real response from the artefact that
@@ -91,20 +92,56 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
     expect(nonceOf(first)).not.toBe(nonceOf(second));
   });
 
-  test("carries the directives production depends on", async ({ request }) => {
+  test("carries exactly the thirteen production directives, at their exact values", async ({
+    request,
+  }) => {
+    // Split and matched exactly rather than by substring — `toContain
+    // ("frame-ancestors")` passes just as happily on `frame-ancestors 'self'`,
+    // which is the opposite policy. The name-only version of this test did
+    // exactly that for five directives (SECURITY_REVIEW §8's "eight of the
+    // thirteen unaudited"; seven, once counted).
     const csp = headerOf(await request.get("/login"), "content-security-policy");
+    const directives = csp.split("; ");
 
-    // `strict-dynamic`, so a script the nonce admits can load its own chunks
-    // without every chunk needing to be listed.
-    expect(csp).toContain("strict-dynamic");
+    // Over plain http — this suite's transport — the transport-keyed
+    // upgrade-insecure-requests is absent, so the count is thirteen. The
+    // count is the one assertion that notices a directive silently added or
+    // dropped, which no list of positives can.
+    expect(directives).toHaveLength(13);
+
+    expect(directives[0]).toBe("default-src 'self'");
+    // Full shape, not just the nonce: 'self', a fresh 32-hex nonce,
+    // 'strict-dynamic', and nothing else — so script-src can never quietly
+    // gain 'unsafe-inline' or a host source.
+    expect(directives[1]).toMatch(
+      /^script-src 'self' 'nonce-[a-f0-9]{32}' 'strict-dynamic'$/,
+    );
+    // style-src's 'unsafe-inline' is the policy's one deliberate exception —
+    // Next inlines critical CSS — pinned at exactly that so a third source
+    // cannot arrive silently.
+    expect(directives[2]).toBe("style-src 'self' 'unsafe-inline'");
+    // The only remote origin images may come from.
+    expect(directives[3]).toBe(
+      "img-src 'self' data: blob: https://images.openfoodfacts.org",
+    );
+    expect(directives[4]).toBe("font-src 'self'");
+    // Exact, which is what proves the dev tail (ws:, http://localhost:*)
+    // never ships.
+    expect(directives[5]).toBe(
+      "connect-src 'self' https://world.openfoodfacts.org",
+    );
+    expect(directives[6]).toBe("media-src 'self'");
     // Named explicitly rather than left to `default-src`, because the service
     // worker is the one script with no page to inherit a policy from.
-    expect(csp).toContain("worker-src");
-    expect(csp).toContain("child-src");
-    // Clickjacking, in the modern spelling as well as the legacy header above.
-    expect(csp).toContain("frame-ancestors");
-    expect(csp).toContain("base-uri");
-    expect(csp).toContain("form-action");
+    expect(directives[7]).toBe("worker-src 'self'");
+    expect(directives[8]).toBe("child-src 'self'");
+    expect(directives[9]).toBe("object-src 'none'");
+    // What stops a <base> injection re-pointing every relative script URL.
+    expect(directives[10]).toBe("base-uri 'self'");
+    expect(directives[11]).toBe("form-action 'self'");
+    // Clickjacking in the modern spelling; must agree with the legacy
+    // X-Frame-Options: DENY asserted above.
+    expect(directives[12]).toBe("frame-ancestors 'none'");
   });
 
   test("does not allow eval in production", async ({ request }) => {
@@ -126,6 +163,58 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
     const csp = headerOf(await request.get("/login"), "content-security-policy");
 
     expect(csp).not.toContain("upgrade-insecure-requests");
+  });
+});
+
+test.describe("what a prefetch label cannot do", () => {
+  // Authenticated, because the route answers 401 before consuming a body —
+  // measured: an unauthenticated 15 MB POST gets 401, not 413, so only a
+  // signed-in request can observe the cap at all.
+  test.use({ storageState: SESSION_FILE });
+
+  test("an oversized POST is refused by two layers, and the prefetch label only reaches the deeper one", async ({
+    request,
+  }) => {
+    // The proxy's matcher skips requests labelled `Purpose: prefetch` or
+    // `Next-Router-Prefetch` (its `missing` clauses — Next's own documented
+    // shape). SECURITY_REVIEW §8 reported the skip and left one sharp
+    // question: `proxyClientMaxBodySize` is applied *because* a middleware is
+    // configured, so does labelling an upload as a prefetch skip the body
+    // cap? Measured here: it does. But the upload is refused regardless,
+    // because there are two layers.
+    //
+    //   - Unlabelled, the proxy cap truncates the 16 MB body mid-flight, and
+    //     tRPC meets an unterminated JSON string → 400 parse error. This is
+    //     finding 13's own signature, and it proves the cap fires.
+    //   - Labelled a prefetch, the whole body arrives — the proxy did not run
+    //     — and is refused one layer deeper by `fileBase64`'s Zod `.max`
+    //     (MAX_RECEIPT_BASE64_LENGTH), the second bound added for exactly the
+    //     case where the first does not apply. → 400 too_big.
+    //
+    // So the label bypasses the proxy cap but not the refusal: the body is
+    // bounded by validation on an authenticated, rate-limited endpoint. If
+    // the labelled request ever stops being refused — a 200, or the write
+    // path reached — this is the test that says so.
+    const oversized = JSON.stringify({
+      json: {
+        fileBase64: "A".repeat(16 * 1024 * 1024),
+        mimeType: "image/png",
+      },
+    });
+
+    const control = await request.post("/api/trpc/receipt.upload", {
+      headers: { "content-type": "application/json" },
+      data: oversized,
+    });
+    expect(control.status()).toBe(400);
+    expect(await control.text()).toContain("Unterminated string");
+
+    const labelled = await request.post("/api/trpc/receipt.upload", {
+      headers: { "content-type": "application/json", purpose: "prefetch" },
+      data: oversized,
+    });
+    expect(labelled.status()).toBe(400);
+    expect(await labelled.text()).toContain("too_big");
   });
 });
 

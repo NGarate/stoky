@@ -404,9 +404,39 @@ lost — that `unsafe-eval` is absent in production, and that
 `upgrade-insecure-requests` is absent over plain http, which is the defect that
 once killed every tRPC call for a Safari user on a LAN install.
 
-**Still reported, not verified:** prefetch requests skip the middleware by its
+~~**Still reported, not verified:** prefetch requests skip the middleware by its
 own matcher, and eight of the thirteen production directives remain unaudited —
-though the new spec now asserts six of them are present.
+though the new spec now asserts six of them are present.~~ **Verified
+2026-08-31**, and the arithmetic was off — the spec asserted six, so seven
+were unaudited, not eight.
+
+**All thirteen are now audited at their exact values.**
+`security-headers.spec.ts` splits the policy on `"; "` and matches each
+directive by equality rather than substring — the name-only assertions passed
+just as happily on `frame-ancestors 'self'` as on `'none'` — and asserts the
+count is thirteen over plain http, which is the only check that catches a
+directive silently added or dropped. `script-src` is pinned to its full shape
+(`'self'`, a 32-hex nonce, `'strict-dynamic'`, nothing else), and `connect-src`
+to exactly its two sources, which is what proves the dev tail (`ws:`,
+`http://localhost:*`) never ships.
+
+**The prefetch-skip is real, and bounded.** Measured: a request labelled
+`Purpose: prefetch` does skip the proxy, so `proxyClientMaxBodySize` does not
+apply to it — an oversized upload's whole body arrives instead of being
+truncated. But it is still refused, one layer deeper, by `fileBase64`'s Zod
+`.max` (`MAX_RECEIPT_BASE64_LENGTH`), the second bound added for exactly the
+case where the proxy cap does not fire. So the label bypasses the cap, not the
+refusal; the body stays bounded by validation on an authenticated,
+rate-limited endpoint. Pinned by "an oversized POST is refused by two
+layers": unlabelled → the proxy truncates → tRPC's `Unterminated string`;
+labelled → the full body → Zod `too_big`. The residual — the full body is
+buffered before Zod refuses it — is a low-severity memory cost behind auth and
+the 30/hour upload meter, worth knowing rather than fixing.
+
+Prefetch responses also carry no `Content-Security-Policy` (it is set only in
+the proxy), so a prefetched RSC payload has no nonce; harmless because such a
+payload is data merged into a document that already has a fresh nonce and
+`'strict-dynamic'`, never itself a top-level document.
 
 ---
 
