@@ -1,20 +1,59 @@
 "use client";
 
 import { useState } from "react";
+import { onlineManager } from "@tanstack/react-query";
 import { BackLink } from "@/components/ui/back-link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
+import { useWriteQueue } from "@/lib/offline/queue-context";
+import { httpStatusOf } from "@/lib/offline/classify";
 
 export default function ScanPage() {
   const t = useTranslations("products.scan");
   const router = useRouter();
   const snackbar = useSnackbar();
+  const { state: queueState, enqueue } = useWriteQueue();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  /**
+   * Queue the scan instead of sending it — the offline path (T7).
+   *
+   * Returns whether it was queued, so the caller can fall back to it from
+   * `onError` too: a captive portal answers `online` and then fails the
+   * request with no status, which `onlineManager` cannot see in advance.
+   * Deduped against what is already waiting, because scanning the same code
+   * twice while offline is a double-tap, not two intentions.
+   */
+  function queueScan(barcode: string): boolean {
+    const already = queueState.pending.some(
+      (op) => op.path === "product.resolveScan" && op.input.barcode === barcode,
+    );
+    if (already) {
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "products.scan.alreadyQueued", values: { barcode } },
+      });
+      return true;
+    }
+
+    const queued = enqueue({
+      path: "product.resolveScan",
+      input: { barcode },
+      label: { key: "offline.scannedBarcode", values: { barcode } },
+    });
+    if (!queued.ok) return false;
+
+    snackbar.show({
+      kind: "confirm",
+      message: { key: "products.scan.queuedOffline", values: { barcode } },
+    });
+    return true;
+  }
 
   const scanMutation = api.product.scanBarcode.useMutation({
     onSuccess: (result) => {
@@ -45,8 +84,16 @@ export default function ScanPage() {
         router.push(`/products/new?barcode=${scannedBarcode}`);
       }
     },
-    onError: () => {
+    onError: (error) => {
       setIsProcessing(false);
+      // A transport failure with no status is a captive portal or a dropped
+      // connection — `onlineManager` said online but nothing got through. Queue
+      // it rather than lose the scan; a real server error (a status) is a
+      // genuine failure and falls through to scanning again.
+      if (scannedBarcode && httpStatusOf(error) === null) {
+        queueScan(scannedBarcode);
+        setScannedBarcode(null);
+      }
       setIsScanning(true);
     },
   });
@@ -56,8 +103,18 @@ export default function ScanPage() {
 
     setScannedBarcode(barcode);
     setIsScanning(false);
-    setIsProcessing(true);
 
+    // Offline mutations pause rather than error under TanStack Query's default
+    // networkMode, so `onError` never fires — the scan would hang. Check first
+    // and queue, which is the whole of T7's happy path.
+    if (!onlineManager.isOnline()) {
+      queueScan(barcode);
+      setScannedBarcode(null);
+      setIsScanning(true);
+      return;
+    }
+
+    setIsProcessing(true);
     scanMutation.mutate({ barcode });
   };
 

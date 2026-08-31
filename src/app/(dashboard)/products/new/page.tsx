@@ -10,6 +10,7 @@ import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
+import { useWriteQueue } from "@/lib/offline/queue-context";
 import type { FormEvent, JSX } from "react";
 
 type FieldName = "name" | "barcode" | "unit" | "minStock";
@@ -76,8 +77,12 @@ function NewProductForm(): JSX.Element {
   const t = useTranslations("products.new");
   const searchParams = useSearchParams();
   const utils = api.useUtils();
+  const { discard } = useWriteQueue();
 
   const scannedBarcode = searchParams.get("barcode")?.trim() ?? "";
+  // The queued scan that sent the person here, if any (T7). Discarded once the
+  // product is created, so the sync indicator's review question clears.
+  const pendingScan = searchParams.get("pendingScan")?.trim() || null;
 
   const [name, setName] = useState("");
   const [barcode, setBarcode] = useState(scannedBarcode);
@@ -183,6 +188,11 @@ function NewProductForm(): JSX.Element {
     onSuccess: async (product) => {
       await utils.product.list.invalidate();
       await utils.product.getByBarcode.invalidate();
+      // A scan queued offline (T7) that could not be resolved sent the person
+      // here to name it. Now that it is named, drop the queued scan so the
+      // sync indicator's review question clears — the product it was asking
+      // for exists.
+      if (pendingScan) discard(pendingScan);
       setCreated({ name: product.name, fromLookup: false });
     },
     onError: (error) => {

@@ -306,7 +306,9 @@
       "torchOff": "Apagar linterna",
       "torchFailed": "La linterna no se ha podido encender. Puede que otra aplicación esté usando la cámara: ciérrala y vuelve a intentarlo.",
       "foundExisting": "Ya tenías «{name}» en el catálogo",
-      "createdFromLookup": "Creaste «{name}» con los datos de Open Food Facts"
+      "createdFromLookup": "Creaste «{name}» con los datos de Open Food Facts",
+      "queuedOffline": "Sin conexión: guardamos el código {barcode} y lo resolveremos al reconectar",
+      "alreadyQueued": "Ya tienes el código {barcode} esperando"
     },
     "rating": {
       "title": "Calidad",

@@ -306,7 +306,9 @@
       "torchOff": "Turn the torch off",
       "torchFailed": "The torch would not turn on. Another app may be using the camera — close it and try again.",
       "foundExisting": "You already had “{name}” in the catalogue",
-      "createdFromLookup": "You created “{name}” from Open Food Facts data"
+      "createdFromLookup": "You created “{name}” from Open Food Facts data",
+      "queuedOffline": "No signal: we saved barcode {barcode} and will resolve it when you reconnect",
+      "alreadyQueued": "You already have barcode {barcode} waiting"
     },
     "rating": {
       "title": "Quality",
