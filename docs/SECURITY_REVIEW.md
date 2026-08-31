@@ -237,10 +237,29 @@ The queue also inherited §2's defects, since `consumeStock` is replayable — w
 is why the location guard sits *before* the replay envelope rather than inside
 it. A queued write is a caller that is not a page.
 
-**Reported, not verified:** cross-household ownership on the replayable
+~~**Reported, not verified:** cross-household ownership on the replayable
 procedures is tested for one of the five; and a claim that role-freshness is not
 what it appears to be. That last one contradicts what §1 verified, so it needs
-settling rather than repeating.
+settling rather than repeating.~~ **Both settled 2026-08-31.**
+
+**Replayable ownership is now tested for every id every one of the five
+accepts** — `integration/cross-household.test.ts` (household A asks for B's
+rows by id) plus the store/location isolation suites: `shopping.addItem`'s
+list and product, `updateItem`'s and `removeItem`'s item, `addStock`'s and
+`consumeStock`'s product and location, each refused and each proven to leave
+B's row untouched. The earlier "one of five" counted only the store dimension.
+
+**Role-freshness: §1 is right, the §4 suspicion is false for authorisation.**
+Every server gate re-reads `householdId` and `role` from the database per call
+(`trpc.ts` `householdProcedure`), so `withReplay` — called inside the resolver,
+after that read and after the tier guard, and carrying no role at all — cannot
+replay under a stale privilege. The one true grain: the *JWT's* `role` claim is
+minted at sign-in and never refreshed, so `session.user.role` can be stale for
+an active session's life — but it drives only UI affordances (which buttons
+show), never a server decision, and the fallback is to `KITCHEN`. "Not what it
+appears" is true of the session object and false of authorisation, which is the
+settling sentence; the audit note that spawned it was never committed, so this
+is the record.
 
 ## 5. Uploads
 

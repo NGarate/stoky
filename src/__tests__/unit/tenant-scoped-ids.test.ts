@@ -140,20 +140,18 @@ const ALLOWED: Record<string, string> = {
   "product.update":
     "resolves the product against the household before writing, by id and householdId together",
   "product.delete":
-    "counts references against the household before refusing; the id is scoped in that query",
+    "resolves the product against the household by id and householdId together before the reference counts and the delete; those later queries key on the bare id, but only after that lookup has refused a foreign one",
   "inventory.getStockHistory":
-    "a read, scoped by the same householdId filter it selects on",
+    "a read: refuses a foreign productId with a household-scoped findFirst, then reads the ledger by that proven id",
   "inventory.getStockOverview":
     "a read: the SQL carries the household filter, so a foreign locationId narrows to nothing",
   "inventory.getExpiringItems":
     "a read: the household filter is passed beside the locationId, so a foreign id narrows within the caller's own household",
   "inventory.getExpiredItems": "a read, as above",
-  "price.getPriceHistory": "a read, scoped by household in its own where clause",
   "price.getLatestPrices":
     "a read: filters on product.householdId as well as the id",
   "price.getHistory":
     "a read: both ids sit beside a product.householdId filter in the same where clause",
-  "price.compareStores": "a read, scoped by household in its own where clause",
 };
 
 /** Every procedure in a router file, with the source between it and the next. */
@@ -186,6 +184,24 @@ describe("a caller-supplied id is looked up before it is written", () => {
       proceduresIn(file, readFileSync(join(ROUTERS, file), "utf8")),
     );
     expect(total.length).toBeGreaterThan(50);
+  });
+
+  it("has no exemption for a procedure that no longer exists", () => {
+    // A dead ALLOWED key is worse than useless: the scan only ever *consults*
+    // ALLOWED by key (`if (ALLOWED[name]) continue`), so a key naming a
+    // renamed or deleted procedure silently exempts nothing and fails
+    // nothing — which is how `price.getPriceHistory` and `price.compareStores`
+    // sat here naming procedures that never existed. Every exemption must
+    // name a real procedure, so removing one forces the exemption to go too.
+    const real = new Set(
+      files.flatMap((file) =>
+        proceduresIn(file, readFileSync(join(ROUTERS, file), "utf8")).map(
+          (p) => p.name,
+        ),
+      ),
+    );
+    const dead = Object.keys(ALLOWED).filter((name) => !real.has(name));
+    expect(dead).toEqual([]);
   });
 
   it("checks every household-scoped id a procedure accepts", () => {
