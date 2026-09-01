@@ -428,6 +428,11 @@ tree across four journeys and can tell you the tree is well formed. Whether the
 result *sounds* sensible is the question neither a tool nor an agent can
 answer, and it is the one item of Phase 2b still open.
 
+**The step-by-step runbook for that pass — what to check on each screen, how to
+drive the screen reader, and the todo list — is
+[`SCREEN_READER_PASS.md`](SCREEN_READER_PASS.md).** This section owns the *why*
+and the tool rationale; that file owns the *how*.
+
 ## 6. Design consistency across routes
 
 **Landed in Phase 2b** (`4eafd1c`, `0158b1b`). Converting the dashboard pages

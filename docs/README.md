@@ -50,6 +50,7 @@ document.
 | What did the 2026-08-29 review find and deliberately not fix? | `DEFERRED.md` |
 | What must work before calling a slice done? | `SMOKE_JOURNEYS.md` |
 | What is the interface supposed to look like, and what is wrong with it? | `DESIGN_AUDIT.md` |
+| How do I run the manual screen-reader pass? | `SCREEN_READER_PASS.md` |
 | What is the threat model, and what is hardened? | `SECURITY.md` |
 | What did the security review find, and what is still open? | `SECURITY_REVIEW.md` |
 | How do I get this running? | `LOCAL_BOOTSTRAP.md` |
@@ -150,6 +151,13 @@ target-size floors went 142 → 13, held by `target-floor.test.ts`) and **A5.4**
 closed 2026-09-01 (the entry point is the person's configurable choice among
 the main screens — D117). What remains is the **human screen-reader pass** that
 §5 describes, which no marker can grant.
+
+**[`SCREEN_READER_PASS.md`](SCREEN_READER_PASS.md)**
+The runbook for that pass: which screen reader to use per OS, how to drive it,
+the pa11y/Accessibility Insights supporting steps, and a per-journey todo list
+of what to check on each screen. `DESIGN_AUDIT.md` §5 owns the *why*; this owns
+the *how*. Its "definition of done" ends by dating the result in `STATUS.md` and
+striking the §10 item.
 
 **[`DEFERRED.md`](DEFERRED.md)**
 What the 2026-08-29 full-codebase review found and deliberately did not fix —
