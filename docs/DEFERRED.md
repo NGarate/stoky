@@ -160,12 +160,20 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
     noise.
 19. **`processReceiptAsync` prints P2025/ENOENT noise in an OCR-failure test
     path** — pre-existing log noise in the suites, not a failure.
-20. **`ExpiringItems`' shape is still the pre-redesign one** — hand-rolled
+20. ~~**`ExpiringItems`' shape is still the pre-redesign one** — hand-rolled
     rows, tinted cards, a restated `min-h-[48px]` — parked by the
     `target-floor.test.ts` allowlist "while that screen's shape is decided". The
     closure work fixed its i18n only, deliberately. The shape is a design
     conversation (`CLAUDE.md`: a screen that needs a different arrangement needs
-    a conversation, not a fourth hand-written `<li>`).
+    a conversation, not a fourth hand-written `<li>`).~~ **Done 2026-09-01.** The
+    conversation happened (D118): follow the design system, and no page of its
+    own — expiry is already shown on the pages that need it. Rewritten on
+    `ItemRow` + `Badge`, the same grammar the dashboard's expiry section uses:
+    each item is a compact plain row with a linked title, a tone-carrying badge
+    (danger expired / danger expiring-soon / warn expiring), and a
+    quantity + location meta list. The tinted cards, the SVG state icons and the
+    restated floor are gone, and the `target-floor.test.ts` allowlist entry with
+    them. Verified in the browser on `/inventory`; `/inventory` stays AAA.
 
 ## Owner decisions — deferred to a person, not to a later commit
 

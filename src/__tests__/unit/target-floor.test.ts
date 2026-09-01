@@ -56,8 +56,6 @@ const ALLOWED: Record<string, string> = {
     "as above — the sheet's close control belongs to the navigation",
   "components/inventory/LocationPicker.tsx":
     "a hand-built listbox, which exists because a hierarchy is not a flat <select> (documented in the file)",
-  "components/inventory/ExpiringItems.tsx":
-    "a row that is entirely a link, kept while that screen's shape is decided",
   "components/shopping/ShoppingItem.tsx":
     "the tick's <label>, which wraps a native checkbox rather than a control the system owns",
 };

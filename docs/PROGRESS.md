@@ -2324,3 +2324,22 @@ on anyone — it is one of three the person may choose between. The question "tw
 doors or three?" dissolves: it is however many the person wants to be able to
 land on, and they choose which. The Panel's own shape (its cards reduced to
 pre-filtered sections over the three 2026-08-18/19/22 passes) is unchanged.
+
+**D118 — ExpiringItems onto the design system, and no page of its own
+(DEFERRED item 20).** The owner's direction on 2026-09-01: follow the same
+design system as the rest of the app, and a dedicated page is not needed
+because expiry is already shown on the pages that need it. Both halves matched
+the ground truth. The component was the last pre-redesign holdout — hand-rolled
+tinted `<li>` cards with SVG state icons and a restated `min-h-[48px]`, exempted
+in `target-floor.test.ts` "while that screen's shape is decided." It is mounted
+in exactly one place (`/inventory`); `/dashboard` and `/kitchen` render expiry
+through their own design-system code already, which is why no page is warranted.
+Rewritten to emit `ItemRow` + `Badge` the way the dashboard's expiry section
+does — compact plain rows, a linked title, a tone-carrying badge, a
+quantity + location meta list — so the state is a word rather than a colour or
+an SVG (the icons-preview-the-action-not-the-state rule), and the 48px floor
+comes from the primitive. The allowlist exemption is deleted, not moved: there
+is no floor to exempt any more. The dashboard's own `ExpiryRow` helper stays as
+it is; both now go through the one shared `ItemRow`, which is the sharing that
+matters — a further extraction of the thin per-file wrapper was judged more
+blast radius than the rule requires.

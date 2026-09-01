@@ -1,9 +1,10 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import type { JSX, ReactNode } from "react";
 
 interface ExpiringItemsProps {
   days?: number;
@@ -11,186 +12,164 @@ interface ExpiringItemsProps {
   maxItems?: number;
 }
 
+/**
+ * What is about to spoil, or already has — on the shared list grammar.
+ *
+ * The same `ItemRow` + `Badge` the dashboard's expiry section uses (its
+ * `ExpiryRow`), rather than the hand-rolled tinted `<li>`s this once carried:
+ * the state is a word in a `Badge`, not a colour and not an SVG, and the 48px
+ * target floor comes from the `ItemRow` primitive instead of being restated on
+ * the row (DEFERRED.md item 20). No page of its own — expiry is shown where it is
+ * relevant (the inventory list, the Panel, the kitchen), and this is the block
+ * the inventory list shows.
+ */
 export function ExpiringItems({
   days = 7,
   showExpired = true,
   maxItems = 10,
-}: ExpiringItemsProps) {
+}: ExpiringItemsProps): JSX.Element {
   const t = useTranslations("inventory.expiring");
 
   const { data: expiringItems, isLoading: loadingExpiring } =
     api.inventory.getExpiringItems.useQuery({ days });
 
   const { data: expiredItems, isLoading: loadingExpired } =
-    api.inventory.getExpiredItems.useQuery({}, {
-      enabled: showExpired,
-    });
+    api.inventory.getExpiredItems.useQuery(
+      {},
+      { enabled: showExpired },
+    );
 
   if (loadingExpiring || (showExpired && loadingExpired)) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4 shadow">
-        <h2 className="text-lg font-semibold mb-4 text-heading">
-          {t("title")}
-        </h2>
-        <div className="space-y-2">
-          {['loading-skeleton-1', 'loading-skeleton-2', 'loading-skeleton-3'].map((key) => (
-            <div key={key} className="h-12 bg-muted rounded animate-pulse" />
-          ))}
-        </div>
+      <div className="space-y-2" aria-hidden="true">
+        {["skeleton-1", "skeleton-2", "skeleton-3"].map((key) => (
+          <div key={key} className="h-16 animate-pulse rounded-lg bg-muted" />
+        ))}
       </div>
     );
   }
 
-  const hasExpired = expiredItems && expiredItems.length > 0;
-  const hasExpiring = expiringItems && expiringItems.length > 0;
+  const displayExpired = expiredItems?.slice(0, maxItems) ?? [];
+  const displayExpiring = expiringItems?.slice(0, maxItems) ?? [];
+  const hasExpired = displayExpired.length > 0;
+  const hasExpiring = displayExpiring.length > 0;
 
   if (!hasExpired && !hasExpiring) {
-    return (
-      <div className="rounded-lg border border-ok-foreground bg-ok p-4">
-        <div className="flex items-center gap-2">
-          <svg
-            className="w-5 h-5 text-ok-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <p className="text-ok-foreground">{t("allClear")}</p>
-        </div>
-      </div>
-    );
+    // Not an alert: nothing needs attention, so it is a plain line, the way the
+    // Panel says the same thing. Reason first, no icon carrying a state.
+    return <p className="text-muted-foreground">{t("allClear")}</p>;
   }
 
-  const displayExpired = expiredItems?.slice(0, maxItems) || [];
-  const displayExpiring = expiringItems?.slice(0, maxItems) || [];
-
   return (
-    <div className="space-y-4">
-      {/* Expired Items Alert */}
-      {hasExpired && (
-        <div className="rounded-lg border border-danger-foreground bg-danger p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <svg
-              className="w-5 h-5 text-danger-foreground"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <h2 className="font-semibold text-danger-foreground">
-              {t("expiredHeading", { count: expiredItems?.length ?? 0 })}
-            </h2>
-          </div>
-          <ul className="space-y-2">
+    <div className="space-y-6">
+      {hasExpired ? (
+        <section aria-labelledby="expiring-expired">
+          <h2
+            id="expiring-expired"
+            className="text-lg font-semibold text-heading"
+          >
+            {t("expiredHeading", { count: expiredItems?.length ?? 0 })}
+          </h2>
+          <ul className="mt-3 divide-y divide-border">
             {displayExpired.map((item) => (
-              <li
+              <ExpiryRow
                 key={item.id}
-                className="flex items-center justify-between p-2 bg-card rounded"
-              >
-                <div className="flex items-center gap-3">
-                  <Button asChild variant="link">
-                    <Link href={`/products/${item.product.id}`} > {item.product.name} </Link>
-                  </Button>
-                  {item.location && (
-                    <span className="text-sm text-muted-foreground">
-                      {t("inLocation", { location: item.location.name })}
-                    </span>
-                  )}
-                </div>
-                <span className="text-sm font-medium text-danger-foreground">
-                  {t("daysAgo", { days: item.daysExpired })}
-                </span>
-              </li>
+                item={item}
+                locationLabel={t("locationLabel")}
+                noLocationLabel={t("noLocation")}
+                quantityLabel={t("quantityLabel")}
+                quantityValue={t("quantityValue", {
+                  quantity: item.quantity,
+                  unit: item.unit,
+                })}
+                status={
+                  <Badge tone="danger">
+                    {t("daysAgo", { days: item.daysExpired })}
+                  </Badge>
+                }
+              />
             ))}
           </ul>
-          {expiredItems && expiredItems.length > maxItems && (
-            <p className="mt-2 text-sm text-danger-foreground">
+          {expiredItems && expiredItems.length > maxItems ? (
+            <p className="mt-2 text-sm text-muted-foreground">
               {t("more", { count: expiredItems.length - maxItems })}
             </p>
-          )}
-        </div>
-      )}
+          ) : null}
+        </section>
+      ) : null}
 
-      {/* Expiring Soon Items */}
-      {hasExpiring && (
-        <div className="rounded-lg border border-warn-foreground bg-warn p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <svg
-              className="w-5 h-5 text-warn-foreground"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <h2 className="font-semibold text-warn-foreground">
-              {t("expiringHeading", { days, count: expiringItems?.length ?? 0 })}
-            </h2>
-          </div>
-          <ul className="space-y-2">
+      {hasExpiring ? (
+        <section aria-labelledby="expiring-soon">
+          <h2
+            id="expiring-soon"
+            className="text-lg font-semibold text-heading"
+          >
+            {t("expiringHeading", { days, count: expiringItems?.length ?? 0 })}
+          </h2>
+          <ul className="mt-3 divide-y divide-border">
             {displayExpiring.map((item) => (
-              <li
+              <ExpiryRow
                 key={item.id}
-                className={`flex items-center justify-between p-2 rounded ${
-                  item.isExpiringSoon ? "bg-danger" : "bg-card"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={`/products/${item.product.id}`}
-                    className={`inline-flex min-h-[48px] items-center font-medium hover:underline ${
-                      item.isExpiringSoon
-                        ? "text-danger-foreground"
-                        : "text-warn-foreground"
-                    }`}
-                  >
-                    {item.product.name}
-                  </Link>
-                  {item.location && (
-                    <span className="text-sm text-muted-foreground">
-                      {t("inLocation", { location: item.location.name })}
-                    </span>
-                  )}
-                </div>
-                <span
-                  className={`text-sm font-medium ${
-                    item.isExpiringSoon
-                      ? "text-danger-foreground"
-                      : "text-warn-foreground"
-                  }`}
-                >
-                  {t("until", { days: item.daysUntilExpiry })}
-                </span>
-              </li>
+                item={item}
+                locationLabel={t("locationLabel")}
+                noLocationLabel={t("noLocation")}
+                quantityLabel={t("quantityLabel")}
+                quantityValue={t("quantityValue", {
+                  quantity: item.quantity,
+                  unit: item.unit,
+                })}
+                status={
+                  <Badge tone={item.isExpiringSoon ? "danger" : "warn"}>
+                    {t("until", { days: item.daysUntilExpiry })}
+                  </Badge>
+                }
+              />
             ))}
           </ul>
-          {expiringItems && expiringItems.length > maxItems && (
-            <p className="mt-2 text-sm text-warn-foreground">
+          {expiringItems && expiringItems.length > maxItems ? (
+            <p className="mt-2 text-sm text-muted-foreground">
               {t("more", { count: expiringItems.length - maxItems })}
             </p>
-          )}
-        </div>
-      )}
+          ) : null}
+        </section>
+      ) : null}
     </div>
+  );
+}
+
+/** One expiry row, the same shape the Panel draws (ItemRow, compact, plain). */
+function ExpiryRow({
+  item,
+  locationLabel,
+  noLocationLabel,
+  quantityLabel,
+  quantityValue,
+  status,
+}: {
+  item: {
+    product: { id: string; name: string };
+    location: { name: string } | null;
+  };
+  locationLabel: string;
+  noLocationLabel: string;
+  quantityLabel: string;
+  quantityValue: string;
+  status: ReactNode;
+}): JSX.Element {
+  return (
+    <ItemRow
+      density="compact"
+      href={`/products/${item.product.id}`}
+      meta={[
+        { label: quantityLabel, value: quantityValue },
+        {
+          label: locationLabel,
+          value: item.location?.name ?? noLocationLabel,
+        },
+      ]}
+      status={status}
+      title={item.product.name}
+      variant="plain"
+    />
   );
 }

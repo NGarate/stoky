@@ -33,6 +33,8 @@ const expiredItem = (id: string, daysExpired: number) => ({
   id,
   product: product(id),
   location: null,
+  quantity: 1,
+  unit: "ud",
   daysExpired,
 });
 
@@ -40,6 +42,8 @@ const expiringItem = (id: string, daysUntilExpiry: number) => ({
   id,
   product: product(id),
   location: null,
+  quantity: 1,
+  unit: "ud",
   daysUntilExpiry,
   isExpiringSoon: daysUntilExpiry <= 3,
 });
@@ -94,6 +98,20 @@ describe("ExpiringItems", () => {
     expect(
       await screen.findByText("Nothing has expired or is about to"),
     ).toBeInTheDocument();
+  });
+
+  it("renders each item on the shared row grammar: a linked title and meta", async () => {
+    expiredData = [expiredItem("1", 3)];
+    expiringData = [];
+
+    renderWithIntl(<ExpiringItems />, { locale: "en" });
+
+    // The title links to the product (ItemRow's title slot), not the whole row.
+    const link = await screen.findByRole("link", { name: "Product 1" });
+    expect(link).toHaveAttribute("href", "/products/p-1");
+    // The meta definition list carries quantity and the no-location fallback.
+    expect(screen.getByText("Quantity")).toBeInTheDocument();
+    expect(screen.getByText("No location")).toBeInTheDocument();
   });
 
   it("truncates and says how many more, in the catalogue's language", async () => {

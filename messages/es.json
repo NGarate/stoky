@@ -542,11 +542,13 @@
     "pagePastEnd": "Esta página no existe. La lista llega hasta la {pages}.",
     "goToLastPage": "Ir a la última página",
     "expiring": {
-      "title": "Productos próximos a caducar",
       "allClear": "No hay productos caducados ni próximos a caducar",
       "expiredHeading": "{count, plural, one {Producto caducado (#)} other {Productos caducados (#)}}",
       "expiringHeading": "{count, plural, one {Caduca en los próximos {days} días (#)} other {Caducan en los próximos {days} días (#)}}",
-      "inLocation": "en {location}",
+      "quantityLabel": "Cantidad",
+      "quantityValue": "{quantity} {unit}",
+      "locationLabel": "Dónde está",
+      "noLocation": "Sin ubicación",
       "daysAgo": "{days, plural, one {Hace # día} other {Hace # días}}",
       "until": "{days, plural, =0 {Hoy} =1 {Mañana} other {En # días}}",
       "more": "{count, plural, one {Y # más…} other {Y # más…}}"
