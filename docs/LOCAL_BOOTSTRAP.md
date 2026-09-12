@@ -1,6 +1,6 @@
 # Stoky Local Bootstrap
 
-Updated: 2026-08-28
+Updated: 2026-09-08
 
 This is the shortest supported path from clone to a running local app.
 
@@ -43,6 +43,24 @@ Or use the repo helper:
 ```bash
 bash scripts/dev-local.sh
 ```
+
+The helper runs `bun install --frozen-lockfile` on every setup, including when
+`node_modules` already exists. If it finds pnpm's `.modules.yaml`, it uses
+`--force` to replace retained pnpm symlinks and removes that marker only after
+installation succeeds. A failed install stops setup before Prisma runs.
+
+### Existing checkout fails with `Failed to load external module argon2-…`
+
+Stop the dev server and run `bun run dev:setup` again. The helper now repairs
+an existing pnpm install instead of skipping it. On 2026-09-08, the host had
+Next 16.3.4 in a pnpm tree while `bun.lock` pinned 16.3.3; `/login` returned
+500 although importing `argon2` directly worked. A normal Bun install retained
+pnpm links for unchanged packages. Running `bun install --frozen-lockfile
+--force`, regenerating Prisma, and restarting the dev server restored HTTP 200.
+The exact upstream cause of the generated alias failure remains unconfirmed.
+
+`src/__tests__/unit/dev-local.test.ts` exercises setup with absent, existing,
+and pnpm dependency directories, plus failed installs, using command stubs.
 
 ## The container path, which is the one to prefer
 

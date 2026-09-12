@@ -12,6 +12,18 @@ say what measured it.
 
 ## Gate status
 
+**2026-09-08 host bootstrap repair (Bun 1.4.2):** restored dependencies with
+`bun install --frozen-lockfile --force`, regenerated Prisma, and restarted
+`bun run dev`. HTTP probes changed `/login` from 500 to 200; `/register`
+returns 200 and `/` returns 307. `dev:setup` now checks the locked installation
+even when `node_modules` exists and replaces a pnpm tree's retained symlinks.
+See `LOCAL_BOOTSTRAP.md` for recovery. The original verification stopped at
+the component-isolation failure TEST-7,
+now fixed separately. The five setup regression tests all fail against the
+original script. Revalidated independently on 2026-09-12: `bun run verify:ci`
+passes in 75 seconds with 694 unit, 653 component and 540 integration tests,
+plus the production build.
+
 **2026-09-12 component isolation repair (Bun 1.4.2):** `bun run verify:ci`
 passes in 83 seconds: 689 unit, 653 component and 540 integration tests,
 followed by a successful production build (35 routes, eight partial prerenders).
@@ -39,12 +51,12 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 386 files, 101 rules (2026-09-12) |
+| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 387 files, 101 rules (2026-09-12) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
 | Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
-| Unit tests | `bun run test:unit` | ✅ 689 pass / 76 files (2026-09-01) |
+| Unit tests | `bun run test:unit` | ✅ 694 pass / 77 files (2026-09-12); all five bootstrap regression tests fail against the original setup script |
 | Component tests | `bun run test:components` | ✅ 653 pass / 60 files (2026-09-12); TEST-7 closed by removing process-wide ProductRating mocks |
 | Integration tests | `bun run test:integration` | ✅ 540 pass / 37 files (2026-09-01) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |

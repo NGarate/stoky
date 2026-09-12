@@ -82,7 +82,7 @@ fi
 # is quiet in the direction that matters: `bun.lock` is written by the version
 # in `.bun-version`, and an *older* bun reports "Unknown lockfile version",
 # prints "Ignoring lockfile", and then resolves a tree nobody pinned. Only
-# `--frozen-lockfile` turns that into an error, and this script does not use it.
+# `--frozen-lockfile` turns that into an error, so installation below uses it.
 #
 # So the comparison happens here, before anything installs. `sort -V` rather
 # than a numeric compare, because "1.10.0" is newer than "1.4.0" and a string
@@ -165,12 +165,18 @@ fi
 # ---------------------------------------------------------------------------
 header "Installing dependencies"
 
-if [ ! -d node_modules ]; then
-    bun install
-    ok "Dependencies installed"
+# A directory is not proof of a current Bun install: it may be a stale or pnpm
+# tree. Next can start with it and only fail resolving externals on navigation.
+# Check the locked tree on every setup; an up-to-date install is a cheap no-op.
+if [ -f node_modules/.modules.yaml ]; then
+    # A normal Bun install retains pnpm links for unchanged versions, leaving
+    # two dependency trees. Force replaces those links with Bun's packages.
+    bun install --frozen-lockfile --force
+    rm node_modules/.modules.yaml
 else
-    ok "node_modules already exists (run 'bun install' to update)"
+    bun install --frozen-lockfile
 fi
+ok "Dependencies match bun.lock"
 
 # ---------------------------------------------------------------------------
 # Database migrations
