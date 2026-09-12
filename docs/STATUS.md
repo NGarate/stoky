@@ -12,6 +12,34 @@ say what measured it.
 
 ## Gate status
 
+**2026-09-08 authenticated navigation:** reproduced the Instant overlay after
+login to `/dashboard`, then removed it by declaring `instant = false` on
+`src/app/(dashboard)/layout.tsx`. The root layout's declaration did not exempt
+this separate shared-layout boundary. A Chromium login probe now reports no
+console errors, and the strengthened `e2e/auth.prod.spec.ts` sign-in test passes
+against `next dev`. Setting the authenticated layout to `instant = true`
+makes that test fail with the reported error. On 2026-09-12, mutation exposed
+a timing gap: `networkidle` returned before Next reported the diagnostic over
+HMR. A five-second observation window after rendering makes the assertion
+catch that delayed error; restoring `instant = false` returns the same dev
+test to green (2 passed including seed). A separate Chromium probe also
+passed dashboard → inventory → products → dashboard and a dashboard reload.
+The root provider, CSP nonce, authentication checks and client data fetching
+are unchanged. The original full Playwright run passed 133 tests; 20 could
+not launch
+without the host's Firefox and WebKit binaries. Revalidated on 2026-09-12:
+`bun run verify:ci` passes in 72 seconds with 694 unit, 653 component and
+540 integration tests, followed by the production build. TEST-7 is fixed
+separately below. The full browser matrix now passes **153 / 153 in 2.7 minutes**
+with the pinned Firefox 1538 and WebKit 2336 extracted under `/tmp`, alongside
+Chromium 1234. WebKit's missing host libraries were also downloaded and
+extracted under `/tmp`; no system packages were installed. The run set
+`PLAYWRIGHT_BROWSERS_PATH=/tmp/stoky-browsers` and
+`LD_LIBRARY_PATH=/tmp/stoky-webkit-libs/root/usr/lib/x86_64-linux-gnu`. After
+strengthening the diagnostic observation window, `bunx playwright test
+e2e/auth.prod.spec.ts` also passes all six tests (including seed and setup)
+in 27.9 seconds against the rebuilt production artefact.
+
 **2026-09-08 host bootstrap repair (Bun 1.4.2):** restored dependencies with
 `bun install --frozen-lockfile --force`, regenerated Prisma, and restarted
 `bun run dev`. HTTP probes changed `/login` from 500 to 200; `/register`
@@ -62,7 +90,7 @@ binary you happen to be holding.
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **153 pass / 0 fail in 4.3 min** (2026-09-01) — against a **Bun-served** standalone production build, on the suite's own database, from a tree Bun also *installed*. 150 → 153 with the two T7 offline-scan scenarios and the prefetch body-cap probe. See *End-to-end* below: the suite changed shape on 2026-08-17 |
+| E2E | `bunx playwright test` | ✅ **153 pass / 0 fail in 2.7 min** (2026-09-12) — full matrix against the Bun-served standalone production build and isolated suite database; missing browsers and WebKit libraries supplied from `/tmp` |
 | Dependency audit | `bun audit` | ✅ clean — 586 packages, 2026-08-28, run in `oven/bun:1.4.0-alpine` because it answers from `bun.lock` and the host's Bun is older than the one that wrote it. It was **2 high** for five days; see *Dependency security* |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,

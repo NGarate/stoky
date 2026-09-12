@@ -12,6 +12,10 @@ import { PreferencesSync } from "@/components/session/PreferencesSync";
 import { ReadCache } from "@/components/offline/ReadCache";
 import { SnackbarProvider } from "@/components/ui/snackbar";
 
+// Entering this shell waits for the session and account preferences. Opt out
+// at this layout boundary; pages within it still validate instant navigation.
+export const instant = false;
+
 /**
  * The authenticated shell.
  *

@@ -58,10 +58,11 @@ test.describe("a production build's authentication", () => {
  * `trustHost` defect.
  */
 test("somebody can actually sign in", async ({ page }) => {
-  const consoleErrors: string[] = [];
+  const browserErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") browserErrors.push(message.text());
   });
+  page.on("pageerror", (error) => browserErrors.push(error.message));
 
   await page.goto("/login");
   await page.waitForSelector('input[name="email"]');
@@ -73,12 +74,25 @@ test("somebody can actually sign in", async ({ page }) => {
   await page.click('button[type="submit"]');
 
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+  await expect(page.locator("main:visible")).toBeVisible();
+  // Instant validation reports asynchronously over the dev HMR websocket,
+  // which networkidle does not wait for. Keep observing errors for a bounded
+  // window after the dashboard renders; otherwise this test can finish before
+  // the validation error arrives (verified with instant = true on the layout).
+  await page.waitForTimeout(5000);
 
   // A CSP violation surfaces here and nowhere else — the page still renders,
   // it just stops working. Reported as its own assertion so a policy problem
   // does not masquerade as a broken login.
-  const violations = consoleErrors.filter((text) =>
+  const violations = browserErrors.filter((text) =>
     /content security policy|refused to (execute|load|connect)/i.test(text),
   );
   expect(violations).toEqual([]);
+
+  // Also exercised against next dev when investigating navigation validation:
+  // a successful HTTP response and URL change can still carry an Instant
+  // error from the authenticated layout's server-side request reads.
+  expect(browserErrors.filter((text) =>
+    /uncached data during prerendering|blocking-prerender-dynamic/.test(text),
+  )).toEqual([]);
 });

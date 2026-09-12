@@ -1,6 +1,6 @@
 # Stoky Smoke Journeys
 
-Updated: 2026-08-26
+Updated: 2026-09-12
 
 These are the minimum user-visible journeys that should be proven before closing
 Stoky product work. They are rewritten around the two entry screens defined in
@@ -82,6 +82,22 @@ Receipts and price history keep their meaning but no longer have a journey — s
 ---
 
 ## Journey 1. Stock changes through the interface
+
+**Entry regression checked 2026-09-08:** signing in to `/dashboard` under
+`bun run dev` reached the page but raised an Instant validation error. The
+authenticated layout reads the session and account preferences; it now declares
+`instant = false` at its own boundary, as the root already does for the nonce
+and locale. Its child pages remain subject to navigation validation.
+`e2e/auth.prod.spec.ts` now checks visible dashboard content and rejects the
+uncached-data console error, in addition to CSP violations. The sign-in test
+passes against the live dev server, where Next enables this validation, and
+fails with the reported error when the authenticated layout is deliberately
+changed to `instant = true`. A Chromium probe also navigated dashboard →
+inventory → products → dashboard and reloaded the dashboard with no errors.
+Rechecked 2026-09-12: the Instant diagnostic can arrive over HMR after
+`networkidle`, so the login test now observes errors for five seconds after
+the dashboard renders. Setting `instant = true` makes its diagnostic
+assertion fail; the layout is restored after this mutation check.
 
 **Passes as of 2026-08-09** (Phase 1, closed by `249fb8d`). It was blocked by
 `ISSUES.md` UI-1 — `/products/new`, `/inventory/add`, `/inventory/consume` and
