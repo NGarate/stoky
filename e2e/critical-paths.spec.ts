@@ -745,6 +745,65 @@ test.describe("Journey 4 — stock changes without a form", () => {
   });
 });
 
+
+test("a recount leaves unknown details blank and two kitchen taps consume two eggs", async ({ page }) => {
+  const register = new RegisterPage(page);
+  const dashboard = new DashboardPage(page);
+  const products = new ProductsPage(page);
+  await register.goto();
+  await register.register(generateTestName("Stock integrity"), generateTestEmail("stock-integrity"), "E2ETestPassword123!", generateTestName("Stock household"));
+  await dashboard.expectLoaded();
+  await dashboard.navigateToProducts();
+  await products.clickAddProduct();
+  const name = generateTestName("Huevos de prueba");
+  await products.fillProductName(name);
+  await page.locator('[name="defaultUnit"]').fill("docena");
+  await products.clickSave();
+  await page.getByRole("dialog").getByRole("link", { name: es.products.new.successViewProducts }).click();
+  await page.getByRole("link", { name, exact: true }).click();
+  await page.waitForURL(/\/products\/[^/]+$/);
+  const productUrl = page.url();
+
+  await page.goto("/inventory/add");
+  await page.locator('[name="productId"]').selectOption({ label: name });
+  await page.locator('[name="quantity"]').fill("3");
+  const date = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+  await page.locator('[name="expirationDate"]').fill(date);
+  await page.locator("summary").click();
+  await page.locator('[name="unit"]').fill("docena");
+  await page.getByRole("button", { name: es.inventory.add.submit, exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  await page.goto("/kitchen");
+  const use = page.getByRole("button", { name: new RegExp(`He usado.*${name}`) });
+  const card = page.locator("li").filter({ has: use });
+  await expect(card).toContainText("Quedan 36 unidad");
+  for (const left of [35, 34]) {
+    const saved = page.waitForResponse((response) => response.url().includes("inventory.consumeStock") && response.request().method() === "POST");
+    await use.click();
+    expect((await saved).ok()).toBe(true);
+    await expect(card).toContainText(`Quedan ${left} unidad`);
+  }
+  await page.reload();
+  await expect(card).toContainText("Quedan 34 unidad");
+  await page.goto(`${productUrl}/history`);
+  await expect(page.getByRole("cell", { name: es.products.history.opCONSUME, exact: true })).toHaveCount(2);
+
+  await page.goto("/products");
+  const row = page.locator("tr:visible, li:visible").filter({ has: page.getByRole("link", { name, exact: true }) });
+  await row.getByRole("link", { name: /^Ajustar/ }).click();
+  await page.getByLabel(es.products.adjust.actualLabel, { exact: true }).fill("35");
+  await page.getByLabel(es.products.adjust.reasonLabel, { exact: true }).fill("Recuento real");
+  await page.getByRole("button", { name: es.products.adjust.submit, exact: true }).click();
+  await expect(page.getByTestId("snackbar")).toContainText("35 unidad");
+  await page.goto(productUrl);
+  await expect(page.getByTestId("stepper-value")).toContainText("35");
+  // Only the 34 eggs left in the dated purchase have a known expiry. The
+  // recounted extra egg acquires neither its date nor a location.
+  await expect(page.getByText("34 unidad · Sin ubicación", { exact: true })).toBeVisible();
+  await expect(page.getByText("35 unidad · Sin ubicación", { exact: true })).toHaveCount(0);
+});
+
 test.describe("Login Flow", () => {
   test("should login with valid credentials", { tag: "@smoke" }, async ({ page }) => {
     const registerPage = new RegisterPage(page);

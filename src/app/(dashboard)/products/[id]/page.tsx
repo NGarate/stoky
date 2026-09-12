@@ -16,7 +16,7 @@ import { QuantityStepper } from "@/components/inventory/QuantityStepper";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { projectStockTotals } from "@/lib/offline/project";
-import { usualLocationId } from "@/lib/inventory/usualLocation";
+import { remainingByBatch } from "@/lib/inventory/batches";
 import type { JSX } from "react";
 
 interface ProductDetailPageProps {
@@ -28,13 +28,13 @@ interface LocationTotal {
   key: string;
   /** `null` for entries saved without a location. */
   name: string | null;
-  quantity: number;
+  quantity: number | null;
 }
 
 /** One stock entry that carries an expiry date, narrowed so the date is real. */
 interface Batch {
   id: string;
-  quantity: number;
+  quantity: number | null;
   unit: string;
   expiresAt: Date;
   locationName: string | null;
@@ -156,47 +156,35 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     [locale],
   );
 
-  /**
-   * Net quantity per location.
-   *
-   * `getById` returns every stock entry, and a consumption is stored as a
-   * negative entry rather than a decrement of the entry it came from. Summing
-   * per location is therefore the only way to say where stock sits, and it
-   * always adds up to `totalStock`. It can also show a location holding more
-   * than it really does — see `locationsNote`.
-   */
+  /** Sum the surviving batches; unknown withdrawals never become a fake shelf balance. */
   const stockByLocation = useMemo<LocationTotal[]>(() => {
     if (!product) return [];
 
     const totals = new Map<string, LocationTotal>();
+    const remaining = remainingByBatch(product.stockEntries);
 
     for (const entry of product.stockEntries) {
+      if (entry.quantity <= 0) continue;
+      const quantity = remaining.get(entry.id) ?? null;
       const key = entry.locationId ?? "";
       const current = totals.get(key);
 
       if (current) {
-        current.quantity += entry.quantity;
+        current.quantity = current.quantity === null || quantity === null ? null : current.quantity + quantity;
       } else {
         totals.set(key, {
           key,
           name: entry.location?.name ?? null,
-          quantity: entry.quantity,
+          quantity,
         });
       }
     }
 
     return [...totals.values()]
       .filter((total) => total.quantity !== 0)
-      .sort((a, b) => b.quantity - a.quantity);
+      .sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0));
   }, [product]);
 
-  /**
-   * Batches with an expiry date, soonest first.
-   *
-   * Only entries that added stock carry a date — a consumption never sets one —
-   * so the negative entries are excluded rather than shown as batches expiring
-   * in the past.
-   */
   /**
    * One instant for the whole render, captured once per mount.
    *
@@ -210,13 +198,14 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const batches = useMemo<Batch[]>(() => {
     if (!product) return [];
 
+    const remaining = remainingByBatch(product.stockEntries);
     return product.stockEntries
       .flatMap((entry) =>
-        entry.expirationDate && entry.quantity > 0
+        entry.expirationDate && entry.quantity > 0 && remaining.get(entry.id) !== 0
           ? [
               {
                 id: entry.id,
-                quantity: entry.quantity,
+                quantity: remaining.get(entry.id) ?? null,
                 unit: entry.unit,
                 expiresAt: entry.expirationDate,
                 locationName: entry.location?.name ?? null,
@@ -294,10 +283,8 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
    * and undo is cancelling the queued change, never a compensating write
    * (D57 — an `addStock` to reverse a consumption fabricates an acquisition).
    *
-   * A purchase lands where this product usually goes (`usualLocationId`,
-   * D96) — the same default the add form gives its picker — because a
-   * one-tap flow has nowhere to ask. A consumption names no location, like
-   * the kitchen's "he usado uno": the negative row is not location-specific.
+   * Unspecified location and expiry stay unknown; a previous purchase does
+   * not describe where this new unit was put.
    */
   function stepStock(direction: "add" | "remove"): void {
     if (!product) return;
@@ -305,7 +292,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       key: direction === "add" ? "offline.addedStock" : "offline.usedUp",
       values: { quantity: 1, unit: product.defaultUnit, name: product.name },
     };
-    const usual = usualLocationId(product.stockEntries);
     const queued = enqueue(
       direction === "add"
         ? {
@@ -314,7 +300,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               productId: product.id,
               quantity: 1,
               unit: product.defaultUnit,
-              ...(usual === undefined ? {} : { locationId: usual }),
             },
             label,
             holdMs: UNDO_HOLD_MS,
@@ -423,7 +408,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                 </span>
                 <span className="font-medium text-foreground">
                   {t("stockValue", {
-                    quantity: total.quantity,
+                    quantity: total.quantity ?? t("quantityUnknown"),
                     unit: product.defaultUnit,
                   })}
                 </span>
@@ -452,7 +437,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("expiryBatch", {
-                    quantity: batch.quantity,
+                    quantity: batch.quantity ?? t("quantityUnknown"),
                     unit: batch.unit,
                     location: batch.locationName ?? t("locationNone"),
                   })}

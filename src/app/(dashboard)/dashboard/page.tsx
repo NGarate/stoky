@@ -231,7 +231,7 @@ export default function DashboardPage(): JSX.Element {
                   productId={item.product.id}
                   locationLabel={t("expiryLocationLabel")}
                   quantity={t("expiryQuantity", {
-                    quantity: item.quantity,
+                    quantity: item.quantity ?? t("quantityUnknown"),
                     unit: item.unit,
                   })}
                   quantityLabel={t("expiryQuantityLabel")}
@@ -251,7 +251,7 @@ export default function DashboardPage(): JSX.Element {
                   productId={item.product.id}
                   locationLabel={t("expiryLocationLabel")}
                   quantity={t("expiryQuantity", {
-                    quantity: item.quantity,
+                    quantity: item.quantity ?? t("quantityUnknown"),
                     unit: item.unit,
                   })}
                   quantityLabel={t("expiryQuantityLabel")}

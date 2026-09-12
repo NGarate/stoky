@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
-import { usualLocationId } from "@/lib/inventory/usualLocation";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
@@ -57,9 +56,6 @@ export default function AddStockPage(): JSX.Element {
   const [storeId, setStoreId] = useState("");
   const [price, setPrice] = useState("");
   const [locationId, setLocationId] = useState<string | undefined>(undefined);
-  // Same contract as `unitTouched`: once the person chooses a location, the
-  // usual-location default must not overwrite it.
-  const [locationTouched, setLocationTouched] = useState(false);
   const [note, setNote] = useState("");
   // The folded half of the form. Uncontrolled — a controlled <details> races
   // hydration: a native click before React attaches flips it open, and the
@@ -137,22 +133,6 @@ export default function AddStockPage(): JSX.Element {
     fieldErrors.store,
     serverError,
   ].filter((message): message is string => Boolean(message));
-
-  /**
-   * Where this product usually goes, read from its own ledger — the entries
-   * `product.getById` already returns, so the default costs no new procedure.
-   * Applied only until the person picks a location themselves.
-   */
-  const detail = api.product.getById.useQuery(
-    { id: product?.id ?? "" },
-    { enabled: product !== null },
-  );
-
-  useEffect(() => {
-    if (!locationTouched && product && detail.data && detail.data.id === product.id) {
-      setLocationId(usualLocationId(detail.data.stockEntries));
-    }
-  }, [detail.data, product, locationTouched]);
 
   function handleProductChange(selected: PickedProduct | null): void {
     setProduct(selected);
@@ -430,7 +410,7 @@ export default function AddStockPage(): JSX.Element {
 
         {/* The folded half (Phase 8 item 3): most saves are quantity, expiry
             and where it was bought — the unit is prefilled from the product,
-            the location defaults to the product's usual one, and the note is
+            the location stays blank until chosen, and the note is
             rare. Native <details>, the pattern ProductRating set; controlled,
             so a refusal about the unit can open it rather than point at a
             closed drawer. */}
@@ -486,7 +466,6 @@ export default function AddStockPage(): JSX.Element {
               <LocationPicker
                 value={locationId}
                 onChange={(selected) => {
-                  setLocationTouched(true);
                   setLocationId(selected);
                 }}
                 placeholder={t("locationPlaceholder")}

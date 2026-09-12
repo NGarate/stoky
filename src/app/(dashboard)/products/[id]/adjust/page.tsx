@@ -24,6 +24,7 @@ import type { FormEvent, JSX } from "react";
 function serverErrorKey(message: string | undefined): string {
   const normalized = message?.toLowerCase() ?? "";
 
+  if (normalized.includes("stock changed")) return "errorStockChanged";
   if (normalized.includes("product not found")) return "errorNotFound";
   if (normalized.includes("household")) return "errorNoHousehold";
 
@@ -80,11 +81,11 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           },
         },
       });
-      await utils.product.getById.invalidate({ id });
-      await utils.inventory.getStockOverview.invalidate();
+      await utils.invalidate();
     },
     onError: (error) => {
       setServerError(t(serverErrorKey(error.message)));
+      void query.refetch();
       setErrorSignal((signal) => signal + 1);
     },
   });
@@ -123,6 +124,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
     adjustStock.mutate({
       productId: product.id,
       quantity: parsed - product.totalStock,
+      expectedStock: product.totalStock,
       unit: product.defaultUnit,
       reason: reason.trim(),
     });

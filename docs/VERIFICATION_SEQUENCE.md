@@ -121,6 +121,22 @@ elsewhere.
 
 ## Playwright browsers on this machine
 
+**2026-09-12, Ubuntu 26.04:** the download/extraction failure below did not
+reproduce. Chromium was present, but Firefox 1538 and WebKit 2336 were missing.
+`PLAYWRIGHT_BROWSERS_PATH=/tmp/stoky-playwright-browsers bunx playwright install firefox webkit`
+downloaded both. WebKit needed `libharfbuzz-icu0`, `libmanette-0.2-0`,
+`libenchant-2-2`, `libhyphen0` and `libhidapi-hidraw0`; these were downloaded with
+`apt-get download` and extracted with `dpkg-deb -x` under
+`/tmp/stoky-webkit-deps`, without changing system packages. Their shared-library
+files were linked into both WebKit bundles' `sys/lib` directories because the
+bundled MiniBrowser launcher replaces `LD_LIBRARY_PATH`. The existing Chromium
+directories were linked into the temporary browser root. With that root and
+`LD_LIBRARY_PATH=/tmp/stoky-webkit-deps/usr/lib/x86_64-linux-gnu`, the full suite
+passes (154 tests). These paths are temporary; recreate them after cleanup.
+
+The following notes record the older environment:
+
+
 `playwright install` hangs. The download completes, then extraction stalls
 indefinitely on a single file — reproducible across attempts, and the reason
 the tool warns *"your OS is not officially supported"*. Plain `unzip` on the

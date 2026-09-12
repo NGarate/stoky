@@ -365,7 +365,7 @@ describe("the expiry views report what is left", () => {
     expect(expiring[0]?.product.name).toBe("Leche entera");
   });
 
-  it("charges consumption to the batch that has to go first", async () => {
+  it("leaves quantities unknown when the consumed batch was not recorded", async () => {
     const api = await caller();
 
     await api.inventory.addStock({
@@ -393,13 +393,14 @@ describe("the expiry views report what is left", () => {
 
     const expiring = await api.inventory.getExpiringItems({ days: 7 });
 
-    // The urgent carton is the one that was drunk, so nothing is spoiling
-    // inside the week — the far batch is outside the window entirely.
-    expect(expiring).toHaveLength(0);
+    // The ledger does not identify which carton was used. Neither expiry
+    // date proves which one remains.
+    expect(expiring).toHaveLength(1);
+    expect(expiring[0]?.quantity).toBeNull();
 
     const monthAhead = await api.inventory.getExpiringItems({ days: 30 });
-    expect(monthAhead).toHaveLength(1);
-    expect(monthAhead[0]?.quantity).toBe(6);
+    expect(monthAhead).toHaveLength(2);
+    expect(monthAhead.every((batch) => batch.quantity === null)).toBe(true);
   });
 
   it("does not list an expired batch that was finished before it turned", async () => {
@@ -663,5 +664,122 @@ describe("a quantity with the wrong sign", () => {
     });
 
     expect(await netStock()).toBe(before - 2);
+  });
+});
+
+describe("stock integrity after an adjustment and kitchen taps", () => {
+  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000);
+  it("two separate taps debit exactly two units from the chosen batch; retries add nothing", async () => {
+    const api = await caller();
+    const early = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", expirationDate: inDays(1), locationId: shelfId });
+    const later = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", expirationDate: inDays(2), locationId: cupboardId });
+    const first = { ...envelope(OWNER.userId), productId, batchId: later.id, quantity: 1, unit: "L" };
+    await api.inventory.consumeStock(first);
+    await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, batchId: later.id, quantity: 1, unit: "L" });
+    await api.inventory.consumeStock(first);
+    const movements = await prisma.stockEntry.findMany({ where: { productId, operationType: "CONSUME" } });
+    expect(movements).toHaveLength(2);
+    expect(movements.map((entry) => entry.quantity)).toEqual([-1, -1]);
+    expect(movements.every((entry) => entry.batchId === later.id && entry.locationId === cupboardId)).toBe(true);
+    expect(await netStock()).toBe(4);
+    const batches = await api.inventory.getExpiringItems({ days: 7 });
+    expect(batches.find((batch) => batch.id === early.id)?.quantity).toBe(3);
+    expect(batches.find((batch) => batch.id === later.id)?.quantity).toBe(1);
+  });
+
+  it("refuses an unknown or foreign batch without changing stock", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L" });
+    await expectCode(api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", batchId: "not-this-products-batch" }), "NOT_FOUND");
+    expect(await netStock()).toBe(3);
+  });
+
+  it("does not invent a source for an ambiguous adjustment", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 2, unit: "L", expirationDate: inDays(1), locationId: shelfId });
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 2, unit: "L", expirationDate: inDays(2), locationId: cupboardId });
+    const adjusted = await api.inventory.adjustStock({ productId, quantity: -1, expectedStock: 4, unit: "L", reason: "Recuento" });
+    expect(adjusted.locationId).toBeNull();
+    expect(adjusted.expirationDate).toBeNull();
+    const batches = await api.inventory.getExpiringItems({ days: 7 });
+    expect(batches).toHaveLength(2);
+    expect(batches.map((batch) => batch.quantity)).toEqual([null, null]);
+    const filtered = await api.inventory.getExpiringItems({ days: 7, locationId: shelfId });
+    expect(filtered[0]?.quantity).toBeNull();
+    expect(await netStock()).toBe(3);
+  });
+
+  it("refuses a stale recount after another consumption", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L" });
+    await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L" });
+    await expectCode(api.inventory.adjustStock({ productId, quantity: -1, expectedStock: 3, unit: "L", reason: "Recuento" }), "CONFLICT");
+    expect(await netStock()).toBe(2);
+  });
+
+  it("records an explicitly provided adjustment expiry", async () => {
+    const api = await caller();
+    const date = inDays(5);
+    const adjusted = await api.inventory.adjustStock({ productId, quantity: 3, unit: "L", reason: "Recuento", expirationDate: date });
+    expect(adjusted.expirationDate).toEqual(date);
+    expect(adjusted.locationId).toBeNull();
+  });
+
+  it("three dozen eggs are 36 units, and two uses leave 34", async () => {
+    const api = await caller();
+    await prisma.product.update({ where: { id: productId }, data: { name: "Huevos", defaultUnit: "unidad" } });
+    const batch = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "docena", expirationDate: inDays(2) });
+    expect(batch.quantity).toBe(36);
+    expect(batch.unit).toBe("unidad");
+    for (let tap = 0; tap < 2; tap++) {
+      await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, batchId: batch.id, quantity: 1, unit: "unidad" });
+    }
+    expect(await netStock()).toBe(34);
+    expect((await api.inventory.getExpiringItems({ days: 7 }))[0]?.quantity).toBe(34);
+  });
+
+  it("converts legacy dozen entries without replacing their recorded details", async () => {
+    const api = await caller();
+    await prisma.product.update({ where: { id: productId }, data: { defaultUnit: "docena", minStock: 1 } });
+    const date = inDays(2);
+    const batch = await prisma.stockEntry.create({ data: {
+      productId, quantity: 3, unit: "docena", operationType: "PURCHASE", createdBy: OWNER.userId,
+      expirationDate: date, locationId: shelfId, note: "Dato aportado",
+    } });
+    const product = await api.product.update({ id: productId, defaultUnit: "unidad" });
+    expect(product.minStock).toBe(12);
+    const saved = await prisma.stockEntry.findUniqueOrThrow({ where: { id: batch.id } });
+    expect(saved.quantity).toBe(36);
+    expect(saved.unit).toBe("unidad");
+    expect(saved.locationId).toBe(shelfId);
+    expect(saved.expirationDate).toEqual(date);
+    expect(saved.note).toBe("Dato aportado");
+    expect(saved.createdAt).toEqual(batch.createdAt);
+  });
+
+  it("requires a quantity basis for queued list edits after converting dozens", async () => {
+    const api = await caller();
+    const list = await prisma.shoppingList.create({ data: { name: "Conversion", householdId: OWNER.householdId } });
+    try {
+      const item = await api.shopping.addItem({ ...envelope(OWNER.userId), shoppingListId: list.id, productId, quantity: 2, unit: "docena" });
+      expect(item.quantity).toBe(24);
+      expect(item.unit).toBe("unidad");
+      await expectCode(api.shopping.updateItem({ ...envelope(OWNER.userId), id: item.id, quantity: 3 }), "BAD_REQUEST");
+      expect((await prisma.shoppingItem.findUniqueOrThrow({ where: { id: item.id } })).quantity).toBe(24);
+      const updated = await api.shopping.updateItem({ ...envelope(OWNER.userId), id: item.id, quantity: 3, quantityUnit: "docena" });
+      expect(updated.quantity).toBe(36);
+      expect(updated.unit).toBe("unidad");
+    } finally {
+      await prisma.shoppingItem.deleteMany({ where: { shoppingListId: list.id } });
+      await prisma.shoppingList.delete({ where: { id: list.id } });
+    }
+  });
+
+  it("changing a unit cannot just relabel incompatible existing stock", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L" });
+    await expectCode(api.product.update({ id: productId, defaultUnit: "kg" }), "BAD_REQUEST");
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).defaultUnit).toBe("L");
+    expect(await netStock()).toBe(3);
   });
 });

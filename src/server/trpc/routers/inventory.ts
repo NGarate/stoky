@@ -1,3 +1,4 @@
+import { canonicalCount } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { z } from "zod";
@@ -57,10 +58,8 @@ async function datedBatchesInWindow(
     },
     include: {
       stockEntries: {
-        // Consumption recorded against a location draws down that location's
-        // batches. Scoping here rather than after the fact keeps stock used in
-        // the kitchen from erasing a batch in the garage.
-        where: locationId ? { locationId } : undefined,
+        // Read the full ledger before filtering locations: an unlocated
+        // withdrawal can make a dated batch's quantity unknown.
         include: { location: true },
       },
     },
@@ -72,11 +71,12 @@ async function datedBatchesInWindow(
     const remaining = remainingByBatch(stockEntries);
 
     for (const entry of stockEntries) {
+      if (locationId && entry.locationId !== locationId) continue;
       const expirationDate = entry.expirationDate;
       if (expirationDate === null) continue;
 
-      const left = remaining.get(entry.id) ?? 0;
-      if (left <= 0) continue;
+      const left = remaining.get(entry.id);
+      if (left === undefined || left === 0) continue;
 
       if (window.gte && expirationDate < window.gte) continue;
       if (window.lte && expirationDate > window.lte) continue;
@@ -376,6 +376,7 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const movement = canonicalCount(input);
 
       // Verify product exists and belongs to household
       const product = await ctx.db.product.findFirst({
@@ -450,11 +451,12 @@ export const inventoryRouter = createTRPCRouter({
         procedure: "inventory.addStock",
         input,
         apply: async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
           const entry = await tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: input.quantity,
-              unit: input.unit,
+              quantity: movement.quantity,
+              unit: movement.unit,
               expirationDate: input.expirationDate,
               locationId: input.locationId,
               operationType: "PURCHASE" as StockOperation,
@@ -473,8 +475,8 @@ export const inventoryRouter = createTRPCRouter({
                 productId: input.productId,
                 storeId: input.storeId,
                 price: input.price,
-                unit: input.unit,
-                quantity: input.quantity,
+                unit: movement.unit,
+                quantity: movement.quantity,
                 currency: "EUR",
               },
             });
@@ -526,6 +528,7 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const movement = canonicalCount(input);
 
       // Before the replay envelope, so a change composed offline is refused on
       // the same terms as one made online — a queued write is a caller that is
@@ -580,10 +583,7 @@ export const inventoryRouter = createTRPCRouter({
                 // ever used: six litres bought and four drunk read as six
                 // available, and the server would accept a consumption of five
                 // and drive stock to minus two (ISSUES.md INV-1).
-                where: input.consumeFromLocationId
-                  ? { locationId: input.consumeFromLocationId }
-                  : undefined,
-                orderBy: { expirationDate: "asc" },
+                orderBy: { createdAt: "asc" },
               },
             },
           });
@@ -595,12 +595,26 @@ export const inventoryRouter = createTRPCRouter({
             });
           }
 
-          const totalAvailable = product.stockEntries.reduce(
-            (sum, entry) => sum + entry.quantity,
-            0
-          );
+          const locationId = input.consumeFromLocationId || input.locationId;
+          const batch = input.batchId
+            ? product.stockEntries.find((entry) => entry.id === input.batchId && entry.quantity > 0)
+            : undefined;
+          if (input.batchId && !batch) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+          }
+          if (batch && (batch.unit !== movement.unit || (locationId && locationId !== batch.locationId))) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Batch unit or location does not match" });
+          }
+          const scopedEntries = product.stockEntries.filter((entry) => !locationId || entry.locationId === locationId);
+          const totalAvailable = scopedEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+          if (batch) {
+            const left = remainingByBatch(product.stockEntries).get(batch.id);
+            if (left == null || movement.quantity > left) {
+              throw new TRPCError({ code: "CONFLICT", message: "Batch quantity needs confirmation" });
+            }
+          }
 
-          if (input.quantity > totalAvailable) {
+          if (movement.quantity > totalAvailable) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "Not enough stock available",
@@ -610,9 +624,10 @@ export const inventoryRouter = createTRPCRouter({
           return tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: -input.quantity,
-              unit: input.unit,
-              locationId: input.consumeFromLocationId || input.locationId,
+              quantity: -movement.quantity,
+              unit: movement.unit,
+              batchId: batch?.id,
+              locationId: batch ? batch.locationId : locationId,
               operationType: "CONSUME" as StockOperation,
               note: input.note,
               createdBy: userId,
@@ -656,41 +671,52 @@ export const inventoryRouter = createTRPCRouter({
     .input(adjustStockSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const movement = canonicalCount(input);
 
       await assertOwnLocation(ctx.db, input.locationId, ctx.householdId);
 
-      // Verify product exists and belongs to household
-      const product = await ctx.db.product.findFirst({
-        where: {
-          id: input.productId,
-          householdId: ctx.householdId,
-        },
-      });
-
-      if (!product) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Product not found",
+      return ctx.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
+        // Verify product exists and belongs to household
+        const product = await tx.product.findFirst({
+          where: {
+            id: input.productId,
+            householdId: ctx.householdId,
+          },
         });
-      }
 
-      const stockEntry = await ctx.db.stockEntry.create({
-        data: {
-          productId: input.productId,
-          quantity: input.quantity,
-          unit: input.unit,
-          locationId: input.locationId,
-          operationType: "ADJUST" as StockOperation,
-          note: input.reason,
-          createdBy: userId,
-        },
-        include: {
-          product: true,
-          location: true,
-        },
+        if (!product) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Product not found",
+          });
+        }
+
+        if (input.expectedStock !== undefined) {
+          const total = await tx.stockEntry.aggregate({ where: { productId: input.productId }, _sum: { quantity: true } });
+          if (Math.round((total._sum.quantity ?? 0) * 100) / 100 !== Math.round(input.expectedStock * 100) / 100) {
+            throw new TRPCError({ code: "CONFLICT", message: "Stock changed; refresh before adjusting" });
+          }
+        }
+        const stockEntry = await tx.stockEntry.create({
+          data: {
+            productId: input.productId,
+            quantity: movement.quantity,
+            unit: movement.unit,
+            expirationDate: input.expirationDate,
+            locationId: input.locationId,
+            operationType: "ADJUST" as StockOperation,
+            note: input.reason,
+            createdBy: userId,
+          },
+          include: {
+            product: true,
+            location: true,
+          },
+        });
+
+        return stockEntry;
       });
-
-      return stockEntry;
     }),
 
   /**
@@ -715,6 +741,7 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const movement = canonicalCount(input);
 
       // Both ends. A check on one is a check somebody later assumes covers the
       // other, and a transfer has two chances to name a shelf that is not yours.
@@ -773,7 +800,7 @@ export const inventoryRouter = createTRPCRouter({
             0,
           );
 
-          if (input.quantity > availableInSource) {
+          if (movement.quantity > availableInSource) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "Not enough stock in source location",
@@ -797,8 +824,8 @@ export const inventoryRouter = createTRPCRouter({
           const fromEntry = await tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: -input.quantity,
-              unit: input.unit,
+              quantity: -movement.quantity,
+              unit: movement.unit,
               locationId: input.fromLocationId,
               operationType: "TRANSFER" as StockOperation,
               note:
@@ -812,8 +839,8 @@ export const inventoryRouter = createTRPCRouter({
           const toEntry = await tx.stockEntry.create({
             data: {
               productId: input.productId,
-              quantity: input.quantity,
-              unit: input.unit,
+              quantity: movement.quantity,
+              unit: movement.unit,
               locationId: input.toLocationId,
               operationType: "TRANSFER" as StockOperation,
               note:

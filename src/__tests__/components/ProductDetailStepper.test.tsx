@@ -148,7 +148,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("each press is a delta, not a new total", () => {
-  it("books a purchase of one where the product usually goes", async () => {
+  it("books one without inventing a location or expiry", async () => {
     renderDetail();
 
     await userEvent.click(
@@ -157,11 +157,12 @@ describe("each press is a delta, not a new total", () => {
 
     expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
       path: "inventory.addStock",
-      // The add form's own default (D96): most products go where they always
-      // went, and a one-tap flow has nowhere to ask.
-      input: { productId: "p1", quantity: 1, unit: "L", locationId: "loc-fridge" },
+      input: { productId: "p1", quantity: 1, unit: "L" },
       holdMs: 10_000,
     });
+    const op = enqueue.mock.calls[0]?.[0] as { input: object };
+    expect(op.input).not.toHaveProperty("locationId");
+    expect(op.input).not.toHaveProperty("expirationDate");
   });
 
   it("books a consumption of one, with no location", async () => {

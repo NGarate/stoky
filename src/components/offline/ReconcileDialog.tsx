@@ -155,14 +155,15 @@ export function ReconcileDialog({
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const actual = Number(amount);
-    if (!Number.isFinite(actual) || actual < 0 || !input.productId) return;
+    if (amount.trim() === "" || !product.data || !Number.isFinite(actual) || actual < 0 || !input.productId) return;
 
     setFailed(false);
     adjust.mutate({
       productId: input.productId,
       // The delta, computed from what they told us is there.
       quantity: Math.round((actual - netStock) * 100) / 100,
-      unit: input.unit ?? product.data?.defaultUnit ?? "unit",
+      expectedStock: Math.round(netStock * 100) / 100,
+      unit: product.data.defaultUnit,
       reason: t("reconcileReason"),
     });
   }
@@ -215,7 +216,7 @@ export function ReconcileDialog({
               className="block text-sm font-medium text-foreground"
               htmlFor={`${fieldId}-amount`}
             >
-              {t("reconcileQuestion")}
+              {t("reconcileQuestion", { unit: product.data?.defaultUnit ?? "" })}
             </label>
             <Input
               aria-describedby={hintId}
@@ -244,7 +245,7 @@ export function ReconcileDialog({
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
-                disabled={adjust.isPending || amount.trim() === ""}
+                disabled={adjust.isPending || !product.data || amount.trim() === ""}
                 type="submit"
               >
                 {adjust.isPending ? t("reconcileSaving") : t("reconcileSubmit")}

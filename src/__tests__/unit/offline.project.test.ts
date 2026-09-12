@@ -168,6 +168,14 @@ describe("projectShoppingItems", () => {
 });
 
 describe("projectStockTotals", () => {
+  it("converts an old queued dozen input to the migrated stock unit", () => {
+    const projected = projectStockTotals(new Map([["eggs", 36]]), [
+      op("inventory.consumeStock", { productId: "eggs", quantity: 1, unit: "docena" }),
+      op("inventory.consumeStock", { productId: "eggs", quantity: 1, unit: "unidad" }),
+    ]);
+    expect(projected.get("eggs")).toBe(23);
+  });
+
   const totals = new Map([
     ["milk", 6],
     ["coffee", 2],

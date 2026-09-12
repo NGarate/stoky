@@ -24,7 +24,7 @@ export const stockOperationSchema = z.enum(["PURCHASE", "CONSUME", "ADJUST", "TR
  */
 const stockMovement = z.object({
   productId: z.string(),
-  unit: z.string(),
+  unit: z.string().trim().min(1),
   expirationDate: z.date().optional(),
   locationId: z.string().optional(),
   note: z.string().optional(),
@@ -37,6 +37,7 @@ export const addStockSchema = stockMovement.extend({
 
 /** Used up. Also a magnitude — the handler is what makes the row negative. */
 export const consumeStockSchema = stockMovement.extend({
+  batchId: z.string().min(1).optional(),
   quantity: z.number().positive(),
 });
 
@@ -52,6 +53,7 @@ export const consumeStockSchema = stockMovement.extend({
  * no stock and carries a reason for a change that did not happen.
  */
 export const adjustStockSchema = stockMovement.extend({
+  expectedStock: z.number().optional(),
   quantity: z.number().refine((value) => value !== 0, {
     message: "An adjustment of zero changes nothing",
   }),

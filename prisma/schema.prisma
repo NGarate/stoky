@@ -92,11 +92,15 @@ model StockEntry {
   operationType StockOperation
   note          String?
   receiptItemId String?
+  batchId       String?
+  batch         StockEntry? @relation("BatchConsumption", fields: [batchId], references: [id])
+  consumptions  StockEntry[] @relation("BatchConsumption")
   createdBy     String
   createdAt     DateTime  @default(now())
 
   @@index([productId])
   @@index([locationId])
+  @@index([batchId])
 }
 
 model StorageLocation {

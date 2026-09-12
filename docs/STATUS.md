@@ -12,6 +12,21 @@ say what measured it.
 
 ## Gate status
 
+**2026-09-12 stock integrity (INV-3):** `bun run verify:ci` passes: 695 unit,
+658 component and 549 integration tests, plus the production build (79 seconds).
+`bunx playwright test` passes all 154 tests in 2.8 minutes across the configured
+Chromium, Firefox and WebKit projects. The first browser run lacked Firefox and
+WebKit; the successful run used `PLAYWRIGHT_BROWSERS_PATH=/tmp/stoky-playwright-browsers`
+and `LD_LIBRARY_PATH=/tmp/stoky-webkit-deps/usr/lib/x86_64-linux-gnu`. See
+`VERIFICATION_SEQUENCE.md` for the temporary browser setup.
+
+The regression follows the product list's “Ajustar” link and checks two separate
+kitchen uses, a reload and the persisted ledger. Unknown batch amounts stay
+unknown, unprovided locations and expiry dates stay absent, and dozens convert
+exactly to individual units. Mutation checks fail when those protections are
+removed. Physical stock after earlier mistaken uses still requires a recount.
+
+
 **2026-09-08 authenticated navigation:** reproduced the Instant overlay after
 login to `/dashboard`, then removed it by declaring `instant = false` on
 `src/app/(dashboard)/layout.tsx`. The root layout's declaration did not exempt

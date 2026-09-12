@@ -6,7 +6,7 @@ export const productSchema = z.object({
   barcode: z.string().optional(),
   brand: z.string().optional(),
   category: z.string().optional(),
-  defaultUnit: z.string().default("unit"),
+  defaultUnit: z.string().trim().min(1).default("unit"),
   minStock: z.number().optional(),
 });
 

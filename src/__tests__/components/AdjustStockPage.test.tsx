@@ -35,6 +35,7 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
+      invalidate: () => Promise.resolve(),
       product: { getById: { invalidate: () => Promise.resolve() } },
       inventory: { getStockOverview: { invalidate: () => Promise.resolve() } },
     }),
@@ -84,6 +85,13 @@ function submit(actual: string, reason: string): void {
 }
 
 describe("the adjustment", () => {
+  it("does not turn a blank recount into zero stock", () => {
+    renderWithIntl(<SnackbarProvider><AdjustStockView id="p1" /></SnackbarProvider>, { locale: "es" });
+    submit("", "Recuento");
+    expect(adjustCalls).toEqual([]);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
   it("computes a signed delta downwards from the counted total", () => {
     renderWithIntl(
       <SnackbarProvider>
@@ -98,6 +106,7 @@ describe("the adjustment", () => {
       {
         productId: "p1",
         quantity: -2,
+        expectedStock: 6,
         unit: "ud",
         reason: "Se rompieron dos",
       },

@@ -479,7 +479,7 @@ describe("the dialog itself", () => {
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
-      /apuntaste que usabas 2 L de «Leche entera»/i,
+      /No se pudo guardar el consumo de 2 L de «Leche entera»/i,
     );
   });
 });

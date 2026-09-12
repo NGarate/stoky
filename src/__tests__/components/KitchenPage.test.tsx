@@ -103,6 +103,7 @@ const renderKitchen = () =>
 function batch(overrides: Record<string, unknown> = {}) {
   return {
     id: "batch-1",
+    quantity: 3,
     unit: "L",
     daysUntilExpiry: 2,
     product: { id: "p1", name: "Leche entera" },
@@ -180,6 +181,39 @@ describe("what is urgent comes first", () => {
 });
 
 describe("using something up", () => {
+  it("two separate taps each enqueue exactly one from the selected batch", async () => {
+    renderKitchen();
+    const button = screen.getByRole("button", { name: /He usado un L/ });
+    await userEvent.click(button);
+    await userEvent.click(button);
+    expect(enqueue).toHaveBeenCalledTimes(2);
+    for (const [op] of enqueue.mock.calls) {
+      expect(op).toMatchObject({ input: { batchId: "batch-1", quantity: 1 } });
+    }
+  });
+
+  it("shows one left after two pending uses of a three-unit batch", () => {
+    pending = [consumeOp("p1"), { ...consumeOp("p1"), id: "second" }].map((op) => ({
+      ...op, input: { ...op.input, batchId: "batch-1" },
+    }));
+    renderKitchen();
+    expect(screen.getByText("Quedan 1 L")).toBeInTheDocument();
+  });
+
+  it("does not offer another use after the last unit is queued", () => {
+    expiringStub.data = [batch({ quantity: 1 })];
+    pending = [{ ...consumeOp("p1"), input: { productId: "p1", batchId: "batch-1", quantity: 1, unit: "L" } }];
+    renderKitchen();
+    expect(screen.getByRole("button", { name: /He usado un L/ })).toBeDisabled();
+  });
+
+  it("leaves ambiguous quantities unconfirmed rather than inventing a remainder", () => {
+    expiringStub.data = [batch({ quantity: null })];
+    renderKitchen();
+    expect(screen.getByText("Cantidad sin confirmar")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /He usado un L/ })).toBeDisabled();
+  });
+
   it("enqueues one unit, so it works on a tablet with no signal", async () => {
     renderKitchen();
 
@@ -187,7 +221,7 @@ describe("using something up", () => {
 
     expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
       path: "inventory.consumeStock",
-      input: { productId: "p1", quantity: 1, unit: "L" },
+      input: { productId: "p1", batchId: "batch-1", quantity: 1, unit: "L" },
       // §4's ten-second undo window (D100). Without the hold the queue
       // drains in one round-trip online and «Deshacer» flashes for a single
       // render — an undo that exists only without a connection.

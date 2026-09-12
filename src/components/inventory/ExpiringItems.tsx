@@ -79,7 +79,7 @@ export function ExpiringItems({
                 noLocationLabel={t("noLocation")}
                 quantityLabel={t("quantityLabel")}
                 quantityValue={t("quantityValue", {
-                  quantity: item.quantity,
+                  quantity: item.quantity ?? t("quantityUnknown"),
                   unit: item.unit,
                 })}
                 status={
@@ -115,7 +115,7 @@ export function ExpiringItems({
                 noLocationLabel={t("noLocation")}
                 quantityLabel={t("quantityLabel")}
                 quantityValue={t("quantityValue", {
-                  quantity: item.quantity,
+                  quantity: item.quantity ?? t("quantityUnknown"),
                   unit: item.unit,
                 })}
                 status={

@@ -188,7 +188,19 @@ export default function KitchenPage(): JSX.Element {
     );
   }
 
+  function batchLeft(batch: (typeof batches)[number]): number | null {
+    if (batch.quantity === null) return null;
+    const used = queue.pending.reduce((sum, op) => {
+      const input = op.input as { batchId?: string; quantity?: number };
+      return op.path === "inventory.consumeStock" && input.batchId === batch.id
+        ? sum + (input.quantity ?? 0) : sum;
+    }, 0);
+    return Math.max(0, batch.quantity - used);
+  }
+
   function useOne(batch: (typeof batches)[number]): void {
+    const left = batchLeft(batch);
+    if (left === null || left < 1) return;
     const label = {
       key: "offline.usedUp",
       values: { quantity: 1, unit: batch.unit, name: batch.product.name },
@@ -197,6 +209,7 @@ export default function KitchenPage(): JSX.Element {
       path: "inventory.consumeStock",
       input: {
         productId: batch.product.id,
+        batchId: batch.id,
         quantity: 1,
         unit: batch.unit,
       },
@@ -257,13 +270,17 @@ export default function KitchenPage(): JSX.Element {
                     {batch.location?.name ?? t("noLocation")}
                   </p>
 
+                  <p className="mt-1 text-xl text-warn-foreground">
+                    {batchLeft(batch) === null ? t("quantityUnknown") : t("batchLeft", { quantity: batchLeft(batch) ?? 0, unit: batch.unit })}
+                  </p>
                   <Button
+                    disabled={batchLeft(batch) === null || (batchLeft(batch) ?? 0) < 1}
                     className="mt-4 w-full text-xl"
                     onClick={() => useOne(batch)}
                     size="lg"
                     type="button"
                   >
-                    <span aria-hidden="true">{t("useOne")}</span>
+                    <span aria-hidden="true">{t("useOneUnit", { unit: batch.unit })}</span>
                     <span className="sr-only">
                       {t("useOneOf", {
                         unit: batch.unit,

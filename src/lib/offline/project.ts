@@ -1,3 +1,4 @@
+import { canonicalCount } from "@/lib/inventory/units";
 import type { QueuedOp } from "./queue";
 
 /**
@@ -115,16 +116,19 @@ export function projectStockTotals(
   const projected = new Map(totals);
 
   for (const op of pending) {
-    const input = op.input as { productId?: unknown; quantity?: unknown };
+    const input = op.input as { productId?: unknown; quantity?: unknown; unit?: unknown };
     if (typeof input.productId !== "string") continue;
     if (typeof input.quantity !== "number") continue;
 
+    const quantity = typeof input.unit === "string"
+      ? canonicalCount({ quantity: input.quantity, unit: input.unit }).quantity
+      : input.quantity;
     const current = projected.get(input.productId) ?? 0;
 
     if (op.path === "inventory.addStock") {
-      projected.set(input.productId, round(current + Math.abs(input.quantity)));
+      projected.set(input.productId, round(current + Math.abs(quantity)));
     } else if (op.path === "inventory.consumeStock") {
-      projected.set(input.productId, round(current - Math.abs(input.quantity)));
+      projected.set(input.productId, round(current - Math.abs(quantity)));
     }
   }
 
@@ -156,9 +160,11 @@ export function projectOnListQuantities(
 
   for (const op of pending) {
     if (op.path !== "shopping.addItem") continue;
-    const input = op.input as { productId?: unknown; quantity?: unknown };
+    const input = op.input as { productId?: unknown; quantity?: unknown; unit?: unknown };
     if (typeof input.productId !== "string") continue;
-    const quantity = typeof input.quantity === "number" ? input.quantity : 1;
+    const amount = typeof input.quantity === "number" ? input.quantity : 1;
+    const quantity = typeof input.unit === "string"
+      ? canonicalCount({ quantity: amount, unit: input.unit }).quantity : amount;
     projected.set(
       input.productId,
       round((projected.get(input.productId) ?? 0) + quantity),

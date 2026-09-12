@@ -256,8 +256,8 @@ Evidence:
   rather than one write that set the total — the delta is what makes Journey 6
   possible
 - `src/__tests__/components/ProductDetailStepper.test.tsx`: the deltas' exact
-  inputs (a purchase of one at the product's usual location, a consumption of
-  one with none), the projection folding unsent presses onto the shown total
+  inputs (a purchase of one with no inferred location or expiry, a consumption
+  of one with none), the projection folding unsent presses onto the shown total
   and the below-minimum sentence, undo cancelling the queued change and never
   writing a compensating one, and a KITCHEN account reading a number instead of
   a control the server would refuse
@@ -400,11 +400,19 @@ Proof required:
   one per running-out row, and no form — `KitchenPage.test.tsx` holds exactly
   that shape
 
-Honest note for whoever builds this: `getExpiringItems` returns *stock entries*
-with a positive quantity, not net product stock. In the seed, Leche entera's
-expiring entry holds 6 L while the product's net total is 2 L, because the
-consumption entry carries no expiry date. The kitchen screen must be explicit
-about which number it is showing, or it will contradict the phone screen.
+**2026-09-12 stock integrity correction:** a kitchen tap now names its batch.
+Two separate taps produce exactly two consumption rows, including after a
+retry. The card shows the remaining amount, including queued uses. Product
+detail and both expiry queries use the same calculation. A withdrawal without
+a source cannot select a batch by expiry: ambiguous amounts show “Cantidad sin
+confirmar” and the kitchen refuses another quick use of such a batch.
+
+The recount page starts with a blank actual count. It records no unprovided
+location or expiry and refuses a stale balance under the product lock. The
+browser regression in `e2e/critical-paths.spec.ts` follows the product list's
+“Ajustar” link and verifies the extra counted egg gets no expiry from the
+previous purchase. Dozens convert exactly to individual units (3 → 36);
+this conversion does not reconstruct physical stock or earlier intent.
 
 ## Journey 8. The screen choice is remembered per person and per device
 

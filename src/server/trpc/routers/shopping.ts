@@ -1,3 +1,4 @@
+import { canonicalCount, unitConversion } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { type PrismaClient } from "@prisma/client";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
@@ -310,7 +311,7 @@ export const shoppingRouter = createTRPCRouter({
         input,
         apply: (tx) =>
           tx.shoppingItem.create({
-            data: fields,
+            data: fields.unit ? canonicalCount({ ...fields, unit: fields.unit }) : fields,
             include: { product: true },
           }),
         ids: (item) => [item.id],
@@ -339,10 +340,10 @@ export const shoppingRouter = createTRPCRouter({
    * buys.
    */
   updateItem: writeProcedure
-    .input(updateShoppingItemSchema.merge(replayable))
+    .input(updateShoppingItemSchema.and(replayable))
     .mutation(async ({ ctx, input }) => {
       // Same trap as `addItem`: this spread everything but `id` into Prisma.
-      const { id, idempotencyKey, composedByUserId, ...data } = input;
+      const { id, idempotencyKey, composedByUserId, quantityUnit, ...data } = input;
 
       // `data` is spread into the update, so an unchecked `storeId` reaches
       // the row the same way it did in `addItem`.
@@ -353,20 +354,35 @@ export const shoppingRouter = createTRPCRouter({
         composedByUserId,
         procedure: "shopping.updateItem",
         input,
-        apply: (tx) =>
-          tx.shoppingItem.update({
+        apply: async (tx) => {
+          let quantity = data.quantity;
+          if (quantity !== undefined) {
+            const current = await tx.shoppingItem.findFirst({
+              where: { id, shoppingList: { householdId: ctx.householdId } },
+            });
+            if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "Shopping item not found" });
+            if (quantityUnit !== current.unit) {
+              const factor = current.unit && quantityUnit !== undefined
+                ? unitConversion(quantityUnit, current.unit) : undefined;
+              if (factor === undefined) throw new TRPCError({ code: "CONFLICT", message: "Quantity unit changed; confirm the amount" });
+              quantity *= factor;
+            }
+          }
+          return tx.shoppingItem.update({
             where: {
               id,
               shoppingList: { householdId: ctx.householdId },
             },
             data: {
               ...data,
+              quantity,
               ...(data.isChecked !== undefined && {
                 checkedAt: data.isChecked ? new Date() : null,
               }),
             },
             include: { product: true },
-          }),
+          });
+        },
         ids: (item) => [item.id],
         reread: async (db, ids) => {
           const item = await db.shoppingItem.findUnique({

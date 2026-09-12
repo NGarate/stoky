@@ -80,7 +80,8 @@
     "quickConsumeStock": "Consume stock",
     "quickUploadReceipt": "Upload a receipt",
     "expiryQuantityLabel": "Quantity",
-    "expiryLocationLabel": "Where it is"
+    "expiryLocationLabel": "Where it is",
+    "quantityUnknown": "Quantity unconfirmed"
   },
   "common": {
     "save": "Save",
@@ -244,12 +245,12 @@
       "locationsTitle": "Where it is",
       "locationsEmpty": "There are no stock movements for this product yet.",
       "locationNone": "No location",
-      "locationsNote": "This is the balance of each location's movements, and it adds up to the current stock. Consumption recorded without a location is subtracted from “No location”, so a location can show more than is really there.",
+      "locationsNote": "Some counts need a check. Past uses did not say which batch they came from.",
       "expiryTitle": "Expiry dates",
       "expiryEmpty": "No batch of this product has an expiry date.",
       "expiryExpired": "Expired",
       "expiryBatch": "{quantity} {unit} · {location}",
-      "expiryNote": "The quantity is the one recorded when the batch was added. Consumption is not deducted from a specific batch, so less than this may be left.",
+      "expiryNote": "If the consumed batch was not recorded, its quantity remains unconfirmed.",
       "pricesTitle": "Latest prices",
       "pricesCaption": "Latest recorded prices for this product",
       "pricesEmpty": "There are no recorded prices for this product yet.",
@@ -286,7 +287,8 @@
       "deleteFailed": "It could not be deleted. Try again.",
       "deletedBody": "“{name}” is no longer in the catalogue.",
       "editFields": "Edit the details",
-      "discardChanges": "Discard"
+      "discardChanges": "Discard",
+      "quantityUnknown": "Quantity unconfirmed"
     },
     "scan": {
       "title": "Scan barcode",
@@ -399,7 +401,8 @@
       "retry": "Try again",
       "submit": "Save the adjustment",
       "submitting": "Saving the adjustment...",
-      "saved": "Adjusted. “{name}” now stands at {stock} {unit}."
+      "saved": "Adjusted. “{name}” now stands at {stock} {unit}.",
+      "errorStockChanged": "Stock changed while you were counting. Review the updated stock and confirm again."
     }
   },
   "inventory": {
@@ -551,7 +554,8 @@
       "noLocation": "No location",
       "daysAgo": "{days, plural, one {# day ago} other {# days ago}}",
       "until": "{days, plural, =0 {Today} =1 {Tomorrow} other {In # days}}",
-      "more": "{count, plural, one {And # more…} other {And # more…}}"
+      "more": "{count, plural, one {And # more…} other {And # more…}}",
+      "quantityUnknown": "Quantity unconfirmed"
     }
   },
   "receipts": {
@@ -976,8 +980,8 @@
     "nameIt": "Name it",
     "sendNow": "Send now",
     "reconcileTitle": "Check the stock",
-    "reconcileBody": "You recorded using {quantity} {unit} of “{name}”, but by the time it reached the server there was less than that. Somebody else probably used it first.",
-    "reconcileQuestion": "How much is in the house right now?",
+    "reconcileBody": "We could not save the use of {quantity} {unit} of “{name}”. Check what is left and confirm the count.",
+    "reconcileQuestion": "How much is there now ({unit})?",
     "reconcileHint": "Look on the shelf or in the fridge and type what you see. We will set the count to that number.",
     "reconcileSubmit": "Save the amount",
     "reconcileSaving": "Saving...",
@@ -1043,7 +1047,10 @@
     "listName": "Kitchen list",
     "listCreateFailed": "The list cannot be created right now. Try again when the connection is back.",
     "onList": "Already on the list: {quantity} {unit}",
-    "leftLabel": "Left"
+    "leftLabel": "Left",
+    "quantityUnknown": "Quantity unconfirmed",
+    "batchLeft": "{quantity} {unit} left",
+    "useOneUnit": "I used 1 {unit}"
   },
   "snackbar": {
     "regionLabel": "Notifications (press F8 to reach the notification)",

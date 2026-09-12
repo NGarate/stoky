@@ -311,7 +311,7 @@ describe("ShoppingItem", () => {
     expect(enqueue.mock.calls).toHaveLength(1);
     expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
       path: "shopping.updateItem",
-      input: { id: "item-1", quantity: 6 },
+      input: { id: "item-1", quantity: 6, quantityUnit: "L" },
     });
   });
 

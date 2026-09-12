@@ -1,3 +1,4 @@
+import { unitConversion, canonicalProduct } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -226,7 +227,7 @@ export const productRouter = createTRPCRouter({
 
   /** Adds a product by hand, for the things that have no barcode. */
   create: writeProcedure
-    .input(productSchema)
+    .input(productSchema.transform(canonicalProduct))
     .mutation(async ({ ctx, input }) => {
       const product = await ctx.db.product.create({
         data: {
@@ -240,30 +241,52 @@ export const productRouter = createTRPCRouter({
 
   /** Edits a product. The name, the unit, and the minimum that drives "to buy". */
   update: writeProcedure
-    .input(updateProductSchema)
+    .input(updateProductSchema.transform(canonicalProduct))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
-      const existingProduct = await ctx.db.product.findFirst({
-        where: {
-          id,
-          householdId: ctx.householdId,
-        },
-      });
-
-      if (!existingProduct) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Product not found",
+      return ctx.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+        const existingProduct = await tx.product.findFirst({
+          where: { id, householdId: ctx.householdId },
         });
-      }
-
-      const product = await ctx.db.product.update({
-        where: { id },
-        data,
+        if (!existingProduct) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
+        }
+        const target = data.defaultUnit;
+        if (target && target !== existingProduct.defaultUnit) {
+          const entries = await tx.stockEntry.findMany({ where: { productId: id } });
+          const prices = await tx.priceRecord.findMany({ where: { productId: id } });
+          const items = await tx.shoppingItem.findMany({ where: { productId: id } });
+          const rows = [...entries, ...prices, ...items];
+          if (rows.some((row) => unitConversion(row.unit, target) === undefined)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Unit conversion needs a known quantity per package" });
+          }
+          for (const row of entries) {
+            await tx.stockEntry.update({ where: { id: row.id }, data: {
+              quantity: row.quantity * unitConversion(row.unit, target)!, unit: target,
+            } });
+          }
+          for (const row of prices) {
+            await tx.priceRecord.update({ where: { id: row.id }, data: {
+              quantity: row.quantity * unitConversion(row.unit, target)!, unit: target,
+            } });
+          }
+          for (const row of items) {
+            await tx.shoppingItem.update({ where: { id: row.id }, data: {
+              quantity: row.quantity * unitConversion(row.unit, target)!, unit: target,
+            } });
+          }
+          if (data.minStock === undefined && existingProduct.minStock !== null) {
+            const factor = unitConversion(existingProduct.defaultUnit, target);
+            if (factor === undefined) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "Unit conversion needs a known quantity per package" });
+            }
+            data.minStock = existingProduct.minStock * factor;
+          }
+        }
+        return tx.product.update({ where: { id }, data });
       });
-
-      return product;
     }),
 
   /**

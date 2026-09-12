@@ -9,7 +9,7 @@ import {
 /**
  * ISSUES.md INV-1, the read half, at the only tier that can answer it cheaply.
  *
- * The drawdown rule is arithmetic over an array. It needs no database and no
+ * Batch provenance is arithmetic over an array. It needs no database and no
  * DOM, so it is unit-tested here in milliseconds and the integration suite is
  * left to prove one thing — that the router calls it.
  */
@@ -53,68 +53,47 @@ describe("remainingByBatch", () => {
     expect(remaining.get(bought.id)).toBe(0);
   });
 
-  it("draws down the soonest-expiring batch first", () => {
-    const urgent = entry(6, 2);
-    const later = entry(6, 30);
-    const drunk = entry(-6);
-
-    const remaining = remainingByBatch([urgent, later, drunk]);
-
-    // Someone reaching into the fridge takes the carton that has to go first.
-    // Charging this to `later` instead would report 6 L as spoiling in two
-    // days when in fact the urgent carton is gone.
-    expect(remaining.get(urgent.id)).toBe(0);
-    expect(remaining.get(later.id)).toBe(6);
+  it("does not choose a batch by expiry when the source was not recorded", () => {
+    const early = entry(3, 2);
+    const late = entry(3, 20);
+    const remaining = remainingByBatch([early, late, entry(-2)]);
+    expect(remaining.get(early.id)).toBeNull();
+    expect(remaining.get(late.id)).toBeNull();
   });
 
-  it("spills over into the next batch when the first cannot cover it", () => {
-    const urgent = entry(4, 2);
-    const later = entry(6, 30);
-    const drunk = entry(-7);
-
-    const remaining = remainingByBatch([urgent, later, drunk]);
-
-    expect(remaining.get(urgent.id)).toBe(0);
-    expect(remaining.get(later.id)).toBe(3);
+  it("debits the explicit batch, even when another expires sooner", () => {
+    const early = entry(3, 2);
+    const late = entry(3, 20);
+    const used = { ...entry(-2), batchId: late.id };
+    const remaining = remainingByBatch([early, late, used]);
+    expect(remaining.get(early.id)).toBe(3);
+    expect(remaining.get(late.id)).toBe(1);
   });
 
-  it("draws down undated batches last", () => {
-    const undated = entry(5);
-    const dated = entry(5, 10);
-    const used = entry(-5);
-
-    const remaining = remainingByBatch([undated, dated, used]);
-
-    // An undated batch has no urgency, so nobody reaches for it first. Taking
-    // it first would leave the dated batch looking fuller than it is, which is
-    // the direction of error that matters.
-    expect(remaining.get(dated.id)).toBe(0);
-    expect(remaining.get(undated.id)).toBe(5);
+  it("does not spend a batch in another location", () => {
+    const early = { ...entry(3, 2), locationId: "garage" };
+    const late = { ...entry(3, 20), locationId: "fridge" };
+    const used = { ...entry(-2), locationId: "fridge" };
+    const remaining = remainingByBatch([early, late, used]);
+    expect(remaining.get(early.id)).toBe(3);
+    expect(remaining.get(late.id)).toBe(1);
   });
 
-  it("does not depend on the order the database returned rows in", () => {
-    const first = entry(3, 5);
-    const second = entry(3, 9);
-    const used = entry(-4);
-
-    const forwards = remainingByBatch([first, second, used]);
-    const backwards = remainingByBatch([used, second, first]);
-
-    expect(backwards.get(first.id)).toBe(forwards.get(first.id));
-    expect(backwards.get(second.id)).toBe(forwards.get(second.id));
-    expect(forwards.get(first.id)).toBe(0);
-    expect(forwards.get(second.id)).toBe(2);
+  it("keeps an adjustment's unknown allocation unknown", () => {
+    const dated = entry(2, 2);
+    const undated = entry(1);
+    const remaining = remainingByBatch([dated, undated, entry(-1)]);
+    expect(remaining.get(dated.id)).toBeNull();
+    expect(remaining.get(undated.id)).toBeNull();
   });
 
-  it("breaks a tie on the same date by id, so the answer is stable", () => {
-    const a = entry(2, 4);
-    const b = entry(2, 4);
-    const used = entry(-2);
-
-    const remaining = remainingByBatch([b, a, used]);
-
-    expect(remaining.get(a.id)).toBe(0);
-    expect(remaining.get(b.id)).toBe(2);
+  it("does not charge old consumption to a later replenishment", () => {
+    const old = { ...entry(2, 2), createdAt: new Date(1) };
+    const used = { ...entry(-2), createdAt: new Date(2) };
+    const fresh = { ...entry(3, 20), createdAt: new Date(3) };
+    const remaining = remainingByBatch([fresh, used, old]);
+    expect(remaining.get(old.id)).toBe(0);
+    expect(remaining.get(fresh.id)).toBe(3);
   });
 
   it("never reports a negative remainder, however much was consumed", () => {

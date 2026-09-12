@@ -91,7 +91,7 @@ export function ShoppingItem({
     const label = { key: "shopping.itemUpdated", values: { name } };
     const queued = enqueue({
       path: "shopping.updateItem",
-      input: { id: item.id, ...input },
+      input: { id: item.id, ...input, ...("quantity" in input ? { quantityUnit: item.unit } : {}) },
       label,
     });
 

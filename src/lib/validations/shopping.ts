@@ -52,8 +52,12 @@ export const updateShoppingItemSchema = z.object({
   id: z.string(),
   isChecked: z.boolean().optional(),
   quantity: z.number().positive().optional(),
+  quantityUnit: z.string().nullable().optional(),
   /** `null` clears it: "anywhere" is a real answer. */
   storeId: z.string().nullish(),
+}).refine((input) => input.quantity === undefined || input.quantityUnit !== undefined, {
+  message: "Confirm the quantity unit before changing the amount",
+  path: ["quantityUnit"],
 });
 
 export const shoppingListQuerySchema = z.object({

@@ -80,7 +80,8 @@
     "quickConsumeStock": "Consumir stock",
     "quickUploadReceipt": "Subir un ticket",
     "expiryQuantityLabel": "Cantidad",
-    "expiryLocationLabel": "Dónde está"
+    "expiryLocationLabel": "Dónde está",
+    "quantityUnknown": "Cantidad sin confirmar"
   },
   "common": {
     "save": "Guardar",
@@ -244,12 +245,12 @@
       "locationsTitle": "Dónde está",
       "locationsEmpty": "Todavía no hay movimientos de stock de este producto.",
       "locationNone": "Sin ubicación",
-      "locationsNote": "Es el saldo de los movimientos de cada ubicación, y suma el stock actual. Los consumos apuntados sin ubicación restan de «Sin ubicación», así que una ubicación puede mostrar más de lo que hay de verdad en ella.",
+      "locationsNote": "Las cantidades sin confirmar necesitan un recuento: no sabemos de qué ubicación salieron los consumos sin lote.",
       "expiryTitle": "Caducidades",
       "expiryEmpty": "Ningún lote de este producto tiene fecha de caducidad.",
       "expiryExpired": "Caducado",
       "expiryBatch": "{quantity} {unit} · {location}",
-      "expiryNote": "La cantidad es la que se apuntó al añadir el lote. Los consumos no se descuentan de un lote concreto, así que puede quedar menos de lo que pone aquí.",
+      "expiryNote": "Si no consta qué lote se consumió, su cantidad queda sin confirmar.",
       "pricesTitle": "Últimos precios",
       "pricesCaption": "Últimos precios registrados de este producto",
       "pricesEmpty": "Todavía no hay precios registrados de este producto.",
@@ -286,7 +287,8 @@
       "deleteFailed": "No se ha podido eliminar. Inténtalo otra vez.",
       "deletedBody": "«{name}» ya no está en el catálogo.",
       "editFields": "Editar los datos",
-      "discardChanges": "Descartar"
+      "discardChanges": "Descartar",
+      "quantityUnknown": "Cantidad sin confirmar"
     },
     "scan": {
       "title": "Escanear Código de Barras",
@@ -399,7 +401,8 @@
       "retry": "Reintentar",
       "submit": "Guardar ajuste",
       "submitting": "Guardando el ajuste...",
-      "saved": "Ajustado. «{name}» queda en {stock} {unit}."
+      "saved": "Ajustado. «{name}» queda en {stock} {unit}.",
+      "errorStockChanged": "El stock ha cambiado mientras contabas. Revisa el saldo actualizado y confirma de nuevo."
     }
   },
   "inventory": {
@@ -551,7 +554,8 @@
       "noLocation": "Sin ubicación",
       "daysAgo": "{days, plural, one {Hace # día} other {Hace # días}}",
       "until": "{days, plural, =0 {Hoy} =1 {Mañana} other {En # días}}",
-      "more": "{count, plural, one {Y # más…} other {Y # más…}}"
+      "more": "{count, plural, one {Y # más…} other {Y # más…}}",
+      "quantityUnknown": "Cantidad sin confirmar"
     }
   },
   "receipts": {
@@ -976,8 +980,8 @@
     "nameIt": "Ponle nombre",
     "sendNow": "Enviar ahora",
     "reconcileTitle": "Comprobar el stock",
-    "reconcileBody": "Apuntaste que usabas {quantity} {unit} de «{name}», pero cuando llegó al servidor ya no quedaba tanto. Alguien más lo habrá usado antes.",
-    "reconcileQuestion": "¿Cuánto hay ahora mismo en casa?",
+    "reconcileBody": "No se pudo guardar el consumo de {quantity} {unit} de «{name}». Comprueba lo que queda y confirma la cantidad.",
+    "reconcileQuestion": "¿Cuánto hay ahora ({unit})?",
     "reconcileHint": "Mira en la estantería o en la nevera y escribe lo que veas. Ajustaremos la cuenta a ese número.",
     "reconcileSubmit": "Guardar la cantidad",
     "reconcileSaving": "Guardando...",
@@ -1043,7 +1047,10 @@
     "listName": "Lista de la cocina",
     "listCreateFailed": "Ahora mismo no se puede crear la lista. Prueba cuando vuelva la conexión.",
     "onList": "Ya en la lista: {quantity} {unit}",
-    "leftLabel": "Queda"
+    "leftLabel": "Queda",
+    "quantityUnknown": "Cantidad sin confirmar",
+    "batchLeft": "Quedan {quantity} {unit}",
+    "useOneUnit": "He usado 1 {unit}"
   },
   "snackbar": {
     "regionLabel": "Avisos (pulsa F8 para ir al aviso)",

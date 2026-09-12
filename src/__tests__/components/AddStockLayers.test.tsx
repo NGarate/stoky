@@ -12,8 +12,7 @@ import { renderWithIntl } from "../utils/render";
  *   since SEC-1's fix — a price without a store is refused at the edge with
  *   the fix named, because the server would accept it and silently record
  *   nothing;
- * - the location defaults to the product's usual one, read from its own
- *   ledger, and stops defaulting the moment the person picks one;
+ * - the location stays blank until explicitly chosen;
  * - unit, location and note live behind a disclosure that a unit error can
  *   open — an error pointing into a closed drawer is a locked door.
  */
@@ -154,7 +153,6 @@ describe("the add form in two layers", () => {
       unit: "L",
       storeId: "s1",
       price: 3.5,
-      locationId: "nevera",
     });
   });
 
@@ -176,7 +174,7 @@ describe("the add form in two layers", () => {
     );
   });
 
-  it("defaults the location to the product's usual one", () => {
+  it("leaves unprovided stock details blank despite the purchase history", () => {
     renderWithIntl(<AddStockPage />, { locale: "es" });
 
     pickProduct();
@@ -185,8 +183,10 @@ describe("the add form in two layers", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Añadir stock" }));
 
-    // Nevera: twice in the ledger against Despensa's once.
+    // Past purchases do not tell us where this new unit was put.
     expect(addStockCalls.length).toBe(1);
-    expect(addStockCalls[0]?.locationId).toBe("nevera");
+    expect(addStockCalls[0]?.locationId).toBeUndefined();
+    expect(addStockCalls[0]?.expirationDate).toBeUndefined();
+    expect(addStockCalls[0]?.note).toBeUndefined();
   });
 });

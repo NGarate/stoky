@@ -39,6 +39,13 @@ Rules for this log:
 
 ## Done
 
+### Stock recounts retain only supported details (2026-09-12)
+
+| Change | Evidence |
+|---|---|
+| INV-3: batch provenance, unknown remainders, explicit stock details and exact dozen conversion | `bun run verify:ci`: 695 unit, 658 component, 549 integration; `bunx playwright test`: 154 passed. Regression tests verified to fail under mutation. D119 records the changed assumptions. |
+
+
 ### Sharp's last job, the proxy rename, and a defect that was ours to expose (2026-08-27)
 
 The Bun migration's tail, from
@@ -2343,3 +2350,17 @@ is no floor to exempt any more. The dashboard's own `ExpiryRow` helper stays as
 it is; both now go through the one shared `ItemRow`, which is the sharing that
 matters — a further extraction of the thin per-file wrapper was judged more
 blast radius than the rule requires.
+
+
+**D119 — Stock details need evidence (owner correction, 2026-09-12; INV-3).**
+Supersedes the usual-location defaults in D96 and the earliest-expiry drawdown
+assumption in INV-1. Recounting a product does not establish a new location or
+expiry. Kitchen consumption now identifies the batch selected, and ambiguous
+historic withdrawals leave batch quantities unknown. Product detail uses the
+same remainder calculation as kitchen. Recounts carry their expected balance
+and serialize with stock writes. Dozens are an exact factor of twelve, so the
+migration and new writes use individual units; package sizes are not inferred.
+The persisted read version changes with that basis. Queued list quantity edits
+carry their unit; legacy edits lacking one are refused rather than reinterpreted.
+The two-tap regression proves two rows and 36 → 34 eggs, including replay of an
+already saved operation. No physical count or historical intent was guessed.

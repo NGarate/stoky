@@ -74,6 +74,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | OCR-1 | OCR downloads language data at runtime in production | ✅ Resolved (Phase 7 slice) |
 | INV-1 | Expiring items report entry quantity, not net stock | ✅ Resolved (Phase 4) |
 | INV-2 | The availability guards are read-then-write, no transaction | ✅ Resolved |
+| INV-3 | Recounts display old batch amounts and infer stock details | ✅ Fixed in code — 2026-09-12 |
 | SEC-1 | `addStock` wrote a price record against any household's store | ✅ Resolved (Phase 4) |
 | UI-2 | LocationPicker never renders child locations | ✅ Resolved (`a6b01c2`) |
 | UI-3 | Assorted validation and a11y gaps found building the add-stock route | ✅ Resolved (Phase 7 slice) |
@@ -475,6 +476,38 @@ stays unproven is that the bundled copy honours these options the same way the
 source does.
 
 ---
+
+### ✅ INV-3: Recounts display old batch amounts and infer stock details
+
+**Reported 2026-09-12:** the product list's “Ajustar” flow appeared to invent
+quantity, location and expiry; two separate kitchen taps appeared to use three.
+
+The adjustment wrote a delta, but product detail displayed the original positive
+entries. The expiry queries chose a source by earliest expiry, while kitchen
+consumption named no batch. Separately, the add form and + button assigned a
+location from purchase history. Eggs in the sample catalogue used dozens, so
+“one” meant a dozen eggs. These were verified in code. The local ledger read on 2026-09-12 contains
+a purchase of +2 dozen, two uses of -1 dozen, then an adjustment of +3 dozen;
+there is no third consume row. That old dated purchase was depleted before
+the adjustment, yet product detail still showed it.
+
+**Correction:** explicit `StockEntry.batchId` provenance for kitchen consumption;
+one shared remainder calculation; unknown amounts remain null when a source
+cannot be determined; no inferred location on new stock. A recount checks its
+expected balance under the product lock, with additions and uses taking the
+same lock. Supplied adjustment expiry is retained. The unit migration converts
+only the exact dozen aliases, preserving signed quantities and price amounts;
+new count inputs normalize the same way. Persisted reads are invalidated and
+queued quantity edits name their unit, so an older unitless list edit is
+refused instead of changing basis silently. Unit edits convert quantities when
+the factor is known, otherwise refuse a relabel of existing records.
+
+**Evidence:** `inventory.net-stock.test.ts`, `batches.test.ts`, the stock form,
+stepper and kitchen component suites, and the recount/kitchen browser regression
+in `e2e/critical-paths.spec.ts`. Mutation checks restore guessed quantities,
+remove batch provenance, bypass the stale check and break the dozen factor;
+the corresponding regression tests fail. Existing physical stock still needs
+a human recount; no historical consumption intent is reconstructed.
 
 ### ✅ INV-1: Expiring items report entry quantity, not net stock
 

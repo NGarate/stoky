@@ -190,10 +190,10 @@ async function main(): Promise<void> {
       brand: null,
       category: "Frescos",
       barcode: "8480000456789",
-      defaultUnit: "docena",
-      minStock: 1,
+      defaultUnit: "unidad",
+      minStock: 12,
       location: fridge.id,
-      stock: [{ quantity: 2, days: -6 }],
+      stock: [{ quantity: 24, days: -6 }],
       // Expiring soon, for the expiring-items widget.
       expiration: daysFromNow(3),
       prices: [
@@ -275,7 +275,7 @@ async function main(): Promise<void> {
           price: price.price,
           currency: "EUR",
           unit: item.defaultUnit,
-          quantity: 1,
+          quantity: item.name === "Huevos frescos" ? 12 : 1,
           recordedAt: daysFromNow(price.days),
         },
       });
