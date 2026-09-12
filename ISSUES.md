@@ -5,14 +5,17 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-08-25  
+**Last Updated:** 2026-09-12
+
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
 (2026-08-18), which filed two new entries. Everything older is closed —
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5 and RUNTIME-1.** TEST-5 is the intermittent bun
+**Open: TEST-5 and RUNTIME-1.** TEST-7 closed on 2026-09-12 by removing
+two process-wide ProductRating mocks from unrelated component tests.
+TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
 and does not fix it. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
@@ -80,6 +83,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
+| TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
@@ -2983,6 +2987,23 @@ so the image's runner reaches no gate. `defd147` changed that: `quality` and
 `test` build `target: development` and run their suites inside it, so the
 image's bun now runs both. Measured before the change landed — `quality` green
 in the image, and `test` at 609 unit, 611 component, 486 integration.
+
+### ✅ TEST-7: ProductRating tests fail in the component suite but pass alone
+
+Found 2026-09-08 while verifying the local dependency setup repair, using Bun
+1.4.2 and dependencies restored from `bun.lock`. `bun run verify:ci` reaches
+the component tier, which reports 646 pass / 7 fail. All failures are in
+`src/__tests__/components/ProductRating.test.tsx`, with an empty rendered div.
+Running `bun test --preload ./src/__tests__/setup/register-dom.ts
+src/__tests__/components/ProductRating.test.tsx` gives 7 pass / 0 fail.
+
+Resolved 2026-09-12: `ProductDetailStepper.test.tsx` and
+`ProductDetailDelete.test.tsx` mocked ProductRating with a null component for
+the whole Bun process. Removing those two unnecessary mocks lets the detail
+tests render the real component and restores all seven rating assertions.
+Measured before removal: 646 pass / 7 fail; after removal: 653 pass / 0 fail
+across 60 files. The existing rating tests detect the regression without a new
+assertion or a runner workaround.
 
 ### ✅ TEST-6: Two inert mobile skips cite a phase that closed
 

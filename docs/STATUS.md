@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-09-01
+Updated: 2026-09-12
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,13 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-09-12 component isolation repair (Bun 1.4.2):** `bun run verify:ci`
+passes in 83 seconds: 689 unit, 653 component and 540 integration tests,
+followed by a successful production build (35 routes, eight partial prerenders).
+Removing two process-wide ProductRating mocks closes ISSUES.md TEST-7; the
+unchanged rating tests fail before removal and pass afterwards. This run
+isolates the test repair from the pending bootstrap and navigation changes.
 
 Measured on 2026-08-17/18 against a live PostgreSQL and Valkey — at
 `443718d` after Phase 6, the CI campaign and the browser suite's move to the
@@ -32,13 +39,13 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 warnings, 0 errors — 376 files, 101 rules (2026-08-28) |
+| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 386 files, 101 rules (2026-09-12) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
 | Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
 | Unit tests | `bun run test:unit` | ✅ 689 pass / 76 files (2026-09-01) |
-| Component tests | `bun run test:components` | ✅ 652 pass / 56 files (2026-09-01) |
+| Component tests | `bun run test:components` | ✅ 653 pass / 60 files (2026-09-12); TEST-7 closed by removing process-wide ProductRating mocks |
 | Integration tests | `bun run test:integration` | ✅ 540 pass / 37 files (2026-09-01) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |

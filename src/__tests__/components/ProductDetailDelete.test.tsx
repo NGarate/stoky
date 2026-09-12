@@ -65,10 +65,6 @@ mock.module("@/lib/offline/queue-context", () => ({
   }),
 }));
 
-mock.module("@/components/products/ProductRating", () => ({
-  ProductRating: () => null,
-}));
-
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({

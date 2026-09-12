@@ -52,10 +52,6 @@ mock.module("@/lib/offline/queue-context", () => ({
   }),
 }));
 
-mock.module("@/components/products/ProductRating", () => ({
-  ProductRating: () => null,
-}));
-
 const product = () => ({
   id: "p1",
   name: "Aceite de oliva",
