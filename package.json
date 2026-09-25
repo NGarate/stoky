@@ -1,6 +1,6 @@
 {
   "name": "stoky",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha.1",
   "description": "Privacy-first household inventory management",
   "scripts": {
     "dev": "bun --bun node_modules/next/dist/bin/next dev",

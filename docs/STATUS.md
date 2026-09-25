@@ -12,6 +12,35 @@ say what measured it.
 
 ## Gate status
 
+**2026-09-25 first-alpha preparation:** `v0.1.0-alpha.1` adds a standalone
+release bundle (`deploy/docker-compose.yml`, `example.env`, `traefik.yml`). It
+pulls an exact app image and derives database/cache/auth URLs from four required
+operator settings. The fixed project name `stoky-release` avoids the development
+project's volumes. Traefik uses a read-only file provider, no Docker socket, and
+is the only service publishing ports. Inline Compose config was rejected after a
+real start failed on read-only Traefik; the third downloadable file fixes it.
+The installation guide includes private-repository/package authentication,
+backup/restore, upgrades and rollback limitations.
+
+`bun run verify:ci` passes in 65 seconds: 713 unit, 658 component and 549
+integration tests plus the production build (2026-09-25).
+
+The local Compose test used isolated projects, loopback ports and a test
+certificate: routing, redirect, registration/login, service health and restored
+household/upload persistence passed. **Public DNS and Let's Encrypt issuance were
+not exercised**; operators must check their actual HTTPS hostname. This alpha
+supports Linux amd64 and trusted testers; registration remains open. The release
+workflow runs the published image by its pushed digest on a fresh database before
+creating a draft; the maintainer publishes the reviewed prerelease afterward.
+
+`bun audit --audit-level moderate` reports no vulnerabilities across 586 packages.
+Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
+production image with zero fixable HIGH/CRITICAL findings. The image was exported
+and scanned read-only, without exposing the Docker socket to the scanner.
+`bash scripts/check-ci.sh` passes with actionlint and shellcheck. The unit tests
+for deployment and packaging pass, with deliberate mutations proving the guards.
+
+
 **2026-09-25 Bun-only image:** every application Docker stage now derives from
 `oven/bun:1.4.0-alpine`; build, migration and serving commands explicitly select
 Bun. The upstream `node` compatibility symlink resolves to `/usr/local/bin/bun`,
@@ -120,19 +149,19 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 387 files, 101 rules (2026-09-12) |
+| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 392 files, 101 rules (2026-09-25) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
 | Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
-| Unit tests | `bun run test:unit` | ✅ 694 pass / 77 files (2026-09-12); all five bootstrap regression tests fail against the original setup script |
-| Component tests | `bun run test:components` | ✅ 653 pass / 60 files (2026-09-12); TEST-7 closed by removing process-wide ProductRating mocks |
-| Integration tests | `bun run test:integration` | ✅ 540 pass / 37 files (2026-09-01) |
+| Unit tests | `bun run test:unit` | ✅ 713 pass / 80 files (2026-09-25) |
+| Component tests | `bun run test:components` | ✅ 658 pass / 60 files (2026-09-25) |
+| Integration tests | `bun run test:integration` | ✅ 549 pass / 37 files (2026-09-25) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
-| Migration | `bunx prisma migrate deploy` | ✅ on a fresh database, all four — re-proven continuously: the integration harness and the browser suite's seed project each run it against a database they create |
+| Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx playwright test` | ✅ **153 pass / 0 fail in 2.7 min** (2026-09-12) — full matrix against the Bun-served standalone production build and isolated suite database; missing browsers and WebKit libraries supplied from `/tmp` |
-| Dependency audit | `bun audit` | ✅ clean — 586 packages, 2026-08-28, run in `oven/bun:1.4.0-alpine` because it answers from `bun.lock` and the host's Bun is older than the one that wrote it. It was **2 high** for five days; see *Dependency security* |
+| E2E | `bunx --bun playwright test` | ✅ 154 pass / 0 fail in 3.3 minutes (2026-09-25), Bun driver and Bun standalone server; browser binaries/libraries staged under `/tmp` |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 586 packages (2026-09-25) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
@@ -736,6 +765,8 @@ alert per advisory-path pair.
 
 ## Versions
 
+Application release: **0.1.0-alpha.1**, from `package.json`.
+
 | Package | Version |
 |---|---|
 | next | 16.3.0 |
@@ -746,8 +777,8 @@ alert per advisory-path pair.
 | next-intl | 4.13.4 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
-| bun | 1.4.0 — `.bun-version` and `Dockerfile:40`, compared by a test; the runtime, the test runner and the installer |
-| node | 24-alpine — the base image for all four stages; **no longer the runtime** |
+| bun | 1.4.0 — `.bun-version` and the Dockerfile pin; all application image stages use Bun |
+| node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.3, **devDependency only** — not shipped, not loaded at runtime |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next

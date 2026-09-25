@@ -43,16 +43,15 @@ about one.
 
 | Version | Supported |
 |---|---|
-| Latest image built from `master` | Yes |
-| Anything older | No |
+| Latest published alpha | Best-effort fixes in the next alpha |
+| `master` / `latest` image | Development snapshots |
+| Older releases | No backports |
 
-Stoky is pre-1.0 MVP software on a trunk-only workflow: `master` is the only
-branch, and every push to it that passes CI publishes a new image. There are no
-release branches and no backports. The only supported configuration is the most
-recent image built from `master`.
-
-The `package.json` version field reads `1.0.0`. It is not meaningful and does
-not indicate a stable release.
+Stoky is pre-1.0 alpha software on a trunk-only workflow. `package.json`, the
+release tag and `deploy/example.env` identify the same version. Release notes
+state upgrade limitations; installations pin a release instead of following
+`latest`. There are no release branches or compatibility guarantees for alpha
+schema changes. See [installation](docs/INSTALL.md) and [releasing](docs/RELEASING.md).
 
 ---
 
@@ -81,7 +80,7 @@ Verified against the files named in each row.
   runs `apk upgrade --no-cache` during the build to take Alpine security fixes;
   Trivy scans the completed image before publication.
 
-### Deployment — `docker-compose.prod.yml`
+### Release deployment — `deploy/docker-compose.yml`
 
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
@@ -93,6 +92,7 @@ Verified against the files named in each row.
   ports**. Only Traefik publishes anything, and only 80 and 443.
 - Memory limits on every service, so one runaway process cannot take the host
   down.
+- Traefik uses a read-only file provider, with no Docker socket access.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
   HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
 
@@ -133,7 +133,7 @@ Verified against the files named in each row.
 
 - MIME allowlist (JPEG, PNG, WebP), a 10 MB size cap, and a magic-byte check on
   the decoded buffer.
-- Every accepted image is re-encoded through Sharp to JPEG, which strips EXIF —
+- Every accepted image is re-encoded through `src/server/services/image.ts` (`Bun.Image`) to JPEG, which strips EXIF —
   including any GPS coordinates in a photo of a receipt.
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
@@ -152,8 +152,9 @@ Verified against the files named in each row.
   uploaded as SARIF, and a separate step fails the job on CRITICAL or HIGH
   findings (`ignore-unfixed: true`).
 - The published image carries an **SBOM** (`sbom: true`) and **build provenance**
-  (`provenance: mode=max`), plus a signed provenance attestation pushed to the
-  registry via `actions/attest-build-provenance`.
+  (`provenance: mode=max`), and, for public repositories, a signed provenance attestation pushed to the
+  registry via `actions/attest-build-provenance`. The separate signed attestation
+  is skipped for this private repository; the image SBOM/provenance remain enabled.
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.
@@ -204,7 +205,7 @@ What is still open, and worth knowing before publishing an instance:
 - **Receipt upload is limited too**, at 30 per account per hour, counted
   before the file is decoded. OWASP ASVS **V11.1.4** asks for anti-automation
   on expensive operations, and this is the expensive one: up to 10 MB decoded,
-  re-encoded through Sharp, written to a volume, then handed to Tesseract. It
+  re-encoded through `src/server/services/image.ts` (`Bun.Image`), written to a volume, then handed to Tesseract. It
   is counted per *account* rather than per address, because the caller is
   already authenticated and a household behind one NAT would otherwise share a
   budget for work each member does separately. A refused upload still counts —
@@ -412,26 +413,21 @@ problems. The tree can be verified to contain the right information; whether the
 result *sounds* sensible cannot. Any accessibility score in an older document
 was still not produced by a tool.
 
-### Traefik has the Docker socket, which is root on the host
+### The legacy source-build proxy still has the Docker socket
 
-`docker-compose.prod.yml` mounts `/var/run/docker.sock` into the Traefik
-container. It is mounted read-only, but **read access to the Docker socket is
-effectively root on the host**: it is enough to enumerate containers, read their
-environment (including `NEXTAUTH_SECRET` and the database password), and in
-practice to escalate further. It is there because Traefik's Docker provider
-discovers routes through it.
-
-If that trade is not acceptable — and for an internet-facing box it probably is
-not — put a socket proxy in front of Traefik and expose only the container-list
-endpoint, or replace the Docker provider with a static file provider and drop
-the socket mount entirely.
+`docker-compose.prod.yml` mounts `/var/run/docker.sock` read-only for discovery.
+That still grants access to the Docker API and is a host-level privilege.
+The release bundle in `deploy/` avoids this entirely with a file provider. Prefer
+that bundle; do not copy the legacy socket mount into a release installation.
 
 ### Other things that do not exist
 
-- No error tracking, no monitoring, no application health endpoint. The
-  container health check requests `/login`.
-- No data export and no in-app backup. Backups are entirely the operator's job.
-- No audit log. There is no record of who changed what.
+- No hosted error tracking or monitoring. `/api/health` checks the database/cache.
+- Settings exports household JSON, without receipt files or a restore importer.
+  Full backups remain the operator's job; [the guide](docs/INSTALL.md) covers them.
+- Refusals are audit-logged, but there is no complete history of who changed what.
+- Registration remains open to anyone who can reach the instance. Restrict access
+  to trusted testers; there is no invitation-only switch.
 - No account lockout, no password reset flow, no email verification, no
   two-factor authentication.
 - No secret scanning or SAST in CI. `ci.yml` is the only workflow; Trivy scans
@@ -443,90 +439,46 @@ the socket mount entirely.
 
 ### Before the first start
 
-1. **Generate a real `NEXTAUTH_SECRET`.**
+Follow [the installation guide](docs/INSTALL.md). The released `example.env`
+leaves all four required settings empty; Compose refuses missing values. Generate
+two independent `openssl rand -hex 32` secrets, and keep `.env` private.
+The app rejects short signing keys and the published development placeholder.
 
-   ```bash
-   openssl rand -base64 32
-   ```
-
-   `.env.example` ships the placeholder `your-secret-key-here-change-in-production`.
-   Leaving it in place means anyone who has read the repository can forge a
-   session cookie for your instance.
-
-2. **Change every example password.** `.env.example` contains
-   `POSTGRES_PASSWORD=change-me-in-production`, and `docker-compose.dev.yml`
-   hardcodes `stoky_dev_password`. Both are public knowledge. Set your own, and
-   keep the `.env` file out of version control.
-
-3. **Use `docker-compose.prod.yml` for anything that is not your laptop.**
-   `docker-compose.dev.yml` publishes PostgreSQL on 5432 and Valkey on 6379 to
-   the host, with that known password. It is for local development only. The
-   production file keeps both on an internal network with no published ports —
-   keep it that way, and do not add a `ports:` entry to `db` or `cache` for
-   convenience.
+Use the release bundle, which exposes only Traefik. Development Compose files
+publish local infrastructure and carry known passwords; they are not deployments.
+A proxy that sanitizes forwarded addresses remains mandatory for per-IP limits.
 
 ### Where to run it
 
-**Prefer a private network.** Authentication is rate-limited now, but the
-password policy is still a length check and Phase 7's security review has not
-run, so the safest deployment today is still one that is not reachable from the
-internet at all:
-
-- your LAN only, with no port forwarding on the router; or
-- behind a VPN — WireGuard, or Tailscale, which needs no open inbound port at
-  all.
-
-If you must publish it, put an authenticating reverse proxy in front (basic
-auth, an identity-aware proxy, or your VPN's own gateway) so that the login form
-is not the first thing an anonymous visitor reaches, and use a strong, unique
-password for every account.
-
-`next.config.ts` contains an `allowedDevOrigins` list with the maintainer's LAN
-and Tailscale addresses. It affects `next dev` only and has no effect on a
-production build, but it is worth narrowing to your own addresses if you develop
-on the machine.
+Restrict this alpha to trusted testers through your network or an authenticating
+proxy. The [security review](docs/SECURITY_REVIEW.md) has run and the password
+policy includes common-password/identity checks; neither makes this a stable
+release. The bundled automatic certificate flow needs a hostname and inbound
+TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
 
 ### Keep it updated
 
-Base-image CVEs are fixed by rebuilding, not by patching in place. `node:24-alpine`
-is pinned by tag precisely so that a rebuild picks up Alpine security updates.
+Use exact release tags and follow the target release notes and
+[upgrade/rollback procedure](docs/INSTALL.md#upgrade-and-rollback). Pulling alone
+does not replace running containers; `docker compose up -d --wait` does.
+Do not automatically follow `latest` for an alpha installation.
 
-Note that the `app` service in `docker-compose.prod.yml` is declared with
-`build:`, not `image:`, so `docker compose pull` will not update it. Either
-rebuild from an updated checkout:
-
-```bash
-git pull
-docker compose -f docker-compose.prod.yml build --pull app
-docker compose -f docker-compose.prod.yml up -d
-```
-
-or point the service at the published image
-(`image: ghcr.io/ngarate/stoky:latest`, ideally pinned to a digest) and pull it
-instead.
-
-Trivy fails the build on CRITICAL and HIGH findings that have a fix available,
-so an image that passed CI was clean at publication time — but only at that
-moment. An image left running for six months is not.
+Trivy checks images before publication for fixable CRITICAL/HIGH findings.
+Published images are not continuously rescanned; a clean publication scan is not
+an assurance about vulnerabilities disclosed later. Updates require a newly built
+image, not an in-place package upgrade inside a running container.
 
 ### Back up your data
 
-There is no export feature. Two things hold everything you care about:
-
-- the `postgres_data` volume — the whole database;
-- the `uploads` volume — the receipt images.
-
-Back up both. A database dump alone loses your receipts; copying the volumes
-alone gives an inconsistent database unless the container is stopped. A workable
-pattern is `pg_dump` from inside the `db` container plus a copy of the `uploads`
-volume, taken together, stored off the machine, and **restored at least once** so
-you know the backup works.
-
----
+Preserve a PostgreSQL dump, the uploads volume, the exact Compose file and `.env`
+together. The [backup and restore commands](docs/INSTALL.md#backup-and-restore)
+stop app writes during the copy and restore into an empty installation. Keep
+backups off the host and verify restoration before relying on them. JSON export
+is not a substitute for a database-and-images backup.
 
 ## Verifying an image's provenance
 
-CI publishes signed build provenance to GHCR, so you can check that the image
+On a public repository, CI publishes signed build provenance to GHCR, so you can check that the image
 you are about to run really was built by this workflow, from this repository, at
 a specific commit. With the [GitHub CLI](https://cli.github.com/):
 
@@ -536,7 +488,8 @@ gh attestation verify \
   --repo NGarate/stoky
 ```
 
-Images are tagged `latest` and `sha-<full-commit-sha>`. Pinning to a digest or
+Images are tagged `sha-<full-commit-sha>` and the exact release version on tag
+builds. `latest` is the development channel from `master`. Pinning to a digest or
 to a `sha-` tag rather than `latest` is the safer choice for a deployment you
 want to be reproducible.
 
@@ -548,8 +501,9 @@ docker buildx imagetools inspect \
   --format '{{ json .SBOM }}'
 ```
 
-If verification fails, do not run the image — report it through the advisory
-link at the top of this document.
+For this private repository the signed-attestation step is disabled, so its
+absence is expected. Where attestation is enabled, investigate a failed verification
+before running the image.
 
 ---
 

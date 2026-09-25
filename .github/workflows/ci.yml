@@ -6,6 +6,7 @@ name: CI
 on:
   push:
     branches: [master]
+    tags: ["v*"]
   workflow_dispatch:
 
 # Superseded runs are wasted work on a trunk. Cancel them.
@@ -29,7 +30,6 @@ permissions:
 # Actions are pinned by commit SHA rather than tag: a tag can be moved to point
 # at different code, a SHA cannot. The comment records the human-readable version.
 env:
-  NODE_VERSION: "24"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -53,6 +53,19 @@ jobs:
       # runs before anything else does. Same script runs locally.
       - name: Lint the pipeline itself
         run: bash scripts/check-ci.sh
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: github.ref_type == 'tag'
+        with:
+          bun-version-file: .bun-version
+
+      # A tag must name the version actually packaged. Check this before the
+      # publish gate so a typo cannot create an image with the wrong version.
+      - name: Validate release assets
+        if: github.ref_type == 'tag'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release"
 
       # Every gate below this line runs inside this project's own development
       # image, not on the runner's toolchain.
@@ -231,11 +244,6 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      # Node stays, because the Playwright driver and the `node -p` check below
-      # are Node programs. Only the package manager moved.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
       # The image ships browsers, not a general toolchain, and it has no
       # `unzip` — which setup-bun needs, because Bun is released as a .zip.
       # Without it the job died at "Unable to locate executable file: unzip"
@@ -251,8 +259,8 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      # setup-node's `cache: pnpm` left with pnpm, and setup-bun caches only the
-      # Bun executable — its `no-cache` input is about the binary, not the
+      # setup-bun caches only the Bun executable — its `no-cache` input is
+      # about the binary, not the
       # dependency tree. Without this step every run of this job fetches the
       # whole tree again, inside a ten-minute budget. Keyed on the lockfile, so
       # a dependency change misses and nothing else does.
@@ -280,7 +288,7 @@ jobs:
       # like a broken suite. Said plainly here instead, before anything runs.
       - name: The image and the package must agree on Playwright
         run: |
-          PKG="$(node -p "require('./node_modules/@playwright/test/package.json').version")"
+          PKG="$(bun -p "require('./node_modules/@playwright/test/package.json').version")"
           if [ "$PKG" != "$PLAYWRIGHT_IMAGE_VERSION" ]; then
             echo "::error::@playwright/test is ${PKG}, but this job runs in mcr.microsoft.com/playwright:v${PLAYWRIGHT_IMAGE_VERSION}-noble. Bump the container image and PLAYWRIGHT_IMAGE_VERSION in .github/workflows/ci.yml to ${PKG}, or the browsers will not be the ones this driver expects."
             exit 1
@@ -290,7 +298,7 @@ jobs:
       # `--project` is not narrowed here: the projects that skip the tier sweeps
       # do so in playwright.config.ts, so CI and a local run execute the same
       # matrix. A flag would let the two drift.
-      - run: bunx playwright test
+      - run: bunx --bun playwright test
         env:
           PLAYWRIGHT_PORT: "3000"
 
@@ -362,7 +370,14 @@ jobs:
         # injection, and this one is attacker-influencable in the general case.
         env:
           BEFORE: ${{ github.event.before }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
+          # A release needs its own version tag even when its commit
+          # changed only documentation or was already built on master.
+          if [ "$REF_TYPE" = tag ]; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Empty on workflow_dispatch; all zeros on history rewrites; absent
           # from the clone if the history was rewritten under it. All three
           # mean "cannot know", and "cannot know" means build.
@@ -476,12 +491,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [quality, test, e2e, audit, image-build]
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     permissions:
       contents: read
       packages: write # push to GHCR
       id-token: write # provenance attestation
       attestations: write
     steps:
+      # Rerunning a published tag must not silently replace the image while its
+      # release downloads still describe the previous build. GraphQL returns
+      # null for a missing release; authentication/network failures fail closed.
+      - name: Protect published releases
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          # The dollar variables belong to GraphQL, not the shell.
+          # shellcheck disable=SC2016
+          STATE="$(gh api graphql \
+            -f query='query($owner: String!, $name: String!, $tag: String!) { repository(owner: $owner, name: $name) { release(tagName: $tag) { isDraft } } }' \
+            -f owner="${GH_REPO%/*}" -f name="${GH_REPO#*/}" -f tag="$RELEASE_TAG" \
+            --jq '.data.repository.release | if . == null then "missing" elif .isDraft then "draft" else "published" end')"
+          if [ "$STATE" = published ]; then
+            echo "::error::Release $RELEASE_TAG is already published; create a new version instead of replacing its image."
+            exit 1
+          fi
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
@@ -492,8 +529,13 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # metadata-action otherwise adds latest automatically for tag refs.
+          # latest remains the existing master channel; a prerelease never
+          # changes it. Installations use the full version tag below.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=ref,event=tag
             type=sha,format=long
 
       - name: Log in to the registry
@@ -535,3 +577,77 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  # ---------------------------------------------------------- release-draft --
+  # The release becomes reviewable only after all gates and its image push.
+  # Publishing the draft is the maintainer's last step after an install smoke.
+  release-draft:
+    name: Prepare release draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [image-publish]
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Log in for the published image smoke
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Run the downloaded registry image, including its migrations, against
+      # new volumes. This checks the actual publication, beyond the build and
+      # source tests. Public DNS/certificate issuance is an operator check.
+      - name: Verify the published image on a fresh database
+        env:
+          STOKY_VERSION: ${{ github.ref_name }}
+          EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
+          DOMAIN: release-smoke.invalid
+          ACME_EMAIL: release-smoke@example.invalid
+        run: |
+          POSTGRES_PASSWORD="$(openssl rand -hex 32)"
+          NEXTAUTH_SECRET="$(openssl rand -hex 32)"
+          export POSTGRES_PASSWORD NEXTAUTH_SECRET
+          COMPOSE=(docker compose --project-name "stoky-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file deploy/docker-compose.yml)
+          trap '"${COMPOSE[@]}" logs --tail=100 app db cache; "${COMPOSE[@]}" down --volumes' EXIT
+          "${COMPOSE[@]}" pull app
+          APP_IMAGE="$("${COMPOSE[@]}" config --format json | bun -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).services.app.image")"
+          docker image inspect "$APP_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+            | grep -Fx "${APP_IMAGE%:*}@$EXPECTED_DIGEST"
+          "${COMPOSE[@]}" up -d --wait --wait-timeout 180 app
+          "${COMPOSE[@]}" exec -T -e EXPECTED_VERSION="${STOKY_VERSION#v}" app \
+            bun -e 'if (require("./package.json").version !== process.env.EXPECTED_VERSION) process.exit(1)'
+      - name: Package installation files
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release"
+      - name: Create or refresh the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          PRERELEASE=false
+          case "$RELEASE_TAG" in *-*) PRERELEASE=true ;; esac
+          ASSETS=("$RUNNER_TEMP/release/docker-compose.yml" "$RUNNER_TEMP/release/example.env" "$RUNNER_TEMP/release/traefik.yml" "$RUNNER_TEMP/release/SHA256SUMS")
+          if DRAFT="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$DRAFT" != true ]; then
+              echo "::error::Release $RELEASE_TAG is already published; refusing to replace its assets."
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" "${ASSETS[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --draft --prerelease="$PRERELEASE" --latest=false \
+              --title "Stoky $RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md"
+          else
+            gh release create "$RELEASE_TAG" "${ASSETS[@]}" --verify-tag --draft \
+              --prerelease="$PRERELEASE" --latest=false \
+              --title "Stoky $RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md"
+          fi

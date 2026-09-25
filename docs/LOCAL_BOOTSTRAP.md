@@ -3,6 +3,7 @@
 Updated: 2026-09-25
 
 This is the shortest supported path from clone to a running local app.
+For an installed alpha with prebuilt images, use [Install](INSTALL.md).
 
 There are two of them. **Prefer the container** — it is the same image that
 serves production, and the gap between "works here" and "works there" is where

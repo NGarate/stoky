@@ -1,0 +1,26 @@
+# Descarga junto con docker-compose.yml; no necesita edición.
+# Download beside docker-compose.yml; no editing required.
+# File routing needs no Docker socket or container-discovery privileges.
+# Traefik expands DOMAIN from the environment set by Compose.
+http:
+  routers:
+    stoky:
+      rule: 'Host(`{{ env "DOMAIN" }}`)'
+      entryPoints: [websecure]
+      service: stoky
+      middlewares: [stoky-security]
+      tls:
+        certResolver: letsencrypt
+  services:
+    stoky:
+      loadBalancer:
+        servers:
+          - url: http://app:3000
+  middlewares:
+    stoky-security:
+      headers:
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        frameDeny: true

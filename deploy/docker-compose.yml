@@ -1,0 +1,150 @@
+# Stoky — instalación de la versión publicada / released-image installation.
+# Download this file, traefik.yml and example.env from the SAME release;
+# rename example.env to .env. Requires Docker Compose >= 2.23.1.
+# See https://github.com/NGarate/stoky/blob/master/docs/INSTALL.md
+# Separate from the source checkout's default development project (stoky).
+name: stoky-release
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_READ_SEARCH, FOWNER, SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    environment:
+      POSTGRES_USER: stoky
+      POSTGRES_DB: stoky
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env con openssl rand -hex 32}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - stoky
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U stoky -d stoky"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cache:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    volumes:
+      - valkey_data:/data
+    networks:
+      - stoky
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ghcr.io/ngarate/stoky:${STOKY_VERSION:-v0.1.0-alpha.1}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    environment:
+      NODE_ENV: production
+      # One password configures BOTH services; hex avoids URL escaping issues.
+      DATABASE_URL: "postgresql://stoky:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env con openssl rand -hex 32}@db:5432/stoky?schema=public"
+      VALKEY_URL: redis://cache:6379
+      NEXTAUTH_URL: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?Define NEXTAUTH_SECRET en .env con openssl rand -hex 32}"
+    volumes:
+      - uploads:/app/uploads
+    # Inherit the image's /api/health check and automatic startup migrations.
+    networks:
+      - stoky
+      - traefik
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  traefik:
+    image: traefik:v3.7.13
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    environment:
+      DOMAIN: "${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
+    command:
+      - --api.dashboard=false
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Define ACME_EMAIL en .env}"
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --entrypoints.health.address=:8082
+      - --ping=true
+      - --ping.entrypoint=health
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/letsencrypt
+    configs:
+      - source: traefik_dynamic
+        target: /etc/traefik/dynamic.yml
+    networks:
+      - traefik
+    healthcheck:
+      test: [CMD, traefik, healthcheck, --ping, --ping.entrypoint=health, --entrypoints.health.address=:8082]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# A file source works with read_only containers; inline configs do not.
+# Traefik reads DOMAIN from its environment through Go templating in this file.
+configs:
+  traefik_dynamic:
+    file: ./traefik.yml
+
+volumes:
+  postgres_data:
+  valkey_data:
+  uploads:
+  letsencrypt:
+
+networks:
+  stoky:
+    internal: true
+  traefik:

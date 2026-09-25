@@ -2387,3 +2387,17 @@ The production migration CLI is staged from the same locked dependency tree,
 replacing an independent npm resolution. UID/GID 1000 survives under username
 `bun`, so existing upload volumes retain their ownership. New posture tests are
 watched to fail with a Node base or a Node migration command restored.
+
+**D122 — The alpha installs from a release bundle, with a reviewable publication.**
+Following Immich's download/configure/start pattern, operators receive versioned
+Compose, environment and Traefik files plus checksums. Deriving connection URLs
+eliminates the old password/host mismatch. The third file is necessary: actual
+Compose startup refused inline config in read-only Traefik. A file provider keeps
+both the read-only boundary and the absence of Docker socket access. The project
+name is distinct from development, while migration instructions require preserving
+an existing deployment's volume identities. No repository/package visibility was
+changed. Version tags run every gate, publish an exact image, smoke-test that
+published digest with empty volumes and prepare a draft; reviewed alphas are
+published as prereleases. `latest` remains the master development channel. The
+first release records unsupported ARM/HEIC and outstanding human checks instead
+of presenting alpha verification as stable-product support.

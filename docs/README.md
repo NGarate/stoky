@@ -53,7 +53,9 @@ document.
 | How do I run the manual screen-reader pass? | `SCREEN_READER_PASS.md` |
 | What is the threat model, and what is hardened? | `SECURITY.md` |
 | What did the security review find, and what is still open? | `SECURITY_REVIEW.md` |
-| How do I get this running? | `LOCAL_BOOTSTRAP.md` |
+| How do I install or upgrade a released version? | `INSTALL.md` |
+| How do I get a development checkout running? | `LOCAL_BOOTSTRAP.md` |
+| How do I publish a release? | `RELEASING.md` |
 | Which command do I run, and what does it prove? | `VERIFICATION_SEQUENCE.md` |
 | How are the test suites configured? | `TEST_SETUP.md` |
 | What does the product do? | `README.md` (root) |
@@ -198,6 +200,14 @@ production build it drives.
 **[`LOCAL_BOOTSTRAP.md`](LOCAL_BOOTSTRAP.md)**
 Clone to running app, the shortest supported path. Read this before asking why
 something will not start.
+
+**[`INSTALL.md`](INSTALL.md)**
+Operator instructions for release assets, configuration, startup, backup/restore,
+upgrades and troubleshooting. Owns the self-hosted installation path.
+
+**[`RELEASING.md`](RELEASING.md)**
+Maintainer checklist for versioning, verification, tagging and publishing. Release
+notes live in `docs/releases/` and describe the specific tagged version.
 
 ### Historical — do not update, do not act on
 

@@ -9,15 +9,11 @@ there is no external service holding your data.
 **Primary language:** Spanish (`es`), with English (`en`) as secondary.
 **Default currency:** EUR.
 
-> **Status:** MVP feature-complete against its plan, unreviewed for public
-> exposure. Both entry screens exist — `/shopping` for the phone, `/kitchen`
-> for the tablet — a whole shop works in aeroplane mode and applies exactly
-> once on reconnect, receipts scan air-gapped, and the product rating explains
-> itself or honestly declines to exist. The design system is 26 theme tokens
-> in CSS, light and dark, with a WCAG AAA floor enforced by the suites.
-> What remains: the Phase 7 security review document, and the human passes no
-> suite can answer. See [`docs/STATUS.md`](docs/STATUS.md) for the
-> command-verified breakdown of what works and what does not.
+> **Status: v0.1.0-alpha.1 — first alpha.** Intended for testing with backups,
+> with Spanish as the default language and EUR as the default currency. Inventory,
+> receipt review, prices, shopping and offline shopping synchronization are built.
+> See [installation](docs/INSTALL.md), [release notes](docs/releases/v0.1.0-alpha.1.md)
+> and the [verified status and known gaps](docs/STATUS.md).
 
 ---
 
@@ -50,7 +46,16 @@ constraint for the MVP.
 
 ---
 
-## Getting started
+## Install the alpha
+
+Follow **[Install with Docker Compose](docs/INSTALL.md)**. Download the files
+attached to `v0.1.0-alpha.1`, set the hostname, certificate email and two secrets,
+then run `docker compose up -d --wait`. The release runs from a prebuilt Linux
+amd64 image; it does not require a source checkout or a local Node/Bun installation.
+The guide covers private GitHub/GHCR access, first registration, backup/restore,
+upgrades and troubleshooting.
+
+## Development from source
 
 ### Prerequisites
 
@@ -114,7 +119,7 @@ Re-running the seed is safe — it clears the demo household first.
 bun run dev                  # dev server on :3000
 bun run dev:services         # start db + cache
 bun run dev:services:down    # stop them
-bunx --bun prisma studio           # visual database browser
+bunx --bun prisma studio     # visual database browser
 ```
 
 ### Verification
@@ -188,9 +193,10 @@ Code is organised by **domain**, not by technical layer.
 - **tRPC as the API layer.** Every procedure takes a Zod input schema. Types
   flow to the client automatically; Superjson handles serialisation.
 - **Zod schemas live in `src/lib/validations/`** and are imported by both sides.
-- **Server Components fetch, Client Components interact** — explicit
-  `"use client"` boundaries.
-- **TanStack Query for server state.** Local UI state is React's; there is no separate client-state library.
+- **Dashboard Client Components fetch through tRPC and TanStack Query**, so
+  persisted reads and offline shopping remain available without a server render.
+- **TanStack Query owns server state; React owns local UI state.** The one Zustand
+  store holds the cross-tab offline write queue.
 - **Receipt pipeline:** upload → OCR → parse → match → review → apply.
   `ReceiptStatus` is a state machine with strict phase progression.
 - **Product matching** uses PostgreSQL `pg_trgm`: auto-match above 0.7,
@@ -215,9 +221,9 @@ reachable. Passwords follow NIST SP 800-63B: twelve characters minimum, no
 composition rules, common-password and identity checks, a maximum so Argon2id
 never takes unbounded input.
 
-**Still not published-ready:** Phase 7's security review has not been written,
-and that is the gate — nothing ships to a public address until it passes.
-Prefer a LAN or a VPN. See `SECURITY.md` for what is and is not covered.
+The [security review](docs/SECURITY_REVIEW.md) records completed fixes and
+remaining operator responsibilities. This alpha still requires a trusted proxy,
+restricted tester access and operator-managed backups; read [Security](SECURITY.md).
 
 ---
 
@@ -248,7 +254,7 @@ is not a test — this repository has been burned by that before, see the note i
 
 ## Documentation
 
-**[`docs/README.md`](docs/README.md) indexes all thirteen documents** — what each
+**[`docs/README.md`](docs/README.md) indexes the project documents** — what each
 contains, when to read it, when to write to it, and which one owns which
 question. Start there; the table below is the short version.
 
@@ -256,7 +262,7 @@ question. Start there; the table below is the short version.
 |---|---|
 | [`docs/README.md`](docs/README.md) | **Index. Start here** — reading order and document ownership |
 | [`docs/STATUS.md`](docs/STATUS.md) | Where the project actually is, with gate results |
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | What is done, and the 26 decisions taken without asking |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | Completed work and decision records |
 | [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) | What is being built, in what order, and what done means |
 | [`docs/DESIGN_AUDIT.md`](docs/DESIGN_AUDIT.md) | The interface and WCAG AAA audit, with numbered actions |
 | [`SECURITY.md`](SECURITY.md) | Threat model and hardening for a self-hosted deployment |
@@ -271,12 +277,9 @@ question. Start there; the table below is the short version.
 
 ## Deployment
 
-```bash
-docker compose -f docker-compose.prod.yml up -d
-```
-
-Adds Traefik v3 for TLS termination. Set `DOMAIN`, `ACME_EMAIL`,
-`POSTGRES_PASSWORD` and a real `NEXTAUTH_SECRET` in `.env` first.
+[The release installation guide](docs/INSTALL.md) is the supported path for
+self-hosting an alpha. `docker-compose.prod.yml` remains the source-build
+configuration for development/diagnosis; it is not the downloadable release bundle.
 
 ## Licence
 
