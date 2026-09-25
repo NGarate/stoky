@@ -40,7 +40,7 @@ setup("seed the demo household", async () => {
   // the committed migrations; on an already-migrated database it is a no-op.
   // Doing it here rather than in a workflow step means local and CI runs have
   // one setup path, and a fresh clone needs no manual step.
-  const migrate = await run("bunx", ["prisma", "migrate", "deploy"], {
+  const migrate = await run("bunx", ["--bun", "prisma", "migrate", "deploy"], {
     env,
     timeout: 120_000,
   }).catch((error: unknown) => ({ stdout: "", stderr: String(error) }));
@@ -50,9 +50,8 @@ setup("seed the demo household", async () => {
     `\`prisma migrate deploy\` failed against the suite's database.\n${migrate.stderr}`,
   ).toMatch(/have been applied|No pending migrations|up to date/);
 
-  // No `cwd`: Playwright's loader hands this file to CommonJS, where
-  // `import.meta` is a syntax error, and `bun run` walks up to the nearest
-  // package.json on its own — so the inherited working directory is enough.
+  // Playwright runs from the repository root, where the db:seed script lives.
+  // Inherit that working directory rather than switching to the ESM test scope.
   const result = await run("bun", ["run", "db:seed"], {
     env,
     // A seed that hangs must not eat the suite's whole budget.

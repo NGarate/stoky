@@ -8,11 +8,11 @@
     "dev:services": "docker compose -f docker-compose.dev.yml up -d",
     "dev:services:down": "docker compose -f docker-compose.dev.yml down",
     "dev:services:logs": "docker compose -f docker-compose.dev.yml logs -f",
-    "build": "next build",
+    "build": "bun --bun node_modules/next/dist/bin/next build",
     "start": "bun --bun node_modules/next/dist/bin/next start",
-    "lint": "oxlint",
-    "typecheck": "tsc --noEmit",
-    "check:react": "react-doctor . --no-telemetry --no-warnings --blocking error --max-duration 120",
+    "lint": "bun --bun node_modules/oxlint/bin/oxlint",
+    "typecheck": "bun --bun node_modules/typescript/bin/tsc --noEmit",
+    "check:react": "bun --bun node_modules/react-doctor/bin/react-doctor.js . --no-telemetry --no-warnings --blocking error --max-duration 120",
     "check:contrast": "bun scripts/check-contrast.ts",
     "check:links": "bun scripts/check-links.ts",
     "test": "bun run test:unit && bun run test:components && bun run test:integration",
@@ -22,9 +22,9 @@
     "test:integration:only": "bun test src/__tests__/integration",
     "verify:local": "bash scripts/verify-local.sh",
     "verify:ci": "bash scripts/verify-local.sh --ci",
-    "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate",
-    "db:seed": "prisma db seed"
+    "db:migrate": "bun --bun node_modules/prisma/build/index.js migrate dev",
+    "db:generate": "bun --bun node_modules/prisma/build/index.js generate",
+    "db:seed": "bun --bun node_modules/prisma/build/index.js db seed"
   },
   "keywords": [
     "inventory",

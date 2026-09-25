@@ -1,6 +1,6 @@
 # Stoky Local Bootstrap
 
-Updated: 2026-09-08
+Updated: 2026-09-25
 
 This is the shortest supported path from clone to a running local app.
 
@@ -12,12 +12,15 @@ to iterate in, not because it is more correct.
 ## Host prerequisites
 
 - Docker with the daemon running
-- Node.js 24 — the install scripts `bun install` runs are Node programs
-  (`argon2`, Prisma, `@parcel/watcher`), so installing still needs it; running
-  the app does not
 - **Bun**, at the version in `.bun-version`. It is the package manager as well
   as the runtime — `bun run dev` and `bun run start` both run `bun --bun` — so
   without it nothing below works, starting with `bun: not found`
+
+Dependency installation, Next builds, Prisma commands and the application all
+run with Bun. The Dockerfile uses the pinned Bun Alpine image in every stage.
+That image includes a compatibility command named `node` which resolves to Bun;
+there is no separate Node.js runtime or npm installation. Production runs as
+`bun` (UID/GID 1000), preserving ownership of existing upload volumes.
 
 That version is a floor, not a suggestion, and nothing enforces it for you any
 more. `bun.lock` is lockfileVersion 2, written by the pinned Bun; an older one
@@ -30,11 +33,11 @@ an error. `scripts/dev-local.sh` compares `bun --version` against
 ## Fast path
 
 ```bash
-bun install
+bun install --frozen-lockfile
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up -d db cache
-bunx prisma generate
-bunx prisma migrate dev
+bunx --bun prisma generate
+bunx --bun prisma migrate dev
 bun run dev
 ```
 
@@ -124,8 +127,8 @@ bash scripts/dev-local.sh --seed
 Bootstrap is only considered complete when all of the following are true:
 
 1. `docker compose -f docker-compose.dev.yml ps` shows healthy `db` and `cache`
-2. `bunx prisma generate` succeeds
-3. `bunx prisma migrate dev` succeeds
+2. `bunx --bun prisma generate` succeeds
+3. `bunx --bun prisma migrate dev` succeeds
 4. the Next dev server responds on `http://localhost:3000`
 5. `/login` and `/register` render without server errors
 

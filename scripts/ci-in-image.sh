@@ -48,8 +48,8 @@ if [ "$SUITE" != "quality" ] && [ "$SUITE" != "test" ]; then
 fi
 
 echo "==> Building the development image"
-# `--target development`, not the production stage: this one carries Bun and
-# git, which the suites need and a deployed image has no business holding.
+# `--target development`: it adds Bash and Git for the suites, while both
+# stages carry the same Bun runtime. It trusts the /app checkout mounted below.
 docker build --target development --tag "$IMAGE_TAG" .
 
 case "$SUITE" in
@@ -65,10 +65,10 @@ case "$SUITE" in
     # on an already-prepared one is a migration that fails on somebody's first
     # install — which is what happened with pg_trgm.
     #
-    # `bunx prisma`, because prisma is a binary rather than a script; and
+    # `bunx --bun prisma`, because prisma is a binary rather than a script; and
     # `bun run test:*` rather than `bun test:*`, because the bare form would
     # invoke Bun's own runner and sweep every suite at once.
-    COMMANDS='bunx prisma migrate deploy \
+    COMMANDS='bunx --bun prisma migrate deploy \
       && bun run test:unit \
       && bun run test:components \
       && bun run test:integration:only'

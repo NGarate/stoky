@@ -64,15 +64,22 @@ Verified against the files named in each row.
 
 - Multi-stage build. The compiler toolchain needed for `argon2` and `@swc/core`
   stays in the `deps` stage and never reaches the production image.
-- The production image runs as `USER node`, not root.
+- All application image stages use the pinned `oven/bun` Alpine image. Bun
+  installs dependencies, builds Next, runs migrations and serves the app.
+  The upstream `node` compatibility command resolves to the Bun executable;
+  no separate Node.js runtime, npm or npx is installed.
+- The production image runs as `USER bun`, not root. Its UID/GID is 1000,
+  matching the former `node` account so existing upload volumes remain writable.
 - `dumb-init` is PID 1, so signals are forwarded and zombies reaped.
-- The Prisma CLI is installed at build time into `/opt/prisma`. Container start
-  used to fetch an unpinned CLI over the network on every boot; it no longer
-  touches the network at start-up.
-- A `HEALTHCHECK` lets the orchestrator restart a wedged container.
-- The base image is pinned by tag rather than digest, deliberately, so that
-  Alpine security updates arriving in `node:24-alpine` rebuilds are picked up.
-  The Trivy gate in CI is what catches a base image that has gone stale.
+- The Prisma CLI and its dependency tree are copied into `/opt/prisma` from
+  the same frozen Bun installation used to build the application. There is
+  no second package resolution or npm installation. Startup runs that bundled
+  CLI through Bun and does not download packages or OCR language data.
+- A `HEALTHCHECK` reports database/cache reachability through `/api/health`.
+  Docker does not restart a running container solely because it is unhealthy.
+- The Bun base image uses the version pinned in `.bun-version`. Production
+  runs `apk upgrade --no-cache` during the build to take Alpine security fixes;
+  Trivy scans the completed image before publication.
 
 ### Deployment — `docker-compose.prod.yml`
 

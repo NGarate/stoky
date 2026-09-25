@@ -32,10 +32,9 @@
   // stop a suite somebody else was watching.
   "shutdownAction": "none",
 
-  // Node is the base and Bun is on top, which is production's shape. Neither
-  // is installed here — the image already carries both, pinned, and installing
-  // a second copy through a devcontainer feature is how the editor comes to
-  // run a different version from the one that serves requests.
+  // The image already carries the same pinned Bun as production. Installing
+  // another runtime through a devcontainer feature would make the editor
+  // disagree with the environment that serves requests.
   "features": {},
 
   // Nothing. Which extensions somebody wants is theirs to decide, and a list

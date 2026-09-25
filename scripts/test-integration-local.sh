@@ -146,7 +146,7 @@ export NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-test-secret}"
 echo "Applying database migrations..."
 # `bunx`, not `bun run`: prisma is a binary in node_modules/.bin, not a script
 # in package.json, and `bun run prisma` would look for the latter and find none.
-bunx prisma migrate deploy
+bunx --bun prisma migrate deploy
 
 if [ "${1:-}" = "--" ]; then
   shift

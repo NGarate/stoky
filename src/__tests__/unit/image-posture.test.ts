@@ -9,16 +9,16 @@ import { join } from "node:path";
  * `SECURITY_REVIEW.md` §7 named this the one posture check that had become no
  * test: the image runs as an unprivileged user, ships no npm, and is served
  * on a read-only root filesystem. Each property is one directive away from
- * being lost — a later `USER root`, a dropped `rm -rf`, a `read_only: false` —
+ * being lost — a later `USER root`, a Node base, a `read_only: false` —
  * and none of those would fail the build or any other test.
  *
  * This is the text half, in the shape of `bun-version.test.ts` and
  * `ocr-tessdata.test.ts`: it proves the directives are present and consistent.
- * Whether they *hold* on the built image — that `id -un` is really `node`,
+ * Whether they *hold* on the built image — that `id -un` is really `bun`,
  * that npm is really gone, that the container really starts read-only — is the
- * behavioural half, and belongs to the CI image job, which runs the image the
- * scan is about to publish. The two are complementary: this catches the edit,
- * that catches the reality.
+ * behavioural half. The release job starts the published image against fresh
+ * volumes, after all gates and the image scan; local installation tests also
+ * exercise proxy routing and restore. Static checks alone do not prove startup.
  */
 const ROOT = join(import.meta.dir, "..", "..", "..");
 
@@ -32,36 +32,37 @@ function productionStage(): string {
 }
 
 describe("the production image drops privilege", () => {
-  it("runs as node, and never returns to root after", () => {
+  it("runs as bun, and never returns to root after", () => {
     const stage = productionStage();
-    expect(stage).toContain("\nUSER node");
+    expect(stage).toContain("\nUSER bun");
     // A `USER root` after the drop would silently undo it. There must be none
-    // in the production stage after the `USER node` line.
-    const afterDrop = stage.slice(stage.indexOf("\nUSER node"));
+    // in the production stage after the `USER bun` line.
+    const afterDrop = stage.slice(stage.indexOf("\nUSER bun"));
     expect(afterDrop).not.toContain("USER root");
   });
 
   it("keeps the uploads directory writable by that user", () => {
-    // Without this, `USER node` turns the first receipt upload into EACCES —
+    // Without this, `USER bun` turns the first receipt upload into EACCES —
     // the failure mode the Dockerfile comment records.
-    expect(productionStage()).toContain("chown -R node:node /app/uploads");
+    expect(productionStage()).toContain("chown -R bun:bun /app/uploads");
   });
 });
 
-describe("the production image ships no npm", () => {
-  it("deletes npm in the same RUN that installed with it", () => {
+describe("the application images use only the Bun runtime", () => {
+  it("derives all stages from the pinned Bun image", () => {
+    const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
+    const bases = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
+    expect(bases[0]).toMatch(/^oven\/bun:[\d.]+-alpine$/);
+    expect(bases.slice(1)).toEqual(["bun", "bun", "bun", "bun"]);
+    const instructions = dockerfile.replace(/^#.*$/gm, "");
+    expect(instructions).not.toMatch(/npm (?:install|init)\b|apk add[^\n]*nodejs/);
+  });
+
+  it("runs migrations explicitly with Bun and uses the locked CLI", () => {
     const stage = productionStage();
-    // npm is used once, to install the Prisma CLI, then removed on the last
-    // line of the same RUN so no layer carries it. The removal must come
-    // after the last npm invocation in the stage — otherwise a later layer
-    // ships npm and its vendored advisories (Dockerfile's own reasoning).
-    const removal = stage.indexOf(
-      "rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx",
-    );
-    expect(removal).toBeGreaterThan(-1);
-    const lastNpmUse = stage.lastIndexOf("npm install");
-    expect(lastNpmUse).toBeGreaterThan(-1);
-    expect(removal).toBeGreaterThan(lastNpmUse);
+    expect(stage).toContain("COPY --from=builder /opt/prisma/ /opt/prisma/");
+    expect(stage).toContain("bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy");
+    expect(stage).toContain("&& exec bun server.js");
   });
 });
 

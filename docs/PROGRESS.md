@@ -2364,3 +2364,26 @@ The persisted read version changes with that basis. Queued list quantity edits
 carry their unit; legacy edits lacking one are refused rather than reinterpreted.
 The two-tap regression proves two rows and 36 → 34 eggs, including replay of an
 already saved operation. No physical count or historical intent was guessed.
+
+**D120 — The development image must run the checkout's own verification.**
+The first-alpha preparation inspected the failed GitHub run rather than
+assuming the documented Bun flake: seven failures came from missing Bash and
+Git refusing the host-owned `/app` checkout. Bash belongs in the development
+stage because bootstrap tests execute the actual shell script. Git trusts
+exactly `/app` at system scope there because that is the intentional CI and
+development mount; a wildcard would trust unrelated repositories too.
+Production receives neither change. Existing behavioural tests caught both
+defects and were watched to fail again with Bash removed or system Git config
+disabled in disposable containers, then pass in the intact image (BUILD-2).
+
+**D121 — Bun is the only application runtime, including install and migrations.**
+The owner rejected the first-alpha image retaining Node 24. All Docker stages now
+use the pinned Bun base, and build/Prisma commands select Bun explicitly. The
+upstream `node` command is a symlink to Bun, verified by its resolved executable
+and `process.versions.bun`; it is not a second JavaScript runtime. The old claim
+that package lifecycle scripts required Node was disproven with a fresh locked
+install plus Argon2, SWC, watcher and Sharp probes and a complete Next build.
+The production migration CLI is staged from the same locked dependency tree,
+replacing an independent npm resolution. UID/GID 1000 survives under username
+`bun`, so existing upload volumes retain their ownership. New posture tests are
+watched to fail with a Node base or a Node migration command restored.

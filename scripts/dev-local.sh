@@ -183,10 +183,10 @@ ok "Dependencies match bun.lock"
 # ---------------------------------------------------------------------------
 header "Running database migrations"
 
-bunx prisma generate
+bunx --bun prisma generate
 ok "Prisma client generated"
 
-bunx prisma migrate dev
+bunx --bun prisma migrate dev
 ok "Migrations applied"
 
 # ---------------------------------------------------------------------------
@@ -194,7 +194,7 @@ ok "Migrations applied"
 # ---------------------------------------------------------------------------
 if $SEED; then
     header "Seeding database"
-    bunx prisma db seed
+    bunx --bun prisma db seed
     ok "Database seeded"
 fi
 
@@ -214,7 +214,7 @@ echo -e "  ${BLUE}Useful commands:${NC}"
 echo "    bun run dev:services        Start Docker services"
 echo "    bun run dev:services:down   Stop Docker services"
 echo "    bun run dev:services:logs   Tail service logs"
-echo "    bunx prisma studio          Visual DB browser"
+echo "    bunx --bun prisma studio          Visual DB browser"
 echo ""
 
 if $START_APP; then

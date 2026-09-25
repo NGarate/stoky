@@ -62,8 +62,8 @@ describe("local bootstrap dependency installation", () => {
       expect(result.exitCode).toBe(0);
       expect(result.calls).toEqual([
         "bun install --frozen-lockfile",
-        "bunx prisma generate",
-        "bunx prisma migrate dev",
+        "bunx --bun prisma generate",
+        "bunx --bun prisma migrate dev",
       ]);
     });
   }
@@ -79,8 +79,8 @@ describe("local bootstrap dependency installation", () => {
     expect(result.exitCode).toBe(0);
     expect(result.calls).toEqual([
       "bun install --frozen-lockfile --force",
-      "bunx prisma generate",
-      "bunx prisma migrate dev",
+      "bunx --bun prisma generate",
+      "bunx --bun prisma migrate dev",
     ]);
     expect(result.pnpmMarker).toBe(false);
   });

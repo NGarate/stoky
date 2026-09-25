@@ -13,6 +13,11 @@ version`, ignores it and resolves an unpinned tree rather than stopping — only
 `--frozen-lockfile` turns that into an error. `STATUS.md` owns the version
 table.
 
+All application Docker stages and project JavaScript commands now run on Bun.
+Use `bunx --bun playwright test` for the browser driver; the E2E directory
+declares ES modules so Bun retains its TypeScript loader (see `TEST_SETUP.md`).
+The `node` command in the Bun image is a compatibility symlink to Bun itself.
+
 ## Command ladder
 
 ### 1. Fast local gate
@@ -60,7 +65,7 @@ Run when a slice changes visible flows in auth, inventory, receipts, shopping,
 or prices:
 
 ```bash
-bunx playwright test e2e/critical-paths.spec.ts
+bunx --bun playwright test e2e/critical-paths.spec.ts
 ```
 
 ## Environment assumptions

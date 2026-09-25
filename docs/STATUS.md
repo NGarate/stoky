@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-09-12
+Updated: 2026-09-25
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,32 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-09-25 Bun-only image:** every application Docker stage now derives from
+`oven/bun:1.4.0-alpine`; build, migration and serving commands explicitly select
+Bun. The upstream `node` compatibility symlink resolves to `/usr/local/bin/bun`,
+verified inside the production image; no separate Node.js, npm or npx is present.
+The Prisma CLI is copied with its dependency graph from the frozen installation,
+including nested/scoped packages and relocatable links, rather than resolved again
+with npm. Five behavioral staging tests pass on both host Bun 1.4.2 and image
+Bun 1.4.0; mutations to required/optional traversal make every test fail.
+
+`bash scripts/ci-in-image.sh quality` passes in the pinned Bun-only development
+image, followed by passing unit and component suites. The original CI's seven Bash
+and Git-ownership failures are fixed (ISSUES BUILD-2) and reproduced by removing
+the protections. `bunx --bun playwright test` passes **154/154 in 3.3 minutes**;
+`e2e/package.json` declares ES modules because Playwright's CommonJS TypeScript
+loader overwrites Bun's loader. Removing the marker makes test discovery fail.
+
+`docker build --target production -t stoky:bun-alpha-test .` succeeds. Isolated
+Compose smoke/restore projects start the new image read-only with healthy
+PostgreSQL and Valkey, apply/check migrations, preserve UID/GID 1000 uploads, and
+serve `/api/health` with status `ok`. A test household and an upload sentinel
+survive a dump/archive restore into separate empty volumes. A real Tesseract worker
+recognizes `TOTAL 12.34 EUR` with `--network none --read-only --tmpfs /tmp`, using
+only the bundled Spanish model. This tests packaging/runtime, not OCR accuracy on
+household receipts. Browser registration reaches the authenticated dashboard.
+
 
 **2026-09-12 stock integrity (INV-3):** `bun run verify:ci` passes: 695 unit,
 658 component and 549 integration tests, plus the production build (79 seconds).

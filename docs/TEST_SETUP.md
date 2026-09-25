@@ -65,8 +65,15 @@ bun run test:integration
 bun run test
 
 # 5. Run E2E tests
-bunx playwright test
+bunx --bun playwright test
 ```
+
+The Playwright driver also runs under Bun. `e2e/package.json` marks only the
+browser tests as ES modules so Playwright imports them through Bun's native
+TypeScript loader. In Playwright 1.62.1, the CommonJS path replaces `.ts` loaders
+with the JavaScript loader; without this scope, `bunx --bun playwright test
+--list` fails on TypeScript imports before any test runs. The nested file sets
+module format only; it declares no package, dependencies or workspace.
 
 ## Test Database Configuration
 
@@ -141,16 +148,16 @@ KEEP_TEST_SERVICES=true bun run test:integration
 ### E2E Tests
 ```bash
 # Run all E2E tests
-bunx playwright test
+bunx --bun playwright test
 
 # Run specific test file
-bunx playwright test e2e/critical-paths.spec.ts
+bunx --bun playwright test e2e/critical-paths.spec.ts
 
 # Run with UI mode for debugging
-bunx playwright test --ui
+bunx --bun playwright test --ui
 
 # Run in headed mode (see browser)
-bunx playwright test --headed
+bunx --bun playwright test --headed
 ```
 
 **It owns its data.** The suite runs against its **own database and cache** —

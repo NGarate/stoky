@@ -29,8 +29,9 @@ currency is EUR.
 ## The runtime is Bun
 
 Not Node, and not only for the test runner. `bun run dev`, `bun run start` and
-the production image all run Bun; `node:24-alpine` is the base image and
-supplies the tooling, nothing more. Two consequences worth having in mind
+the production image all run Bun. Every application Docker stage uses the pinned
+`oven/bun` base. Its `node` compatibility symlink also executes Bun; there is no
+separate Node.js runtime or npm installation. Two consequences worth having in mind
 before writing server code:
 
 - Bun's own APIs are available. Image processing already uses `Bun.Image`

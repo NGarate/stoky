@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-09-12
+**Last Updated:** 2026-09-25
 
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
@@ -86,6 +86,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
+| BUILD-2 | Development image cannot run Bash fixtures or inspect its mounted checkout | ✅ Resolved 2026-09-25 — Bash installed and Git trusts only `/app` |
 | RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
@@ -3020,6 +3021,37 @@ so the image's runner reaches no gate. `defd147` changed that: `quality` and
 `test` build `target: development` and run their suites inside it, so the
 image's bun now runs both. Measured before the change landed — `quality` green
 in the image, and `test` at 609 unit, 611 component, 486 integration.
+
+### ✅ BUILD-2: Development image cannot run the tests CI mounts into it
+
+**Files:** `Dockerfile`, `scripts/ci-in-image.sh`
+**Severity:** HIGH — image publication blocked
+**Status:** RESOLVED 2026-09-25
+
+[CI run 34907244706](https://github.com/NGarate/stoky/actions/runs/34907244706)
+failed seven unit tests. Five bootstrap tests could not spawn `bash`, which
+the Alpine development image did not install. Two tests that inspect the
+checkout failed Git's ownership check: the runner owns the bind-mounted
+`/app`, while the container runs as root. Neither failure was TEST-5.
+
+The development stage now installs Bash and configures Git's system
+`safe.directory` for exactly `/app`. Production gains neither tool nor this
+trust setting. The existing tests provide the regression check: in disposable
+containers, removing Bash reproduced the five failures, and disabling system
+Git configuration reproduced the two ownership failures. With the image
+intact, all 24 tests across `dev-local.test.ts`, `service-worker.test.ts` and
+`ledger-shas.test.ts` pass against the mounted checkout.
+
+Reproduce the passing check after building the development image:
+
+```bash
+docker build --target development -t stoky-dev:ci .
+docker run --rm -v "$PWD:/app:ro" -v /app/node_modules stoky-dev:ci \
+  bun test src/__tests__/unit/dev-local.test.ts \
+  src/__tests__/unit/service-worker.test.ts src/__tests__/unit/ledger-shas.test.ts
+```
+
+---
 
 ### ✅ TEST-7: ProductRating tests fail in the component suite but pass alone
 

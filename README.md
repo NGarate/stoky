@@ -38,10 +38,11 @@ there is no external service holding your data.
 Next.js 16 (App Router) · TypeScript 5 strict · tRPC 11 · Prisma 6 ·
 PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Auth.js v5 (Argon2id) ·
 Tailwind CSS 4 · TanStack Query v5 · next-intl v4 ·
-Tesseract.js · Sharp
+Tesseract.js · Bun.Image
 
-Tooling: Bun 1.4 (package manager and test runner), oxlint, Playwright,
-Docker Compose.
+Runtime and tooling: Bun 1.4 (dependency installation, builds, migrations,
+server and tests), oxlint, Playwright and Docker Compose. Every application image
+stage uses the pinned Bun Alpine base; no separate Node.js runtime is installed.
 
 **Single repository, single Next.js application — not a monorepo.** tRPC needs
 client and server colocated for end-to-end type inference. This is an enforced
@@ -57,18 +58,17 @@ constraint for the MVP.
   `docker ps`. If that says *permission denied*, run
   `sudo usermod -aG docker $USER && newgrp docker` — see
   [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md).
-- **Node.js 24 LTS**
 - **Bun**, at the version in `.bun-version` — it installs the dependencies,
   runs the app and runs the test suites. An older one cannot read `bun.lock`
 
 ### Setup
 
 ```bash
-bun install
+bun install --frozen-lockfile
 cp .env.example .env                                  # then set NEXTAUTH_SECRET
 docker compose -f docker-compose.dev.yml up -d db cache
-bunx prisma generate
-bunx prisma migrate dev
+bunx --bun prisma generate
+bunx --bun prisma migrate dev
 bun run dev
 ```
 
@@ -114,7 +114,7 @@ Re-running the seed is safe — it clears the demo household first.
 bun run dev                  # dev server on :3000
 bun run dev:services         # start db + cache
 bun run dev:services:down    # stop them
-bunx prisma studio           # visual database browser
+bunx --bun prisma studio           # visual database browser
 ```
 
 ### Verification
@@ -126,7 +126,7 @@ gate proves.
 ```bash
 bun run verify:local         # lint + typecheck + unit + component tests
 bun run verify:ci            # the above + integration tests + build
-bunx playwright test e2e/critical-paths.spec.ts
+bunx --bun playwright test e2e/critical-paths.spec.ts
 ```
 
 Individually:
@@ -146,8 +146,8 @@ own will fail.
 ### Database
 
 ```bash
-bunx prisma migrate dev        # create + apply a migration
-bunx prisma migrate deploy     # apply in production
+bunx --bun prisma migrate dev        # create + apply a migration
+bunx --bun prisma migrate deploy     # apply in production
 bun run db:seed                # demo data
 ```
 
@@ -202,7 +202,7 @@ Code is organised by **domain**, not by technical layer.
 
 - Passwords hashed with Argon2id (64 MB, 3 iterations).
 - Receipt uploads are validated by MIME type and magic bytes, re-encoded with
-  Sharp to strip EXIF, stored under UUID filenames in an isolated volume, and
+  `Bun.Image` to strip EXIF, stored under UUID filenames in an isolated volume, and
   served only through authenticated tRPC queries.
 - Only Traefik exposes ports in production; PostgreSQL and Valkey have none.
 - Raw SQL only through parameterised tagged template literals.
