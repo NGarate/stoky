@@ -3,7 +3,9 @@
 import { useFormatter, useTranslations } from "next-intl";
 import { BackLink } from "@/components/ui/back-link";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
@@ -23,6 +25,22 @@ import type { JSX } from "react";
  * only place that says when each change was made — which is the thing that
  * makes "was this the milk from Tuesday?" answerable.
  */
+
+/**
+ * What state the change is in, as a badge.
+ *
+ * `warn` for the two that are questions for a person — reconcile, or name a
+ * scan — and `danger` for the rest, which did not save. The reason below says
+ * the same in a sentence, so the tone is never the only carrier.
+ */
+function statusOf(reason: FailureReason): {
+  tone: "warn" | "danger";
+  key: "unsavedStatusCheck" | "unsavedStatusName" | "unsavedStatusFailed";
+} {
+  if (reason === "needs-reconciliation") return { tone: "warn", key: "unsavedStatusCheck" };
+  if (reason === "needs-review") return { tone: "warn", key: "unsavedStatusName" };
+  return { tone: "danger", key: "unsavedStatusFailed" };
+}
 
 /** Why it is not going to be sent again, in words rather than a code. */
 const REASON_KEY: Record<FailureReason, string> = {
@@ -68,55 +86,58 @@ export default function UnsavedPage(): JSX.Element {
         <>
           <p className="text-muted-foreground">{t("unsavedIntro")}</p>
 
+          {/* `ItemRow`, the one list row: a hand-written card per change had
+              its own title, its own meta paragraphs and no status at all. */}
           <ul className="mt-6 space-y-4">
             {failed.map((op) => (
-              <li
+              <ItemRow
                 key={op.id}
-                className="rounded-lg border border-border bg-card p-4"
-              >
-                <p className="font-medium text-foreground">
-                  {tLabel(op.label.key, op.label.values)}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("unsavedWhen", {
-                    date: format.dateTime(op.createdAt, {
+                meta={[
+                  {
+                    label: t("unsavedWhenLabel"),
+                    value: format.dateTime(op.createdAt, {
                       dateStyle: "medium",
                       timeStyle: "short",
                     }),
-                  })}
-                </p>
-                <p className="mt-1 text-sm text-foreground">
-                  {t(REASON_KEY[op.reason])}
-                </p>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {op.reason === "needs-reconciliation" ? (
+                  },
+                  { label: t("unsavedWhyLabel"), value: t(REASON_KEY[op.reason]) },
+                ]}
+                status={
+                  <Badge tone={statusOf(op.reason).tone}>
+                    {t(statusOf(op.reason).key)}
+                  </Badge>
+                }
+                title={tLabel(op.label.key, op.label.values)}
+                actions={
+                  <>
+                    {op.reason === "needs-reconciliation" ? (
+                      <Button
+                        onClick={() => setReconciling(op)}
+                        type="button"
+                      >
+                        {t("review")}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => retry(op.id)}
+                        type="button"
+                      >
+                        {t("retry")}
+                      </Button>
+                    )}
+  
+                    {/* Deletes the change for good, so it is not drawn in the
+                        colour of the retry beside it. */}
                     <Button
-                      onClick={() => setReconciling(op)}
+                      onClick={() => discard(op.id)}
                       type="button"
+                      variant="destructive"
                     >
-                      {t("review")}
+                      {t("discard")}
                     </Button>
-                  ) : (
-                    <Button
-                      onClick={() => retry(op.id)}
-                      type="button"
-                    >
-                      {t("retry")}
-                    </Button>
-                  )}
-
-                  {/* Deletes the change for good, so it is not drawn in the
-                      colour of the retry beside it. */}
-                  <Button
-                    onClick={() => discard(op.id)}
-                    type="button"
-                    variant="destructive"
-                  >
-                    {t("discard")}
-                  </Button>
-                </div>
-              </li>
+                  </>
+                }
+              />
             ))}
           </ul>
         </>
