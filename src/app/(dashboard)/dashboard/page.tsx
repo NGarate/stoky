@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
+import { StockStatus } from "@/components/inventory/StockStatus";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
@@ -164,18 +165,30 @@ export default function DashboardPage(): JSX.Element {
                   density="compact"
                   href={`/products/${product.id}`}
                   key={product.id}
+                  // How much is left is a detail, so it is meta; the state is
+                  // StockStatus's word, the same one the inventory wears. This
+                  // derived its own — "Quedan 1 paquete (mínimo 2)" in a warn
+                  // badge here, "Stock bajo" there — which is ISSUES UI-11
+                  // arriving on a fifth screen.
+                  meta={
+                    product.totalStock > 0
+                      ? [
+                          {
+                            label: t("restockAmountLabel"),
+                            value: t("restockLow", {
+                              quantity: product.totalStock,
+                              minimum: product.minStock ?? 0,
+                              unit: product.defaultUnit,
+                            }),
+                          },
+                        ]
+                      : undefined
+                  }
                   status={
-                    product.totalStock <= 0 ? (
-                      <Badge tone="danger">{t("restockOut")}</Badge>
-                    ) : (
-                      <Badge tone="warn">
-                        {t("restockLow", {
-                          quantity: product.totalStock,
-                          minimum: product.minStock ?? 0,
-                          unit: product.defaultUnit,
-                        })}
-                      </Badge>
-                    )
+                    <StockStatus
+                      isLowStock={product.isLowStock}
+                      totalStock={product.totalStock}
+                    />
                   }
                   title={product.name}
                   variant="plain"
