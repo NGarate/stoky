@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 
 import { Select } from "@/components/ui/select";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,15 +16,6 @@ import { useSnackbar } from "@/components/ui/snackbar";
 
 import type { JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
-
-/**
- * How long a removal can still be taken back.
- *
- * The same ten seconds the kitchen holds a consumption for (D100), and for
- * the same reason: long enough to notice the wrong row went, short enough
- * that the change still lands while the person is standing in the aisle.
- */
-const UNDO_HOLD_MS = 10_000;
 
 interface ShoppingItemProps {
   item: {
@@ -148,7 +140,7 @@ export function ShoppingItem({
       path: "shopping.removeItem",
       input: { id: item.id },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
 
     if (!queued.ok) return;

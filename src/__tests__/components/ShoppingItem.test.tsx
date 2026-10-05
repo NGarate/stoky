@@ -240,6 +240,26 @@ describe("ShoppingItem", () => {
     ).toBeInTheDocument();
   });
 
+  it("holds the removal as long as the person asked messages to stay", async () => {
+    // WCAG 2.2.3. The undo is a time limit too, and it was ten seconds
+    // whatever "Duración de los avisos" said — so the person who asked for
+    // longer to read got longer to read a button that had already stopped
+    // working.
+    const { setSnackbarDuration } = await import("@/lib/snackbar-duration");
+    setSnackbarDuration("long");
+    try {
+      render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }),
+      );
+
+      expect(lastEnqueued()).toMatchObject({ holdMs: 30_000 });
+    } finally {
+      setSnackbarDuration("default");
+    }
+  });
+
   it("puts back a quantity it would not accept", async () => {
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 

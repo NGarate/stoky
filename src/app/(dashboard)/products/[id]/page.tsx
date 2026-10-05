@@ -18,7 +18,7 @@ import { QuantityStepper } from "@/components/inventory/QuantityStepper";
 import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { useWriteQueue } from "@/lib/offline/queue-context";
-import { UNDO_HOLD_MS } from "@/lib/offline/queue";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { projectStockTotals } from "@/lib/offline/project";
 import { daysUntilExpiry, remainingByBatch, startOfToday } from "@/lib/inventory/batches";
 import type { JSX } from "react";
@@ -260,7 +260,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               unit: product.defaultUnit,
             },
             label,
-            holdMs: UNDO_HOLD_MS,
+            holdMs: undoHoldMs(),
           }
         : {
             path: "inventory.consumeStock",
@@ -270,7 +270,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               unit: product.defaultUnit,
             },
             label,
-            holdMs: UNDO_HOLD_MS,
+            holdMs: undoHoldMs(),
           },
     );
 

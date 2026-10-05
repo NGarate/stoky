@@ -864,6 +864,7 @@
       "exportPrivacyNote": "El archivo contiene los nombres y correos de quienes usan este hogar. Guárdalo en un sitio seguro."
     },
     "snackbarDuration": "Duración de los avisos",
+    "snackbarDurationHint": "También es el tiempo para deshacer: 10, 30 o 60 segundos.",
     "snackbarDefault": "Normal",
     "snackbarLong": "Larga",
     "snackbarForever": "Hasta descartar"

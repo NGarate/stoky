@@ -864,6 +864,7 @@
       "exportPrivacyNote": "The archive contains the names and emails of everyone who uses this household. Keep it somewhere safe."
     },
     "snackbarDuration": "Notification duration",
+    "snackbarDurationHint": "It is also how long you have to undo: 10, 30 or 60 seconds.",
     "snackbarDefault": "Normal",
     "snackbarLong": "Long",
     "snackbarForever": "Until dismissed"

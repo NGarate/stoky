@@ -15,7 +15,7 @@ import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
 import { Section } from "@/components/ui/section";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/lib/offline/queue-context";
-import { UNDO_HOLD_MS } from "@/lib/offline/queue";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { useSnackbar } from "@/components/ui/snackbar";
 import {
   projectOnListQuantities,
@@ -179,7 +179,7 @@ export default function KitchenPage(): JSX.Element {
         unit: product.defaultUnit,
       },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
 
     // Refused for want of room: the queue is full and says so in the shell's
@@ -255,7 +255,7 @@ export default function KitchenPage(): JSX.Element {
         unit: batch.unit,
       },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
 
     if (!queued.ok) return;
