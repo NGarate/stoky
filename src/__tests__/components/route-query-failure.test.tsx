@@ -77,6 +77,15 @@ mock.module("@/lib/trpc/client", () => ({
       update: { useMutation: () => idleMutation },
       delete: { useMutation: () => idleMutation },
     },
+    // `/settings/stores` is the same screen with a different noun, and had
+    // the same defect in a worse shape: loading was a bare "Cargando…" with no
+    // title, and a failure rendered nothing at all.
+    store: {
+      list: { useQuery: () => queryStub },
+      create: { useMutation: () => idleMutation },
+      update: { useMutation: () => idleMutation },
+      delete: { useMutation: () => idleMutation },
+    },
     // The same screen asks who is looking before it draws an admin's
     // controls. It is not what is under test here, so it answers plainly.
     auth: { me: { useQuery: () => ({ data: { role: "OWNER" } }) } },
@@ -89,6 +98,9 @@ const { default: ShoppingListsPage } = await import(
 );
 const { default: LocationsPage } = await import(
   "@/app/(dashboard)/settings/locations/page"
+);
+const { default: StoresPage } = await import(
+  "@/app/(dashboard)/settings/stores/page"
 );
 
 /** A refusal shaped the way tRPC delivers one to the browser. */
@@ -125,6 +137,14 @@ const ROUTES = [
       },
     ],
     loadedText: "Nevera",
+  },
+  {
+    name: "/settings/stores",
+    Page: StoresPage,
+    /** What it would claim with an empty answer: "No hay tiendas". */
+    emptyState: /No hay tiendas/,
+    loaded: [{ id: "s1", name: "Mercadona", address: null, householdId: "h1" }],
+    loadedText: "Mercadona",
   },
 ] as const;
 

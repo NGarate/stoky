@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -10,6 +9,8 @@ import { isLowStock } from "@/lib/stock/low-stock";
 import { ProductDetailsForm } from "@/components/products/ProductDetailsForm";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import { QuantityStepper } from "@/components/inventory/QuantityStepper";
@@ -41,30 +42,6 @@ interface Batch {
   unit: string;
   expiresAt: Date;
   locationName: string | null;
-}
-
-/**
- * Turns a tRPC error into something a person can act on.
- *
- * The procedures throw plain English `Error`s, so there is no error code to
- * switch on. Matching on the message is fragile, which is why anything
- * unrecognised falls back to a generic, still-actionable message rather than
- * showing the raw text.
- *
- * `getById` looks the product up with `findFirst({ id, householdId })` and
- * throws the same "Product not found" whether the id is nonsense, belongs to a
- * deleted product, or belongs to another household. That is deliberate on the
- * server's part — distinguishing them would confirm to an outsider that a given
- * id exists — so this page says the one thing that is true in all three cases:
- * it is not in your household's catalogue.
- */
-function serverErrorKey(message: string | undefined): string {
-  const normalized = message?.toLowerCase() ?? "";
-
-  if (normalized.includes("product not found")) return "errorNotFound";
-  if (normalized.includes("household")) return "errorNoHousehold";
-
-  return "errorGeneric";
 }
 
 export default function ProductDetailPage({
@@ -211,46 +188,31 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime());
   }, [product]);
 
-  if (query.isPending) {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/products">{t("backToProducts")}</BackLink>
-        <h1 className="mt-2 text-2xl font-bold text-heading">{t("loadingTitle")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
-          {t("loading")}
-        </p>
-      </div>
-    );
-  }
+  const back = { href: "/products", label: t("backToProducts") };
 
+  /**
+   * Every state without a product, through the one component that tells them
+   * apart. This screen hand-rolled two: `isPending` drew "Cargando…" — which
+   * a query paused offline also is, so with no signal it said loading for
+   * ever (UI-8) — and everything else was one red alert that matched the
+   * server's English to guess whether the household was missing.
+   *
+   * `getById` answers NOT_FOUND alike for a nonsense id, a deleted product
+   * and another household's — deliberately, so an outsider cannot confirm an
+   * id exists — and the sentence says the one thing true of all three.
+   */
   if (!product) {
-    const errorKey = serverErrorKey(query.error?.message);
-
     return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/products">{t("backToProducts")}</BackLink>
-
-        <div
-          role="alert"
-          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("errorTitle")}</h1>
-          <p className="mt-2">{t(errorKey)}</p>
-        </div>
-
-        {/* Retrying a product that is not in the catalogue would fail the same
-            way every time; a transport failure is the case worth offering. */}
-        {errorKey === "errorNotFound" ? null : (
-          <Button
-            type="button"
-            onClick={() => {
-              void query.refetch();
-            }}
-          >
-            {t("retry")}
-          </Button>
-        )}
-      </div>
+      <RouteState
+        back={back}
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        notFound={{ title: t("notFoundTitle"), body: t("errorNotFound") }}
+        onRetry={() => void query.refetch()}
+        title={t("loadingTitle")}
+        width="detail"
+      />
     );
   }
 
@@ -319,10 +281,8 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <BackLink href="/products">{t("backToProducts")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading">{product.name}</h1>
+    <PageShell width="detail">
+      <PageHeader back={back} className="mb-0" title={product.name} />
 
       {/* Decorative: the name it illustrates is directly above it, so an alt
           text would only repeat the heading. Open Food Facts is the only thing
@@ -635,6 +595,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           </p>
         </section>
       ) : null}
-    </div>
+    </PageShell>
   );
 }

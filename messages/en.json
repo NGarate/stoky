@@ -217,6 +217,7 @@
     },
     "detail": {
       "loadingTitle": "Product",
+      "notFoundTitle": "We can't find this product",
       "loading": "Loading the product...",
       "backToProducts": "Back to products",
       "errorTitle": "This product could not be shown",
@@ -587,6 +588,8 @@
     "processed": "Receipt processed! {count, plural, one {# item found} other {# items found}}.",
     "reviewItems": "Review items",
     "notFound": "Receipt not found",
+    "notFoundTitle": "This receipt no longer exists",
+    "notFoundBody": "It may have been deleted, or the link may be old. Go back to your receipts to choose another.",
     "backToList": "Back to receipts",
     "alreadyApplied": "This receipt has already been applied to the inventory",
     "viewApplied": "See what this receipt added",

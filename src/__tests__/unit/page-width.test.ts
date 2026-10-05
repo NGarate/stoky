@@ -41,18 +41,6 @@ function rendering(): Array<{ path: string; name: string; source: string }> {
     .filter(({ source }) => !source.includes("permanentRedirect"));
 }
 
-/**
- * Screens not yet held to the shared header. These four hand-roll their
- * loading and failure states, each with an `<h1>` of its own; they adopt
- * `RouteState` and `PageHeader` together. The list only shrinks.
- */
-const PENDING = new Set([
-  "products/[id]/page.tsx",
-  "products/[id]/adjust/page.tsx",
-  "products/[id]/history/page.tsx",
-  "receipts/[id]/applied/page.tsx",
-]);
-
 describe("a dashboard screen states its width", () => {
   it("finds the screens, so the checks below are not vacuous", () => {
     expect(screens(DASHBOARD).length).toBeGreaterThan(10);
@@ -96,7 +84,6 @@ describe("a dashboard screen draws its top through PageHeader", () => {
     // sizes, came from every screen writing its own. `PageHeader` holds the
     // one arrangement and the one size; a hand-written `<h1>` is a sixth.
     const own = rendering()
-      .filter(({ name }) => !PENDING.has(name))
       .filter(({ source }) => /<h1[\s>]/.test(source))
       .map(({ name }) => name);
 
@@ -105,7 +92,6 @@ describe("a dashboard screen draws its top through PageHeader", () => {
 
   it("draws the header it is held to", () => {
     const headerless = rendering()
-      .filter(({ name }) => !PENDING.has(name))
       .filter(({ source }) => !source.includes("<PageHeader"))
       .map(({ name }) => name);
 

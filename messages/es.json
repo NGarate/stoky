@@ -217,6 +217,7 @@
     },
     "detail": {
       "loadingTitle": "Producto",
+      "notFoundTitle": "No encontramos este producto",
       "loading": "Cargando el producto...",
       "backToProducts": "Volver a productos",
       "errorTitle": "No se ha podido mostrar el producto",
@@ -587,6 +588,8 @@
     "processed": "¡Ticket procesado! {count, plural, one {# producto encontrado} other {# productos encontrados}}.",
     "reviewItems": "Revisar productos",
     "notFound": "Ticket no encontrado",
+    "notFoundTitle": "Este ticket ya no existe",
+    "notFoundBody": "Puede que se haya borrado o que el enlace sea antiguo. Vuelve a tus tickets para elegir otro.",
     "backToList": "Volver a tickets",
     "alreadyApplied": "Este ticket ya se ha aplicado al inventario",
     "viewApplied": "Ver qué añadió este ticket",

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
@@ -13,28 +14,6 @@ import { formatDate } from "@/lib/dates";
 
 interface AppliedPageProps {
   params: Promise<{ id: string }>;
-}
-
-/**
- * Turns a tRPC error into something a person can act on.
- *
- * `getAppliedSummary` throws plain English messages with no error code to switch
- * on, so the message is matched. Anything unrecognised falls back to a generic
- * but still actionable line rather than showing raw server text.
- *
- * "Receipt not found" and "Access denied" deliberately collapse into one
- * message. The procedure distinguishes them, but repeating that distinction on
- * screen would tell someone holding a guessed id whether it exists in another
- * household — the same reasoning `products/[id]` records.
- */
-function serverErrorKey(message: string | undefined): string {
-  const normalized = message?.toLowerCase() ?? "";
-
-  if (normalized.includes("receipt not found")) return "errorNotFound";
-  if (normalized.includes("access denied")) return "errorNotFound";
-  if (normalized.includes("household")) return "errorNoHousehold";
-
-  return "errorGeneric";
 }
 
 /**
@@ -61,6 +40,7 @@ export default function ReceiptAppliedPage({
   const t = useTranslations("receipts.applied");
   const units = useQuantityFormat();
   const statusLabel = useTranslations("receipts.status");
+  const tReceipts = useTranslations("receipts");
   const locale = useLocale();
 
   // `retry: false` because the likeliest failure is an id that is not in this
@@ -73,48 +53,28 @@ export default function ReceiptAppliedPage({
   const summary = query.data;
 
 
-  if (query.isPending) {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
-        <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
-          {t("loadingTitle")}
-        </h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground md:text-lg">
-          {t("loading")}
-        </p>
-      </div>
-    );
-  }
+  const back = { href: "/receipts", label: t("backToReceipts") };
 
+  /**
+   * Every state without a summary, through the one component that tells them
+   * apart. `isPending` used to draw "Cargando…" — which a query paused
+   * offline also is, so with no signal it said loading for ever (UI-8) — and
+   * the server's English was matched to guess whether the household was
+   * missing. The procedure answers NOT_FOUND for an id in another household
+   * as for one that never existed, so the sentence cannot confirm either.
+   */
   if (!summary) {
-    const errorKey = serverErrorKey(query.error?.message);
-
     return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
-
-        <div
-          role="alert"
-          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h1 className="text-2xl font-bold md:text-4xl">{t("errorTitle")}</h1>
-          <p className="mt-2 md:text-lg">{t(errorKey)}</p>
-        </div>
-
-        {/* Retrying a receipt that is not in this household would fail the same
-            way every time; a transport failure is the case worth offering. */}
-        {errorKey === "errorNotFound" ? null : (
-          <Button
-            type="button"
-            onClick={() => {
-              void query.refetch();
-            }}
-          >
-            {t("retry")}
-          </Button>
-        )}
-      </div>
+      <RouteState
+        back={back}
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        notFound={{ title: tReceipts("notFoundTitle"), body: tReceipts("notFoundBody") }}
+        onRetry={() => void query.refetch()}
+        title={t("loadingTitle")}
+        width="detail"
+      />
     );
   }
 
@@ -132,20 +92,16 @@ export default function ReceiptAppliedPage({
   // page could do, so it says the opposite and points at what is outstanding.
   if (!isApplied) {
     return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
+      <PageShell width="detail">
+        <PageHeader back={back} title={t("pendingTitle")} />
 
-        <div
-          role="status"
-          className="mt-2 rounded border border-warn-foreground bg-warn p-4 text-warn-foreground"
-        >
-          <h1 className="text-2xl font-bold md:text-4xl">{t("pendingTitle")}</h1>
-          <p className="mt-2 md:text-lg">
+        <div className="rounded border border-warn-foreground bg-warn p-4 text-warn-foreground">
+          <p>
             {t("pendingStatus", {
               status: statusLabel(receipt.status.toLowerCase()),
             })}
           </p>
-          <p className="mt-2 md:text-lg">
+          <p className="mt-2">
             {hasFailed ? t("pendingFailed") : t("pendingIntro")}
           </p>
         </div>
@@ -164,18 +120,18 @@ export default function ReceiptAppliedPage({
             </Button>
           </li>
         </ul>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <BackLink href="/receipts">{t("backToReceipts")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
-        {t("title")}
-      </h1>
-      <p className="mt-2 text-muted-foreground md:text-lg">{t("intro")}</p>
+    <PageShell width="detail">
+      <PageHeader
+        back={back}
+        className="mb-0"
+        intro={t("intro")}
+        title={t("title")}
+      />
 
       <h2 className="mt-8 text-lg font-semibold text-heading md:text-2xl">
         {t("summaryTitle")}
@@ -316,7 +272,7 @@ export default function ReceiptAppliedPage({
           </Button>
         </li>
       </ul>
-    </div>
+    </PageShell>
   );
 }
 

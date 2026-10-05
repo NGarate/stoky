@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import type { StoreInput } from "@/lib/validations/store";
 
 interface Store {
@@ -28,7 +29,8 @@ export default function StoresPage() {
 
   const snackbar = useSnackbar();
   const utils = api.useUtils();
-  const { data: stores, isLoading } = api.store.list.useQuery({ limit: 100 });
+  const storesQuery = api.store.list.useQuery({ limit: 100 });
+  const stores = storesQuery.data;
 
   // All three writes here are `adminProcedure`, and this screen drew "Crear
   // tienda", "Editar" and "Eliminar" for everyone — so a MEMBER was offered
@@ -107,8 +109,25 @@ export default function StoresPage() {
     setFormData({ name: "", address: "" });
   };
 
-  if (isLoading) {
-    return <div className="p-8">{t("common.loading")}</div>;
+  const back = { href: "/settings", label: t("stores.backToSettings") };
+
+  // Three states, not two (ISSUES.md UI-9). Gated on `isLoading` alone, this
+  // drew a bare "Cargando…" with no title and no way back while loading, and
+  // a failed or paused query — for which `isLoading` is false — fell through
+  // to a screen with a heading and no shops at all, which reads as "you have
+  // none".
+  if (!stores) {
+    return (
+      <RouteState
+        back={back}
+        error={storesQuery.error}
+        fetchStatus={storesQuery.fetchStatus}
+        isLoading={storesQuery.isPending}
+        onRetry={() => void storesQuery.refetch()}
+        title={t("stores.title")}
+        width="form"
+      />
+    );
   }
 
   return (
@@ -128,7 +147,7 @@ export default function StoresPage() {
             </Button>
           ) : undefined
         }
-        back={{ href: "/settings", label: t("stores.backToSettings") }}
+        back={back}
         title={t("stores.title")}
       />
       <div className="space-y-6">
@@ -191,14 +210,14 @@ export default function StoresPage() {
           concrete reason (DESIGN_AUDIT A5.4). The inventory and the
           catalogue already list into a bare `<ul>`. */}
       <div>
-        {stores?.length === 0 ? (
+        {stores.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
             <p>{t("stores.noStores")}</p>
             <p className="mt-2 text-sm">{t("stores.addFirst")}</p>
           </div>
         ) : (
           <ul className="space-y-3">
-            {stores?.map((store: Store) => (
+            {stores.map((store: Store) => (
               <ItemRow
                 actions={
                   canManage ? (

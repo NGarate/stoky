@@ -2,8 +2,9 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo } from "react";
-import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
 import { runningTotals } from "@/lib/inventory/stockLedger";
 import { StockHistoryChart } from "@/components/inventory/StockHistoryChart";
@@ -21,15 +22,6 @@ import { formatDate } from "@/lib/dates";
  * points; loading more extends the line leftwards and never moves a point
  * already drawn.
  */
-function serverErrorKey(message: string | undefined): string {
-  const normalized = message?.toLowerCase() ?? "";
-
-  if (normalized.includes("product not found")) return "errorNotFound";
-  if (normalized.includes("household")) return "errorNoHousehold";
-
-  return "errorGeneric";
-}
-
 interface StockHistoryPageProps {
   params: Promise<{ id: string }>;
 }
@@ -45,6 +37,7 @@ export default function StockHistoryPage({
 export function StockHistoryView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.history");
   const units = useQuantityFormat();
+  const tDetail = useTranslations("products.detail");
   const locale = useLocale();
 
   const detail = api.product.getById.useQuery({ id }, { retry: false });
@@ -68,56 +61,42 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
   );
 
 
-  const failed = detail.error ?? history.error;
-  if (failed) {
-    const errorKey = serverErrorKey(failed.message);
+  const back = { href: `/products/${id}`, label: t("backToProduct") };
 
-    return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/products">{t("backToProduct")}</BackLink>
-
-        <div
-          role="alert"
-          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("errorTitle")}</h1>
-          <p className="mt-2">{t(errorKey)}</p>
-        </div>
-
-        {errorKey === "errorNotFound" ? null : (
-          <Button
-            type="button"
-            onClick={() => {
-              void detail.refetch();
-              void history.refetch();
-            }}
-          >
-            {t("retry")}
-          </Button>
-        )}
-      </div>
-    );
-  }
-
+  // Two questions, one screen: whichever has not answered is the one the
+  // screen is waiting on, and the product's first, because a product that
+  // does not exist has no history to wait for.
   if (!product || !history.data) {
+    const waiting = !product ? detail : history;
     return (
-      <div className="mx-auto max-w-3xl">
-        <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
-          {t("loading")}
-        </p>
-      </div>
+      <RouteState
+        back={back}
+        error={waiting.error}
+        fetchStatus={waiting.fetchStatus}
+        isLoading={waiting.isPending}
+        notFound={{
+          title: tDetail("notFoundTitle"),
+          body: t("errorNotFound"),
+          back: { href: "/products", label: tDetail("backToProducts") },
+        }}
+        onRetry={() => {
+          void detail.refetch();
+          void history.refetch();
+        }}
+        title={t("title")}
+        width="detail"
+      />
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <BackLink href={`/products/${id}`}>{t("backToProduct")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading">
-        {t("titleOf", { name: product.name })}
-      </h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
+    <PageShell width="detail">
+      <PageHeader
+        back={back}
+        className="mb-0"
+        intro={t("intro")}
+        title={t("titleOf", { name: product.name })}
+      />
       <p className="mt-2 font-medium text-foreground">
         {t("currentTotal", {
           stock: product.totalStock,
@@ -201,6 +180,6 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
           ) : null}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
