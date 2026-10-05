@@ -7,6 +7,7 @@ import { Check, Package } from "lucide-react";
 import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
+import { invalidateAfterReceiptApplied } from "@/lib/trpc/stale";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
 import { BackLink } from "@/components/ui/back-link";
@@ -82,6 +83,10 @@ export default function ReviewPage() {
   });
   const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
     onSuccess: () => {
+      // Applying moves stock and records prices; without this the inventory,
+      // the product pages and the price history kept their pre-receipt
+      // answers until something else happened to refetch them.
+      void invalidateAfterReceiptApplied(utils);
       router.push(`/receipts/${receiptId}/applied`);
     },
     // A failure said nothing at all: the button re-enabled, the count did

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/trpc/client";
+import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
@@ -116,7 +117,7 @@ export default function AddStockPage(): JSX.Element {
         quantity: Math.abs(variables.quantity),
         unit: variables.unit,
       });
-      await utils.inventory.getStockOverview.invalidate();
+      await invalidateAfterStockChange(utils);
       router.refresh();
     },
     onError: (error) => {

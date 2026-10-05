@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
+import { invalidateAfterProductCreated } from "@/lib/trpc/stale";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { httpStatusOf } from "@/lib/offline/classify";
 
@@ -15,6 +16,7 @@ export default function ScanPage() {
   const t = useTranslations("products.scan");
   const router = useRouter();
   const snackbar = useSnackbar();
+  const utils = api.useUtils();
   const { state: queueState, enqueue } = useWriteQueue();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
@@ -58,6 +60,12 @@ export default function ScanPage() {
   const scanMutation = api.product.scanBarcode.useMutation({
     onSuccess: (result) => {
       setIsProcessing(false);
+
+      // A lookup that found the code elsewhere *created* the product, and the
+      // catalogue was still the list from before it existed.
+      if (result.product && result.source !== "local") {
+        void invalidateAfterProductCreated(utils);
+      }
 
       if (result.product) {
         // Arriving at the product is not the whole answer. Whether the scan

@@ -13,6 +13,7 @@ import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
+import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
@@ -128,10 +129,10 @@ export default function ConsumeStockPage(): JSX.Element {
         unit: variables.unit,
         left: Math.round(((availableStock ?? used) - used) * 100) / 100,
       });
-      await utils.inventory.getStockOverview.invalidate();
-      // The figure above is read from this query, and consuming twice in a row
-      // is an ordinary thing to do, so it must not be served from cache.
-      await utils.product.getById.invalidate({ id: variables.productId });
+      // Including the product's own figure above, which is read from
+      // product.getById: consuming twice in a row is an ordinary thing to do,
+      // so it must not be served from cache.
+      await invalidateAfterStockChange(utils);
       router.refresh();
     },
     onError: (error) => {
