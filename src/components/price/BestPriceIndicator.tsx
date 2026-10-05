@@ -78,7 +78,8 @@ export function BestPriceIndicator({
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">{t("bestPrice")}:</span>
-      <span className="font-medium text-ok-foreground">
+      {/* Ink, not `ok`: a ranking is not a state (see the note above). */}
+      <span className="font-medium text-foreground">
         {formatUnitPrice(locale, bestPrice.unitPrice, bestPrice.currency ?? DEFAULT_CURRENCY)}{" "}
         {t("perUnit", { unit: units.unit(bestPrice.unit, 1) })}
       </span>

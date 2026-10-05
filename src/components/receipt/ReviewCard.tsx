@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, X, Plus, ShoppingCart } from "lucide-react";
+import { Check, X, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
@@ -59,6 +60,9 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
   };
 
   const isConfirmed = isItemReviewed(item.matchStatus);
+  // Reviewed, but answered "leave it out": not a confirmation, and not
+  // something to colour as healthy. It wore "Confirmado" on a green card.
+  const isSkipped = item.matchStatus === "SKIPPED";
 
   const isAutoMatched = item.matchStatus === "AUTO_MATCHED";
 
@@ -69,12 +73,13 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
 
   return (
     <div
+      // Only a confirmed line is tinted, because only that is a state — and
+      // its badge says it in words. An automatic match used to tint the card
+      // `bg-muted`, which is where the suggestion came from, not a state.
       className={`p-4 border rounded-lg ${
-        isConfirmed
+        isConfirmed && !isSkipped
           ? "bg-ok border-ok-foreground"
-          : isAutoMatched
-            ? "bg-muted border-border"
-            : "bg-card border-border"
+          : "bg-card border-border"
       }`}
     >
       <div className="flex items-start justify-between mb-3">
@@ -91,16 +96,17 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
           )}
         </div>
 
-        {isConfirmed ? (
-          <div className="flex items-center gap-1 text-ok-foreground">
-            <Check className="w-4 h-4" />
-            <span className="text-sm">{t("itemConfirmed")}</span>
-          </div>
+        {/* A `Badge`, like every other status. It was an icon and coloured
+            text, and "Auto-detectado" wore a shopping cart — the shopping
+            screen's navigation icon, saying something else entirely. */}
+        {isSkipped ? (
+          <Badge tone="neutral">{t("itemSkipped")}</Badge>
+        ) : isConfirmed ? (
+          <Badge tone="ok" variant="outline">
+            {t("itemConfirmed")}
+          </Badge>
         ) : isAutoMatched ? (
-          <div className="flex items-center gap-1 text-primary">
-            <ShoppingCart className="w-4 h-4" />
-            <span className="text-sm">{t("itemAutoMatched")}</span>
-          </div>
+          <Badge tone="neutral">{t("itemAutoMatched")}</Badge>
         ) : null}
       </div>
 

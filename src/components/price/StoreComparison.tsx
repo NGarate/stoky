@@ -2,11 +2,12 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
+import { Badge } from "@/components/ui/badge";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { DEFAULT_CURRENCY, formatMoney, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 import type { JSX } from "react";
-import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Where this product is cheapest.
@@ -144,10 +145,10 @@ export function StoreComparison({
               </span>
 
               <p className="mt-1 text-sm text-muted-foreground md:text-base">
+                {/* `neutral`: the cheapest shop is a ranking, not a state,
+                    and `ok` has to keep meaning "this is fine". */}
                 {isBest ? (
-                  <span className="font-medium text-ok-foreground">
-                    {t("prices.bestPrice")}
-                  </span>
+                  <Badge tone="neutral">{t("prices.bestPrice")}</Badge>
                 ) : (
                   <span>{t("prices.premiumOver", { percent: `${over}%` })}</span>
                 )}

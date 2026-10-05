@@ -75,6 +75,16 @@ describe("StoreComparison", () => {
     expect(within(first).getByText("Mejor precio")).toBeInTheDocument();
   });
 
+  it("labels the best price as a neutral pill, not a state", () => {
+    prices = [row("a", "Carrefour", 1.45), row("b", "Mercadona", 1.19)];
+    renderWithIntl(<StoreComparison productId="p1" />, { locale: "es" });
+
+    // It was `text-ok-foreground`: the healthy-state ink on a ranking.
+    const label = screen.getByText("Mejor precio");
+    expect(label.className).toContain("bg-muted");
+    expect(label.className).not.toMatch(/\b(?:text|bg|border)-(?:ok|warn|danger)(?:-foreground)?\b/);
+  });
+
   it("writes every price as text, so the bars add nothing that is only a bar", () => {
     prices = [row("a", "Carrefour", 1.45), row("b", "Mercadona", 1.19)];
     renderWithIntl(<StoreComparison productId="p1" />, { locale: "es" });

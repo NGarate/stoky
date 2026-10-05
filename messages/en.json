@@ -669,7 +669,8 @@
     "confirmedAll": "You finished the review. You can apply it to the inventory now.",
     "confirmAllFailed": "Could not finish the review. Try again.",
     "confirmItemFailed": "Could not confirm that line. Try again.",
-    "applyFailed": "Could not apply the receipt to the inventory. Try again."
+    "applyFailed": "Could not apply the receipt to the inventory. Try again.",
+    "itemSkipped": "Won't be added"
   },
   "shopping": {
     "title": "Shopping lists",
