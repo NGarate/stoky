@@ -225,8 +225,12 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
 
       await client.getProductByBarcode("1234567890123");
 
-      const callArg = fetchSpy.mock.calls[0];
-      expect(callArg).toBeDefined();
+      // The header itself, not merely that fetch was called: Open Food Facts
+      // asks every client to identify itself, and this assertion passed with
+      // the header deleted.
+      const init = fetchSpy.mock.calls[0]?.[1];
+      const userAgent = new Headers(init?.headers).get("user-agent");
+      expect(userAgent).toMatch(/^Stoky\/\S+ \(.+@.+\)$/);
     });
   });
 
