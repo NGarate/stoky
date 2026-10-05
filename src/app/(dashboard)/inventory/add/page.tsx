@@ -360,7 +360,6 @@ export default function AddStockPage(): JSX.Element {
               fieldErrors.store ? `${storeHintId} ${storeErrorId}` : storeHintId
             }
             ariaInvalid={fieldErrors.store ? true : undefined}
-            className="min-h-[48px] w-full"
           />
           <p id={storeHintId} className="mt-1 text-sm text-muted-foreground">
             {t("storeHint")}

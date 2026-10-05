@@ -115,7 +115,6 @@ export default function UploadPage() {
               id="receipt-store"
               value={storeId}
               onChange={setStoreId}
-              className="min-h-[48px] w-full"
             />
             <p className="mt-1 text-sm text-muted-foreground">
               {t("uploadStoreHint")}

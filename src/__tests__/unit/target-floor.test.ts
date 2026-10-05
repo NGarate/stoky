@@ -42,8 +42,6 @@ const ALLOWED: Record<string, string> = {
     "a <summary> disclosure — as above",
   "components/products/ProductRating.tsx":
     "a <summary> disclosure — as above",
-  "app/(dashboard)/receipts/upload/page.tsx":
-    "sizing passed to StoreSelector, which should own its own geometry — a real loose end, not an exception",
   "app/(dashboard)/shopping/page.tsx":
     "Screen A's trolley disclosure: a full-width row read with a trolley in one hand (D54, REDESIGN_PLAN §3)",
   "app/offline/page.tsx":
