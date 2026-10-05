@@ -5,6 +5,27 @@ import { valkeyProductCache, type ProductCache } from "./product-cache";
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
 const OFF_USER_AGENT = "Stoky/1.0 (contact@stoky.app)";
 
+/** What `extractUnit` answers for a count, or for anything it cannot read. */
+const COUNT_UNIT = "unit";
+
+/**
+ * Every way a label writes a unit this application measures in, Spanish
+ * first, mapped to the one spelling it stores.
+ */
+const UNIT_WORDS: Record<string, string> = {
+  g: "g", gr: "g", grs: "g", gramo: "g", gramos: "g", gram: "g", grams: "g",
+  kg: "kg", kgs: "kg", kilo: "kg", kilos: "kg", kilogramo: "kg", kilogramos: "kg",
+  kilogram: "kg", kilograms: "kg",
+  mg: "mg",
+  ml: "ml", mililitro: "ml", mililitros: "ml", millilitre: "ml", millilitres: "ml",
+  milliliter: "ml", milliliters: "ml",
+  cl: "cl", centilitro: "cl", centilitros: "cl",
+  l: "l", litro: "l", litros: "l", litre: "l", litres: "l", liter: "l", liters: "l",
+  oz: "oz", lb: "lb", lbs: "lb",
+};
+
+const VOLUME_UNITS = new Set(["ml", "cl", "l"]);
+
 
 const offProductSchema = z.object({
   code: z.string(),
@@ -160,34 +181,36 @@ export class OpenFoodFactsClient {
   }
 
   /**
-   * Extract unit from quantity string (e.g., "500g" -> "g", "1.5L" -> "L")
+   * The unit a new product counts in, from Open Food Facts' free-text
+   * `quantity` ("500 g", "1,5L", "6x33cl", "12 huevos").
+   *
+   * One vocabulary whether or not there is a space. There used to be two
+   * paths that disagreed: "1kg" gave `kg` and "1 kg" gave `g`, "500ml" gave
+   * `ml` and "500 ml" gave `l` — and any spaced word ending in "s" gave the
+   * unit `s`, so "12 huevos" became a product counted in "s" and "250 grams"
+   * one counted in "s" too.
+   *
+   * A word this table does not know — "huevos", "piezas", "unidades",
+   * "sobres" — is a count, and a count is the app's own count unit, `unit`:
+   * the `Product.defaultUnit` default and one of the spellings
+   * `countUnitSize` reads as one. Guessing a unit out of an unknown word is
+   * how "s" happened.
+   *
+   * A multipack of a liquid ("6x33cl", "pack 6x1L") is counted in litres,
+   * as before: the pack is what is bought, and its total is the useful
+   * number.
    */
   extractUnit(quantity?: string): string {
-    if (!quantity) return "unit";
+    const normalized = quantity?.trim().toLowerCase() ?? "";
 
-    const normalizedQuantity = quantity.trim().toLowerCase();
-    if (!normalizedQuantity) return "unit";
+    const match = normalized.match(/\d+(?:[.,]\d+)?\s*([a-záéíóúñ]+)\.?$/);
+    if (!match) return COUNT_UNIT;
 
-    const compactMatch = normalizedQuantity.match(
-      /\d+(?:[.,]\d+)?([a-z]+)$/,
-    );
-    if (compactMatch) {
-      const compactUnit = compactMatch[1];
-      if (normalizedQuantity.includes("x") && /^(cl|ml|l)$/.test(compactUnit)) {
-        return "l";
-      }
-      return compactUnit;
-    }
+    const unit = UNIT_WORDS[match[1]];
+    if (!unit) return COUNT_UNIT;
 
-    const spacedMatch = normalizedQuantity.match(/\d+(?:[.,]\d+)?\s+([a-z]+)$/);
-    if (spacedMatch) {
-      const spacedUnit = spacedMatch[1];
-      if (spacedUnit === "kg" || spacedUnit === "g") return "g";
-      if (/^(ml|cl|l)$/.test(spacedUnit)) return "l";
-      if (spacedUnit.endsWith("s")) return "s";
-    }
-
-    return "unit";
+    if (/\d\s*x\s*\d/.test(normalized) && VOLUME_UNITS.has(unit)) return "l";
+    return unit;
   }
 
   /** Forget one barcode. */
