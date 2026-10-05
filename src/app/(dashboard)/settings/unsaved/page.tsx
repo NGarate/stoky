@@ -10,6 +10,7 @@ import { ItemRow } from "@/components/ui/item-row";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
+import { useDiscardChange } from "@/components/offline/useDiscardChange";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 import type { JSX } from "react";
 import { formatDateTime } from "@/lib/dates";
@@ -65,7 +66,8 @@ export default function UnsavedPage(): JSX.Element {
   const tLabel = useTranslations();
   const units = useQuantityFormat();
   const locale = useLocale();
-  const { state, retry, discard } = useWriteQueue();
+  const { state, retry } = useWriteQueue();
+  const discardChange = useDiscardChange();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
 
   const failed = state.failed;
@@ -120,10 +122,14 @@ export default function UnsavedPage(): JSX.Element {
                       </Button>
                     )}
   
-                    {/* Deletes the change for good, so it is not drawn in the
-                        colour of the retry beside it. */}
+                    {/* Deletes the change once its undo has gone, so it is not
+                        drawn in the colour of the retry beside it — and names
+                        the change, because every row's says the same word. */}
                     <Button
-                      onClick={() => discard(op.id)}
+                      aria-label={t("discardNamed", {
+                        label: tLabel(op.label.key, op.label.values),
+                      })}
+                      onClick={() => discardChange(op)}
                       type="button"
                       variant="destructive"
                     >

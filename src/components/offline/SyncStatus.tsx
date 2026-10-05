@@ -8,6 +8,7 @@ import { syncStatus, isUrgent } from "@/lib/offline/status";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { ReconcileDialog } from "./ReconcileDialog";
+import { useDiscardChange } from "./useDiscardChange";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { JSX } from "react";
 
@@ -37,7 +38,8 @@ export function SyncStatus(): JSX.Element {
   // namespace was shown raw: "offline.shopping.itemUpdated".
   const tLabel = useTranslations();
   const units = useQuantityFormat();
-  const { state, drain, retry, discard } = useWriteQueue();
+  const { state, drain, retry } = useWriteQueue();
+  const discardChange = useDiscardChange();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
 
   const summary = syncStatus(state);
@@ -139,10 +141,15 @@ export function SyncStatus(): JSX.Element {
                         {t("nameIt")}
                       </Link>
                     </Button>
-                    {/* Discarding deletes an unsent change and nothing puts it
-                        back, so it wears the colour that says so. */}
+                    {/* Discarding deletes an unsent change once its undo has
+                        gone, so it wears the colour that says so — and names
+                        the change, because every row's button says the same
+                        word. */}
                     <Button
-                      onClick={() => discard(op.id)}
+                      aria-label={t("discardNamed", {
+                        label: tLabel(op.label.key, op.label.values),
+                      })}
+                      onClick={() => discardChange(op)}
                       type="button"
                       variant="destructive"
                     >
@@ -167,7 +174,10 @@ export function SyncStatus(): JSX.Element {
                       {t("retry")}
                     </Button>
                     <Button
-                      onClick={() => discard(op.id)}
+                      aria-label={t("discardNamed", {
+                        label: tLabel(op.label.key, op.label.values),
+                      })}
+                      onClick={() => discardChange(op)}
                       type="button"
                       variant="destructive"
                     >

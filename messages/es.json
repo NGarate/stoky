@@ -1008,6 +1008,8 @@
     "reconcileFailed": "No se ha podido ajustar. Inténtalo otra vez.",
     "reconcileKitchen": "Esta cuenta puede mirar y consumir, pero no ajustar el stock. Díselo a alguien que administre el hogar.",
     "discard": "Descartar",
+    "discardNamed": "Descartar: {label}",
+    "discarded": "Cambio descartado: {label}",
     "retry": "Reintentar",
     "tickedOff": "Marcaste «{name}»",
     "untickedOff": "Desmarcaste «{name}»",

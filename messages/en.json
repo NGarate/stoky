@@ -1008,6 +1008,8 @@
     "reconcileFailed": "That could not be adjusted. Try again.",
     "reconcileKitchen": "This account can look and use things up, but not adjust the stock. Tell somebody who manages the household.",
     "discard": "Discard",
+    "discardNamed": "Discard: {label}",
+    "discarded": "Change discarded: {label}",
     "retry": "Retry",
     "tickedOff": "You ticked off “{name}”",
     "untickedOff": "You unticked “{name}”",

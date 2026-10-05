@@ -203,8 +203,18 @@ export interface WriteQueue {
 
   /** Put a failed change back at the tail, with its strikes cleared. */
   retry(id: string): void;
-  /** Give up on a failed change deliberately. */
-  discard(id: string): void;
+  /**
+   * Give up on a failed change deliberately.
+   *
+   * Returns what it removed — `null` when it held nothing by that id — so
+   * the discard can be undone with `restore` (§7 rule 3: undo, not confirm).
+   */
+  discard(id: string): FailedOp | null;
+  /**
+   * Put a discarded change back, as it was and where it was: same id, same
+   * reason, same place in the list. A no-op when it is already back.
+   */
+  restore(op: FailedOp): void;
   /** Sign-out: this account's changes leave the device. */
   purgeAll(): void;
   /**
@@ -314,6 +324,12 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   let draining = false;
   /** The operation currently in flight, which cannot be taken back. */
   let inFlightId: string | null = null;
+  /**
+   * Where each discarded change stood in `failed`, so an undo puts it back in
+   * its place rather than at the end of a list somebody is reading. Memory
+   * only: an undo does not outlive the snackbar that offers it.
+   */
+  const discardedAt = new Map<string, number>();
 
   /** How much of the undo window is still open. Zero for a change without one. */
   function holdRemainingMs(op: QueuedOp): number {
@@ -523,9 +539,32 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     },
 
     discard(id) {
+      const failed = store.getState().failed;
+      const index = failed.findIndex((entry) => entry.id === id);
+      const op = failed[index];
+      if (!op) return null;
+
+      discardedAt.set(id, index);
       commit((state) => ({
         ...state,
         failed: state.failed.filter((entry) => entry.id !== id),
+      }));
+      return op;
+    },
+
+    restore(op) {
+      const { pending, failed } = store.getState();
+      if ([...pending, ...failed].some((entry) => entry.id === op.id)) return;
+
+      const index = discardedAt.get(op.id) ?? failed.length;
+      discardedAt.delete(op.id);
+      commit((state) => ({
+        ...state,
+        failed: [
+          ...state.failed.slice(0, index),
+          op,
+          ...state.failed.slice(index),
+        ],
       }));
     },
 

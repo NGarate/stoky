@@ -698,6 +698,59 @@ describe("dealing with what failed", () => {
     expect(queue.getState().failed).toHaveLength(0);
   });
 
+  it("hands back what it discarded, so the discard can be undone", async () => {
+    // "Descartar" deleted an unsent change in one tap, for good, and every
+    // row's button had the same name. Undo instead of confirm (§7 rule 3)
+    // needs the change to come back exactly as it was — same id, so a
+    // change the server did apply is still recognised, same reason, same
+    // place in the list.
+    const storage = createMemoryStorage();
+    const queue = open(
+      async () => {
+        throw refusal(403);
+      },
+      { storage },
+    );
+
+    queue.enqueue(tick());
+    queue.enqueue({ ...tick(), input: { id: "item-2", isChecked: true } });
+    await queue.drain();
+    await queue.drain();
+    const [first, second] = queue.getState().failed;
+
+    const discarded = queue.discard(first?.id as string);
+    expect(discarded).toEqual(first ?? null);
+    expect(queue.getState().failed).toEqual(second ? [second] : []);
+
+    queue.restore(discarded!);
+    expect(queue.getState().failed).toEqual([first!, second!]);
+    // Kept on the device again, not only in memory.
+    expect(JSON.stringify(storage.read(USER))).toContain(first?.id as string);
+  });
+
+  it("restores a change only once", async () => {
+    // Two taps on "Deshacer" — or an undo arriving after the change came back
+    // some other way — must not make two of it.
+    const queue = open(async () => {
+      throw refusal(403);
+    });
+
+    queue.enqueue(tick());
+    await queue.drain();
+    const discarded = queue.discard(queue.getState().failed[0]?.id as string);
+
+    queue.restore(discarded!);
+    queue.restore(discarded!);
+
+    expect(queue.getState().failed).toHaveLength(1);
+  });
+
+  it("discards nothing it does not hold", () => {
+    const queue = open(async () => {});
+
+    expect(queue.discard("not-here")).toBeNull();
+  });
+
   it("takes the whole queue off the device on sign-out", () => {
     const storage = createMemoryStorage();
     const queue = open(async () => {}, { storage });

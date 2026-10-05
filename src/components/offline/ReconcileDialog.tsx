@@ -9,6 +9,7 @@ import { tabbableWithin } from "@/lib/focus";
 import { api } from "@/lib/trpc/client";
 import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { useDiscardChange } from "./useDiscardChange";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
@@ -63,6 +64,9 @@ export function ReconcileDialog({
   const units = useQuantityFormat();
   const tCommon = useTranslations("common");
   const { discard } = useWriteQueue();
+  // The person's own discard, which can be undone. The one after a
+  // successful adjustment above is the change being answered, not dropped.
+  const discardChange = useDiscardChange();
   const utils = api.useUtils();
   const fieldId = useId();
   const hintId = useId();
@@ -288,12 +292,12 @@ export function ReconcileDialog({
               >
                 {adjust.isPending ? t("reconcileSaving") : t("reconcileSubmit")}
               </Button>
-              {/* It throws away an unsent change, and no procedure puts it
-                  back. Drawn as the filled primary beside "Guardar", it was
-                  the same colour as the action that keeps the work. */}
+              {/* It throws away an unsent change — for the length of an undo,
+                  then for good. Drawn as the filled primary beside "Guardar",
+                  it was the same colour as the action that keeps the work. */}
               <Button
                 onClick={() => {
-                  discard(op.id);
+                  discardChange(op);
                   onClose();
                 }}
                 type="button"
