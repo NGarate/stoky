@@ -14,7 +14,7 @@ afterEach(() => {
   }
 });
 
-function setup(options: { packageVersion?: string; envVersion?: string; notes?: boolean } = {}) {
+function setup(options: { packageVersion?: string; envVersion?: string; notes?: boolean; guideVersion?: string } = {}) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-release-"));
   fixtures.push(fixture);
   for (const directory of ["scripts", "deploy", "docs/releases", "bin"]) {
@@ -29,6 +29,9 @@ function setup(options: { packageVersion?: string; envVersion?: string; notes?: 
   writeFileSync(join(fixture, "deploy/traefik.yml"), "http:\n  services:\n    stoky:\n      loadBalancer:\n        servers:\n          - url: http://app:3000\n");
   // An operator's local credentials must never become a release attachment.
   writeFileSync(join(fixture, "deploy/.env"), "NEXTAUTH_SECRET=private-local-value\n");
+  const guideVersion = options.guideVersion ?? tag;
+  writeFileSync(join(fixture, "docs/INSTALL.md"), `This guide is for **${guideVersion}**.\n\ngh release download ${guideVersion}\n`);
+  writeFileSync(join(fixture, "README.md"), `Status: ${tag}. See [notes](docs/releases/${tag}.md).\n`);
   if (options.notes !== false) writeFileSync(join(fixture, `docs/releases/${tag}.md`), "First alpha.\n");
   const output = join(fixture, "download");
   return {
@@ -80,6 +83,15 @@ describe("release installation assets", () => {
     const result = run();
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(`STOKY_VERSION=${tag}`);
+    expect(existsSync(output)).toBe(false);
+  });
+
+  it("rejects an installation guide whose commands download another release", () => {
+    const { output, run } = setup({ guideVersion: "v0.0.9" });
+    const result = run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("docs/INSTALL.md names a version other than");
+    expect(result.stderr.toString()).toContain("v0.0.9");
     expect(existsSync(output)).toBe(false);
   });
 

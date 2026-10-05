@@ -21,7 +21,9 @@ not stable releases. Repository/package visibility is a separate owner decision.
    proxy routing, registration/login, health, restart persistence and backup/restore.
    Record what was actually tested in `STATUS.md`, including any TLS/host limitations.
 6. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets`.
-   The script rejects version mismatches/missing notes and produces `SHA256SUMS`.
+   The script rejects version mismatches (package, `example.env`, and any version
+   named in `docs/INSTALL.md` or `README.md`) and missing notes, pins the assets'
+   guide links to the tag, and produces `SHA256SUMS`.
 
 Commit each independent change only after its gates pass. Stage explicit paths,
 push `master`, and wait for **all** CI jobs, including image publication, to pass.
