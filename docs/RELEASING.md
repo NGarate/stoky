@@ -6,8 +6,9 @@ not stable releases. Repository/package visibility is a separate owner decision.
 
 ## Prepare a reviewable version
 
-1. Update `package.json` and `deploy/example.env` to the same version. Keep the
-   default image tag in `deploy/docker-compose.yml` aligned. Commit no secrets.
+1. Update `package.json` and `deploy/example.env` to the same version. The
+   Compose file has no default image tag: it requires `STOKY_VERSION` from `.env`,
+   so `example.env` is the one place the bundle names its version. Commit no secrets.
 2. Write `docs/releases/vVERSION.md`: introduction, highlights, installation link,
    upgrade instructions, known limitations and verification. Describe user-visible
    behavior; do not claim that automated tests settle the outstanding human checks.
