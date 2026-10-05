@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select";
 import { api } from "@/lib/trpc/client";
 import { PriceChart } from "@/components/price/PriceChart";
 import { StoreComparison } from "@/components/price/StoreComparison";
+import { toChartPoints } from "@/lib/prices/unitPrice";
 
 interface ProductPricePageProps {
   params: Promise<{ productId: string }>;
@@ -26,12 +27,9 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
     return <div className="p-8">{t("common.loading")}</div>;
   }
 
-  const chartData =
-    history?.map((record) => ({
-      date: record.recordedAt.toISOString(),
-      price: record.price,
-      storeName: record.store.name,
-    })) || [];
+  // Unit prices, so a week the household bought the six-pack is not drawn
+  // as a price spike.
+  const chartData = toChartPoints(history ?? []);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

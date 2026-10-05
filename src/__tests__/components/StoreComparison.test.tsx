@@ -23,9 +23,13 @@ mock.module("@/lib/trpc/client", () => ({
 
 const { StoreComparison } = await import("@/components/price/StoreComparison");
 
-const row = (id: string, store: string, price: number) => ({
+const row = (id: string, store: string, price: number, quantity = 1) => ({
   id,
   price,
+  quantity,
+  unit: "unidad",
+  // What `price.getLatestPrices` computes on the server.
+  unitPrice: price / quantity,
   currency: "EUR",
   recordedAt: new Date("2026-08-01T10:00:00.000Z"),
   store: { id: `st-${id}`, name: store },
@@ -113,5 +117,21 @@ describe("StoreComparison", () => {
     renderWithIntl(<StoreComparison productId="p1" />, { locale: "es" });
 
     expect(screen.getByText(/50% más caro que el mejor/)).toBeInTheDocument();
+  });
+
+  it("ranks by unit price, so six for 5,34 € beats one for 0,99 €", () => {
+    // Ranked by the total paid, the single came first and the pack read as
+    // 439% dearer.
+    prices = [row("a", "Carrefour", 0.99), row("b", "Mercadona", 5.34, 6)];
+    renderWithIntl(<StoreComparison productId="p1" />, { locale: "es" });
+
+    const [first, second] = screen.getAllByRole("listitem");
+    expect(first!.textContent).toContain("Mercadona");
+    expect(within(first!).getByText("Mejor precio")).toBeInTheDocument();
+    expect(first!.textContent).toContain("0,89");
+    // The total is still there, said as a total.
+    expect(first!.textContent).toContain("5,34");
+    expect(first!.textContent).toContain("por 6 unidad");
+    expect(second!.textContent).toContain("11% más caro que el mejor");
   });
 });

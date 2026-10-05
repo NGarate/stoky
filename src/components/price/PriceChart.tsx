@@ -14,12 +14,13 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 
 import type { JSX } from "react";
 
 interface PriceDataPoint {
   date: string;
+  /** Per unit (`toChartPoints`), never a record's total paid. */
   price: number;
   storeName?: string;
 }
@@ -59,7 +60,7 @@ export function PriceChart({
   const [asTable, setAsTable] = useState(false);
 
   const money = (value: number): string =>
-    formatMoney(locale, value, DEFAULT_CURRENCY);
+    formatUnitPrice(locale, value, DEFAULT_CURRENCY);
 
   // `PriceRecord.storeId` is required, so this should never be reached
   // through the real query — but the prop is optional and the fallback used

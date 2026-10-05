@@ -756,10 +756,11 @@
     "priceStable": "Precio estable",
     "atStore": "en {store}",
     "perUnit": "por {unit}",
+    "paidFor": "{total} por {quantity} {unit}",
     "chart": {
       "title": "Evolución de precios",
       "xAxis": "Fecha",
-      "yAxis": "Precio (€)",
+      "yAxis": "Precio por unidad (€)",
       "tableView": "Ver como tabla",
       "chartView": "Ver como gráfica",
       "otherStores": "Otras {count, plural, one {# tienda} other {# tiendas}}",

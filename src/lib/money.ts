@@ -35,3 +35,27 @@ export function formatMoney(
     return `${amount} ${currency}`;
   }
 }
+
+/**
+ * A unit price, which can be a fraction of a cent.
+ *
+ * 500 g at 1,20 € is 0,0024 € a gram, and `formatMoney`'s two decimals would
+ * write that as "0,00 €" — a price of nothing. Up to four decimals here, never
+ * fewer than the usual two.
+ */
+export function formatUnitPrice(
+  locale: string,
+  amount: number,
+  currency: string,
+): string {
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
