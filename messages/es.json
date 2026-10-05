@@ -980,6 +980,7 @@
     "needsReview": "{count, plural, one {# código escaneado necesita un nombre} other {# códigos escaneados necesitan un nombre}}",
     "review": "Revisar",
     "nameIt": "Ponle nombre",
+    "signInAgain": "Volver a entrar",
     "sendNow": "Enviar ahora",
     "reconcileTitle": "Comprobar el stock",
     "reconcileBody": "No se pudo guardar el consumo de {quantity} {unit} de «{name}». Comprueba lo que queda y confirma la cantidad.",

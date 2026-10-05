@@ -177,14 +177,26 @@ export function SyncStatus(): JSX.Element {
               </Button>
             ) : null}
 
-            {/* The only honest answer to a captive portal, which reports
-                itself as online and swallows every request. */}
-            <Button
-              onClick={drain}
-              type="button"
-            >
-              {t("sendNow")}
-            </Button>
+            {summary.state === "needs-signin" ? (
+              /* The one thing that helps. "Enviar ahora" was the only control
+                 here, and the drain returns at once while the session is
+                 expired — a button that does nothing, under a message saying
+                 to sign in with nowhere to do it. A plain anchor rather than
+                 `Link`: signing in sets a new session cookie, and a full
+                 navigation is what makes every layer read it. */
+              <Button asChild>
+                <a href="/login">{t("signInAgain")}</a>
+              </Button>
+            ) : (
+              /* The only honest answer to a captive portal, which reports
+                 itself as online and swallows every request. */
+              <Button
+                onClick={drain}
+                type="button"
+              >
+                {t("sendNow")}
+              </Button>
+            )}
           </div>
         ) : null}
       </div>
