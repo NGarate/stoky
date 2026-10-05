@@ -411,13 +411,19 @@ TOTAL: 61,40 EUR`;
         { text: "15032024", description: "DDMMYYYY" },
       ];
 
-      for (const { text } of formats) {
+      for (const { text, description } of formats) {
         const ocrText = `TIENDA\n${text}\nProducto 1,00`;
-        const parsed = parseReceiptText(ocrText);
-        
-        if (parsed.purchaseDate) {
-          expect(parsed.purchaseDate.getFullYear()).toBe(2024);
-        }
+        const date = parseReceiptText(ocrText).purchaseDate;
+
+        // Every format must be read, and read as 15 March 2024 — the
+        // assertion used to sit inside `if (parsed.purchaseDate)`, so a
+        // format that was not read at all passed.
+        expect({
+          description,
+          day: date?.getDate(),
+          month: date?.getMonth(),
+          year: date?.getFullYear(),
+        }).toEqual({ description, day: 15, month: 2, year: 2024 });
       }
     });
 

@@ -32,7 +32,9 @@ const KNOWN_STORES = [
 
 const DATE_PATTERNS = [
   /\b(\d{4})[/](\d{1,2})[/](\d{1,2})\b/,
-  /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/,
+  // Two digits or four, never three: `05/10/202` (a year the OCR cut short)
+  // was read as the year 2202.
+  /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4}|\d{2})\b/,
   /\b(\d{2})(\d{2})(\d{4})\b/,
 ];
 
@@ -78,7 +80,17 @@ export function parseEsAmount(text: string): number {
 const TOTAL_LABEL =
   /(?<!sub[\s.-]?)\b(?:total|importe|suma)\b(?!\s*(?:ahorr|descuento|dto|puntos|entregad|devol|cambio))/gi;
 
-export function parseReceiptText(ocrText: string): ParsedReceipt {
+/** A day of slack for a till clock or a timezone ahead of the server's. */
+const FUTURE_DATE_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * @param now When "today" is, for refusing a purchase date in the future.
+ *   A parameter so a test can pin it; callers leave it out.
+ */
+export function parseReceiptText(
+  ocrText: string,
+  now: Date = new Date(),
+): ParsedReceipt {
   const lines = ocrText
     .split("\n")
     .map((line) => line.trim())
@@ -126,7 +138,11 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
           !Number.isNaN(date.getTime()) &&
           date.getFullYear() === year &&
           date.getMonth() === month &&
-          date.getDate() === day;
+          date.getDate() === day &&
+          // A receipt is printed when the purchase happens, so a date ahead
+          // of now is a misread — a barcode or a reference number that
+          // happened to fit the pattern — and the next candidate is tried.
+          date.getTime() <= now.getTime() + FUTURE_DATE_TOLERANCE_MS;
 
         if (isValidDate) {
           result.purchaseDate = date;
