@@ -19,6 +19,7 @@ interface Service {
   deploy: { resources: { limits: { memory: string } } };
   command?: string[];
   configs?: { source: string; target: string }[];
+  healthcheck?: { test: string[] };
 }
 
 interface Compose {
@@ -64,6 +65,12 @@ describe("the downloadable installation", () => {
     expect(template).toMatch(/^POSTGRES_PASSWORD=$/m);
     expect(template).toMatch(/^NEXTAUTH_SECRET=$/m);
     expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|NEXTAUTH_URL)=/m);
+  });
+
+  it("reports the database healthy only once it accepts TCP connections", () => {
+    // The image's init server listens on the unix socket only; a socket probe
+    // passes during init and releases the app into a refused connection.
+    expect(compose.services.db.healthcheck?.test.join(" ")).toContain("pg_isready -h 127.0.0.1 ");
   });
 
   it("keeps the app and stateful services behind Traefik", () => {
