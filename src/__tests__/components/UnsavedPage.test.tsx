@@ -39,6 +39,8 @@ mock.module("@/lib/offline/queue-context", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
+    // The reconcile dialog asks who is looking before offering an adjustment.
+    auth: { me: { useQuery: () => ({ data: { role: "OWNER" } }) } },
     product: {
       getById: {
         useQuery: () => ({
