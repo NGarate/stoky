@@ -178,13 +178,25 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
 `ci`, `chore`. Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`,
 `shopping`, `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
 
-## Git Workflow (trunk-based, master only)
+## Git Workflow (trunk-based)
 
-`master` is the only branch. **Do not create feature branches, do not open pull
-requests**, and do not leave work parked on a branch "just for review".
+`master` is the trunk. Work done **with a person watching** — someone reading
+each change as it lands — goes straight to `master`: no feature branches, no
+pull requests, and no work left parked on a branch "just for review".
 
-Because there is no PR gate, the commit is the only reviewable unit and
-`git revert` is the only undo. That is what makes the rules below hard:
+**Unattended and semi-attended agent work is the exception.** When an agent
+runs a long, multi-commit task without someone reviewing each commit as it
+lands (a fan-out of subagents, a review-and-fix sweep, a session the owner
+checks only at the end), it works on a branch cut from `master` named
+`<type>/<topic>-<YYYY-MM-DD>` (e.g. `fix/project-review-2026-10-05`), pushes
+it, and opens a pull request. The branch is a review buffer, not a place for
+work to live: it is merged or closed once reviewed, keeping history linear
+(rebase or fast-forward, never a merge commit), and never used for a second,
+unrelated task. If the owner asks for a branch explicitly, that settles it.
+
+Either way, the commit is the reviewable unit and `git revert` is the only
+undo once it reaches `master`. That is what makes the rules below hard, on a
+branch as much as on the trunk:
 
 - **One commit, one change.** If the subject line needs "and", split it.
 - **It stands on its own.** Checked out in isolation it builds and its gates
