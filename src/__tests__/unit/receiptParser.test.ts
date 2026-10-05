@@ -252,6 +252,27 @@ GRACIAS POR SU VISITA
     });
   });
 
+  describe("store name", () => {
+    it("does not find a known store inside another word", () => {
+      for (const header of [
+        "C/ AVDA. DIAGONAL 456",
+        "MEDIA MARKT",
+        "ASOC. CONSUMIDORES",
+        "ESPARRAGOS DEL NORTE",
+      ]) {
+        expect(parseReceiptText(`${header}\nPAN 1,00`).storeName).toBeUndefined();
+      }
+    });
+
+    it("finds a known store named as a word", () => {
+      expect(parseReceiptText("SUPERMERCADOS DIA\nPAN 1,00").storeName).toBe("dia");
+      expect(parseReceiptText("EL CORTE INGLÉS, S.A.\nPAN 1,00").storeName).toBe(
+        "el corte ingles",
+      );
+      expect(parseReceiptText("CONSUM S. COOP\nPAN 1,00").storeName).toBe("consum");
+    });
+  });
+
   describe("amounts", () => {
     it("reads a thousands separator as part of the amount", () => {
       expect(parseEsAmount("1.234,56")).toBe(1234.56);
