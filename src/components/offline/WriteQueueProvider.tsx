@@ -74,15 +74,16 @@ export function WriteQueueProvider({
       // immediately when a drain is already running, so a second guard here
       // would be a second thing to keep in step for one property — and the
       // one that rots is always the copy.
-      const before = queue.getState().pending.length;
-
-      void queue.drain().then(() => {
-        // Only when something actually left. A drain that sent nothing has
-        // changed nothing on the server, and refetching then is a request
-        // every trigger would make for no reason.
-        if (queue.getState().pending.length !== before) {
-          void invalidate.current();
-        }
+      void queue.drain().then((sent) => {
+        // Only when something was sent. A drain that sent nothing has changed
+        // nothing on the server, and refetching then is a request every
+        // trigger would make for no reason.
+        //
+        // The count comes from the drain rather than from comparing the
+        // pending length before and after: one change sent while another was
+        // queued leaves the length where it was, and the screen kept its
+        // answer from before the write that just landed.
+        if (sent > 0) void invalidate.current();
       });
     },
     [queue],

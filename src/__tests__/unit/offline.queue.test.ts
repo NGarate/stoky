@@ -91,6 +91,29 @@ describe("sending what is waiting", () => {
   });
 });
 
+describe("what a drain reports", () => {
+  it("says how many changes it sent", async () => {
+    // The provider refetches only when this is above zero. It used to compare
+    // the pending length before and after, which cannot see one change sent
+    // while another was queued meanwhile.
+    const queue = open(async () => {});
+    queue.enqueue(tick());
+    queue.enqueue(tick());
+
+    expect(await queue.drain()).toBe(2);
+  });
+
+  it("says zero when it sent nothing", async () => {
+    const queue = open(async () => {
+      throw dropped();
+    });
+    queue.enqueue(tick());
+
+    expect(await queue.drain()).toBe(0);
+    expect(await open(async () => {}).drain()).toBe(0);
+  });
+});
+
 describe("a change the server will never accept", () => {
   it("does not block the changes behind it", async () => {
     const sent: string[] = [];
