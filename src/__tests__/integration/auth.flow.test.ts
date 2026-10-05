@@ -228,6 +228,35 @@ describe("Authentication Flow Integration Tests", () => {
       expect(result).toBeNull();
     });
 
+    it("takes as long for a non-existent email as for a wrong password", async () => {
+      // Indistinguishable in the answer is not enough if it is distinguishable
+      // on a stopwatch. Argon2id ran only when the account existed, so "no
+      // such address" came back in a few milliseconds and "wrong password" in
+      // a quarter of a second.
+      //
+      // A ratio rather than a number, and a generous one, so a slow machine
+      // or a busy CI runner cannot make it flake: the difference it catches is
+      // two orders of magnitude, not a few percent.
+      const email = runEmail("timing");
+      await createTestUser({ email, name: generateTestName("Timing"), password: "CorrectPassword123!" });
+
+      const elapsed = async (address: string): Promise<number> => {
+        const started = performance.now();
+        await signInWith({ email: address, password: "WrongPassword123!" });
+        return performance.now() - started;
+      };
+      const median = (values: number[]) => values.sort((a, b) => a - b)[1];
+
+      const wrongPassword: number[] = [];
+      const noAccount: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        wrongPassword.push(await elapsed(email));
+        noAccount.push(await elapsed(runEmail(`timing-missing-${i}`)));
+      }
+
+      expect(median(noAccount)).toBeGreaterThan(median(wrongPassword) * 0.5);
+    });
+
     it("should refuse empty credentials", async () => {
       const result = await signInWith({ email: "", password: "" });
 
