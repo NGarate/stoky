@@ -368,8 +368,13 @@ function extractStoreName(lines: string[]): string | undefined {
     const compact = normalized.replace(/\s+/g, " ").trim();
     if (!compact) continue;
 
+    // As whole words. A substring test found "dia" in "AVDA. DIAGONAL" and
+    // "MEDIA MARKT", "consum" in "CONSUMIDOR" and "spar" in "ESPARRAGO", and
+    // the receipt was filed against a shop it never came from. `compact` is
+    // only `[a-z0-9 ]`, so a space or an end is a word's edge.
+    const words = ` ${compact} `;
     for (const store of KNOWN_STORES) {
-      if (compact.includes(store)) {
+      if (words.includes(` ${store} `)) {
         return store;
       }
     }
