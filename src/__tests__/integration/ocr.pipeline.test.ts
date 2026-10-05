@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { pngOf } from "../utils/png";
 
 describe("OCR Pipeline Integration", () => {
   let testHouseholdId: string;
@@ -332,6 +333,61 @@ Producto completamente diferente xyz123 5,00
         expect(error).toBeDefined();
         expect((error as Error).message).toContain("Receipt not found");
       }
+    });
+
+    it("fails a receipt OCR read no text from, instead of leaving it PARSED", async () => {
+      const receiptDir = join(testDir, randomUUID());
+      await mkdir(receiptDir, { recursive: true });
+      cleanupDirs.push(receiptDir);
+
+      const imagePath = join(receiptDir, "receipt.png");
+      await writeFile(imagePath, pngOf(60, 40));
+
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath,
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+
+      // What tesseract returns for a blank page: whitespace.
+      await expect(
+        processReceiptOcr(receipt.id, async () => " \n\n "),
+      ).rejects.toThrow("No text recognised");
+
+      const updated = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+      });
+      expect(updated?.status).toBe(ReceiptStatus.FAILED);
+    });
+
+    it("hands back the text and moves to PARSED when OCR reads some", async () => {
+      const receiptDir = join(testDir, randomUUID());
+      await mkdir(receiptDir, { recursive: true });
+      cleanupDirs.push(receiptDir);
+
+      const imagePath = join(receiptDir, "receipt.png");
+      await writeFile(imagePath, pngOf(60, 40));
+
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath,
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+
+      const text = await processReceiptOcr(receipt.id, async () => "LECHE 1,25\n");
+
+      expect(text).toBe("LECHE 1,25\n");
+      const updated = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+      });
+      expect(updated?.status).toBe(ReceiptStatus.PARSED);
+      expect(updated?.rawOcrText).toBe("LECHE 1,25\n");
     });
 
     it("should mark receipt as FAILED on OCR error", async () => {
