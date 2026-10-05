@@ -18,6 +18,7 @@ import {
   startOfToday,
 } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
+import { MAX_DAYS, MAX_PRICE, MAX_QUANTITY } from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
 import type {
   StockDirection,
@@ -403,7 +404,7 @@ export const inventoryRouter = createTRPCRouter({
           // A zero or negative price used to pass validation and silently
           // write no record (PRICE-1); refused at the edge instead, where the
           // person can fix it.
-          price: z.number().positive().optional(),
+          price: z.number().positive().finite().max(MAX_PRICE).optional(),
           storeId: z.string().optional(),
         })
         .merge(replayable)
@@ -778,7 +779,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       z.object({
         productId: z.string(),
-        quantity: z.number().positive(),
+        quantity: z.number().positive().finite().max(MAX_QUANTITY),
         unit: z.string(),
         fromLocationId: z.string(),
         toLocationId: z.string(),
@@ -1004,7 +1005,7 @@ export const inventoryRouter = createTRPCRouter({
   getExpiringItems: householdProcedure
     .input(
       z.object({
-        days: z.number().default(7),
+        days: z.number().int().min(1).max(MAX_DAYS).default(7),
         locationId: z.string().optional(),
       })
     )

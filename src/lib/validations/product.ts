@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PAGE_SIZE, MAX_QUANTITY, MAX_SEARCH_LENGTH } from "./bounds";
 import { replayable } from "./idempotency";
 
 export const productSchema = z.object({
@@ -7,7 +8,10 @@ export const productSchema = z.object({
   brand: z.string().optional(),
   category: z.string().optional(),
   defaultUnit: z.string().trim().min(1).default("unit"),
-  minStock: z.number().optional(),
+  // `.min(0)` here as well as on update: a minimum of minus three was
+  // accepted on create and refused on edit, so the product could be made but
+  // not saved again without changing it.
+  minStock: z.number().finite().min(0).max(MAX_QUANTITY).optional(),
 });
 
 /**
@@ -24,12 +28,14 @@ export const updateProductSchema = productSchema.partial().extend({
   barcode: z.string().min(1).nullish(),
   brand: z.string().min(1).nullish(),
   category: z.string().min(1).nullish(),
-  minStock: z.number().min(0).nullish(),
+  minStock: z.number().finite().min(0).max(MAX_QUANTITY).nullish(),
 });
 
 export const productSearchSchema = z.object({
-  query: z.string(),
-  limit: z.number().default(10),
+  query: z.string().trim().min(1).max(MAX_SEARCH_LENGTH),
+  // Interpolated into `LIMIT ${…}` by `searchByName`: parameterised, so not an
+  // injection, but -1 was a Postgres error and a billion was every row.
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
 });
 
 export const productByBarcodeSchema = z.object({
@@ -50,14 +56,14 @@ export const resolveScanSchema = productByBarcodeSchema.merge(replayable);
 
 export const productPaginationSchema = z.object({
   cursor: z.string().optional(),
-  limit: z.number().min(1).max(100).default(20),
-  search: z.string().optional(),
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
+  search: z.string().max(MAX_SEARCH_LENGTH).optional(),
 });
 
 export const productListSchema = z.object({
   cursor: z.string().optional(),
-  limit: z.number().min(1).max(100).default(20),
-  search: z.string().optional(),
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
+  search: z.string().max(MAX_SEARCH_LENGTH).optional(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
