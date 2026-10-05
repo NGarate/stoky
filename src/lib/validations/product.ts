@@ -38,8 +38,18 @@ export const productSearchSchema = z.object({
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
 });
 
+/**
+ * A GTIN — EAN-8, EAN-13, UPC-A/E, GTIN-14 — which is what a food label
+ * carries and the only thing Open Food Facts can look up.
+ *
+ * It was any string, and `getProductByBarcode` put it in the path of the
+ * request it makes to Open Food Facts: `../` and `?` from a caller became
+ * part of an outbound URL from this server. Digits only closes that at the
+ * edge, and the client encodes it as well. Trimmed first, because the manual
+ * entry box is typed on a phone.
+ */
 export const productByBarcodeSchema = z.object({
-  barcode: z.string(),
+  barcode: z.string().trim().regex(/^\d{6,14}$/, "Not a product barcode"),
 });
 
 /**

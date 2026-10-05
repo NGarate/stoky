@@ -87,7 +87,7 @@ export class OpenFoodFactsClient {
 
     try {
       const response = await fetch(
-        `${OFF_API_BASE}/product/${barcode}.json?fields=code,product_name,brands,categories,image_url,image_front_url,quantity,serving_quantity,nutriments,ingredients_text,allergens,nutriscore_grade,nova_group,additives_n,additives_tags,nutrient_levels,labels_tags`,
+        `${OFF_API_BASE}/product/${encodeURIComponent(barcode)}.json?fields=code,product_name,brands,categories,image_url,image_front_url,quantity,serving_quantity,nutriments,ingredients_text,allergens,nutriscore_grade,nova_group,additives_n,additives_tags,nutrient_levels,labels_tags`,
         {
           headers: {
             "User-Agent": OFF_USER_AGENT,
