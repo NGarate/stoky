@@ -58,7 +58,7 @@
     "restockTitle": "Necesita reposición",
     "restockListLink": "Ver la lista de la compra",
     "restockEmpty": "No falta nada: todo está por encima de su mínimo.",
-    "restockOut": "Sin stock",
+    "restockAmountLabel": "En casa",
     "restockLow": "Quedan {quantity} {unit} (mínimo {minimum})",
     "restockMore": "Ver los {count, plural, one {# producto restante} other {# productos restantes}} en el inventario",
     "expiryTitle": "Caduca en los próximos {days} días",

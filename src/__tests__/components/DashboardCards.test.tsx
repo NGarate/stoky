@@ -251,6 +251,21 @@ describe("when not every question has an answer", () => {
   });
 });
 
+describe("the restock list's state", () => {
+  it("wears StockStatus's word, the one the inventory wears", () => {
+    // It derived its own: a warn badge reading "Quedan 1 paquete (mínimo 2)"
+    // here and "Stock bajo" on /inventory for the same product (UI-11).
+    overviewStub.data = {
+      products: [row({ id: "p-low", name: "Arroz", totalStock: 1, isLowStock: true })],
+    };
+    renderWithIntl(<DashboardPage />, { locale: "es" });
+
+    expect(screen.getByText("Stock bajo")).toBeInTheDocument();
+    // How much is left is still said, as a detail rather than as the state.
+    expect(screen.getByText(/Quedan 1 paquete \(mínimo 2\)/)).toBeInTheDocument();
+  });
+});
+
 describe("the Panel's lists", () => {
   it("offers the overflow as a door to the filtered inventory", () => {
     overviewStub.data = {

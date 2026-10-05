@@ -58,7 +58,7 @@
     "restockTitle": "Needs restocking",
     "restockListLink": "Open the shopping list",
     "restockEmpty": "Nothing is missing: everything is above its minimum.",
-    "restockOut": "Out of stock",
+    "restockAmountLabel": "At home",
     "restockLow": "{quantity} {unit} left (minimum {minimum})",
     "restockMore": "See the {count, plural, one {# remaining product} other {# remaining products}} in the inventory",
     "expiryTitle": "Expiring in the next {days} days",
