@@ -275,6 +275,30 @@ describe("refreshing what is on screen", () => {
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
+  it("refetches when one change was sent while another was queued", async () => {
+    // The pending length is the same before and after — one left, one
+    // arrived — and the refetch used to be keyed on it changing, so the
+    // screen kept its answer from before the write that just landed.
+    let queue: ReturnType<typeof makeQueue>;
+    const send = mock(async () => {
+      queue.enqueue({ ...tick, input: { id: "item-2", isChecked: true }, holdMs: 60_000 });
+    });
+    queue = makeQueue(send);
+    queue.enqueue(tick);
+
+    await act(async () => {
+      renderWithIntl(
+        <WriteQueueProvider queue={queue}>
+          <Readout />
+        </WriteQueueProvider>,
+      );
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queue.getState().pending).toHaveLength(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it("does not refetch when nothing was sent", async () => {
     const queue = makeQueue(async () => {});
 

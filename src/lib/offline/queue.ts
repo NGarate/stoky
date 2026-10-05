@@ -169,7 +169,16 @@ export interface WriteQueue {
   getState(): QueueState;
   subscribe(listener: (state: QueueState) => void): () => void;
   enqueue(op: EnqueueInput): EnqueueResult;
-  drain(): Promise<void>;
+  /**
+   * Send what can be sent, in order. Resolves with **how many changes this
+   * drain sent** — zero when another drain was already running, when the
+   * session has expired, or when the head is still held.
+   *
+   * The count is what tells the caller whether the server changed. Comparing
+   * the pending length before and after could not: one change sent and
+   * another queued meanwhile leaves the length where it was.
+   */
+  drain(): Promise<number>;
   /**
    * Take back a change that has not been sent yet.
    *
@@ -383,11 +392,12 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     },
 
     async drain() {
-      if (draining) return;
-      if (store.getState().status === "needs-signin") return;
-      if (store.getState().pending.length === 0) return;
+      if (draining) return 0;
+      if (store.getState().status === "needs-signin") return 0;
+      if (store.getState().pending.length === 0) return 0;
 
       draining = true;
+      let sent = 0;
       commit((state) => ({ ...state, status: "sending" }));
 
       try {
@@ -401,7 +411,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
           // correctness (see above), so nothing may overtake a held head. The
           // provider's timer re-arms from `nextDelayMs` and drains when the
           // window closes.
-          if (holdRemainingMs(op) > 0) return;
+          if (holdRemainingMs(op) > 0) return sent;
 
           if (op.householdId !== householdId) {
             // Composed in one household and drained in another. The server
@@ -415,6 +425,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
             inFlightId = op.id;
             await send(op);
             inFlightId = null;
+            sent += 1;
             commit((state) => ({
               ...state,
               pending: state.pending.filter((entry) => entry.id !== op.id),
@@ -424,7 +435,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
             if (classifyMutationError(error, op.path) === "auth") {
               // Keep everything. This is the likeliest end of a real shop.
               commit((state) => ({ ...state, status: "needs-signin" }));
-              return;
+              return sent;
             }
 
             const reason = reasonFor(error, op.path);
@@ -447,9 +458,10 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
                 entry.id === op.id ? { ...entry, attempts } : entry,
               ),
             }));
-            return;
+            return sent;
           }
         }
+        return sent;
       } finally {
         draining = false;
         inFlightId = null;
