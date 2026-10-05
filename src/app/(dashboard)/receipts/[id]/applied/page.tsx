@@ -87,7 +87,8 @@ export default function ReceiptAppliedPage({
   // to be reachable a third way — finishing a review navigated here, and
   // `confirmAll` only sets CONFIRMED — which made this branch the ordinary
   // outcome of the review journey rather than the exception it is written as.
-  // The review screen now stays where the outstanding step is.
+  // The review's one finish button now confirms *and* applies before it
+  // comes here.
   //
   // Saying "applied" over a receipt that is not would be the worst thing this
   // page could do, so it says the opposite and points at what is outstanding.

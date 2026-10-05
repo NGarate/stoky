@@ -3,7 +3,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, Package } from "lucide-react";
+import { Package } from "lucide-react";
 import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
@@ -30,25 +30,42 @@ export default function ReviewPage() {
   });
   const receipt = receiptQuery.data;
 
-  /**
-   * Confirming every line does not apply the receipt.
-   *
-   * `confirmAll` sets the receipt to CONFIRMED; only `applyReceipt` sets
-   * APPLIED. So navigating to /applied landed on a page whose first job is to
-   * refuse to say "applied" over a receipt that is not — it rendered
-   * "todavía no se ha aplicado" and pointed at the outstanding step, which is
-   * the "Aplicar al inventario" button back on the page it had just left.
-   *
-   * It stays here, where the next step is, and refetches so the lines show
-   * as confirmed.
-   */
-  const confirmAllMutation = api.receipt.confirmAll.useMutation({
-    onSuccess: async () => {
-      await utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+  const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
+    onSuccess: () => {
+      // Applying moves stock and records prices; without this the inventory,
+      // the product pages and the price history kept their pre-receipt
+      // answers until something else happened to refetch them.
+      void invalidateAfterReceiptApplied(utils);
+      router.push(`/receipts/${receiptId}/applied`);
+    },
+    // A failure said nothing at all: the button re-enabled, the count did
+    // not move, and no text was written anywhere in the document — so a
+    // screen-reader user was told nothing had happened, and a sighted one
+    // reasonably pressed it again (WCAG 3.3.1).
+    onError: () =>
       snackbar.show({
         kind: "confirm",
-        message: { key: "receipts.confirmedAll" },
-      });
+        tone: "danger",
+        message: { key: "receipts.applyFailed" },
+      }),
+  });
+
+  /**
+   * The first half of finishing: the NEEDS_REVIEW → CONFIRMED edge.
+   *
+   * `confirmAll` sets the receipt to CONFIRMED; only `applyReceipt` sets
+   * APPLIED. The page used to stop between the two — "Terminar revisión",
+   * a snackbar saying the receipt could now be applied, then "Aplicar al
+   * inventario" in the same place — two presses where, every line already
+   * being reviewed, the first decided nothing a person could see. So the one
+   * finish button runs both, in order, and only applies what was confirmed.
+   */
+  const confirmAllMutation = api.receipt.confirmAll.useMutation({
+    onSuccess: () => {
+      // Refetched as well, so that if the apply below is refused the page
+      // shows what is true — confirmed, with only the apply left to do.
+      void utils.receipt.getReceiptWithItems.invalidate({ receiptId });
+      applyReceiptMutation.mutate({ receiptId });
     },
     // A failure said nothing at all: the button re-enabled, the count did
     // not move, and no text was written anywhere in the document — so a
@@ -80,25 +97,6 @@ export default function ReviewPage() {
         kind: "confirm",
         tone: "danger",
         message: { key: "receipts.confirmItemFailed" },
-      }),
-  });
-  const applyReceiptMutation = api.receipt.applyReceipt.useMutation({
-    onSuccess: () => {
-      // Applying moves stock and records prices; without this the inventory,
-      // the product pages and the price history kept their pre-receipt
-      // answers until something else happened to refetch them.
-      void invalidateAfterReceiptApplied(utils);
-      router.push(`/receipts/${receiptId}/applied`);
-    },
-    // A failure said nothing at all: the button re-enabled, the count did
-    // not move, and no text was written anywhere in the document — so a
-    // screen-reader user was told nothing had happened, and a sighted one
-    // reasonably pressed it again (WCAG 3.3.1).
-    onError: () =>
-      snackbar.show({
-        kind: "confirm",
-        tone: "danger",
-        message: { key: "receipts.applyFailed" },
       }),
   });
 
@@ -156,9 +154,21 @@ export default function ReviewPage() {
     confirmAllMutation.mutate({ receiptId, items: itemsToConfirm });
   };
 
-  const handleApply = (): void => {
-    applyReceiptMutation.mutate({ receiptId });
+  /** Confirm what is not yet confirmed, then apply — or just apply. */
+  const handleFinish = (): void => {
+    if (receipt.status === "CONFIRMED") {
+      applyReceiptMutation.mutate({ receiptId });
+    } else {
+      handleConfirmAll();
+    }
   };
+
+  const finishing =
+    confirmAllMutation.isPending || applyReceiptMutation.isPending;
+  // Ready once nothing waits for a decision. A CONFIRMED receipt is ready
+  // whatever its lines say: `confirmAll` accepts a subset, and applying is
+  // the step left.
+  const canFinish = pendingItems === 0 || receipt.status === "CONFIRMED";
 
   return (
     // No padding of its own: the dashboard `main` already pads every route, and
@@ -220,27 +230,20 @@ export default function ReviewPage() {
                 : t("pendingItems", { count: pendingItems })}
             </p>
 
-            {receipt.status === "CONFIRMED" ? (
+            {/* One button, offered once there is nothing left to decide.
+                Before that the sentence beside it says what is left; a
+                disabled button would only be one a keyboard cannot reach to
+                ask why. */}
+            {canFinish ? (
               <Button
                 type="button"
-                onClick={handleApply}
-                disabled={applyReceiptMutation.isPending}
+                onClick={handleFinish}
+                disabled={finishing}
               >
                 <Package aria-hidden="true" className="mr-2 size-5" />
-                {applyReceiptMutation.isPending
-                  ? t("applying")
-                  : t("applyToInventory")}
+                {finishing ? t("applying") : t("applyToInventory")}
               </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={handleConfirmAll}
-                disabled={pendingItems > 0 || confirmAllMutation.isPending}
-              >
-                <Check aria-hidden="true" className="mr-2 size-5" />
-                {t("confirmAll")}
-              </Button>
-            )}
+            ) : null}
           </div>
 
           <div className="space-y-4">

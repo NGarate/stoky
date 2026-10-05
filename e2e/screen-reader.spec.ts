@@ -696,17 +696,16 @@ test.describe("Screen-reader journeys", () => {
       await page.goto(reviewable as string);
       await settle(page);
 
-      // ISSUES.md I18N-6. This receipt still has lines to decide, so the button
-      // that ends the review must say so and must be unusable: it finalises the
-      // receipt *after* the work rather than instead of it. It used to be called
-      // "Confirmar todos", which promises a bulk action that skips the reviewing
-      // — the one thing it cannot do — and a name that offers what the disabled
-      // state then refuses is worse than an unclear one.
-      const finishReview = page.getByRole("button", {
-        name: /^(terminar revisión|finish review)$/i,
-      });
-      await expect(finishReview).toBeVisible();
-      await expect(finishReview).toBeDisabled();
+      // ISSUES.md I18N-6. This receipt still has lines to decide, so the
+      // button that finishes it — confirm and add to the inventory, one press —
+      // is not offered at all: it finalises the receipt *after* the work rather
+      // than instead of it. It used to be a disabled "Confirmar todos", which
+      // promised a bulk action that skips the reviewing, and a disabled button
+      // is one a keyboard cannot even reach to ask why. The pending count
+      // beside it says what is left.
+      await expect(
+        page.getByRole("button", { name: es.receipts.applyToInventory }),
+      ).toHaveCount(0);
 
       const count = page.getByRole("status").first();
       const wasSaying = ((await count.textContent()) ?? "").trim();
