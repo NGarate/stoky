@@ -44,22 +44,38 @@ afterAll(() => {
 const FAILURE = Object.assign(new Error("boom"), { digest: "1975821282" });
 
 describe("when a screen fails to render", () => {
-  it("offers the retry React hands it", async () => {
-    // `reset` is the only thing that can bring the segment back without a full
+  it("offers the retry Next hands it", async () => {
+    // `retry` is the only thing that can bring the segment back without a full
     // reload, and a boundary that does not wire it up is a dead end with
     // sympathetic wording.
-    const reset = mock(() => {});
-    renderWithIntl(<DashboardError error={FAILURE} reset={reset} />);
+    const retry = mock(() => {});
+    renderWithIntl(<DashboardError error={FAILURE} retry={retry} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
 
-    expect(reset).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries by fetching again, not by re-rendering what failed", async () => {
+    // In this Next `reset` re-renders without re-fetching, so a screen that
+    // failed because the server did failed the same way again. Both props
+    // are handed to the boundary; only `retry` can recover.
+    const retry = mock(() => {});
+    const reset = mock(() => {});
+    renderWithIntl(
+      <DashboardError error={FAILURE} {...({ reset } as object)} retry={retry} />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
+
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(reset).not.toHaveBeenCalled();
   });
 
   it("offers a way out that does not depend on this segment working", () => {
     // If `reset` throws again — the usual case, since the cause is rarely
     // transient — a link to a different route is the only escape.
-    renderWithIntl(<DashboardError error={FAILURE} reset={() => {}} />);
+    renderWithIntl(<DashboardError error={FAILURE} retry={() => {}} />);
 
     expect(
       screen.getByRole("link", { name: "Ir al inicio" }),
@@ -71,14 +87,14 @@ describe("when a screen fails to render", () => {
     // with the offline queue behind it the honest answer is no. Saying so is
     // the difference between an apology and an answer.
     const { container } = renderWithIntl(
-      <DashboardError error={FAILURE} reset={() => {}} />,
+      <DashboardError error={FAILURE} retry={() => {}} />,
     );
 
     expect(container.textContent).toContain("nada de lo que hayas apuntado se ha perdido");
   });
 
   it("shows the digest, which is the only thread back to the server log", () => {
-    renderWithIntl(<DashboardError error={FAILURE} reset={() => {}} />);
+    renderWithIntl(<DashboardError error={FAILURE} retry={() => {}} />);
 
     expect(screen.getByText(/1975821282/)).toBeInTheDocument();
   });
@@ -87,7 +103,7 @@ describe("when a screen fails to render", () => {
     // A client-side throw has no digest. "Fault reference: undefined" is worse
     // than no reference at all.
     const { container } = renderWithIntl(
-      <DashboardError error={new Error("boom")} reset={() => {}} />,
+      <DashboardError error={new Error("boom")} retry={() => {}} />,
     );
 
     expect(container.textContent).not.toContain("Referencia");
@@ -95,7 +111,7 @@ describe("when a screen fails to render", () => {
   });
 
   it("logs the failure rather than swallowing it", () => {
-    renderWithIntl(<DashboardError error={FAILURE} reset={() => {}} />);
+    renderWithIntl(<DashboardError error={FAILURE} retry={() => {}} />);
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((args) => args.includes(FAILURE))).toBe(true);
@@ -107,7 +123,7 @@ describe("in English", () => {
     // The reason this boundary sits under `(dashboard)` rather than at the
     // root: the intl provider is in the root layout, and a boundary replaces
     // everything below the segment it lives in.
-    renderWithIntl(<DashboardError error={FAILURE} reset={() => {}} />, {
+    renderWithIntl(<DashboardError error={FAILURE} retry={() => {}} />, {
       locale: "en",
     });
 
@@ -120,7 +136,7 @@ describe("in English", () => {
 describe("the controls a thumb has to hit", () => {
   it("keeps the 48px floor, on the screen where it matters most", () => {
     // A person meeting this page on a phone is already having a bad time.
-    renderWithIntl(<DashboardError error={FAILURE} reset={() => {}} />);
+    renderWithIntl(<DashboardError error={FAILURE} retry={() => {}} />);
 
     for (const control of [
       screen.getByRole("button", { name: "Volver a intentarlo" }),
@@ -156,9 +172,9 @@ describe("the controls a thumb has to hit", () => {
  * the same shape too — do not hand it the graph. A detached container keeps
  * the nested document out of the live one, and the assertions are unchanged.
  */
-function renderGlobalError(reset: () => void = () => {}): HTMLElement {
+function renderGlobalError(retry: () => void = () => {}): HTMLElement {
   const { container } = renderWithIntl(
-    <GlobalError error={FAILURE} reset={reset} />,
+    <GlobalError error={FAILURE} retry={retry} />,
     // Deliberately never appended: see above.
     { container: document.createElement("div") },
   );
@@ -181,15 +197,20 @@ describe("when even the layout failed", () => {
     expect(container.textContent).toContain("could not start");
   });
 
-  it("still offers the retry", async () => {
+  it("still offers the retry, the one that fetches again", async () => {
+    const retry = mock(() => {});
     const reset = mock(() => {});
     // `within(container)` rather than `screen`, which reads `document.body` —
     // and the container is deliberately not in it.
-    const container = renderGlobalError(reset);
+    const { container } = renderWithIntl(
+      <GlobalError error={FAILURE} {...({ reset } as object)} retry={retry} />,
+      { container: document.createElement("div") },
+    );
 
     await userEvent.click(within(container).getByRole("button"));
 
-    expect(reset).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(reset).not.toHaveBeenCalled();
   });
 
   it("carries no translation call and no utility class", () => {
