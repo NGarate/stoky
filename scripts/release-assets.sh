@@ -29,6 +29,19 @@ if [ "$(grep -c '^STOKY_VERSION=' deploy/example.env)" != 1 ] \
   exit 1
 fi
 
+# The guide and README name the version in prose and in copy-paste commands
+# (`gh release download vX`). Nothing else ties those to the tag, so a release
+# that forgets them ships instructions that download the previous one.
+for doc in docs/INSTALL.md README.md; do
+  STALE="$(grep -noE 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?' "$doc" \
+    | sed 's/\.md$//' | awk -F: -v tag="$RELEASE_TAG" '$2 != tag' || true)"
+  if [ -n "$STALE" ]; then
+    echo "Error: $doc names a version other than $RELEASE_TAG:" >&2
+    echo "$STALE" >&2
+    exit 1
+  fi
+done
+
 if [ ! -s "docs/releases/$RELEASE_TAG.md" ]; then
   echo "Error: release notes docs/releases/$RELEASE_TAG.md are missing or empty." >&2
   exit 1
