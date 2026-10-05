@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_QUANTITY } from "./bounds";
 import { replayable } from "./idempotency";
 
 export const shoppingListSchema = z.object({
@@ -37,7 +38,7 @@ export const updateShoppingListSchema = shoppingListSchema.partial().extend({
 const shoppingItemFields = z.object({
   shoppingListId: z.string(),
   productId: z.string().min(1),
-  quantity: z.number().positive().default(1),
+  quantity: z.number().positive().finite().max(MAX_QUANTITY).default(1),
   unit: z.string().optional(),
   /** Where to buy it. Optional: most items do not care. */
   storeId: z.string().optional(),
@@ -51,7 +52,7 @@ export const addShoppingItemSchema = shoppingItemFields.merge(replayable);
 export const updateShoppingItemSchema = z.object({
   id: z.string(),
   isChecked: z.boolean().optional(),
-  quantity: z.number().positive().optional(),
+  quantity: z.number().positive().finite().max(MAX_QUANTITY).optional(),
   quantityUnit: z.string().nullable().optional(),
   /** `null` clears it: "anywhere" is a real answer. */
   storeId: z.string().nullish(),

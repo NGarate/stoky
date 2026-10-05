@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_PAGE_SIZE, MAX_SEARCH_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   priceRecordSchema,
@@ -151,8 +152,8 @@ export const priceRouter = createTRPCRouter({
   getProductPrices: householdProcedure
     .input(
       z.object({
-        search: z.string().optional(),
-        limit: z.number().default(50),
+        search: z.string().trim().max(MAX_SEARCH_LENGTH).optional(),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(50),
       })
     )
     .query(async ({ ctx, input }) => {

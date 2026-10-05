@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PAGE_SIZE, MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -473,7 +474,7 @@ export const receiptRouter = createTRPCRouter({
     .input(
       z.object({
         receiptId: z.string(),
-        items: z.array(receiptItemMatchSchema),
+        items: z.array(receiptItemMatchSchema).max(MAX_RECEIPT_LINES),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -832,7 +833,7 @@ export const receiptRouter = createTRPCRouter({
           "APPLIED",
           "FAILED",
         ]).optional(),
-        limit: z.number().default(20),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
         cursor: z.string().optional(),
       }),
     )

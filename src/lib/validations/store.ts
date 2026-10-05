@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PAGE_SIZE, MAX_SEARCH_LENGTH } from "./bounds";
 
 export const storeSchema = z.object({
   name: z.string().min(1),
@@ -10,8 +11,8 @@ export const updateStoreSchema = storeSchema.partial().extend({
 });
 
 export const storeQuerySchema = z.object({
-  search: z.string().optional(),
-  limit: z.number().default(20),
+  search: z.string().trim().max(MAX_SEARCH_LENGTH).optional(),
+  limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
 });
 
 export type StoreInput = z.infer<typeof storeSchema>;
