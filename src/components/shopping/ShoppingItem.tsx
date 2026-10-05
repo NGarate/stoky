@@ -34,6 +34,11 @@ interface ShoppingItemProps {
     isChecked: boolean;
     storeId?: string | null;
     store?: { id: string; name: string } | null;
+    /**
+     * An addition still in the queue, whose `id` is the queued change's
+     * rather than a row the server knows. See `ProjectedItem.queued`.
+     */
+    queued?: boolean;
   };
   /**
    * Courtesy only. `shopping.updateItem` is a `writeProcedure`, so a KITCHEN
@@ -77,12 +82,20 @@ export function ShoppingItem({
   stores,
 }: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
-  const { enqueue } = useWriteQueue();
+  const { enqueue, cancel } = useWriteQueue();
   const snackbar = useSnackbar();
   const quantityId = useId();
   const storeId = useId();
 
   const name = item.product?.name || t("itemName");
+  /**
+   * Whether this row can be written against yet.
+   *
+   * An addition that has not been sent has no server id: a tick, a quantity
+   * or a shop sent with the queued change's id is refused as a row that does
+   * not exist, and the change is lost. So those wait until it is sent.
+   */
+  const editable = canWrite && item.queued !== true;
 
   /** Both controls write the same way the tick does: through the queue. */
   function change(
@@ -118,6 +131,17 @@ export function ShoppingItem({
    */
   function remove(): void {
     const label = { key: "offline.removedItem", values: { name } };
+
+    // An addition that has not been sent is taken back by not sending it. A
+    // removal queued against its id was refused as a row that does not exist
+    // — and the addition, still queued ahead of it, put the item on the list
+    // anyway. Too late to cancel means it is being sent right now; it becomes
+    // a real row in a moment and can be removed like one.
+    if (item.queued === true) {
+      if (cancel(item.id)) snackbar.show({ kind: "confirm", message: label });
+      return;
+    }
+
     const queued = enqueue({
       path: "shopping.removeItem",
       input: { id: item.id },
@@ -170,7 +194,7 @@ export function ShoppingItem({
       meta={[
         {
           label: t("quantityLabel"),
-          value: canWrite ? (
+          value: editable ? (
             <div className="flex items-center gap-2">
               <label className="sr-only" htmlFor={quantityId}>
                 {t("quantityOf", { name })}
@@ -211,7 +235,7 @@ export function ShoppingItem({
         },
         {
           label: t("storeLabel"),
-          value: canWrite ? (
+          value: editable ? (
             <>
               <label className="sr-only" htmlFor={storeId}>
                 {t("storeOf", { name })}
@@ -242,7 +266,11 @@ export function ShoppingItem({
          had. The badge widens it once the row is ticked, which is why only the
          unticked rows failed. */
       status={
-        canWrite ? (
+        item.queued === true ? (
+          /* Not a tick yet: there is nothing on the server to tick. Said in
+             words, because a missing checkbox on its own says nothing. */
+          <Badge tone="neutral">{t("notSentYet")}</Badge>
+        ) : canWrite ? (
           <label className="flex min-h-[48px] min-w-[48px] items-center justify-center gap-2 text-lg">
             <input
               checked={item.isChecked}

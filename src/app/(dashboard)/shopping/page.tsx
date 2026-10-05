@@ -214,6 +214,8 @@ interface Row {
   minStock: number | null;
   listName: string;
   pending: boolean;
+  /** An addition not sent yet, whose id is the queued change's. */
+  queued: boolean;
 }
 
 /**
@@ -223,6 +225,10 @@ interface Row {
  * and one of them is 13px. It is a `button` with `aria-pressed` rather than a
  * checkbox because "ticked off" is a state being toggled, and because the
  * accessible name can then say what the tap will do.
+ *
+ * **An addition that has not been sent cannot be ticked yet.** Its id is the
+ * queued change's, so a tick sent with it was refused as a row that does not
+ * exist and the tap was lost. The row says so in words and the control waits.
  */
 function ShopRow({
   item,
@@ -245,7 +251,8 @@ function ShopRow({
     // (Noel's review, 2026-08-19).
     <button
       aria-pressed={item.isChecked}
-      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent"
+      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent disabled:hover:bg-transparent"
+      disabled={item.queued}
       onClick={onToggle}
       type="button"
     >
@@ -271,7 +278,9 @@ function ShopRow({
 
         {/* In words. The bar below is decoration and says nothing on its own. */}
         <span className="block text-sm text-muted-foreground">
-          {item.stock === null || item.minStock === null
+          {item.queued
+            ? t("notSentYet")
+            : item.stock === null || item.minStock === null
             ? item.stock === 0
               ? t("stockNone")
               : t("stockUnknown")
