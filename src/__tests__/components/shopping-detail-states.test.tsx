@@ -146,7 +146,7 @@ describe("the shopping list someone is holding", () => {
     expect(
       screen.getByText("Aquí todavía no hay nada guardado"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("No encontrado")).toBeAbsent();
+    expect(screen.queryByText("Esta lista ya no existe")).toBeAbsent();
   });
 
   it("still says a deleted list is gone", () => {
@@ -160,7 +160,17 @@ describe("the shopping list someone is holding", () => {
 
     renderPage();
 
-    expect(screen.getByText("No encontrado")).toBeInTheDocument();
+    // A heading, a reason and a way out. This was a bare
+    // `<div>No encontrado</div>` — no h1, no sentence, no link — reached
+    // from a link that used to work, by somebody whose household deleted
+    // the list under them.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Esta lista ya no existe" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Vuelve a tus listas para elegir otra/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Volver a tus listas" }).getAttribute("href"),
+    ).toBe("/shopping/lists");
     expect(screen.queryByText("Aquí todavía no hay nada guardado")).toBeAbsent();
   });
 
@@ -178,7 +188,7 @@ describe("the shopping list someone is holding", () => {
     expect(
       screen.getByText("No se han podido cargar los datos"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("No encontrado")).toBeAbsent();
+    expect(screen.queryByText("Esta lista ya no existe")).toBeAbsent();
   });
 
   it("draws its rows inside a list, not loose in a div", () => {
@@ -216,7 +226,7 @@ describe("the shopping list someone is holding", () => {
     // shopping list with a failure panel mid-shop is the worse answer.
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
     expect(screen.queryByText("No se han podido cargar los datos")).toBeAbsent();
-    expect(screen.queryByText("No encontrado")).toBeAbsent();
+    expect(screen.queryByText("Esta lista ya no existe")).toBeAbsent();
   });
 });
 

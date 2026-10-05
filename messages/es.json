@@ -707,6 +707,8 @@
     "shopTitle": "Compra",
     "backToShop": "Volver a la compra",
     "backToLists": "Volver a tus listas",
+    "notFoundTitle": "Esta lista ya no existe",
+    "notFoundBody": "Puede que alguien de tu hogar la haya eliminado. Vuelve a tus listas para elegir otra.",
     "scan": "Escanear",
     "toBuy": "Para comprar",
     "inTrolley": "En el carro",

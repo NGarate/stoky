@@ -707,6 +707,8 @@
     "shopTitle": "Shopping",
     "backToShop": "Back to shopping",
     "backToLists": "Back to your lists",
+    "notFoundTitle": "This list no longer exists",
+    "notFoundBody": "Someone in your household may have deleted it. Go back to your lists to choose another.",
     "scan": "Scan",
     "toBuy": "To buy",
     "inTrolley": "In the trolley",

@@ -137,7 +137,7 @@ const ROUTES = [
   {
     name: "/receipts/[id]/review",
     render: () => <ReviewPage />,
-    lie: /Ticket no encontrado/,
+    lie: /Ticket no encontrado|Este ticket ya no existe/,
   },
   { name: "/prices", render: () => <PricesPage />, lie: /No hay precios registrados/ },
   {
@@ -235,7 +235,16 @@ describe("a receipt that really is not there", () => {
 
     mount(<ReviewPage />);
 
-    expect(screen.getByText("Ticket no encontrado")).toBeInTheDocument();
+    // And says it as a page, not a stray paragraph: a heading, why, and the
+    // way back. It was a bare `<p>` with no h1 and no link — a dead end.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Este ticket ya no existe" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Vuelve a tus tickets/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Volver a tickets" }).getAttribute("href"),
+    ).toBe("/receipts");
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeAbsent();
   });
 });
 

@@ -10,7 +10,7 @@ import { ProductPicker, type PickedProduct } from "@/components/inventory/Produc
 import { CreateProductInline } from "@/components/receipt/CreateProductInline";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
-import { RouteState, isNotFoundError } from "@/components/household/RouteState";
+import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { projectShoppingItems } from "@/lib/offline/project";
@@ -124,16 +124,22 @@ export function ShoppingListView({ id }: { id: string }) {
   // for a paused query — so with no signal this fell straight through to
   // "not found" and told someone standing in a shop that the list they were
   // shopping from does not exist (ISSUES.md UI-9).
+  //
+  // A list that really is gone — most often deleted by someone else in the
+  // household, under the person holding it — gets a page that says so, why,
+  // and the way back. It was a bare "No encontrado" with no heading and no
+  // link: a dead end reached from a link that used to work.
   if (!list) {
-    if (isNotFoundError(listQuery.error)) {
-      return <div className="p-8">{t("errors.notFound")}</div>;
-    }
     return (
       <RouteState
+        back={{ href: "/shopping/lists", label: t("shopping.backToLists") }}
         error={listQuery.error}
         fetchStatus={listQuery.fetchStatus}
         isLoading={listQuery.isPending}
-        back={{ href: "/shopping/lists", label: t("shopping.backToLists") }}
+        notFound={{
+          title: t("shopping.notFoundTitle"),
+          body: t("shopping.notFoundBody"),
+        }}
         onRetry={() => void listQuery.refetch()}
         title={t("shopping.title")}
         width="detail"

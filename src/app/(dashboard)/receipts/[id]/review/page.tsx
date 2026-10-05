@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
 import { invalidateAfterReceiptApplied } from "@/lib/trpc/stale";
-import { RouteState, isNotFoundError } from "@/components/household/RouteState";
+import { RouteState } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -106,20 +106,17 @@ export default function ReviewPage() {
   // "Not found" only when the server said so. Gated on `isLoading`, a query
   // paused offline or refused with a 500 fell through to this branch and
   // told somebody their receipt did not exist.
+  //
+  // A receipt that really is gone says so as a page — a heading, why, and the
+  // way back. It was a bare paragraph with no h1 and no link: a dead end.
   if (!receipt) {
-    if (isNotFoundError(receiptQuery.error)) {
-      return (
-        <div className="mx-auto max-w-4xl">
-          <p>{t("notFound")}</p>
-        </div>
-      );
-    }
     return (
       <RouteState
+        back={{ href: "/receipts", label: t("backToList") }}
         error={receiptQuery.error}
         fetchStatus={receiptQuery.fetchStatus}
         isLoading={receiptQuery.isPending}
-        back={{ href: "/receipts", label: t("backToList") }}
+        notFound={{ title: t("notFoundTitle"), body: t("notFoundBody") }}
         onRetry={() => void receiptQuery.refetch()}
         title={t("review")}
         width="detail"
