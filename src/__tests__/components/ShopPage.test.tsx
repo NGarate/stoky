@@ -264,6 +264,31 @@ describe("what a queued change looks like", () => {
     // Straight into the trolley, before any server has heard about it.
     expect(screen.getByText("1 cosa marcada")).toBeInTheDocument();
   });
+
+  it("does not offer to tick an addition the server has not heard of", async () => {
+    // Its id is the queued change's. A tick sent with it was refused as a row
+    // that does not exist, and the tap was lost.
+    queryStub.data = [];
+    pending = [
+      {
+        id: "op-add",
+        path: "shopping.addItem",
+        input: { shoppingListId: "list-1", productId: "p-pan", quantity: 1 },
+        householdId: "h1",
+        label: { key: "offline.addedItem", values: { name: "Pan" } },
+        createdAt: new Date("2026-08-11T10:00:00.000Z"),
+        attempts: 0,
+      },
+    ];
+    renderWithIntl(<ShopPage />);
+
+    const control = screen.getByRole("button", { name: /Pan/ });
+    expect(control).toBeDisabled();
+    expect(control).toHaveTextContent("Sin enviar todavía");
+
+    await userEvent.click(control);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
 });
 
 describe("rows are rows, not cards", () => {

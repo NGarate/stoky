@@ -90,6 +90,18 @@ describe("projectShoppingItems", () => {
     expect(projected.find((row) => row.id === added.id)?.pending).toBe(true);
   });
 
+  it("marks an addition as queued, so no control writes against its id", () => {
+    // A tick or a removal sent with the operation's id is refused by the
+    // server as a row that does not exist. The screens can only avoid that if
+    // the row says what it is.
+    const added = op("shopping.addItem", { shoppingListId: "list-1", productId: "p" });
+
+    const projected = projectShoppingItems(rows, [added], "list-1");
+
+    expect(projected.find((row) => row.id === added.id)?.queued).toBe(true);
+    expect(projected.find((row) => row.id === "a")?.queued).toBe(false);
+  });
+
   it("gives an item added offline the name it was added under", () => {
     const added = op(
       "shopping.addItem",

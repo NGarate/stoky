@@ -738,6 +738,7 @@
     "storeAnywhere": "En cualquier sitio",
     "quantityLabel": "Cantidad",
     "unitLabel": "Unidad",
+    "notSentYet": "Sin enviar todavía",
     "itemUpdated": "Cambiaste «{name}»",
     "seePrices": "Ver precios de «{name}»",
     "bought": "Comprado",

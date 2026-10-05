@@ -27,6 +27,18 @@ export interface ProjectedItem {
   isChecked: boolean;
   /** True when an unsent change is responsible for the state shown. */
   pending: boolean;
+  /**
+   * True when the row *is* an unsent addition, so its `id` is the queued
+   * change's id and no row the server knows about.
+   *
+   * The screens have to know, because every other control on a row writes
+   * against that id: a tick or a removal sent with it was refused by the
+   * server as a row that does not exist — the tick lost, and the item the
+   * person had just taken back off the list added anyway once the addition
+   * drained. Such a row is taken back by cancelling the addition, and is
+   * edited once it has been sent.
+   */
+  queued: boolean;
 }
 
 interface ServerItem {
@@ -47,7 +59,7 @@ export function projectShoppingItems<T extends ServerItem>(
   listId?: string,
 ): (T & ProjectedItem)[] {
   const projected = new Map<string, T & ProjectedItem>(
-    items.map((item) => [item.id, { ...item, pending: false }]),
+    items.map((item) => [item.id, { ...item, pending: false, queued: false }]),
   );
 
   for (const op of pending) {
@@ -101,6 +113,7 @@ export function projectShoppingItems<T extends ServerItem>(
         id: op.id,
         isChecked: false,
         pending: true,
+        queued: true,
       });
     }
   }

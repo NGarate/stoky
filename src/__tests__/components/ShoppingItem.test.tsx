@@ -6,6 +6,7 @@ import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
+const cancel = mock((_id: string) => true);
 
 mock.module("@/lib/offline/queue-context", () => ({
   // A real context as well as the hook. `mock.module` replaces the module for
@@ -21,7 +22,7 @@ mock.module("@/lib/offline/queue-context", () => ({
     discard: () => {},
     // The row reports through the snackbar now, and the snackbar asks the
     // queue how long a change can still be taken back.
-    cancel: () => true,
+    cancel,
     holdRemainingMs: () => 10_000,
   }),
 }));
@@ -57,6 +58,7 @@ const baseItem = {
 
 beforeEach(() => {
   enqueue.mockClear();
+  cancel.mockClear();
 });
 
 afterEach(cleanup);
@@ -66,6 +68,41 @@ afterEach(cleanup);
 function lastEnqueued(): Record<string, unknown> {
   return enqueue.mock.calls[0]?.[0] as Record<string, unknown>;
 }
+
+/**
+ * A row added with no signal, still in the queue.
+ *
+ * Its `id` is the queued addition's, not a row the server has. Every control
+ * on the row wrote against that id: the tick and the quantity were refused as
+ * a row that does not exist, and the bin queued a removal that was refused
+ * while the addition ahead of it drained and put the item on the list anyway.
+ */
+describe("an addition that has not been sent", () => {
+  const queuedItem = { ...baseItem, id: "op-add", queued: true };
+
+  it("is taken back by cancelling the addition, not by removing a row", async () => {
+    render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Eliminar artículo" }));
+
+    expect(cancel).toHaveBeenCalledWith("op-add");
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("offers no tick until there is something on the server to tick", () => {
+    render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
+
+    expect(screen.queryByRole("checkbox")).toBeAbsent();
+    expect(screen.getByText("Sin enviar todavía")).toBeInTheDocument();
+  });
+
+  it("offers no quantity or shop to change yet", () => {
+    render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
+
+    expect(screen.queryByRole("spinbutton")).toBeAbsent();
+    expect(screen.queryByRole("combobox")).toBeAbsent();
+  });
+});
 
 describe("ShoppingItem", () => {
   it("shows the linked product name and quantity", () => {
