@@ -45,6 +45,18 @@ export default function ShopPage(): JSX.Element {
   const [trolleyOpen, setTrolleyOpen] = useState(false);
 
   const query = api.shopping.getBuyList.useQuery();
+  // A tick is `shopping.updateItem`, a `writeProcedure` the server refuses
+  // for KITCHEN — so for that account a row is something to read, not a
+  // control whose tap would be queued, refused and filed under "Cambios sin
+  // guardar". Courtesy, the same as the list detail's; the server is the
+  // control.
+  //
+  // Unknown counts as *yes* here, unlike on the list detail. `auth.me` is
+  // not among the persisted reads, so in a shop with no signal the answer
+  // never arrives — and gating on it would turn this screen, whose whole
+  // reason is working offline, into a list nobody can tick.
+  const me = api.auth.me.useQuery(undefined, { retry: false });
+  const canWrite = me.data?.role !== "KITCHEN";
 
   if (!query.data) {
     return (
@@ -128,7 +140,11 @@ export default function ShopPage(): JSX.Element {
           <ul className="divide-y divide-border">
             {toBuy.map((item) => (
               <li key={item.id}>
-                <ShopRow item={item} onToggle={() => setChecked(item, true)} />
+                <ShopRow
+                  canWrite={canWrite}
+                  item={item}
+                  onToggle={() => setChecked(item, true)}
+                />
               </li>
             ))}
           </ul>
@@ -173,6 +189,7 @@ export default function ShopPage(): JSX.Element {
             {trolley.map((item) => (
               <li key={item.id}>
                 <ShopRow
+                  canWrite={canWrite}
                   item={item}
                   onToggle={() => setChecked(item, false)}
                 />
@@ -216,9 +233,11 @@ interface Row {
  * exist and the tap was lost. The row says so in words and the control waits.
  */
 function ShopRow({
+  canWrite,
   item,
   onToggle,
 }: {
+  canWrite: boolean;
   item: Row;
   onToggle: () => void;
 }): JSX.Element {
@@ -235,17 +254,7 @@ function ShopRow({
       ? Math.min(100, ((item.stock as number) / (item.minStock as number)) * 100)
       : 0;
 
-  return (
-    // A row, not a card: the tick circle, the words and the list's dividers
-    // carry the state, so the box that used to wrap each item is gone
-    // (Noel's review, 2026-08-19).
-    <button
-      aria-pressed={item.isChecked}
-      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent disabled:hover:bg-transparent"
-      disabled={item.queued}
-      onClick={onToggle}
-      type="button"
-    >
+  const circle = (
       <span
         aria-hidden="true"
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
@@ -256,7 +265,9 @@ function ShopRow({
       >
         {item.isChecked ? "✓" : null}
       </span>
+  );
 
+  const words = (
       <span className="min-w-0 flex-1">
         <span
           className={`block font-medium ${
@@ -295,7 +306,31 @@ function ShopRow({
           </span>
         ) : null}
       </span>
+  );
 
+  // Read-only: the same words, no control and no tick circle — a circle
+  // with nothing behind it would look like a checkbox that does nothing.
+  if (!canWrite) {
+    return (
+      <div className="flex min-h-[64px] w-full items-center gap-3 py-3">
+        {words}
+      </div>
+    );
+  }
+
+  return (
+    // A row, not a card: the tick circle, the words and the list's dividers
+    // carry the state, so the box that used to wrap each item is gone
+    // (Noel's review, 2026-08-19).
+    <button
+      aria-pressed={item.isChecked}
+      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent disabled:hover:bg-transparent"
+      disabled={item.queued}
+      onClick={onToggle}
+      type="button"
+    >
+      {circle}
+      {words}
       <span className="sr-only">
         {item.isChecked
           ? t("untick", { name: item.name })
