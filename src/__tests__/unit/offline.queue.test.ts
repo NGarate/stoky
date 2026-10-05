@@ -289,6 +289,36 @@ describe("a queue composed in another household", () => {
     expect(send).not.toHaveBeenCalled();
     expect(queue.getState().failed[0]?.reason).toBe("wrong-household");
   });
+
+  it("sends a change composed before any household was known", async () => {
+    // Stamped "" by a session whose token had no household while the
+    // account created its first. Refusing it as wrong-household — which it
+    // was, for ever, once the next sign-in carried the real one — discarded
+    // a change that could only ever have been meant for this household.
+    const send = mock(async () => {});
+    const queue = open(send);
+
+    queue.enqueue(tick());
+    const stored = queue.getState().pending[0] as QueuedOp;
+    queue.store.setState(
+      { ...queue.getState(), pending: [{ ...stored, householdId: "" }] },
+      true,
+    );
+
+    await queue.drain();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queue.getState().failed).toHaveLength(0);
+  });
+
+  it("stamps changes with the household it was told about since opening", () => {
+    const queue = open(async () => {}, { householdId: "" });
+
+    queue.setHousehold(HOUSEHOLD);
+    queue.enqueue(tick());
+
+    expect(queue.getState().pending[0]?.householdId).toBe(HOUSEHOLD);
+  });
 });
 
 describe("room", () => {

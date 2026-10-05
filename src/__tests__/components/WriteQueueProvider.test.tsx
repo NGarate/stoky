@@ -13,9 +13,20 @@ import { renderWithIntl } from "../utils/render";
  */
 
 const invalidate = mock(() => Promise.resolve());
+/** The household the server reports for the account; null leaves it unknown. */
+let serverHousehold: string | null = null;
 
 mock.module("@/lib/trpc/client", () => ({
-  api: { useUtils: () => ({ invalidate }) },
+  api: {
+    useUtils: () => ({ invalidate }),
+    auth: {
+      me: {
+        useQuery: () => ({
+          data: serverHousehold === null ? undefined : { household: { id: serverHousehold } },
+        }),
+      },
+    },
+  },
 }));
 
 const { WriteQueueProvider } = await import(
@@ -62,6 +73,7 @@ function setNavigatorOnline(value: boolean): void {
 
 beforeEach(() => {
   invalidate.mockClear();
+  serverHousehold = null;
   setNavigatorOnline(true);
   onlineManager.setOnline(true);
 });
@@ -213,6 +225,33 @@ describe("two triggers at once", () => {
       release?.();
       await Promise.resolve();
     });
+  });
+});
+
+describe("a household created this session", () => {
+  it("stamps new changes with the household the server reports", async () => {
+    // The token still says no household; the account row says one exists.
+    serverHousehold = "clnewhouseholdnewhousehold";
+    const queue = openWriteQueue({
+      userId: "clttttttttttttttttttttttt",
+      householdId: "",
+      send: async () => {},
+      storage: createMemoryStorage(),
+    });
+
+    await act(async () => {
+      renderWithIntl(
+        <WriteQueueProvider queue={queue}>
+          <Readout />
+        </WriteQueueProvider>,
+      );
+    });
+    onlineManager.setOnline(false);
+    queue.enqueue(tick);
+
+    expect(queue.getState().pending[0]?.householdId).toBe(
+      "clnewhouseholdnewhousehold",
+    );
   });
 });
 
