@@ -177,15 +177,19 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={handleCameraCapture}
+      {/* The Button primitive: this was a bare <button> with hand-written
+          classes and no focus-visible outline of its own — the one control
+          on the screen a keyboard user could lose. */}
+      <Button
+        className="w-full gap-2"
         disabled={isUploading}
-        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+        onClick={handleCameraCapture}
+        type="button"
+        variant="outline"
       >
-        <Camera className="w-5 h-5" />
-        <span>{t("cameraCapture")}</span>
-      </button>
+        <Camera aria-hidden="true" className="size-5" />
+        {t("cameraCapture")}
+      </Button>
     </div>
   );
 }

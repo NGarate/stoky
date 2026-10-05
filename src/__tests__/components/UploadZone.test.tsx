@@ -201,6 +201,14 @@ describe("UploadZone", () => {
     ).toBeInTheDocument();
   });
 
+  it("draws the camera action as the Button primitive, focus outline and all", () => {
+    renderWithIntl(<UploadZone onUpload={() => {}} />);
+
+    const camera = screen.getByRole("button", { name: /Hacer foto con la cámara/ });
+    expect(camera.className).toContain("focus-visible:outline-ring");
+    expect(camera.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("disables the camera action while uploading", () => {
     renderWithIntl(<UploadZone onUpload={() => {}} isUploading />);
 
