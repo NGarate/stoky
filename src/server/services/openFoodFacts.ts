@@ -35,14 +35,35 @@ const offProductSchema = z.object({
   image_url: z.string().optional(),
   image_front_url: z.string().optional(),
   quantity: z.string().optional(),
-  serving_quantity: z.string().optional(),
+  // A number for some products and a string for others — the live API does
+  // both. Typed as a string only, a numeric one failed the whole parse, and
+  // `getProductByBarcode` reports a failed parse as "not found": a product
+  // Open Food Facts knows came back as unknown over a field nothing reads.
+  serving_quantity: z
+    .union([z.string(), z.number()])
+    .transform((value) => String(value))
+    .optional(),
   nutriments: z
     .object({
+      // OFF's key is `energy-kcal`, with a hyphen, and the normalised
+      // `energy-kcal_100g` beside it. Nothing ever sends `energy_kcal`, so
+      // the field this schema promised was never filled. Read from OFF's
+      // keys and stored under ours; `energy_kcal` itself stays accepted
+      // because that is how a product this schema already parsed comes
+      // back out of the cache.
       energy_kcal: z.number().optional(),
+      "energy-kcal": z.number().optional(),
+      "energy-kcal_100g": z.number().optional(),
       proteins: z.number().optional(),
       carbohydrates: z.number().optional(),
       fat: z.number().optional(),
     })
+    .transform(
+      ({ "energy-kcal": kcal, "energy-kcal_100g": kcal100g, energy_kcal, ...rest }) => ({
+        ...rest,
+        energy_kcal: energy_kcal ?? kcal ?? kcal100g,
+      }),
+    )
     .optional(),
   ingredients_text: z.string().optional(),
   allergens: z.string().optional(),
