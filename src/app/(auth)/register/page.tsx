@@ -60,7 +60,9 @@ export default function RegisterPage(): JSX.Element {
       }
 
       startTransition(() => {
-        router.replace("/dashboard");
+        // `/`, which asks a new account which screen it wants (Journey 8) —
+        // straight to `/dashboard` meant nobody new ever saw `/start`.
+        router.replace("/");
         router.refresh();
       });
     } catch (error: unknown) {

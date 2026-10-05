@@ -484,9 +484,11 @@ test.describe("Screen-reader journeys", () => {
 
     await page.fill('input[name="password"]', DEMO_PASSWORD);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+    // A fresh context is a device nobody has chosen a screen on, so signing
+    // in asks (Journey 8) — the first screen a new reader actually meets.
+    await page.waitForURL(/\/start/, { timeout: 30_000 });
     await settle(page);
-    assertTree(await snapshot(page), "/dashboard");
+    assertTree(await snapshot(page), "/start");
   });
 
   test.describe("signed in", () => {

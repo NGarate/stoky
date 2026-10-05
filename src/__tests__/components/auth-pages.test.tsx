@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
@@ -27,8 +28,15 @@ mock.module("next-auth/react", () => ({
   signIn: async () => ({ ok: true, error: null }),
 }));
 
+/** Every path a page asked the router to replace the current entry with. */
+const replaced: string[] = [];
+
 mock.module("next/navigation", () => ({
-  useRouter: () => ({ push: () => {}, refresh: () => {} }),
+  useRouter: () => ({
+    push: () => {},
+    refresh: () => {},
+    replace: (path: string) => replaced.push(path),
+  }),
   usePathname: () => "/login",
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({}),
@@ -243,4 +251,33 @@ describe("how a failed sign-in reaches someone who cannot see the form", () => {
       expect(container.querySelector('[role="alert"]')).toBeAbsent();
     });
   }
+});
+
+describe("where signing in leads", () => {
+  // `/` is where the screen choice is honoured (`src/app/page.tsx`, Journey
+  // 8): the kitchen tablet goes to the kitchen, the phone that chose the shop
+  // goes to the shop, and somebody new is asked. Replacing straight to
+  // `/dashboard` walked past all three — a new account never saw `/start`.
+  it("goes to the landing decision after a sign-in", async () => {
+    replaced.length = 0;
+    renderWithIntl(<LoginPage />, { locale: "es" });
+
+    await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
+    await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
+    await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+
+    await waitFor(() => expect(replaced).toEqual(["/"]));
+  });
+
+  it("goes to the landing decision after a registration", async () => {
+    replaced.length = 0;
+    renderWithIntl(<RegisterPage />, { locale: "es" });
+
+    await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
+    await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
+    await userEvent.type(screen.getByLabelText("Contraseña"), "Secreta1234!");
+    await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
+
+    await waitFor(() => expect(replaced).toEqual(["/"]));
+  });
 });

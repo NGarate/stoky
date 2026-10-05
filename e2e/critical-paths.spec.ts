@@ -116,7 +116,8 @@ class RegisterPage {
     householdName?: string,
   ) {
     await this.register(name, email, password, householdName);
-    await expect(this.page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    // A new account is asked which screen it wants (Journey 8).
+    await expect(this.page).toHaveURL(/\/start/, { timeout: 15_000 });
   }
 
   async expectErrorMessage(message: string) {
@@ -127,7 +128,22 @@ class RegisterPage {
 class DashboardPage {
   constructor(private page: Page) {}
 
+  /**
+   * Arrive on the panel after registering or signing in.
+   *
+   * Signing in lands on `/`, which sends a device nobody has chosen a screen
+   * on to `/start` (Journey 8) — and every account these journeys create is
+   * new to this browser context. So they answer the question the way a person
+   * does, by choosing the panel, rather than typing its URL. A second sign-in
+   * on the same context has already answered and goes straight there.
+   */
   async expectLoaded() {
+    await expect(this.page).toHaveURL(/\/(start|dashboard)/, { timeout: 15_000 });
+    if (new URL(this.page.url()).pathname === "/start") {
+      await this.page
+        .getByRole("button", { name: new RegExp(es.start.dashboard) })
+        .click();
+    }
     await expect(this.page).toHaveURL(/\/dashboard/);
     // Wait for dashboard content to load
     await this.page.waitForLoadState("networkidle");
@@ -363,7 +379,7 @@ class InventoryPage {
  * E2E Critical Path Tests
  * 
  * These tests cover the most important user flows:
- * 1. Onboarding Flow: Register → Create household → Land on dashboard
+ * 1. Onboarding Flow: Register → Create household → Choose a screen → Land on dashboard
  * 2. Product Creation: Login → Navigate to products → Add product → Verify in list
  * 3. Inventory Management: Login → Add stock → View inventory → Consume stock
  */
@@ -385,7 +401,7 @@ test.describe("Onboarding Flow", () => {
     // Fill registration form with household
     await registerPage.register(testName, testEmail, testPassword, householdName);
 
-    // Should redirect to dashboard after successful registration
+    // Asked which screen to start on, then on the one chosen
     await dashboardPage.expectLoaded();
 
     // Verify navigation items are present
@@ -832,7 +848,7 @@ test.describe("Login Flow", () => {
     await page.goto("/login");
     await loginPage.login(testEmail, testPassword);
 
-    // Should redirect to dashboard
+    // Already answered on this context, so straight to the panel
     await dashboardPage.expectLoaded();
   });
 

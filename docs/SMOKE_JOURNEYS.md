@@ -451,6 +451,12 @@ Evidence:
 - `src/__tests__/unit/landing.test.ts` covers the precedence, including the
   omission that matters — no quiet fallback to the Panel for the unasked.
 
+- *Signing in goes through the decision*: until 2026-10-06 the login and
+  registration forms replaced straight to `/dashboard`, so the question was
+  only ever asked of someone who later typed `/` — the kitchen tablet signed in
+  to the panel, and a new account never met `/start`. Both now replace to `/`;
+  `auth-pages.test.tsx` pins it, and every browser sign-in (`session.setup.ts`,
+  `auth.prod.spec.ts`, `critical-paths`) now arrives at `/start`.
 - *Changeable from settings*: `/settings/screen` shows which screen is current,
   changes it without walking you out of settings, and announces the new answer
   in a live region — and a second device is unaffected by the change.
