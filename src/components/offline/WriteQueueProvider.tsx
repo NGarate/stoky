@@ -1,7 +1,7 @@
 "use client";
 
 import { onlineManager } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useStore } from "zustand";
 import { api } from "@/lib/trpc/client";
 import { useComposer } from "./Composer";
@@ -124,9 +124,25 @@ export function WriteQueueProvider({
    */
   const pendingCount = state.pending.length;
   const needsSignin = state.status === "needs-signin";
+  /**
+   * And only while there is a connection to retry against.
+   *
+   * A transport failure costs no strike — that is right, a phone in a tunnel
+   * has not been refused — so `attempts` stays at zero and the backoff stays
+   * at its first, sub-second step. Offline, this timer therefore fired, failed
+   * and re-armed under a second, for as long as the phone had no signal:
+   * battery, and a localStorage write on every lap. The connection coming
+   * back is already a trigger (the subscription above), and this is a
+   * dependency so the timer re-arms then too.
+   */
+  const online = useSyncExternalStore(
+    (onChange) => onlineManager.subscribe(onChange),
+    () => onlineManager.isOnline(),
+    () => true,
+  );
   const [retryTick, setRetryTick] = useState(0);
   useEffect(() => {
-    if (pendingCount === 0 || needsSignin) return;
+    if (pendingCount === 0 || needsSignin || !online) return;
 
     const delay = queue.nextDelayMs();
     if (delay === null) return;
@@ -141,7 +157,7 @@ export function WriteQueueProvider({
     }, Math.max(delay, 250));
 
     return () => clearTimeout(id);
-  }, [pendingCount, needsSignin, retryTick, queue, drain]);
+  }, [pendingCount, needsSignin, online, retryTick, queue, drain]);
 
   const value = useMemo<WriteQueueValue>(
     () => ({

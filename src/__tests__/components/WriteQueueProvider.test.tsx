@@ -1,5 +1,5 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
+import { describe, it, expect, afterEach, beforeEach, jest, mock } from "bun:test";
 import { act, cleanup } from "@testing-library/react";
 import { onlineManager } from "@tanstack/react-query";
 import { renderWithIntl } from "../utils/render";
@@ -213,6 +213,44 @@ describe("two triggers at once", () => {
       release?.();
       await Promise.resolve();
     });
+  });
+});
+
+describe("with no connection", () => {
+  it("does not keep retrying a change it cannot send", async () => {
+    // A transport failure costs no strike, so the backoff never left its
+    // first, sub-second step: offline, the timer fired, failed and re-armed
+    // every second for as long as there was no signal.
+    jest.useFakeTimers();
+    try {
+      setNavigatorOnline(false);
+      onlineManager.setOnline(false);
+      const send = mock(async () => {
+        throw new TypeError("Failed to fetch");
+      });
+      const queue = makeQueue(send);
+      queue.enqueue(tick);
+
+      await act(async () => {
+        renderWithIntl(
+          <WriteQueueProvider queue={queue}>
+            <Readout />
+          </WriteQueueProvider>,
+        );
+      });
+      const afterMount = send.mock.calls.length;
+
+      for (let second = 0; second < 30; second += 1) {
+        await act(async () => {
+          jest.advanceTimersByTime(1_000);
+        });
+      }
+
+      expect(send.mock.calls.length).toBe(afterMount);
+      expect(queue.getState().pending).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
