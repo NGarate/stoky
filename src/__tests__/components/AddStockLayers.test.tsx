@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup, fireEvent } from "@testing-library/react";
+import { act, screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 
@@ -24,6 +24,7 @@ const entries = [
 ];
 
 let addStockCalls: Array<Record<string, unknown>>;
+let addStockOptions: { onError?: (error: { message: string }) => void } = {};
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
@@ -90,12 +91,15 @@ mock.module("@/lib/trpc/client", () => ({
     },
     inventory: {
       addStock: {
-        useMutation: () => ({
-          mutate: (input: Record<string, unknown>) => {
-            addStockCalls.push(input);
-          },
-          isPending: false,
-        }),
+        useMutation: (options: typeof addStockOptions) => {
+          addStockOptions = options;
+          return {
+            mutate: (input: Record<string, unknown>) => {
+              addStockCalls.push(input);
+            },
+            isPending: false,
+          };
+        },
       },
     },
   },
@@ -188,5 +192,24 @@ describe("the add form in two layers", () => {
     expect(addStockCalls[0]?.locationId).toBeUndefined();
     expect(addStockCalls[0]?.expirationDate).toBeUndefined();
     expect(addStockCalls[0]?.note).toBeUndefined();
+  });
+
+  it("names the product's unit when the server refuses the one typed", () => {
+    renderWithIntl(<AddStockPage />, { locale: "es" });
+
+    pickProduct();
+    act(() => {
+      addStockOptions.onError?.({
+        message: "Unit cannot be converted to the product's unit",
+      });
+    });
+
+    // Not the generic "revisa los datos": the person typed a unit the product
+    // is not counted in, and the fix is to use the one it is.
+    expect(screen.getByRole("alert").textContent).toContain(
+      "no se puede convertir a la del producto (L)",
+    );
+    // And the unit field it is about is not left in a closed drawer.
+    expect(document.querySelector("details")?.open).toBe(true);
   });
 });

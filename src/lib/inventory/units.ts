@@ -10,8 +10,9 @@ export function countUnitSize(unit: string | null): number | undefined {
   }
 }
 
+/** Case and surrounding space do not make a different unit: "L" is "l". */
 export function unitConversion(from: string | null, to: string): number | undefined {
-  if (from === to) return 1;
+  if (from === to || (from ?? "").trim().toLowerCase() === to.trim().toLowerCase()) return 1;
   const source = countUnitSize(from);
   const target = countUnitSize(to);
   return source !== undefined && target !== undefined ? source / target : undefined;
