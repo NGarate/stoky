@@ -157,7 +157,9 @@ describe("what is urgent comes first", () => {
     renderKitchen();
 
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
-    expect(screen.getByText("Quedan 2 días")).toBeInTheDocument();
+    // `ExpiryStatus`'s words — the kitchen said "Quedan 2 días" while the
+    // Panel said "En 2 días" for the same batch.
+    expect(screen.getByText("Caduca en 2 días")).toBeInTheDocument();
   });
 
   it("leaves what is further off in the reading columns", () => {

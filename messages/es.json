@@ -64,20 +64,11 @@
     "expiryTitle": "Caduca en los próximos {days} días",
     "expiryInventoryLink": "Ver el inventario",
     "expiryEmpty": "No hay nada caducado ni a punto de caducar.",
-    "expiryQuantity": "{quantity} {unit}",
-    "expiryNoLocation": "Sin ubicación",
-    "expiryExpired": "Caducó hace {days} días",
-    "expiryToday": "Caduca hoy",
-    "expiryTomorrow": "Caduca mañana",
-    "expiryInDays": "En {days} días",
     "expiryMore": "Hay más lotes de los que caben aquí. Ábrelos en el inventario.",
     "quickTitle": "Acciones rápidas",
     "quickAddStock": "Añadir stock",
     "quickConsumeStock": "Consumir stock",
-    "quickUploadReceipt": "Subir un ticket",
-    "expiryQuantityLabel": "Cantidad",
-    "expiryLocationLabel": "Dónde está",
-    "quantityUnknown": "Cantidad sin confirmar"
+    "quickUploadReceipt": "Subir un ticket"
   },
   "common": {
     "save": "Guardar",
@@ -244,7 +235,6 @@
       "locationsNote": "Las cantidades sin confirmar necesitan un recuento: no sabemos de qué ubicación salieron los consumos sin lote.",
       "expiryTitle": "Caducidades",
       "expiryEmpty": "Ningún lote de este producto tiene fecha de caducidad.",
-      "expiryExpired": "Caducado",
       "expiryBatch": "{quantity} {unit} · {location}",
       "expiryNote": "Si no consta qué lote se consumió, su cantidad queda sin confirmar.",
       "pricesTitle": "Últimos precios",
@@ -554,10 +544,12 @@
       "quantityValue": "{quantity} {unit}",
       "locationLabel": "Dónde está",
       "noLocation": "Sin ubicación",
-      "daysAgo": "{days, plural, one {Hace # día} other {Hace # días}}",
-      "until": "{days, plural, =0 {Hoy} =1 {Mañana} other {En # días}}",
       "more": "{count, plural, one {Y # más…} other {Y # más…}}",
       "quantityUnknown": "Cantidad sin confirmar"
+    },
+    "expiryStatus": {
+      "upcoming": "{days, plural, =0 {Caduca hoy} =1 {Caduca mañana} other {Caduca en # días}}",
+      "past": "{days, plural, =1 {Caducó ayer} other {Caducó hace # días}}"
     }
   },
   "receipts": {
@@ -1036,10 +1028,6 @@
     "runningOut": "Se está acabando",
     "useOne": "He usado uno",
     "useOneOf": "He usado un {unit} de {name}",
-    "expiresToday": "Caduca hoy",
-    "expiresTomorrow": "Caduca mañana",
-    "expiresInDays": "Quedan {days} días",
-    "expired": "Caducado",
     "noLocation": "Sin sitio",
     "nothingUrgent": "No hay nada a punto de caducar",
     "nothingUrgentHint": "Todo lo que hay en casa aguanta más de tres días.",

@@ -6,6 +6,8 @@ import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
+import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
@@ -118,8 +120,12 @@ export default function KitchenPage(): JSX.Element {
   }
 
   const batches = expiring.data;
-  const urgent = batches.filter((batch) => batch.daysUntilExpiry <= 3);
-  const later = batches.filter((batch) => batch.daysUntilExpiry > 3);
+  const urgent = batches.filter(
+    (batch) => batch.daysUntilExpiry <= EXPIRING_SOON_DAYS,
+  );
+  const later = batches.filter(
+    (batch) => batch.daysUntilExpiry > EXPIRING_SOON_DAYS,
+  );
 
   const lowStock = stock.data?.products ?? [];
   /**
@@ -251,13 +257,6 @@ export default function KitchenPage(): JSX.Element {
     });
   }
 
-  function when(days: number): string {
-    if (days < 0) return t("expired");
-    if (days === 0) return t("expiresToday");
-    if (days === 1) return t("expiresTomorrow");
-    return t("expiresInDays", { days });
-  }
-
   return (
     <div className="mx-auto max-w-5xl">
       <h1 className="text-4xl font-bold text-heading">{t("title")}</h1>
@@ -288,8 +287,15 @@ export default function KitchenPage(): JSX.Element {
                   <p className="text-2xl font-bold text-warn-foreground">
                     {batch.product.name}
                   </p>
-                  <p className="mt-1 text-xl text-warn-foreground">
-                    {when(batch.daysUntilExpiry)}
+                  {/* `ExpiryStatus`'s word, the one every screen uses. This
+                      said "Quedan 2 días" while the Panel said "En 2 días"
+                      for the same batch. Outlined: the card is already warn. */}
+                  <p className="mt-2">
+                    <ExpiryStatus
+                      className="text-xl"
+                      daysUntilExpiry={batch.daysUntilExpiry}
+                      onTintedRow
+                    />
                   </p>
                   <p className="mt-1 text-xl text-warn-foreground">
                     {batch.location?.name ?? t("noLocation")}
@@ -339,9 +345,10 @@ export default function KitchenPage(): JSX.Element {
                   density="touch"
                   key={batch.id}
                   status={
-                    <span className="shrink-0 text-muted-foreground">
-                      {when(batch.daysUntilExpiry)}
-                    </span>
+                    <ExpiryStatus
+                      className="text-lg md:text-xl"
+                      daysUntilExpiry={batch.daysUntilExpiry}
+                    />
                   }
                   title={batch.product.name}
                   variant="plain"

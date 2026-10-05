@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
+import { ExpiryRow } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState, SectionState } from "@/components/household/RouteState";
-import type { JSX, ReactNode } from "react";
+import type { JSX } from "react";
 
 /**
  * Household overview — the screen every login lands on.
@@ -236,46 +236,16 @@ export default function DashboardPage(): JSX.Element {
             <ul className="mt-3 divide-y divide-border">
               {expiredItems.slice(0, MAX_ROWS).map((item) => (
                 <ExpiryRow
+                  batch={item}
+                  daysUntilExpiry={-item.daysExpired}
                   key={item.id}
-                  location={item.location?.name ?? null}
-                  name={item.product.name}
-                  noLocationLabel={t("expiryNoLocation")}
-                  productId={item.product.id}
-                  locationLabel={t("expiryLocationLabel")}
-                  quantity={t("expiryQuantity", {
-                    quantity: item.quantity ?? t("quantityUnknown"),
-                    unit: item.unit,
-                  })}
-                  quantityLabel={t("expiryQuantityLabel")}
-                  status={
-                    <Badge tone="danger">
-                      {t("expiryExpired", { days: item.daysExpired })}
-                    </Badge>
-                  }
                 />
               ))}
               {expiringItems.slice(0, MAX_ROWS).map((item) => (
                 <ExpiryRow
+                  batch={item}
+                  daysUntilExpiry={item.daysUntilExpiry}
                   key={item.id}
-                  location={item.location?.name ?? null}
-                  name={item.product.name}
-                  noLocationLabel={t("expiryNoLocation")}
-                  productId={item.product.id}
-                  locationLabel={t("expiryLocationLabel")}
-                  quantity={t("expiryQuantity", {
-                    quantity: item.quantity ?? t("quantityUnknown"),
-                    unit: item.unit,
-                  })}
-                  quantityLabel={t("expiryQuantityLabel")}
-                  status={
-                    <Badge tone={item.isExpiringSoon ? "danger" : "warn"}>
-                      {item.daysUntilExpiry <= 0
-                        ? t("expiryToday")
-                        : item.daysUntilExpiry === 1
-                          ? t("expiryTomorrow")
-                          : t("expiryInDays", { days: item.daysUntilExpiry })}
-                    </Badge>
-                  }
                 />
               ))}
             </ul>
@@ -290,41 +260,6 @@ export default function DashboardPage(): JSX.Element {
       </section>
 
     </div>
-  );
-}
-
-/** One batch that has expired or is about to. */
-function ExpiryRow({
-  location,
-  locationLabel,
-  name,
-  noLocationLabel,
-  productId,
-  quantity,
-  quantityLabel,
-  status,
-}: {
-  location: string | null;
-  name: string;
-  noLocationLabel: string;
-  productId: string;
-  quantity: string;
-  quantityLabel: string;
-  locationLabel: string;
-  status: ReactNode;
-}): JSX.Element {
-  return (
-    <ItemRow
-      density="compact"
-      href={`/products/${productId}`}
-      meta={[
-        { label: quantityLabel, value: quantity },
-        { label: locationLabel, value: location ?? noLocationLabel },
-      ]}
-      status={status}
-      title={name}
-      variant="plain"
-    />
   );
 }
 

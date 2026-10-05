@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import { QuantityStepper } from "@/components/inventory/QuantityStepper";
+import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { projectStockTotals } from "@/lib/offline/project";
@@ -427,14 +428,19 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           <ul className="mt-2 divide-y divide-border rounded border border-border bg-card">
             {batches.map((batch) => (
               <li key={batch.id} className="px-4 py-3">
-                <p className="font-medium text-foreground">
+                <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
                   {dateFormat.format(batch.expiresAt)}
-                  {/* A date, not an instant: dated today is not yet expired. */}
-                  {daysUntilExpiry(batch.expiresAt, startOfToday(new Date(now))) < 0 ? (
-                    <span className="ml-2 font-semibold text-danger-foreground">
-                      {t("expiryExpired")}
-                    </span>
-                  ) : null}
+                  {/* A date, not an instant: dated today is not yet expired.
+                      The words and tone are the ones every other screen
+                      uses for a batch's date — this was a bare red
+                      "Caducado" span, not a pill, saying nothing at all
+                      about a batch that goes off tomorrow. */}
+                  <ExpiryStatus
+                    daysUntilExpiry={daysUntilExpiry(
+                      batch.expiresAt,
+                      startOfToday(new Date(now)),
+                    )}
+                  />
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("expiryBatch", {

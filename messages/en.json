@@ -64,20 +64,11 @@
     "expiryTitle": "Expiring in the next {days} days",
     "expiryInventoryLink": "Open the inventory",
     "expiryEmpty": "Nothing has expired and nothing is about to.",
-    "expiryQuantity": "{quantity} {unit}",
-    "expiryNoLocation": "No location",
-    "expiryExpired": "Expired {days} days ago",
-    "expiryToday": "Expires today",
-    "expiryTomorrow": "Expires tomorrow",
-    "expiryInDays": "In {days} days",
     "expiryMore": "There are more batches than fit here. Open them in the inventory.",
     "quickTitle": "Quick actions",
     "quickAddStock": "Add stock",
     "quickConsumeStock": "Consume stock",
-    "quickUploadReceipt": "Upload a receipt",
-    "expiryQuantityLabel": "Quantity",
-    "expiryLocationLabel": "Where it is",
-    "quantityUnknown": "Quantity unconfirmed"
+    "quickUploadReceipt": "Upload a receipt"
   },
   "common": {
     "save": "Save",
@@ -244,7 +235,6 @@
       "locationsNote": "Some counts need a check. Past uses did not say which batch they came from.",
       "expiryTitle": "Expiry dates",
       "expiryEmpty": "No batch of this product has an expiry date.",
-      "expiryExpired": "Expired",
       "expiryBatch": "{quantity} {unit} · {location}",
       "expiryNote": "If the consumed batch was not recorded, its quantity remains unconfirmed.",
       "pricesTitle": "Latest prices",
@@ -554,10 +544,12 @@
       "quantityValue": "{quantity} {unit}",
       "locationLabel": "Where it is",
       "noLocation": "No location",
-      "daysAgo": "{days, plural, one {# day ago} other {# days ago}}",
-      "until": "{days, plural, =0 {Today} =1 {Tomorrow} other {In # days}}",
       "more": "{count, plural, one {And # more…} other {And # more…}}",
       "quantityUnknown": "Quantity unconfirmed"
+    },
+    "expiryStatus": {
+      "upcoming": "{days, plural, =0 {Expires today} =1 {Expires tomorrow} other {Expires in # days}}",
+      "past": "{days, plural, =1 {Expired yesterday} other {Expired # days ago}}"
     }
   },
   "receipts": {
@@ -1036,10 +1028,6 @@
     "runningOut": "Running out",
     "useOne": "Used one",
     "useOneOf": "Used one {unit} of {name}",
-    "expiresToday": "Goes off today",
-    "expiresTomorrow": "Goes off tomorrow",
-    "expiresInDays": "{days} days left",
-    "expired": "Past its date",
     "noLocation": "No place set",
     "nothingUrgent": "Nothing is about to go off",
     "nothingUrgentHint": "Everything in the house lasts more than three days.",

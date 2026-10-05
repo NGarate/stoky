@@ -1,11 +1,10 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { ItemRow } from "@/components/ui/item-row";
+import { ExpiryRow } from "@/components/inventory/ExpiryStatus";
 import { api } from "@/lib/trpc/client";
 import { SectionState } from "@/components/household/RouteState";
 import { useTranslations } from "next-intl";
-import type { JSX, ReactNode } from "react";
+import type { JSX } from "react";
 
 interface ExpiringItemsProps {
   days?: number;
@@ -16,9 +15,9 @@ interface ExpiringItemsProps {
 /**
  * What is about to spoil, or already has — on the shared list grammar.
  *
- * The same `ItemRow` + `Badge` the dashboard's expiry section uses (its
- * `ExpiryRow`), rather than the hand-rolled tinted `<li>`s this once carried:
- * the state is a word in a `Badge`, not a colour and not an SVG, and the 48px
+ * The same `ExpiryRow` the dashboard's expiry section uses, rather than the
+ * hand-rolled tinted `<li>`s this once carried: the state is `ExpiryStatus`'s
+ * word in a `Badge`, not a colour and not an SVG, and the 48px
  * target floor comes from the `ItemRow` primitive instead of being restated on
  * the row (DEFERRED.md item 20). No page of its own — expiry is shown where it is
  * relevant (the inventory list, the Panel, the kitchen), and this is the block
@@ -81,20 +80,9 @@ export function ExpiringItems({
           <ul className="mt-3 divide-y divide-border">
             {displayExpired.map((item) => (
               <ExpiryRow
+                batch={item}
+                daysUntilExpiry={-item.daysExpired}
                 key={item.id}
-                item={item}
-                locationLabel={t("locationLabel")}
-                noLocationLabel={t("noLocation")}
-                quantityLabel={t("quantityLabel")}
-                quantityValue={t("quantityValue", {
-                  quantity: item.quantity ?? t("quantityUnknown"),
-                  unit: item.unit,
-                })}
-                status={
-                  <Badge tone="danger">
-                    {t("daysAgo", { days: item.daysExpired })}
-                  </Badge>
-                }
               />
             ))}
           </ul>
@@ -117,20 +105,9 @@ export function ExpiringItems({
           <ul className="mt-3 divide-y divide-border">
             {displayExpiring.map((item) => (
               <ExpiryRow
+                batch={item}
+                daysUntilExpiry={item.daysUntilExpiry}
                 key={item.id}
-                item={item}
-                locationLabel={t("locationLabel")}
-                noLocationLabel={t("noLocation")}
-                quantityLabel={t("quantityLabel")}
-                quantityValue={t("quantityValue", {
-                  quantity: item.quantity ?? t("quantityUnknown"),
-                  unit: item.unit,
-                })}
-                status={
-                  <Badge tone={item.isExpiringSoon ? "danger" : "warn"}>
-                    {t("until", { days: item.daysUntilExpiry })}
-                  </Badge>
-                }
               />
             ))}
           </ul>
@@ -142,42 +119,5 @@ export function ExpiringItems({
         </section>
       ) : null}
     </div>
-  );
-}
-
-/** One expiry row, the same shape the Panel draws (ItemRow, compact, plain). */
-function ExpiryRow({
-  item,
-  locationLabel,
-  noLocationLabel,
-  quantityLabel,
-  quantityValue,
-  status,
-}: {
-  item: {
-    product: { id: string; name: string };
-    location: { name: string } | null;
-  };
-  locationLabel: string;
-  noLocationLabel: string;
-  quantityLabel: string;
-  quantityValue: string;
-  status: ReactNode;
-}): JSX.Element {
-  return (
-    <ItemRow
-      density="compact"
-      href={`/products/${item.product.id}`}
-      meta={[
-        { label: quantityLabel, value: quantityValue },
-        {
-          label: locationLabel,
-          value: item.location?.name ?? noLocationLabel,
-        },
-      ]}
-      status={status}
-      title={item.product.name}
-      variant="plain"
-    />
   );
 }
