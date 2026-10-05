@@ -980,6 +980,7 @@
     "needsReview": "{count, plural, one {# scanned barcode needs a name} other {# scanned barcodes need a name}}",
     "review": "Review",
     "nameIt": "Name it",
+    "signInAgain": "Sign in again",
     "sendNow": "Send now",
     "reconcileTitle": "Check the stock",
     "reconcileBody": "We could not save the use of {quantity} {unit} of “{name}”. Check what is left and confirm the count.",

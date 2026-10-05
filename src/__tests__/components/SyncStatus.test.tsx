@@ -187,6 +187,19 @@ describe("the two live regions", () => {
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
+  it("offers the way back in, not a send that cannot work", () => {
+    // The drain returns at once while the session is expired, so "Enviar
+    // ahora" — the only control this banner had — did nothing at all.
+    queueState = { ...queueState, status: "needs-signin", pending: [op("a")] };
+    renderWithIntl(<SyncStatus />);
+
+    expect(screen.getByRole("link", { name: "Volver a entrar" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(screen.queryByRole("button", { name: "Enviar ahora" })).toBeAbsent();
+  });
+
   it("says nothing at all when everything is saved", () => {
     renderWithIntl(<SyncStatus />);
 
