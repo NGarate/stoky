@@ -1,6 +1,6 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, jest, mock } from "bun:test";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -21,7 +21,9 @@ import { renderWithIntl } from "../utils/render";
  * - **Undo is `cancel`, never a compensating write** (D57).
  */
 
-const cancel = mock((_id: string) => true);
+/** Whether the queue still holds the change; false once it has been sent. */
+let cancellable = true;
+const cancel = mock((_id: string) => cancellable);
 let holdRemaining = 10_000;
 
 mock.module("@/lib/offline/queue-context", () => ({
@@ -140,6 +142,7 @@ const press = async (name: string): Promise<void> => {
 
 beforeEach(() => {
   cancel.mockClear();
+  cancellable = true;
   holdRemaining = 10_000;
   window.localStorage.clear();
 });
@@ -268,6 +271,50 @@ describe("undo", () => {
     // snackbar outlived the window it was measuring, and under "hasta
     // descartar" it never closed at all.
     expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
+  });
+
+  it("says it was too late rather than closing as if it had worked", async () => {
+    // `cancel` is false once the change is sent or being sent. That was
+    // ignored and the snackbar closed exactly as after a real undo — telling
+    // somebody, by omission, that a change the server holds was taken back.
+    cancellable = false;
+    render();
+    await press("deshacible");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Deshacer" }),
+    );
+
+    expect(
+      (await screen.findAllByText(/Demasiado tarde para deshacerlo/)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("stops offering the undo when the hold runs out, even while paused", () => {
+    // Radix pauses its close timer while the window is blurred, while the
+    // pointer rests on the snackbar and while focus is in it (F8). The
+    // queue's hold does not pause, so the snackbar outlived the window and
+    // kept offering "Deshacer" over a change already on its way.
+    holdRemaining = 3_000;
+    jest.useFakeTimers();
+    try {
+      render();
+      fireEvent.click(screen.getByRole("button", { name: "deshacible" }));
+      expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
+
+      act(() => {
+        window.dispatchEvent(new Event("blur"));
+      });
+      act(() => {
+        jest.advanceTimersByTime(3_100);
+      });
+
+      // Still up — Radix is paused — but no longer offering what it cannot do.
+      expect(screen.getAllByText(/Usaste/).length).toBeGreaterThan(0);
+      expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("runs the inverse when there is an exact one", async () => {

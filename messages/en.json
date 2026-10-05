@@ -1058,6 +1058,7 @@
   "snackbar": {
     "regionLabel": "Notifications (press F8 to reach the notification)",
     "undo": "Undo",
+    "undoTooLate": "Too late to undo: the change had already been sent.",
     "dismiss": "Dismiss notification",
     "announcePrefix": "Notification"
   },

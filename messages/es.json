@@ -1058,6 +1058,7 @@
   "snackbar": {
     "regionLabel": "Avisos (pulsa F8 para ir al aviso)",
     "undo": "Deshacer",
+    "undoTooLate": "Demasiado tarde para deshacerlo: el cambio ya se había enviado.",
     "dismiss": "Descartar el aviso",
     "announcePrefix": "Aviso"
   },
