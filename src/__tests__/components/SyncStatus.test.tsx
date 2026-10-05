@@ -49,6 +49,12 @@ mock.module("@/lib/offline/queue-context", () => ({
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    // The dialog refreshes what a corrected count makes stale.
+    useUtils: () => ({
+      inventory: { invalidate: async () => {} },
+      product: { invalidate: async () => {} },
+      shopping: { invalidate: async () => {} },
+    }),
     product: { getById: { useQuery: () => productQuery } },
     inventory: {
       adjustStock: {

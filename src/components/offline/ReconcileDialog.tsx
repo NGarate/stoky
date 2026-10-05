@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tabbableWithin } from "@/lib/focus";
 import { api } from "@/lib/trpc/client";
+import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
@@ -59,6 +60,7 @@ export function ReconcileDialog({
   const t = useTranslations("offline");
   const tCommon = useTranslations("common");
   const { discard } = useWriteQueue();
+  const utils = api.useUtils();
   const fieldId = useId();
   const hintId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -82,6 +84,10 @@ export function ReconcileDialog({
       // The change is answered, so it leaves the queue rather than sitting
       // there as a permanent complaint.
       discard(op.id);
+      // The count was just corrected; every screen showing the old one is
+      // wrong until it asks again. Nothing here did, so the shelf and the
+      // screen went on disagreeing after the person had settled it.
+      void invalidateAfterStockChange(utils);
       onClose();
     },
     onError: () => setFailed(true),

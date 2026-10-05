@@ -88,10 +88,15 @@ mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
       receipt: {
+        invalidate: async () => void invalidated.push("receipt"),
         getReceiptWithItems: {
           invalidate: async () => void invalidated.push("getReceiptWithItems"),
         },
       },
+      inventory: { invalidate: async () => void invalidated.push("inventory") },
+      product: { invalidate: async () => void invalidated.push("product") },
+      shopping: { invalidate: async () => void invalidated.push("shopping") },
+      price: { invalidate: async () => void invalidated.push("price") },
     }),
     receipt: {
       getReceiptWithItems: {
@@ -228,5 +233,27 @@ describe("when it does not work", () => {
     );
 
     expect(screen.queryByText(/Ya puedes aplicarlo al inventario/)).toBeAbsent();
+  });
+});
+
+describe("applying a receipt", () => {
+  it("refreshes stock, products, prices and the shopping list", async () => {
+    // Applying moves stock and records prices, and nothing was refetched:
+    // the inventory and the price history kept their pre-receipt answers.
+    const status = receipt.status;
+    receipt.status = "CONFIRMED";
+    try {
+      render();
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Aplicar al inventario" }),
+      );
+
+      expect(invalidated).toEqual(
+        expect.arrayContaining(["inventory", "product", "shopping", "price"]),
+      );
+    } finally {
+      receipt.status = status;
+    }
   });
 });

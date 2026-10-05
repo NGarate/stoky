@@ -24,7 +24,14 @@ const entries = [
 ];
 
 let addStockCalls: Array<Record<string, unknown>>;
-let addStockOptions: { onError?: (error: { message: string }) => void } = {};
+let addStockOptions: {
+  onError?: (error: { message: string }) => void;
+  onSuccess?: (data: unknown, input: Record<string, unknown>) => Promise<void>;
+} = {};
+/** Routers the page asked to refetch after a save. */
+let invalidated: string[];
+/** Whether the mocked save reports success. */
+let addSucceeds = false;
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
@@ -49,7 +56,9 @@ mock.module("@/components/offline/Composer", () => ({
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
-      inventory: { getStockOverview: { invalidate: () => Promise.resolve() } },
+      inventory: { invalidate: async () => void invalidated.push("inventory") },
+      product: { invalidate: async () => void invalidated.push("product") },
+      shopping: { invalidate: async () => void invalidated.push("shopping") },
     }),
     product: {
       list: {
@@ -96,6 +105,7 @@ mock.module("@/lib/trpc/client", () => ({
           return {
             mutate: (input: Record<string, unknown>) => {
               addStockCalls.push(input);
+              if (addSucceeds) void options.onSuccess?.({}, input);
             },
             isPending: false,
           };
@@ -111,6 +121,8 @@ const { default: AddStockPage } = await import(
 
 beforeEach(() => {
   addStockCalls = [];
+  invalidated = [];
+  addSucceeds = false;
 });
 
 afterEach(cleanup);
@@ -211,5 +223,26 @@ describe("the add form in two layers", () => {
     );
     // And the unit field it is about is not left in a closed drawer.
     expect(document.querySelector("details")?.open).toBe(true);
+  });
+});
+
+describe("after a save", () => {
+  it("refreshes every screen that shows stock, not only the overview", async () => {
+    // It refreshed `getStockOverview` and nothing else, so the product page,
+    // the expiry lists, the buy list's "en casa" figures and the catalogue
+    // kept the number from before the save.
+    addSucceeds = true;
+    renderWithIntl(<AddStockPage />, { locale: "es" });
+
+    pickProduct();
+    fireEvent.change(screen.getByLabelText("Cantidad"), {
+      target: { value: "2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Añadir stock" }));
+    await Promise.resolve();
+
+    expect(invalidated).toEqual(
+      expect.arrayContaining(["inventory", "product", "shopping"]),
+    );
   });
 });

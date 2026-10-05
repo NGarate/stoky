@@ -17,7 +17,13 @@ import type { QueuedOp } from "@/lib/offline/queue";
  */
 
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
-const scanMutate = mock((_input: unknown) => {});
+/** What the server answers a scan with; null leaves the mutation unanswered. */
+let scanResult: { product: { id: string; name: string } | null; source: string } | null = null;
+let scanCallbacks: { onSuccess?: (result: unknown) => void } = {};
+const scanMutate = mock((_input: unknown) => {
+  if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult);
+});
+const productInvalidate = mock(() => Promise.resolve());
 let pending: QueuedOp[] = [];
 
 mock.module("@/lib/offline/queue-context", () => ({
@@ -34,9 +40,13 @@ mock.module("@/lib/offline/queue-context", () => ({
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    useUtils: () => ({ product: { invalidate: productInvalidate } }),
     product: {
       scanBarcode: {
-        useMutation: () => ({ mutate: scanMutate, isPending: false }),
+        useMutation: (callbacks: typeof scanCallbacks) => {
+          scanCallbacks = callbacks;
+          return { mutate: scanMutate, isPending: false };
+        },
       },
     },
   },
@@ -72,6 +82,8 @@ async function typeBarcode(value: string) {
 beforeEach(() => {
   enqueue.mockClear();
   scanMutate.mockClear();
+  productInvalidate.mockClear();
+  scanResult = null;
   pending = [];
   onlineManager.setOnline(true);
 });
@@ -88,6 +100,24 @@ describe("scanning with a signal", () => {
 
     expect(scanMutate).toHaveBeenCalledWith({ barcode: "8410000111111" });
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("a scan that creates a product", () => {
+  it("refreshes the catalogue, which did not have it a moment ago", async () => {
+    scanResult = { product: { id: "p-new", name: "Galletas" }, source: "openfoodfacts" };
+    render();
+    await typeBarcode("8410000444444");
+
+    expect(productInvalidate).toHaveBeenCalled();
+  });
+
+  it("leaves it alone when the scan only found what was already there", async () => {
+    scanResult = { product: { id: "p-old", name: "Leche" }, source: "local" };
+    render();
+    await typeBarcode("8410000555555");
+
+    expect(productInvalidate).not.toHaveBeenCalled();
   });
 });
 
