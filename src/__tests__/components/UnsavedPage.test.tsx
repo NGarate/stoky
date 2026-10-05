@@ -1,7 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { createContext } from "react";
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
@@ -130,7 +130,20 @@ describe("what each change says", () => {
 
     // The banner cannot say this, and it is what makes an hour-old failure
     // identifiable at all.
-    expect(screen.getByText(/Apuntado el/)).toBeInTheDocument();
+    const when = screen.getByText("Apuntado");
+    expect(when.tagName).toBe("DT");
+    expect(when.nextElementSibling?.textContent).toMatch(/2026/);
+  });
+
+  it("is drawn on the list row, with its state as a badge", () => {
+    // A hand-written card per change: its own title paragraph, its own meta
+    // paragraphs, and no status at all — the one screen of failures with no
+    // word for which state each one was in.
+    renderWithIntl(<UnsavedPage />);
+
+    const item = screen.getByRole("listitem");
+    expect(within(item).getByText("No guardado")).toBeInTheDocument();
+    expect(item.querySelector("dl")).not.toBeNull();
   });
 
   it("says why, in words rather than a code", () => {
