@@ -118,9 +118,11 @@ export default function ConsumeStockPage(): JSX.Element {
     /**
      * Report what was written, rather than redirecting in silence.
      *
-     * The redirect's only confirmation was Next's route announcer reading
-     * "Inventario", which is what it reads when somebody navigates there and
-     * saves nothing — it answers "where am I", never "did that work"
+     * The redirect confirmed nothing: Next's route announcer speaks only when
+     * `document.title` changes, which it then never did. Even with a title per
+     * route it would read "Inventario · Stoky", which is what it reads when
+     * somebody navigates there and saves nothing — "where am I", never "did
+     * that work"
      * (ISSUES.md A11Y-1). Saying it here also answers *how much is left*,
      * which is the question somebody consuming stock actually has next.
      */

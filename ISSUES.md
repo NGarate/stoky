@@ -1769,6 +1769,15 @@ One consequence in the browser suite: a journey that added stock and then
 clicked through to `/inventory/consume` was relying on the redirect. The page
 object navigates directly when it is not already there, and says why.
 
+**Correction (2026-10-06).** The announcer did not read "Inventario"; it read
+nothing. It speaks on a client navigation only when `document.title` changes
+(`next/dist/client/components/app-router-announcer.js`), and every route then
+wore the same hardcoded English title. The conclusion stands — a route's name
+answers "where am I", not "did that work" — and the silence was wider than this
+entry knew: it applied to every navigation, not only to saves. Each route now
+has its own title (`src/lib/route-titles.ts`, pinned by
+`e2e/page-titles.spec.ts`).
+
 ---
 
 ### ✅ A11Y-2: Confirming a receipt line changes nothing on screen

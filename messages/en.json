@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "Stoky - Inventory Management",
+    "title": "Stoky · Household inventory",
     "description": "Privacy-first household inventory management"
   },
   "auth": {
@@ -678,6 +678,7 @@
   },
   "shopping": {
     "title": "Shopping lists",
+    "listPageTitle": "Shopping list",
     "create": "Create list",
     "edit": "Edit list",
     "delete": "Delete list",

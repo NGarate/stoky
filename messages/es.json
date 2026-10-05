@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "Stoky - Gestión de Inventario",
+    "title": "Stoky · Inventario de la casa",
     "description": "Gestión de inventario del hogar con privacidad"
   },
   "auth": {
@@ -678,6 +678,7 @@
   },
   "shopping": {
     "title": "Listas de compra",
+    "listPageTitle": "Lista de la compra",
     "create": "Crear lista",
     "edit": "Editar lista",
     "delete": "Eliminar lista",

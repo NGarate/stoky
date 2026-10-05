@@ -104,11 +104,13 @@ export default function AddStockPage(): JSX.Element {
      * Report what was written, rather than redirecting in silence.
      *
      * This used to `router.push("/inventory")`, and the destination has no
-     * live region — so the entire confirmation a screen-reader user received
-     * was Next's route announcer reading "Inventario". That is the same word
-     * it reads when somebody clicks Inventario in the navigation and saves
-     * nothing: it answers "where am I", never "did that work" (ISSUES.md
-     * A11Y-1).
+     * live region — so a screen-reader user received no confirmation at all.
+     * Next's route announcer speaks only when `document.title` changes, and
+     * every route then shared one title, so it said nothing. Now that each
+     * route has its own (`src/lib/route-titles.ts`) it would read
+     * "Inventario · Stoky" — the same words it reads when somebody clicks
+     * Inventario in the navigation and saves nothing: "where am I", never
+     * "did that work" (ISSUES.md A11Y-1).
      *
      * Saying it here also answers *how much* and *of what* without walking the
      * table, which the redirect could never do. Same shape as
@@ -226,8 +228,8 @@ export default function AddStockPage(): JSX.Element {
     <PageShell width="form">
       {/* Over the form rather than instead of it. A11Y-1 is why this is a
           dialog and not a snackbar: focus moves into it, so the confirmation
-          is announced rather than left to Next's route announcer reading the
-          destination's name. Closing it is what "Añadir otro" used to be —
+          is announced rather than left to Next's route announcer, which only
+          ever reads the destination's title. Closing it is what "Añadir otro" used to be —
           the form is still underneath, exactly as it was left. */}
       <Dialog
         description={
