@@ -37,6 +37,11 @@ const REASON_KEY: Record<FailureReason, string> = {
 
 export default function UnsavedPage(): JSX.Element {
   const t = useTranslations("offline");
+  // Op labels carry their full key — `offline.tickedOff`, `shopping.itemUpdated` —
+  // and are rendered from the root, as the snackbar renders them. Read through
+  // the `offline` namespace with the prefix stripped, any label from another
+  // namespace was shown raw: "offline.shopping.itemUpdated".
+  const tLabel = useTranslations();
   const format = useFormatter();
   const { state, retry, discard } = useWriteQueue();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
@@ -70,7 +75,7 @@ export default function UnsavedPage(): JSX.Element {
                 className="rounded-lg border border-border bg-card p-4"
               >
                 <p className="font-medium text-foreground">
-                  {t(op.label.key.replace("offline.", ""), op.label.values)}
+                  {tLabel(op.label.key, op.label.values)}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("unsavedWhen", {

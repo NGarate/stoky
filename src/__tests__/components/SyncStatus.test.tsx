@@ -228,6 +228,25 @@ describe("every state has words", () => {
 });
 
 describe("a change that did not save", () => {
+  it("names a change whose label lives outside the offline catalogue", () => {
+    // A shop or quantity edit is labelled `shopping.itemUpdated`. Read through
+    // the `offline` namespace it was shown as the raw key
+    // "offline.shopping.itemUpdated".
+    queueState = {
+      ...queueState,
+      failed: [
+        {
+          ...failed("f1", "refused"),
+          label: { key: "shopping.itemUpdated", values: { name: "Leche entera" } },
+        },
+      ],
+    };
+    renderWithIntl(<SyncStatus />);
+
+    expect(screen.getByText("Cambiaste «Leche entera»")).toBeInTheDocument();
+    expect(screen.queryByText(/shopping\.itemUpdated/)).toBeAbsent();
+  });
+
   it("offers to try it again or to let it go", async () => {
     queueState = { ...queueState, failed: [failed("f1", "refused")] };
     renderWithIntl(<SyncStatus />);

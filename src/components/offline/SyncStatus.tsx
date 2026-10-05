@@ -30,6 +30,11 @@ import type { JSX } from "react";
  */
 export function SyncStatus(): JSX.Element {
   const t = useTranslations("offline");
+  // Op labels carry their full key — `offline.tickedOff`, `shopping.itemUpdated` —
+  // and are rendered from the root, as the snackbar renders them. Read through
+  // the `offline` namespace with the prefix stripped, any label from another
+  // namespace was shown raw: "offline.shopping.itemUpdated".
+  const tLabel = useTranslations();
   const { state, drain, retry, discard } = useWriteQueue();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
 
@@ -101,7 +106,7 @@ export function SyncStatus(): JSX.Element {
                 {toReconcile.map((op) => (
                   <li key={op.id} className="flex flex-wrap items-center gap-2">
                     <span className="flex-1">
-                      {t(op.label.key.replace("offline.", ""), op.label.values)}
+                      {tLabel(op.label.key, op.label.values)}
                     </span>
                     <Button
                       onClick={() => setReconciling(op)}
@@ -119,7 +124,7 @@ export function SyncStatus(): JSX.Element {
                 {toReview.map((op) => (
                   <li key={op.id} className="flex flex-wrap items-center gap-2">
                     <span className="flex-1">
-                      {t(op.label.key.replace("offline.", ""), op.label.values)}
+                      {tLabel(op.label.key, op.label.values)}
                     </span>
                     {/* The barcode carries into the create form, which
                         discards this queued scan once the product is named. */}
@@ -145,7 +150,7 @@ export function SyncStatus(): JSX.Element {
                 {otherFailures.map((op) => (
                   <li key={op.id} className="flex flex-wrap items-center gap-2">
                     <span className="flex-1">
-                      {t(op.label.key.replace("offline.", ""), op.label.values)}
+                      {tLabel(op.label.key, op.label.values)}
                     </span>
                     <Button
                       onClick={() => retry(op.id)}
