@@ -868,17 +868,29 @@ async function validateImageMagicBytes(
   buffer: Buffer,
   mimeType: string,
 ): Promise<boolean> {
-  const magicBytes = {
+  // Each entry is the bytes `(byte | null)[]` from offset 0; `null` is "any".
+  //
+  // WebP is a RIFF container: "RIFF", a four-byte length, then the form type
+  // "WEBP". Checking "RIFF" alone admitted every RIFF file — WAV audio, AVI
+  // video — as a WebP photograph, leaving the decoder as the only thing
+  // between them and disk.
+  const magicBytes: Record<string, (number | null)[][]> = {
     "image/jpeg": [[0xff, 0xd8, 0xff]],
     "image/png": [[0x89, 0x50, 0x4e, 0x47]],
-    "image/webp": [[0x52, 0x49, 0x46, 0x46]],
+    "image/webp": [
+      [
+        0x52, 0x49, 0x46, 0x46, // RIFF
+        null, null, null, null, // chunk size
+        0x57, 0x45, 0x42, 0x50, // WEBP
+      ],
+    ],
   };
 
-  const patterns = magicBytes[mimeType as keyof typeof magicBytes];
+  const patterns = magicBytes[mimeType];
   if (!patterns) return false;
 
   return patterns.some((pattern) =>
-    pattern.every((byte, i) => buffer[i] === byte),
+    pattern.every((byte, i) => byte === null || buffer[i] === byte),
   );
 }
 
