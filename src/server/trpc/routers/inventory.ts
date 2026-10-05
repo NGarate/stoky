@@ -9,7 +9,7 @@ import {
   consumeStockSchema,
   stockOverviewSchema,
 } from "@/lib/validations/inventory";
-import { daysBetween, remainingByBatch } from "@/lib/inventory/batches";
+import { daysBetween, netStock, remainingByBatch } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
 import { withReplay } from "../replay";
 import type {
@@ -606,7 +606,10 @@ export const inventoryRouter = createTRPCRouter({
             throw new TRPCError({ code: "BAD_REQUEST", message: "Batch unit or location does not match" });
           }
           const scopedEntries = product.stockEntries.filter((entry) => !locationId || entry.locationId === locationId);
-          const totalAvailable = scopedEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+          // Rounded as the screens round it (`netStock`): 1 − 0.9 is
+          // 0.09999999999999998, which every screen shows as 0.1, and an
+          // unrounded guard then refuses the 0.1 the person can see.
+          const totalAvailable = netStock(scopedEntries);
           if (batch) {
             const left = remainingByBatch(product.stockEntries).get(batch.id);
             if (left == null || movement.quantity > left) {
@@ -795,10 +798,8 @@ export const inventoryRouter = createTRPCRouter({
             });
           }
 
-          const availableInSource = product.stockEntries.reduce(
-            (sum, entry) => sum + entry.quantity,
-            0,
-          );
+          // Rounded like `consumeStock`'s guard, for the same reason.
+          const availableInSource = netStock(product.stockEntries);
 
           if (movement.quantity > availableInSource) {
             throw new TRPCError({
