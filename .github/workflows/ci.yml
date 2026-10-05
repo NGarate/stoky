@@ -589,11 +589,19 @@ jobs:
       # If this repository goes public, provenance starts attesting on its
       # own — which is also when it starts mattering, since it exists for
       # people who did not build the image themselves.
+      # OCI repository names are lowercase; `github.repository` is NGarate/stoky.
+      # metadata-action lowercases its input, the attestation action does not,
+      # so it would push to `ghcr.io/NGarate/stoky` and fail after the image
+      # was already published.
+      - name: Lowercase image name
+        if: github.event.repository.private == false
+        id: image
+        run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
       - name: Attest provenance
         if: github.event.repository.private == false
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
