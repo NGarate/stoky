@@ -9,7 +9,7 @@ import { RadioOption } from "@/components/ui/radio-option";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -176,27 +176,26 @@ export default function PeoplePage(): JSX.Element {
   if (!members.data) {
     return (
       <RouteState
+        back={{ href: "/settings", label: t("backToSettings") }}
         error={members.error}
         fetchStatus={members.fetchStatus}
         isLoading={members.isPending}
         onRetry={() => void members.refetch()}
         title={t("peopleTitle")}
+        width="form"
       />
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          {t("peopleTitle")}
-        </h1>
-        <BackLink href="/settings">{t("backToSettings")}</BackLink>
-      </div>
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/settings", label: t("backToSettings") }}
+        intro={t("peopleIntro")}
+        title={t("peopleTitle")}
+      />
 
-      <p className="text-muted-foreground">{t("peopleIntro")}</p>
-
-      <ul className="mt-6 space-y-3">
+      <ul className="space-y-3">
         {members.data.map((member) => (
           <ItemRow
             key={member.id}
@@ -522,6 +521,6 @@ export default function PeoplePage(): JSX.Element {
           </Button>
         </form>
       </section>
-    </div>
+    </PageShell>
   );
 }

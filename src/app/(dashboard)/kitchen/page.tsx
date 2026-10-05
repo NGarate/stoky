@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ItemRow } from "@/components/ui/item-row";
 import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
@@ -118,8 +119,10 @@ export default function KitchenPage(): JSX.Element {
         error={expiring.error}
         fetchStatus={expiring.fetchStatus}
         isLoading={expiring.isPending}
+        density="touch"
         onRetry={() => void expiring.refetch()}
         title={t("title")}
+        width="screen"
       />
     );
   }
@@ -263,10 +266,10 @@ export default function KitchenPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-4xl font-bold text-heading">{t("title")}</h1>
+    <PageShell width="screen">
+      <PageHeader density="touch" title={t("title")} />
 
-      <section aria-labelledby="use-now" className="mt-8">
+      <section aria-labelledby="use-now">
         <h2
           className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
           id="use-now"
@@ -492,6 +495,6 @@ export default function KitchenPage(): JSX.Element {
           })}
         </p>
       ) : null}
-    </div>
+    </PageShell>
   );
 }

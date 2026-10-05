@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useDeferredValue, useId, useState } from "react";
@@ -64,12 +64,15 @@ function NewProductFallback(): JSX.Element {
   const t = useTranslations("products.new");
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/products", label: t("backToProducts") }}
+        title={t("title")}
+      />
+      <p role="status" aria-live="polite" className="text-muted-foreground">
         {t("loading")}
       </p>
-    </div>
+    </PageShell>
   );
 }
 
@@ -294,7 +297,7 @@ function NewProductForm(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <PageShell width="form">
       {/* Over the form rather than instead of it — see the note on the same
           dialog in inventory/add. Closing it is `handleCreateAnother`, which
           clears the form the way the button under the old screen did. */}
@@ -324,13 +327,14 @@ function NewProductForm(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <BackLink href="/products">{t("backToProducts")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
+      <PageHeader
+        back={{ href: "/products", label: t("backToProducts") }}
+        intro={t("intro")}
+        title={t("title")}
+      />
 
       {showScanContext ? (
-        <div className="mt-4 rounded border border-border bg-muted p-4">
+        <div className="mb-6 rounded border border-border bg-muted p-4">
           <h2 className="text-sm font-medium text-foreground">
             {t("scanContextTitle")}
           </h2>
@@ -341,7 +345,7 @@ function NewProductForm(): JSX.Element {
         </div>
       ) : null}
 
-      <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form noValidate onSubmit={handleSubmit} className="space-y-6">
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
@@ -578,6 +582,6 @@ function NewProductForm(): JSX.Element {
           </p>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

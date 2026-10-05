@@ -10,7 +10,7 @@ import { api } from "@/lib/trpc/client";
 import { invalidateAfterReceiptApplied } from "@/lib/trpc/stale";
 import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
@@ -119,8 +119,10 @@ export default function ReviewPage() {
         error={receiptQuery.error}
         fetchStatus={receiptQuery.fetchStatus}
         isLoading={receiptQuery.isPending}
+        back={{ href: "/receipts", label: t("backToList") }}
         onRetry={() => void receiptQuery.refetch()}
         title={t("review")}
+        width="detail"
       />
     );
   }
@@ -164,7 +166,7 @@ export default function ReviewPage() {
   return (
     // No padding of its own: the dashboard `main` already pads every route, and
     // a second `p-6` on top of it cost 48px of a 390px screen (ISSUES UI-5).
-    <div className="mx-auto max-w-4xl">
+    <PageShell width="detail">
       {/* Was an icon-only link: a bare `<ArrowLeft/>` in a ghost button,
           named only by `aria-label`. That is enough for WCAG 2.4.4 and not for
           2.4.9, which asks that a link's purpose be clear from its link text —
@@ -172,16 +174,17 @@ export default function ReviewPage() {
           floor). It was also the last way back in the application that was not
           a `BackLink`, so this screen alone spelled "back" as an icon while
           eleven others spelled it as an arrow and a sentence. */}
-      <div className="mb-6">
-        <BackLink href="/receipts">{t("backToList")}</BackLink>
-
-        <h1 className="mt-2 text-2xl font-bold text-heading">{t("review")}</h1>
-        <p className="text-muted-foreground">
-          {receipt.store?.name || t("storeUnknown")}
-          {receipt.purchaseDate &&
-            ` • ${formatDate(locale, receipt.purchaseDate, "long")}`}
-        </p>
-      </div>
+      <PageHeader
+        back={{ href: "/receipts", label: t("backToList") }}
+        intro={
+          <>
+            {receipt.store?.name || t("storeUnknown")}
+            {receipt.purchaseDate &&
+              ` • ${formatDate(locale, receipt.purchaseDate, "long")}`}
+          </>
+        }
+        title={t("review")}
+      />
 
       <div className="mb-6">
         <ReceiptStatusStep status={receipt.status} />
@@ -286,6 +289,6 @@ export default function ReviewPage() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

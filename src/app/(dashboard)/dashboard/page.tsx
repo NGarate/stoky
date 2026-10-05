@@ -8,6 +8,7 @@ import { StockStatus } from "@/components/inventory/StockStatus";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState, SectionState } from "@/components/household/RouteState";
 import type { JSX } from "react";
@@ -107,6 +108,7 @@ export default function DashboardPage(): JSX.Element {
         isLoading={restockQuery.isPending}
         onRetry={() => void restockQuery.refetch()}
         title={t("title")}
+        width="screen"
       />
     );
   }
@@ -124,11 +126,9 @@ export default function DashboardPage(): JSX.Element {
   const atRisk = expiredItems.length + expiringItems.length;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-      </div>
+    <PageShell width="screen">
+      <PageHeader intro={t("intro")} title={t("title")} />
+      <div className="space-y-8">
 
       <section aria-labelledby="dashboard-quick">
         <h2 id="dashboard-quick" className="sr-only">
@@ -263,8 +263,8 @@ export default function DashboardPage(): JSX.Element {
           </>
         )}
       </section>
-
-    </div>
+      </div>
+    </PageShell>
   );
 }
 

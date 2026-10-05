@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,13 +70,12 @@ export default function UnsavedPage(): JSX.Element {
   const failed = state.failed;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          {t("unsavedTitle")}
-        </h1>
-        <BackLink href="/settings">{t("backToSettings")}</BackLink>
-      </div>
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/settings", label: t("backToSettings") }}
+        intro={failed.length > 0 ? t("unsavedIntro") : undefined}
+        title={t("unsavedTitle")}
+      />
 
       {failed.length === 0 ? (
         <div className="rounded-xl border border-ok-foreground bg-ok p-6">
@@ -87,7 +86,6 @@ export default function UnsavedPage(): JSX.Element {
         </div>
       ) : (
         <>
-          <p className="text-muted-foreground">{t("unsavedIntro")}</p>
 
           {/* `ItemRow`, the one list row: a hand-written card per change had
               its own title, its own meta paragraphs and no status at all. */}
@@ -149,6 +147,6 @@ export default function UnsavedPage(): JSX.Element {
           op={reconciling}
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }

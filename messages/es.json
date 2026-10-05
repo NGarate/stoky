@@ -703,6 +703,7 @@
     "year": "año",
     "shopTitle": "Compra",
     "backToShop": "Volver a la compra",
+    "backToLists": "Volver a tus listas",
     "scan": "Escanear",
     "toBuy": "Para comprar",
     "inTrolley": "En el carro",
@@ -764,6 +765,7 @@
       "legend": "Tiendas en la gráfica"
     },
     "noPrices": "No hay precios registrados",
+    "backToPrices": "Volver a precios",
     "addFirst": "Registra tu primer precio",
     "comparisonSummary": "Media {average} en {count, plural, one {# tienda} other {# tiendas}}",
     "premiumOver": "{percent} más caro que el mejor",

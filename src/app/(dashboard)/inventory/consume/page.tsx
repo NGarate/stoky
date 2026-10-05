@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
@@ -219,7 +219,7 @@ export default function ConsumeStockPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <PageShell width="form">
       {/* Over the form rather than instead of it — see the note on the same
           dialog in inventory/add. Closing it is what "Apuntar otro consumo"
           used to be. */}
@@ -250,12 +250,13 @@ export default function ConsumeStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <BackLink href="/inventory">{t("backToInventory")}</BackLink>
+      <PageHeader
+        back={{ href: "/inventory", label: t("backToInventory") }}
+        intro={t("intro")}
+        title={t("title")}
+      />
 
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-
-      <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form noValidate onSubmit={handleSubmit} className="space-y-6">
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
@@ -416,6 +417,6 @@ export default function ConsumeStockPage(): JSX.Element {
           </p>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

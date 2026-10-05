@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { StoreSelector } from "@/components/store/StoreSelector";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -223,7 +223,7 @@ export default function AddStockPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <PageShell width="form">
       {/* Over the form rather than instead of it. A11Y-1 is why this is a
           dialog and not a snackbar: focus moves into it, so the confirmation
           is announced rather than left to Next's route announcer reading the
@@ -254,12 +254,13 @@ export default function AddStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <BackLink href="/inventory">{t("backToInventory")}</BackLink>
+      <PageHeader
+        back={{ href: "/inventory", label: t("backToInventory") }}
+        intro={t("intro")}
+        title={t("title")}
+      />
 
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-
-      <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form noValidate onSubmit={handleSubmit} className="space-y-6">
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
@@ -518,6 +519,6 @@ export default function AddStockPage(): JSX.Element {
           </p>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { onlineManager } from "@tanstack/react-query";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -140,11 +140,13 @@ export default function ScanPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <BackLink href="/products">{t("backToProducts")}</BackLink>
-      </div>
+    // No padding of its own: the layout's `p-4` is the gutter, and a second
+    // `p-6` cost 48px of a 390px screen (ISSUES UI-5).
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/products", label: t("backToProducts") }}
+        title={t("title")}
+      />
 
       {isProcessing ? (
         <div className="p-8 bg-muted rounded-lg text-center">
@@ -209,6 +211,6 @@ export default function ScanPage() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -703,6 +703,7 @@
     "year": "year",
     "shopTitle": "Shopping",
     "backToShop": "Back to shopping",
+    "backToLists": "Back to your lists",
     "scan": "Scan",
     "toBuy": "To buy",
     "inTrolley": "In the trolley",
@@ -764,6 +765,7 @@
       "legend": "Stores in the chart"
     },
     "noPrices": "No prices recorded",
+    "backToPrices": "Back to prices",
     "addFirst": "Record your first price",
     "comparisonSummary": "Average {average} across {count, plural, one {# store} other {# stores}}",
     "premiumOver": "{percent} dearer than the best",

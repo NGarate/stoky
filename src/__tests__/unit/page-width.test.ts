@@ -42,19 +42,15 @@ function rendering(): Array<{ path: string; name: string; source: string }> {
 }
 
 /**
- * Which screens are held to the shared header. Index screens first; the
- * sub-pages join as they adopt it, and when every screen has, this list is
- * replaced by all of them.
+ * Screens not yet held to the shared header. These four hand-roll their
+ * loading and failure states, each with an `<h1>` of its own; they adopt
+ * `RouteState` and `PageHeader` together. The list only shrinks.
  */
-const HEADED = new Set([
-  "inventory/page.tsx",
-  "products/page.tsx",
-  "prices/page.tsx",
-  "receipts/page.tsx",
-  "shopping/lists/page.tsx",
-  "settings/page.tsx",
-  "settings/stores/page.tsx",
-  "settings/locations/page.tsx",
+const PENDING = new Set([
+  "products/[id]/page.tsx",
+  "products/[id]/adjust/page.tsx",
+  "products/[id]/history/page.tsx",
+  "receipts/[id]/applied/page.tsx",
 ]);
 
 describe("a dashboard screen states its width", () => {
@@ -75,6 +71,23 @@ describe("a dashboard screen states its width", () => {
     // phone, `detail` for one thing, `screen` for an overview.
     expect(unbounded).toEqual([]);
   });
+
+  it("adds no gutter of its own to the layout's", () => {
+    // A second `p-6` on a screen cost 48px of a 390px phone (ISSUES UI-5)
+    // and made that screen more inset than every neighbour. The bound box is
+    // the one that must not pad: `mx-auto` with any `p-N` beside it.
+    const padded = rendering()
+      .filter(({ source }) =>
+        [...source.matchAll(/className="([^"]*)"/g)].some(
+          ([, classes]) =>
+            /(^|\s)mx-auto(\s|$)/.test(classes as string) &&
+            /(^|\s)p-\d+(\s|$)/.test(classes as string),
+        ),
+      )
+      .map(({ name }) => name);
+
+    expect(padded).toEqual([]);
+  });
 });
 
 describe("a dashboard screen draws its top through PageHeader", () => {
@@ -83,7 +96,7 @@ describe("a dashboard screen draws its top through PageHeader", () => {
     // sizes, came from every screen writing its own. `PageHeader` holds the
     // one arrangement and the one size; a hand-written `<h1>` is a sixth.
     const own = rendering()
-      .filter(({ name }) => HEADED.has(name))
+      .filter(({ name }) => !PENDING.has(name))
       .filter(({ source }) => /<h1[\s>]/.test(source))
       .map(({ name }) => name);
 
@@ -92,7 +105,7 @@ describe("a dashboard screen draws its top through PageHeader", () => {
 
   it("draws the header it is held to", () => {
     const headerless = rendering()
-      .filter(({ name }) => HEADED.has(name))
+      .filter(({ name }) => !PENDING.has(name))
       .filter(({ source }) => !source.includes("<PageHeader"))
       .map(({ name }) => name);
 

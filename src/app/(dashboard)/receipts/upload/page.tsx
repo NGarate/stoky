@@ -8,6 +8,7 @@ import { StoreSelector } from "@/components/store/StoreSelector";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useSnackbar } from "@/components/ui/snackbar";
 
 /**
@@ -99,8 +100,14 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 text-heading">{t("upload")}</h1>
+    // No padding of its own: the layout's `p-4` is the gutter (ISSUES UI-5).
+    // And a way back, which this was the one sub-page without — the list it
+    // came from was reachable only through the navigation.
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/receipts", label: t("backToList") }}
+        title={t("upload")}
+      />
 
       {!uploadedReceiptId ? (
         <div className="space-y-6">
@@ -167,6 +174,6 @@ export default function UploadPage() {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

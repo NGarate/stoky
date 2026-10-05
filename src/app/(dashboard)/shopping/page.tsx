@@ -5,6 +5,7 @@ import { ChevronDown, ScanLine } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/lib/offline/queue-context";
@@ -52,6 +53,7 @@ export default function ShopPage(): JSX.Element {
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
         title={t("shopTitle")}
+        width="form"
       />
     );
   }
@@ -76,10 +78,8 @@ export default function ShopPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-bold text-heading md:text-4xl">
-        {t("shopTitle")}
-      </h1>
+    <PageShell width="form">
+      <PageHeader className="mb-0" title={t("shopTitle")} />
 
       {/* The primary action, always on top and always the same size.
           Its colour, hover and focus ring come from `Button` rather than
@@ -183,7 +183,7 @@ export default function ShopPage(): JSX.Element {
       <Button asChild className="mt-8" variant="link">
         <Link href="/shopping/lists" > {t("manageLists")} </Link>
       </Button>
-    </div>
+    </PageShell>
   );
 }
 
