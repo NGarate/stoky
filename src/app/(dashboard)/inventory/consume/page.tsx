@@ -40,6 +40,7 @@ function serverErrorKey(message: string | undefined): string {
 
   if (normalized.includes("not enough stock")) return "errorNotEnoughStockServer";
   if (normalized.includes("product not found")) return "errorProductNotFound";
+  if (normalized.includes("unit cannot be converted")) return "errorUnitMismatch";
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
@@ -134,7 +135,9 @@ export default function ConsumeStockPage(): JSX.Element {
       router.refresh();
     },
     onError: (error) => {
-      setServerError(t(serverErrorKey(error.message)));
+      const key = serverErrorKey(error.message);
+      setServerError(t(key, { unit: product?.defaultUnit ?? "" }));
+      if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
     },
   });

@@ -1,4 +1,4 @@
-import { canonicalCount } from "@/lib/inventory/units";
+import { unitConversion } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { isLowStock } from "@/lib/stock/low-stock";
 import { z } from "zod";
@@ -294,6 +294,33 @@ async function assertOwnLocation(
   }
 }
 
+/**
+ * A movement, restated in the product's own unit.
+ *
+ * Every row of a product's ledger is summed as one number, and
+ * `product.update` already assumes every row is in `defaultUnit` when it
+ * converts them on a unit change. The movements below took any free-text unit
+ * and stored it as given, so 500 "g" into a product counted in "kg" summed to
+ * 501. A unit with a known conversion (dozens to units, or the same unit in a
+ * different case) is converted; anything else is refused rather than guessed.
+ *
+ * The forms send the product's unit unless a person edits it, so the ordinary
+ * path is factor 1.
+ */
+function inProductUnit<T extends { quantity: number; unit: string }>(
+  input: T,
+  defaultUnit: string,
+): T {
+  const factor = unitConversion(input.unit, defaultUnit);
+  if (factor === undefined) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Unit cannot be converted to the product's unit",
+    });
+  }
+  return { ...input, quantity: input.quantity * factor, unit: defaultUnit };
+}
+
 export const inventoryRouter = createTRPCRouter({
   /**
    * Every product in the household, with its net stock — one page of it.
@@ -376,7 +403,6 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const movement = canonicalCount(input);
 
       // Verify product exists and belongs to household
       const product = await ctx.db.product.findFirst({
@@ -392,6 +418,8 @@ export const inventoryRouter = createTRPCRouter({
           message: "Product not found",
         });
       }
+
+      const movement = inProductUnit(input, product.defaultUnit);
 
       // Verify location if provided
       if (input.locationId) {
@@ -528,7 +556,6 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const movement = canonicalCount(input);
 
       // Before the replay envelope, so a change composed offline is refused on
       // the same terms as one made online — a queued write is a caller that is
@@ -595,6 +622,7 @@ export const inventoryRouter = createTRPCRouter({
             });
           }
 
+          const movement = inProductUnit(input, product.defaultUnit);
           const locationId = input.consumeFromLocationId || input.locationId;
           const batch = input.batchId
             ? product.stockEntries.find((entry) => entry.id === input.batchId && entry.quantity > 0)
@@ -602,7 +630,7 @@ export const inventoryRouter = createTRPCRouter({
           if (input.batchId && !batch) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
           }
-          if (batch && (batch.unit !== movement.unit || (locationId && locationId !== batch.locationId))) {
+          if (batch && (unitConversion(batch.unit, movement.unit) !== 1 || (locationId && locationId !== batch.locationId))) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Batch unit or location does not match" });
           }
           const scopedEntries = product.stockEntries.filter((entry) => !locationId || entry.locationId === locationId);
@@ -674,7 +702,6 @@ export const inventoryRouter = createTRPCRouter({
     .input(adjustStockSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const movement = canonicalCount(input);
 
       await assertOwnLocation(ctx.db, input.locationId, ctx.householdId);
 
@@ -695,6 +722,7 @@ export const inventoryRouter = createTRPCRouter({
           });
         }
 
+        const movement = inProductUnit(input, product.defaultUnit);
         const total = await tx.stockEntry.aggregate({ where: { productId: input.productId }, _sum: { quantity: true } });
         const current = Math.round((total._sum.quantity ?? 0) * 100) / 100;
         if (input.expectedStock !== undefined) {
@@ -752,7 +780,6 @@ export const inventoryRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const movement = canonicalCount(input);
 
       // Both ends. A check on one is a check somebody later assumes covers the
       // other, and a transfer has two chances to name a shelf that is not yours.
@@ -806,6 +833,7 @@ export const inventoryRouter = createTRPCRouter({
             });
           }
 
+          const movement = inProductUnit(input, product.defaultUnit);
           // Rounded like `consumeStock`'s guard, for the same reason.
           const availableInSource = netStock(product.stockEntries);
 

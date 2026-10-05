@@ -954,7 +954,9 @@ describe("tRPC Router Integration Tests", () => {
         "Inventory User 6e",
         "Inventory Household 6e"
       );
-      const product = await createTestProduct(householdId);
+      // Counted in kg, so the purchase below is in the product's own unit;
+      // a unit the product is not counted in is refused.
+      const product = await createTestProduct(householdId, { defaultUnit: "kg" });
       const store = await createTestStore(householdId, { name: "Tienda 6e" });
       const { caller, envelope } = await createTestContext(user.id, householdId);
 

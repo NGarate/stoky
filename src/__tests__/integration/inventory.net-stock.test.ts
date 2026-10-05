@@ -841,3 +841,59 @@ describe("an adjustment cannot take stock below zero", () => {
     expect(await netStock()).toBeCloseTo(0, 6);
   });
 });
+
+/**
+ * Every row of a product's ledger is in the product's unit — `product.update`
+ * already assumes so when it converts them all on a unit change. The four
+ * movements took any free-text unit and summed the number regardless, so
+ * 500 "g" into a product counted in "kg" read as 501 kg.
+ */
+describe("a movement is stored in the product's unit", () => {
+  it("refuses a purchase in a unit that cannot be converted", async () => {
+    const api = await caller();
+    await prisma.product.update({ where: { id: productId }, data: { defaultUnit: "kg" } });
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "kg" });
+
+    await expectCode(
+      api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 500, unit: "g" }),
+      "BAD_REQUEST",
+    );
+
+    expect(await netStock()).toBe(1);
+  });
+
+  it("refuses a consumption, adjustment or transfer in such a unit", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 4, unit: "L", locationId: shelfId });
+
+    await expectCode(
+      api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "kg" }),
+      "BAD_REQUEST",
+    );
+    await expectCode(
+      api.inventory.adjustStock({ productId, quantity: -1, unit: "ml", reason: "Recuento" }),
+      "BAD_REQUEST",
+    );
+    await expectCode(
+      api.inventory.transferStock({ productId, quantity: 1, unit: "botella", fromLocationId: shelfId, toLocationId: cupboardId }),
+      "BAD_REQUEST",
+    );
+
+    expect(await netStock()).toBe(4);
+    expect(await netStock(shelfId)).toBe(4);
+  });
+
+  it("stores a convertible unit as the product's, converted", async () => {
+    const api = await caller();
+    await prisma.product.update({ where: { id: productId }, data: { defaultUnit: "unidad" } });
+
+    const entry = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 2, unit: "docena" });
+    // Case is not a different unit.
+    const lower = await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "Unidad" });
+
+    expect(entry.quantity).toBe(24);
+    expect(entry.unit).toBe("unidad");
+    expect(lower.unit).toBe("unidad");
+    expect(await netStock()).toBe(21);
+  });
+});

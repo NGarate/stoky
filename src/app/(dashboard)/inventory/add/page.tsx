@@ -35,6 +35,7 @@ function serverErrorKey(message: string | undefined): string {
 
   if (normalized.includes("product not found")) return "errorProductNotFound";
   if (normalized.includes("location not found")) return "errorLocationNotFound";
+  if (normalized.includes("unit cannot be converted")) return "errorUnitMismatch";
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
@@ -119,7 +120,11 @@ export default function AddStockPage(): JSX.Element {
       router.refresh();
     },
     onError: (error) => {
-      setServerError(t(serverErrorKey(error.message)));
+      const key = serverErrorKey(error.message);
+      setServerError(t(key, { unit: product?.defaultUnit ?? "" }));
+      // The unit lives in the folded half; a refusal about it must not point
+      // at a closed drawer.
+      if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
     },
   });
