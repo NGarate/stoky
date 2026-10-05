@@ -53,7 +53,9 @@ services:
       retries: 10
 
   app:
-    image: ghcr.io/ngarate/stoky:${STOKY_VERSION:-v0.1.0-alpha.1}
+    # Required, never defaulted: a default here is a second copy of the version
+    # that nothing checks, and an .env without the line would silently pull it.
+    image: "ghcr.io/ngarate/stoky:${STOKY_VERSION:?Define STOKY_VERSION en .env con la etiqueta exacta de esta versión}"
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
