@@ -243,12 +243,40 @@ GRACIAS POR SU VISITA
         { text: "2024/03/15", expected: { day: 15, month: 2, year: 2024 } },
       ];
 
-      for (const { text } of formats) {
-        const result = parseReceiptText(text);
-        if (result.purchaseDate) {
-          expect(result.purchaseDate.getFullYear()).toBe(2024);
-        }
+      for (const { text, expected } of formats) {
+        const date = parseReceiptText(text).purchaseDate;
+        expect({
+          day: date?.getDate(),
+          month: date?.getMonth(),
+          year: date?.getFullYear(),
+        }).toEqual(expected);
       }
+    });
+
+    it("does not read a three-digit year", () => {
+      // The OCR cut the year short; this used to come out as 5 October 2202.
+      const result = parseReceiptText("05/10/202\nPAN 1,00");
+
+      expect(result.purchaseDate).toBeUndefined();
+    });
+
+    it("refuses a date in the future and tries the next one", () => {
+      const now = new Date(2026, 9, 6, 12, 0);
+      const result = parseReceiptText(
+        "REF 05/10/2099\nFecha: 04/10/2026\nPAN 1,00",
+        now,
+      );
+
+      expect(result.purchaseDate?.getFullYear()).toBe(2026);
+      expect(result.purchaseDate?.getMonth()).toBe(9);
+      expect(result.purchaseDate?.getDate()).toBe(4);
+    });
+
+    it("allows a day of slack for a till clock ahead of the server", () => {
+      const now = new Date(2026, 9, 6, 12, 0);
+
+      expect(parseReceiptText("07/10/2026", now).purchaseDate?.getDate()).toBe(7);
+      expect(parseReceiptText("08/10/2026", now).purchaseDate).toBeUndefined();
     });
   });
 
