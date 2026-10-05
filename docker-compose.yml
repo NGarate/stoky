@@ -42,8 +42,11 @@ services:
       - .:/app
       - /app/node_modules
       - uploads:/app/uploads
+    # Loopback only, like the services in docker-compose.dev.yml. Reaching the
+    # dev server from a phone goes through `tailscale serve` (see
+    # DEV_ALLOWED_ORIGIN in .env.example), which also proxies to localhost.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       db:
         condition: service_healthy
