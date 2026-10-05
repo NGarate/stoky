@@ -67,10 +67,16 @@ export function parseEsAmount(text: string): number {
   return Number.parseFloat(normalised);
 }
 
-const TOTAL_PATTERN = new RegExp(
-  String.raw`(?:total|importe|suma)(?:\s+[a-záéíóúñ]+)*\s*[:€()]*\s*(${AMOUNT_SOURCE})`,
-  "i",
-);
+/**
+ * The word that labels a total, as a whole word and not after "sub": a
+ * subtotal is the amount *before* the discounts the total is after.
+ *
+ * Followed by what it must not be followed by — `TOTAL AHORRO 0,50` and
+ * `IMPORTE ENTREGADO 10,00` are labelled with the same word and are not what
+ * was paid.
+ */
+const TOTAL_LABEL =
+  /(?<!sub[\s.-]?)\b(?:total|importe|suma)\b(?!\s*(?:ahorr|descuento|dto|puntos|entregad|devol|cambio))/gi;
 
 export function parseReceiptText(ocrText: string): ParsedReceipt {
   const lines = ocrText
@@ -132,10 +138,7 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
   }
 
   // Extract total amount
-  const totalMatch = ocrText.match(TOTAL_PATTERN);
-  if (totalMatch) {
-    result.totalAmount = parseEsAmount(totalMatch[1]);
-  }
+  result.totalAmount = extractTotal(lines);
 
   // Extract items
   for (let i = 0; i < lines.length; i++) {
@@ -188,6 +191,39 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
   }
 
   return result;
+}
+
+/**
+ * What the receipt says was paid.
+ *
+ * Read a line at a time, and from the last line that carries a total. It used
+ * to be one pattern over the whole text, which went wrong two ways: `total`
+ * matched inside `SUBTOTAL`, so `SUBTOTAL 2,09 / DESCUENTO 0,50 / TOTAL 1,59`
+ * came out at 2,09; and its `\s` crossed newlines, so a column header ending in
+ * `Importe` ran on into the first item line and took that item's price.
+ *
+ * The last total line rather than the first because what a till prints after
+ * its subtotal and discounts is the amount charged. Only a line with a single
+ * amount after its label counts: the tax summary at the foot of a Mercadona
+ * ticket closes with `TOTAL 8,00 0,80` — base and tax, not the charge — and
+ * would otherwise be the last total line on the receipt.
+ */
+function extractTotal(lines: string[]): number | undefined {
+  let total: number | undefined;
+
+  for (const line of lines) {
+    const labels = [...line.matchAll(TOTAL_LABEL)];
+    const label = labels.at(-1);
+    if (label?.index === undefined) continue;
+
+    const after = line.slice(label.index + label[0].length);
+    const amounts = after.match(amountPattern()) ?? [];
+    if (amounts.length === 1) {
+      total = parseEsAmount(amounts[0]);
+    }
+  }
+
+  return total;
 }
 
 function parseLineItem(line: string): ParsedItem | null {
