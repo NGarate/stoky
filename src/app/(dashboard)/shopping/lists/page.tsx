@@ -6,6 +6,7 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
@@ -145,10 +146,17 @@ export default function ShoppingListsPage() {
       )}
 
       {lists.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-          <p>{t("shopping.noLists")}</p>
-          <p className="mt-2 text-sm">{t("shopping.createFirst")}</p>
-        </div>
+        <EmptyState
+          action={
+            isCreating ? undefined : (
+              <Button onClick={() => setIsCreating(true)} type="button" variant="outline">
+                {t("shopping.create")}
+              </Button>
+            )
+          }
+          body={t("shopping.createFirst")}
+          title={t("shopping.noLists")}
+        />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {lists.map((list) => {

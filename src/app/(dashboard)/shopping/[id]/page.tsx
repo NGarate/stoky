@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ProductPicker, type PickedProduct } from "@/components/inventory/ProductPicker";
 import { CreateProductInline } from "@/components/receipt/CreateProductInline";
@@ -332,10 +333,9 @@ export function ShoppingListView({ id }: { id: string }) {
           `<div>`, so each row was an orphaned list item: drawn with a bullet,
           and announced without the count that makes a list worth being one. */}
       {items.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-          <p>{t("shopping.emptyList")}</p>
-          <p className="mt-2 text-sm">{t("shopping.addItems")}</p>
-        </div>
+        // No button of its own: "Añadir artículo" sits directly above, and a
+        // second one a line below it would be the same control twice.
+        <EmptyState body={t("shopping.addItems")} title={t("shopping.emptyList")} />
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (

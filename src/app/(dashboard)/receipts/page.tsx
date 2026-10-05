@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-
-import { Plus, FileText } from "lucide-react";
+import { Plus } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
@@ -91,14 +91,15 @@ export default function ReceiptsPage() {
       <PageHeader actions={upload} title={t("title")} />
 
       {receipts.length === 0 ? (
-        <div className="text-center py-12 rounded-lg border border-border bg-muted">
-          <FileText aria-hidden="true" className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-foreground mb-2">{t("noReceipts")}</p>
-          <p className="text-sm text-muted-foreground">{t("uploadFirst")}</p>
-          <Button asChild variant="outline" className="mt-4">
-            <Link href="/receipts/upload">{t("upload")}</Link>
-          </Button>
-        </div>
+        <EmptyState
+          action={
+            <Button asChild variant="outline">
+              <Link href="/receipts/upload">{t("upload")}</Link>
+            </Button>
+          }
+          body={t("uploadFirst")}
+          title={t("noReceipts")}
+        />
       ) : (
         <ul className="space-y-3">
           {receipts.map((receipt) => (

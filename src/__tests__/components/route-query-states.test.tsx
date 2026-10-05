@@ -139,7 +139,7 @@ const ROUTES = [
     render: () => <ReviewPage />,
     lie: /Ticket no encontrado|Este ticket ya no existe/,
   },
-  { name: "/prices", render: () => <PricesPage />, lie: /No hay precios registrados/ },
+  { name: "/prices", render: () => <PricesPage />, lie: /No hay precios registrados|Todavía no hay precios/ },
   {
     name: "/prices/[productId]",
     render: () => <PriceHistoryPage params={params} />,

@@ -6,6 +6,7 @@ import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
@@ -343,9 +344,7 @@ export default function KitchenPage(): JSX.Element {
             {t("thisWeek")}
           </h2>
           {later.length === 0 ? (
-            <p className="mt-3 text-xl text-muted-foreground">
-              {t("nothingThisWeek")}
-            </p>
+            <EmptyState className="mt-3" density="touch" title={t("nothingThisWeek")} />
           ) : (
             <ul className="mt-3">
               {later.map((batch) => (
@@ -402,9 +401,7 @@ export default function KitchenPage(): JSX.Element {
               {t("runningOutLoading")}
             </p>
           ) : lowStock.length === 0 ? (
-            <p className="mt-3 text-xl text-muted-foreground">
-              {t("nothingRunningOut")}
-            </p>
+            <EmptyState className="mt-3" density="touch" title={t("nothingRunningOut")} />
           ) : (
             <ul className="mt-3">
               {lowStock.map((product) => {

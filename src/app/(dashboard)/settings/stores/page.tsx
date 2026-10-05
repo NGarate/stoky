@@ -6,6 +6,7 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -211,10 +212,17 @@ export default function StoresPage() {
           catalogue already list into a bare `<ul>`. */}
       <div>
         {stores.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-            <p>{t("stores.noStores")}</p>
-            <p className="mt-2 text-sm">{t("stores.addFirst")}</p>
-          </div>
+          <EmptyState
+            action={
+              canManage && !isCreating ? (
+                <Button onClick={() => setIsCreating(true)} type="button" variant="outline">
+                  {t("stores.create")}
+                </Button>
+              ) : undefined
+            }
+            body={t("stores.addFirst")}
+            title={t("stores.noStores")}
+          />
         ) : (
           <ul className="space-y-3">
             {stores.map((store: Store) => (

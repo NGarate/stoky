@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import {
@@ -75,6 +76,7 @@ function RowAction({
 
 export default function ProductsPage(): JSX.Element {
   const t = useTranslations("products.list");
+  const tProducts = useTranslations("products");
   const query = api.product.list.useQuery({ limit: 100 });
   const result = query.data;
 
@@ -124,6 +126,26 @@ export default function ProductsPage(): JSX.Element {
         </p>
       ) : null}
 
+      {products.length === 0 ? (
+        // The header already offers both; here they are the whole of what
+        // the screen can say, so they are repeated as its invitation —
+        // outline, because the header's "Nuevo producto" is the one primary.
+        <EmptyState
+          action={
+            <>
+              <Button asChild variant="outline">
+                <Link href="/products/new">{t("new")}</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/products/scan">{t("scan")}</Link>
+              </Button>
+            </>
+          }
+          body={tProducts("addFirst")}
+          title={tProducts("noProducts")}
+        />
+      ) : null}
+
       {/* Desktop: the table.
 
           Only one of the two is ever displayed, so source order does not affect
@@ -131,6 +153,7 @@ export default function ProductsPage(): JSX.Element {
           which copy a `.first()` selector resolves to, and resolving to the
           hidden one makes "the product is on the page" assert false on the tier
           where it is true. */}
+      {products.length > 0 ? (
       <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
         <table className="w-full">
           <thead className="bg-muted text-muted-foreground">
@@ -202,6 +225,7 @@ export default function ProductsPage(): JSX.Element {
           </tbody>
         </table>
       </div>
+      ) : null}
 
       {/* Phone and tablet: one card per product. */}
       <ul className="space-y-3 lg:hidden">

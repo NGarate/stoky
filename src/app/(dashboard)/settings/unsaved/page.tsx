@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -78,12 +79,7 @@ export default function UnsavedPage(): JSX.Element {
       />
 
       {failed.length === 0 ? (
-        <div className="rounded-xl border border-ok-foreground bg-ok p-6">
-          <p className="text-ok-foreground">{t("unsavedEmpty")}</p>
-          <p className="mt-2 text-sm text-ok-foreground">
-            {t("unsavedEmptyHint")}
-          </p>
-        </div>
+        <EmptyState body={t("unsavedEmptyHint")} title={t("unsavedEmpty")} />
       ) : (
         <>
 

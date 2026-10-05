@@ -5,6 +5,9 @@ import { Search } from "lucide-react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
@@ -86,11 +89,34 @@ export default function PricesPage() {
           concrete reason (DESIGN_AUDIT A5.4). The inventory and the
           catalogue already list into a bare `<ul>`. */}
       <div>
-        {products.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-            <p>{t("prices.noPrices")}</p>
-            <p className="mt-2 text-sm">{t("prices.addFirst")}</p>
-          </div>
+        {/* Two different empties. A search that found nothing says so and
+            offers the way back to everything; a household with no prices at
+            all is told where prices come from — this screen cannot record
+            one, so "Registra tu primer precio" asked for the impossible. */}
+        {products.length === 0 && search ? (
+          <EmptyState
+            action={
+              <Button onClick={() => setSearch("")} type="button" variant="outline">
+                {t("inventory.searchClear")}
+              </Button>
+            }
+            title={t("prices.searchEmpty", { search })}
+          />
+        ) : products.length === 0 ? (
+          <EmptyState
+            action={
+              <>
+                <Button asChild>
+                  <Link href="/inventory/add">{t("inventory.addStock")}</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/receipts/upload">{t("receipts.upload")}</Link>
+                </Button>
+              </>
+            }
+            body={t("prices.emptyBody")}
+            title={t("prices.emptyTitle")}
+          />
         ) : (
           <ul className="space-y-3">
             {products.map((product) => (

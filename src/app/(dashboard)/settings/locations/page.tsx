@@ -6,6 +6,7 @@ import { TRPCClientError } from "@trpc/client";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { Select } from "@/components/ui/select";
 import { useSnackbar } from "@/components/ui/snackbar";
@@ -451,10 +452,18 @@ export default function LocationsPage(): JSX.Element {
       ) : null}
 
       {tree.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-          <p>{t("noLocations")}</p>
-          <p className="mt-2 text-sm">{t("addFirst")}</p>
-        </div>
+        <EmptyState
+          action={
+            canManage && !isEditing ? (
+              <Button onClick={() => setIsEditing(true)} type="button" variant="outline">
+                {t("create")}
+              </Button>
+            ) : undefined
+          }
+          body={t("addFirst")}
+          className="mt-6"
+          title={t("noLocations")}
+        />
       ) : (
         <div className="mt-6">
           <LocationTree
