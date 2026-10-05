@@ -65,6 +65,20 @@ export function ReconcileDialog({
   const hintId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * The latest `onClose`, so the effect below can run once.
+   *
+   * The caller passes an inline function, a new one on every render of the
+   * banner — and the focus effect depended on it. Each re-render of the
+   * parent therefore tore the effect down and set it up again: focus went
+   * back to the opener and then to the card, out of the amount box somebody
+   * was typing into.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   const input = op.input as {
     productId?: string;
     quantity?: number;
@@ -89,7 +103,7 @@ export function ReconcileDialog({
       // wrong until it asks again. Nothing here did, so the shelf and the
       // screen went on disagreeing after the person had settled it.
       void invalidateAfterStockChange(utils);
-      onClose();
+      onCloseRef.current();
     },
     onError: () => setFailed(true),
   });
@@ -98,7 +112,7 @@ export function ReconcileDialog({
     (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -129,7 +143,7 @@ export function ReconcileDialog({
         first?.focus();
       }
     },
-    [onClose],
+    [],
   );
 
   useEffect(() => {
