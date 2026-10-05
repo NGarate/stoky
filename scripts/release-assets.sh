@@ -35,9 +35,12 @@ if [ ! -s "docs/releases/$RELEASE_TAG.md" ]; then
 fi
 
 mkdir -p "$ASSET_DIR"
-cp deploy/docker-compose.yml "$ASSET_DIR/docker-compose.yml"
-cp deploy/example.env "$ASSET_DIR/example.env"
-cp deploy/traefik.yml "$ASSET_DIR/traefik.yml"
+# The templates link to the guide on master, which is right for a checkout and
+# wrong for a download: once the next release lands, master's guide describes
+# that release. Each asset points at the guide written for its own tag.
+for asset in docker-compose.yml example.env traefik.yml; do
+  sed "s#/blob/master/#/blob/$RELEASE_TAG/#g" "deploy/$asset" > "$ASSET_DIR/$asset"
+done
 (
   cd "$ASSET_DIR"
   sha256sum docker-compose.yml example.env traefik.yml > SHA256SUMS
