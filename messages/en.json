@@ -950,6 +950,7 @@
     "signOutDiscard": "Sign out and discard them",
     "signOutCancel": "Stay here",
     "signOutWorking": "Signing out...",
+    "endSessionUnsaved": "{count, plural, one {# change the server refused will be deleted} other {# changes the server refused will be deleted}} when you sign out.",
     "signOutShared": "Sign out when you are done if other people use this device.",
     "revokeAll": "Sign out on every device",
     "revokeAllWhy": "Use this if you lose a device, or think someone else is using your account.",

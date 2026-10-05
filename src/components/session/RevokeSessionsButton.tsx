@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
@@ -40,6 +41,7 @@ import type { JSX } from "react";
  */
 export function RevokeSessionsButton(): JSX.Element {
   const t = useTranslations("session");
+  const tOffline = useTranslations("offline");
   const revoke = api.auth.revokeMySessions.useMutation({
     // **`always`, not the client's `online` default.** Offline, an `online`
     // mutation is *paused* rather than rejected — `src/lib/offline/persist.ts`
@@ -51,7 +53,7 @@ export function RevokeSessionsButton(): JSX.Element {
     // refusal they can read and retry, not a spinner.
     networkMode: "always",
   });
-  const { pending, working, leave, sendThenLeave } = useEndSession(() =>
+  const { pending, unsaved, working, leave, sendThenLeave } = useEndSession(() =>
     revoke.mutateAsync(),
   );
   const [asking, setAsking] = useState(false);
@@ -112,8 +114,27 @@ export function RevokeSessionsButton(): JSX.Element {
         {t("revokeAllTitle")}
       </h3>
       <p className="mt-1 text-sm text-warn-foreground">
-        {pending > 0 ? t("revokeAllPending", { count: pending }) : t("revokeAllClean")}
+        {pending > 0
+          ? t("revokeAllPending", { count: pending })
+          : unsaved > 0
+            ? null
+            : t("revokeAllClean")}
+        {/* Refused changes go with the rest, and sending first cannot save
+            them — so they are said apart, and never as "nothing unsent". */}
+        {unsaved > 0 ? (
+          <>
+            {pending > 0 ? " " : null}
+            {t("endSessionUnsaved", { count: unsaved })}
+          </>
+        ) : null}
       </p>
+      {unsaved > 0 ? (
+        // Somewhere to look at them before they go, rather than a warning
+        // with no way to act on it.
+        <Button asChild className="px-0 text-warn-foreground" variant="link">
+          <Link href="/settings/unsaved">{tOffline("seeUnsaved")}</Link>
+        </Button>
+      ) : null}
 
       {failed !== null ? (
         <p className="mt-2 text-sm font-semibold text-warn-foreground" role="alert">
@@ -141,7 +162,7 @@ export function RevokeSessionsButton(): JSX.Element {
         <Button disabled={working} onClick={() => void run(leave)} type="button">
           {working
             ? t("revokeAllWorking")
-            : pending > 0
+            : pending > 0 || unsaved > 0
               ? t("revokeAllDiscard")
               : t("revokeAllConfirm")}
         </Button>
