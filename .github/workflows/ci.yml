@@ -628,14 +628,17 @@ jobs:
           NEXTAUTH_SECRET="$(openssl rand -hex 32)"
           export POSTGRES_PASSWORD NEXTAUTH_SECRET
           COMPOSE=(docker compose --project-name "stoky-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file deploy/docker-compose.yml)
-          trap '"${COMPOSE[@]}" logs --tail=100 app db cache; "${COMPOSE[@]}" down --volumes' EXIT
+          trap '"${COMPOSE[@]}" logs --tail=100 app db cache traefik; "${COMPOSE[@]}" down --volumes' EXIT
           "${COMPOSE[@]}" pull app
           APP_IMAGE="$("${COMPOSE[@]}" config --format json | bun -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).services.app.image")"
           docker image inspect "$APP_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' \
             | grep -Fx "${APP_IMAGE%:*}@$EXPECTED_DIGEST"
-          "${COMPOSE[@]}" up -d --wait --wait-timeout 180 app
+          # Traefik too: it is the only way in, and its file-provider template,
+          # flags and read-only config mount are shipped files no other job runs.
+          "${COMPOSE[@]}" up -d --wait --wait-timeout 180 app traefik
           "${COMPOSE[@]}" exec -T -e EXPECTED_VERSION="${RELEASE_TAG#v}" app \
             bun -e 'if (require("./package.json").version !== process.env.EXPECTED_VERSION) process.exit(1)'
+          bash scripts/smoke-proxy.sh "$DOMAIN"
       # Retag the exact digest the smoke ran, server side: no rebuild, so the
       # version tag cannot name anything but the verified image.
       - name: Promote the verified image to the version tag
