@@ -29,13 +29,20 @@ import type { JSX } from "react";
  * no. It offers the retry React already provides. And it shows the digest,
  * which is the only string that connects what the person saw to what the server
  * logged.
+ *
+ * **`retry`, not `reset`.** In this Next (16.3; see
+ * `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/error.md`)
+ * `reset` clears the error state and re-renders the children *without
+ * re-fetching them*, and `retry` — stable since 16.3 — re-fetches and then
+ * re-renders. A screen that failed because the server did is the same failure
+ * after a `reset`, so "Volver a intentarlo" was a button that did nothing.
  */
 export default function DashboardError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }): JSX.Element {
   const t = useTranslations("errors");
 
@@ -58,7 +65,7 @@ export default function DashboardError({
           {/* 48px, the floor this project holds everything to (PROGRESS D17). A
               person meeting this screen on a phone is already having a bad time. */}
           <Button
-            onClick={reset}
+            onClick={() => retry()}
             type="button"
           >
             {t("boundaryRetry")}

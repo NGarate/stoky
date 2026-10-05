@@ -29,13 +29,17 @@ import type { JSX } from "react";
  * `(dashboard)/error.tsx` is the one that will actually be seen, and it does
  * speak the reader's language. This is for the case where even that could not
  * be rendered.
+ *
+ * It takes `retry`, not `reset`, for the reason `(dashboard)/error.tsx` gives:
+ * in this Next `reset` re-renders without re-fetching, so a root layout that
+ * failed on the server failed again, and "Recargar" did nothing.
  */
 export default function GlobalError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }): JSX.Element {
   useEffect(() => {
     console.error("[boundary] the root layout failed to render", error);
@@ -71,7 +75,7 @@ export default function GlobalError({
           </p>
 
           <button
-            onClick={reset}
+            onClick={() => retry()}
             style={{
               minHeight: "48px",
               padding: "0 1.25rem",
