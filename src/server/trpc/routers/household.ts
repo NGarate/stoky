@@ -85,9 +85,13 @@ function assertMayActOnOwner(
  * `CONFLICT` rather than `FORBIDDEN`: nothing is wrong with who is asking, and
  * the answer is not "you may not" but "not while you are the last one" — which
  * is a state the caller can resolve by promoting somebody first.
+ *
+ * **Only meaningful inside `withOwnersLocked`.** Counting and then writing is
+ * a check that races with itself: two owners stepping down at once each count
+ * the other, both pass, and the household is left with none.
  */
 async function assertAnOwnerRemains(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: Prisma.TransactionClient,
   householdId: string,
   target: { id: string; role: HouseholdRole },
   becoming: HouseholdRole | null,
@@ -105,6 +109,41 @@ async function assertAnOwnerRemains(
         "This household would have no owner. Make somebody else an owner first.",
     });
   }
+}
+
+/**
+ * Runs `work` in a transaction holding this household's owner rows.
+ *
+ * What makes `assertAnOwnerRemains` true by the time the write lands. Two
+ * concurrent demotions (or a demotion and a removal) of different owners each
+ * passed the count on its own and together left zero owners — measured, not
+ * inferred: `household.roles.test.ts` lost every owner in the first round
+ * without this.
+ *
+ * `FOR UPDATE` on the owner rows rather than Serializable: the second caller
+ * waits for the first to commit, Postgres then re-checks `role = 'OWNER'` on
+ * the rows it was waiting for, and the count that follows sees the first
+ * caller's write — so it is refused with `CONFLICT` rather than with a
+ * serialization failure the client would have to retry. `ORDER BY id` so two
+ * callers take the locks in the same order and cannot deadlock each other.
+ *
+ * The member is re-read inside, after the lock, so the role the guards judge
+ * is the one the write replaces.
+ */
+async function withOwnersLocked<T>(
+  db: PrismaClient,
+  householdId: string,
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id FROM "User"
+      WHERE "householdId" = ${householdId} AND role = 'OWNER'
+      ORDER BY id
+      FOR UPDATE
+    `;
+    return work(tx);
+  });
 }
 
 export const householdRouter = createTRPCRouter({
@@ -244,15 +283,17 @@ export const householdRouter = createTRPCRouter({
   updateRole: adminProcedure
     .input(updateMemberRoleSchema)
     .mutation(async ({ ctx, input }) => {
-      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+      return withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
+        const member = await memberOfHousehold(tx, input.userId, ctx.householdId);
 
-      assertMayActOnOwner(ctx.role, member.role, input.role);
-      await assertAnOwnerRemains(ctx.db, ctx.householdId, member, input.role);
+        assertMayActOnOwner(ctx.role, member.role, input.role);
+        await assertAnOwnerRemains(tx, ctx.householdId, member, input.role);
 
-      return ctx.db.user.update({
-        where: { id: member.id },
-        data: { role: input.role },
-        select: { id: true, name: true, email: true, role: true },
+        return tx.user.update({
+          where: { id: member.id },
+          data: { role: input.role },
+          select: { id: true, name: true, email: true, role: true },
+        });
       });
     }),
 
@@ -273,14 +314,16 @@ export const householdRouter = createTRPCRouter({
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
-      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+      await withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
+        const member = await memberOfHousehold(tx, input.userId, ctx.householdId);
 
-      assertMayActOnOwner(ctx.role, member.role);
-      await assertAnOwnerRemains(ctx.db, ctx.householdId, member, null);
+        assertMayActOnOwner(ctx.role, member.role);
+        await assertAnOwnerRemains(tx, ctx.householdId, member, null);
 
-      await ctx.db.user.update({
-        where: { id: member.id },
-        data: { householdId: null },
+        await tx.user.update({
+          where: { id: member.id },
+          data: { householdId: null },
+        });
       });
 
       return { success: true };
