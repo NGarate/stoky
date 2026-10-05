@@ -102,6 +102,14 @@ describe("what each change says", () => {
     expect(screen.getByText(/Usaste 1 L de «Leche entera»/)).toBeInTheDocument();
   });
 
+  it("draws letting it go as the destructive action it is", () => {
+    renderWithIntl(<UnsavedPage />);
+
+    expect(screen.getByRole("button", { name: "Descartar" }).className).toContain(
+      "bg-destructive",
+    );
+  });
+
   it("names a change whose label lives outside the offline catalogue", () => {
     // Read through the `offline` namespace, `shopping.itemUpdated` was shown
     // as the raw key "offline.shopping.itemUpdated".

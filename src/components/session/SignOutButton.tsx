@@ -141,10 +141,14 @@ export function SignOutButton(): JSX.Element {
           </Button>
         ) : null}
 
+        {/* With changes still on the device this button deletes them, so it
+            wears the colour that says so; with nothing to lose it is the
+            ordinary commit. */}
         <Button
           disabled={working}
           onClick={() => void run(leave)}
           type="button"
+          variant={pending > 0 || unsaved > 0 ? "destructive" : "default"}
         >
           {working
             ? t("signOutWorking")

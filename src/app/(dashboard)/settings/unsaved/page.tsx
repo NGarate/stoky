@@ -106,9 +106,12 @@ export default function UnsavedPage(): JSX.Element {
                     </Button>
                   )}
 
+                  {/* Deletes the change for good, so it is not drawn in the
+                      colour of the retry beside it. */}
                   <Button
                     onClick={() => discard(op.id)}
                     type="button"
+                    variant="destructive"
                   >
                     {t("discard")}
                   </Button>

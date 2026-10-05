@@ -253,6 +253,27 @@ describe("with unsent changes", () => {
     expect(signOutAction).toHaveBeenCalledTimes(1);
   });
 
+  it("draws discarding them as the destructive action it is", async () => {
+    // It deletes somebody's unsent changes, and was drawn in the same filled
+    // primary as "Enviar y cerrar sesión", which keeps them.
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+    expect(
+      screen.getByRole("button", { name: "Cerrar sesión y descartarlos" }).className,
+    ).toContain("bg-destructive");
+  });
+
+  it("draws the same on the control that ends every session", async () => {
+    renderWithIntl(<RevokeSessionsButton />);
+    const confirm = await openRevokeConfirm();
+
+    expect(
+      within(confirm).getByRole("button", { name: "Cerrarlas todas y descartarlos" })
+        .className,
+    ).toContain("bg-destructive");
+  });
+
   it("lets the person stay, and changes nothing when they do", async () => {
     renderWithIntl(<SignOutButton />);
     await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));

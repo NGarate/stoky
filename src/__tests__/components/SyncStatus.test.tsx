@@ -265,6 +265,20 @@ describe("a change that did not save", () => {
     expect(screen.queryByText(/shopping\.itemUpdated/)).toBeAbsent();
   });
 
+  it("draws letting it go as the destructive action it is", () => {
+    // Discarding deletes an unsent change and nothing puts it back. It was
+    // drawn in the same filled primary as "Reintentar" beside it.
+    queueState = {
+      ...queueState,
+      failed: [failed("f1", "refused"), { ...failed("s1", "needs-review"), path: "product.resolveScan", input: { barcode: "1" } }],
+    };
+    renderWithIntl(<SyncStatus />);
+
+    for (const button of screen.getAllByRole("button", { name: "Descartar" })) {
+      expect(button.className).toContain("bg-destructive");
+    }
+  });
+
   it("offers to try it again or to let it go", async () => {
     queueState = { ...queueState, failed: [failed("f1", "refused")] };
     renderWithIntl(<SyncStatus />);
