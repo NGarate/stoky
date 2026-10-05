@@ -58,7 +58,7 @@ export default function ScanPage() {
   }
 
   const scanMutation = api.product.scanBarcode.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       setIsProcessing(false);
 
       // A lookup that found the code elsewhere *created* the product, and the
@@ -89,7 +89,13 @@ export default function ScanPage() {
       } else {
         // Not found anywhere: the create form opens with the barcode filled
         // in, which is itself the answer and needs no sentence.
-        router.push(`/products/new?barcode=${scannedBarcode}`);
+        //
+        // Encoded, and taken from what was sent rather than from state. The
+        // manual field accepts anything, so "12&pendingScan=x" became a
+        // second query parameter — and a `#` cut the code short.
+        router.push(
+          `/products/new?barcode=${encodeURIComponent(variables.barcode)}`,
+        );
       }
     },
     onError: (error) => {
