@@ -162,6 +162,12 @@ function NewProductForm(): JSX.Element {
         return;
       }
 
+      // Either way the product now exists, so the queued scan that sent the
+      // person here has its answer. Only the create path discarded it, so a
+      // lookup that found or made the product left the "needs a name"
+      // question standing in the sync banner, for a product that had one.
+      if (pendingScan) discard(pendingScan);
+
       if (result.source === "local") {
         // Someone in the household already has this code. Nothing was created.
         setLookupOutcome(null);
