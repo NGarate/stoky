@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import { rm } from "node:fs/promises";
 import { pngClaiming, pngOf } from "../utils/png";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { MatchStatus, ReceiptStatus } from "@prisma/client";
@@ -322,6 +323,41 @@ describe("receipt.upload — what it refuses", () => {
         }),
       "BAD_REQUEST",
     );
+  });
+
+  it("refuses a RIFF file that is not a WebP on a WebP declaration", async () => {
+    // A WAV header: "RIFF", a length, then "WAVE" where a WebP has "WEBP".
+    // Refused by the magic-byte check itself — "Invalid image file" — not
+    // left for the decoder to refuse with "Failed to process image".
+    const wav = Buffer.concat([
+      Buffer.from("RIFF"),
+      Buffer.from([0x24, 0, 0, 0]),
+      Buffer.from("WAVEfmt "),
+      Buffer.alloc(32, 0),
+    ]);
+
+    await expect(
+      caller.receipt.upload({
+        fileBase64: wav.toString("base64"),
+        mimeType: "image/webp",
+      }),
+    ).rejects.toThrow("Invalid image file");
+  });
+
+  it("still accepts a real WebP", async () => {
+    const webp = Buffer.from(
+      await new Bun.Image(ONE_PIXEL_PNG).webp().toBuffer(),
+    );
+    expect(webp.subarray(8, 12).toString("latin1")).toBe("WEBP");
+
+    const receipt = await caller.receipt.upload({
+      fileBase64: webp.toString("base64"),
+      mimeType: "image/webp",
+    });
+
+    // Normalised to the JPEG every upload becomes, so it really went through.
+    expect(receipt.imagePath).toEndWith(".jpg");
+    await rm(receipt.imagePath, { force: true });
   });
 
   it("refuses a PNG header on a JPEG declaration", async () => {
