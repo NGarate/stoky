@@ -360,6 +360,7 @@ export function InventoryView(): JSX.Element {
                 <td className="px-4 py-3 text-center">
                   <StockStatus
                     isLowStock={product.isLowStock}
+                    onTintedRow
                     totalStock={product.totalStock}
                   />
                 </td>
@@ -394,6 +395,7 @@ export function InventoryView(): JSX.Element {
             status={
               <StockStatus
                 isLowStock={product.isLowStock}
+                onTintedRow
                 totalStock={product.totalStock}
               />
             }

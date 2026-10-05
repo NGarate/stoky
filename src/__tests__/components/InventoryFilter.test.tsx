@@ -146,6 +146,13 @@ describe("the restock filter", () => {
       expect(row?.className ?? "").toContain("bg-danger");
       expect(row?.className ?? "").not.toContain("bg-warn");
     }
+
+    // And the pill on a tinted row is outlined, in both tiers: a filled
+    // `bg-danger` pill on a `bg-danger` row is not there at all.
+    for (const pill of screen.getAllByText("Sin stock")) {
+      expect(pill.className).toContain("border-danger-foreground");
+      expect(pill.className).not.toContain("bg-danger");
+    }
   });
 
   it("says so when nothing needs restocking, instead of a bare empty list", () => {

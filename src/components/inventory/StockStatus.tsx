@@ -76,25 +76,40 @@ export function StockAmount({
  * screens, one product, two words for one state. Run out is the stronger
  * statement, so it wins; there is now one place that decides.
  *
- * The low-stock badge is outlined rather than filled: its row is already
- * tinted `bg-warn`, so a filled warn pill would vanish into it.
+ * **Filled or outlined follows the row, not the state.** The rule in
+ * `badge.tsx`: an outline is for a badge sitting on a row already tinted with
+ * its own tone. This used to be hard-coded per state — "Sin stock" always
+ * filled, "Stock bajo" always outlined — which got both wrong somewhere: the
+ * filled danger pill vanished into the inventory's `bg-danger` row, and the
+ * outlined warn pill was the faint one on the Panel and /products, which do
+ * not tint. `onTintedRow` says the row wears `stockTone`'s colour; the caller
+ * knows, because the caller tinted it.
  */
 export function StockStatus({
   isLowStock,
+  onTintedRow = false,
   totalStock,
 }: {
   isLowStock: boolean;
+  /** The row this sits on is tinted with `stockTone(totalStock, isLowStock)`. */
+  onTintedRow?: boolean;
   totalStock: number;
 }): JSX.Element {
   const t = useTranslations("inventory");
+  // A healthy row is never tinted, so `ok` has nothing to clash with.
+  const variant = onTintedRow ? "outline" : "solid";
 
   if (totalStock <= 0) {
-    return <Badge tone="danger">{t("noStock")}</Badge>;
+    return (
+      <Badge tone="danger" variant={variant}>
+        {t("noStock")}
+      </Badge>
+    );
   }
 
   if (isLowStock) {
     return (
-      <Badge tone="warn" variant="outline">
+      <Badge tone="warn" variant={variant}>
         {t("lowStock")}
       </Badge>
     );
