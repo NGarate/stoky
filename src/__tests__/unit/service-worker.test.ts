@@ -291,3 +291,105 @@ describe("giving up on the network", () => {
     expect(await response.text()).toBe("from the network");
   });
 });
+
+/**
+ * What an unlisted navigation leaves behind, driven rather than read.
+ *
+ * It used to leave a copy of itself: the writer was handed the cache name
+ * `"none"`, which it took literally, so every authenticated page anybody
+ * opened was kept in a cache the `stoky-` purge on sign-out never matched —
+ * and `caches.match` searches every cache, so offline the next account on the
+ * device was served the previous account's pages.
+ */
+describe("what an unlisted navigation keeps", () => {
+  function load(existing: string[]) {
+    const listeners = new Map<string, (event: unknown) => void>();
+    const opened: string[] = [];
+    const deleted: string[] = [];
+    const pending: Promise<unknown>[] = [];
+
+    const caches = {
+      open: async (name: string) => {
+        opened.push(name);
+        return { put: async () => {}, add: async () => {}, match: async () => undefined };
+      },
+      keys: async () => existing,
+      delete: async (name: string) => {
+        deleted.push(name);
+        return true;
+      },
+      match: async () => undefined,
+    };
+
+    const self = {
+      location: { origin: "https://stoky.example" },
+      addEventListener: (type: string, handler: (event: unknown) => void) => {
+        listeners.set(type, handler);
+      },
+      setTimeout: () => 0,
+      fetch: async () =>
+        new Response("<html>a household's page</html>", {
+          headers: { "content-type": "text/html" },
+        }),
+      caches,
+      Response,
+      skipWaiting: async () => {},
+      clients: { claim: async () => {} },
+    };
+
+    new Function("self", SOURCE)(self);
+
+    const fire = (type: string, event: Record<string, unknown>) => {
+      listeners.get(type)?.({
+        ...event,
+        waitUntil: (value: Promise<unknown>) => pending.push(value),
+        respondWith: (value: Promise<unknown>) => pending.push(value),
+      });
+      return Promise.all(pending);
+    };
+
+    return { opened, deleted, fire };
+  }
+
+  function navigation(path: string): Request {
+    const request = new Request(`https://stoky.example${path}`, {
+      headers: { accept: "text/html" },
+    });
+    Object.defineProperty(request, "mode", { value: "navigate" });
+    return request;
+  }
+
+  it("serves an unlisted page without writing it to any cache", async () => {
+    const worker = load([]);
+
+    await worker.fire("fetch", { request: navigation("/inventory/abc123") });
+
+    expect(worker.opened).toEqual([]);
+  });
+
+  it("still keeps a listed shell route", async () => {
+    // The other half: a fix that stopped writing altogether would pass the
+    // test above and leave the app unable to open offline.
+    const worker = load([]);
+
+    await worker.fire("fetch", { request: navigation("/dashboard") });
+
+    expect(worker.opened).toEqual(["stoky-shell-v1"]);
+  });
+
+  it("deletes the cache an earlier worker filled, on activate", async () => {
+    const worker = load(["none", "stoky-shell-v1", "stoky-static-v1", "someone-else"]);
+
+    await worker.fire("activate", {});
+
+    expect(worker.deleted).toEqual(["none"]);
+  });
+
+  it("deletes it on sign-out as well", async () => {
+    const worker = load(["none", "stoky-shell-v1", "someone-else"]);
+
+    await worker.fire("message", { data: "STOKY_FORGET" });
+
+    expect(worker.deleted).toEqual(["none", "stoky-shell-v1"]);
+  });
+});
