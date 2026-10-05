@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import { runningTotals } from "@/lib/inventory/stockLedger";
 import { StockHistoryChart } from "@/components/inventory/StockHistoryChart";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import type { JSX } from "react";
 
 /**
@@ -42,6 +43,7 @@ export default function StockHistoryPage({
 /** Exported apart from the route so the component suite can render it. */
 export function StockHistoryView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.history");
+  const units = useQuantityFormat();
   const locale = useLocale();
 
   const detail = api.product.getById.useQuery({ id }, { retry: false });
@@ -127,7 +129,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
       <p className="mt-2 font-medium text-foreground">
         {t("currentTotal", {
           stock: product.totalStock,
-          unit: product.defaultUnit,
+          unit: units.unit(product.defaultUnit, product.totalStock),
         })}
       </p>
 
@@ -180,14 +182,14 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                             : "text-ok-foreground"
                         }`}
                       >
-                        {entry.quantity > 0 ? `+${entry.quantity}` : entry.quantity}{" "}
-                        {entry.unit}
+                        {entry.quantity > 0 ? "+" : ""}
+                        {units.quantity(entry.quantity, entry.unit)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {entry.location?.name ?? t("noLocation")}
                       </td>
                       <td className="px-4 py-3 text-right text-foreground">
-                        {point.total} {product.defaultUnit}
+                        {units.quantity(point.total, product.defaultUnit)}
                       </td>
                     </tr>
                   );

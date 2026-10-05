@@ -124,6 +124,18 @@ describe("StockAmount", () => {
     expect(stockTone(5, false)).toBe("neutral");
   });
 
+  it("writes the stored count unit as a word, pluralised", () => {
+    renderWithIntl(
+      <StockAmount defaultUnit="unit" isLowStock={false} totalStock={24} />,
+      { locale: "es" },
+    );
+
+    // The schema stores the count unit as the token "unit"; it was printed
+    // as stored, so the inventory said "24 unit" — or "24 unidad" for rows
+    // that had been folded from dozens.
+    expect(screen.getByText("24 unidades")).toBeInTheDocument();
+  });
+
   it("always carries the unit, because a bare number is not an amount", () => {
     renderWithIntl(
       <StockAmount defaultUnit="kg" isLowStock={false} totalStock={5} />,

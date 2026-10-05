@@ -115,6 +115,17 @@ function Harness({
       <button
         onClick={() =>
           snackbar.show({
+            kind: "confirm",
+            message: { key: "offline.usedUp", values: { quantity: 2, unit: "unit", name: "Huevos" } },
+          })
+        }
+        type="button"
+      >
+        contado
+      </button>
+      <button
+        onClick={() =>
+          snackbar.show({
             kind: "undo-inverse",
             message: { key: "offline.addedItem", values: { name: "Pan" } },
             undo: () => onUndo?.(),
@@ -187,6 +198,18 @@ describe("what the snackbar says", () => {
     // The op label is `{key, values}` so that a queue composed in Spanish and
     // read after a language switch is not half in each (queue.ts:41-47).
     expect(await screen.findAllByText("Marcaste «Leche»")).not.toHaveLength(0);
+  });
+
+  it("writes a stored count unit as a word, in the reader's plural", async () => {
+    render();
+    await press("contado");
+
+    // The queue stores the unit token as it was sent ("unit"); the label is
+    // translated here, so this is where the token becomes a word. It read
+    // "Usaste 2 unit de «Huevos»" in a Spanish interface.
+    expect(
+      await screen.findAllByText("Usaste 2 unidades de «Huevos»"),
+    ).not.toHaveLength(0);
   });
 
   it("offers no undo on a plain confirmation", async () => {

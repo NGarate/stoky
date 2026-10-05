@@ -6,6 +6,7 @@ import { DEFAULT_CURRENCY, formatMoney, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 import type { JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Where this product is cheapest.
@@ -44,6 +45,7 @@ export function StoreComparison({
   productId: string;
 }): JSX.Element {
   const t = useTranslations();
+  const units = useQuantityFormat();
   const locale = useLocale();
   const { data: prices, isLoading } = api.price.getLatestPrices.useQuery({
     productId,
@@ -120,7 +122,7 @@ export function StoreComparison({
                   }
                 >
                   {formatUnitPrice(locale, price.unitPrice, priceCurrency)}{" "}
-                  {t("prices.perUnit", { unit: price.unit })}
+                  {t("prices.perUnit", { unit: units.unit(price.unit, 1) })}
                 </span>
               </div>
 
@@ -156,7 +158,7 @@ export function StoreComparison({
                     {t("prices.paidFor", {
                       total: formatMoney(locale, price.price, priceCurrency),
                       quantity: price.quantity,
-                      unit: price.unit,
+                      unit: units.unit(price.unit, price.quantity),
                     })}
                   </>
                 )}

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { useLocale, useTranslations } from "next-intl";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Net stock over time — the history screen's chart (Phase 8 item 5).
@@ -35,6 +36,7 @@ export function StockHistoryChart({
   unit: string;
 }) {
   const t = useTranslations("products.history");
+  const units = useQuantityFormat();
   const locale = useLocale();
 
   const chartData = points.map((point) => ({
@@ -60,7 +62,7 @@ export function StockHistoryChart({
             allowDecimals={false}
           />
           <Tooltip
-            formatter={(value: number) => [`${value} ${unit}`, t("totalHeader")]}
+            formatter={(value: number) => [units.quantity(value, unit), t("totalHeader")]}
             labelFormatter={(label) => label}
           />
           <Line

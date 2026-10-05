@@ -7,6 +7,7 @@ import { use, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 interface AppliedPageProps {
   params: Promise<{ id: string }>;
@@ -73,6 +74,7 @@ export default function ReceiptAppliedPage({
 }: AppliedPageProps): JSX.Element {
   const { id } = use(params);
   const t = useTranslations("receipts.applied");
+  const units = useQuantityFormat();
   const statusLabel = useTranslations("receipts.status");
   const locale = useLocale();
 
@@ -285,10 +287,7 @@ export default function ReceiptAppliedPage({
                 <p className="font-medium text-foreground md:text-xl">{name}</p>
                 {stock ? (
                   <p className="mt-1 text-lg font-semibold text-heading md:text-2xl">
-                    {t("itemQuantity", {
-                      quantity: stock.quantity,
-                      unit: stock.unit,
-                    })}
+                    {units.quantity(stock.quantity, stock.unit)}
                   </p>
                 ) : null}
                 <p className="mt-1 text-sm text-muted-foreground md:text-base">

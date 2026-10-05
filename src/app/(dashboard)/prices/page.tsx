@@ -9,9 +9,11 @@ import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 export default function PricesPage() {
   const t = useTranslations();
+  const units = useQuantityFormat();
   const locale = useLocale();
   const [search, setSearch] = useState("");
 
@@ -120,7 +122,7 @@ export default function PricesPage() {
                             locale,
                             product.priceRecords[0].unitPrice,
                             product.priceRecords[0].currency ?? DEFAULT_CURRENCY,
-                          )} ${t("prices.perUnit", { unit: product.priceRecords[0].unit })}`
+                          )} ${t("prices.perUnit", { unit: units.unit(product.priceRecords[0].unit, 1) })}`
                         : t("prices.noPrices"),
                   },
                 ]}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/lib/offline/queue-context";
@@ -68,6 +69,7 @@ import type { JSX } from "react";
 export default function KitchenPage(): JSX.Element {
   const t = useTranslations("kitchen");
   const locale = useLocale();
+  const units = useQuantityFormat();
   const { state: queue, enqueue } = useWriteQueue();
   const snackbar = useSnackbar();
 
@@ -304,7 +306,7 @@ export default function KitchenPage(): JSX.Element {
                   </p>
 
                   <p className="mt-1 text-xl text-warn-foreground">
-                    {batchLeft(batch) === null ? t("quantityUnknown") : t("batchLeft", { quantity: batchLeft(batch) ?? 0, unit: batch.unit })}
+                    {batchLeft(batch) === null ? t("quantityUnknown") : t("batchLeft", { quantity: batchLeft(batch) ?? 0, unit: units.unit(batch.unit, batchLeft(batch) ?? 0) })}
                   </p>
                   <Button
                     disabled={batchLeft(batch) === null || (batchLeft(batch) ?? 0) < 1}
@@ -313,10 +315,10 @@ export default function KitchenPage(): JSX.Element {
                     size="lg"
                     type="button"
                   >
-                    <span aria-hidden="true">{t("useOneUnit", { unit: batch.unit })}</span>
+                    <span aria-hidden="true">{t("useOneUnit", { unit: units.unit(batch.unit, 1) })}</span>
                     <span className="sr-only">
                       {t("useOneOf", {
-                        unit: batch.unit,
+                        unit: units.unit(batch.unit, 1),
                         name: batch.product.name,
                       })}
                     </span>
@@ -420,7 +422,7 @@ export default function KitchenPage(): JSX.Element {
                         value: t("leftOf", {
                           stock: Math.max(0, left),
                           minimum: product.minStock ?? 0,
-                          unit: product.defaultUnit,
+                          unit: units.unit(product.defaultUnit, product.minStock ?? 0),
                         }),
                       },
                     ]}
@@ -464,7 +466,7 @@ export default function KitchenPage(): JSX.Element {
                         <p className="text-lg text-muted-foreground md:text-xl">
                           {t("onList", {
                             quantity: already,
-                            unit: product.defaultUnit,
+                            unit: units.unit(product.defaultUnit, already),
                           })}
                         </p>
                       )

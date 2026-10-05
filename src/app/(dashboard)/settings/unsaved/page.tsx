@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 import type { JSX } from "react";
@@ -60,6 +61,7 @@ export default function UnsavedPage(): JSX.Element {
   // the `offline` namespace with the prefix stripped, any label from another
   // namespace was shown raw: "offline.shopping.itemUpdated".
   const tLabel = useTranslations();
+  const units = useQuantityFormat();
   const format = useFormatter();
   const { state, retry, discard } = useWriteQueue();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
@@ -107,7 +109,7 @@ export default function UnsavedPage(): JSX.Element {
                     {t(statusOf(op.reason).key)}
                   </Badge>
                 }
-                title={tLabel(op.label.key, op.label.values)}
+                title={tLabel(op.label.key, units.labelValues(op.label.values))}
                 actions={
                   <>
                     {op.reason === "needs-reconciliation" ? (

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 import { ExpiryRow } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
@@ -51,6 +52,7 @@ const MAX_ROWS = 5;
 
 export default function DashboardPage(): JSX.Element {
   const t = useTranslations("dashboard");
+  const units = useQuantityFormat();
 
   // The summary asks the server for the same set the section below shows
   // (`needsRestock`, the filter /inventory?filter=restock uses) — a number
@@ -178,7 +180,10 @@ export default function DashboardPage(): JSX.Element {
                             value: t("restockLow", {
                               quantity: product.totalStock,
                               minimum: product.minStock ?? 0,
-                              unit: product.defaultUnit,
+                              unit: units.unit(
+                                product.defaultUnit,
+                                product.totalStock,
+                              ),
                             }),
                           },
                         ]

@@ -9,6 +9,7 @@ import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 import type { JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Screen A — the phone, "day to day" (`REDESIGN_PLAN.md` §3).
@@ -238,6 +239,7 @@ function ShopRow({
   onToggle: () => void;
 }): JSX.Element {
   const t = useTranslations("shopping");
+  const units = useQuantityFormat();
 
   // `== null`, not `=== null`: a row composed offline is spread from the
   // queued `addItem` input, which has no stock figures at all — `undefined`
@@ -293,7 +295,7 @@ function ShopRow({
               : t("stockOf", {
                   stock: item.stock,
                   minimum: item.minStock,
-                  unit: item.unit ?? "",
+                  unit: units.unit(item.unit, item.minStock),
                 })}
         </span>
 

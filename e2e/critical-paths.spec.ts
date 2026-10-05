@@ -777,15 +777,15 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await page.goto("/kitchen");
   const use = page.getByRole("button", { name: new RegExp(`He usado.*${name}`) });
   const card = page.locator("li").filter({ has: use });
-  await expect(card).toContainText("Quedan 36 unidad");
+  await expect(card).toContainText("Quedan 36 unidades");
   for (const left of [35, 34]) {
     const saved = page.waitForResponse((response) => response.url().includes("inventory.consumeStock") && response.request().method() === "POST");
     await use.click();
     expect((await saved).ok()).toBe(true);
-    await expect(card).toContainText(`Quedan ${left} unidad`);
+    await expect(card).toContainText(`Quedan ${left} unidades`);
   }
   await page.reload();
-  await expect(card).toContainText("Quedan 34 unidad");
+  await expect(card).toContainText("Quedan 34 unidades");
   await page.goto(`${productUrl}/history`);
   await expect(page.getByRole("cell", { name: es.products.history.opCONSUME, exact: true })).toHaveCount(2);
 
@@ -795,13 +795,13 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await page.getByLabel(es.products.adjust.actualLabel, { exact: true }).fill("35");
   await page.getByLabel(es.products.adjust.reasonLabel, { exact: true }).fill("Recuento real");
   await page.getByRole("button", { name: es.products.adjust.submit, exact: true }).click();
-  await expect(page.getByTestId("snackbar")).toContainText("35 unidad");
+  await expect(page.getByTestId("snackbar")).toContainText("35 unidades");
   await page.goto(productUrl);
   await expect(page.getByTestId("stepper-value")).toContainText("35");
   // Only the 34 eggs left in the dated purchase have a known expiry. The
   // recounted extra egg acquires neither its date nor a location.
-  await expect(page.getByText("34 unidad · Sin ubicación", { exact: true })).toBeVisible();
-  await expect(page.getByText("35 unidad · Sin ubicación", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("34 unidades · Sin ubicación", { exact: true })).toBeVisible();
+  await expect(page.getByText("35 unidades · Sin ubicación", { exact: true })).toHaveCount(0);
 });
 
 test.describe("Login Flow", () => {

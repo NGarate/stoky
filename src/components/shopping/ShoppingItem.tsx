@@ -14,6 +14,7 @@ import { ItemRow } from "@/components/ui/item-row";
 import { useSnackbar } from "@/components/ui/snackbar";
 
 import type { JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * How long a removal can still be taken back.
@@ -82,6 +83,7 @@ export function ShoppingItem({
   stores,
 }: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
+  const units = useQuantityFormat();
   const { enqueue, cancel } = useWriteQueue();
   const snackbar = useSnackbar();
   const quantityId = useId();
@@ -227,10 +229,10 @@ export function ShoppingItem({
                 step="any"
                 type="number"
               />
-              <span>{item.unit ?? ""}</span>
+              <span>{units.unit(item.unit, item.quantity)}</span>
             </div>
           ) : (
-            `${item.quantity} ${item.unit ?? ""}`.trim()
+            units.quantity(item.quantity, item.unit)
           ),
         },
         {

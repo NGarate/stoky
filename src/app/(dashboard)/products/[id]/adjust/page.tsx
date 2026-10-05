@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Stock correction — "what is actually there" (Phase 8 item 5).
@@ -45,6 +46,7 @@ export default function AdjustStockPage({
 /** Exported apart from the route so the component suite can render it. */
 export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.adjust");
+  const units = useQuantityFormat();
   const tCommon = useTranslations("common");
   const snackbar = useSnackbar();
   const utils = api.useUtils();
@@ -180,7 +182,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
       <p className="mt-4 rounded border border-border bg-muted p-4 text-foreground">
         {t("currentLabel", {
           stock: product.totalStock,
-          unit: product.defaultUnit,
+          unit: units.unit(product.defaultUnit, product.totalStock),
         })}
       </p>
 
@@ -216,7 +218,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
             }
           />
           <p id={actualHintId} className="mt-1 text-sm text-muted-foreground">
-            {t("actualHint", { unit: product.defaultUnit })}
+            {t("actualHint", { unit: units.measure(product.defaultUnit) })}
           </p>
           {fieldErrors.actual ? (
             <p

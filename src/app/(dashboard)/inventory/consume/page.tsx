@@ -17,6 +17,7 @@ import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 type FieldName = "product" | "quantity" | "unit";
 
@@ -49,6 +50,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function ConsumeStockPage(): JSX.Element {
   const t = useTranslations("inventory.consume");
+  const units = useQuantityFormat();
   const envelope = useEnvelope();
   const router = useRouter();
   const utils = api.useUtils();
@@ -108,7 +110,7 @@ export default function ConsumeStockPage(): JSX.Element {
         ? t("availableUnknown")
         : t("availableValue", {
             quantity: availableStock,
-            unit: product.defaultUnit,
+            unit: units.unit(product.defaultUnit, availableStock),
           });
 
   const consumeStock = api.inventory.consumeStock.useMutation({
@@ -137,7 +139,7 @@ export default function ConsumeStockPage(): JSX.Element {
     },
     onError: (error) => {
       const key = serverErrorKey(error.message);
-      setServerError(t(key, { unit: product?.defaultUnit ?? "" }));
+      setServerError(t(key, { unit: units.measure(product?.defaultUnit) }));
       if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
     },
@@ -184,7 +186,7 @@ export default function ConsumeStockPage(): JSX.Element {
       // and lets the message say how much there actually is.
       errors.quantity = t("errorNotEnoughStock", {
         available: availableStock,
-        unit: product.defaultUnit,
+        unit: units.unit(product.defaultUnit, availableStock),
       });
     }
 
@@ -225,9 +227,10 @@ export default function ConsumeStockPage(): JSX.Element {
           saved
             ? t("successBody", {
                 quantity: saved.quantity,
-                unit: saved.unit,
+                unit: units.unit(saved.unit, saved.quantity),
                 name: saved.name,
                 left: saved.left,
+                leftUnit: units.unit(saved.unit, saved.left),
               })
             : undefined
         }

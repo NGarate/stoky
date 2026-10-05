@@ -14,6 +14,7 @@ import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import { QuantityStepper } from "@/components/inventory/QuantityStepper";
 import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { projectStockTotals } from "@/lib/offline/project";
@@ -75,6 +76,7 @@ export default function ProductDetailPage({
 /** Exported apart from the route so the component suite can render it. */
 export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.detail");
+  const units = useQuantityFormat();
   const locale = useLocale();
   const router = useRouter();
   const snackbar = useSnackbar();
@@ -352,26 +354,23 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         <div className="mt-2">
           <QuantityStepper
             addLabel={t("stepperAdd", {
-              unit: product.defaultUnit,
+              unit: units.unit(product.defaultUnit, 1),
               name: product.name,
             })}
             onAdd={() => stepStock("add")}
             onRemove={() => stepStock("remove")}
             removeDisabled={shownStock <= 0}
             removeLabel={t("stepperRemove", {
-              unit: product.defaultUnit,
+              unit: units.unit(product.defaultUnit, 1),
               name: product.name,
             })}
-            unit={product.defaultUnit}
+            unit={units.unit(product.defaultUnit, shownStock)}
             value={shownStock}
           />
         </div>
       ) : (
         <p className="mt-2 text-2xl font-bold text-heading">
-          {t("stockValue", {
-            quantity: shownStock,
-            unit: product.defaultUnit,
-          })}
+          {units.quantity(shownStock, product.defaultUnit)}
         </p>
       )}
       {shownStock <= 0 ? (
@@ -380,7 +379,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
             minimum: product.minStock,
-            unit: product.defaultUnit,
+            unit: units.unit(product.defaultUnit, product.minStock ?? 0),
           })}
         </p>
       ) : null}
@@ -408,10 +407,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                   {total.name ?? t("locationNone")}
                 </span>
                 <span className="font-medium text-foreground">
-                  {t("stockValue", {
-                    quantity: total.quantity ?? t("quantityUnknown"),
-                    unit: product.defaultUnit,
-                  })}
+                  {total.quantity === null
+                    ? t("quantityUnknown")
+                    : units.quantity(total.quantity, product.defaultUnit)}
                 </span>
               </li>
             ))}
@@ -444,8 +442,10 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("expiryBatch", {
-                    quantity: batch.quantity ?? t("quantityUnknown"),
-                    unit: batch.unit,
+                    amount:
+                      batch.quantity === null
+                        ? t("quantityUnknown")
+                        : units.quantity(batch.quantity, batch.unit),
                     location: batch.locationName ?? t("locationNone"),
                   })}
                 </p>
@@ -490,10 +490,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                       {t("priceQuantityHeader")}
                     </dt>
                     <dd className="mt-1 text-foreground">
-                      {t("stockValue", {
-                        quantity: record.quantity,
-                        unit: record.unit,
-                      })}
+                      {units.quantity(record.quantity, record.unit)}
                     </dd>
                   </div>
                 </dl>
@@ -531,10 +528,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                     {formatMoney(locale, record.price, record.currency)}
                   </td>
                   <td className="px-4 py-2">
-                    {t("stockValue", {
-                      quantity: record.quantity,
-                      unit: record.unit,
-                    })}
+                    {units.quantity(record.quantity, record.unit)}
                   </td>
                 </tr>
               ))}

@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 import type { JSX } from "react";
 
@@ -50,6 +51,7 @@ export function StockAmount({
   isLowStock: boolean;
   totalStock: number;
 }): JSX.Element {
+  const units = useQuantityFormat();
   return (
     <span
       className={`font-medium ${
@@ -60,7 +62,7 @@ export function StockAmount({
             : "text-ok-foreground"
       }`}
     >
-      {totalStock} {defaultUnit}
+      {units.quantity(totalStock, defaultUnit)}
     </span>
   );
 }

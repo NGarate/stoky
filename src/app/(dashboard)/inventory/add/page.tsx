@@ -18,6 +18,7 @@ import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 type FieldName = "product" | "quantity" | "unit" | "expiration" | "price" | "store";
 
@@ -44,6 +45,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function AddStockPage(): JSX.Element {
   const t = useTranslations("inventory.add");
+  const units = useQuantityFormat();
   const envelope = useEnvelope();
   const router = useRouter();
   const utils = api.useUtils();
@@ -122,7 +124,7 @@ export default function AddStockPage(): JSX.Element {
     },
     onError: (error) => {
       const key = serverErrorKey(error.message);
-      setServerError(t(key, { unit: product?.defaultUnit ?? "" }));
+      setServerError(t(key, { unit: units.measure(product?.defaultUnit) }));
       // The unit lives in the folded half; a refusal about it must not point
       // at a closed drawer.
       if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
@@ -231,7 +233,7 @@ export default function AddStockPage(): JSX.Element {
           saved
             ? t("successBody", {
                 quantity: saved.quantity,
-                unit: saved.unit,
+                unit: units.unit(saved.unit, saved.quantity),
                 name: saved.name,
               })
             : undefined

@@ -264,6 +264,17 @@ describe("using something up", () => {
     ).toBeInTheDocument();
   });
 
+  it("says a counted unit as a word, singular for one and plural for more", () => {
+    expiringStub.data = [batch({ unit: "unit", quantity: 3 })];
+    renderKitchen();
+
+    // "He usado 1 unit" and "Quedan 3 unit", in a Spanish kitchen.
+    expect(screen.getByText("Quedan 3 unidades")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "He usado 1 unidad de «Leche entera»" }),
+    ).toBeInTheDocument();
+  });
+
   it("puts the words it shows at the start of the name it announces", () => {
     stockStub = {
       data: {

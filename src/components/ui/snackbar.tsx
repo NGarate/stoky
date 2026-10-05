@@ -15,6 +15,7 @@ import {
 } from "react";
 
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import {
   DURATION_MS,
   getServerSnackbarDurationSnapshot,
@@ -227,6 +228,7 @@ function SnackbarRoot({
   onClosed: () => void;
 }): JSX.Element {
   const t = useTranslations();
+  const units = useQuantityFormat();
   const queue = useWriteQueue();
   const snackbar = useSnackbar();
   const preference = useSyncExternalStore(
@@ -238,7 +240,7 @@ function SnackbarRoot({
   // The label is stored as `{key, values}` and rendered here, never composed
   // into a sentence at the call site: a message written in Spanish and read
   // after a language switch would otherwise be half in each (queue.ts:41-47).
-  const message = t(entry.message.key, entry.message.values);
+  const message = t(entry.message.key, units.labelValues(entry.message.values));
 
   // Captured once, on mount, and never recomputed.
   //

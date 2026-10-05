@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { ItemRow } from "@/components/ui/item-row";
 import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 import type { JSX } from "react";
 
@@ -87,6 +88,7 @@ export function ExpiryRow({
   daysUntilExpiry: number;
 }): JSX.Element {
   const t = useTranslations("inventory.expiring");
+  const units = useQuantityFormat();
 
   return (
     <ItemRow
@@ -98,7 +100,10 @@ export function ExpiryRow({
           value:
             batch.quantity === null
               ? t("quantityUnknown")
-              : t("quantityValue", { quantity: batch.quantity, unit: batch.unit }),
+              : t("quantityValue", {
+                  quantity: batch.quantity,
+                  unit: units.unit(batch.unit, batch.quantity),
+                }),
         },
         {
           label: t("locationLabel"),

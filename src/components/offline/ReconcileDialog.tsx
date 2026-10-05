@@ -10,6 +10,7 @@ import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * The question a refused consumption becomes.
@@ -58,6 +59,7 @@ export function ReconcileDialog({
   onClose: () => void;
 }): JSX.Element {
   const t = useTranslations("offline");
+  const units = useQuantityFormat();
   const tCommon = useTranslations("common");
   const { discard } = useWriteQueue();
   const utils = api.useUtils();
@@ -246,7 +248,7 @@ export function ReconcileDialog({
               className="block text-sm font-medium text-foreground"
               htmlFor={`${fieldId}-amount`}
             >
-              {t("reconcileQuestion", { unit: product.data?.defaultUnit ?? "" })}
+              {t("reconcileQuestion", { unit: units.measure(product.data?.defaultUnit) })}
             </label>
             <Input
               aria-describedby={hintId}
