@@ -158,6 +158,21 @@ describe("the link variant", () => {
     ).toContain("min-h-[48px]");
   });
 
+  it("is underlined at rest, not only under the pointer", () => {
+    render(<Button variant="link">Volver al inventario</Button>);
+
+    // Colour was the only thing telling these apart from the sentence around
+    // them, and `primary` against body ink measured 1.78:1 light and 1.36:1
+    // dark — under the 3:1 that 1.4.1 asks of a colour-only cue. A touch
+    // screen has no hover, so `hover:underline` was no cue at all. The rule
+    // now matches `ItemRow`'s title and `BackLink`: a link is underlined.
+    const className = screen.getByRole("button", {
+      name: "Volver al inventario",
+    }).className.split(/\s+/);
+    expect(className).toContain("underline");
+    expect(className).not.toContain("hover:underline");
+  });
+
   it("leaves every other variant padded", () => {
     render(<Button variant="outline">Cancelar</Button>);
 

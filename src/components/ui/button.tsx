@@ -25,7 +25,11 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        // Underlined at rest. `primary` against body ink is 1.78:1 light and
+        // 1.36:1 dark, under the 3:1 a colour-only cue needs (1.4.1), and a
+        // touch screen has no hover to reveal it. Same rule as `ItemRow`'s
+        // title and `BackLink`: a link wears its underline.
+        link: "text-primary underline underline-offset-4 hover:decoration-2",
       },
       // Every size clears 48×48. WCAG 2.5.5 (AAA) asks for 44, and the phone is
       // the tier where a thumb is expected, so the floor is written unprefixed —
