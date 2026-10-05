@@ -32,7 +32,7 @@ describe("OpenFoodFacts Service", () => {
 
     it("should handle various unit formats", () => {
       expect(client.extractUnit("33cl")).toBe("cl");
-      expect(client.extractUnit("1 oz")).toBe("unit"); // space breaks it
+      expect(client.extractUnit("1 oz")).toBe("oz"); // a space no longer changes the answer
       expect(client.extractUnit("1000G")).toBe("g"); // lowercase
     });
   });

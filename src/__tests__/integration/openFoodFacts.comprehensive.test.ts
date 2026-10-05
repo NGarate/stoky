@@ -323,7 +323,9 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
     it("should extract grams from quantity string", () => {
       expect(client.extractUnit("500g")).toBe("g");
       expect(client.extractUnit("1000G")).toBe("g");
-      expect(client.extractUnit("250 grams")).toBe("s");
+      // Was "s": every spaced word ending in "s" became the unit "s".
+      expect(client.extractUnit("250 grams")).toBe("g");
+      expect(client.extractUnit("250 gramos")).toBe("g");
     });
 
     it("should extract kilograms from quantity string", () => {
@@ -361,9 +363,32 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       expect(client.extractUnit("1.5")).toBe("unit");
     });
 
-    it("should handle quantity with spaces", () => {
-      expect(client.extractUnit("1 kg")).toBe("g");
-      expect(client.extractUnit("500 g")).toBe("g");
+    it("answers the same with or without a space", () => {
+      // "1 kg" was "g" while "1kg" was "kg", and "500 ml" was "l" while
+      // "500ml" was "ml": two parsers that disagreed.
+      for (const [compact, spaced, unit] of [
+        ["1kg", "1 kg", "kg"],
+        ["500g", "500 g", "g"],
+        ["500ml", "500 ml", "ml"],
+        ["33cl", "33 cl", "cl"],
+        ["1,5l", "1,5 l", "l"],
+      ]) {
+        expect([client.extractUnit(compact), client.extractUnit(spaced)]).toEqual([unit, unit]);
+      }
+    });
+
+    it("counts in the app's count unit when the word is a thing, not a measure", () => {
+      // "12 huevos" was a product counted in "s".
+      expect(client.extractUnit("12 huevos")).toBe("unit");
+      expect(client.extractUnit("6 unidades")).toBe("unit");
+      expect(client.extractUnit("10 sobres")).toBe("unit");
+      expect(client.extractUnit("4 piezas")).toBe("unit");
+    });
+
+    it("reads Spanish unit words", () => {
+      expect(client.extractUnit("1 kilo")).toBe("kg");
+      expect(client.extractUnit("2 litros")).toBe("l");
+      expect(client.extractUnit("750 mililitros")).toBe("ml");
     });
 
     it("should handle complex quantity strings", () => {
