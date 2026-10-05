@@ -195,6 +195,25 @@ const PAIRS: Pair[] = [
   { fg: "warn-foreground", bg: "warn", scale: "body", where: "low-stock status pill" },
   { fg: "danger-foreground", bg: "danger", scale: "body", where: "expiring / out-of-stock pill" },
 
+  // The same state inks off their own fill. The pills above are not where most
+  // of them land: a stock amount, a form-field error, the kitchen's "nothing
+  // urgent", a failed-upload line and every `variant="outline"` badge (which
+  // sits on `bg-card`) put the ink straight on the page or on a card — some
+  // thirty call sites that no row here measured until 2026-10-06.
+  { fg: "ok-foreground", bg: "background", scale: "body", where: "healthy-state text on the page" },
+  { fg: "ok-foreground", bg: "card", scale: "body", where: "healthy-state text, outline ok badge" },
+  { fg: "warn-foreground", bg: "background", scale: "body", where: "warning text on the page" },
+  { fg: "warn-foreground", bg: "card", scale: "body", where: "warning text, outline warn badge" },
+  { fg: "danger-foreground", bg: "background", scale: "body", where: "error text on the page" },
+  { fg: "danger-foreground", bg: "card", scale: "body", where: "error text, outline danger badge" },
+
+  // `destructive` is a button fill, but a row's delete action writes it as
+  // ink: at rest on the page or a card, and on the accent wash a ghost button
+  // paints under the pointer.
+  { fg: "destructive", bg: "background", scale: "body", where: "destructive row action on the page" },
+  { fg: "destructive", bg: "card", scale: "body", where: "destructive row action on a card" },
+  { fg: "destructive", bg: "accent", scale: "body", where: "destructive row action, hovered" },
+
   // Display type — the kitchen screen reads from a metre away.
   { fg: "heading", bg: "background", scale: "large", where: "page heading" },
   { fg: "heading", bg: "card", scale: "large", where: "card heading" },
