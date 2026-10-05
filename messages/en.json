@@ -30,10 +30,10 @@
     "registering": "Creating account...",
     "tooManyAttempts": "Too many attempts from this connection. Wait a few minutes and try again.",
     "authUnavailable": "The sign-in service is unavailable right now. Try again in a few minutes.",
-    "loginError": "Login error",
-    "registerError": "Registration error",
-    "invalidCredentials": "Invalid credentials",
-    "emailExists": "Email already registered"
+    "loginError": "Signing in did not work. Try again in a moment.",
+    "registerError": "The account could not be created. Check the details and try again.",
+    "invalidCredentials": "The email or the password is not right. Check both; the password is case-sensitive.",
+    "emailExists": "There is already an account with this email. Sign in with it, or use another one."
   },
   "navigation": {
     "inventory": "Inventory",

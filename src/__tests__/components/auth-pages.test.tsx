@@ -24,8 +24,14 @@ import { resolve } from "../setup/tailwind";
  * that closes that blind spot for these pages.
  */
 
+/** What the next sign-in answers. Each test that changes it puts it back. */
+let signInResult: { ok: boolean; error: string | null; code?: string } = {
+  ok: true,
+  error: null,
+};
+
 mock.module("next-auth/react", () => ({
-  signIn: async () => ({ ok: true, error: null }),
+  signIn: async () => signInResult,
 }));
 
 /** Every path a page asked the router to replace the current entry with. */
@@ -279,5 +285,30 @@ describe("where signing in leads", () => {
     await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
 
     await waitFor(() => expect(replaced).toEqual(["/"]));
+  });
+});
+
+describe("what a refused sign-in says", () => {
+  it("says what was wrong and what to check, not a word for it", async () => {
+    // "Credenciales inválidas" named the failure in the system's word and
+    // said nothing about what to do. Auth.js will not say which of the two
+    // was wrong — deliberately — so the message names both, and the one
+    // detail that most often explains a right-looking password.
+    signInResult = { ok: false, error: "CredentialsSignin" };
+    try {
+      renderWithIntl(<LoginPage />, { locale: "es" });
+
+      await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
+      await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
+      await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+
+      expect(
+        await screen.findByText(
+          "El correo o la contraseña no son correctos. Revisa los dos; la contraseña distingue mayúsculas.",
+        ),
+      ).toBeInTheDocument();
+    } finally {
+      signInResult = { ok: true, error: null };
+    }
   });
 });

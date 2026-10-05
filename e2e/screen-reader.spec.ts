@@ -468,7 +468,7 @@ test.describe("Screen-reader journeys", () => {
     await page.fill('input[name="email"]', DEMO_EMAIL);
     await page.fill('input[name="password"]', "definitely-not-the-password");
     await page.click('button[type="submit"]');
-    await expect(page.getByText(/inválid|invalid/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/no son correctos|is not right/i)).toBeVisible({ timeout: 20_000 });
 
     const rejected = await snapshot(page);
     assertTree(rejected, "/login after a rejected sign-in");

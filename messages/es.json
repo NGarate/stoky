@@ -30,10 +30,10 @@
     "registering": "Creando cuenta...",
     "tooManyAttempts": "Demasiados intentos desde esta conexión. Espera unos minutos y vuelve a probar.",
     "authUnavailable": "El servicio de acceso no está disponible ahora mismo. Inténtalo de nuevo en unos minutos.",
-    "loginError": "Error al iniciar sesión",
-    "registerError": "Error al registrarse",
-    "invalidCredentials": "Credenciales inválidas",
-    "emailExists": "El correo ya está registrado"
+    "loginError": "No se ha podido iniciar sesión. Vuelve a intentarlo en un momento.",
+    "registerError": "No se ha podido crear la cuenta. Revisa los datos y vuelve a intentarlo.",
+    "invalidCredentials": "El correo o la contraseña no son correctos. Revisa los dos; la contraseña distingue mayúsculas.",
+    "emailExists": "Ya hay una cuenta con este correo. Inicia sesión con él o usa otro."
   },
   "navigation": {
     "inventory": "Inventario",
