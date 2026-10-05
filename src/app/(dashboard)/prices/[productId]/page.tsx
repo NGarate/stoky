@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { BackLink } from "@/components/ui/back-link";
 import { Select } from "@/components/ui/select";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import { PriceChart } from "@/components/price/PriceChart";
 import { StoreComparison } from "@/components/price/StoreComparison";
 import { toChartPoints } from "@/lib/prices/unitPrice";
@@ -18,18 +20,33 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
   const [days, setDays] = useState(90);
   const { productId } = React.use(params);
 
-  const { data: history, isLoading } = api.price.getHistory.useQuery({
-    productId,
-    days,
-  });
+  // The previous range stays up while a new one is asked, so changing it
+  // does not swap the page — and the control just used — for a loading state.
+  const query = api.price.getHistory.useQuery(
+    { productId, days },
+    { placeholderData: keepPreviousData },
+  );
+  const history = query.data;
 
-  if (isLoading) {
-    return <div className="p-8">{t("common.loading")}</div>;
+  // `!data` rather than `isLoading`, which is false for a query that is
+  // paused offline or has failed — so with no signal, or after a 500, this
+  // fell straight through to the empty state and told somebody they had
+  // nothing. RouteState says which of loading, offline or failed it is.
+  if (!history) {
+    return (
+      <RouteState
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        onRetry={() => void query.refetch()}
+        title={t("prices.history")}
+      />
+    );
   }
 
   // Unit prices, so a week the household bought the six-pack is not drawn
   // as a price spike.
-  const chartData = toChartPoints(history ?? []);
+  const chartData = toChartPoints(history);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

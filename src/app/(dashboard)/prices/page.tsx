@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
 
 export default function PricesPage() {
@@ -13,13 +15,28 @@ export default function PricesPage() {
   const locale = useLocale();
   const [search, setSearch] = useState("");
 
-  const { data: products, isLoading } = api.price.getProductPrices.useQuery({
-    search: search || undefined,
-    limit: 50,
-  });
+  // The previous answer stays up while a new search is asked, so typing does
+  // not swap the page — and the field being typed in — for a loading state.
+  const query = api.price.getProductPrices.useQuery(
+    { search: search || undefined, limit: 50 },
+    { placeholderData: keepPreviousData },
+  );
+  const products = query.data;
 
-  if (isLoading) {
-    return <div className="p-8">{t("common.loading")}</div>;
+  // `!data` rather than `isLoading`, which is false for a query that is
+  // paused offline or has failed — so with no signal, or after a 500, this
+  // fell straight through to the empty state and told somebody they had
+  // nothing. RouteState says which of loading, offline or failed it is.
+  if (!products) {
+    return (
+      <RouteState
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        onRetry={() => void query.refetch()}
+        title={t("prices.title")}
+      />
+    );
   }
 
   return (
@@ -76,14 +93,14 @@ export default function PricesPage() {
           concrete reason (DESIGN_AUDIT A5.4). The inventory and the
           catalogue already list into a bare `<ul>`. */}
       <div>
-        {products?.length === 0 ? (
+        {products.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
             <p>{t("prices.noPrices")}</p>
             <p className="mt-2 text-sm">{t("prices.addFirst")}</p>
           </div>
         ) : (
           <ul className="space-y-3">
-            {products?.map((product) => (
+            {products.map((product) => (
               <ItemRow
                 href={`/prices/${product.id}`}
                 key={product.id}
