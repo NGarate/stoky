@@ -49,9 +49,14 @@ interface ServerItem {
 /**
  * Fold the queue over one list's rows.
  *
- * Removals drop out, ticks apply, and an addition composed offline appears with
- * the operation's own id — so it can be shown, but never mistaken for a row the
- * server knows about.
+ * Removals drop out, ticks, quantities and shops apply, and an addition
+ * composed offline appears with the operation's own id — so it can be shown,
+ * but never mistaken for a row the server knows about.
+ *
+ * Quantities and shops were not folded, only ticks. The shop picker is
+ * controlled by the row's `storeId`, so a shop chosen offline snapped back to
+ * the old one the moment it was chosen — and choosing it again, reasonably,
+ * queued a second write for the same change.
  */
 export function projectShoppingItems<T extends ServerItem>(
   items: readonly T[],
@@ -66,17 +71,25 @@ export function projectShoppingItems<T extends ServerItem>(
     const input = op.input as {
       id?: unknown;
       isChecked?: unknown;
+      quantity?: unknown;
+      storeId?: unknown;
       shoppingListId?: unknown;
     };
 
     if (op.path === "shopping.updateItem" && typeof input.id === "string") {
       const existing = projected.get(input.id);
-      if (existing && typeof input.isChecked === "boolean") {
-        projected.set(input.id, {
-          ...existing,
-          isChecked: input.isChecked,
-          pending: true,
-        });
+      if (!existing) continue;
+
+      const changes: Partial<ProjectedItem & { quantity: number; storeId: string | null }> = {};
+      if (typeof input.isChecked === "boolean") changes.isChecked = input.isChecked;
+      if (typeof input.quantity === "number") changes.quantity = input.quantity;
+      // `null` is a choice — "anywhere" — so presence, not truthiness.
+      if (typeof input.storeId === "string" || input.storeId === null) {
+        changes.storeId = input.storeId;
+      }
+
+      if (Object.keys(changes).length > 0) {
+        projected.set(input.id, { ...existing, ...changes, pending: true });
       }
       continue;
     }

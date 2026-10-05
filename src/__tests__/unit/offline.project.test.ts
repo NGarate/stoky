@@ -68,6 +68,41 @@ describe("projectShoppingItems", () => {
     expect(projected[0]?.isChecked).toBe(false);
   });
 
+  it("shows a shop chosen offline, so the picker does not snap back", () => {
+    // The picker is controlled by the row's `storeId`. Only ticks were
+    // folded, so a shop chosen with no signal reverted the moment it was
+    // chosen, and choosing it again queued a second write.
+    const withStore = [{ id: "a", isChecked: false, storeId: "s1" as string | null }];
+
+    const projected = projectShoppingItems(withStore, [
+      op("shopping.updateItem", { id: "a", storeId: "s2" }),
+    ]);
+
+    expect(projected[0]?.storeId).toBe("s2");
+    expect(projected[0]?.pending).toBe(true);
+  });
+
+  it("shows a shop cleared offline as cleared", () => {
+    const withStore = [{ id: "a", isChecked: false, storeId: "s1" as string | null }];
+
+    const projected = projectShoppingItems(withStore, [
+      op("shopping.updateItem", { id: "a", storeId: null }),
+    ]);
+
+    expect(projected[0]?.storeId).toBeNull();
+  });
+
+  it("shows a quantity changed offline", () => {
+    const withQuantity = [{ id: "a", isChecked: false, quantity: 1 }];
+
+    const projected = projectShoppingItems(withQuantity, [
+      op("shopping.updateItem", { id: "a", quantity: 3, quantityUnit: "L" }),
+    ]);
+
+    expect(projected[0]?.quantity).toBe(3);
+    expect(projected[0]?.isChecked).toBe(false);
+  });
+
   it("drops a row whose removal is waiting", () => {
     const projected = projectShoppingItems(rows, [
       op("shopping.removeItem", { id: "b" }),
