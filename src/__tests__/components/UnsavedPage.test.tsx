@@ -100,6 +100,21 @@ describe("what each change says", () => {
     expect(screen.getByText(/Usaste 1 L de «Leche entera»/)).toBeInTheDocument();
   });
 
+  it("names a change whose label lives outside the offline catalogue", () => {
+    // Read through the `offline` namespace, `shopping.itemUpdated` was shown
+    // as the raw key "offline.shopping.itemUpdated".
+    failed = [
+      {
+        ...failure("refused"),
+        label: { key: "shopping.itemUpdated", values: { name: "Leche entera" } },
+      },
+    ];
+    renderWithIntl(<UnsavedPage />);
+
+    expect(screen.getByText(/Cambiaste «Leche entera»/)).toBeInTheDocument();
+    expect(screen.queryByText(/shopping\.itemUpdated/)).toBeAbsent();
+  });
+
   it("says when it was made", () => {
     renderWithIntl(<UnsavedPage />);
 
