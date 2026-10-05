@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { parseReceiptText } from "@/server/services/receiptParser";
+import { parseEsAmount, parseReceiptText } from "@/server/services/receiptParser";
 
 describe("Receipt Parser Service", () => {
   describe("parseReceiptText", () => {
@@ -140,6 +140,29 @@ GRACIAS POR SU VISITA
           expect(result.purchaseDate.getFullYear()).toBe(2024);
         }
       }
+    });
+  });
+
+  describe("amounts", () => {
+    it("reads a thousands separator as part of the amount", () => {
+      expect(parseEsAmount("1.234,56")).toBe(1234.56);
+      expect(parseEsAmount("12.345,00")).toBe(12345);
+      expect(parseEsAmount("0,89")).toBe(0.89);
+      expect(parseEsAmount("1.25")).toBe(1.25);
+    });
+
+    it("books a line and a total over a thousand at their whole value", () => {
+      const result = parseReceiptText("TELEVISOR 1.234,56\nTOTAL 1.234,56");
+
+      expect(result.items).toEqual([
+        {
+          rawText: "TELEVISOR 1.234,56",
+          parsedName: "televisor",
+          parsedPrice: 1234.56,
+          parsedQuantity: undefined,
+        },
+      ]);
+      expect(result.totalAmount).toBe(1234.56);
     });
   });
 });
