@@ -1,6 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { screen, cleanup } from "@testing-library/react";
+import { screen, cleanup, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
 
@@ -109,11 +109,44 @@ describe("the stock history", () => {
   it("shows the ledger in words, with signed deltas and what was left", () => {
     renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
 
-    expect(screen.getAllByText("Compra").length).toBe(2);
-    expect(screen.getByText("Consumo")).toBeInTheDocument();
-    expect(screen.getByText("+4 L")).toBeInTheDocument();
-    expect(screen.getByText("-1 L")).toBeInTheDocument();
-    expect(screen.getByText("5 L").closest("td")).not.toBeNull();
+    // Scoped to the table: the same ledger is also drawn as cards for the
+    // tiers below `lg`, so an unscoped query finds every value twice.
+    const table = within(screen.getByRole("table"));
+    expect(table.getAllByText("Compra").length).toBe(2);
+    expect(table.getByText("Consumo")).toBeInTheDocument();
+    expect(table.getByText("+4 L")).toBeInTheDocument();
+    expect(table.getByText("-1 L")).toBeInTheDocument();
+    expect(table.getByText("5 L").closest("td")).not.toBeNull();
+  });
+
+  /**
+   * Five columns at 390px under `overflow-hidden` clipped "Ubicación" and
+   * "Total" off the right edge — the information lost as completely as if it
+   * were never sent, which is DESIGN_AUDIT A3.3's correction. The other
+   * tables became cards below `lg`; this one, built later, did not.
+   */
+  it("is cards below lg and a table only from lg, with nothing dropped", () => {
+    renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
+
+    const table = screen.getByRole("table");
+    const tableBox = table.parentElement as HTMLElement;
+    expect(tableBox.className).toContain("hidden");
+    expect(tableBox.className).toContain("lg:block");
+
+    const cards = document.querySelector<HTMLElement>("ul.lg\\:hidden");
+    expect(cards).not.toBeNull();
+    const rows = within(cards as HTMLElement).getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
+
+    // Every column the table carries is on each card.
+    for (const row of rows) {
+      const terms = within(row)
+        .getAllByRole("term")
+        .map((term) => term.textContent);
+      expect(terms).toEqual(["Movimiento", "Cambio", "Ubicación", "Quedó"]);
+    }
+    expect(within(rows[0] as HTMLElement).getByText("Nevera")).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText("+4 L")).toBeInTheDocument();
   });
 
   it("says so when there is no ledger yet, instead of an empty chart", () => {

@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
@@ -122,7 +123,40 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
             />
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card shadow">
+          {/* Phone and tablet: one card per movement. Five columns at 390px
+              under `overflow-hidden` clipped "Ubicación" and "Quedó" off the
+              edge — lost as completely as if never sent (DESIGN_AUDIT A3.3).
+              Every column is on the card; the table is for `lg` only, as on
+              /inventory and /products (A3.2). */}
+          <ul className="mt-6 space-y-3 lg:hidden">
+            {points.map((point) => {
+              const entry = entries.find((row) => row.id === point.id);
+              if (!entry) return null;
+              return (
+                <ItemRow
+                  key={entry.id}
+                  meta={[
+                    { label: t("typeHeader"), value: t(`op${entry.operationType}`) },
+                    {
+                      label: t("changeHeader"),
+                      value: `${entry.quantity > 0 ? "+" : ""}${units.quantity(entry.quantity, entry.unit)}`,
+                    },
+                    {
+                      label: t("locationHeader"),
+                      value: entry.location?.name ?? t("noLocation"),
+                    },
+                    {
+                      label: t("totalHeader"),
+                      value: units.quantity(point.total, product.defaultUnit),
+                    },
+                  ]}
+                  title={formatDate(locale, entry.createdAt, "short")}
+                />
+              );
+            })}
+          </ul>
+
+          <div className="mt-6 hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
             <table className="w-full">
               <caption className="sr-only">{t("tableCaption")}</caption>
               <thead className="bg-muted text-muted-foreground">
