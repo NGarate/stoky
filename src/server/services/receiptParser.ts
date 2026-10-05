@@ -36,7 +36,41 @@ const DATE_PATTERNS = [
   /\b(\d{2})(\d{2})(\d{4})\b/,
 ];
 
-const TOTAL_PATTERN = /(?:total|importe|suma)(?:\s+[a-záéíóúñ]+)*\s*[:€()]*\s*(\d+[,.]\d{2})/i;
+/**
+ * One printed amount, as a Spanish till prints it: `0,89`, `1.234,56`, and the
+ * dot-decimal `1.25` some tills and most OCR slips produce.
+ *
+ * Written once, because there used to be four `\d+[,.]\d{2}` patterns and
+ * none of them knew about the thousands separator: `1.234,56` read as `1.23`
+ * followed by `4,56`, so a 1.234,56 € line was booked at 4,56 € and a total of
+ * the same at 1,23 €. Bounded on both sides so a number is taken whole or not
+ * at all — `0,345` (a weight) is not the price `0,34`, and the `234,56` inside
+ * `1.234,56` is never a match of its own.
+ */
+const AMOUNT_SOURCE = String.raw`(?<![\d.,])(?:\d{1,3}(?:\.\d{3})+,\d{2}|\d+[.,]\d{2})(?![\d])`;
+
+function amountPattern(): RegExp {
+  return new RegExp(AMOUNT_SOURCE, "g");
+}
+
+/**
+ * The value of one amount `AMOUNT_SOURCE` matched — the only place a printed
+ * amount becomes a number, so the separator rules cannot drift between the
+ * total, the lines and the no-newline fallback again.
+ */
+export function parseEsAmount(text: string): number {
+  const trimmed = text.trim();
+  // `1.234,56`: the dots group thousands and the comma is the decimal point.
+  const normalised = /^\d{1,3}(?:\.\d{3})+,\d{2}$/.test(trimmed)
+    ? trimmed.replace(/\./g, "").replace(",", ".")
+    : trimmed.replace(",", ".");
+  return Number.parseFloat(normalised);
+}
+
+const TOTAL_PATTERN = new RegExp(
+  String.raw`(?:total|importe|suma)(?:\s+[a-záéíóúñ]+)*\s*[:€()]*\s*(${AMOUNT_SOURCE})`,
+  "i",
+);
 
 export function parseReceiptText(ocrText: string): ParsedReceipt {
   const lines = ocrText
@@ -100,13 +134,13 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
   // Extract total amount
   const totalMatch = ocrText.match(TOTAL_PATTERN);
   if (totalMatch) {
-    result.totalAmount = Number.parseFloat(totalMatch[1].replace(",", "."));
+    result.totalAmount = parseEsAmount(totalMatch[1]);
   }
 
   // Extract items
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].replace(/\b(?:total|importe|suma)\b.*$/i, "").trim();
-    const priceMatches = line.match(/\d+[,.]\d{2}/g) ?? [];
+    const priceMatches = line.match(amountPattern()) ?? [];
 
     // Skip lines that are likely headers, footers, or irrelevant
     if (
@@ -133,13 +167,16 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
       .trim();
     const matches = [
       ...inlineText.matchAll(
-        /([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s/-]{1,}?)\s+(\d+[,.]\d{2})/g,
+        new RegExp(
+          String.raw`([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s/-]{1,}?)\s+(${AMOUNT_SOURCE})`,
+          "g",
+        ),
       ),
     ];
 
     for (const match of matches) {
       const name = cleanProductName(match[1]);
-      const price = Number.parseFloat(match[2].replace(",", "."));
+      const price = parseEsAmount(match[2]);
       if (name && !Number.isNaN(price) && price > 0 && price < 10000) {
         result.items.push({
           rawText: `${match[1]} ${match[2]}`.trim(),
@@ -155,16 +192,17 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
 
 function parseLineItem(line: string): ParsedItem | null {
   const quantityPrefixMatch = line.match(
-    /^(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s+(\d+[,.]\d{2})\s*$/i,
+    new RegExp(
+      String.raw`^(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s+(${AMOUNT_SOURCE})\s*$`,
+      "i",
+    ),
   );
   if (quantityPrefixMatch) {
     const quantity = Number.parseFloat(
       quantityPrefixMatch[1].replace(",", "."),
     );
     const name = cleanProductName(quantityPrefixMatch[2]);
-    const price = Number.parseFloat(
-      quantityPrefixMatch[3].replace(",", "."),
-    );
+    const price = parseEsAmount(quantityPrefixMatch[3]);
     if (
       name &&
       !Number.isNaN(quantity) &&
@@ -182,13 +220,13 @@ function parseLineItem(line: string): ParsedItem | null {
     }
   }
 
-  const prices = [...line.matchAll(/(\d+[,.]\d{2})/g)];
+  const prices = [...line.matchAll(amountPattern())];
   if (prices.length === 0) return null;
 
   const firstPrice = prices[0];
   const lastPrice = prices[prices.length - 1];
   if (firstPrice.index === undefined) return null;
-  const price = Number.parseFloat(lastPrice[1].replace(",", "."));
+  const price = parseEsAmount(lastPrice[0]);
   if (Number.isNaN(price) || price <= 0 || price >= 10000) return null;
 
   let namePart = line.slice(0, firstPrice.index).trim();
