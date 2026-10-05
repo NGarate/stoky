@@ -41,8 +41,41 @@ export const createTRPCContext = cache(
   },
 );
 
+/**
+ * What the client is told when the server fails in a way nobody anticipated.
+ *
+ * A transport string, like the others in `prisma-errors.ts`: the screens map
+ * messages to their own translated keys and fall back to a generic one, so
+ * nothing ever shows this text to a person directly.
+ */
+export const INTERNAL_ERROR_MESSAGE = "Something went wrong on the server.";
+
+/**
+ * Keep a server fault's details on the server.
+ *
+ * Every error nobody translated reaches the client as `INTERNAL_SERVER_ERROR`,
+ * and tRPC's default shape carries **the underlying error's own message** —
+ * a Prisma raw-query failure with its SQL, a file path, a library's internals,
+ * sent verbatim to any signed-in browser, in production as in development.
+ * That is OWASP ASVS V7.4.1, and a map of the server for anyone probing it.
+ *
+ * Only that code is rewritten. Everything else is a refusal or a domain
+ * outcome a resolver, `domainErrors` or a middleware chose to send, worded
+ * for the client, and the screens read those messages ("product not found",
+ * "household") to pick what to say.
+ *
+ * The original goes to the server log instead. Until this there was no
+ * `onError` on the route either, so an unexpected failure was not written
+ * anywhere at all — the only copy of it was the one sent to the browser.
+ */
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
+  errorFormatter: ({ shape, error, path }) => {
+    if (error.code !== "INTERNAL_SERVER_ERROR") return shape;
+
+    console.error(`[trpc] ${path ?? "(no path)"} failed`, error.cause ?? error);
+    return { ...shape, message: INTERNAL_ERROR_MESSAGE };
+  },
 });
 
 export const createTRPCRouter = t.router;
