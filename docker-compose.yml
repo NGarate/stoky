@@ -12,9 +12,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    # Identical to docker-compose.dev.yml's `db` and `cache`, ports included.
+    # Both files are project `stoky`, so a definition that differs makes each
+    # `up` recreate the other's containers: the host's integration suite would
+    # move `db` off this network and strand the app container. Loopback ports
+    # also let the host's `verify:ci` reach the same two services.
+    # src/__tests__/unit/compose-dev.test.ts holds the two in step.
+    ports:
+      - "127.0.0.1:5432:5432"
     networks:
       - stoky
-    # No exposed ports - internal network only
 
   cache:
     image: valkey/valkey:8-alpine
@@ -25,9 +32,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "127.0.0.1:6379:6379"
     networks:
       - stoky
-    # No exposed ports - internal network only
 
   app:
     build:
