@@ -1,7 +1,9 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
-import { renderWithIntl } from "../utils/render";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
 import { resolve } from "../setup/tailwind";
 
 /**
@@ -49,6 +51,17 @@ mock.module("@/components/providers/TRPCProvider", () => ({
   },
   TRPCProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+
+/**
+ * The root layout's query client, which `/login` empties on arrival — the
+ * previous account's reads must not be the first thing the next one sees.
+ */
+function renderWithIntl(ui: ReactElement, options?: { locale?: TestLocale }) {
+  return renderWithIntlOnly(
+    <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>,
+    options,
+  );
+}
 
 const { default: LoginPage } = await import("@/app/(auth)/login/page");
 const { default: RegisterPage } = await import("@/app/(auth)/register/page");
