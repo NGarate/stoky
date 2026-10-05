@@ -9,7 +9,7 @@ import {
   consumeStockSchema,
   stockOverviewSchema,
 } from "@/lib/validations/inventory";
-import { daysBetween, netStock, remainingByBatch } from "@/lib/inventory/batches";
+import { allocateFefo, daysBetween, netStock, remainingByBatch } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
 import { withReplay } from "../replay";
 import type {
@@ -817,12 +817,10 @@ export const inventoryRouter = createTRPCRouter({
               householdId: ctx.householdId,
             },
             include: {
-              stockEntries: {
-                // Every entry, not only the positive ones: `gt: 0` counted
-                // what arrived at the source and not what left it, so a shelf
-                // with six in and four out offered six to move (INV-1).
-                where: { locationId: input.fromLocationId },
-              },
+              // The whole ledger, not only the source shelf: what is left of
+              // each batch there depends on withdrawals recorded anywhere
+              // (`remainingByBatch`).
+              stockEntries: { orderBy: { createdAt: "asc" } },
             },
           });
 
@@ -834,8 +832,13 @@ export const inventoryRouter = createTRPCRouter({
           }
 
           const movement = inProductUnit(input, product.defaultUnit);
-          // Rounded like `consumeStock`'s guard, for the same reason.
-          const availableInSource = netStock(product.stockEntries);
+          // Every entry at the source, not only the positive ones: `gt: 0`
+          // counted what arrived and not what left, so a shelf with six in and
+          // four out offered six to move (INV-1). Rounded like
+          // `consumeStock`'s guard, for the same reason.
+          const availableInSource = netStock(
+            product.stockEntries.filter((entry) => entry.locationId === input.fromLocationId),
+          );
 
           if (movement.quantity > availableInSource) {
             throw new TRPCError({
@@ -858,37 +861,65 @@ export const inventoryRouter = createTRPCRouter({
             });
           }
 
-          const fromEntry = await tx.stockEntry.create({
-            data: {
-              productId: input.productId,
-              quantity: -movement.quantity,
-              unit: movement.unit,
-              locationId: input.fromLocationId,
-              operationType: "TRANSFER" as StockOperation,
-              note:
-                input.note ||
-                `Transfer to ${locations.find((l) => l.id === input.toLocationId)?.name}`,
-              createdBy: userId,
-            },
-            include: { product: true, location: true },
-          });
+          /**
+           * One pair of rows per batch moved, soonest expiry first.
+           *
+           * The pair used to be one undated row each way with no `batchId`,
+           * so the source batch was drawn down (or made unknown) by the move
+           * and what arrived had no date: moved milk vanished from the
+           * expiring and expired screens. The outgoing row now names the
+           * batch it leaves, and the incoming one carries that batch's date.
+           * There is no screen that asks which batch to move, so FEFO
+           * (`allocateFefo`) chooses; anything it cannot place in a batch
+           * with a known remainder moves undated, as before.
+           */
+          const { parts, unassigned } = allocateFefo(
+            product.stockEntries,
+            input.fromLocationId,
+            movement.quantity,
+          );
+          const moves: Array<{ quantity: number; batchId?: string; expirationDate?: Date | null }> =
+            parts.map(({ batch, quantity }) => ({
+              quantity,
+              batchId: batch.id,
+              expirationDate: batch.expirationDate,
+            }));
+          if (unassigned > 0) moves.push({ quantity: unassigned });
 
-          const toEntry = await tx.stockEntry.create({
-            data: {
-              productId: input.productId,
-              quantity: movement.quantity,
-              unit: movement.unit,
-              locationId: input.toLocationId,
-              operationType: "TRANSFER" as StockOperation,
-              note:
-                input.note ||
-                `Transfer from ${locations.find((l) => l.id === input.fromLocationId)?.name}`,
-              createdBy: userId,
-            },
-            include: { product: true, location: true },
-          });
+          const toName = locations.find((l) => l.id === input.toLocationId)?.name;
+          const fromName = locations.find((l) => l.id === input.fromLocationId)?.name;
+          const fromEntries = [];
+          const toEntries = [];
+          for (const move of moves) {
+            fromEntries.push(await tx.stockEntry.create({
+              data: {
+                productId: input.productId,
+                quantity: -move.quantity,
+                unit: movement.unit,
+                batchId: move.batchId,
+                locationId: input.fromLocationId,
+                operationType: "TRANSFER" as StockOperation,
+                note: input.note || `Transfer to ${toName}`,
+                createdBy: userId,
+              },
+              include: { product: true, location: true },
+            }));
+            toEntries.push(await tx.stockEntry.create({
+              data: {
+                productId: input.productId,
+                quantity: move.quantity,
+                unit: movement.unit,
+                expirationDate: move.expirationDate,
+                locationId: input.toLocationId,
+                operationType: "TRANSFER" as StockOperation,
+                note: input.note || `Transfer from ${fromName}`,
+                createdBy: userId,
+              },
+              include: { product: true, location: true },
+            }));
+          }
 
-          return { fromEntry, toEntry };
+          return { fromEntries, toEntries };
         },
         { maxWait: 5_000, timeout: 10_000 },
       );

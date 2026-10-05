@@ -897,3 +897,63 @@ describe("a movement is stored in the product's unit", () => {
     expect(await netStock()).toBe(21);
   });
 });
+
+/**
+ * A transfer moves a batch, and a batch has an expiry date.
+ *
+ * The outgoing row carried no `batchId` and the incoming one no
+ * `expirationDate`, so the source batch was drawn down by the move (or made
+ * unknown) and what arrived was undated: moved milk vanished from the expiring
+ * and expired screens.
+ */
+describe("a transfer carries the expiry of what it moves", () => {
+  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000);
+
+  it("moves part of one dated batch, keeping its date on both shelves", async () => {
+    const api = await caller();
+    const date = inDays(3);
+    const batch = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", expirationDate: date, locationId: shelfId });
+
+    const { fromEntries, toEntries } = await api.inventory.transferStock({ productId, quantity: 2, unit: "L", fromLocationId: shelfId, toLocationId: cupboardId });
+
+    expect(fromEntries.map((entry) => entry.batchId)).toEqual([batch.id]);
+    expect(toEntries.map((entry) => entry.expirationDate)).toEqual([date]);
+
+    const atShelf = await api.inventory.getExpiringItems({ days: 7, locationId: shelfId });
+    const atCupboard = await api.inventory.getExpiringItems({ days: 7, locationId: cupboardId });
+    expect(atShelf.map((row) => row.quantity)).toEqual([1]);
+    expect(atCupboard.map((row) => [row.quantity, row.expirationDate])).toEqual([[2, date]]);
+  });
+
+  it("takes the soonest-expiring first and writes one movement per batch", async () => {
+    const api = await caller();
+    const soon = inDays(2);
+    const later = inDays(5);
+    // Bought in the opposite order, so FEFO is not creation order.
+    const laterBatch = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 3, unit: "L", expirationDate: later, locationId: shelfId });
+    const soonBatch = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 2, unit: "L", expirationDate: soon, locationId: shelfId });
+
+    const { fromEntries, toEntries } = await api.inventory.transferStock({ productId, quantity: 3, unit: "L", fromLocationId: shelfId, toLocationId: cupboardId });
+
+    expect(fromEntries.map((entry) => [entry.batchId, entry.quantity])).toEqual([[soonBatch.id, -2], [laterBatch.id, -1]]);
+    expect(toEntries.map((entry) => [entry.expirationDate, entry.quantity])).toEqual([[soon, 2], [later, 1]]);
+
+    const atShelf = await api.inventory.getExpiringItems({ days: 7, locationId: shelfId });
+    const atCupboard = await api.inventory.getExpiringItems({ days: 7, locationId: cupboardId });
+    expect(atShelf.map((row) => [row.quantity, row.expirationDate])).toEqual([[2, later]]);
+    expect(atCupboard.map((row) => [row.quantity, row.expirationDate])).toEqual([[2, soon], [1, later]]);
+    expect(await netStock(shelfId)).toBe(2);
+    expect(await netStock(cupboardId)).toBe(3);
+  });
+
+  it("still lists an expired batch as expired after it is moved", async () => {
+    const api = await caller();
+    const date = inDays(-3);
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 2, unit: "L", expirationDate: date, locationId: shelfId });
+
+    await api.inventory.transferStock({ productId, quantity: 2, unit: "L", fromLocationId: shelfId, toLocationId: cupboardId });
+
+    const expired = await api.inventory.getExpiredItems({});
+    expect(expired.map((row) => [row.quantity, row.locationId])).toEqual([[2, cupboardId]]);
+  });
+});

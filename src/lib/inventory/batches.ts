@@ -51,6 +51,40 @@ export function remainingByBatch(entries: readonly LedgerEntry[]): Map<string, n
   return remaining;
 }
 
+/**
+ * Which batches at `locationId` a move of `quantity` comes out of: soonest
+ * expiry first (FEFO), undated last, oldest purchase breaking ties.
+ *
+ * This is a choice being *made and recorded* — each part becomes a movement
+ * carrying its `batchId` — not an inference about what was used, which
+ * `remainingByBatch` refuses to make. Only batches whose remainder is known
+ * are drawn from; whatever is left over is `unassigned`, and the caller moves
+ * it without a batch, as every movement was moved before batches existed.
+ */
+export function allocateFefo<T extends LedgerEntry>(
+  entries: readonly T[],
+  locationId: string,
+  quantity: number,
+): { parts: Array<{ batch: T; quantity: number }>; unassigned: number } {
+  const remaining = remainingByBatch(entries);
+  const candidates = entries
+    .filter((entry) => entry.quantity > 0 && entry.locationId === locationId &&
+      (remaining.get(entry.id) ?? 0) > 0)
+    .sort((a, b) =>
+      (a.expirationDate?.getTime() ?? Infinity) - (b.expirationDate?.getTime() ?? Infinity) ||
+      (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+
+  const parts: Array<{ batch: T; quantity: number }> = [];
+  let left = Math.round(quantity * 100) / 100;
+  for (const batch of candidates) {
+    if (left <= 0) break;
+    const take = Math.min(remaining.get(batch.id) ?? 0, left);
+    parts.push({ batch, quantity: take });
+    left = Math.round((left - take) * 100) / 100;
+  }
+  return { parts, unassigned: Math.max(0, left) };
+}
+
 export function netStock(entries: readonly LedgerEntry[]): number {
   const total = entries.reduce((sum, entry) => sum + entry.quantity, 0);
   return Math.round(total * 100) / 100;

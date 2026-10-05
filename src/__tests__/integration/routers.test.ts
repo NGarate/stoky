@@ -1011,9 +1011,14 @@ describe("tRPC Router Integration Tests", () => {
         toLocationId: location2.id,
       });
 
-      expect(result.fromEntry.quantity).toBe(-10);
-      expect(result.toEntry.quantity).toBe(10);
-      testData.stockEntries.push(result.fromEntry.id, result.toEntry.id);
+      // One undated batch, so one row each way.
+      expect(result.fromEntries.map((e) => e.quantity)).toEqual([-10]);
+      expect(result.toEntries.map((e) => e.quantity)).toEqual([10]);
+      expect(result.fromEntries[0]?.batchId).toBe(entry.id);
+      testData.stockEntries.push(
+        ...result.fromEntries.map((e) => e.id),
+        ...result.toEntries.map((e) => e.id),
+      );
     });
   });
 

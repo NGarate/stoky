@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import {
+  allocateFefo,
   daysBetween,
   netStock,
   remainingByBatch,
@@ -167,5 +168,44 @@ describe("daysBetween", () => {
 
     expect(-daysBetween(noon, gone)).toBe(4);
     expect(Math.ceil((noon.getTime() - gone.getTime()) / 86_400_000)).toBe(5);
+  });
+});
+
+describe("allocateFefo", () => {
+  const at = (id: string, quantity: number, day: number | null, locationId = "shelf", extra: Partial<LedgerEntry> = {}): LedgerEntry => ({
+    id,
+    quantity,
+    expirationDate: day === null ? null : new Date(2026, 0, day),
+    locationId,
+    createdAt: new Date(2026, 0, 1, 0, Number(id.replace(/\D/g, "")) || 0),
+    ...extra,
+  });
+
+  it("takes the soonest expiry first, undated last", () => {
+    const entries = [at("b1", 3, null), at("b2", 3, 20), at("b3", 2, 10)];
+    const { parts, unassigned } = allocateFefo(entries, "shelf", 6);
+
+    expect(parts.map((part) => [part.batch.id, part.quantity])).toEqual([["b3", 2], ["b2", 3], ["b1", 1]]);
+    expect(unassigned).toBe(0);
+  });
+
+  it("draws only on what is left, and only at the named location", () => {
+    const entries = [
+      at("b1", 3, 10),
+      at("b2", 5, 5, "cupboard"),
+      at("c1", -2, null, "shelf", { batchId: "b1" }),
+    ];
+    const { parts } = allocateFefo(entries, "shelf", 1);
+
+    expect(parts.map((part) => [part.batch.id, part.quantity])).toEqual([["b1", 1]]);
+  });
+
+  it("leaves what it cannot place in a known batch unassigned", () => {
+    // An unattributed withdrawal at a shelf with two batches makes both unknown.
+    const entries = [at("b1", 2, 10), at("b2", 2, 12), at("c9", -1, null)];
+    const { parts, unassigned } = allocateFefo(entries, "shelf", 2);
+
+    expect(parts).toEqual([]);
+    expect(unassigned).toBe(2);
   });
 });
