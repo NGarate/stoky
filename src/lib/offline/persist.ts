@@ -113,13 +113,44 @@ function defaultStorage(): Storage | null {
   return typeof window === "undefined" ? null : window.localStorage;
 }
 
+/**
+ * Keys forgotten since their persister was made.
+ *
+ * The persister's writes are throttled: a save queued just before sign-out
+ * lands up to `throttleTime` later, *after* `forgetPersistedReads` removed the
+ * key and after the subscription was dropped — unsubscribing stops new saves,
+ * not the one already on a timer. Without this the account that just left
+ * had its cached reads put back on the device a moment after it was told they
+ * were gone.
+ *
+ * Module state, which dies with the page, and so does any timer it guards.
+ */
+const forgotten = new Set<string>();
+
+/** A storage whose writes to a forgotten key are dropped. */
+function refusingForgotten(storage: Storage | null): Storage | null {
+  if (storage === null) return null;
+  return {
+    getItem: (key: string) => storage.getItem(key),
+    removeItem: (key: string) => storage.removeItem(key),
+    setItem: (key: string, value: string) => {
+      if (forgotten.has(key)) return;
+      storage.setItem(key, value);
+    },
+  } as Storage;
+}
+
 export function createReadPersister(
   userId: string,
   seams: PersistSeams = {},
 ): Persister {
+  // A new persister is the account signing in again; its writes are wanted.
+  forgotten.delete(persistKey(userId));
   return createSyncStoragePersister({
     key: persistKey(userId),
-    storage: seams.storage === undefined ? defaultStorage() : seams.storage,
+    storage: refusingForgotten(
+      seams.storage === undefined ? defaultStorage() : seams.storage,
+    ),
     throttleTime: seams.throttleTime ?? 1000,
     serialize: (client) => SuperJSON.stringify(client),
     deserialize: (cached) => SuperJSON.parse(cached),
@@ -131,6 +162,7 @@ export function forgetPersistedReads(
   userId: string,
   storage: Storage | null = defaultStorage(),
 ): void {
+  forgotten.add(persistKey(userId));
   try {
     storage?.removeItem(persistKey(userId));
   } catch {
