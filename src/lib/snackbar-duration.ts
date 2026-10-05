@@ -29,11 +29,13 @@
  * of the screen you are looking at, and it has to work on `/login` where there
  * is no account; `src/lib/theme.ts` says so at more length.
  *
- * The undo snackbar is the one exception, and the provider enforces it: its
- * life is the queue's hold window, because the button stops working when the
- * window closes and offering a button that does nothing is worse than offering
- * none. Under 2.2.1 that duration is essential — extending it would invalidate
- * the activity.
+ * There are two exceptions, and the provider enforces both. The undo
+ * snackbar's life is the queue's hold window, because the button stops
+ * working when the window closes and offering a button that does nothing is
+ * worse than offering none. Under 2.2.1 that duration is essential — extending
+ * it would invalidate the activity. And a failure always waits to be
+ * dismissed (2.2.3): a message saying something did not happen is the one
+ * that must not leave while somebody looks away.
  */
 
 export const SNACKBAR_DURATIONS = ["default", "long", "forever"] as const;

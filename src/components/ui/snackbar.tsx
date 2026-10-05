@@ -140,7 +140,12 @@ export function SnackbarProvider({
       // one — but never an undo. Taking away the button someone is reaching
       // for is exactly the failure D54 rejected toasts over, so a
       // confirmation arriving over an undo still waits behind it.
-      if (entry.kind === "confirm") return [...undos, entry];
+      //
+      // Nor a failure. Somebody does need to know the last thing did not
+      // work, so a failure stays until it is dismissed and whatever arrives
+      // after it waits its turn (WCAG 2.2.3; see `undoDuration`).
+      const failures = confirms.filter(isFailure);
+      if (entry.kind === "confirm") return [...undos, ...failures, entry];
 
       // Undoable changes stand beside each other rather than in a line.
       //
@@ -383,6 +388,13 @@ function SnackbarRoot({
  * that makes the duration essential — extending it would invalidate the
  * activity — which is the criterion's own exception.
  *
+ * A failure is not a preference either, the other way round: it waits to be
+ * dismissed, whatever the preference says. It reports that something the
+ * person asked for did not happen — a receipt that would not apply, an upload
+ * refused — and a message like that, gone after six seconds while somebody
+ * looked away, is a time limit on learning it (WCAG 2.2.3, AAA). It is also
+ * exactly the message that must not be missed.
+ *
  * Everything else takes the device's preference, including "wait to be
  * dismissed".
  */
@@ -391,11 +403,17 @@ function undoDuration(
   heldMs: number,
   preference: ReturnType<typeof getSnackbarDurationSnapshot>,
 ): number | undefined {
+  // Radix treats Infinity as "never close on its own".
+  if (isFailure(entry)) return Number.POSITIVE_INFINITY;
   if (entry.kind === "undo-queued" && heldMs >= MIN_UNDO_MS) return heldMs;
   if (entry.kind === "undo-inverse") {
     return entry.durationMs ?? DURATION_MS.long ?? undefined;
   }
   const ms = DURATION_MS[preference];
-  // Radix treats Infinity as "never close on its own".
   return ms ?? Number.POSITIVE_INFINITY;
+}
+
+/** A confirmation that reports something did not work. */
+function isFailure(entry: Entry): boolean {
+  return entry.kind === "confirm" && entry.tone === "danger";
 }

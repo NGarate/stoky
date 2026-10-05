@@ -250,6 +250,51 @@ describe("a failure", () => {
     const said = await screen.findAllByText(/No se ha podido eliminar/);
     expect(said.length).toBeGreaterThan(0);
   });
+
+  it("waits to be dismissed, where a success leaves on its own", () => {
+    // WCAG 2.2.3 (AAA, no timing). A failure — a receipt that would not
+    // apply, an upload refused, a store that could not be saved — was gone
+    // after six seconds like any confirmation, so somebody who looked away
+    // never learned it had not worked. The success half is the control: it
+    // proves the fake clock really drives the close, so the failure staying
+    // is the code's doing and not a timer that never ran.
+    jest.useFakeTimers();
+    try {
+      render();
+      fireEvent.click(screen.getByRole("button", { name: "confirmar" }));
+      expect(screen.getAllByText("Marcaste «Leche»").length).toBeGreaterThan(0);
+      act(() => {
+        jest.advanceTimersByTime(7_000);
+      });
+      expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+
+      fireEvent.click(screen.getByRole("button", { name: "fallo" }));
+      act(() => {
+        jest.advanceTimersByTime(10 * 60_000);
+      });
+      expect(screen.getAllByText(/No se ha podido eliminar/).length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("is not pushed off the screen by the next confirmation", async () => {
+    // A confirmation replaces a confirmation because nobody needs the old
+    // one. Somebody does need to know an action failed: the success waits
+    // behind it instead, and shows once the failure has been dismissed.
+    render();
+    await press("fallo");
+    await screen.findAllByText(/No se ha podido eliminar/);
+
+    await press("confirmar");
+
+    expect(screen.getAllByText(/No se ha podido eliminar/).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Descartar el aviso" }));
+    await waitFor(() => {
+      expect(screen.getAllByText("Marcaste «Leche»").length).toBeGreaterThan(0);
+    });
+  });
 });
 
 describe("undo", () => {
