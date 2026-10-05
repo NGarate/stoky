@@ -239,7 +239,11 @@ function ShopRow({
 }): JSX.Element {
   const t = useTranslations("shopping");
 
-  const hasNotch = item.stock !== null && item.minStock !== null;
+  // `== null`, not `=== null`: a row composed offline is spread from the
+  // queued `addItem` input, which has no stock figures at all — `undefined`
+  // slipped past a strict check, drew a bar `NaN%` wide, and with no queued
+  // branch above would have reached `stockOf` with nothing to fill it.
+  const hasNotch = item.stock != null && item.minStock != null;
   const filled =
     hasNotch && (item.minStock as number) > 0
       ? Math.min(100, ((item.stock as number) / (item.minStock as number)) * 100)
@@ -280,7 +284,7 @@ function ShopRow({
         <span className="block text-sm text-muted-foreground">
           {item.queued
             ? t("notSentYet")
-            : item.stock === null || item.minStock === null
+            : item.stock == null || item.minStock == null
             ? item.stock === 0
               ? t("stockNone")
               : t("stockUnknown")

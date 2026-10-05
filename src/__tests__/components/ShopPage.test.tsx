@@ -289,6 +289,28 @@ describe("what a queued change looks like", () => {
     await userEvent.click(control);
     expect(enqueue).not.toHaveBeenCalled();
   });
+
+  it("draws no gauge for an addition that has no stock figures", () => {
+    // The row is spread from the queued input, which carries no stock or
+    // minimum: `undefined`, which a `=== null` check let through to draw a
+    // bar `NaN%` wide.
+    queryStub.data = [];
+    pending = [
+      {
+        id: "op-add",
+        path: "shopping.addItem",
+        input: { shoppingListId: "list-1", productId: "p-pan", quantity: 1 },
+        householdId: "h1",
+        label: { key: "offline.addedItem", values: { name: "Pan" } },
+        createdAt: new Date("2026-08-11T10:00:00.000Z"),
+        attempts: 0,
+      },
+    ];
+    const { container } = renderWithIntl(<ShopPage />);
+
+    expect(container.querySelector(".bg-gauge-track")).toBeNull();
+    expect(container.textContent).not.toContain("NaN");
+  });
 });
 
 describe("rows are rows, not cards", () => {
