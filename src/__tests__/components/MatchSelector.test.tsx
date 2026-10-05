@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, mock } from "bun:test";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { minimumHeight } from "../setup/tailwind";
 
 import { MatchSelector } from "@/components/receipt/MatchSelector";
 
@@ -24,6 +25,22 @@ const CANDIDATES = [
 ];
 
 afterEach(cleanup);
+
+describe("MatchSelector's targets", () => {
+  it("clears the 48px floor on every candidate", async () => {
+    // Hand-styled at p-2 around 14px text, each candidate was about 36px
+    // tall — the row a person taps to say which product a receipt line is.
+    renderWithIntl(
+      <MatchSelector autoMatch={null} candidates={CANDIDATES} onSelect={() => {}} selectedId="p2" />,
+      { locale: "es" },
+    );
+
+    for (const name of [/Leche entera/, /Leche desnatada/, /Leche de avena/]) {
+      const height = await minimumHeight(screen.getByRole("button", { name }).className);
+      expect(height ?? 0).toBeGreaterThanOrEqual(48);
+    }
+  });
+});
 
 describe("MatchSelector", () => {
   it("says which candidate is chosen, and which are not", () => {

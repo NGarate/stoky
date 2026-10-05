@@ -5,6 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { useTranslations } from "next-intl";
 import { Upload, Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { MAX_RECEIPT_BYTES, RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 
 interface UploadZoneProps {
@@ -134,15 +135,19 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
             alt={t("previewAlt")}
             className="w-full h-64 object-contain rounded-lg border border-border"
           />
-          <button
+          {/* The icon primitive: a hand-styled 24px circle was half the
+              target floor, on the one control that throws the photo away. */}
+          <Button
             type="button"
             aria-label={t("clearPreview")}
             onClick={clearPreview}
-            className="absolute top-2 right-2 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90"
+            className="absolute top-2 right-2 rounded-full"
             disabled={isUploading}
+            size="icon"
+            variant="destructive"
           >
-            <X className="w-4 h-4" />
-          </button>
+            <X aria-hidden="true" className="w-4 h-4" />
+          </Button>
         </div>
       ) : (
         <div
