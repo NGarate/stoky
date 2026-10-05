@@ -376,6 +376,15 @@ eight attempts on it.
 DEBT-4 closed earlier, in Phase 3: the routers raise `TRPCError` with a code
 chosen by what the client can do about the condition.
 
+What is still `INTERNAL_SERVER_ERROR` is a fault nobody anticipated, and its
+message is **not** the underlying error's: the `errorFormatter` in
+`src/server/trpc/trpc.ts` replaces it with a generic sentence and writes the
+original to the server log (OWASP ASVS V7.4.1). Before that, a raw Prisma
+failure reached the browser with its SQL and the file it ran from, and was
+logged nowhere. Every other code keeps the message its resolver or translator
+chose, because the screens read those. `src/__tests__/unit/trpc-error-shape.test.ts`
+checks both halves over HTTP.
+
 ### ~~Household roles are decorative~~ — this section was false
 
 **Corrected 2026-08-26 by the Phase 7 review**, and it is worth leaving the
