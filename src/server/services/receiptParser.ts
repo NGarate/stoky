@@ -226,60 +226,93 @@ function extractTotal(lines: string[]): number | undefined {
   return total;
 }
 
-function parseLineItem(line: string): ParsedItem | null {
-  const quantityPrefixMatch = line.match(
-    new RegExp(
-      String.raw`^(\d+(?:[.,]\d+)?)\s*x\s*(.+?)\s+(${AMOUNT_SOURCE})\s*$`,
-      "i",
-    ),
+/**
+ * Whether `quantity` units at `unitPrice` come to `lineTotal`, to the cent the
+ * till rounded to. A weighed line (`1,234 kg × 1,99 = 2,46`) rounds, so the
+ * tolerance is a cent rather than zero.
+ */
+function multipliesOut(
+  quantity: number,
+  unitPrice: number | undefined,
+  lineTotal: number,
+): boolean {
+  return (
+    unitPrice !== undefined &&
+    Math.abs(quantity * unitPrice - lineTotal) <= 0.011
   );
-  if (quantityPrefixMatch) {
-    const quantity = Number.parseFloat(
-      quantityPrefixMatch[1].replace(",", "."),
-    );
-    const name = cleanProductName(quantityPrefixMatch[2]);
-    const price = parseEsAmount(quantityPrefixMatch[3]);
-    if (
-      name &&
-      !Number.isNaN(quantity) &&
-      quantity > 0 &&
-      !Number.isNaN(price) &&
-      price > 0 &&
-      price < 10000
-    ) {
-      return {
-        rawText: line,
-        parsedName: name,
-        parsedPrice: price,
-        parsedQuantity: quantity,
-      };
-    }
-  }
+}
 
-  const prices = [...line.matchAll(amountPattern())];
-  if (prices.length === 0) return null;
+function parseDecimal(text: string): number {
+  return Number.parseFloat(text.replace(",", "."));
+}
 
-  const firstPrice = prices[0];
-  const lastPrice = prices[prices.length - 1];
-  if (firstPrice.index === undefined) return null;
-  const price = parseEsAmount(lastPrice[0]);
+/**
+ * One receipt line as a purchase: name, line total and, where the line says
+ * so, how many.
+ *
+ * **`parsedPrice` is the line total** — the last amount on the line — and the
+ * quantity is how many units it paid for; apply books the stock and the price
+ * record from that pair.
+ *
+ * A number beside the name is only taken as a quantity when the line itself
+ * proves it is one, because a number in a name is just as often a pack size:
+ * `PAPEL HIGIENICO 12 3,50` is twelve rolls for 3,50 €, not twelve packs. So:
+ *
+ * - `2x LECHE 2,50` / `2 x LECHE` — the `x` says it is a quantity.
+ * - `2 LECHE ENTERA 0,89 1,78` (Mercadona) or `LECHE ENTERA 2 1,25 2,50`
+ *   (Carrefour) — a leading or trailing number is a quantity when the line
+ *   also prints a unit price and the two multiply out to the line total.
+ * - `1 PAN DE MOLDE 0,95` — a leading `1` is the quantity column of a
+ *   one-unit line; it is not part of the name, whatever follows.
+ *
+ * Anything else stays in the name, and the line is one unit.
+ */
+function parseLineItem(line: string): ParsedItem | null {
+  const amounts = [...line.matchAll(amountPattern())];
+  const first = amounts[0];
+  if (first?.index === undefined) return null;
+
+  const price = parseEsAmount(amounts[amounts.length - 1][0]);
   if (Number.isNaN(price) || price <= 0 || price >= 10000) return null;
 
-  let namePart = line.slice(0, firstPrice.index).trim();
-  if (!namePart) return null;
+  const unitPrice =
+    amounts.length >= 2
+      ? parseEsAmount(amounts[amounts.length - 2][0])
+      : undefined;
 
+  let namePart = line.slice(0, first.index).trim();
   let parsedQuantity: number | undefined;
-  const quantitySuffixMatch = namePart.match(/\b(\d+(?:[.,]\d+)?)$/);
-  if (quantitySuffixMatch) {
-    const candidateQuantity = Number.parseFloat(
-      quantitySuffixMatch[1].replace(",", "."),
-    );
-    if (!Number.isNaN(candidateQuantity) && candidateQuantity > 0 && candidateQuantity < 1000) {
-      parsedQuantity = candidateQuantity;
-      namePart = namePart
-        .slice(0, quantitySuffixMatch.index ?? namePart.length)
-        .trim();
-    }
+
+  // `2x LECHE`, `2 x LECHE`, `2xLECHE` — but not `5 XL CAMISETA`.
+  const explicit =
+    namePart.match(/^(\d+(?:[.,]\d+)?)\s*[x×]\s+(\S.*)$/iu) ??
+    namePart.match(/^(\d+(?:[.,]\d+)?)[x×](\p{L}.*)$/iu);
+  const leading = namePart.match(/^(\d{1,3})\s+(\p{L}.*)$/u);
+  const trailing = namePart.match(/\s(\d+(?:[.,]\d+)?)$/);
+
+  if (explicit) {
+    parsedQuantity = parseDecimal(explicit[1]);
+    namePart = explicit[2];
+  } else if (
+    leading &&
+    (leading[1] === "1" ||
+      multipliesOut(Number(leading[1]), unitPrice, price))
+  ) {
+    parsedQuantity = Number(leading[1]);
+    namePart = leading[2];
+  } else if (
+    trailing?.index !== undefined &&
+    multipliesOut(parseDecimal(trailing[1]), unitPrice, price)
+  ) {
+    parsedQuantity = parseDecimal(trailing[1]);
+    namePart = namePart.slice(0, trailing.index);
+  }
+
+  if (
+    parsedQuantity !== undefined &&
+    (Number.isNaN(parsedQuantity) || parsedQuantity <= 0 || parsedQuantity >= 1000)
+  ) {
+    return null;
   }
 
   const name = cleanProductName(namePart);

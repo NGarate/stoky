@@ -125,10 +125,54 @@ TOTAL: 5,00 EUR
 
       const result = parseReceiptText(receiptText);
 
-      const multiItem = result.items.find(item => item.parsedQuantity && item.parsedQuantity > 1);
-      if (multiItem) {
-        expect(multiItem.parsedQuantity).toBeGreaterThan(1);
-      }
+      expect(
+        result.items.map(({ parsedName, parsedPrice, parsedQuantity }) => ({
+          parsedName,
+          parsedPrice,
+          parsedQuantity,
+        })),
+      ).toEqual([
+        { parsedName: "leche", parsedPrice: 2.5, parsedQuantity: 2 },
+        { parsedName: "pan", parsedPrice: 3, parsedQuantity: 3 },
+      ]);
+    });
+
+    it("reads a leading quantity and books the line total", () => {
+      const result = parseReceiptText("2 LECHE ENTERA 0,89 1,78");
+
+      expect(result.items).toEqual([
+        {
+          rawText: "2 LECHE ENTERA 0,89 1,78",
+          parsedName: "leche entera",
+          parsedPrice: 1.78,
+          parsedQuantity: 2,
+        },
+      ]);
+    });
+
+    it("takes a leading 1 as the quantity column, not part of the name", () => {
+      const [item] = parseReceiptText("1 PAN DE MOLDE 0,95").items;
+
+      expect(item.parsedName).toBe("pan de molde");
+      expect(item.parsedQuantity).toBe(1);
+    });
+
+    it("reads a trailing quantity that multiplies out to the line total", () => {
+      const [item] = parseReceiptText("LECHE ENTERA 2 1,25 2,50").items;
+
+      expect(item.parsedName).toBe("leche entera");
+      expect(item.parsedPrice).toBe(2.5);
+      expect(item.parsedQuantity).toBe(2);
+    });
+
+    it("leaves a pack size in the name instead of booking it as a quantity", () => {
+      const [roll] = parseReceiptText("PAPEL HIGIENICO 12 3,50").items;
+      const [pizza] = parseReceiptText("4 QUESOS PIZZA 2,50").items;
+
+      expect(roll.parsedName).toBe("papel higienico 12");
+      expect(roll.parsedQuantity).toBeUndefined();
+      expect(pizza.parsedName).toBe("4 quesos pizza");
+      expect(pizza.parsedQuantity).toBeUndefined();
     });
 
     it("should skip header and footer lines", () => {
