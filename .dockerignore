@@ -14,10 +14,11 @@ out
 .git
 .gitignore
 
-# Environment (secrets)
-.env
-.env.local
-.env.*.local
+# Environment (secrets). Every variant, not a list of the usual three: Next's
+# standalone output copies `.env.production` into the image, and Bun loads it at
+# start, so an unlisted one ships its secrets in a layer.
+.env*
+!.env.example
 
 # IDE / editor
 .vscode
