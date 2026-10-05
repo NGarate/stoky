@@ -695,11 +695,19 @@ export const inventoryRouter = createTRPCRouter({
           });
         }
 
+        const total = await tx.stockEntry.aggregate({ where: { productId: input.productId }, _sum: { quantity: true } });
+        const current = Math.round((total._sum.quantity ?? 0) * 100) / 100;
         if (input.expectedStock !== undefined) {
-          const total = await tx.stockEntry.aggregate({ where: { productId: input.productId }, _sum: { quantity: true } });
-          if (Math.round((total._sum.quantity ?? 0) * 100) / 100 !== Math.round(input.expectedStock * 100) / 100) {
+          if (current !== Math.round(input.expectedStock * 100) / 100) {
             throw new TRPCError({ code: "CONFLICT", message: "Stock changed; refresh before adjusting" });
           }
+        }
+        // The floor `consumeStock` has. `expectedStock` is optional, so without
+        // this a correction larger than the ledger drove the product negative.
+        // Rounded like every other guard, so a recount to exactly zero is not
+        // refused over 1e-17 of float residue.
+        if (Math.round((current + movement.quantity) * 100) / 100 < 0) {
+          throw new TRPCError({ code: "CONFLICT", message: "Adjustment would take stock below zero" });
         }
         const stockEntry = await tx.stockEntry.create({
           data: {
