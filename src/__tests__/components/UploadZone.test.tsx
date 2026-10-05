@@ -38,7 +38,7 @@ describe("UploadZone", () => {
 
     expect(
       screen.getByText(
-        "Arrastra una foto del ticket o haz clic para seleccionar",
+        "Arrastra una foto del ticket o pulsa para elegirla",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("JPG, PNG o WebP (máx. 10 MB)")).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe("UploadZone", () => {
     // The dropzone prompt is replaced by the preview.
     expect(
       screen.queryByText(
-        "Arrastra una foto del ticket o haz clic para seleccionar",
+        "Arrastra una foto del ticket o pulsa para elegirla",
       ),
     ).toBeAbsent();
   });
@@ -177,7 +177,7 @@ describe("UploadZone", () => {
 
     expect(screen.queryByAltText("Vista previa del ticket")).toBeAbsent();
     expect(
-      screen.getByText("Arrastra una foto del ticket o haz clic para seleccionar"),
+      screen.getByText("Arrastra una foto del ticket o pulsa para elegirla"),
     ).toBeInTheDocument();
   });
 

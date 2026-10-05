@@ -116,8 +116,8 @@ describe("the result of reading a receipt", () => {
     await upload(container);
 
     await waitFor(() => {
-      expect(pageStatus(container)?.textContent).toMatch(/Error al procesar el ticket/);
+      expect(pageStatus(container)?.textContent).toMatch(/No se ha podido leer el ticket/);
     });
-    expect(screen.getByRole("button", { name: /Intentar de nuevo|Reintentar/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Subir otra foto" })).toBeInTheDocument();
   });
 });

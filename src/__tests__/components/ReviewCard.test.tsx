@@ -54,7 +54,7 @@ describe("ReviewCard status", () => {
       { locale: "es" },
     );
 
-    const pill = screen.getByText("Auto-detectado");
+    const pill = screen.getByText("Reconocido automáticamente");
     expect(pill.className).toContain("bg-muted");
     expect(pill.querySelector("svg")).toBeNull();
     expect(pill.parentElement?.querySelector("svg")).toBeNull();

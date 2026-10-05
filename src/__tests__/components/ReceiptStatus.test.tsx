@@ -17,10 +17,10 @@ describe("ReceiptStatusBadge", () => {
     const expected: Record<ReceiptStatus, string> = {
       [ReceiptStatus.UPLOADING]: "Subiendo",
       [ReceiptStatus.PROCESSING]: "Leyendo el ticket",
-      [ReceiptStatus.PARSED]: "Datos extraídos",
+      [ReceiptStatus.PARSED]: "Líneas leídas",
       [ReceiptStatus.NEEDS_REVIEW]: "Necesita revisión",
       [ReceiptStatus.CONFIRMED]: "Confirmado",
-      [ReceiptStatus.APPLIED]: "Aplicado",
+      [ReceiptStatus.APPLIED]: "En el inventario",
       [ReceiptStatus.FAILED]: "Error",
     };
 
@@ -151,7 +151,7 @@ describe("ReceiptStatusStep", () => {
       <ReceiptStatusStep status={ReceiptStatus.PARSED} />,
     );
 
-    const labels = ["Subida", "OCR", "Análisis", "Revisión", "Confirmado", "Aplicado"];
+    const labels = ["Subida", "Lectura", "Datos", "Revisión", "Confirmado", "En el inventario"];
     for (const label of labels) {
       expect(within(ladder(container)).getByText(label)).toBeInTheDocument();
     }
@@ -213,7 +213,7 @@ describe("ReceiptStatusStep", () => {
     );
 
     expect(compact(container).textContent).toContain("Paso 6 de 6");
-    expect(compact(container).textContent).toContain("Aplicado");
+    expect(compact(container).textContent).toContain("En el inventario");
   });
 
   it("says so plainly when the receipt never reached a step", () => {
@@ -222,7 +222,7 @@ describe("ReceiptStatusStep", () => {
     );
 
     expect(compact(container).textContent).toBe(
-      "El procesamiento no llegó a completarse",
+      "La lectura del ticket no llegó a terminar",
     );
   });
 });

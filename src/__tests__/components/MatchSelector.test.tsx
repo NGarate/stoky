@@ -42,6 +42,25 @@ describe("MatchSelector's targets", () => {
   });
 });
 
+describe("what a candidate says", () => {
+  it("names the product, not the matcher's score", () => {
+    // "Leche entera 82 %" — a trigram similarity, read aloud as part of the
+    // choice and tinted by thresholds nobody is told. It is the system's
+    // confidence in its own guess (REDESIGN_PLAN §7 rule 2, no system
+    // vocabulary), and the order of the list already says which it thinks
+    // likeliest.
+    renderWithIntl(
+      <MatchSelector autoMatch={null} candidates={CANDIDATES} onSelect={() => {}} selectedId={null} />,
+      { locale: "es" },
+    );
+
+    expect(
+      screen.getAllByRole("button").map((button) => button.textContent?.trim()),
+    ).toEqual(["Leche entera", "Leche desnatada", "Leche de avena"]);
+    expect(screen.queryByText(/%/)).toBeAbsent();
+  });
+});
+
 describe("MatchSelector", () => {
   it("says which candidate is chosen, and which are not", () => {
     renderWithIntl(

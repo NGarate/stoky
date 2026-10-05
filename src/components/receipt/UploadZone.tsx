@@ -172,7 +172,9 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
             <p className="text-foreground">
               {isDragActive ? t("dropActive") : t("dropPrompt")}
             </p>
-            <p className="text-sm text-muted-foreground">{t("dropHint")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("dropHint", { max: inMegabytes(MAX_RECEIPT_BYTES) })}
+            </p>
           </div>
         </div>
       )}
