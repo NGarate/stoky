@@ -16,7 +16,7 @@ import { QuantityStepper } from "@/components/inventory/QuantityStepper";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { projectStockTotals } from "@/lib/offline/project";
-import { remainingByBatch } from "@/lib/inventory/batches";
+import { daysUntilExpiry, remainingByBatch, startOfToday } from "@/lib/inventory/batches";
 import type { JSX } from "react";
 
 interface ProductDetailPageProps {
@@ -429,7 +429,8 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               <li key={batch.id} className="px-4 py-3">
                 <p className="font-medium text-foreground">
                   {dateFormat.format(batch.expiresAt)}
-                  {batch.expiresAt.getTime() < now ? (
+                  {/* A date, not an instant: dated today is not yet expired. */}
+                  {daysUntilExpiry(batch.expiresAt, startOfToday(new Date(now))) < 0 ? (
                     <span className="ml-2 font-semibold text-danger-foreground">
                       {t("expiryExpired")}
                     </span>

@@ -9,7 +9,14 @@ import {
   consumeStockSchema,
   stockOverviewSchema,
 } from "@/lib/validations/inventory";
-import { allocateFefo, daysBetween, netStock, remainingByBatch } from "@/lib/inventory/batches";
+import {
+  allocateFefo,
+  daysUntilExpiry,
+  endOfDayAfter,
+  netStock,
+  remainingByBatch,
+  startOfToday,
+} from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
 import { withReplay } from "../replay";
 import type {
@@ -1002,24 +1009,24 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const now = new Date();
-      const expiryThreshold = new Date(now);
-      expiryThreshold.setDate(expiryThreshold.getDate() + input.days);
+      // Calendar days, not instants (`startOfToday`): a batch dated today
+      // is expiring today, and `days` ahead includes that whole last day.
+      const today = startOfToday();
 
       const batches = await datedBatchesInWindow(
         ctx.db,
         ctx.householdId,
         input.locationId,
-        { gte: now, lte: expiryThreshold },
+        { gte: today, lt: endOfDayAfter(today, input.days) },
       );
 
       return batches.map((batch) => {
-        const daysUntilExpiry = daysBetween(now, batch.expirationDate);
+        const daysLeft = daysUntilExpiry(batch.expirationDate, today);
 
         return {
           ...batch,
-          daysUntilExpiry,
-          isExpiringSoon: daysUntilExpiry <= 3,
+          daysUntilExpiry: daysLeft,
+          isExpiringSoon: daysLeft <= 3,
         };
       });
     }),
@@ -1039,13 +1046,15 @@ export const inventoryRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const now = new Date();
+      // Expired means dated before today — not before this instant, which
+      // listed milk as expired on the morning of the day printed on it.
+      const today = startOfToday();
 
       const batches = await datedBatchesInWindow(
         ctx.db,
         ctx.householdId,
         input.locationId,
-        { lt: now },
+        { lt: today },
       );
 
       return batches
@@ -1055,7 +1064,7 @@ export const inventoryRouter = createTRPCRouter({
           // direction. Rounding elapsed time *up*, which is what this did
           // before, reported a carton four days and one second gone as five
           // days gone. Days remaining and days elapsed are the same distance.
-          daysExpired: -daysBetween(now, batch.expirationDate),
+          daysExpired: -daysUntilExpiry(batch.expirationDate, today),
         }))
         // Newest first, matching the previous `expirationDate: "desc"`.
         .reverse();

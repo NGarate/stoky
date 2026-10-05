@@ -1,5 +1,5 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
+import { describe, it, expect, afterEach, beforeEach, mock, setSystemTime } from "bun:test";
 import { createContext } from "react";
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -289,5 +289,30 @@ describe("who gets the control", () => {
     expect(screen.queryByRole("button", { name: /Usar 1 L/ })).toBeAbsent();
     // The plain total is a paragraph; the "2 L" in the locations list is a span.
     expect(screen.getByText("2 L", { selector: "p" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The batch list's "Caducado" is a calendar question. The picker's date is
+ * stored as UTC midnight, and comparing that instant with `Date.now()` called
+ * a carton expired from 02:00 on the day printed on it, in Madrid.
+ */
+describe("a batch's expiry is read as a date", () => {
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("is not expired on the day it is dated, and is the day after", () => {
+    // 11:00 in Madrid on the 6th.
+    setSystemTime(new Date("2026-10-06T09:00:00Z"));
+    stockEntries = [
+      fridgeEntry({ id: "today", expirationDate: new Date("2026-10-06") }),
+      fridgeEntry({ id: "yesterday", expirationDate: new Date("2026-10-05") }),
+    ];
+    renderDetail();
+
+    expect(screen.getAllByText("Caducado")).toHaveLength(1);
+    const expired = screen.getByText("Caducado").closest("li");
+    expect(expired?.textContent).toContain("5");
   });
 });
