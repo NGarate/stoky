@@ -315,6 +315,12 @@ resolve (a force push, a `workflow_dispatch`, a before-commit that no longer
 exists). The decision function was checked against real ranges in this history
 and ten representative paths before it shipped.
 
+**2026-10-05:** the base is now the head of the last *successful* run on master
+(`gh run list --status success`), not `github.event.before`. Diffing against the
+previous push lost images: a code push whose run was cancelled by a following
+docs-only push, or failed before it, never got one. Not yet exercised on GitHub;
+an API failure or a non-ancestor base still answers "build".
+
 The gate had one bug worth keeping visible, because it failed silently rather
 than loudly. `changes` originally *fetched* the before-commit, and the same
 push stopped every checkout persisting the workflow token — on a private
