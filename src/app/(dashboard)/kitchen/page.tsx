@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
@@ -86,8 +86,23 @@ export default function KitchenPage(): JSX.Element {
   const lists = api.shopping.list.useQuery({}, { refetchInterval });
   const [listError, setListError] = useState(false);
   const utils = api.useUtils();
+  /**
+   * Taps waiting for the first list, and that list once it exists.
+   *
+   * With no list, the first tap creates one — and every tap after it, until
+   * the list query caught up, saw no list either and created another. Quick
+   * taps on a tablet left a household with several "Lista de la cocina".
+   * Taps made while the list is being created now wait for it and land on
+   * it; the created id is kept so the gap before the list query refetches
+   * cannot open the door again.
+   */
+  const waitingForList = useRef<Array<{ id: string; name: string; defaultUnit: string }> | null>(null);
+  const createdListId = useRef<string | null>(null);
   const createList = api.shopping.create.useMutation({
-    onError: () => setListError(true),
+    onError: () => {
+      waitingForList.current = null;
+      setListError(true);
+    },
   });
 
   if (!expiring.data) {
@@ -169,19 +184,29 @@ export default function KitchenPage(): JSX.Element {
     defaultUnit: string;
   }): void {
     setListError(false);
-    const target = lists.data?.[0];
+    const target = lists.data?.[0]?.id ?? createdListId.current;
     if (target) {
-      enqueueAdd(target.id, product);
+      enqueueAdd(target, product);
+      return;
+    }
+    // Already creating it: this tap waits for that list rather than asking
+    // for another.
+    if (waitingForList.current !== null) {
+      waitingForList.current.push(product);
       return;
     }
     // No list yet: the tap creates one and writes the first item on it. Two
     // steps, one gesture — a person at the tablet asked for neither a form
     // nor a decision about names.
+    waitingForList.current = [product];
     createList.mutate(
       { name: t("listName") },
       {
         onSuccess: async (created) => {
-          enqueueAdd(created.id, product);
+          createdListId.current = created.id;
+          const waiting = waitingForList.current ?? [];
+          waitingForList.current = null;
+          for (const each of waiting) enqueueAdd(created.id, each);
           await utils.shopping.list.invalidate();
         },
       },

@@ -1,7 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { createContext } from "react";
-import { cleanup, screen } from "@testing-library/react";
+import { act, cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import type { QueuedOp, EnqueueResult } from "@/lib/offline/queue";
@@ -28,11 +28,19 @@ const createList = mock(
       createListOpts?.onError?.(new Error("offline"));
       return;
     }
+    if (createListHeld) {
+      // The request is still out: answered later by `answerCreateList`.
+      answerCreateList = () => void opts?.onSuccess?.({ id: "l-new" });
+      return;
+    }
     void opts?.onSuccess?.({ id: "l-new" });
   },
 );
 let createListOpts: { onError?: (e: unknown) => unknown } | undefined;
 let createListFails = false;
+/** Whether the create request stays unanswered until the test answers it. */
+let createListHeld = false;
+let answerCreateList: () => void = () => {};
 let listsStub: { data: Array<{ id: string; name: string }> | undefined };
 
 let pending: QueuedOp[] = [];
@@ -129,6 +137,7 @@ beforeEach(() => {
   cancel.mockClear();
   createList.mockClear();
   createListFails = false;
+  createListHeld = false;
   listsStub = { data: [{ id: "l1", name: "Lista" }] };
   pending = [];
   expiringStub = {
@@ -313,6 +322,30 @@ describe("writing it on the list", () => {
       path: "shopping.addItem",
       input: { shoppingListId: "l-new", productId: "p9" },
     });
+  });
+
+  it("creates one list however quickly the first taps come", async () => {
+    // Every tap before the list query caught up saw no list and created one,
+    // so a few quick taps left several "Lista de la cocina".
+    listsStub = { data: [] };
+    createListHeld = true;
+    renderKitchen();
+
+    const tap = screen.getByRole("button", { name: /Apuntar «Café molido»/ });
+    await userEvent.click(tap);
+    await userEvent.click(tap);
+
+    expect(createList).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      answerCreateList();
+    });
+
+    // Both taps land on the one list that was made.
+    expect(enqueue).toHaveBeenCalledTimes(2);
+    for (const call of enqueue.mock.calls) {
+      expect(call[0]).toMatchObject({ input: { shoppingListId: "l-new" } });
+    }
   });
 
   it("says so when the first list cannot be created", async () => {
