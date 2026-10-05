@@ -887,21 +887,16 @@ async function validateImageMagicBytes(
 // inside a procedure takes ctx.db (trpc.ts:24-38 explains why).
 async function processReceiptAsync(receiptId: string): Promise<void> {
   try {
-    // Run OCR
-    await processReceiptOcr(receiptId);
+    // OCR, then parse and match the text it returns — unconditionally. This
+    // used to re-read the receipt and parse only `if (rawOcrText)`, which
+    // skipped an empty read and left the receipt at PARSED for ever. An
+    // empty read is now FAILED inside `processReceiptOcr`, so whatever comes
+    // back here has text, and every receipt that gets this far ends at
+    // NEEDS_REVIEW or CONFIRMED.
+    const text = await processReceiptOcr(receiptId);
 
-    // Parse receipt
-    const receipt = await prisma.receipt.findUnique({
-      where: { id: receiptId },
-    });
-
-    if (receipt?.rawOcrText) {
-      const parsed = parseReceiptText(receipt.rawOcrText);
-      await saveParsedItems(receiptId, parsed);
-
-      // Match items
-      await matchReceiptItems(receiptId);
-    }
+    await saveParsedItems(receiptId, parseReceiptText(text));
+    await matchReceiptItems(receiptId);
   } catch (error) {
     console.error("Failed to process receipt:", error);
     await prisma.receipt.update({

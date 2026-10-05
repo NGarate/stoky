@@ -108,7 +108,32 @@ const ocrWorker = sharedWorker<Worker>(() =>
   createWorker("spa", undefined, workerOptions()),
 );
 
-export async function processReceiptOcr(receiptId: string): Promise<string> {
+async function recogniseWithTesseract(image: Buffer): Promise<string> {
+  const worker = await ocrWorker.get();
+  const {
+    data: { text },
+  } = await worker.recognize(image);
+  return text;
+}
+
+/**
+ * Reads the receipt's photograph and moves it to PARSED with the text — or to
+ * FAILED.
+ *
+ * **No text is a failure.** A photograph of nothing legible (a blank page, the
+ * back of the ticket, a blur) used to reach PARSED with `rawOcrText` empty.
+ * The step after this one only parses when there is text, so the receipt sat
+ * at PARSED for ever: not failed, so the upload screen offered no retry, and
+ * still polling, because PARSED is a state it waits on. FAILED is the state
+ * that screen can say something about.
+ *
+ * @param recognise The OCR engine. A parameter so the pipeline around it can
+ *   be tested without loading tesseract; callers leave it out.
+ */
+export async function processReceiptOcr(
+  receiptId: string,
+  recognise: (image: Buffer) => Promise<string> = recogniseWithTesseract,
+): Promise<string> {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
   });
@@ -137,10 +162,10 @@ export async function processReceiptOcr(receiptId: string): Promise<string> {
     // than through the procedure that checked them.
     await readImageMetadata(imageBuffer);
 
-    const worker = await ocrWorker.get();
-    const {
-      data: { text },
-    } = await worker.recognize(imageBuffer);
+    const text = await recognise(imageBuffer);
+    if (text.trim().length === 0) {
+      throw new InvalidInputError("No text recognised in the image");
+    }
 
     await prisma.receipt.update({
       where: { id: receiptId },
