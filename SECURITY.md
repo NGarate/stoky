@@ -319,6 +319,18 @@ missing, is the example value, or is shorter than 32 characters — with a messa
 naming the file and the command that generates a real one, because the person
 reading it is looking at a container that will not start.
 
+- **At start-up, and the process exits.** `src/instrumentation.ts` runs the
+  check from Next's `register` hook and exits with status 1, so the server never
+  listens. Until 2026-10-06 the check ran only when `@/lib/auth` was first
+  imported — by the first request needing a session — and Next answers a route
+  module that fails to load with a 500, not an exit: the container stayed up,
+  `/api/health` (which never imports auth) answered 200, and every sign-in
+  failed. A *throw* from `register` is not enough either: measured against the
+  standalone server, Next logs "Failed to prepare server" and keeps listening,
+  answering 500 to everything.
+- **`/api/health` checks it too**, answering 503 with the same opaque body as
+  any other failed dependency, so an instance that somehow got past start-up
+  with an unusable key is reported unhealthy rather than healthy.
 - **Production only.** Development and the suites use whatever is to hand;
   refusing there would trade a risk nobody faces for an obstacle everybody does.
 - **Not during `next build`.** The image is built without a runtime secret and

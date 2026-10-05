@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { pingCache } from "@/lib/rate-limit";
+import { secretProblem } from "@/lib/auth/secret";
 
 /**
  * Is this instance able to serve? — for the container runtime, not for a person.
@@ -14,6 +15,8 @@ import { pingCache } from "@/lib/rate-limit";
  * answers HTTP but cannot reach Postgres serves an error on every page, and
  * without Valkey nobody can sign in at all, because the rate limiter fails
  * closed. Reporting "healthy" in either state is reporting the wrong thing.
+ * The same goes for a session signing key the application refuses to use —
+ * see `signingKey` below.
  *
  * **Not rate limited**, deliberately and unusually for this codebase. The
  * limiter lives in Valkey and fails closed, so metering this endpoint would
@@ -52,6 +55,26 @@ function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
+/**
+ * A signing key the application refuses to use is a dependency that is down.
+ *
+ * `src/instrumentation.ts` stops the server starting with one, and this is the
+ * second line: were that ever bypassed — a runtime that skips the hook, a
+ * secret changed under a running process — every route that reads a session
+ * would fail while this endpoint, which never imports `@/lib/auth`, went on
+ * answering 200. That is exactly how it was before the hook existed. Checked
+ * per request, like the others, so it reports the environment as it is now.
+ */
+async function signingKey(): Promise<void> {
+  // `next build` calls this handler while deciding whether it can be
+  // prerendered, with no runtime secret by design — the same exemption
+  // `assertUsableSecret` makes, for the same reason.
+  if (process.env.NEXT_PHASE === "phase-production-build") return;
+
+  const problem = secretProblem(process.env.NEXTAUTH_SECRET, process.env.NODE_ENV);
+  if (problem) throw new Error(`[auth] ${problem}`);
+}
+
 export async function GET(): Promise<Response> {
   const checks = await Promise.allSettled([
     // `SELECT 1` rather than a model query: it proves the connection without
@@ -59,6 +82,7 @@ export async function GET(): Promise<Response> {
     // honestly instead of failing as though the database were down.
     withTimeout(prisma.$queryRaw`SELECT 1`, "database"),
     withTimeout(pingCache(), "cache"),
+    signingKey(),
   ]);
 
   const failures = checks.filter((check) => check.status === "rejected");

@@ -1,6 +1,7 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, afterAll, spyOn } from "bun:test";
 import { GET } from "@/app/api/health/route";
 import { closeRateLimiter } from "@/lib/rate-limit";
+import { PLACEHOLDER_SECRET } from "@/lib/auth/secret";
 
 /**
  * `/api/health`, against a real database and a real Valkey.
@@ -68,6 +69,32 @@ describe("when a dependency is gone", () => {
       await closeRateLimiter();
       if (original === undefined) delete process.env.VALKEY_URL;
       else process.env.VALKEY_URL = original;
+    }
+  });
+
+  it("answers 503 when the session signing key is one the application refuses", async () => {
+    // Before, the key was checked only when `@/lib/auth` was imported — never
+    // by this route — so a production instance with the example secret was
+    // "healthy" while every route that reads a session failed.
+    // Without the read-only `NODE_ENV` of the Next typings.
+    const env = process.env as Record<string, string | undefined>;
+    const originalSecret = env.NEXTAUTH_SECRET;
+    const originalEnv = env.NODE_ENV;
+    env.NODE_ENV = "production";
+    env.NEXTAUTH_SECRET = PLACEHOLDER_SECRET;
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const response = await GET();
+
+      expect(response.status).toBe(503);
+      // Still nothing about which check failed, in the body.
+      expect(await response.json()).toEqual({ status: "degraded" });
+    } finally {
+      logged.mockRestore();
+      env.NODE_ENV = originalEnv;
+      if (originalSecret === undefined) delete env.NEXTAUTH_SECRET;
+      else env.NEXTAUTH_SECRET = originalSecret;
     }
   });
 
