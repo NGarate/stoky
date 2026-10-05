@@ -7,6 +7,7 @@ import { Check, Package } from "lucide-react";
 import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
+import { RouteState, isNotFoundError } from "@/components/household/RouteState";
 import { isItemReviewed } from "@/lib/receipts";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -22,9 +23,10 @@ export default function ReviewPage() {
   const receiptId = params.id as string;
 
   const utils = api.useUtils();
-  const { data: receipt, isLoading } = api.receipt.getReceiptWithItems.useQuery({
+  const receiptQuery = api.receipt.getReceiptWithItems.useQuery({
     receiptId,
   });
+  const receipt = receiptQuery.data;
 
   /**
    * Confirming every line does not apply the receipt.
@@ -96,19 +98,25 @@ export default function ReviewPage() {
 
   const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale), [locale]);
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-4xl">
-        <p>{t("loadingReceipt")}</p>
-      </div>
-    );
-  }
-
+  // "Not found" only when the server said so. Gated on `isLoading`, a query
+  // paused offline or refused with a 500 fell through to this branch and
+  // told somebody their receipt did not exist.
   if (!receipt) {
+    if (isNotFoundError(receiptQuery.error)) {
+      return (
+        <div className="mx-auto max-w-4xl">
+          <p>{t("notFound")}</p>
+        </div>
+      );
+    }
     return (
-      <div className="mx-auto max-w-4xl">
-        <p>{t("notFound")}</p>
-      </div>
+      <RouteState
+        error={receiptQuery.error}
+        fetchStatus={receiptQuery.fetchStatus}
+        isLoading={receiptQuery.isPending}
+        onRetry={() => void receiptQuery.refetch()}
+        title={t("review")}
+      />
     );
   }
 

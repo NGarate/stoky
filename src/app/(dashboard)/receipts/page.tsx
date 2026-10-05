@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
 import { Plus, FileText } from "lucide-react";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
@@ -44,7 +45,8 @@ function receiptHref(receipt: Receipt): string {
 export default function ReceiptsPage() {
   const t = useTranslations("receipts");
   const locale = useLocale();
-  const { data, isLoading } = api.receipt.list.useQuery({ limit: 50 });
+  const query = api.receipt.list.useQuery({ limit: 50 });
+  const data = query.data;
   const receipts: Receipt[] = data?.items ?? [];
 
   // Formatted here rather than by a shared helper, because a shared one has to
@@ -67,16 +69,19 @@ export default function ReceiptsPage() {
     [locale],
   );
 
-  if (isLoading) {
+  // `!data` rather than `isLoading`, which is false for a query that is
+  // paused offline or has failed — so with no signal, or after a 500, this
+  // fell straight through to the empty state and told somebody they had
+  // nothing. RouteState says which of loading, offline or failed it is.
+  if (!data) {
     return (
-      <div className="mx-auto max-w-6xl">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("title")}</h1>
-        </div>
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">{t("loadingList")}</p>
-        </div>
-      </div>
+      <RouteState
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        onRetry={() => void query.refetch()}
+        title={t("title")}
+      />
     );
   }
 
