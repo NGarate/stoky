@@ -86,10 +86,13 @@ export function StockAmount({
  * knows, because the caller tinted it.
  */
 export function StockStatus({
+  className,
   isLowStock,
   onTintedRow = false,
   totalStock,
 }: {
+  /** Type size only — the kitchen reads it from a metre away. */
+  className?: string;
   isLowStock: boolean;
   /** The row this sits on is tinted with `stockTone(totalStock, isLowStock)`. */
   onTintedRow?: boolean;
@@ -101,7 +104,7 @@ export function StockStatus({
 
   if (totalStock <= 0) {
     return (
-      <Badge tone="danger" variant={variant}>
+      <Badge className={className} tone="danger" variant={variant}>
         {t("noStock")}
       </Badge>
     );
@@ -109,11 +112,15 @@ export function StockStatus({
 
   if (isLowStock) {
     return (
-      <Badge tone="warn" variant={variant}>
+      <Badge className={className} tone="warn" variant={variant}>
         {t("lowStock")}
       </Badge>
     );
   }
 
-  return <Badge tone="ok">{t("stockOk")}</Badge>;
+  return (
+    <Badge className={className} tone="ok">
+      {t("stockOk")}
+    </Badge>
+  );
 }

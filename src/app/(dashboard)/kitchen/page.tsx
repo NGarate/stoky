@@ -1,12 +1,13 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
+import { StockStatus } from "@/components/inventory/StockStatus";
 import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/lib/offline/queue-context";
@@ -66,6 +67,7 @@ import type { JSX } from "react";
  */
 export default function KitchenPage(): JSX.Element {
   const t = useTranslations("kitchen");
+  const locale = useLocale();
   const { state: queue, enqueue } = useWriteQueue();
   const snackbar = useSnackbar();
 
@@ -411,19 +413,30 @@ export default function KitchenPage(): JSX.Element {
                         // The label says "Queda"; the value used to say it
                         // again — "Queda / Queda 1 de 2 L", and "Queda / No
                         // queda nada" — which on a tablet read from a metre
-                        // away is a word of the sentence spent twice.
+                        // away is a word of the sentence spent twice. At
+                        // zero it is the amount like any other: what that
+                        // *means* is the status badge's job.
                         label: t("leftLabel"),
-                        value:
-                          left <= 0
-                            ? t("noneLeft")
-                            : t("leftOf", {
-                                stock: left,
-                                minimum: product.minStock ?? 0,
-                                unit: product.defaultUnit,
-                              }),
+                        value: t("leftOf", {
+                          stock: Math.max(0, left),
+                          minimum: product.minStock ?? 0,
+                          unit: product.defaultUnit,
+                        }),
                       },
                     ]}
+                    /* StockStatus's word, the one the inventory and the Panel
+                       wear. This row worked the state out for itself — "Queda:
+                       Nada" and no badge — which is ISSUES UI-11 on a sixth
+                       screen. Every row here came from the `lowStock`
+                       question, so each is low by construction. */
                     status={
+                      <StockStatus
+                        className="text-lg md:text-xl"
+                        isLowStock
+                        totalStock={left}
+                      />
+                    }
+                    actions={
                       /* Offered only while it would change anything. Six
                          litres already written down and a minimum of six is
                          not a product that needs buying, and a button that
@@ -431,8 +444,14 @@ export default function KitchenPage(): JSX.Element {
                          button somebody presses again. What replaces it is
                          the reason, not a blank. */
                       needsMoreOnList(left, already, product.minStock) ? (
+                        // In `actions`, not `status`: beside the title it
+                        // moved with the length of the product's name, at
+                        // `text-sm`, on a screen read from a metre away. Same
+                        // size as the cards' "He usado" button.
                         <Button
+                          className="text-xl"
                           onClick={() => addToList(product)}
+                          size="lg"
                           type="button"
                           variant="outline"
                         >
@@ -442,12 +461,12 @@ export default function KitchenPage(): JSX.Element {
                           </span>
                         </Button>
                       ) : (
-                        <span className="shrink-0 text-lg text-muted-foreground">
+                        <p className="text-lg text-muted-foreground md:text-xl">
                           {t("onList", {
                             quantity: already,
                             unit: product.defaultUnit,
                           })}
-                        </span>
+                        </p>
                       )
                     }
                     title={product.name}
@@ -459,6 +478,20 @@ export default function KitchenPage(): JSX.Element {
           )}
         </section>
       </div>
+
+      {/* A tablet nobody touches refreshes itself every five minutes; this
+          is how a person reading it from across the room can tell it did.
+          Not live: announcing the clock every five minutes would be noise. */}
+      {expiring.dataUpdatedAt > 0 ? (
+        <p className="mt-10 text-lg text-muted-foreground">
+          {t("updated", {
+            time: new Intl.DateTimeFormat(locale, {
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(expiring.dataUpdatedAt),
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }
