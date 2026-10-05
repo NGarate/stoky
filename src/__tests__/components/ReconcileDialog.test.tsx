@@ -14,6 +14,7 @@ import type { FailedOp } from "@/lib/offline/queue";
 
 const discard = mock((_id: string) => {});
 let invalidated: string[] = [];
+let role = "OWNER";
 
 mock.module("@/lib/offline/queue-context", () => ({
   WriteQueueContext: createContext(null),
@@ -37,6 +38,7 @@ mock.module("@/lib/trpc/client", () => ({
       product: { invalidate: async () => void invalidated.push("product") },
       shopping: { invalidate: async () => void invalidated.push("shopping") },
     }),
+    auth: { me: { useQuery: () => ({ data: { role } }) } },
     product: {
       getById: {
         useQuery: () => ({
@@ -76,6 +78,7 @@ const op: FailedOp = {
 
 beforeEach(() => {
   invalidated = [];
+  role = "OWNER";
   discard.mockClear();
 });
 
@@ -101,3 +104,17 @@ describe("answering the question", () => {
     );
   });
 });
+
+describe("who may answer it", () => {
+  it("does not offer a kitchen account a form the server will refuse", () => {
+    // The product loads for KITCHEN — `getById` is a householdProcedure — so
+    // deciding from that query failing offered the form to every kitchen
+    // account, and every answer came back FORBIDDEN.
+    role = "KITCHEN";
+    renderWithIntl(<ReconcileDialog onClose={() => {}} op={op} />);
+
+    expect(screen.queryByLabelText(/¿Cuánto hay ahora/)).toBeAbsent();
+    expect(screen.getByRole("dialog")).toHaveTextContent(/no ajustar el stock/i);
+  });
+});
+

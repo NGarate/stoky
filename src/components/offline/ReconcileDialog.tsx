@@ -75,6 +75,7 @@ export function ReconcileDialog({
     { id: input.productId ?? "" },
     { enabled: Boolean(input.productId) },
   );
+  const me = api.auth.me.useQuery(undefined, { retry: false });
 
   const [amount, setAmount] = useState("");
   const [failed, setFailed] = useState(false);
@@ -155,13 +156,22 @@ export function ReconcileDialog({
     0,
   );
 
-  /** A KITCHEN account may look and consume, and not adjust. */
-  const mayAdjust = product.error === null;
+  /**
+   * A KITCHEN account may look and consume, and not adjust.
+   *
+   * Asked of the account, not inferred from the product query failing: that
+   * query is a `householdProcedure`, which KITCHEN may read — so it never
+   * failed, the form was always offered, and every answer was refused as
+   * FORBIDDEN. Unknown until `auth.me` answers, so the form waits rather than
+   * guessing either way.
+   */
+  const role = me.data?.role;
+  const mayAdjust = role !== "KITCHEN";
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const actual = Number(amount);
-    if (amount.trim() === "" || !product.data || !Number.isFinite(actual) || actual < 0 || !input.productId) return;
+    if (amount.trim() === "" || role === undefined || !product.data || !Number.isFinite(actual) || actual < 0 || !input.productId) return;
 
     setFailed(false);
     adjust.mutate({
@@ -251,7 +261,12 @@ export function ReconcileDialog({
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
-                disabled={adjust.isPending || !product.data || amount.trim() === ""}
+                disabled={
+                  adjust.isPending ||
+                  !product.data ||
+                  role === undefined ||
+                  amount.trim() === ""
+                }
                 type="submit"
               >
                 {adjust.isPending ? t("reconcileSaving") : t("reconcileSubmit")}

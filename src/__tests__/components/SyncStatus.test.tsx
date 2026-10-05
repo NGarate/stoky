@@ -27,6 +27,9 @@ let queueState = {
   hydrated: true,
 };
 
+/** Who is looking: the reconcile dialog asks before offering an adjustment. */
+let role = "OWNER";
+
 let productQuery: unknown = {
   data: { name: "Leche entera", defaultUnit: "L", stockEntries: [] },
   error: null,
@@ -55,6 +58,7 @@ mock.module("@/lib/trpc/client", () => ({
       product: { invalidate: async () => {} },
       shopping: { invalidate: async () => {} },
     }),
+    auth: { me: { useQuery: () => ({ data: { role } }) } },
     product: { getById: { useQuery: () => productQuery } },
     inventory: {
       adjustStock: {
@@ -101,6 +105,7 @@ beforeEach(() => {
     data: { name: "Leche entera", defaultUnit: "L", stockEntries: [] },
     error: null,
   };
+  role = "OWNER";
 });
 
 afterEach(cleanup);
@@ -393,7 +398,13 @@ describe("a refused consumption", () => {
     // `adjustStock` is a writeProcedure and the matrix gives KITCHEN looking
     // and consuming. Offering a control the server would refuse is worse than
     // not offering one.
-    productQuery = { data: undefined, error: new Error("forbidden") };
+    //
+    // The product loads for a kitchen account — `getById` is a
+    // householdProcedure — so the dialog cannot learn the role from it
+    // failing. This test used to simulate exactly that failure, which never
+    // happens, and so passed while every real kitchen account was offered a
+    // form the server refused.
+    role = "KITCHEN";
     renderWithIntl(<SyncStatus />);
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
