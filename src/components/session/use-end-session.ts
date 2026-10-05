@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { signOutAction } from "@/lib/auth/actions";
 import { useWriteQueue } from "@/lib/offline/queue-context";
@@ -8,10 +9,14 @@ import { forgetPersistedReads } from "@/lib/offline/persist";
 import { useComposer } from "@/components/offline/Composer";
 
 /**
- * Ending a session, and the three things that have to go with it.
+ * Ending a session, and the four things that have to go with it.
  *
- * The write queue, the persisted reads and the cached shell all belong to the
- * account that is leaving. Until `SignOutButton` existed they were security
+ * The write queue, the persisted reads, the cached shell and the queries held
+ * in memory all belong to the account that is leaving. The last is the one
+ * that was missed: the query client lives in the root provider and outlives
+ * the redirect, so the next person to sign in on the same tab was first shown
+ * the previous account's inventory, and their persister saved it under their
+ * own key. Until `SignOutButton` existed they were security
  * controls nothing could fire; there are two callers now — signing out of this
  * device, and ending every session everywhere — and the sequence is here rather
  * than copied because a second copy is how one of the three gets forgotten.
@@ -60,6 +65,7 @@ export interface EndSession {
 export function useEndSession(before?: () => Promise<unknown>): EndSession {
   const { state, flush, purgeAll } = useWriteQueue();
   const { userId } = useComposer();
+  const queryClient = useQueryClient();
   const [working, setWorking] = useState(false);
 
   async function leave(): Promise<void> {
@@ -77,8 +83,11 @@ export function useEndSession(before?: () => Promise<unknown>): EndSession {
     }
 
     try {
-      // All three go before the redirect, because after it this component is
-      // gone.
+      // All four go before the redirect, because after it this component is
+      // gone. Queries first, cancelled before they are cleared, so an answer
+      // already on its way cannot land in the cache after it was emptied.
+      await queryClient.cancelQueries();
+      queryClient.clear();
       purgeAll();
       forgetPersistedReads(userId);
       forgetCachedShell();

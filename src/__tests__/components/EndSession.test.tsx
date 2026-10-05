@@ -2,8 +2,9 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createContext } from "react";
-import { renderWithIntl } from "../utils/render";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createContext, type ReactElement } from "react";
+import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
 import { useComposer } from "@/components/offline/Composer";
 import { persistKey } from "@/lib/offline/persist";
 import type { QueuedOp } from "@/lib/offline/queue";
@@ -30,11 +31,30 @@ let steps: string[] = [];
 
 /** Whether the sign-out POST fails — the shared-tablet case, a dropped Wi-Fi. */
 let signOutFails = false;
+
+/**
+ * The root provider's query client, holding what the leaving account last saw.
+ *
+ * It lives above the dashboard and survives the redirect, so whatever is in it
+ * when `signOutAction` runs is what the next person to sign in on this tab is
+ * shown first.
+ */
+let queryClient = new QueryClient();
+/** How many queries the client still held when the sign-out POST went out. */
+let queriesAtSignOut: number | null = null;
+
+function renderWithIntl(ui: ReactElement, options?: { locale?: TestLocale }) {
+  return renderWithIntlOnly(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+    options,
+  );
+}
 /** What `flush()` reports as still unsent. A drain can send nothing and resolve. */
 let unsentAfterFlush = 0;
 
 const signOutAction = mock(async () => {
   steps.push("signOut");
+  queriesAtSignOut = queryClient.getQueryCache().getAll().length;
   if (signOutFails) throw new Error("the sign-out POST failed");
 });
 const postMessage = mock((_message: string) => {
@@ -138,6 +158,12 @@ beforeEach(() => {
   flush.mockClear();
   pending = [];
   steps = [];
+  queryClient = new QueryClient();
+  queryClient.setQueryData(
+    [["inventory", "getStockOverview"], { type: "query" }],
+    { items: [{ name: "the leaving account's milk" }] },
+  );
+  queriesAtSignOut = null;
   serverRefuses = false;
   signOutFails = false;
   unsentAfterFlush = 0;
@@ -169,6 +195,19 @@ describe("with nothing waiting", () => {
     expect(purgeAll).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenCalledWith("STOKY_FORGET");
     expect(signOutAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("empties the queries held in memory before signing out", async () => {
+    // The query client outlives the redirect. Whatever it still holds is the
+    // first thing the next account on this tab is shown, and what that
+    // account's persister then saves under its own key.
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Cerrar sesión" })[0] as HTMLElement,
+    );
+
+    expect(queriesAtSignOut).toBe(0);
   });
 });
 
