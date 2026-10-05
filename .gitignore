@@ -8,6 +8,12 @@ node_modules/
 # 2026-08-28 still holds one, and it is on the order of a gigabyte. Un-ignoring
 # it would put that in front of the next `git add`.
 .pnpm-store/
+# A pnpm run in this directory (by hand, or by a tool that guesses the package
+# manager) writes its store and manifests here rather than under `~`. The store
+# is over a gigabyte. Anchored to the root: `src/components/store/` is source.
+/store/
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
 
 # Build outputs
 .next/
