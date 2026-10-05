@@ -143,12 +143,9 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
   // Extract items
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].replace(/\b(?:total|importe|suma)\b.*$/i, "").trim();
-    const priceMatches = line.match(amountPattern()) ?? [];
-
     // Skip lines that are likely headers, footers, or irrelevant
     if (
-      (line.match(/\b(?:subtotal|iva|descuento|cambio|efectivo|tarjeta|factura|ticket|caja|hora|fecha)\b/i) &&
-        priceMatches.length <= 1) ||
+      isNotAPurchase(line) ||
       line.match(/^\d{1,2}[/]\d{1,2}[/]\d{2,4}$/) ||
       line.match(/^\d{2}:\d{2}/) ||
       line.length < 3
@@ -191,6 +188,31 @@ export function parseReceiptText(ocrText: string): ParsedReceipt {
   }
 
   return result;
+}
+
+/**
+ * Words that mark a line as money changing hands rather than a thing bought:
+ * tax, discounts, the payment and the change. Matched anywhere on the line and
+ * whatever else is on it.
+ *
+ * This used to apply only to lines with at most one amount, which let through
+ * exactly the lines that carry more: a tax row (`IVA 10% 8,00 0,80`), and a
+ * payment line printed with its running total. And the list stopped at
+ * `cambio`, so `ENTREGADO 5,00` and `A DEVOLVER 4,11` were booked as products
+ * called "entregado" and "a devolver".
+ */
+const NOT_A_PURCHASE =
+  /\b(?:sub\s*total|iva|i\.v\.a|imponible|cuota|descuento|ahorro|cupon|redondeo|cambio|efectivo|entregado|entrega|devolver|devolucion|tarjeta|visa|mastercard|maestro|pago)\b/;
+
+/**
+ * Words that only head a line: the till's own header fields. Anchored to the
+ * start because `caja` and `hora` are also words a product name can contain.
+ */
+const HEADER_FIELD = /^(?:factura|ticket|caja|hora|fecha|nif|cif|tel(?:efono)?)\b/;
+
+function isNotAPurchase(line: string): boolean {
+  const normalised = normalizeText(line);
+  return NOT_A_PURCHASE.test(normalised) || HEADER_FIELD.test(normalised);
 }
 
 /**
@@ -272,7 +294,17 @@ function parseLineItem(line: string): ParsedItem | null {
   const first = amounts[0];
   if (first?.index === undefined) return null;
 
-  const price = parseEsAmount(amounts[amounts.length - 1][0]);
+  const last = amounts[amounts.length - 1];
+  // A minus on either side — `CUPON -0,50`, `0,50-` — is money coming off,
+  // not a purchase. The amount pattern does not take the sign, so without
+  // this a discount was booked as a 0,50 € purchase of a product called
+  // "cupon".
+  const lastEnd = (last.index ?? 0) + last[0].length;
+  if (/[-−]\s?$/.test(line.slice(0, last.index)) || /^[-−]/.test(line.slice(lastEnd))) {
+    return null;
+  }
+
+  const price = parseEsAmount(last[0]);
   if (Number.isNaN(price) || price <= 0 || price >= 10000) return null;
 
   const unitPrice =
@@ -315,8 +347,10 @@ function parseLineItem(line: string): ParsedItem | null {
     return null;
   }
 
+  // A name with no letter in it is not a product: it is the rate column of a
+  // tax breakdown (`10% 8,00 0,80` became a product called "10").
   const name = cleanProductName(namePart);
-  if (!name) return null;
+  if (!/[a-z]/.test(name)) return null;
 
   return {
     rawText: line,

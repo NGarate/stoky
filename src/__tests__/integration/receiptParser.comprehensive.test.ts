@@ -107,7 +107,21 @@ GRACIAS POR SU COMPRA`;
       expect(result.storeName?.toLowerCase()).toContain("mercadona");
       expect(result.purchaseDate?.getFullYear()).toBe(2024);
       expect(result.totalAmount).toBe(8.8);
-      expect(result.items.length).toBeGreaterThanOrEqual(4);
+      // Exactly the five products: not the header, not the card line, and not
+      // the `10% 8,00 0,80` tax row, which used to become a product called "10".
+      expect(
+        result.items.map(({ parsedName, parsedPrice, parsedQuantity }) => ({
+          parsedName,
+          parsedPrice,
+          parsedQuantity,
+        })),
+      ).toEqual([
+        { parsedName: "leche semi 1l", parsedPrice: 1.25, parsedQuantity: undefined },
+        { parsedName: "pan de molde", parsedPrice: 0.95, parsedQuantity: undefined },
+        { parsedName: "huevos frescos docena", parsedPrice: 2.5, parsedQuantity: undefined },
+        { parsedName: "manzanas golden kg", parsedPrice: 2.3, parsedQuantity: undefined },
+        { parsedName: "yogur natural pack 4", parsedPrice: 1.8, parsedQuantity: undefined },
+      ]);
     });
 
     it("should parse Carrefour receipt format", () => {
