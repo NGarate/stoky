@@ -31,6 +31,16 @@ let queryStub: QueryStub;
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
 
+// Deleting a list leaves through the router now rather than a full reload,
+// so the screen asks for one on every render.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ push: noop, replace: noop, refresh: noop }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/shopping/list-1",
+  useParams: () => ({ id: "list-1" }),
+  redirect: noop,
+}));
+
 mock.module("@/lib/offline/queue-context", () => ({
   // A real context as well as the hook. `mock.module` replaces the module for
   // the whole process, and `WriteQueueProvider` renders

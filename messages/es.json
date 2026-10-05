@@ -747,7 +747,9 @@
     "listNameHint": "Por ejemplo: Compra del sábado.",
     "listNameRequired": "Escribe un nombre para la lista.",
     "createFailed": "No se ha podido crear la lista. El nombre sigue escrito: vuelve a intentarlo.",
-    "generateFailed": "No se ha podido generar la lista. Vuelve a intentarlo."
+    "generateFailed": "No se ha podido generar la lista. Vuelve a intentarlo.",
+    "listDeleted": "Eliminaste la lista «{name}»",
+    "deleteFailed": "No se ha podido eliminar la lista. Sigue aquí: vuelve a intentarlo."
   },
   "prices": {
     "title": "Precios",

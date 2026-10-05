@@ -747,7 +747,9 @@
     "listNameHint": "For example: Saturday shop.",
     "listNameRequired": "Type a name for the list.",
     "createFailed": "The list could not be created. The name is still there: try again.",
-    "generateFailed": "The list could not be generated. Try again."
+    "generateFailed": "The list could not be generated. Try again.",
+    "listDeleted": "You deleted the list “{name}”",
+    "deleteFailed": "The list could not be deleted. It is still here: try again."
   },
   "prices": {
     "title": "Prices",
