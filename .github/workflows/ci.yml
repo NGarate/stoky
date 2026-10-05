@@ -1,12 +1,15 @@
 name: CI
 
-# Trunk-based: master is the only branch, so every push to it is a release
-# candidate. There is no pull-request gate to lean on — this pipeline is the
-# gate, and it has to be trustworthy enough that a red run means something.
+# Trunk-based: every push to master is a release candidate, and this pipeline
+# is the gate, so it has to be trustworthy enough that a red run means
+# something. Pull requests into master come from unattended agent work
+# (CLAUDE.md, Git Workflow) and run the same gates; they never publish.
 on:
   push:
     branches: [master]
     tags: ["v*"]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 # Superseded runs are wasted work on a trunk. Cancel them.
@@ -502,6 +505,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [quality, test, e2e, audit, image-build]
+    # A pull request is verified, scanned included, but publishes nothing: no
+    # `sha-` tag for a commit that is not on master, and no `latest`.
+    if: github.event_name != 'pull_request'
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     permissions:
