@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { onlineManager } from "@tanstack/react-query";
 import { BackLink } from "@/components/ui/back-link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
@@ -158,23 +160,29 @@ export default function ScanPage() {
             isScanning={isScanning}
           />
 
+          {/* `Button`, not a hand-styled <button>: the primitive is what
+              clears the 48px floor, and these two were 40px tall. */}
           {!isScanning && (
             <div className="mt-4 text-center">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setIsScanning(true);
                   setScannedBarcode(null);
                 }}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
               >
                 {t("scanAgain")}
-              </button>
+              </Button>
             </div>
           )}
 
           <div className="mt-8 p-4 bg-muted rounded-lg">
             <h2 className="font-semibold mb-2 text-heading">{t("manualTitle")}</h2>
+            {/* A label, not only a placeholder: the placeholder is gone the
+                moment somebody types, and with it the field's only name. */}
+            <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="manual-barcode">
+              {t("manualLabel")}
+            </label>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -187,18 +195,16 @@ export default function ScanPage() {
               }}
               className="flex gap-2"
             >
-              <input
-                type="text"
+              <Input
+                className="flex-1"
+                id="manual-barcode"
                 name="barcode"
                 placeholder={t("manualPlaceholder")}
-                className="flex-1 px-4 py-2 rounded border border-input bg-card text-foreground"
+                type="text"
               />
-              <button
-                type="submit"
-                className="px-4 py-2 rounded border border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
-              >
+              <Button type="submit" variant="outline">
                 {t("manualSubmit")}
-              </button>
+              </Button>
             </form>
           </div>
         </>
