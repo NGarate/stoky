@@ -95,6 +95,30 @@ describe("ItemRow", () => {
   });
 });
 
+describe("a plain ItemRow", () => {
+  for (const density of ["compact", "default", "touch"] as const) {
+    it(`starts its ${density} title on the section's own edge`, () => {
+      const { container } = list(
+        <ItemRow density={density} title="Café" variant="plain" />,
+      );
+      const classes = container.querySelector("li")!.className.split(/\s+/);
+
+      // A card has a surface, so its padding is inside something. A plain row
+      // has none, and the padding only pushed every title 12–20px right of
+      // the heading it sits under, on the Panel, the kitchen and the
+      // inventory's expiry block. Vertical rhythm stays; the inset goes, at
+      // every breakpoint the density pads at.
+      expect(classes).toContain("px-0");
+      expect(classes).toContain("md:px-0");
+    });
+  }
+
+  it("leaves a card's inset alone", () => {
+    const { container } = list(<ItemRow title="Café" />);
+    expect(container.querySelector("li")!.className).not.toContain("px-0");
+  });
+});
+
 describe("ItemRow densities", () => {
   it("gives the two screens read at arm's length a floor of their own", async () => {
     const { container } = list(<ItemRow density="touch" title="Café" />);

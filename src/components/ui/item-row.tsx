@@ -59,6 +59,11 @@ const itemRowVariants = cva("transition-colors", {
     compoundVariants: [
       // Only a card has a surface of its own to tint.
       { variant: "card", tone: "neutral", class: "bg-card" },
+      // A card's padding is inside its surface; a plain row has no surface,
+      // so the inset only pushed every title 12–20px right of the heading it
+      // sits under. The vertical rhythm stays. `md:` too, or `md:p-5` brings
+      // the inset back at the tablet tier.
+      { variant: "plain", class: "px-0 md:px-0" },
     ],
     defaultVariants: { variant: "card", density: "default", tone: "neutral" },
   });
