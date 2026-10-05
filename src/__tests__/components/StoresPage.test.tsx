@@ -123,6 +123,16 @@ describe("the stores settings screen", () => {
     expect(invalidated).toContain("store.list");
   });
 
+  it("draws a row's delete as a destructive button, not a coloured span", () => {
+    renderPage();
+
+    // The red word was a `<span className="text-destructive">` inside a
+    // ghost button; the button itself is now the variant that says it.
+    const remove = screen.getByRole("button", { name: /Eliminar Mercadona/ });
+    expect(remove.className).toContain("text-destructive");
+    expect(remove.querySelector(".text-destructive")).toBeNull();
+  });
+
   it("refetches the list after deleting one", async () => {
     renderPage();
 

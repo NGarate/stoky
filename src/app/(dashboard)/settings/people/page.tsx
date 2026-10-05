@@ -359,7 +359,7 @@ export default function PeoplePage(): JSX.Element {
                       setRowFailure(null);
                     }}
                     type="button"
-                    variant="outline"
+                    variant="destructive-ghost"
                   >
                     {t("removeButton")}
                   </Button>

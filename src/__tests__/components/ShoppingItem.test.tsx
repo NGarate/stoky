@@ -77,13 +77,31 @@ function lastEnqueued(): Record<string, unknown> {
  * a row that does not exist, and the bin queued a removal that was refused
  * while the addition ahead of it drained and put the item on the list anyway.
  */
+describe("the remove control", () => {
+  it("says which item it removes, and shows the word it is named by", () => {
+    render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
+
+    // It was an icon-only bin named "Eliminar artículo" on every row: a
+    // screen reader heard the same name ten times down a list, and a voice
+    // user had no visible word to say. Its visible label now starts its name
+    // (2.5.3), and the word is drawn in the destructive ink a row trigger
+    // wears — the confirming red fill is for the act itself.
+    const remove = screen.getByRole("button", {
+      name: "Quitar «Leche entera» de la lista",
+    });
+    expect(remove.textContent).toContain("Quitar");
+    expect(remove.className).toContain("text-destructive");
+    expect(remove.className).not.toContain("bg-destructive");
+  });
+});
+
 describe("an addition that has not been sent", () => {
   const queuedItem = { ...baseItem, id: "op-add", queued: true };
 
   it("is taken back by cancelling the addition, not by removing a row", async () => {
     render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Eliminar artículo" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }));
 
     expect(cancel).toHaveBeenCalledWith("op-add");
     expect(enqueue).not.toHaveBeenCalled();
@@ -192,9 +210,9 @@ describe("ShoppingItem", () => {
   it("removes the item via the labelled delete control", async () => {
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
-    // shopping.removeItem in messages/es.json
+    // shopping.removeItemOf in messages/es.json
     await userEvent.click(
-      screen.getByRole("button", { name: "Eliminar artículo" }),
+      screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }),
     );
 
     expect(lastEnqueued()).toMatchObject({
@@ -208,7 +226,7 @@ describe("ShoppingItem", () => {
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Eliminar artículo" }),
+      screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }),
     );
 
     // This screen is not Screen A: it has no trolley to hold a removal, so
@@ -265,7 +283,7 @@ describe("ShoppingItem", () => {
     // `writeProcedure` refuses, found out by pressing one. D88 widened that
     // role by exactly two capabilities and neither is this.
     expect(screen.queryByRole("checkbox")).toBeAbsent();
-    expect(screen.queryByRole("button", { name: "Eliminar artículo" })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: "Quitar «Leche entera» de la lista" })).toBeAbsent();
   });
 
   it("still tells a reader whether it has been bought", () => {
@@ -310,7 +328,7 @@ describe("ShoppingItem", () => {
     // round trip between two items.
     render(<ShoppingItem canWrite stores={STORES} item={baseItem} />);
 
-    const remove = screen.getByRole("button", { name: "Eliminar artículo" });
+    const remove = screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" });
     expect(remove).not.toBeDisabled();
 
     await userEvent.click(remove);

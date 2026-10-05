@@ -253,9 +253,9 @@ export default function StoresPage() {
                       }
                       size="sm"
                       type="button"
-                      variant="ghost"
+                      variant="destructive-ghost"
                     >
-                      <span className="text-destructive">{t("common.delete")}</span>
+                      {t("common.delete")}
                       <span className="sr-only"> {store.name}</span>
                     </Button>
                   </>

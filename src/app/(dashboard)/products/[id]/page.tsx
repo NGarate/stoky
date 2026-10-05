@@ -609,6 +609,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                   type="button"
                   disabled={deleteProduct.isPending}
                   onClick={() => deleteProduct.mutate({ id: product.id })}
+                  variant="destructive"
                 >
                   {t("deleteConfirm")}
                 </Button>
@@ -618,6 +619,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                     setConfirmingDelete(false);
                     setDeleteError(null);
                   }}
+                  variant="outline"
                 >
                   {t("deleteCancel")}
                 </Button>
@@ -629,6 +631,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               <Button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
+                variant="destructive-ghost"
               >
                 {t("deleteButton")}
               </Button>

@@ -159,11 +159,9 @@ function LocationTree({
                       onClick={() => onDelete(location)}
                       size="sm"
                       type="button"
-                      variant="ghost"
+                      variant="destructive-ghost"
                     >
-                      <span className="text-destructive">
-                        {tCommon("delete")}
-                      </span>
+                      {tCommon("delete")}
                       <span className="sr-only"> {location.name}</span>
                     </Button>
                   </>

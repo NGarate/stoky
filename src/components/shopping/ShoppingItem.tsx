@@ -180,14 +180,19 @@ export function ShoppingItem({
             </Button>
           ) : null}
           {canWrite ? (
+            /* A word as well as the bin, and the item in the name. It was an
+               icon-only control named "Eliminar artículo" on every row, so a
+               list read aloud said it ten times and a voice user had nothing
+               visible to say. The visible word starts the name (2.5.3). */
             <Button
-              aria-label={t("removeItem")}
+              aria-label={t("removeItemOf", { name })}
               onClick={remove}
-              size="icon"
+              size="sm"
               type="button"
-              variant="ghost"
+              variant="destructive-ghost"
             >
-              <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
+              <Trash2 aria-hidden="true" className="mr-1 size-5" />
+              {t("removeShort")}
             </Button>
           ) : null}
         </>

@@ -143,6 +143,24 @@ describe("deleting a product", () => {
     ).toBeAbsent();
   });
 
+  it("draws the trigger as a destructive word and only the confirmation in red", () => {
+    render();
+
+    // All three were the primary fill: "Eliminar el producto", "Sí, eliminar
+    // definitivamente" and "Cancelar" looked the same as "Guardar".
+    const trigger = screen.getByRole("button", { name: "Eliminar el producto" });
+    expect(trigger.className).toContain("text-destructive");
+    expect(trigger.className).not.toContain("bg-primary");
+
+    fireEvent.click(trigger);
+    expect(
+      screen.getByRole("button", { name: "Sí, eliminar definitivamente" }).className,
+    ).toContain("bg-destructive");
+    expect(
+      screen.getByRole("button", { name: "Cancelar" }).className,
+    ).not.toContain("bg-primary");
+  });
+
   it("never fires on the first press — the second one names the product", () => {
     render();
 

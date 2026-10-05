@@ -25,6 +25,18 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
+        /**
+         * A row's trigger for something destructive — "Eliminar", "Quitar".
+         *
+         * One rule for destruction: the trigger on the row is a ghost with
+         * the destructive word in `destructive` ink, and the button that
+         * *confirms* is `destructive`, the red fill. Screens were reaching
+         * the first by wrapping a `<span className="text-destructive">` in a
+         * ghost button, and the product page drew trigger, confirmation and
+         * cancel all in the primary fill. The ink stays on hover: the
+         * accent wash under it is an audited pair (`check-contrast.ts`).
+         */
+        "destructive-ghost": "text-destructive hover:bg-accent",
         // Underlined at rest. `primary` against body ink is 1.78:1 light and
         // 1.36:1 dark, under the 3:1 a colour-only cue needs (1.4.1), and a
         // touch screen has no hover to reveal it. Same rule as `ItemRow`'s

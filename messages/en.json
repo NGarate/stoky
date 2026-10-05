@@ -697,7 +697,6 @@
     "emptyList": "Empty list",
     "addItems": "Add items to your list",
     "view": "View",
-    "removeItem": "Remove item",
     "days": "days",
     "months": "months",
     "year": "year",
@@ -734,7 +733,9 @@
     "bought": "Bought",
     "quantityOf": "Quantity of “{name}”",
     "storeOf": "Where to buy “{name}”",
-    "seePricesShort": "Prices"
+    "seePricesShort": "Prices",
+    "removeItemOf": "Remove “{name}” from the list",
+    "removeShort": "Remove"
   },
   "prices": {
     "title": "Prices",

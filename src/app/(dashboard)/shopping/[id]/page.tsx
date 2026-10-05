@@ -166,7 +166,7 @@ export function ShoppingListView({ id }: { id: string }) {
           onClick={() => setConfirmingDelete(true)}
           ref={deleteRef}
           type="button"
-          variant="ghost"
+          variant="destructive-ghost"
         >
           {t("shopping.delete")}
         </Button>
