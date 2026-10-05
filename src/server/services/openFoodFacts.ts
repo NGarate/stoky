@@ -101,6 +101,11 @@ const offResponseSchema = z.object({
 export type OpenFoodFactsProduct = z.infer<typeof offProductSchema>;
 export type OpenFoodFactsResponse = z.infer<typeof offResponseSchema>;
 
+/** Whether an Open Food Facts record says what the product is. */
+function identifiesAProduct(product: OpenFoodFactsProduct): boolean {
+  return Boolean(product.product_name?.trim() || product.brands?.trim());
+}
+
 export class OpenFoodFactsClient {
   /**
    * Where lookups are remembered — ISSUES.md DEBT-3.
@@ -123,7 +128,8 @@ export class OpenFoodFactsClient {
       // so an entry written by an older shape of this schema would otherwise
       // reach a caller as a valid product with fields missing.
       const revived = offProductSchema.safeParse(JSON.parse(cached));
-      if (revived.success) return revived.data;
+      // A stub cached before stubs were refused is dropped like a stale shape.
+      if (revived.success && identifiesAProduct(revived.data)) return revived.data;
       await this.cache.delete(barcode);
     }
 
@@ -144,7 +150,14 @@ export class OpenFoodFactsClient {
       const rawData = await response.json();
       const parsed = offResponseSchema.parse(rawData);
 
-      if (parsed.status !== 1 || !parsed.product) {
+      // `status: 1` is not "OFF knows this product". An app that scans an
+      // unknown code can make OFF create an empty stub (`"empty": 1`, no name,
+      // completeness 0), after which the API answers "product found" with
+      // nothing in it. Taking that as a hit created a nameless "Product <code>"
+      // instead of sending the person to the form to name it. A record with
+      // neither a name nor a brand identifies nothing, so it counts as unknown
+      // and is not cached: the next lookup sees it once someone fills it in.
+      if (parsed.status !== 1 || !parsed.product || !identifiesAProduct(parsed.product)) {
         return null;
       }
 

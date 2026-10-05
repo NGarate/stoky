@@ -101,6 +101,41 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       expect(cached?.nutriments?.energy_kcal).toBe(63);
     });
 
+    it("treats an empty stub OFF calls 'found' as unknown, and does not keep it", async () => {
+      // The live shape on 2026-10-05 for a code nobody has described: an app
+      // scan made OFF create the record, so the API says "product found" with
+      // `empty: 1` and no name. Taken as a hit, it became a product called
+      // "Product 9990000000017" instead of a question for the person.
+      const stub = {
+        code: "9990000000017",
+        product: { code: "9990000000017", empty: 1, completeness: 0, countries: "Ireland" },
+        status: 1,
+        status_verbose: "product found",
+      };
+      // A Response body reads once, so one per call.
+      fetchSpy
+        .mockResolvedValueOnce(createMockResponse(stub))
+        .mockResolvedValueOnce(createMockResponse(stub));
+
+      expect(await client.getProductByBarcode("9990000000017")).toBeNull();
+      // Not cached: once someone names it upstream, the next lookup sees that.
+      expect(await client.getProductByBarcode("9990000000017")).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("drops a stub an earlier version cached as a product", async () => {
+      await client.clearAllCache();
+      // As the previous release wrote it: the parsed stub, stored as a hit.
+      const { valkeyProductCache } = await import("@/server/services/product-cache");
+      await valkeyProductCache.set("9990000000017", JSON.stringify({ code: "9990000000017" }));
+      fetchSpy.mockResolvedValue(
+        createMockResponse({ code: "9990000000017", status: 0, status_verbose: "product not found" }),
+      );
+
+      expect(await client.getProductByBarcode("9990000000017")).toBeNull();
+      expect(await valkeyProductCache.get("9990000000017")).toBeNull();
+    });
+
     it("should return null for non-existent barcode", async () => {
       fetchSpy.mockResolvedValue(
         createMockResponse({
