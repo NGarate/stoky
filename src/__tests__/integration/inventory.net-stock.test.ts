@@ -812,3 +812,32 @@ describe("the guards round the ledger the way the screens do", () => {
     expect(await netStock(cupboardId)).toBeCloseTo(0.1, 6);
   });
 });
+
+/**
+ * `adjustStock` is the one signed movement, and it had no floor: without
+ * `expectedStock` (optional in the schema) a negative correction larger than
+ * the ledger was written as-is and the product read minus something.
+ */
+describe("an adjustment cannot take stock below zero", () => {
+  it("refuses a correction larger than what is there", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 2, unit: "L" });
+
+    await expectCode(
+      api.inventory.adjustStock({ productId, quantity: -3, unit: "L", reason: "Recuento" }),
+      "CONFLICT",
+    );
+
+    expect(await netStock()).toBe(2);
+  });
+
+  it("still allows a correction down to exactly zero, float residue included", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L" });
+    await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 0.9, unit: "L" });
+
+    await api.inventory.adjustStock({ productId, quantity: -0.1, unit: "L", reason: "Recuento" });
+
+    expect(await netStock()).toBeCloseTo(0, 6);
+  });
+});
