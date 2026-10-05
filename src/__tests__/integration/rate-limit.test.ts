@@ -339,6 +339,81 @@ describe("the per-account limit, through authorize", () => {
 });
 
 /**
+ * The per-address limit, through authorize — and what a success does to it.
+ *
+ * A successful sign-in used to *clear* the address's counter. Anybody can sign
+ * in successfully from an address: register an account of your own, and a few
+ * guesses at other people's passwords followed by one good sign-in to yours
+ * left the counter at zero, round after round. That is an unlimited password
+ * spray from one address — the attack the per-address limit exists to stop.
+ */
+describe("the per-address limit, through authorize", () => {
+  const ATTEMPTS = 3;
+  const original = process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
+  const MARKER = `spray-${process.pid}-${Date.now().toString(36)}`;
+  const PASSWORD = "cocina despensa nevera";
+
+  beforeEach(() => {
+    process.env.RATE_LIMIT_LOGIN_ATTEMPTS = String(ATTEMPTS);
+  });
+
+  afterAll(async () => {
+    if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
+    else process.env.RATE_LIMIT_LOGIN_ATTEMPTS = original;
+    await cleanupTestUsers(MARKER);
+    await cleanupTestHouseholds(MARKER);
+  });
+
+  async function ownAccount(label: string): Promise<string> {
+    const email = generateTestEmail(`${MARKER}-${label}`);
+    const household = await createTestHousehold({ name: `${MARKER} ${label}` });
+    await createTestUser({
+      email,
+      name: generateTestName("Own"),
+      password: PASSWORD,
+      householdId: household.id,
+    });
+    return email;
+  }
+
+  it("does not let a good sign-in to one account wipe guesses at others", async () => {
+    // Unique to this run: Valkey is shared, and a fixed address would inherit
+    // whatever another run left in its bucket.
+    const address = `203.0.113.7-${MARKER}`;
+    const mine = await ownAccount("attacker");
+
+    // Each round: guesses up to one short of the budget, each at a different
+    // victim so no per-account limit fires and this is about the address
+    // counter alone, then one good sign-in to the attacker's own account.
+    let refused: unknown;
+    try {
+      for (let round = 0; round < 4; round++) {
+        for (let guess = 0; guess < ATTEMPTS - 1; guess++) {
+          const victim = generateTestEmail(`${MARKER}-victim-${round}-${guess}`);
+          await signInWith({ email: victim, password: "wrong password here" }, { address });
+        }
+        expect(await signInWith({ email: mine, password: PASSWORD }, { address })).not.toBeNull();
+      }
+    } catch (error) {
+      refused = error;
+    }
+
+    expect(refused).toBeInstanceOf(RateLimitedSignin);
+  });
+
+  it("still does not charge a household for signing in successfully", async () => {
+    // What clearing was for, kept: a phone, a tablet and a laptop behind one
+    // NAT, signing in through the morning, spend nothing doing it.
+    const address = `203.0.113.8-${MARKER}`;
+    const mine = await ownAccount("household");
+
+    for (let i = 0; i < ATTEMPTS + 2; i++) {
+      expect(await signInWith({ email: mine, password: PASSWORD }, { address })).not.toBeNull();
+    }
+  });
+});
+
+/**
  * The registration limit, through the router that serves it
  * (`docs/SECURITY_REVIEW.md` finding 10).
  *

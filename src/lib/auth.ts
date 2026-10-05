@@ -15,6 +15,7 @@ import {
   loginAccountRateLimit,
   loginRateLimit,
   rateLimitIdentifier,
+  refundRateLimit,
   resetRateLimit,
 } from "@/lib/rate-limit";
 
@@ -212,10 +213,17 @@ export const authConfig: NextAuthConfig = {
           return null;
         }
 
-        // Both counters, for the reason D30 gives: the specification counts
-        // attempts rather than failures, and a household signing in from three
-        // devices is three attempts before anybody has mistyped anything.
-        await resetRateLimit(limit, identifier);
+        // For the reason D30 gives: the specification counts attempts rather
+        // than failures, and a household signing in from three devices is
+        // three attempts before anybody has mistyped anything.
+        //
+        // **The two counters are not treated alike.** The account's counter is
+        // cleared: only its own password gets here. The address's counter is
+        // refunded by this one attempt and no more, because clearing it let
+        // anybody with an account of their own wipe the failures beside it —
+        // four guesses at other people's passwords, one good sign-in to their
+        // own, repeat, and the per-address limit never filled.
+        await refundRateLimit(limit, identifier);
         await resetRateLimit(accountLimit, account);
 
         return {

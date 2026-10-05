@@ -234,12 +234,17 @@ export async function consumeRateLimit(
 /**
  * Clears the counter for `identifier`.
  *
- * Called after a successful sign-in. The specification counts attempts rather
- * than failures, and taken literally that locks out a household that signs in
- * six times in a quarter of an hour — a phone, a tablet and a laptop is three
- * before anyone has mistyped anything. Clearing on success keeps the ceiling
- * exactly where the specification puts it for someone who cannot sign in,
- * which is the only case the limit is defending against.
+ * Called after a successful sign-in, on the **per-account** counter only. The
+ * specification counts attempts rather than failures, and taken literally that
+ * locks out a household that signs in six times in a quarter of an hour — a
+ * phone, a tablet and a laptop is three before anyone has mistyped anything.
+ * Clearing on success keeps the ceiling exactly where the specification puts it
+ * for someone who cannot sign in, which is the only case the limit is
+ * defending against.
+ *
+ * Safe on the account counter because only the account's own password can
+ * trigger it. **Not** safe on the per-address counter, which any account
+ * signing in from that address could clear — see `refundRateLimit`.
  */
 export async function resetRateLimit(
   limit: RateLimit,
@@ -250,6 +255,48 @@ export async function resetRateLimit(
   } catch {
     // A counter that could not be cleared expires on its own within the
     // window. Failing the sign-in that just succeeded would be worse.
+  }
+}
+
+/**
+ * Gives back one attempt counted against `identifier`, and only one.
+ *
+ * What a successful sign-in does to the **per-address** counter. Clearing it
+ * outright — which is what this used to do — handed the reset to whoever can
+ * sign in from that address, and anybody can: register an account of your own,
+ * then interleave four guesses against other people's accounts with one good
+ * sign-in to yours, and the per-address limit never fills. One address, an
+ * unlimited password spray, bounded only by the per-account limit of each
+ * victim.
+ *
+ * Refunding the attempt that succeeded keeps what clearing was for — a
+ * household behind one NAT signing in from a phone, a tablet and a laptop
+ * spends nothing doing so — without letting a success erase the failures
+ * beside it. Guesses stay counted whoever else signs in from the same place.
+ *
+ * In one script so the read and the decrement cannot interleave with another
+ * request's `INCR`, and floored at zero so a counter that has already expired
+ * is not driven negative into a budget larger than the limit. `DECR` keeps the
+ * key's TTL, so the window still ends when it was going to.
+ */
+const REFUND_SCRIPT = `
+local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+if count > 0 then
+  return redis.call('DECR', KEYS[1])
+end
+return 0
+`;
+
+export async function refundRateLimit(
+  limit: RateLimit,
+  identifier: string,
+): Promise<void> {
+  try {
+    await valkey().eval(REFUND_SCRIPT, 1, `${limit.prefix}:${identifier}`);
+  } catch {
+    // The same reasoning as `resetRateLimit`: the attempt stays counted until
+    // the window ends, which is safe, and failing the sign-in that just
+    // succeeded would be worse.
   }
 }
 
