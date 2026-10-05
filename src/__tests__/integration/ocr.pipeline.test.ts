@@ -223,7 +223,7 @@ Leche semi desnatada 1,25
     });
 
     it("should provide candidates for 0.3-0.7 similarity matches", async () => {
-      await prisma.product.create({
+      const lecheEntera = await prisma.product.create({
         data: {
           name: "leche entera",
           householdId: testHouseholdId,
@@ -266,17 +266,17 @@ Leche desnatada 1,25
 
       const matches = await matchReceiptItems(receipt.id);
 
-      const candidateMatches = matches.filter(
-        (m) => !m.autoMatch && m.candidates.length > 0
-      );
-
-      if (candidateMatches.length > 0) {
-        for (const match of candidateMatches) {
-          expect(match.candidates.length).toBeGreaterThan(0);
-          expect(match.candidates[0].similarity).toBeGreaterThanOrEqual(0.3);
-          expect(match.candidates[0].similarity).toBeLessThan(0.7);
-        }
-      }
+      // One line, not auto-matched, offered "leche entera" (they share
+      // "leche") and not "yogur natural" (they share nothing). The assertions
+      // used to sit inside `if (candidateMatches.length > 0)`, so a line with
+      // no candidates at all passed.
+      expect(matches).toHaveLength(1);
+      expect(matches[0].autoMatch).toBeNull();
+      expect(matches[0].candidates.map((c) => c.productId)).toEqual([
+        lecheEntera.id,
+      ]);
+      expect(matches[0].candidates[0].similarity).toBeGreaterThanOrEqual(0.3);
+      expect(matches[0].candidates[0].similarity).toBeLessThan(0.7);
     });
 
     it("should handle no match for products with <0.3 similarity", async () => {
