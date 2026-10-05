@@ -139,8 +139,8 @@ while [ $elapsed -lt $MAX_WAIT ]; do
     db_ok=false
     cache_ok=false
 
-    echo "$db_health" | grep -qi "healthy" && db_ok=true
-    echo "$cache_health" | grep -qi "healthy" && cache_ok=true
+    echo "$db_health" | grep -qx '"Health":"healthy"' && db_ok=true
+    echo "$cache_health" | grep -qx '"Health":"healthy"' && cache_ok=true
 
     if $db_ok && $cache_ok; then
         ok "PostgreSQL is healthy"
