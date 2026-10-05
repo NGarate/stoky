@@ -215,6 +215,17 @@ export interface WriteQueue {
   discard(id: string): void;
   /** Sign-out: this account's changes leave the device. */
   purgeAll(): void;
+  /**
+   * The household changes are composed in, as the server now reports it.
+   *
+   * The queue was opened with the household in the session token, and a
+   * token is not refreshed when the account creates or joins a household
+   * mid-session. An account that created its household this session stamped
+   * every change with "" — and after signing in again, with the real
+   * household in the token, every one of them was refused as
+   * "wrong-household", for ever.
+   */
+  setHousehold(id: string): void;
   /** How long to wait before the next attempt, or null when there is nothing. */
   nextDelayMs(): number | null;
 }
@@ -262,12 +273,14 @@ function reasonFor(error: unknown, path: ReplayablePath): FailureReason | null {
 export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
   const {
     userId,
-    householdId,
     send,
     storage = createQueueStorage(),
     now = () => new Date(),
     random = Math.random,
   } = options;
+
+  /** See {@link WriteQueue.setHousehold}. */
+  let householdId = options.householdId;
 
   /**
    * The store starts **empty**, and storage is read by `hydrate()`.
@@ -413,7 +426,11 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
           // window closes.
           if (holdRemainingMs(op) > 0) return sent;
 
-          if (op.householdId !== householdId) {
+          // "" is "composed before the client knew of any household" — the
+          // token said none, and the account was creating its first. There
+          // was no other household it could have been meant for, so it is
+          // sent into the one there is rather than refused for ever.
+          if (op.householdId !== householdId && op.householdId !== "") {
             // Composed in one household and drained in another. The server
             // would derive the household from the session and write this into
             // the wrong one.
@@ -484,6 +501,10 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
         pending: state.pending.filter((entry) => entry.id !== id),
       }));
       return true;
+    },
+
+    setHousehold(id) {
+      householdId = id;
     },
 
     holdRemainingMs(id) {

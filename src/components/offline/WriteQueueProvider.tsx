@@ -58,6 +58,21 @@ export function WriteQueueProvider({
 
   const state = useStore(queue.store);
 
+  /**
+   * The household as the server reports it, not as the token remembers it.
+   *
+   * The token is not re-issued when an account creates or joins a household,
+   * so the composer's `householdId` can be null — or the old one — for the
+   * rest of the session, and every change composed meanwhile was stamped with
+   * it. `auth.me` reads the account row, and `CreateHousehold` invalidates
+   * every query on success, so this follows the household as it changes.
+   */
+  const me = api.auth.me.useQuery(undefined, { retry: false });
+  const liveHousehold = me.data?.household?.id;
+  useEffect(() => {
+    if (liveHousehold) queue.setHousehold(liveHousehold);
+  }, [liveHousehold, queue]);
+
   // Held in a ref so the effects below do not re-run when the cache helpers
   // change identity, which they do on every render. Assigned in an effect
   // rather than during render: a ref written while rendering is a Rules of
