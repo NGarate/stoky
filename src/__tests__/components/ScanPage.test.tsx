@@ -19,9 +19,9 @@ import type { QueuedOp } from "@/lib/offline/queue";
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 /** What the server answers a scan with; null leaves the mutation unanswered. */
 let scanResult: { product: { id: string; name: string } | null; source: string } | null = null;
-let scanCallbacks: { onSuccess?: (result: unknown) => void } = {};
-const scanMutate = mock((_input: unknown) => {
-  if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult);
+let scanCallbacks: { onSuccess?: (result: unknown, input: unknown) => void } = {};
+const scanMutate = mock((input: unknown) => {
+  if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult, input);
 });
 const productInvalidate = mock(() => Promise.resolve());
 let pending: QueuedOp[] = [];
@@ -82,6 +82,7 @@ async function typeBarcode(value: string) {
 beforeEach(() => {
   enqueue.mockClear();
   scanMutate.mockClear();
+  routerPush.mockClear();
   productInvalidate.mockClear();
   scanResult = null;
   pending = [];
@@ -118,6 +119,20 @@ describe("a scan that creates a product", () => {
     await typeBarcode("8410000555555");
 
     expect(productInvalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("a code nobody knows", () => {
+  it("opens the create form with the code intact, whatever it contains", async () => {
+    // The manual field accepts anything. Interpolated raw, "&" started a
+    // second query parameter and "#" cut the code short on arrival.
+    scanResult = { product: null, source: "not_found" };
+    render();
+    await typeBarcode("12&pendingScan=x#3");
+
+    expect(routerPush).toHaveBeenCalledWith(
+      `/products/new?barcode=${encodeURIComponent("12&pendingScan=x#3")}`,
+    );
   });
 });
 
