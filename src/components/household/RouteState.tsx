@@ -6,7 +6,13 @@ import { TRPCClientError } from "@trpc/client";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { FormEvent, JSX } from "react";
+import {
+  PageHeader,
+  PageShell,
+  type PageBack,
+  type PageWidth,
+} from "@/components/ui/page-header";
+import type { FormEvent, JSX, ReactNode } from "react";
 
 /**
  * The same three states for one section of a screen rather than a whole one.
@@ -26,7 +32,7 @@ export function SectionState({
   error,
   fetchStatus,
   onRetry,
-}: Omit<RouteStateProps, "title" | "isLoading">): JSX.Element {
+}: Pick<RouteStateProps, "error" | "fetchStatus" | "onRetry">): JSX.Element {
   const t = useTranslations("household");
   const offline = useTranslations("offline");
   const paused = fetchStatus === "paused";
@@ -79,13 +85,37 @@ export function SectionState({
  * so a skeleton would win and someone with no signal would watch it for ever —
  * which is UI-8 again, arrived at from the other direction.
  *
+ * - **Not found** — when the route says what that means. The server said the
+ *   thing does not exist, so retrying is pointless; the honest screen is a
+ *   title saying so, a sentence saying why it might be, and the way back.
+ *   Two routes drew this as a bare "No encontrado" with no heading and no way
+ *   out — a dead end, reached from a link that used to work.
+ *
  * `fetchStatus` is required rather than defaulted. A default would silently
  * give every existing caller the old behaviour, which is the bug; the compiler
  * is what makes each route decide.
+ *
+ * **What sits above the data is drawn while there is no data.** The title,
+ * the way back and the primary action come through `PageHeader` exactly as
+ * the loaded screen draws them, so loading does not move them, and a person
+ * who already knows where they are going can go there — "Nuevo producto"
+ * does not need the catalogue to have arrived.
  */
 
 interface RouteStateProps {
   title: string;
+  /** The way back, as the loaded screen draws it. */
+  back?: PageBack;
+  /** The screen's actions, when they do not depend on the data. */
+  actions?: ReactNode;
+  /** The loaded screen's width. Defaults to an index's. */
+  width?: PageWidth;
+  density?: "default" | "touch";
+  /**
+   * What to say when the server answers NOT_FOUND. Without it, a NOT_FOUND
+   * is treated as any other failure and offered a retry.
+   */
+  notFound?: { title: string; body: string; back?: PageBack };
   /** The failing query, so this component can retry it. */
   isLoading: boolean;
   error: unknown;
@@ -111,6 +141,11 @@ export function isNotFoundError(error: unknown): boolean {
 
 export function RouteState({
   title,
+  back,
+  actions,
+  width = "index",
+  density,
+  notFound,
   isLoading,
   error,
   fetchStatus,
@@ -121,12 +156,19 @@ export function RouteState({
 
   // The no-household branch is a form rather than a message, so it leaves
   // before the live region below — a `role="status"` wrapped around a form
-  // announces the whole form.
+  // announces the whole form. No actions: every one of them would be refused
+  // for the same missing household.
   if (isNoHouseholdError(error)) {
-    return <CreateHousehold title={title} />;
+    return (
+      <PageShell width={width}>
+        <PageHeader back={back} density={density} title={title} />
+        <CreateHousehold />
+      </PageShell>
+    );
   }
 
   const paused = fetchStatus === "paused";
+  const missing = !paused && notFound !== undefined && isNotFoundError(error);
 
   /**
    * One region, present from the first render, whose *contents* change.
@@ -148,10 +190,21 @@ export function RouteState({
    * shell and a second would make `getByRole("alert")` ambiguous everywhere.
    */
   return (
-    <div className="mx-auto max-w-6xl">
-      <h1 className="mb-6 text-2xl font-bold text-heading md:text-4xl">{title}</h1>
+    <PageShell width={width}>
+      {/* At the same place in the tree in every branch, so the live region
+          below stays the same DOM node when the title changes to say the
+          thing is gone. The actions leave with it: nothing is left for them
+          to act on. */}
+      <PageHeader
+        actions={missing ? undefined : actions}
+        back={missing ? (notFound.back ?? back) : back}
+        density={density}
+        title={missing ? notFound.title : title}
+      />
       <div aria-live="polite" role="status">
-        {isLoading && !paused ? (
+        {missing ? (
+          <p className="text-muted-foreground">{notFound.body}</p>
+        ) : isLoading && !paused ? (
           <div className="space-y-4" aria-busy="true">
             <p className="sr-only">{t("loading")}</p>
             {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5"].map(
@@ -174,7 +227,7 @@ export function RouteState({
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
@@ -188,7 +241,7 @@ export function RouteState({
  * making a second one), and the second silently creates a household named after
  * nothing, which is worse than asking.
  */
-function CreateHousehold({ title }: { title: string }): JSX.Element {
+function CreateHousehold(): JSX.Element {
   const t = useTranslations("household");
   const utils = api.useUtils();
   const [name, setName] = useState("");
@@ -212,8 +265,7 @@ function CreateHousehold({ title }: { title: string }): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <h1 className="mb-6 text-2xl font-bold text-heading md:text-4xl">{title}</h1>
+    <div>
       <div className="rounded-xl border border-input bg-card p-6">
         <h2 className="text-lg font-semibold text-heading">{t("noHouseholdTitle")}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{t("noHouseholdBody")}</p>

@@ -370,3 +370,103 @@ describe("what a screen reader is told", () => {
     ).toBe("polite");
   });
 });
+
+describe("the page around the state", () => {
+  const back = { href: "/shopping/lists", label: "Volver a tus listas" };
+
+  it("keeps the way back and the primary action on screen while loading", () => {
+    // Loading used to draw a bare title and nothing else, so the screen's
+    // way out and its primary action appeared only once the data did — and
+    // never, for a query that did not answer.
+    renderWithIntl(
+      <RouteState
+        actions={<button type="button">Nuevo producto</button>}
+        back={back}
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Productos"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Volver a tus listas" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nuevo producto" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
+  it("takes the width of the screen it stands in for", () => {
+    const { container } = renderWithIntl(
+      <RouteState
+        error={null}
+        fetchStatus="fetching"
+        isLoading
+        onRetry={() => {}}
+        title="Ajustar"
+        width="form"
+      />,
+    );
+
+    expect(container.firstElementChild?.className).toContain("max-w-2xl");
+  });
+
+  it("says a thing is gone, why it may be, and the way back — not a retry", () => {
+    renderWithIntl(
+      <RouteState
+        actions={<button type="button">Borrar lista</button>}
+        back={back}
+        error={trpcError("NOT_FOUND")}
+        fetchStatus="idle"
+        isLoading={false}
+        notFound={{
+          title: "Esta lista ya no existe",
+          body: "Puede que alguien de tu hogar la haya eliminado.",
+        }}
+        onRetry={() => {}}
+        title="Lista"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Esta lista ya no existe" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Puede que alguien de tu hogar la haya eliminado."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver a tus listas" })).toBeInTheDocument();
+    // Retrying a thing that does not exist fails the same way every time,
+    // and an action on it has nothing left to act on.
+    expect(screen.queryByRole("button")).toBeAbsent();
+  });
+
+  it("still offers a retry for NOT_FOUND when the route has not said what it means", () => {
+    renderWithIntl(
+      <RouteState
+        error={trpcError("NOT_FOUND")}
+        fetchStatus="idle"
+        isLoading={false}
+        onRetry={() => {}}
+        title="Lista"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
+
+  it("explains a failure in plain words, not the system's", () => {
+    renderWithIntl(
+      <RouteState
+        error={trpcError("INTERNAL_SERVER_ERROR")}
+        fetchStatus="idle"
+        isLoading={false}
+        onRetry={() => {}}
+        title="Lista"
+      />,
+    );
+
+    // "La consulta al servidor ha fallado" is the system describing itself;
+    // the person needs what probably happened and what to do (§7 rule 2).
+    expect(screen.queryByText(/consulta|servidor/)).toBeAbsent();
+    expect(screen.getByText(/conexión/)).toBeInTheDocument();
+  });
+});

@@ -880,7 +880,7 @@
     "creating": "Creating household...",
     "createFailed": "The household could not be created. Try again.",
     "loadFailedTitle": "The data could not be loaded",
-    "loadFailedBody": "The request to the server failed. It may be a temporary connection problem.",
+    "loadFailedBody": "The connection may have dropped for a moment. Try again.",
     "loading": "Loading…",
     "retry": "Try again",
     "peopleTitle": "People in the household",
