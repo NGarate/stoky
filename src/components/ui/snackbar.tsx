@@ -7,6 +7,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -227,6 +228,7 @@ function SnackbarRoot({
 }): JSX.Element {
   const t = useTranslations();
   const queue = useWriteQueue();
+  const snackbar = useSnackbar();
   const preference = useSyncExternalStore(
     subscribeSnackbarDuration,
     getSnackbarDurationSnapshot,
@@ -260,9 +262,25 @@ function SnackbarRoot({
       : 0,
   );
 
+  /**
+   * Whether the hold has run out while the snackbar was still up.
+   *
+   * Radix pauses its own close timer while the pointer is over the snackbar,
+   * while focus is in it (F8) and while the window is blurred — and the
+   * queue's hold does not pause for any of that. So the snackbar could outlive
+   * the window it was measuring, still offering "Deshacer" over a change
+   * already on its way to the server. The button goes when the hold does.
+   */
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (entry.kind !== "undo-queued" || heldMs < MIN_UNDO_MS) return;
+    const timer = setTimeout(() => setExpired(true), heldMs);
+    return () => clearTimeout(timer);
+  }, [entry.kind, heldMs]);
+
   const undoable =
     entry.kind === "undo-inverse" ||
-    (entry.kind === "undo-queued" && heldMs >= MIN_UNDO_MS);
+    (entry.kind === "undo-queued" && heldMs >= MIN_UNDO_MS && !expired);
 
   const duration = undoDuration(entry, heldMs, preference);
 
@@ -270,7 +288,18 @@ function SnackbarRoot({
     if (entry.kind === "undo-queued" && entry.opId) {
       // D57: undo is taking the queued change back, never a compensating
       // write. A stock movement that never happened must leave no trace.
-      queue.cancel(entry.opId);
+      //
+      // `cancel` says false when the change is already sent or being sent.
+      // That used to be ignored, and the snackbar closed exactly as it does
+      // after an undo that worked — so somebody was told, by omission, that
+      // a change the server now holds had been taken back.
+      if (!queue.cancel(entry.opId)) {
+        snackbar.show({
+          kind: "confirm",
+          tone: "danger",
+          message: { key: "snackbar.undoTooLate" },
+        });
+      }
       return;
     }
     void entry.undo?.();
