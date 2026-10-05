@@ -10,7 +10,7 @@ This document provides comprehensive documentation for the OCR pipeline and busi
 - **Purpose**: Processes receipt images using Tesseract.js OCR
 - **Key Functions**:
   - `processReceiptOcr(receiptId)`: Main entry point for OCR processing
-  - `getWorker()`: Manages Tesseract.js worker lifecycle
+  - `sharedWorker()`: One Tesseract.js worker per process, shared by concurrent first scans
   - `terminateWorker()`: Cleans up worker resources
 - **Status Flow**: UPLOADING → PROCESSING → PARSED/FAILED
 

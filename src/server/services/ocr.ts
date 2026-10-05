@@ -6,8 +6,6 @@ import { join } from "node:path";
 import { InvalidInputError, NotFoundError } from "./errors";
 import { readImageMetadata } from "./image";
 
-let worker: Worker | null = null;
-
 /**
  * Where the Spanish traineddata is read from — ISSUES.md OCR-1.
  *
@@ -45,7 +43,7 @@ export function tessdataDirectory(): string | null {
  * The image sets `TESSDATA_PATH` and bakes the file in, so there the answer is
  * always the local path.
  *
- * Separated from `getWorker` so it can be asserted without standing up a
+ * Separated from the worker so it can be asserted without standing up a
  * worker, which spawns a thread and loads the whole model — not something a
  * test should do to check a string.
  */
@@ -65,12 +63,50 @@ export function workerOptions(): { langPath?: string; cachePath?: string; gzip?:
   };
 }
 
-async function getWorker(): Promise<Worker> {
-  if (!worker) {
-    worker = await createWorker("spa", undefined, workerOptions());
-  }
-  return worker;
+/**
+ * One worker, created on first use and shared — including by the first uses
+ * that arrive together.
+ *
+ * This held the *worker* and checked it before awaiting `createWorker`, so two
+ * receipts whose OCR started before the first worker had finished loading
+ * (it spawns a thread and reads the model) each saw none and each created
+ * one. The second assignment won and the first worker was never terminated —
+ * a thread and a loaded model leaked per race, for the life of the process.
+ * Holding the *promise* means the second caller awaits the first one's worker.
+ *
+ * A creation that fails is forgotten, so the next scan tries again rather
+ * than every later scan inheriting the rejection.
+ *
+ * A factory rather than module state so the race can be tested without
+ * standing up tesseract.
+ */
+export function sharedWorker<W extends { terminate(): Promise<unknown> }>(
+  create: () => Promise<W>,
+): { get(): Promise<W>; terminate(): Promise<void> } {
+  let pending: Promise<W> | null = null;
+
+  return {
+    get() {
+      pending ??= create().catch((error: unknown) => {
+        pending = null;
+        throw error;
+      });
+      return pending;
+    },
+    async terminate() {
+      const current = pending;
+      if (!current) return;
+      pending = null;
+      // A creation that failed has nothing to terminate.
+      const worker = await current.catch(() => null);
+      await worker?.terminate();
+    },
+  };
 }
+
+const ocrWorker = sharedWorker<Worker>(() =>
+  createWorker("spa", undefined, workerOptions()),
+);
 
 export async function processReceiptOcr(receiptId: string): Promise<string> {
   const receipt = await prisma.receipt.findUnique({
@@ -101,10 +137,10 @@ export async function processReceiptOcr(receiptId: string): Promise<string> {
     // than through the procedure that checked them.
     await readImageMetadata(imageBuffer);
 
-    const ocrWorker = await getWorker();
+    const worker = await ocrWorker.get();
     const {
       data: { text },
-    } = await ocrWorker.recognize(imageBuffer);
+    } = await worker.recognize(imageBuffer);
 
     await prisma.receipt.update({
       where: { id: receiptId },
@@ -126,8 +162,5 @@ export async function processReceiptOcr(receiptId: string): Promise<string> {
 }
 
 export async function terminateWorker(): Promise<void> {
-  if (worker) {
-    await worker.terminate();
-    worker = null;
-  }
+  await ocrWorker.terminate();
 }
