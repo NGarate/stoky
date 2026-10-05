@@ -307,13 +307,21 @@ describe("two people consuming the last of something", () => {
   });
 });
 
+/**
+ * The date `days` from today on a Madrid calendar, as `/inventory/add` sends
+ * it: the picker's "YYYY-MM-DD" parsed by `new Date`, which is UTC midnight.
+ * Computed here independently of the code under test.
+ */
+function calendarDay(days: number): Date {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
+  const date = new Date(today);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date;
+}
+
 describe("the expiry views report what is left", () => {
-  /** A date `days` from now, which the window bounds are relative to. */
-  function inDays(days: number): Date {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    return date;
-  }
+  /** An expiry date `days` from today, which the window bounds are relative to. */
+  const inDays = calendarDay;
 
   it("does not list a batch that has already been finished", async () => {
     const api = await caller();
@@ -955,5 +963,41 @@ describe("a transfer carries the expiry of what it moves", () => {
 
     const expired = await api.inventory.getExpiredItems({});
     expect(expired.map((row) => [row.quantity, row.locationId])).toEqual([[2, cupboardId]]);
+  });
+});
+
+/**
+ * An expiry date is a calendar date, not an instant.
+ *
+ * The picker's "06/10" is stored as 2026-10-06T00:00Z and both views compared
+ * it with `new Date()`: from 02:00 in Madrid on the 6th the milk was listed as
+ * expired on the very day it says it is good until, and "days left" rounded a
+ * part-day of milliseconds.
+ */
+describe("expiry is compared by calendar day", () => {
+  it("lists a batch dated today as expiring today, not as expired", async () => {
+    const api = await caller();
+    const batch = await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", expirationDate: calendarDay(0) });
+
+    const expiring = await api.inventory.getExpiringItems({ days: 7 });
+    const expired = await api.inventory.getExpiredItems({});
+
+    expect(expiring.map((row) => [row.id, row.daysUntilExpiry])).toEqual([[batch.id, 0]]);
+    expect(expired).toEqual([]);
+  });
+
+  it("counts whole days either side of today", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", expirationDate: calendarDay(1) });
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", expirationDate: calendarDay(7) });
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", expirationDate: calendarDay(8) });
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", expirationDate: calendarDay(-1) });
+
+    const expiring = await api.inventory.getExpiringItems({ days: 7 });
+    const expired = await api.inventory.getExpiredItems({});
+
+    // Seven days ahead includes the seventh day itself, and not the eighth.
+    expect(expiring.map((row) => row.daysUntilExpiry)).toEqual([1, 7]);
+    expect(expired.map((row) => row.daysExpired)).toEqual([1]);
   });
 });
