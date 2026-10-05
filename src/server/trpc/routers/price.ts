@@ -5,6 +5,7 @@ import {
   priceRecordSchema,
   priceHistorySchema,
 } from "@/lib/validations/price";
+import { withUnitPrices } from "@/lib/prices/unitPrice";
 
 /**
  * What things cost, and where — the price intelligence half of the product.
@@ -18,6 +19,12 @@ import {
  * when a purchase carries a price, and the receipt pipeline when a scanned
  * receipt is applied. All three must verify that the store belongs to the
  * caller's household — the one that did not was SEC-1.
+ *
+ * **`price` is a total, not a unit price**: what was paid for `quantity`
+ * units. Every read below therefore returns `unitPrice` beside it, computed
+ * once here (`src/lib/prices/unitPrice.ts`), and leaves out a row with no
+ * usable quantity — so no screen ranks a six-pack against a single carton by
+ * what the whole pack cost.
  */
 export const priceRouter = createTRPCRouter({
   /**
@@ -82,6 +89,7 @@ export const priceRouter = createTRPCRouter({
           recordedAt: {
             gte: startDate,
           },
+          quantity: { gt: 0 },
           product: {
             householdId: ctx.householdId,
           },
@@ -94,7 +102,7 @@ export const priceRouter = createTRPCRouter({
         },
       });
 
-      return history;
+      return withUnitPrices(history);
     }),
 
   /** The most recent sighting per store for a product — where it is cheapest now. */
@@ -105,6 +113,9 @@ export const priceRouter = createTRPCRouter({
       const latestPrices = await ctx.db.priceRecord.findMany({
         where: {
           productId: input.productId,
+          // Before the per-store pick, so a store's latest *usable* sighting
+          // is the one reported rather than a row that cannot be compared.
+          quantity: { gt: 0 },
           product: {
             householdId: ctx.householdId,
           },
@@ -118,14 +129,14 @@ export const priceRouter = createTRPCRouter({
       });
 
       // Group by store and take the first (latest) for each
-      const pricesByStore = new Map();
+      const pricesByStore = new Map<string, (typeof latestPrices)[number]>();
       for (const price of latestPrices) {
         if (!pricesByStore.has(price.storeId)) {
           pricesByStore.set(price.storeId, price);
         }
       }
 
-      return Array.from(pricesByStore.values());
+      return withUnitPrices(Array.from(pricesByStore.values()));
     }),
 
   /**
@@ -157,6 +168,7 @@ export const priceRouter = createTRPCRouter({
         },
         include: {
           priceRecords: {
+            where: { quantity: { gt: 0 } },
             include: {
               store: true,
             },
@@ -169,6 +181,9 @@ export const priceRouter = createTRPCRouter({
         take: input.limit,
       });
 
-      return products;
+      return products.map((product) => ({
+        ...product,
+        priceRecords: withUnitPrices(product.priceRecords),
+      }));
     }),
 });

@@ -4,11 +4,12 @@ import { Check } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 interface BestPriceIndicatorProps {
   productId: string;
+  /** Per unit, like everything this compares against — not a total paid. */
   currentPrice?: number;
   currentStoreId?: string;
 }
@@ -28,13 +29,15 @@ export function BestPriceIndicator({
     return null;
   }
 
-  const sortedPrices = [...prices].sort((a, b) => a.price - b.price);
-  const bestPrice = sortedPrices[0];
+  // By unit price: `price` is the total paid for `quantity` units, so a
+  // six-pack ranked by it lost to a single carton (see StoreComparison).
+  const sortedPrices = [...prices].sort((a, b) => a.unitPrice - b.unitPrice);
+  const bestPrice = sortedPrices[0]!;
 
   // If current price is provided, compare it
   if (currentPrice !== undefined && currentStoreId) {
-    const isBestPrice = currentPrice <= bestPrice.price + 0.01; // Small tolerance
-    const isGoodDeal = currentPrice <= bestPrice.price * 1.1; // Within 10%
+    const isBestPrice = currentPrice <= bestPrice.unitPrice + 0.01; // Small tolerance
+    const isGoodDeal = currentPrice <= bestPrice.unitPrice * 1.1; // Within 10%
 
     // `neutral`, not `ok`. The design system reserves `ok`/`warn`/`danger`
     // for state — healthy, needs-attention, wrong — and names "best price"
@@ -61,7 +64,7 @@ export function BestPriceIndicator({
     // "+15%" and nothing else, so what that number meant was carried by the
     // pill being amber. `premiumOver` already existed for this sentence;
     // `StoreComparison` has been using it.
-    const priceDiff = ((currentPrice / bestPrice.price - 1) * 100).toFixed(0);
+    const priceDiff = ((currentPrice / bestPrice.unitPrice - 1) * 100).toFixed(0);
     return (
       <Badge tone="warn">
         {t("premiumOver", { percent: `+${priceDiff}%` })}
@@ -74,7 +77,8 @@ export function BestPriceIndicator({
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">{t("bestPrice")}:</span>
       <span className="font-medium text-ok-foreground">
-        {formatMoney(locale, bestPrice.price, bestPrice.currency ?? DEFAULT_CURRENCY)}
+        {formatUnitPrice(locale, bestPrice.unitPrice, bestPrice.currency ?? DEFAULT_CURRENCY)}{" "}
+        {t("perUnit", { unit: bestPrice.unit })}
       </span>
       <span className="text-sm text-muted-foreground">{t("atStore", { store: bestPrice.store.name })}</span>
     </div>

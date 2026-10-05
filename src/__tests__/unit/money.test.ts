@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { DEFAULT_CURRENCY, formatMoney, formatUnitPrice } from "@/lib/money";
 
 /**
  * The defect this replaces is not untidiness. Sixteen call sites wrote
@@ -39,5 +39,17 @@ describe("formatMoney", () => {
 
   it("names the schema default rather than hiding it in a signature", () => {
     expect(DEFAULT_CURRENCY).toBe("EUR");
+  });
+});
+
+describe("formatUnitPrice", () => {
+  it("does not round a price per gram down to nothing", () => {
+    // 500 g for 1,20 €.
+    expect(formatUnitPrice("es", 1.2 / 500, "EUR")).toContain("0,0024");
+  });
+
+  it("still writes an ordinary unit price with two decimals", () => {
+    expect(formatUnitPrice("es", 5.34 / 6, "EUR")).toContain("0,89");
+    expect(formatUnitPrice("es", 1, "EUR")).toContain("1,00");
   });
 });

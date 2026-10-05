@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { DEFAULT_CURRENCY, formatMoney, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 import type { JSX } from "react";
@@ -31,6 +31,12 @@ import type { JSX } from "react";
  * the same length. That is the honest picture: they *are* nearly the same
  * price. The percentage beside each carries the fine distinction, which is the
  * part a truncated axis would exaggerate into a story that is not there.
+ *
+ * **Ranked by unit price.** A record's `price` is what was paid for
+ * `quantity` units, so a six-pack at 5,34 € beside one carton at 0,99 € used
+ * to come out as the single being best and the pack 439 % dearer. Every
+ * figure here — order, bars, average, premium — is `unitPrice`, which the
+ * server computes once; the total paid is shown beside it when it differs.
  */
 export function StoreComparison({
   productId,
@@ -55,11 +61,11 @@ export function StoreComparison({
     );
   }
 
-  const sorted = [...prices].sort((a, b) => a.price - b.price);
+  const sorted = [...prices].sort((a, b) => a.unitPrice - b.unitPrice);
   const best = sorted[0]!;
   const dearest = sorted[sorted.length - 1]!;
   const average =
-    sorted.reduce((sum, price) => sum + price.price, 0) / sorted.length;
+    sorted.reduce((sum, price) => sum + price.unitPrice, 0) / sorted.length;
 
   // Derived from these rows rather than being one, so it takes the cheapest
   // row's currency. A comparison mixing currencies is already meaningless; an
@@ -68,7 +74,7 @@ export function StoreComparison({
 
   /** Whole percent over the cheapest. Zero for the cheapest itself. */
   const premium = (price: number): number =>
-    Math.round((price / best.price - 1) * 100);
+    Math.round((price / best.unitPrice - 1) * 100);
 
   return (
     <section
@@ -83,7 +89,7 @@ export function StoreComparison({
       </h3>
       <p className="mt-1 text-muted-foreground">
         {t("prices.comparisonSummary", {
-          average: formatMoney(locale, average, currency),
+          average: formatUnitPrice(locale, average, currency),
           count: sorted.length,
         })}
       </p>
@@ -91,7 +97,8 @@ export function StoreComparison({
       <ul className="mt-4 space-y-4">
         {sorted.map((price, index) => {
           const isBest = index === 0;
-          const over = premium(price.price);
+          const over = premium(price.unitPrice);
+          const priceCurrency = price.currency ?? DEFAULT_CURRENCY;
 
           return (
             <li key={price.id}>
@@ -112,11 +119,8 @@ export function StoreComparison({
                       : "font-medium text-foreground md:text-lg"
                   }
                 >
-                  {formatMoney(
-                    locale,
-                    price.price,
-                    price.currency ?? DEFAULT_CURRENCY,
-                  )}
+                  {formatUnitPrice(locale, price.unitPrice, priceCurrency)}{" "}
+                  {t("prices.perUnit", { unit: price.unit })}
                 </span>
               </div>
 
@@ -131,7 +135,9 @@ export function StoreComparison({
                   className={`block h-2 rounded-full ${
                     isBest ? "bg-chart-emphasis" : "bg-chart-muted"
                   }`}
-                  style={{ width: `${(price.price / dearest.price) * 100}%` }}
+                  style={{
+                    width: `${(price.unitPrice / dearest.unitPrice) * 100}%`,
+                  }}
                 />
               </span>
 
@@ -142,6 +148,17 @@ export function StoreComparison({
                   </span>
                 ) : (
                   <span>{t("prices.premiumOver", { percent: `${over}%` })}</span>
+                )}
+                {price.quantity === 1 ? null : (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <span className="sr-only">. </span>
+                    {t("prices.paidFor", {
+                      total: formatMoney(locale, price.price, priceCurrency),
+                      quantity: price.quantity,
+                      unit: price.unit,
+                    })}
+                  </>
                 )}
                 <span aria-hidden="true"> · </span>
                 <span className="sr-only">. </span>

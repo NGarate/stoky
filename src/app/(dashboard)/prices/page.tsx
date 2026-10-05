@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
@@ -94,13 +94,16 @@ export default function PricesPage() {
                   },
                   {
                     label: t("products.lastPrice"),
+                    // Per unit, the figure the comparison beside it ranks
+                    // by — a pack's total next to a single's price is not
+                    // a comparison anybody can read.
                     value:
                       product.priceRecords.length > 0
-                        ? formatMoney(
+                        ? `${formatUnitPrice(
                             locale,
-                            product.priceRecords[0].price,
+                            product.priceRecords[0].unitPrice,
                             product.priceRecords[0].currency ?? DEFAULT_CURRENCY,
-                          )
+                          )} ${t("prices.perUnit", { unit: product.priceRecords[0].unit })}`
                         : t("prices.noPrices"),
                   },
                 ]}
