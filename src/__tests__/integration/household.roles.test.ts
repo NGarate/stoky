@@ -188,6 +188,35 @@ describe("the household keeps an owner", () => {
     ).toBeNull();
     expect(await roleOf(first.id)).toBe("MEMBER");
   });
+
+  it("keeps an owner when two owners step down at the same moment", async () => {
+    // Each call, alone, is allowed: there is another owner. Together they
+    // leave none. The count and the write were separate statements outside
+    // any transaction, so both counts could see two owners before either
+    // write landed. Repeated, because a race that loses once proves nothing.
+    const outcomes: string[] = [];
+
+    for (let round = 0; round < 5; round++) {
+      await prisma.user.deleteMany({
+        where: { householdId, name: { startsWith: PREFIX } },
+      });
+      const first = await member("OWNER", `RaceA${round}`);
+      const second = await member("OWNER", `RaceB${round}`);
+
+      const [a, b] = await Promise.all([
+        codeOf(() => first.caller.household.updateRole({ userId: first.id, role: "MEMBER" })),
+        codeOf(() => second.caller.household.removeMember({ userId: second.id })),
+      ]);
+      outcomes.push(`${a}/${b}`);
+
+      const owners = await prisma.user.count({ where: { householdId, role: "OWNER" } });
+      expect({ round, owners, outcomes }).toEqual({ round, owners: 1, outcomes });
+
+      // Exactly one of the two went ahead, and the other was told why.
+      expect([a, b].filter((code) => code === null)).toHaveLength(1);
+      expect([a, b].filter((code) => code === "CONFLICT")).toHaveLength(1);
+    }
+  });
 });
 
 describe("when it takes effect", () => {
