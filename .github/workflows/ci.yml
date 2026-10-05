@@ -531,12 +531,20 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # metadata-action otherwise adds latest automatically for tag refs.
           # latest remains the existing master channel; a prerelease never
-          # changes it. Installations use the full version tag below.
+          # changes it.
+          #
+          # A tag run pushes neither the version tag nor `sha-`. The version tag
+          # is what installations pull, so it is added by release-draft only
+          # after the published digest passes the install smoke; pushing it here
+          # left an unverified image under that name whenever the smoke failed.
+          # `sha-` already exists from the master run of the same commit, and a
+          # rebuild here (new SBOM/provenance timestamps, new digest) replaced
+          # it, so anyone pinned to it silently got a different image.
           flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            type=ref,event=tag
-            type=sha,format=long
+            type=sha,format=long,enable=${{ github.ref_type != 'tag' }}
+            type=raw,value=candidate-${{ github.ref_name }},enable=${{ github.ref_type == 'tag' }}
 
       - name: Log in to the registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -589,7 +597,7 @@ jobs:
     if: github.ref_type == 'tag'
     permissions:
       contents: write
-      packages: read
+      packages: write # promote the verified candidate to the version tag
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -608,7 +616,10 @@ jobs:
       # source tests. Public DNS/certificate issuance is an operator check.
       - name: Verify the published image on a fresh database
         env:
-          STOKY_VERSION: ${{ github.ref_name }}
+          # The candidate tag image-publish pushed; the version tag does not
+          # exist yet. The Compose file is the shipped one, unmodified.
+          STOKY_VERSION: candidate-${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
           EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
           DOMAIN: release-smoke.invalid
           ACME_EMAIL: release-smoke@example.invalid
@@ -623,8 +634,22 @@ jobs:
           docker image inspect "$APP_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' \
             | grep -Fx "${APP_IMAGE%:*}@$EXPECTED_DIGEST"
           "${COMPOSE[@]}" up -d --wait --wait-timeout 180 app
-          "${COMPOSE[@]}" exec -T -e EXPECTED_VERSION="${STOKY_VERSION#v}" app \
+          "${COMPOSE[@]}" exec -T -e EXPECTED_VERSION="${RELEASE_TAG#v}" app \
             bun -e 'if (require("./package.json").version !== process.env.EXPECTED_VERSION) process.exit(1)'
+      # Retag the exact digest the smoke ran, server side: no rebuild, so the
+      # version tag cannot name anything but the verified image.
+      - name: Promote the verified image to the version tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
+        run: |
+          IMAGE="${REGISTRY}/${IMAGE_NAME,,}"
+          docker buildx imagetools create --tag "$IMAGE:$RELEASE_TAG" "$IMAGE@$EXPECTED_DIGEST"
+          PROMOTED="$(docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" --format '{{.Manifest.Digest}}')"
+          if [ "$PROMOTED" != "$EXPECTED_DIGEST" ]; then
+            echo "::error::$IMAGE:$RELEASE_TAG resolves to $PROMOTED, not the verified $EXPECTED_DIGEST."
+            exit 1
+          fi
       - name: Package installation files
         env:
           RELEASE_TAG: ${{ github.ref_name }}

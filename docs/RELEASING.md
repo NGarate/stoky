@@ -37,10 +37,12 @@ git push origin vVERSION
 ```
 
 The `v*` tag runs the complete CI pipeline and validates the package/environment
-version. The image is built and scanned before publication. Only after all gates
-pass is the exact version image published to `ghcr.io/ngarate/stoky:vVERSION`.
-The `release-draft` job then creates a draft with the checked-in release notes and
-the installation files plus checksums. Draft retries may replace draft attachments;
+version. The image is built and scanned before publication. After all gates pass
+it is pushed only as `ghcr.io/ngarate/stoky:candidate-vVERSION`; the `release-draft`
+job installs that digest with the shipped Compose file on fresh volumes, and only
+when that smoke passes retags the same digest (no rebuild) as `:vVERSION`. A failed
+smoke leaves no version tag behind. The job then creates a draft with the
+checked-in release notes and the installation files plus checksums. Draft retries may replace draft attachments;
 published releases must not be reused for a different build. Fixes get a new tag.
 
 Download and review the draft assets with `gh release download`, run

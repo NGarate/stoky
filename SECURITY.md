@@ -488,8 +488,9 @@ gh attestation verify \
   --repo NGarate/stoky
 ```
 
-Images are tagged `sha-<full-commit-sha>` and the exact release version on tag
-builds. `latest` is the development channel from `master`. Pinning to a digest or
+Images from `master` are tagged `sha-<full-commit-sha>`. A release tag's build is
+pushed as `candidate-<version>` and gains the exact version tag only after the
+install smoke passes on that digest; it never rewrites the `sha-` tag. `latest` is the development channel from `master`. Pinning to a digest or
 to a `sha-` tag rather than `latest` is the safer choice for a deployment you
 want to be reproducible.
 
