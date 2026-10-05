@@ -31,7 +31,9 @@ This document provides comprehensive documentation for the OCR pipeline and busi
   - `matchReceiptItems(receiptId)`: Main matching logic
   - `getItemCandidates(receiptItemId)`: Returns candidate products
 - **Matching Thresholds**:
-  - Auto-match: similarity ≥ 0.7
+  - Auto-match: similarity ≥ 0.7 — reachable only by the symmetric
+    `similarity()`; containment (`word_similarity`, shared words) is capped
+    just below and can only rank a candidate
   - Candidate list: 0.3 ≤ similarity < 0.7
   - No match: similarity < 0.3
 

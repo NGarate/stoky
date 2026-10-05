@@ -19,6 +19,10 @@ const AUTO_MATCH_THRESHOLD = 0.7;
 const MIN_CANDIDATE_THRESHOLD = 0.3;
 const MAX_CANDIDATES = 5;
 
+/** What `normalizeForSimilarity` strips, for the SQL side of the comparison. */
+const ACCENTED = "áàâäéèêëíìîïóòôöúùûüñç";
+const UNACCENTED = "aaaaeeeeiiiioooouuuunc";
+
 function normalizeForSimilarity(value: string): string {
   return value
     .normalize("NFD")
@@ -29,13 +33,35 @@ function normalizeForSimilarity(value: string): string {
     .trim();
 }
 
-function tokenSimilarity(left: string, right: string): number {
-  const leftTokens = new Set(
-    normalizeForSimilarity(left).split(" ").filter(Boolean),
+/**
+ * Words that join a product name together without saying what it is. "Pan de
+ * molde" and "pan" share "pan"; they do not share "de".
+ */
+const STOP_WORDS = new Set([
+  "a", "al", "con", "de", "del", "el", "en", "la", "las", "los", "para", "por", "y",
+]);
+
+function contentTokens(value: string): Set<string> {
+  return new Set(
+    normalizeForSimilarity(value)
+      .split(" ")
+      .filter((token) => token && !STOP_WORDS.has(token)),
   );
-  const rightTokens = new Set(
-    normalizeForSimilarity(right).split(" ").filter(Boolean),
-  );
+}
+
+/**
+ * How much of both names their shared words cover — Dice's coefficient,
+ * `2·common / (|A| + |B|)`.
+ *
+ * It divided by the *smaller* name until the 2026-10-05 review: one shared
+ * word out of a one-word name scored 1.0, so "Leche" scored 1.0 against
+ * "LECHE DE COCO" and "Pan" against "Pan de molde", and a household with a
+ * product called "Leche" had every line containing that word auto-matched to
+ * it. Over both sizes those come to 0.67.
+ */
+export function tokenSimilarity(left: string, right: string): number {
+  const leftTokens = contentTokens(left);
+  const rightTokens = contentTokens(right);
 
   if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
 
@@ -46,7 +72,26 @@ function tokenSimilarity(left: string, right: string): number {
     }
   }
 
-  return commonTokens / Math.min(leftTokens.size, rightTokens.size);
+  return (2 * commonTokens) / (leftTokens.size + rightTokens.size);
+}
+
+/**
+ * The score a product is ranked and decided by.
+ *
+ * **Only pg_trgm's `similarity()` can reach the auto-match threshold.** It is
+ * symmetric, so a short name inside a long one scores low from both ends —
+ * "leche" against "leche de coco" is 0.43. The other signals are containment
+ * measures: `word_similarity` is 1.0 whenever one name appears inside the
+ * other, in whichever argument order, and the token overlap is high whenever
+ * one name is mostly the other's words. They are good at finding candidates
+ * and wrong about identity, so they are capped just under the threshold: they
+ * can put a product in front of the person, never confirm it for them.
+ */
+export function matchScore(trigramSimilarity: number, containment: number): number {
+  return Math.max(
+    trigramSimilarity,
+    Math.min(containment, AUTO_MATCH_THRESHOLD - 0.01),
+  );
 }
 
 export async function matchReceiptItems(
@@ -142,42 +187,51 @@ async function findProductMatches(
 ): Promise<ProductMatch[]> {
   const normalizedParsedName = normalizeForSimilarity(parsedName);
 
-  // Use pg_trgm similarity function
+  // pg_trgm, both ways: the symmetric `similarity()` that decides, and the
+  // containment measures that only rank (see `matchScore`). Ordered by the
+  // larger so a product found only by containment is still among the fifty.
   const products = await prisma.$queryRaw<
     Array<{
       id: string;
       name: string;
       trigramSimilarity: number;
+      containment: number;
     }>
   >`
     SELECT
       id,
       name,
+      similarity(folded, ${normalizedParsedName}) AS "trigramSimilarity",
       GREATEST(
-        similarity(lower(name), ${normalizedParsedName}),
-        word_similarity(lower(name), ${normalizedParsedName}),
-        strict_word_similarity(lower(name), ${normalizedParsedName}),
-        word_similarity(${normalizedParsedName}, lower(name)),
-        strict_word_similarity(${normalizedParsedName}, lower(name))
-      ) AS "trigramSimilarity"
-    FROM "Product"
-    WHERE "householdId" = ${householdId}
-    ORDER BY "trigramSimilarity" DESC
+        word_similarity(folded, ${normalizedParsedName}),
+        strict_word_similarity(folded, ${normalizedParsedName}),
+        word_similarity(${normalizedParsedName}, folded),
+        strict_word_similarity(${normalizedParsedName}, folded)
+      ) AS "containment"
+    FROM (
+      -- Lower-cased and accent-folded like the parsed name it is compared
+      -- with: receipts print "JAMON" for the household's "Jamón".
+      SELECT id, name, translate(lower(name), ${ACCENTED}, ${UNACCENTED}) AS folded
+      FROM "Product"
+      WHERE "householdId" = ${householdId}
+    ) AS product
+    ORDER BY GREATEST(
+      similarity(folded, ${normalizedParsedName}),
+      word_similarity(folded, ${normalizedParsedName}),
+      word_similarity(${normalizedParsedName}, folded)
+    ) DESC
     LIMIT 50
   `;
 
   return products
-    .map((product) => {
-      const boostedSimilarity = Math.max(
+    .map((product) => ({
+      productId: product.id,
+      name: product.name,
+      similarity: matchScore(
         product.trigramSimilarity,
-        tokenSimilarity(product.name, parsedName),
-      );
-      return {
-        productId: product.id,
-        name: product.name,
-        similarity: boostedSimilarity,
-      };
-    })
+        Math.max(product.containment, tokenSimilarity(product.name, parsedName)),
+      ),
+    }))
     .filter((product) => product.similarity > 0.1)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, 10);

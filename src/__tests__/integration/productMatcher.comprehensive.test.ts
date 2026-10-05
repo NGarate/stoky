@@ -74,6 +74,30 @@ describe("Product Matcher Service - Comprehensive", () => {
     cleanupDirs = [];
   });
 
+  /** Parse `lines` as a receipt of this household's and match it. */
+  async function matchReceipt(lines: string) {
+    const receipt = await prisma.receipt.create({
+      data: {
+        imagePath: join(testDir, "receipt.jpg"),
+        status: ReceiptStatus.UPLOADING,
+        householdId: testHouseholdId,
+        uploadedBy: testUserId,
+      },
+    });
+
+    await saveParsedItems(receipt.id, parseReceiptText(`TIENDA\n${lines}`));
+    const matches = await matchReceiptItems(receipt.id);
+    const saved = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+
+    return { matches, status: saved.status };
+  }
+
+  async function matchLines(lines: string) {
+    return (await matchReceipt(lines)).matches;
+  }
+
   describe("pg_trgm Similarity Queries", () => {
     it("should find exact matches with similarity = 1.0", async () => {
       await prisma.product.create({
@@ -114,8 +138,11 @@ leche semi desnatada 1,25
       expect(exactMatch).toBeDefined();
     });
 
-    it("should find similar products with high similarity", async () => {
-      await prisma.product.create({
+    it("offers a shortened name as a candidate rather than auto-matching it", async () => {
+      // "leche semi" is inside "leche semi desnatada" — and equally inside
+      // "leche semi sin lactosa". Containment finds the product; it does not
+      // get to confirm it.
+      const product = await prisma.product.create({
         data: {
           name: "leche semi desnatada",
           householdId: testHouseholdId,
@@ -123,40 +150,16 @@ leche semi desnatada 1,25
         },
       });
 
-      const ocrText = `TIENDA
-Fecha: 15/03/2024
-leche semi 1,25
-`;
+      const [match] = await matchLines("leche semi 1,25");
 
-      const receiptDir = join(testDir, randomUUID());
-      await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
-
-      const imagePath = join(receiptDir, "receipt.jpg");
-      await writeFile(imagePath, Buffer.from("fake"));
-
-      const receipt = await prisma.receipt.create({
-        data: {
-          imagePath,
-          status: ReceiptStatus.UPLOADING,
-          householdId: testHouseholdId,
-          uploadedBy: testUserId,
-        },
-      });
-
-      const parsed = parseReceiptText(ocrText);
-      await saveParsedItems(receipt.id, parsed);
-
-      const matches = await matchReceiptItems(receipt.id);
-
-      const highSimilarityMatch = matches.find(
-        (m) => m.autoMatch && m.autoMatch.similarity >= 0.7
-      );
-      expect(highSimilarityMatch).toBeDefined();
+      expect(match.autoMatch).toBeNull();
+      expect(match.candidates[0]?.productId).toBe(product.id);
+      expect(match.candidates[0]?.similarity).toBeGreaterThanOrEqual(0.3);
+      expect(match.candidates[0]?.similarity).toBeLessThan(0.7);
     });
 
     it("should handle partial word matches", async () => {
-      await prisma.product.create({
+      const product = await prisma.product.create({
         data: {
           name: "manzanas golden delicious",
           householdId: testHouseholdId,
@@ -164,37 +167,43 @@ leche semi 1,25
         },
       });
 
-      const ocrText = `TIENDA
-Fecha: 15/03/2024
-manzanas golden 2,30
-`;
+      const [match] = await matchLines("manzanas golden 2,30");
 
-      const receiptDir = join(testDir, randomUUID());
-      await mkdir(receiptDir, { recursive: true });
-      cleanupDirs.push(receiptDir);
+      // A candidate, and this one — not "any match at all", which is what
+      // this test used to accept.
+      expect(match.autoMatch).toBeNull();
+      expect(match.candidates.map((c) => c.productId)).toEqual([product.id]);
+      expect(match.candidates[0].similarity).toBeGreaterThanOrEqual(0.3);
+      expect(match.candidates[0].similarity).toBeLessThan(0.7);
+    });
 
-      const imagePath = join(receiptDir, "receipt.jpg");
-      await writeFile(imagePath, Buffer.from("fake"));
-
-      const receipt = await prisma.receipt.create({
-        data: {
-          imagePath,
-          status: ReceiptStatus.UPLOADING,
-          householdId: testHouseholdId,
-          uploadedBy: testUserId,
-        },
+    it("does not auto-match a one-word product to every line containing the word", async () => {
+      await prisma.product.create({
+        data: { name: "Leche", householdId: testHouseholdId, defaultUnit: "litro" },
+      });
+      await prisma.product.create({
+        data: { name: "Pan", householdId: testHouseholdId, defaultUnit: "unidad" },
       });
 
-      const parsed = parseReceiptText(ocrText);
-      await saveParsedItems(receipt.id, parsed);
-
-      const matches = await matchReceiptItems(receipt.id);
-
-      // Should have some match, either auto or candidate
-      const hasAnyMatch = matches.some(
-        (m) => m.autoMatch !== null || m.candidates.length > 0
+      const { matches, status } = await matchReceipt(
+        "LECHE DE COCO 2,10\nPAN DE MOLDE 1,20",
       );
-      expect(hasAnyMatch).toBe(true);
+
+      expect(matches.map((m) => m.autoMatch)).toEqual([null, null]);
+      // Before: both lines auto-matched, and with nothing left pending the
+      // receipt skipped review and went straight to CONFIRMED.
+      expect(status).toBe(ReceiptStatus.NEEDS_REVIEW);
+    });
+
+    it("auto-matches a receipt's unaccented name to an accented product", async () => {
+      const product = await prisma.product.create({
+        data: { name: "Jamón", householdId: testHouseholdId, defaultUnit: "unidad" },
+      });
+
+      const [match] = await matchLines("JAMON 4,50");
+
+      expect(match.autoMatch?.productId).toBe(product.id);
+      expect(match.autoMatch?.similarity).toBe(1);
     });
 
     it("should handle word order variations", async () => {
