@@ -149,14 +149,64 @@ describe("BarcodeScanner", () => {
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     renderWithIntl(<BarcodeScanner onScan={() => {}} onError={onError} />);
 
-    const failure = new Error("Permission denied");
+    const failure = new DOMException("Permission denied", "NotAllowedError");
     act(() => {
       lastScannerProps?.onError(failure);
     });
 
     expect(screen.getByText("Error al acceder a la cámara")).toBeInTheDocument();
-    expect(screen.getByText("Permission denied")).toBeInTheDocument();
     expect(onError).toHaveBeenCalledWith(failure);
+
+    consoleError.mockRestore();
+  });
+
+  /**
+   * The browser's message is English whatever the catalogue says, and written
+   * for developers. It was shown verbatim: "Permission denied" in the middle
+   * of a Spanish screen, with no word on how to give the permission back.
+   */
+  it("says what a denied permission means, in the catalogue's words", () => {
+    const consoleError = spyOn(console, "error").mockImplementation(() => {});
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+
+    act(() => {
+      lastScannerProps?.onError(new DOMException("Permission denied", "NotAllowedError"));
+    });
+
+    expect(screen.getByText(/Permite el acceso a la cámara para este sitio/)).toBeInTheDocument();
+    expect(screen.queryByText("Permission denied")).toBeAbsent();
+
+    consoleError.mockRestore();
+  });
+
+  it("says when there is no camera at all", () => {
+    const consoleError = spyOn(console, "error").mockImplementation(() => {});
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />, { locale: "en" });
+
+    act(() => {
+      lastScannerProps?.onError(new DOMException("Requested device not found", "NotFoundError"));
+    });
+
+    expect(screen.getByText(/No camera was found on this device/)).toBeInTheDocument();
+    expect(screen.queryByText("Requested device not found")).toBeAbsent();
+
+    consoleError.mockRestore();
+  });
+
+  it("keeps the explanation once the page stops scanning because of it", () => {
+    // The scan page answers a camera error by turning scanning off, and this
+    // component's "off" branch returned before the error panel — so the
+    // explanation was set and never seen.
+    const consoleError = spyOn(console, "error").mockImplementation(() => {});
+    const { rerender } = renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+
+    act(() => {
+      lastScannerProps?.onError(new DOMException("Permission denied", "NotAllowedError"));
+    });
+    rerender(<BarcodeScanner isScanning={false} onScan={() => {}} />);
+
+    expect(screen.getByText("Error al acceder a la cámara")).toBeInTheDocument();
+    expect(screen.getByText(/Permite el acceso a la cámara para este sitio/)).toBeInTheDocument();
 
     consoleError.mockRestore();
   });

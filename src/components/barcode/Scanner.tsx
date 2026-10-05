@@ -28,6 +28,37 @@ interface TorchConstraints extends MediaTrackConstraints {
   advanced?: Array<MediaTrackConstraintSet & { torch?: boolean }>;
 }
 
+/** What went wrong with the camera, as something a person can act on. */
+type CameraProblem =
+  | "cameraDenied"
+  | "cameraNotFound"
+  | "cameraBusy"
+  | "cameraErrorUnknown";
+
+/**
+ * The camera's refusal, read by its name rather than shown as its message.
+ *
+ * The message is the browser's, in English whatever the catalogue says, and
+ * written for developers — "Permission denied", "Requested device not found".
+ * The `name` is the standard part (`getUserMedia` rejects with these
+ * `DOMException`s), and each one has a different next step.
+ */
+export function cameraProblem(error: Error | undefined): CameraProblem {
+  switch (error?.name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "cameraDenied";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "cameraNotFound";
+    case "NotReadableError":
+    case "AbortError":
+      return "cameraBusy";
+    default:
+      return "cameraErrorUnknown";
+  }
+}
+
 export function BarcodeScanner({
   onScan,
   onError,
@@ -37,7 +68,7 @@ export function BarcodeScanner({
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchFailed, setTorchFailed] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<CameraProblem | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   /**
@@ -64,14 +95,13 @@ export function BarcodeScanner({
 
   const handleError = useCallback(
     (error?: Error) => {
-      const errMsg = error?.message || t("cameraErrorUnknown");
-      console.error("Barcode scanner error:", errMsg);
-      setScanError(errMsg);
+      console.error("Barcode scanner error:", error?.message);
+      setScanError(cameraProblem(error));
       if (error) {
         onError?.(error);
       }
     },
-    [onError, t]
+    [onError]
   );
 
   /**
@@ -108,6 +138,8 @@ export function BarcodeScanner({
     // agree — otherwise resuming a scan shows "turn it off" over a dark lamp.
     setTorchEnabled(false);
     setTorchFailed(false);
+    // The feed arrived, so whatever stopped it last time no longer applies.
+    setScanError(null);
   }, [cameraTrack]);
 
   const toggleTorch = useCallback(async () => {
@@ -136,10 +168,31 @@ export function BarcodeScanner({
     );
   }
 
+  /**
+   * Why the camera is not working, and what to do about it.
+   *
+   * Rendered in the "off" branch as well. A camera error makes the page stop
+   * scanning, which used to take this component straight to "Escáner
+   * desactivado" — so the explanation was set and never seen, and a person
+   * who had denied the permission was told only that the scanner was off.
+   */
+  const errorPanel = scanError ? (
+    <div className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">
+      <p className="font-medium">{t("cameraErrorTitle")}</p>
+      <p className="text-sm">{t(scanError)}</p>
+      {scanError === "cameraErrorUnknown" ? (
+        <p className="text-sm mt-2">{t("cameraErrorHint")}</p>
+      ) : null}
+    </div>
+  ) : null;
+
   if (!isScanning) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg bg-muted p-8">
-        <p className="text-muted-foreground">{t("cameraOff")}</p>
+      <div>
+        <div className="flex flex-col items-center justify-center rounded-lg bg-muted p-8">
+          <p className="text-muted-foreground">{t("cameraOff")}</p>
+        </div>
+        {errorPanel}
       </div>
     );
   }
@@ -240,13 +293,7 @@ export function BarcodeScanner({
         {torchFailed ? t("torchFailed") : ""}
       </p>
 
-      {scanError && (
-        <div className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground">
-          <p className="font-medium">{t("cameraErrorTitle")}</p>
-          <p className="text-sm">{scanError}</p>
-          <p className="text-sm mt-2">{t("cameraErrorHint")}</p>
-        </div>
-      )}
+      {errorPanel}
 
       <p className="mt-4 text-center text-sm text-muted-foreground">
         {t("framingHint")}
