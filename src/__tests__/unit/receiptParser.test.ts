@@ -71,8 +71,37 @@ TOTAL: 5,00 EUR
 
       const result = parseReceiptText(receiptText);
 
-      expect(result.totalAmount).toBeDefined();
-      expect(result.totalAmount).toBeGreaterThan(0);
+      expect(result.totalAmount).toBe(5);
+    });
+
+    it("takes the total after the discounts, not the subtotal before them", () => {
+      const result = parseReceiptText(
+        "LECHE 2,09\nSUBTOTAL 2,09\nDESCUENTO 0,50\nTOTAL 1,59",
+      );
+
+      expect(result.totalAmount).toBe(1.59);
+    });
+
+    it("does not read a total from a separated SUB TOTAL", () => {
+      const result = parseReceiptText("LECHE 2,09\nSUB TOTAL 2,09");
+
+      expect(result.totalAmount).toBeUndefined();
+    });
+
+    it("does not run a column header on into the first item's price", () => {
+      const result = parseReceiptText(
+        "Descripción P. Unit Importe\nPAN DE MOLDE 0,95\nLECHE 1,20\nTOTAL 2,15",
+      );
+
+      expect(result.totalAmount).toBe(2.15);
+    });
+
+    it("ignores the base-and-tax row that closes a tax summary", () => {
+      const result = parseReceiptText(
+        "PAN 8,80\nTOTAL (€) 8,80\nIVA BASE IMPONIBLE CUOTA\n10% 8,00 0,80\nTOTAL 8,00 0,80",
+      );
+
+      expect(result.totalAmount).toBe(8.8);
     });
 
     it("should handle empty receipt", () => {
