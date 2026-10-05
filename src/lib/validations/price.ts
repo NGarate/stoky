@@ -6,7 +6,7 @@ export const priceRecordSchema = z.object({
   price: z.number().positive(),
   currency: z.string().default("EUR"),
   unit: z.string(),
-  quantity: z.number().default(1),
+  quantity: z.number().positive().default(1),
 });
 
 export const priceQuerySchema = z.object({
