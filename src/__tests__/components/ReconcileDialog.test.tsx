@@ -1,7 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { createContext } from "react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { createContext, useState } from "react";
 import { renderWithIntl } from "../utils/render";
 import type { FailedOp } from "@/lib/offline/queue";
 
@@ -118,3 +118,23 @@ describe("who may answer it", () => {
   });
 });
 
+describe("while somebody is typing", () => {
+  it("keeps focus in the amount when the banner around it re-renders", () => {
+    // The banner passes an inline `onClose`, a new one on every render, and
+    // the focus effect depended on it — so each re-render sent focus to the
+    // opener and back to the card, out of the box being typed into.
+    let rerender: () => void = () => {};
+    function Banner() {
+      const [, setTick] = useState(0);
+      rerender = () => setTick((tick) => tick + 1);
+      return <ReconcileDialog onClose={() => {}} op={op} />;
+    }
+    renderWithIntl(<Banner />);
+
+    const amount = screen.getByLabelText(/¿Cuánto hay ahora/);
+    amount.focus();
+    act(() => rerender());
+
+    expect(document.activeElement).toBe(amount);
+  });
+});
