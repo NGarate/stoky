@@ -8,6 +8,10 @@
 # this file, Postgres's superuser can run programs in the container, Valkey has
 # no authentication, and Docker's published ports bypass host firewalls such
 # as ufw. On a shared network a bare "5432:5432" is all three, open.
+#
+# `db` and `cache` are defined exactly as in docker-compose.yml, network
+# included: both files are project `stoky`, and any difference makes one
+# file's `up` recreate the other's containers.
 
 services:
   db:
@@ -18,6 +22,8 @@ services:
       POSTGRES_DB: stoky
     ports:
       - "127.0.0.1:5432:5432"
+    networks:
+      - stoky
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -30,6 +36,8 @@ services:
     image: valkey/valkey:8-alpine
     ports:
       - "127.0.0.1:6379:6379"
+    networks:
+      - stoky
     volumes:
       - valkey_data:/data
     healthcheck:
@@ -41,3 +49,7 @@ services:
 volumes:
   postgres_data:
   valkey_data:
+
+networks:
+  stoky:
+    driver: bridge
