@@ -169,6 +169,20 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       expect(result).toBeNull();
     });
 
+    it("keeps a barcode inside the path segment it is put in", async () => {
+      // The schema refuses anything but digits; this is the service not
+      // relying on that. A raw `../` or `?` would otherwise change which
+      // Open Food Facts URL this server requests.
+      fetchSpy.mockResolvedValue(
+        createMockResponse({ code: "x", status: 0, status_verbose: "not found" }),
+      );
+
+      await client.getProductByBarcode("../search?x=1");
+
+      const url = String(fetchSpy.mock.calls[0]?.[0]);
+      expect(url).toContain("/product/..%2Fsearch%3Fx%3D1.json?");
+    });
+
     it("should use correct User-Agent header", async () => {
       fetchSpy.mockResolvedValue(
         createMockResponse({

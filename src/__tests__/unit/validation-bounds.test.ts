@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import {
+  productByBarcodeSchema,
   productPaginationSchema,
   productSchema,
   productSearchSchema,
@@ -25,9 +26,9 @@ import {
  *
  * Each case is a value the schema used to accept: Infinity through
  * `.positive()`, a negative or fractional page size that went into `LIMIT`, a
- * day window that made an Invalid Date. The procedures that declare their
- * schema inline are covered through the router in
- * `integration/input-bounds.test.ts`.
+ * day window that made an Invalid Date, a barcode that became part of an
+ * outbound URL. The procedures that declare their schema inline are covered
+ * through the router in `integration/input-bounds.test.ts`.
  */
 
 const accepts = (schema: { safeParse: (v: unknown) => { success: boolean } }, value: unknown) =>
@@ -102,5 +103,24 @@ describe("page sizes, windows and searches are bounded", () => {
     expect(accepts(storeQuerySchema, { search: long })).toBe(false);
     expect(accepts(productPaginationSchema, { search: long })).toBe(false);
     expect(accepts(productSearchSchema, { query: "leche entera" })).toBe(true);
+  });
+});
+
+describe("a barcode is a product barcode", () => {
+  it("takes the GTIN lengths a food label carries", () => {
+    for (const barcode of ["012345", "96385074", "036000291452", "8410000678901", "18410000678908"]) {
+      expect(accepts(productByBarcodeSchema, { barcode })).toBe(true);
+    }
+  });
+
+  it("trims what a phone keyboard adds", () => {
+    expect(productByBarcodeSchema.parse({ barcode: " 8410000678901 " }).barcode).toBe("8410000678901");
+  });
+
+  it("refuses anything that would change the shape of the lookup URL", () => {
+    // It was interpolated into the path of the request to Open Food Facts.
+    for (const barcode of ["../../search", "8410000678901?x=1", "84100/00678", "", "12345", "1".repeat(15)]) {
+      expect(accepts(productByBarcodeSchema, { barcode })).toBe(false);
+    }
   });
 });
