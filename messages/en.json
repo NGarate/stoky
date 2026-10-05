@@ -292,6 +292,7 @@
       "processing": "Looking up the code...",
       "scanAgain": "Scan another code",
       "manualTitle": "Type the code",
+      "manualLabel": "Barcode",
       "manualPlaceholder": "Enter the code by hand",
       "manualSubmit": "Search",
       "cameraOff": "Scanner off",

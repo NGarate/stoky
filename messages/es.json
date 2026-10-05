@@ -292,6 +292,7 @@
       "processing": "Procesando código...",
       "scanAgain": "Escanear otro código",
       "manualTitle": "Código manual",
+      "manualLabel": "Código de barras",
       "manualPlaceholder": "Introducir código manualmente",
       "manualSubmit": "Buscar",
       "cameraOff": "Escáner desactivado",

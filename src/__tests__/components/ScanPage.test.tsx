@@ -62,6 +62,7 @@ mock.module("next/navigation", () => ({
 }));
 
 const { default: ScanPage } = await import("@/app/(dashboard)/products/scan/page");
+const { buttonVariants } = await import("@/components/ui/button");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 function render() {
@@ -119,6 +120,26 @@ describe("a scan that creates a product", () => {
     await typeBarcode("8410000555555");
 
     expect(productInvalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("the manual field", () => {
+  it("is named by a label, not only by its placeholder", () => {
+    // The placeholder vanishes as soon as somebody types, and it was the
+    // field's only name.
+    render();
+
+    expect(screen.getByLabelText("Código de barras")).toHaveAttribute("name", "barcode");
+  });
+
+  it("submits through the Button primitive, which owns the target floor", () => {
+    // A hand-styled <button> with px-4 py-2 was 40px tall, under the 48px
+    // floor every primitive clears.
+    render();
+
+    expect(screen.getByRole("button", { name: "Buscar" }).className).toBe(
+      buttonVariants({ variant: "outline" }),
+    );
   });
 });
 
