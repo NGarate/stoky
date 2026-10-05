@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, spyOn } from "bun:test";
 import {
   MIN_SECRET_LENGTH,
   PLACEHOLDER_SECRET,
@@ -76,6 +76,65 @@ describe("how it refuses", () => {
 
   it("stays out of the way when the secret is real", () => {
     expect(() => assertUsableSecret(REAL, "production")).not.toThrow();
+  });
+});
+
+describe("when it refuses", () => {
+  /** `process.env` without the read-only `NODE_ENV` of the Next typings. */
+  const env = process.env as Record<string, string | undefined>;
+
+  /** Runs `body` with the environment of a production Node server. */
+  async function asProductionServer(secret: string | undefined, body: () => Promise<void>) {
+    const keys = ["NODE_ENV", "NEXTAUTH_SECRET", "NEXT_PHASE", "NEXT_RUNTIME"];
+    const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
+    env.NODE_ENV = "production";
+    env.NEXT_RUNTIME = "nodejs";
+    delete env.NEXT_PHASE;
+    if (secret === undefined) delete env.NEXTAUTH_SECRET;
+    else env.NEXTAUTH_SECRET = secret;
+    try {
+      await body();
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete env[key];
+        else env[key] = value;
+      }
+    }
+  }
+
+  it("stops the process at server start, from the instrumentation hook", async () => {
+    // It used to be only when `@/lib/auth` was first imported — by the first
+    // request that needed a session — and Next answers a route module that
+    // fails to load with a 500, not an exit. The container stayed up and
+    // `/api/health` (which never imports auth) said it was healthy.
+    //
+    // An exit and not a throw: Next's server catches a throw from `register`
+    // and keeps listening. `process.exit` is replaced so the suite survives.
+    const { register } = await import("@/instrumentation");
+    const exit = spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as typeof process.exit);
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await asProductionServer(PLACEHOLDER_SECRET, async () => {
+        await expect(register()).rejects.toThrow("exit 1");
+      });
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(/refusing to start/i);
+
+      await asProductionServer(undefined, async () => {
+        await expect(register()).rejects.toThrow("exit 1");
+      });
+
+      exit.mockClear();
+      await asProductionServer(REAL, async () => {
+        await register();
+      });
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      exit.mockRestore();
+      logged.mockRestore();
+    }
   });
 });
 
