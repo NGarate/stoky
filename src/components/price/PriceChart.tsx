@@ -2,7 +2,6 @@
 
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -49,6 +48,16 @@ interface PriceDataPoint {
  *
  * Colour is never the only carrier: a legend is always present for two or
  * more series, and the table view names every store beside every price.
+ *
+ * **Words are ink, colour is a swatch.** Recharts' own legend and tooltip
+ * paint each store's *name* in that store's series colour, which on the light
+ * card measured 2.17–4.42:1 — under AA, let alone the 7:1 this application
+ * holds text to. The series hues are audited for telling series apart, not
+ * for being read (see the note beside PAIRS in `check-contrast.ts`), so they
+ * are kept off every glyph: the legend is ours, in `foreground`, with the hue
+ * in a swatch beside the name, and the tooltip names each store in
+ * `foreground` too — where it used to label every row "Precio por unidad",
+ * leaving the colour alone to say which shop a price was.
  */
 export function PriceChart({
   data,
@@ -144,8 +153,11 @@ export function PriceChart({
                   tickFormatter={money}
                 />
                 <Tooltip
-                  formatter={(value: number) => [money(value), t("yAxis")]}
+                  contentStyle={TOOLTIP_SURFACE}
+                  formatter={(value: number, name: string) => [money(value), name]}
+                  itemStyle={TOOLTIP_INK}
                   labelFormatter={(label) => label}
+                  labelStyle={TOOLTIP_INK}
                 />
                 {storeNames.map((storeName, index) => (
                     <Line
@@ -186,10 +198,24 @@ export function PriceChart({
                       type="monotone"
                     />
                 ))}
-                {storeNames.length > 1 ? <Legend /> : null}
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {storeNames.length > 1 ? (
+            <ul aria-label={t("legend")} className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {storeNames.map((storeName, index) => (
+                <li className="flex items-center gap-2 text-sm text-foreground" key={storeName}>
+                  <span
+                    aria-hidden="true"
+                    className="inline-block size-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: colours[index] }}
+                  />
+                  {storeName}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           {hiddenStores > 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
@@ -201,6 +227,16 @@ export function PriceChart({
     </div>
   );
 }
+
+/** The tooltip's box, in the surface tokens so night does not get a white card. */
+const TOOLTIP_SURFACE = {
+  backgroundColor: "var(--card)",
+  borderColor: "var(--border)",
+  color: "var(--foreground)",
+} as const;
+
+/** Every glyph in the tooltip, including the per-store rows Recharts tints. */
+const TOOLTIP_INK = { color: "var(--foreground)" } as const;
 
 /** The chart's values, for anything that cannot read a canvas. */
 function PriceTable({

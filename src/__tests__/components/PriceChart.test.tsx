@@ -22,7 +22,14 @@ let lineProps: Array<{
   connectNulls?: boolean;
 }> = [];
 let gridProps: { strokeDasharray?: string } | undefined;
-let legendRendered = false;
+let tooltipProps:
+  | {
+      formatter?: (value: number, name: string) => [string, string];
+      itemStyle?: { color?: string };
+      labelStyle?: { color?: string };
+      contentStyle?: { backgroundColor?: string };
+    }
+  | undefined;
 let yTickFormatter: ((value: number) => string) | undefined;
 
 mock.module("recharts", () => ({
@@ -52,11 +59,13 @@ mock.module("recharts", () => ({
     gridProps = props;
     return null;
   },
-  Tooltip: () => null,
-  Legend: () => {
-    legendRendered = true;
+  Tooltip: (props: typeof tooltipProps) => {
+    tooltipProps = props;
     return null;
   },
+  // Recharts' own legend paints each name in its series colour. The chart
+  // must not use it; if it ever comes back, this makes it visible.
+  Legend: () => <div data-testid="recharts-legend" />,
 }));
 
 const { PriceChart } = await import("@/components/price/PriceChart");
@@ -71,7 +80,7 @@ beforeEach(() => {
   chartData = [];
   lineProps = [];
   gridProps = undefined;
-  legendRendered = false;
+  tooltipProps = undefined;
   yTickFormatter = undefined;
 });
 
@@ -146,11 +155,43 @@ describe("PriceChart", () => {
         ]}
       />,
     );
-    expect(legendRendered).toBe(false);
+    expect(
+      screen.queryByRole("list", { name: "Tiendas en la gráfica" }),
+    ).not.toBeInTheDocument();
 
     cleanup();
     renderWithIntl(<PriceChart data={data} />);
-    expect(legendRendered).toBe(true);
+    const legend = screen.getByRole("list", { name: "Tiendas en la gráfica" });
+    expect(
+      within(legend).getAllByRole("listitem").map((item) => item.textContent),
+    ).toEqual(["Mercadona", "Carrefour"]);
+  });
+
+  it("writes store names in ink and keeps the series colour in a swatch", () => {
+    renderWithIntl(<PriceChart data={data} />);
+
+    // Recharts' legend painted "Mercadona" in --series-1, which measured
+    // 2.17–4.42:1 on the light card. The hue now lives in an aria-hidden
+    // swatch and the word is ordinary foreground text.
+    expect(screen.queryByTestId("recharts-legend")).not.toBeInTheDocument();
+    const legend = screen.getByRole("list", { name: "Tiendas en la gráfica" });
+    for (const [index, item] of within(legend).getAllByRole("listitem").entries()) {
+      expect(item.className).toContain("text-foreground");
+      expect(item.style.color).toBe("");
+      const swatch = item.querySelector("[aria-hidden='true']") as HTMLElement;
+      expect(swatch.style.backgroundColor).toBe(`var(--series-${index + 1})`);
+    }
+  });
+
+  it("names each store in the tooltip, in ink rather than its series colour", () => {
+    renderWithIntl(<PriceChart data={data} />);
+
+    // Every row was labelled "Precio por unidad (€)", so only the tint said
+    // which shop a price was — and the tint was below AA as text.
+    expect(tooltipProps?.formatter?.(1.5, "Lidl")[1]).toBe("Lidl");
+    expect(tooltipProps?.itemStyle?.color).toBe("var(--foreground)");
+    expect(tooltipProps?.labelStyle?.color).toBe("var(--foreground)");
+    expect(tooltipProps?.contentStyle?.backgroundColor).toBe("var(--card)");
   });
 
   it("formats the price axis the way the reader's language writes money", () => {

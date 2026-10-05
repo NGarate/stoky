@@ -765,7 +765,8 @@
       "tableView": "View as a table",
       "chartView": "View as a chart",
       "otherStores": "{count, plural, one {# other store} other {# other stores}}",
-      "unknownStore": "Unknown store"
+      "unknownStore": "Unknown store",
+      "legend": "Stores in the chart"
     },
     "noPrices": "No prices recorded",
     "addFirst": "Record your first price",
