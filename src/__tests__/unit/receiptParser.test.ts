@@ -198,6 +198,42 @@ GRACIAS POR SU VISITA
         item.parsedName.toLowerCase().includes("factura")
       );
       expect(invalidItems.length).toBe(0);
+      expect(result.items.map((item) => item.parsedName)).toEqual(["producto"]);
+    });
+
+    it("books none of the tax, payment, change or discount lines", () => {
+      const result = parseReceiptText(
+        [
+          "PAN 1,00",
+          "IVA 10% 8,00 0,80",
+          "10% 8,00 0,80",
+          "BASE IMPONIBLE 8,00",
+          "ENTREGADO 5,00",
+          "A DEVOLVER 4,11",
+          "CAMBIO 4,00",
+          "VISA 1,00",
+          "CUPÓN -0,50",
+          "LECHE 2X1 0,50-",
+        ].join("\n"),
+      );
+
+      expect(result.items.map((item) => item.parsedName)).toEqual(["pan"]);
+    });
+
+    it("never books a negative line as a purchase", () => {
+      const result = parseReceiptText("YOGUR 1,80\nPROMO YOGUR -0,60");
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].parsedPrice).toBe(1.8);
+    });
+
+    it("still reads a product whose name holds a header word", () => {
+      const result = parseReceiptText("PAN 1,00\nGALLETAS CAJA 2,50");
+
+      expect(result.items.map((item) => item.parsedName)).toEqual([
+        "pan",
+        "galletas caja",
+      ]);
     });
 
     it("should handle various date formats", () => {
