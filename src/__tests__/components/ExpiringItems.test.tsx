@@ -12,14 +12,24 @@ import { renderWithIntl } from "../utils/render";
 let expiringData: unknown[] = [];
 let expiredData: unknown[] = [];
 
+/** What the expiring query is doing, when a test needs it to have no answer. */
+let expiringState: {
+  data?: undefined;
+  error: unknown;
+  fetchStatus: "fetching" | "paused" | "idle";
+} | null = null;
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     inventory: {
       getExpiringItems: {
-        useQuery: () => ({ data: expiringData, isLoading: false }),
+        useQuery: () =>
+          expiringState === null
+            ? { data: expiringData, isLoading: false, error: null, fetchStatus: "idle", refetch: () => {} }
+            : { ...expiringState, data: undefined, isLoading: false, refetch: () => {} },
       },
       getExpiredItems: {
-        useQuery: () => ({ data: expiredData, isLoading: false }),
+        useQuery: () => ({ data: expiredData, isLoading: false, error: null, fetchStatus: "idle", refetch: () => {} }),
       },
     },
   },
@@ -48,7 +58,41 @@ const expiringItem = (id: string, daysUntilExpiry: number) => ({
   isExpiringSoon: daysUntilExpiry <= 3,
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  expiringState = null;
+});
+
+/**
+ * No answer is not an empty answer.
+ *
+ * Gated on `isLoading`, which is false for a paused or failed query, both fell
+ * through to "allClear" — a failure reading as the good news that nothing is
+ * about to spoil.
+ */
+describe("ExpiringItems without an answer", () => {
+  it("does not say all is clear when there is no connection", async () => {
+    expiringState = { error: null, fetchStatus: "paused" };
+
+    renderWithIntl(<ExpiringItems />, { locale: "es" });
+
+    expect(await screen.findByText("Aquí todavía no hay nada guardado")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No hay productos caducados ni próximos a caducar"),
+    ).toBeAbsent();
+  });
+
+  it("does not say all is clear when the server failed", async () => {
+    expiringState = { error: new Error("500"), fetchStatus: "idle" };
+
+    renderWithIntl(<ExpiringItems />, { locale: "es" });
+
+    expect(await screen.findByText("No se han podido cargar los datos")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No hay productos caducados ni próximos a caducar"),
+    ).toBeAbsent();
+  });
+});
 
 describe("ExpiringItems", () => {
   it("renders in the catalogue's language, not hardcoded Spanish", async () => {

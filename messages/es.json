@@ -55,10 +55,6 @@
   "dashboard": {
     "title": "Panel",
     "intro": "Lo que falta en casa y lo que caduca pronto, de un vistazo.",
-    "loading": "Cargando el resumen del hogar...",
-    "errorTitle": "No se pudo cargar el resumen",
-    "errorNoHousehold": "Tu cuenta todavía no pertenece a ningún hogar. Crea o únete a uno para ver el inventario.",
-    "errorGeneric": "Ha ocurrido un problema al cargar los datos. Vuelve a intentarlo en unos instantes.",
     "restockTitle": "Necesita reposición",
     "restockListLink": "Ver la lista de la compra",
     "restockEmpty": "No falta nada: todo está por encima de su mínimo.",

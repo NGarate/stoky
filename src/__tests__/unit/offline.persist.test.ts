@@ -42,6 +42,13 @@ describe("which queries are kept", () => {
     }
   });
 
+  it("keeps the expired batches beside the expiring ones", () => {
+    // Every screen that shows expiry asks both. With only one kept, offline
+    // the dashboard waited on the other for ever and could not say whether
+    // anything had gone off.
+    expect(shouldPersist(query([["inventory", "getExpiredItems"]]))).toBe(true);
+  });
+
   it("keeps nothing else", () => {
     // Receipts and prices are not what somebody opens the app in a shop or a
     // kitchen to see, and every extra entry is more household data at rest.
