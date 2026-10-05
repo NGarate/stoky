@@ -349,11 +349,14 @@ jobs:
     timeout-minutes: 5
     outputs:
       image: ${{ steps.diff.outputs.image }}
+    permissions:
+      contents: read
+      actions: read # find the last successful run on master
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-          # The whole history, so the before-commit is already here and the
+          # The whole history, so the base commit is already here and the
           # diff needs no network call. The first version of this job fetched
           # it instead and failed on a private repository the moment the
           # checkouts stopped persisting a token: `git fetch` had no
@@ -363,13 +366,20 @@ jobs:
           # silent no-op rather than a failure. 291 commits is 3.9 MB and
           # about a second; not fetching is worth more than that.
           fetch-depth: 0
-      - name: Diff against the previous head
+      # The base is the head of the last *successful* run on master, not the
+      # previous push. Diffing against `github.event.before` lost images: push
+      # A (code) then B (docs) cancels A's run, B's diff is docs-only, and A's
+      # code never got an image. Same when A failed and B only fixed a doc.
+      # Every successful run either published or was docs-only against its own
+      # base, so the last success's commit is the newest one with an image.
+      - name: Diff against the last successful run
         id: diff
         # Through the environment, never interpolated into the script: an
         # expression pasted into shell text is how a workflow gets an
         # injection, and this one is attacker-influencable in the general case.
         env:
-          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           REF_TYPE: ${{ github.ref_type }}
         run: |
           # A release needs its own version tag even when its commit
@@ -378,16 +388,17 @@ jobs:
             echo "image=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Empty on workflow_dispatch; all zeros on history rewrites; absent
-          # from the clone if the history was rewritten under it. All three
-          # mean "cannot know", and "cannot know" means build.
-          if [ -z "$BEFORE" ] || printf '%s' "$BEFORE" | grep -qE '^0+$' \
-             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+          # No earlier success, an API failure, or a base that is not an
+          # ancestor of this commit (history rewritten under it) all mean
+          # "cannot know", and "cannot know" means build.
+          BASE="$(gh run list --workflow ci.yml --branch master --status success \
+            --limit 1 --json headSha --jq '.[0].headSha // empty' || true)"
+          if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" HEAD 2>/dev/null; then
             echo "image=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Any changed file that is not documentation reaches the image.
-          if git diff --name-only "$BEFORE" HEAD | grep -qvE '^(docs/|.*\.md$)'; then
+          if git diff --name-only "$BASE" HEAD | grep -qvE '^(docs/|.*\.md$)'; then
             echo "image=true" >> "$GITHUB_OUTPUT"
           else
             echo "image=false" >> "$GITHUB_OUTPUT"
