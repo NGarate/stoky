@@ -640,6 +640,51 @@ Leche semi desnatada 1L 1,25
       expect(item?.rawText).toContain("Leche");
     });
 
+    it("keeps the store chosen at upload instead of the one the header names", async () => {
+      const chosen = await prisma.store.create({
+        data: { name: "Mi Mercadona", householdId: testHouseholdId },
+      });
+
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath: join(testDir, "receipt.jpg"),
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+          storeId: chosen.id,
+        },
+      });
+
+      await saveParsedItems(receipt.id, parseReceiptText("LIDL\nLeche 1,25"));
+
+      const saved = await prisma.receipt.findUnique({ where: { id: receipt.id } });
+      expect(saved?.storeId).toBe(chosen.id);
+      // And the header's guess was not created as a store on the side.
+      const stores = await prisma.store.findMany({
+        where: { householdId: testHouseholdId },
+      });
+      expect(stores.map((store) => store.id)).toEqual([chosen.id]);
+    });
+
+    it("files the receipt under the header's store when none was chosen", async () => {
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath: join(testDir, "receipt.jpg"),
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+
+      await saveParsedItems(receipt.id, parseReceiptText("LIDL\nLeche 1,25"));
+
+      const saved = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+        include: { store: true },
+      });
+      expect(saved?.store?.name).toBe("lidl");
+    });
+
     it("replaces the lines, so running twice is running once", async () => {
       const ocrText = `TIENDA
 Leche 1,25
