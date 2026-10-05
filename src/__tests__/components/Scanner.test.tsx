@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock, spyOn } from "bun:te
 import { screen, cleanup, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { minimumHeight } from "../setup/tailwind";
 
 type ScannerProps = {
   doScan: boolean;
@@ -272,6 +273,18 @@ describe("BarcodeScanner", () => {
     expect(
       screen.getByRole("button", { name: "Encender linterna" }),
     ).toBeInTheDocument();
+  });
+
+  it("makes the torch a full-size target in the system's colours", async () => {
+    // A 40px circle in palette black and white: under the floor, and the one
+    // control on the screen whose colours no audit had seen.
+    stubCamera({ torch: true });
+    renderWithIntl(<BarcodeScanner onScan={() => {}} />);
+    feedReady();
+
+    const torch = screen.getByRole("button", { name: "Encender linterna" });
+    expect((await minimumHeight(torch.className)) ?? 0).toBeGreaterThanOrEqual(48);
+    expect(torch.className).not.toMatch(/bg-black|text-white/);
   });
 
   it("turns the torch on at the camera, not just in the label", async () => {

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner as BarcodeScannerComponent } from "@thewirv/react-barcode-scanner";
+import { Button } from "@/components/ui/button";
 
 interface BarcodeScannerProps {
   onScan: (barcode: string) => void;
@@ -222,11 +223,17 @@ export function BarcodeScanner({
 
         {/* Torch toggle button */}
         {hasTorch && (
-          <button
+          // A control, unlike the framing guides above, so it is the icon
+          // primitive in the system's colours rather than black/white from
+          // the palette — and clears the 48px floor the hand-styled 40px
+          // circle did not.
+          <Button
             type="button"
             onClick={() => void toggleTorch()}
             aria-pressed={torchEnabled}
-            className="absolute bottom-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+            className="absolute bottom-4 right-4 rounded-full"
+            size="icon"
+            variant="secondary"
             aria-label={
               torchEnabled ? t("torchOff") : t("torchOn")
             }
@@ -274,7 +281,7 @@ export function BarcodeScanner({
                 />
               </svg>
             )}
-          </button>
+          </Button>
         )}
       </div>
 

@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, mock } from "bun:test";
 import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
+import { minimumHeight } from "../setup/tailwind";
 import { RECEIPT_IMAGE_TYPES } from "@/lib/validations/receipt";
 import { UploadZone } from "@/components/receipt/UploadZone";
 
@@ -178,6 +179,18 @@ describe("UploadZone", () => {
     expect(
       screen.getByText("Arrastra una foto del ticket o haz clic para seleccionar"),
     ).toBeInTheDocument();
+  });
+
+  it("makes the clear control a full-size target", async () => {
+    // A 24px circle (p-1 around a 16px icon), half the floor, on the control
+    // that throws the photo away.
+    const { container } = renderWithIntl(<UploadZone onUpload={() => {}} />);
+
+    await userEvent.upload(fileInput(container), jpeg());
+    await screen.findByAltText("Vista previa del ticket");
+
+    const clear = screen.getByRole("button", { name: "Quitar la foto" });
+    expect((await minimumHeight(clear.className)) ?? 0).toBeGreaterThanOrEqual(48);
   });
 
   it("offers a camera capture action", () => {

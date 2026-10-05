@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ProductCandidate {
   productId: string;
@@ -66,15 +67,18 @@ export function MatchSelector({
           is the convention here rather than a new one. */}
       <div className="space-y-1">
         {candidates.map((candidate) => (
-          <button
+          // `Button`, so the 48px floor and the focus ring are the
+          // primitive's rather than a hand-styled 36px row's. Outline
+          // throughout — a candidate is a choice, not a commit — with the
+          // chosen one bordered in the primary colour beside its tick.
+          <Button
             aria-pressed={selectedId === candidate.productId}
             type="button"
             key={candidate.productId}
             onClick={() => onSelect(candidate.productId)}
-            className={`w-full flex items-center justify-between p-2 rounded border text-left transition-colors ${
-              selectedId === candidate.productId
-                ? "border-primary bg-accent text-accent-foreground"
-                : "border-border bg-card text-foreground hover:bg-muted"
+            variant="outline"
+            className={`h-auto w-full justify-between whitespace-normal text-left ${
+              selectedId === candidate.productId ? "border-primary bg-accent" : ""
             }`}
           >
             <div className="flex items-center gap-2">
@@ -86,7 +90,7 @@ export function MatchSelector({
             <span className={`text-xs font-medium ${getScoreColor(candidate.similarity)}`}>
               {formatScore(candidate.similarity)}
             </span>
-          </button>
+          </Button>
         ))}
       </div>
     </div>
