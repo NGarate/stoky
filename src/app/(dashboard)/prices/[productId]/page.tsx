@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { sectionHeading } from "@/components/ui/section";
 import { Select } from "@/components/ui/select";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -72,7 +73,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.chart.title")}</h2>
+        <h2 className={`mb-4 ${sectionHeading()}`}>{t("prices.chart.title")}</h2>
         {chartData.length > 0 ? (
           <PriceChart data={chartData} />
         ) : (

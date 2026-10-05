@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
 import { Button } from "@/components/ui/button";
+import { sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
@@ -133,7 +134,7 @@ export default function ReceiptAppliedPage({
         title={t("title")}
       />
 
-      <h2 className="mt-8 text-lg font-semibold text-heading md:text-2xl">
+      <h2 className={`mt-8 ${sectionHeading()}`}>
         {t("summaryTitle")}
       </h2>
       {/* One column on a phone, three from `md`: three numbers side by side at
@@ -158,7 +159,7 @@ export default function ReceiptAppliedPage({
         />
       </dl>
 
-      <h2 className="mt-8 text-lg font-semibold text-heading md:text-2xl">
+      <h2 className={`mt-8 ${sectionHeading()}`}>
         {t("detailsTitle")}
       </h2>
       <dl className="mt-2 space-y-3">
@@ -192,7 +193,7 @@ export default function ReceiptAppliedPage({
         </div>
       </dl>
 
-      <h2 className="mt-8 text-lg font-semibold text-heading md:text-2xl">
+      <h2 className={`mt-8 ${sectionHeading()}`}>
         {t("itemsTitle")}
       </h2>
       {summary.items.length === 0 ? (
@@ -247,7 +248,7 @@ export default function ReceiptAppliedPage({
         </p>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold text-heading md:text-2xl">
+      <h2 className={`mt-8 ${sectionHeading()}`}>
         {t("nextTitle")}
       </h2>
       <ul className="mt-2 space-y-2">

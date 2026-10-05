@@ -9,6 +9,7 @@ import { isLowStock } from "@/lib/stock/low-stock";
 import { ProductDetailsForm } from "@/components/products/ProductDetailsForm";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Button } from "@/components/ui/button";
+import { sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
@@ -296,7 +297,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         />
       ) : null}
 
-      <h2 className="mt-6 text-lg font-semibold text-heading">{t("stockTitle")}</h2>
+      <h2 className={`mt-6 ${sectionHeading()}`}>{t("stockTitle")}</h2>
       {/* §3 flow 3: changing stock is the stepper, not a form. Offered only to
           the roles `writeProcedure` admits — plus is `addStock`, which a
           KITCHEN account would be refused — so a kitchen tablet reads the
@@ -344,7 +345,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         <ProductRating barcode={product.barcode} snapshot={product.openFoodFactsData} />
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("locationsTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("locationsTitle")}</h2>
       {stockByLocation.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("locationsEmpty")}</p>
       ) : (
@@ -370,7 +371,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("expiryTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("expiryTitle")}</h2>
       {batches.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
       ) : (
@@ -408,7 +409,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("pricesTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("pricesTitle")}</h2>
       {product.priceRecords.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("pricesEmpty")}</p>
       ) : (
@@ -501,7 +502,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         product={product}
       />
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("actionsTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("actionsTitle")}</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         {t("actionsHint", { name: product.name })}
       </p>
@@ -535,7 +536,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           four-way count is still the control behind it. */}
       {isAdmin ? (
         <section aria-labelledby="product-delete" className="mt-10 rounded border border-border bg-muted p-4">
-          <h2 id="product-delete" className="text-lg font-semibold text-heading">
+          <h2 id="product-delete" className={sectionHeading()}>
             {t("deleteTitle")}
           </h2>
           {product.stockEntries.length > 0 ? (

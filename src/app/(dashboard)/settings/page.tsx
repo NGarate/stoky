@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
@@ -128,7 +129,7 @@ export default function SettingsPage(): JSX.Element {
           in the top bar and in the "Más" sheet as well, which put settings
           controls across the top of every screen — including the household
           overview, whose whole job is what to buy and what is running out. */}
-      <h2 className="mt-8 text-lg font-semibold text-heading">
+      <h2 className={`mt-8 ${sectionHeading()}`}>
         {t("preferencesTitle")}
       </h2>
       <p className="mt-2 text-muted-foreground">{t("preferencesDescription")}</p>

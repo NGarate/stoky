@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { sectionHeading } from "@/components/ui/section";
 import { ProductPicker, type PickedProduct } from "@/components/inventory/ProductPicker";
 import { CreateProductInline } from "@/components/receipt/CreateProductInline";
 import { api } from "@/lib/trpc/client";
@@ -214,7 +215,7 @@ export function ShoppingListView({ id }: { id: string }) {
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-heading">{t("shopping.items")}</h2>
+        <h2 className={sectionHeading()}>{t("shopping.items")}</h2>
         {!isAdding && (
           <Button onClick={() => setIsAdding(true)} type="button">
             {t("shopping.addItem")}

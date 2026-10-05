@@ -5,6 +5,7 @@ import { ChevronDown, ScanLine } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Section, sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -98,19 +99,20 @@ export default function ShopPage(): JSX.Element {
         </Link>
       </Button>
 
-      <section aria-labelledby="to-buy" className="mt-8">
-        <h2
-          className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-          id="to-buy"
-        >
-          {t("toBuy")}
-          <span className="text-base font-bold text-foreground">
-            {toBuy.length}
+      {/* Sentence case, in the one section size. "PARA COMPRAR" in small
+          tracked grey capitals was a label rather than a heading, and the
+          count is said in words beside it rather than as a bare number. */}
+      <Section
+        aside={
+          <span className="text-muted-foreground">
+            {t("itemsCount", { count: toBuy.length })}
           </span>
-        </h2>
-
+        }
+        className="mt-8"
+        title={t("toBuy")}
+      >
         {toBuy.length === 0 ? (
-          <div className="mt-3">
+          <div>
             <p className="text-foreground">{t("nothingToBuy")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {t("nothingToBuyHint")}
@@ -123,7 +125,7 @@ export default function ShopPage(): JSX.Element {
           // Rows, not cards: a border and a background around every item of a
           // list is visual overhead (Noel's review, 2026-08-19). A divider is
           // all the separation a list needs.
-          <ul className="mt-1 divide-y divide-border">
+          <ul className="divide-y divide-border">
             {toBuy.map((item) => (
               <li key={item.id}>
                 <ShopRow item={item} onToggle={() => setChecked(item, true)} />
@@ -131,7 +133,7 @@ export default function ShopPage(): JSX.Element {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
       <section aria-labelledby="trolley" className="mt-8">
         {/* Folded away, because what is already in the trolley is not the
@@ -147,12 +149,12 @@ export default function ShopPage(): JSX.Element {
         <h2 id="trolley">
           <button
             aria-expanded={trolleyOpen}
-            className="flex min-h-[48px] w-full items-center justify-between gap-3 text-left text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+            className={`flex min-h-[48px] w-full items-center justify-between gap-3 text-left ${sectionHeading()}`}
             onClick={() => setTrolleyOpen((open) => !open)}
             type="button"
           >
             {t("inTrolley")}
-            <span className="flex items-center gap-2 normal-case tracking-normal">
+            <span className="flex items-center gap-2 text-base text-muted-foreground">
               <span className="font-normal">
                 {t("trolleyCount", { count: trolley.length })}
               </span>

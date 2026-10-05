@@ -12,6 +12,7 @@ import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
+import { Section } from "@/components/ui/section";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { UNDO_HOLD_MS } from "@/lib/offline/queue";
@@ -270,23 +271,19 @@ export default function KitchenPage(): JSX.Element {
     <PageShell width="screen">
       <PageHeader density="touch" title={t("title")} />
 
-      <section aria-labelledby="use-now">
-        <h2
-          className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
-          id="use-now"
-        >
-          {t("useNow")}
-        </h2>
-
+      {/* Sentence case. These were tracked uppercase grey labels: the
+          commonest tell of a template, and on a tablet read from a metre
+          away, uppercase is the slower thing to read. */}
+      <Section density="touch" title={t("useNow")}>
         {urgent.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-ok-foreground bg-ok p-6">
+          <div className="rounded-xl border border-ok-foreground bg-ok p-6">
             <p className="text-2xl text-ok-foreground">{t("nothingUrgent")}</p>
             <p className="mt-2 text-xl text-ok-foreground">
               {t("nothingUrgentHint")}
             </p>
           </div>
         ) : (
-          <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {urgent.map((batch) => {
               return (
                 <li
@@ -333,20 +330,14 @@ export default function KitchenPage(): JSX.Element {
             })}
           </ul>
         )}
-      </section>
+      </Section>
 
       <div className="mt-10 grid gap-8 md:grid-cols-2">
-        <section aria-labelledby="this-week">
-          <h2
-            className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
-            id="this-week"
-          >
-            {t("thisWeek")}
-          </h2>
+        <Section density="touch" title={t("thisWeek")}>
           {later.length === 0 ? (
-            <EmptyState className="mt-3" density="touch" title={t("nothingThisWeek")} />
+            <EmptyState density="touch" title={t("nothingThisWeek")} />
           ) : (
-            <ul className="mt-3">
+            <ul>
               {later.map((batch) => (
                 <ItemRow
                   density="touch"
@@ -363,27 +354,21 @@ export default function KitchenPage(): JSX.Element {
               ))}
             </ul>
           )}
-        </section>
+        </Section>
 
-        <section aria-labelledby="running-out">
-          <h2
-            className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
-            id="running-out"
-          >
-            {t("runningOut")}
-          </h2>
+        <Section density="touch" title={t("runningOut")}>
           {/* Announced politely: the one failure this section can produce is
               "no connection to create the first list", and a tablet read from
               a metre away must say it rather than swallow the tap. */}
           <p
             aria-live="polite"
-            className={listError ? "mt-3 text-lg text-danger-foreground" : "sr-only"}
+            className={listError ? "mb-3 text-lg text-danger-foreground" : "sr-only"}
             role="status"
           >
             {listError ? t("listCreateFailed") : ""}
           </p>
           {restock === "failed" ? (
-            <div className="mt-3">
+            <div>
               <p className="text-xl text-danger-foreground">
                 {t("runningOutFailed")}
               </p>
@@ -397,13 +382,13 @@ export default function KitchenPage(): JSX.Element {
               </Button>
             </div>
           ) : restock === "checking" ? (
-            <p className="mt-3 text-xl text-muted-foreground">
+            <p className="text-xl text-muted-foreground">
               {t("runningOutLoading")}
             </p>
           ) : lowStock.length === 0 ? (
-            <EmptyState className="mt-3" density="touch" title={t("nothingRunningOut")} />
+            <EmptyState density="touch" title={t("nothingRunningOut")} />
           ) : (
-            <ul className="mt-3">
+            <ul>
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
                 const already = onList.get(product.id) ?? 0;
@@ -479,7 +464,7 @@ export default function KitchenPage(): JSX.Element {
               })}
             </ul>
           )}
-        </section>
+        </Section>
       </div>
 
       {/* A tablet nobody touches refreshes itself every five minutes; this

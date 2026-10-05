@@ -145,3 +145,19 @@ describe("StoreComparison", () => {
     expect(second!.textContent).toContain("11% más caro que el mejor");
   });
 });
+
+describe("its place in the page outline", () => {
+  it("is a section of the page, at the page's section level and size", () => {
+    // It was an h3 at md:text-2xl straight after the chart's h2 at text-lg:
+    // the outline said "part of the chart", the type said "bigger than it"
+    // (WCAG 1.3.1).
+    prices = [row("a", "Carrefour", 1.45), row("b", "Mercadona", 1.19)];
+    const { container } = renderWithIntl(<StoreComparison productId="p1" />, {
+      locale: "es",
+    });
+
+    const heading = container.querySelector("#store-comparison");
+    expect(heading?.tagName).toBe("H2");
+    expect(heading?.className).not.toContain("md:text-2xl");
+  });
+});

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { DEFAULT_CURRENCY, formatMoney, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
+import { sectionHeading } from "@/components/ui/section";
 
 import type { JSX } from "react";
 import { formatDate } from "@/lib/dates";
@@ -85,12 +86,14 @@ export function StoreComparison({
       aria-labelledby="store-comparison"
       className="rounded-lg border border-border bg-card p-4"
     >
-      <h3
-        className="text-lg font-semibold text-heading md:text-2xl"
-        id="store-comparison"
-      >
+      {/* An h2, in the section size. It was an h3 at md:text-2xl directly
+          after the chart's h2 at text-lg: the outline said "part of the
+          chart" while the type said "more important than it" (WCAG 1.3.1).
+          It is a sibling section of the page, so it is the same level and
+          the same size. */}
+      <h2 className={sectionHeading()} id="store-comparison">
         {t("prices.comparison")}
-      </h3>
+      </h2>
       <p className="mt-1 text-muted-foreground">
         {t("prices.comparisonSummary", {
           average: formatUnitPrice(locale, average, currency),

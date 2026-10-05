@@ -8,6 +8,7 @@ import { StockStatus } from "@/components/inventory/StockStatus";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { Section } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState, SectionState } from "@/components/household/RouteState";
@@ -141,27 +142,22 @@ export default function DashboardPage(): JSX.Element {
         </ul>
       </section>
 
-      <section aria-labelledby="dashboard-restock">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2
-            id="dashboard-restock"
-            className="text-lg font-semibold text-heading"
-          >
-            {t("restockTitle")}
-          </h2>
+      <Section
+        aside={
           <Button asChild variant="link">
-              <Link href="/shopping">{t("restockListLink")}</Link>
-            </Button>
-        </div>
-
+            <Link href="/shopping">{t("restockListLink")}</Link>
+          </Button>
+        }
+        title={t("restockTitle")}
+      >
         {restock.length === 0 ? (
-          <p className="mt-2 text-muted-foreground">{t("restockEmpty")}</p>
+          <p className="text-muted-foreground">{t("restockEmpty")}</p>
         ) : (
           <>
             {/* A list, not a card: rows separate with dividers, and the box
                 that used to frame them is gone (Noel's rule, 2026-08-19 —
                 cards only where a card is justified). */}
-            <ul className="mt-3">
+            <ul>
               {restock.slice(0, MAX_ROWS).map((product) => (
                 <ItemRow
                   density="compact"
@@ -213,20 +209,16 @@ export default function DashboardPage(): JSX.Element {
             ) : null}
           </>
         )}
-      </section>
+      </Section>
 
-      <section aria-labelledby="dashboard-expiry">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2
-            id="dashboard-expiry"
-            className="text-lg font-semibold text-heading"
-          >
-            {t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
-          </h2>
+      <Section
+        aside={
           <Button asChild variant="link">
-              <Link href="/inventory">{t("expiryInventoryLink")}</Link>
-            </Button>
-        </div>
+            <Link href="/inventory">{t("expiryInventoryLink")}</Link>
+          </Button>
+        }
+        title={t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
+      >
 
         {expiryUnanswered !== null ? (
           <SectionState
@@ -235,10 +227,10 @@ export default function DashboardPage(): JSX.Element {
             onRetry={() => void expiryUnanswered.refetch()}
           />
         ) : atRisk === 0 ? (
-          <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
+          <p className="text-muted-foreground">{t("expiryEmpty")}</p>
         ) : (
           <>
-            <ul className="mt-3 divide-y divide-border">
+            <ul className="divide-y divide-border">
               {expiredItems.slice(0, MAX_ROWS).map((item) => (
                 <ExpiryRow
                   batch={item}
@@ -262,7 +254,7 @@ export default function DashboardPage(): JSX.Element {
             ) : null}
           </>
         )}
-      </section>
+      </Section>
       </div>
     </PageShell>
   );

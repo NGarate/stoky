@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { onlineManager } from "@tanstack/react-query";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { sectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -179,7 +180,7 @@ export default function ScanPage() {
           )}
 
           <div className="mt-8 p-4 bg-muted rounded-lg">
-            <h2 className="font-semibold mb-2 text-heading">{t("manualTitle")}</h2>
+            <h2 className={`mb-2 ${sectionHeading()}`}>{t("manualTitle")}</h2>
             {/* A label, not only a placeholder: the placeholder is gone the
                 moment somebody types, and with it the field's only name. */}
             <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="manual-barcode">
