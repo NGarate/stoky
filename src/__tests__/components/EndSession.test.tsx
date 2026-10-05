@@ -7,7 +7,7 @@ import { createContext, type ReactElement } from "react";
 import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
 import { useComposer } from "@/components/offline/Composer";
 import { persistKey } from "@/lib/offline/persist";
-import type { QueuedOp } from "@/lib/offline/queue";
+import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
 
 /**
  * The two controls that end a session, in one file because they share a hook.
@@ -69,6 +69,8 @@ const flush = mock(async () => {
 });
 
 let pending: QueuedOp[] = [];
+/** Changes the server refused, waiting for a person. `purgeAll` takes these too. */
+let failedOps: FailedOp[] = [];
 /** Whether the server accepts the revocation, per test. */
 let serverRefuses = false;
 
@@ -102,7 +104,7 @@ mock.module("@/lib/offline/queue-context", () => ({
   // into a syntax error in whichever suite renders the real one.
   WriteQueueContext: createContext(null),
   useWriteQueue: () => ({
-    state: { pending, failed: [], status: "idle", full: false },
+    state: { pending, failed: failedOps, status: "idle", full: false },
     enqueue: () => ({ ok: true as const, id: "x" }),
     drain: () => {},
     retry: () => {},
@@ -157,6 +159,7 @@ beforeEach(() => {
   purgeAll.mockClear();
   flush.mockClear();
   pending = [];
+  failedOps = [];
   steps = [];
   queryClient = new QueryClient();
   queryClient.setQueryData(
@@ -258,6 +261,71 @@ describe("with unsent changes", () => {
     expect(signOutAction).not.toHaveBeenCalled();
     expect(purgeAll).not.toHaveBeenCalled();
     expect(screen.queryByRole("group")).toBeAbsent();
+  });
+});
+
+describe("with changes the server refused", () => {
+  /**
+   * `purgeAll` empties `failed` as well as `pending`, and the panel counted
+   * only `pending` — so somebody with three changes to reconcile was told
+   * "No hay nada sin enviar" and then had them deleted.
+   */
+  beforeEach(() => {
+    failedOps = ["a", "b", "c"].map((id) => ({
+      ...op(id),
+      reason: "needs-reconciliation" as const,
+    }));
+  });
+
+  it("does not say there is nothing to lose", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+    const panel = screen.getByRole("group");
+    expect(panel).not.toHaveTextContent(/no hay nada sin enviar/i);
+    expect(panel).toHaveTextContent(/hay 3 cambios que el servidor no aceptó/i);
+  });
+
+  it("names leaving for what it does to them, and offers to look first", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+    expect(
+      screen.getByRole("button", { name: "Cerrar sesión y descartarlos" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Ver los cambios sin guardar" }),
+    ).toHaveAttribute("href", "/settings/unsaved");
+  });
+
+  it("does not offer to send them, which cannot help", async () => {
+    renderWithIntl(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Enviar y cerrar sesión" }),
+    ).toBeAbsent();
+  });
+
+  it("says the same on the control that ends every session", async () => {
+    renderWithIntl(<RevokeSessionsButton />);
+
+    const confirm = await openRevokeConfirm();
+
+    expect(confirm).not.toHaveTextContent(/no hay nada sin enviar/i);
+    expect(confirm).toHaveTextContent(/hay 3 cambios que el servidor no aceptó/i);
+    expect(
+      within(confirm).getByRole("button", { name: "Cerrarlas todas y descartarlos" }),
+    ).toBeInTheDocument();
+  });
+
+  it("carries the English copy too", async () => {
+    renderWithIntl(<SignOutButton />, { locale: "en" });
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(screen.getByRole("group")).toHaveTextContent(
+      /3 changes the server refused will be deleted/i,
+    );
   });
 });
 

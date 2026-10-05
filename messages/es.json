@@ -950,6 +950,7 @@
     "signOutDiscard": "Cerrar sesión y descartarlos",
     "signOutCancel": "Seguir aquí",
     "signOutWorking": "Cerrando sesión...",
+    "endSessionUnsaved": "{count, plural, one {Hay # cambio que el servidor no aceptó y se borrará} other {Hay # cambios que el servidor no aceptó y se borrarán}} al cerrar sesión.",
     "signOutShared": "Cierra la sesión al terminar si este dispositivo lo usa más gente.",
     "revokeAll": "Cerrar la sesión en todos los dispositivos",
     "revokeAllWhy": "Úsalo si pierdes un dispositivo o crees que alguien más entra con tu cuenta.",

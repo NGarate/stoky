@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,9 +32,10 @@ import type { JSX } from "react";
  */
 export function SignOutButton(): JSX.Element {
   const t = useTranslations("session");
+  const tOffline = useTranslations("offline");
   // No `before`: signing out of this device asks the server for nothing. The
   // purge sequence is shared with "end every session" — see `useEndSession`.
-  const { pending, working, leave, sendThenLeave } = useEndSession();
+  const { pending, unsaved, working, leave, sendThenLeave } = useEndSession();
   const [asking, setAsking] = useState(false);
   const [failed, setFailed] = useState<EndSessionPhase | null>(null);
   const titleId = useId();
@@ -100,8 +102,27 @@ export function SignOutButton(): JSX.Element {
         {t("signOutTitle")}
       </h3>
       <p className="mt-1 text-sm text-warn-foreground">
-        {pending > 0 ? t("signOutPending", { count: pending }) : t("signOutClean")}
+        {pending > 0
+          ? t("signOutPending", { count: pending })
+          : unsaved > 0
+            ? null
+            : t("signOutClean")}
+        {/* Refused changes go with the rest, and sending first cannot save
+            them — so they are said apart, and never as "nothing unsent". */}
+        {unsaved > 0 ? (
+          <>
+            {pending > 0 ? " " : null}
+            {t("endSessionUnsaved", { count: unsaved })}
+          </>
+        ) : null}
       </p>
+      {unsaved > 0 ? (
+        // Somewhere to look at them before they go, rather than a warning
+        // with no way to act on it.
+        <Button asChild className="px-0 text-warn-foreground" variant="link">
+          <Link href="/settings/unsaved">{tOffline("seeUnsaved")}</Link>
+        </Button>
+      ) : null}
 
       {failed !== null ? (
         <p className="mt-2 text-sm font-semibold text-warn-foreground" role="alert">
@@ -127,7 +148,7 @@ export function SignOutButton(): JSX.Element {
         >
           {working
             ? t("signOutWorking")
-            : pending > 0
+            : pending > 0 || unsaved > 0
               ? t("signOutDiscard")
               : t("signOut")}
         </Button>

@@ -54,6 +54,16 @@ export class EndSessionError extends Error {
 export interface EndSession {
   /** Unsent writes that leaving would discard. */
   pending: number;
+  /**
+   * Writes the server refused, waiting for a person to resolve them, that
+   * leaving would discard as well.
+   *
+   * `purgeAll` empties `failed` along with `pending`, so a count of pending
+   * alone told somebody with three changes to reconcile "nothing unsent" and
+   * then deleted them. Sending first cannot help these — the drain is done
+   * with them — so they are counted apart, to be said apart.
+   */
+  unsaved: number;
   /** True once a sequence has started, for disabling the controls. */
   working: boolean;
   /** Run `before`, purge this account's local state, and sign out. */
@@ -123,5 +133,11 @@ export function useEndSession(before?: () => Promise<unknown>): EndSession {
     await leave();
   }
 
-  return { pending: state.pending.length, working, leave, sendThenLeave };
+  return {
+    pending: state.pending.length,
+    unsaved: state.failed.length,
+    working,
+    leave,
+    sendThenLeave,
+  };
 }
