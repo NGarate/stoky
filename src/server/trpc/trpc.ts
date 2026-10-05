@@ -244,7 +244,8 @@ export const householdProcedure = protectedProcedure.use(async ({ ctx, next }) =
 
 /**
  * Household data: stock, products, lists, receipts, prices. Every role except
- * KITCHEN, which may look and consume and nothing else.
+ * KITCHEN, whose writes are the `read`-tier ones above: consuming stock,
+ * starting a shopping list and adding to one (D88).
  */
 export const writeProcedure = householdProcedure.use(({ ctx, next }) => {
   if (!CAPABILITY_ROLES.write.includes(ctx.role)) {

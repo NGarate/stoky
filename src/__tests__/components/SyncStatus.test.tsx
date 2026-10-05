@@ -454,7 +454,7 @@ describe("a refused consumption", () => {
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
-      /no ajustar el stock/i,
+      /no corregir la cantidad/i,
     );
     expect(screen.queryByLabelText(/cuánto hay ahora/i)).toBeAbsent();
   });

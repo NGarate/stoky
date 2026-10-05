@@ -139,7 +139,7 @@ describe("who may answer it", () => {
     renderWithIntl(<ReconcileDialog onClose={() => {}} op={op} />);
 
     expect(screen.queryByLabelText(/¿Cuánto hay ahora/)).toBeAbsent();
-    expect(screen.getByRole("dialog")).toHaveTextContent(/no ajustar el stock/i);
+    expect(screen.getByRole("dialog")).toHaveTextContent(/no corregir la cantidad/i);
   });
 });
 
