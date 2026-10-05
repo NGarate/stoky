@@ -8,6 +8,7 @@ import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
 import type { ReceiptStatus } from "@prisma/client";
@@ -59,9 +60,23 @@ export default function ReceiptsPage() {
   // paused offline or has failed — so with no signal, or after a 500, this
   // fell straight through to the empty state and told somebody they had
   // nothing. RouteState says which of loading, offline or failed it is.
+  // `asChild` so the anchor *is* the button: a `<Link>` wrapping a `<Button>`
+  // produced an `<a>` with no box of its own — 103×17, well under the target
+  // floor — around a button that had one, and an anchor containing a button
+  // is not valid HTML either (DESIGN_AUDIT A4.2).
+  const upload = (
+    <Button asChild>
+      <Link href="/receipts/upload">
+        <Plus aria-hidden="true" className="mr-2 size-5" />
+        {t("upload")}
+      </Link>
+    </Button>
+  );
+
   if (!data) {
     return (
       <RouteState
+        actions={upload}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -72,20 +87,8 @@ export default function ReceiptsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("title")}</h1>
-        {/* `asChild` so the anchor *is* the button: a `<Link>` wrapping a
-            `<Button>` produced an `<a>` with no box of its own — 103×17, well
-            under the target floor — around a button that had one, and an anchor
-            containing a button is not valid HTML either (DESIGN_AUDIT A4.2). */}
-        <Button asChild>
-          <Link href="/receipts/upload">
-            <Plus aria-hidden="true" className="mr-2 size-5" />
-            {t("upload")}
-          </Link>
-        </Button>
-      </div>
+    <PageShell width="index">
+      <PageHeader actions={upload} title={t("title")} />
 
       {receipts.length === 0 ? (
         <div className="text-center py-12 rounded-lg border border-border bg-muted">
@@ -138,6 +141,6 @@ export default function ReceiptsPage() {
           ))}
         </ul>
       )}
-    </div>
+    </PageShell>
   );
 }

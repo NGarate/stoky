@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
@@ -46,11 +47,10 @@ export default function SettingsPage(): JSX.Element {
   const tStart = useTranslations("start");
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
+    <PageShell width="form">
+      <PageHeader intro={t("intro")} title={t("title")} />
 
-      <ul className="mt-6 space-y-4">
+      <ul className="space-y-4">
         <li className="rounded border border-border bg-card p-4">
           <h2 className="text-lg font-semibold text-heading">
             <Button asChild variant="link">
@@ -145,6 +145,6 @@ export default function SettingsPage(): JSX.Element {
 
       <h2 className="mt-8 text-lg font-semibold text-heading">{t("pendingTitle")}</h2>
       <p className="mt-2 text-muted-foreground">{t("pendingDescription")}</p>
-    </div>
+    </PageShell>
   );
 }

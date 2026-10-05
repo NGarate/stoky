@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 /**
- * Every dashboard screen says how wide it is.
+ * Every dashboard screen says how wide it is, and draws its top the same way.
  *
  * The layout gives each of them `mx-auto max-w-7xl p-4` and then each screen
  * narrows within it. Three did not: `/prices` and `/shopping/lists` had no
@@ -13,11 +13,9 @@ import { join, relative } from "node:path";
  * bound *and* a second `p-6` on top of the layout's padding, so it was both
  * narrower and more inset than anything else.
  *
- * The check is that a width is *stated*, not which one. `/shopping` is a
- * phone-first column at 2xl and `/kitchen` is read from a metre away at 5xl;
- * both are decisions with reasons written down, and a rule that forced them
- * to agree would be worse than the drift it replaced. What is not a decision
- * is a screen that never says.
+ * The width now comes from the kind of screen — `PageShell`'s `width` — and
+ * the title from `PageHeader`, so the checks below are that each screen goes
+ * through those two rather than restating what they decide.
  */
 const ROOT = join(import.meta.dir, "..", "..", "..");
 const DASHBOARD = join(ROOT, "src", "app", "(dashboard)");
@@ -32,21 +30,72 @@ function screens(dir: string, found: string[] = []): string[] {
   return found;
 }
 
+/** The screens that render something — a route that only redirects has no box. */
+function rendering(): Array<{ path: string; name: string; source: string }> {
+  return screens(DASHBOARD)
+    .map((path) => ({
+      path,
+      name: relative(DASHBOARD, path),
+      source: readFileSync(path, "utf8"),
+    }))
+    .filter(({ source }) => !source.includes("permanentRedirect"));
+}
+
+/**
+ * Which screens are held to the shared header. Index screens first; the
+ * sub-pages join as they adopt it, and when every screen has, this list is
+ * replaced by all of them.
+ */
+const HEADED = new Set([
+  "inventory/page.tsx",
+  "products/page.tsx",
+  "prices/page.tsx",
+  "receipts/page.tsx",
+  "shopping/lists/page.tsx",
+  "settings/page.tsx",
+  "settings/stores/page.tsx",
+  "settings/locations/page.tsx",
+]);
+
 describe("a dashboard screen states its width", () => {
-  it("finds the screens, so the check below is not vacuous", () => {
+  it("finds the screens, so the checks below are not vacuous", () => {
     expect(screens(DASHBOARD).length).toBeGreaterThan(10);
   });
 
   it("leaves none of them to fill whatever it is given", () => {
-    const unbounded = screens(DASHBOARD)
-      .map((path) => ({ path, source: readFileSync(path, "utf8") }))
-      // A route that only redirects renders no box to bound.
-      .filter(({ source }) => !source.includes("permanentRedirect"))
-      .filter(({ source }) => !/max-w-[0-9a-z]+/.test(source))
-      .map(({ path }) => relative(DASHBOARD, path));
+    const unbounded = rendering()
+      .filter(
+        ({ source }) =>
+          !/max-w-[0-9a-z]+/.test(source) && !/<PageShell[^>]*width=/.test(source),
+      )
+      .map(({ name }) => name);
 
-    // If this is red: pick the width the screen's peers use — 6xl for a data
-    // index, 2xl for a column read on a phone — and say so.
+    // If this is red: wrap the screen in `PageShell` with the width of its
+    // kind — `index` for a list of things, `form` for a column read on a
+    // phone, `detail` for one thing, `screen` for an overview.
     expect(unbounded).toEqual([]);
+  });
+});
+
+describe("a dashboard screen draws its top through PageHeader", () => {
+  it("writes no h1 of its own", () => {
+    // Five arrangements of back link, title and actions, and two title
+    // sizes, came from every screen writing its own. `PageHeader` holds the
+    // one arrangement and the one size; a hand-written `<h1>` is a sixth.
+    const own = rendering()
+      .filter(({ name }) => HEADED.has(name))
+      .filter(({ source }) => /<h1[\s>]/.test(source))
+      .map(({ name }) => name);
+
+    expect(own).toEqual([]);
+  });
+
+  it("draws the header it is held to", () => {
+    const headerless = rendering()
+      .filter(({ name }) => HEADED.has(name))
+      .filter(({ source }) => !source.includes("<PageHeader"))
+      .map(({ name }) => name);
+
+    expect(headerless).toEqual([]);
   });
 });

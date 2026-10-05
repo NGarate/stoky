@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -166,9 +167,23 @@ export function InventoryView(): JSX.Element {
   // the skeleton for ever, with no message and no way forward — ISSUES.md
   // UI-8 — and the one failure no amount of waiting fixes is an account
   // with no household, which is HOUSE-1.
+  // Neither needs the list to have arrived, so both are drawn while it has
+  // not — RouteState puts them in the same place the loaded screen does.
+  const actions = (
+    <>
+      <Button asChild>
+        <Link href="/inventory/add">{t("addStock")}</Link>
+      </Button>
+      <Button asChild variant="outline">
+        <Link href="/inventory/consume">{t("consumeStock")}</Link>
+      </Button>
+    </>
+  );
+
   if (!result) {
     return (
       <RouteState
+        actions={actions}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -181,20 +196,8 @@ export function InventoryView(): JSX.Element {
   const products = result.products;
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          {t("title")}
-        </h1>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild className="md:text-lg" variant="default">
-            <Link href="/inventory/add" > {t("addStock")} </Link>
-          </Button>
-          <Button asChild className="md:text-lg" variant="outline">
-            <Link href="/inventory/consume" > {t("consumeStock")} </Link>
-          </Button>
-        </div>
-      </div>
+    <PageShell width="index">
+      <PageHeader actions={actions} title={t("title")} />
 
       {filterRestock ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-foreground bg-warn px-4 py-3">
@@ -414,6 +417,6 @@ export function InventoryView(): JSX.Element {
         previousLabel={common("previous")}
         status={t("pageStatus", { page: result.page, pages: result.pageCount })}
       />
-    </div>
+    </PageShell>
   );
 }

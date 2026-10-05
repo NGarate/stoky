@@ -3,7 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { TRPCClientError } from "@trpc/client";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
@@ -332,14 +332,18 @@ export default function LocationsPage(): JSX.Element {
   // Three states, not two. `if (isLoading)` alone falls through on a failed
   // query and renders the empty state below, so someone with ten locations is
   // told they have none (ISSUES.md UI-9).
+  const back = { href: "/settings", label: t("backToSettings") };
+
   if (!locationsQuery.data) {
     return (
       <RouteState
+        back={back}
         error={locationsQuery.error}
         fetchStatus={locationsQuery.fetchStatus}
         isLoading={locationsQuery.isPending}
         onRetry={() => void locationsQuery.refetch()}
         title={t("title")}
+        width="form"
       />
     );
   }
@@ -347,19 +351,23 @@ export default function LocationsPage(): JSX.Element {
   const saving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <BackLink href="/settings">{t("backToSettings")}</BackLink>
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        {canManage && !isEditing ? (
-          <Button onClick={() => setIsEditing(true)} type="button">
-            {t("create")}
-          </Button>
-        ) : null}
-      </div>
-
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
+    <PageShell width="form">
+      {/* The intro sits under the title it explains. The create button used
+          to come between them, so the sentence saying what the screen is for
+          was read after the control that acts on it. */}
+      <PageHeader
+        actions={
+          canManage && !isEditing ? (
+            <Button onClick={() => setIsEditing(true)} type="button">
+              {t("create")}
+            </Button>
+          ) : undefined
+        }
+        back={back}
+        className="mb-0"
+        intro={t("intro")}
+        title={t("title")}
+      />
 
       {/* Said once, plainly, rather than left to be discovered by pressing
           something. A reader who cannot change the locations can still read
@@ -459,6 +467,6 @@ export default function LocationsPage(): JSX.Element {
           />
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

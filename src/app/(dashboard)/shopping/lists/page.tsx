@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { AutoListPreview } from "@/components/shopping/AutoListPreview";
@@ -62,6 +62,29 @@ export default function ShoppingListsPage() {
     }
   };
 
+  // Back to the screen this used to be. Filing is not shopping.
+  const back = { href: "/shopping", label: t("shopping.backToShop") };
+
+  // One primary. Both used to be filled, so the screen offered two equal
+  // answers to "what do I do here" — and at 390px the pair beside the title
+  // pushed the page to 399px wide (WCAG 1.4.10). Creating a list is the
+  // thing this screen is for; generating one is the shortcut beside it.
+  const actions = (
+    <>
+      <Button onClick={() => setIsCreating(true)} type="button">
+        {t("shopping.create")}
+      </Button>
+      <Button
+        disabled={generateMutation.isPending}
+        onClick={() => generateMutation.mutate()}
+        type="button"
+        variant="outline"
+      >
+        {t("shopping.generateFromLowStock")}
+      </Button>
+    </>
+  );
+
   // Three states, not two. `if (isLoading)` alone falls through on a failed
   // query and renders the empty state below, so someone with four lists is
   // told they have none and the only tell is that creating one appears to do
@@ -69,6 +92,7 @@ export default function ShoppingListsPage() {
   if (!lists) {
     return (
       <RouteState
+        back={back}
         error={listsQuery.error}
         fetchStatus={listsQuery.fetchStatus}
         isLoading={listsQuery.isPending}
@@ -82,34 +106,9 @@ export default function ShoppingListsPage() {
     // Bounded like every other index. Unbounded, it ran the full width of the
     // layout's 7xl while `/inventory` and `/products` beside it stopped at
     // 6xl — the same list, two line lengths, depending which one you opened.
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-heading">
-            {t("shopping.title")}
-          </h1>
-          {/* Back to the screen this used to be. Filing is not shopping. */}
-          <Button asChild className="mt-1" variant="link">
-            <Link href="/shopping" > {t("shopping.shopTitle")} </Link>
-          </Button>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            onClick={() => generateMutation.mutate()}
-            disabled={generateMutation.isPending}
-          >
-            {t("shopping.generateFromLowStock")}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setIsCreating(true)}
-          >
-            {t("shopping.create")}
-          </Button>
-        </div>
-      </div>
-
+    <PageShell width="index">
+      <PageHeader actions={actions} back={back} title={t("shopping.title")} />
+      <div className="space-y-6">
       <AutoListPreview />
 
       {isCreating && (
@@ -209,6 +208,7 @@ export default function ShoppingListsPage() {
           })}
         </ul>
       )}
-    </div>
+      </div>
+    </PageShell>
   );
 }

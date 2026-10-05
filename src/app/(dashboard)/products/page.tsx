@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import {
   StockAmount,
   StockStatus,
@@ -81,9 +82,22 @@ export default function ProductsPage(): JSX.Element {
   // the skeleton for ever, with no message and no way forward — ISSUES.md
   // UI-8 — and the one failure no amount of waiting fixes is an account
   // with no household, which is HOUSE-1.
+  // Primary first, in reading order as well as in colour.
+  const actions = (
+    <>
+      <Button asChild>
+        <Link href="/products/new">{t("new")}</Link>
+      </Button>
+      <Button asChild variant="outline">
+        <Link href="/products/scan">{t("scan")}</Link>
+      </Button>
+    </>
+  );
+
   if (!result) {
     return (
       <RouteState
+        actions={actions}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -101,20 +115,8 @@ export default function ProductsPage(): JSX.Element {
   const truncated = Boolean(result.nextCursor);
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          {t("title")}
-        </h1>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/products/scan">{t("scan")}</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/products/new">{t("new")}</Link>
-          </Button>
-        </div>
-      </div>
+    <PageShell width="index">
+      <PageHeader actions={actions} title={t("title")} />
 
       {truncated ? (
         <p className="mb-4 rounded border border-border bg-card p-3 text-sm text-muted-foreground">
@@ -259,6 +261,6 @@ export default function ProductsPage(): JSX.Element {
           />
         ))}
       </ul>
-    </div>
+    </PageShell>
   );
 }

@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
@@ -46,10 +47,9 @@ export default function PricesPage() {
     // Bounded like every other index. Unbounded, it ran the full width of the
     // layout's 7xl while `/inventory` and `/products` beside it stopped at
     // 6xl — the same list, two line lengths, depending which one you opened.
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("prices.title")}</h1>
-      </div>
+    <PageShell width="index">
+      <PageHeader title={t("prices.title")} />
+      <div className="space-y-6">
 
       {/* The placeholder was doing the job of the label, which means the field
           loses its name the moment someone types in it — and keeps it lost for
@@ -124,6 +124,7 @@ export default function PricesPage() {
           </ul>
         )}
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }
