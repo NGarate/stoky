@@ -182,8 +182,12 @@ is what is wrong today.
 `ISSUES.md` CRITICAL-4 is closed as of Phase 3: `src/lib/rate-limit.ts` counts
 sign-ins and registrations per IP in Valkey, at the numbers `CLAUDE.md`
 specifies — 5 sign-ins per 15 minutes, 3 registrations per hour. A successful
-sign-in clears its counter, so a household signing in from several devices is
-not locked out by a limit meant for someone guessing.
+sign-in is not charged to its address — the one attempt that succeeded is
+refunded — so a household signing in from several devices is not locked out by
+a limit meant for someone guessing. It is refunded rather than the counter
+cleared, because anybody can sign in successfully from an address: clearing let
+an attacker with an account of their own interleave guesses at other people's
+passwords with sign-ins to their own and never fill the bucket.
 
 **Sign-in is also counted per account**, at 10 attempts per 15 minutes. NIST
 SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
@@ -191,7 +195,8 @@ SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
 addresses gets the per-IP budget from each of them, which is five hundred
 attempts against one password. With both limits in force, a hundred addresses
 buy ten. The number is higher than the per-IP one because this counter cannot
-tell a household's phone from its tablet, and a successful sign-in clears both.
+tell a household's phone from its tablet, and a successful sign-in clears it —
+safe here, since only that account's own password can.
 
 The counter is keyed on a SHA-256 of the normalised address rather than the
 address, so a `KEYS rl:login:acct:*` on Valkey — available to anything on the
