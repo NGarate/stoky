@@ -131,6 +131,54 @@ describe("Authentication Flow Integration Tests", () => {
       expect(error?.message).toContain("Email already registered");
     });
 
+    it("treats an address in any case as one account", async () => {
+      // Registration stored the case as typed and sign-in compared exactly:
+      // the account below could not sign in with the address in lower case,
+      // and the lower-case spelling could be registered as a second account.
+      const lower = runEmail("mixed-case");
+      const typed = `  ${lower.toUpperCase()} `;
+      const password = "SecurePassword123!";
+
+      const result = await caller.auth.register({
+        email: typed,
+        name: generateTestName("Mixed Case"),
+        password,
+      });
+      expect(result.user.email).toBe(lower);
+
+      expect(await signInWith({ email: lower, password })).not.toBeNull();
+      expect(await signInWith({ email: typed, password })).not.toBeNull();
+
+      await expect(
+        caller.auth.register({ email: lower, name: "Second", password }),
+      ).rejects.toThrow("Email already registered");
+      expect(
+        await prisma.user.count({ where: { email: { equals: lower, mode: "insensitive" } } }),
+      ).toBe(1);
+    });
+
+    it("refuses a second spelling of an address even from a write that skips the schema", async () => {
+      // The unique index on lower(email), under the schema's normalisation:
+      // a script, a seed or a future procedure that forgets to lowercase
+      // still cannot create a twin of an existing account.
+      const lower = runEmail("raw-twin");
+      await createTestUser({ email: lower, name: generateTestName("Raw Twin") });
+
+      let thrown: unknown;
+      try {
+        await prisma.user.create({
+          data: { email: lower.toUpperCase(), name: "Twin", passwordHash: "x" },
+        });
+      } catch (error) {
+        thrown = error;
+      } finally {
+        // Not reached by the run marker's cleanup, which matches case-sensitively.
+        await prisma.user.deleteMany({ where: { email: lower.toUpperCase() } });
+      }
+
+      expect((thrown as { code?: string } | undefined)?.code).toBe("P2002");
+    });
+
     it("should fail to register with invalid email format", async () => {
       const name = generateTestName("Invalid Email User");
       const password = "SecurePassword123!";

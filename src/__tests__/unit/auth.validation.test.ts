@@ -151,6 +151,24 @@ describe("Authentication Validation Schemas", () => {
       expect(result.success).toBe(true);
     });
 
+    it("stores an address in the one spelling sign-in looks up", () => {
+      // Registration kept the case as typed and sign-in compared exactly, so
+      // "Noel@Example.com" could register and then never sign in as
+      // "noel@example.com" — or register a second account under it.
+      const registered = registerSchema.parse({
+        email: "  Noel@Example.COM ",
+        name: "Noel",
+        password: "nevera cocina despensa",
+      });
+      const signingIn = loginSchema.parse({
+        email: "NOEL@example.com",
+        password: "nevera cocina despensa",
+      });
+
+      expect(registered.email).toBe("noel@example.com");
+      expect(signingIn.email).toBe(registered.email);
+    });
+
     it("refuses a password that is only long enough for the old rule", () => {
       const result = registerSchema.safeParse({
         email: "a@b.co",
