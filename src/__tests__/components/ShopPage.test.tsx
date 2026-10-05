@@ -89,7 +89,8 @@ describe("one task per screen", () => {
     renderWithIntl(<ShopPage />);
 
     const scan = screen.getByRole("link", { name: "Escanear" });
-    expect(scan).toHaveAttribute("href", "/products/scan");
+    // `?from=shopping`, so the scan page leads back here, not to the catalogue.
+    expect(scan).toHaveAttribute("href", "/products/scan?from=shopping");
   });
 
   it("keeps managing lists as a link, not a second primary action", () => {

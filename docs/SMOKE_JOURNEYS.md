@@ -294,6 +294,12 @@ Visible outcome, in all four cases:
   barcode already filled in — never a refusal
 - **no camera**: an error that says what to do instead, with a barcode field
   already focused
+- **a lookup the server refuses**: said beside the field, with the code
+  already in it, rather than the camera silently starting again
+
+The focus half of "no camera" and the refused lookup were only built on
+2026-10-06; until then the camera error left focus where it was and a refused
+lookup restarted the scanner without a word. `ScanPage.test.tsx` pins both.
 
 Proof required:
 

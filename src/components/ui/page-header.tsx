@@ -74,10 +74,23 @@ export interface PageBack {
   label: string;
 }
 
+function isPageBack(back: PageBack | ReactNode): back is PageBack {
+  return (
+    typeof back === "object" &&
+    back !== null &&
+    "href" in back &&
+    "label" in back
+  );
+}
+
 export interface PageHeaderProps {
   title: ReactNode;
-  /** The way back out of a sub-page. Above the title, always. */
-  back?: PageBack;
+  /**
+   * The way back out of a sub-page. Above the title, always. A node only when
+   * the destination depends on how the person arrived (the scanner, reached
+   * from the shop or from the catalogue); it must render a `<BackLink>`.
+   */
+  back?: PageBack | ReactNode;
   /** One sentence saying what this screen is for. */
   intro?: ReactNode;
   /**
@@ -120,7 +133,11 @@ export function PageHeader({
 }: PageHeaderProps): JSX.Element {
   return (
     <div className={cn("mb-6", className)}>
-      {back ? <BackLink href={back.href}>{back.label}</BackLink> : null}
+      {isPageBack(back) ? (
+        <BackLink href={back.href}>{back.label}</BackLink>
+      ) : (
+        back ?? null
+      )}
       <div
         className={cn(
           "flex flex-col gap-4 md:flex-row md:items-start md:justify-between",

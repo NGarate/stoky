@@ -280,7 +280,9 @@
     "scan": {
       "title": "Escanear Código de Barras",
       "backToProducts": "Volver a productos",
+      "backToShopping": "Volver a la compra",
       "processing": "Procesando código...",
+      "lookupFailed": "No se ha podido buscar el código {barcode}. Vuelve a escanearlo o escríbelo abajo.",
       "scanAgain": "Escanear otro código",
       "manualTitle": "Código manual",
       "manualLabel": "Código de barras",

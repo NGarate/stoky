@@ -2,7 +2,8 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { createContext } from "react";
 import { onlineManager } from "@tanstack/react-query";
-import { cleanup, screen } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
+import { TRPCClientError } from "@trpc/client";
 import userEvent from "@testing-library/user-event";
 import { renderWithIntl } from "../utils/render";
 import type { QueuedOp } from "@/lib/offline/queue";
@@ -19,9 +20,20 @@ import type { QueuedOp } from "@/lib/offline/queue";
 const enqueue = mock((_op: unknown) => ({ ok: true as const, id: "op-1" }));
 /** What the server answers a scan with; null leaves the mutation unanswered. */
 let scanResult: { product: { id: string; name: string } | null; source: string } | null = null;
-let scanCallbacks: { onSuccess?: (result: unknown, input: unknown) => void } = {};
+let scanCallbacks: {
+  onSuccess?: (result: unknown, input: unknown) => void;
+  onError?: (error: unknown, input: unknown) => void;
+} = {};
+/** When set, the server refuses the lookup with this instead of answering. */
+let scanError: unknown = null;
 const scanMutate = mock((input: unknown) => {
-  if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult, input);
+  // Later, as a real refusal arrives: by then the page is showing its
+  // "looking up" state, and the manual field is not on screen.
+  if (scanError !== null) {
+    const error = scanError;
+    setTimeout(() => scanCallbacks.onError?.(error, input), 0);
+  }
+  else if (scanResult !== null) scanCallbacks.onSuccess?.(scanResult, input);
 });
 const productInvalidate = mock(() => Promise.resolve());
 let pending: QueuedOp[] = [];
@@ -53,12 +65,29 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const routerPush = mock((_href: string) => {});
+let searchParams = new URLSearchParams();
 mock.module("next/navigation", () => ({
   useRouter: () => ({ push: routerPush, replace: () => {}, refresh: () => {} }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
   usePathname: () => "/products/scan",
   useParams: () => ({}),
   redirect: () => {},
+}));
+
+/**
+ * The camera library, replaced so a camera failure is something a test
+ * does rather than something the environment happens to do. It was left
+ * real, and happy-dom's missing MediaDevices made it fail on every render —
+ * until `Scanner.test.tsx`, whose own mock of this module is process-wide,
+ * happened to load first, and then it never failed at all. The focus test
+ * went red or green by file order.
+ */
+let scannerOnError: ((error?: Error) => void) | undefined;
+mock.module("@thewirv/react-barcode-scanner", () => ({
+  BarcodeScanner: (props: { onError: (error?: Error) => void }) => {
+    scannerOnError = props.onError;
+    return <div data-testid="barcode-scanner" />;
+  },
 }));
 
 const { default: ScanPage } = await import("@/app/(dashboard)/products/scan/page");
@@ -86,6 +115,8 @@ beforeEach(() => {
   routerPush.mockClear();
   productInvalidate.mockClear();
   scanResult = null;
+  scanError = null;
+  searchParams = new URLSearchParams();
   pending = [];
   onlineManager.setOnline(true);
 });
@@ -195,5 +226,80 @@ describe("scanning with no signal", () => {
     // The dedupe is the behaviour that matters: a barcode already waiting is
     // not queued a second time.
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+/** A refusal the server sent, with a status — not a dropped connection. */
+function serverError(): TRPCClientError<never> {
+  const error = new TRPCClientError<never>("lookup failed");
+  Object.defineProperty(error, "data", { value: { httpStatus: 502 } });
+  return error;
+}
+
+describe("a lookup that fails", () => {
+  it("says so, and what to do, instead of quietly scanning again", async () => {
+    // A refused lookup restarted the camera and said nothing, so the code
+    // seemed simply not to have been read — and scanning it again failed
+    // again, silently, for as long as anyone kept trying.
+    scanError = serverError();
+    render();
+    await typeBarcode("8410000666666");
+
+    expect(
+      await screen.findByText(
+        "No se ha podido buscar el código 8410000666666. Vuelve a escanearlo o escríbelo abajo.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the code in the field, ready to send again", async () => {
+    scanError = serverError();
+    render();
+    await typeBarcode("8410000777777");
+
+    await waitFor(() => {
+      const field = screen.getByLabelText("Código de barras");
+      expect(field).toHaveValue("8410000777777");
+      expect(field).toHaveFocus();
+    });
+  });
+});
+
+describe("a camera that cannot be used", () => {
+  it("puts focus in the field where the code can be typed instead", () => {
+    // §7 rule 4: "No camera available. Type the barcode instead" — with the
+    // field already focused. The refusal a phone gives when the permission
+    // was denied.
+    render();
+    expect(screen.getByLabelText("Código de barras")).not.toHaveFocus();
+
+    act(() => {
+      scannerOnError?.(
+        Object.assign(new Error("Permission denied"), { name: "NotAllowedError" }),
+      );
+    });
+
+    expect(screen.getByLabelText("Código de barras")).toHaveFocus();
+  });
+});
+
+describe("the way back", () => {
+  it("goes to the products by default", () => {
+    render();
+
+    expect(
+      screen.getByRole("link", { name: /Volver a productos/ }),
+    ).toHaveAttribute("href", "/products");
+  });
+
+  it("goes back to the shop when the shop is where scanning started", () => {
+    // Screen A's scan button opens this page, and the way back led to the
+    // product catalogue — a place the person in the aisle never was.
+    searchParams = new URLSearchParams("from=shopping");
+    render();
+
+    expect(
+      screen.getByRole("link", { name: /Volver a la compra/ }),
+    ).toHaveAttribute("href", "/shopping");
   });
 });

@@ -105,7 +105,7 @@ export default function ShopPage(): JSX.Element {
         asChild
         className="mt-4 min-h-[64px] w-full gap-3 rounded-xl py-4 text-lg font-semibold"
       >
-        <Link href="/products/scan">
+        <Link href="/products/scan?from=shopping">
           <ScanLine aria-hidden="true" className="size-5 shrink-0" />
           {t("scan")}
         </Link>

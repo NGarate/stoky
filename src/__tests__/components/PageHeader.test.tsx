@@ -43,6 +43,25 @@ describe("PageHeader", () => {
     expect(back.getAttribute("href")).toBe("/settings");
   });
 
+  it("takes a back link chosen at runtime, above the title like any other", () => {
+    // The scanner's way back depends on whether the person came from the
+    // shop or the catalogue, so the page passes the link itself.
+    const { container } = render(
+      <PageHeader
+        back={<a href="/shopping">Volver a la compra</a>}
+        title="Escanear código de barras"
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "Volver a la compra" });
+    expect(link.getAttribute("href")).toBe("/shopping");
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(
+      link.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.querySelectorAll("a")).toHaveLength(1);
+  });
+
   it("renders exactly one h1 and nothing it was not given", () => {
     const { container } = render(<PageHeader title="Inventario" />);
 
