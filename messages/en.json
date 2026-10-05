@@ -55,10 +55,6 @@
   "dashboard": {
     "title": "Dashboard",
     "intro": "What the house is running out of and what expires soon, at a glance.",
-    "loading": "Loading the household overview...",
-    "errorTitle": "The overview could not be loaded",
-    "errorNoHousehold": "Your account does not belong to a household yet. Create or join one to see the inventory.",
-    "errorGeneric": "Something went wrong loading the data. Try again in a moment.",
     "restockTitle": "Needs restocking",
     "restockListLink": "Open the shopping list",
     "restockEmpty": "Nothing is missing: everything is above its minimum.",

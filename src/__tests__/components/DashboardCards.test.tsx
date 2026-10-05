@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
+import { TRPCClientError } from "@trpc/client";
 import { renderWithIntl } from "../utils/render";
 
 /**
@@ -54,16 +55,36 @@ const expiredItem = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-let overviewStub: {
-  data: { products: ReturnType<typeof row>[]; nextCursor?: string } | undefined;
+interface Stub<T> {
+  data: T | undefined;
   isPending: boolean;
-  error: null;
-};
-let expiringStub: { data: unknown[]; isPending: boolean; error: null };
-let expiredStub: { data: unknown[]; isPending: boolean; error: null };
+  error: unknown;
+  fetchStatus: "fetching" | "paused" | "idle";
+  refetch: () => void;
+}
+
+let overviewStub: Stub<{ products: ReturnType<typeof row>[]; nextCursor?: string }>;
+let expiringStub: Stub<unknown[]>;
+let expiredStub: Stub<unknown[]>;
+
+/** A refusal shaped the way tRPC delivers one to the browser. */
+function trpcError(code: string, httpStatus: number): TRPCClientError<never> {
+  const error = new TRPCClientError<never>("User not in a household");
+  Object.defineProperty(error, "data", { value: { code, httpStatus } });
+  return error;
+}
+
+function answered<T>(data: T): Stub<T> {
+  return { data, isPending: false, error: null, fetchStatus: "idle", refetch: () => {} };
+}
 
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    // RouteState's household form, reached only on the no-household branch.
+    useUtils: () => ({ invalidate: () => Promise.resolve() }),
+    household: {
+      create: { useMutation: () => ({ mutate: () => {}, isPending: false }) },
+    },
     inventory: {
       getStockOverview: {
         useQuery: (input: Record<string, unknown>) => {
@@ -86,13 +107,9 @@ const { default: DashboardPage } = await import(
 );
 
 beforeEach(() => {
-  overviewStub = {
-    data: { products: [row()] },
-    isPending: false,
-    error: null,
-  };
-  expiringStub = { data: [], isPending: false, error: null };
-  expiredStub = { data: [], isPending: false, error: null };
+  overviewStub = answered({ products: [row()] });
+  expiringStub = answered<unknown[]>([]);
+  expiredStub = answered<unknown[]>([]);
   overviewCalls = [];
 });
 
@@ -172,6 +189,65 @@ describe("what the Panel does not say twice", () => {
         (input) => input.needsRestock === true && input.limit === 100,
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * Gated on the data it is built from, not on every query's progress.
+ *
+ * It waited for all three queries to stop being pending — and
+ * `getExpiredItems` was not persisted, so offline it was pending for ever and
+ * the Panel said "loading" over a restock list it already had. Any error
+ * replaced the whole page, so one background refetch failing took a loaded
+ * panel away. And no-household was found by looking for the word in the
+ * message text.
+ */
+describe("when not every question has an answer", () => {
+  it("shows the restock list while the expired query waits for a signal", () => {
+    expiredStub = {
+      data: undefined,
+      isPending: true,
+      error: null,
+      fetchStatus: "paused",
+      refetch: () => {},
+    };
+    renderWithIntl(<DashboardPage />, { locale: "es" });
+
+    expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
+  });
+
+  it("keeps a loaded panel when a background refetch fails", () => {
+    overviewStub = { ...answered({ products: [row()] }), error: trpcError("INTERNAL_SERVER_ERROR", 500) };
+    renderWithIntl(<DashboardPage />, { locale: "es" });
+
+    expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
+  });
+
+  it("does not call a failed expiry question good news", () => {
+    expiringStub = {
+      data: undefined,
+      isPending: false,
+      error: trpcError("INTERNAL_SERVER_ERROR", 500),
+      fetchStatus: "idle",
+      refetch: () => {},
+    };
+    renderWithIntl(<DashboardPage />, { locale: "es" });
+
+    expect(screen.queryByText("No hay nada caducado ni a punto de caducar.")).toBeAbsent();
+    expect(screen.getByText("No se han podido cargar los datos")).toBeInTheDocument();
+  });
+
+  it("offers a household by the server's code, not by the message's words", () => {
+    overviewStub = {
+      data: undefined,
+      isPending: false,
+      error: trpcError("PRECONDITION_FAILED", 412),
+      fetchStatus: "idle",
+      refetch: () => {},
+    };
+    renderWithIntl(<DashboardPage />, { locale: "es" });
+
+    expect(screen.getByText("Todavía no tienes un hogar")).toBeInTheDocument();
   });
 });
 

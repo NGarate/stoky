@@ -9,6 +9,53 @@ import { Input } from "@/components/ui/input";
 import type { FormEvent, JSX } from "react";
 
 /**
+ * The same three states for one section of a screen rather than a whole one.
+ *
+ * Some screens are several questions, and one of them failing is not the
+ * screen failing: the dashboard's restock list is still true when its expiry
+ * question could not be asked. Those sections used to treat "no answer" as
+ * "an empty answer" — `data ?? []` — so a failed or paused expiry query said
+ * "nothing is about to go off", which is the one failure that reads as good
+ * news.
+ *
+ * No title and no household form: the route around it owns both. A section
+ * is told what its query is doing and says so, in the same polite region
+ * shape `RouteState` uses and for the same reason.
+ */
+export function SectionState({
+  error,
+  fetchStatus,
+  onRetry,
+}: Omit<RouteStateProps, "title" | "isLoading">): JSX.Element {
+  const t = useTranslations("household");
+  const offline = useTranslations("offline");
+  const paused = fetchStatus === "paused";
+  const failed = !paused && error !== null && error !== undefined;
+
+  return (
+    <div aria-live="polite" className="mt-2" role="status">
+      {paused || failed ? (
+        <>
+          <p className="text-muted-foreground">
+            {paused ? offline("nothingSavedTitle") : t("loadFailedTitle")}
+          </p>
+          <Button className="mt-2" onClick={onRetry} size="sm" type="button" variant="outline">
+            {paused ? offline("refresh") : t("retry")}
+          </Button>
+        </>
+      ) : (
+        <div aria-busy="true" className="space-y-2">
+          <p className="sr-only">{t("loading")}</p>
+          {["skeleton-1", "skeleton-2"].map((key) => (
+            <div key={key} className="h-12 animate-pulse rounded bg-muted" />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * What a data route shows when it has no data yet.
  *
  * Three states, and telling them apart is the whole point. Every dashboard

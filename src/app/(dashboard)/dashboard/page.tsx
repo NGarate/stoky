@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { RouteState, SectionState } from "@/components/household/RouteState";
 import type { JSX, ReactNode } from "react";
 
 /**
@@ -83,46 +84,38 @@ export default function DashboardPage(): JSX.Element {
     });
   }, [restockRows]);
 
-  const isPending =
-    restockQuery.isPending || expiring.isPending || expired.isPending;
-  const failed = restockQuery.error ?? expiring.error ?? expired.error;
-
-  if (isPending) {
+  /**
+   * Gated on the data the page is built from, not on what every query is
+   * doing.
+   *
+   * It used to wait for all three to stop being pending, and
+   * `getExpiredItems` was not persisted — so offline it was pending for ever
+   * and the screen said "loading" over a restock list it already had. And any
+   * error replaced the page, so one background refetch failing took a loaded
+   * panel away. The restock list is the page: without it, RouteState says
+   * which of loading, offline, failed or no-household it is (by the server's
+   * code, where this used to look for "household" in the message text).
+   */
+  if (!restockRows) {
     return (
-      <div className="mx-auto max-w-5xl">
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
-          {t("loading")}
-        </p>
-      </div>
+      <RouteState
+        error={restockQuery.error}
+        fetchStatus={restockQuery.fetchStatus}
+        isLoading={restockQuery.isPending}
+        onRetry={() => void restockQuery.refetch()}
+        title={t("title")}
+      />
     );
   }
 
-  if (failed || !restockRows) {
-    // Every procedure on this page throws the same "User not in a household"
-    // when the session has no household, which is the one failure a person can
-    // actually act on. Anything else is reported generically rather than as raw
-    // server text.
-    const isNoHousehold = (failed?.message ?? "")
-      .toLowerCase()
-      .includes("household");
-
-    return (
-      <div className="mx-auto max-w-5xl">
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <div
-          role="alert"
-          className="mt-4 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h2 className="font-semibold">{t("errorTitle")}</h2>
-          <p className="mt-2">
-            {isNoHousehold ? t("errorNoHousehold") : t("errorGeneric")}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  // The expiry section needs both answers before it can say anything is or is
+  // not about to go off. Without one it says why, rather than `data ?? []`
+  // turning a failure into "nothing at risk".
+  const expiryUnanswered = !expiring.data
+    ? expiring
+    : !expired.data
+      ? expired
+      : null;
   const expiredItems = expired.data ?? [];
   const expiringItems = expiring.data ?? [];
   const atRisk = expiredItems.length + expiringItems.length;
@@ -217,7 +210,13 @@ export default function DashboardPage(): JSX.Element {
             </Button>
         </div>
 
-        {atRisk === 0 ? (
+        {expiryUnanswered !== null ? (
+          <SectionState
+            error={expiryUnanswered.error}
+            fetchStatus={expiryUnanswered.fetchStatus}
+            onRetry={() => void expiryUnanswered.refetch()}
+          />
+        ) : atRisk === 0 ? (
           <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
         ) : (
           <>

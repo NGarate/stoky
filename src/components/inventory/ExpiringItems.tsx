@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { SectionState } from "@/components/household/RouteState";
 import { useTranslations } from "next-intl";
 import type { JSX, ReactNode } from "react";
 
@@ -30,22 +31,29 @@ export function ExpiringItems({
 }: ExpiringItemsProps): JSX.Element {
   const t = useTranslations("inventory.expiring");
 
-  const { data: expiringItems, isLoading: loadingExpiring } =
-    api.inventory.getExpiringItems.useQuery({ days });
+  const expiring = api.inventory.getExpiringItems.useQuery({ days });
+  const expired = api.inventory.getExpiredItems.useQuery(
+    {},
+    { enabled: showExpired },
+  );
+  const expiringItems = expiring.data;
+  const expiredItems = expired.data;
 
-  const { data: expiredItems, isLoading: loadingExpired } =
-    api.inventory.getExpiredItems.useQuery(
-      {},
-      { enabled: showExpired },
-    );
-
-  if (loadingExpiring || (showExpired && loadingExpired)) {
+  // On the data, not on `isLoading` — which is false for a query paused
+  // offline or one that failed, so either fell through to "allClear": a
+  // failure reading as the good news that nothing is about to spoil.
+  const unanswered = !expiringItems
+    ? expiring
+    : showExpired && !expiredItems
+      ? expired
+      : null;
+  if (unanswered !== null) {
     return (
-      <div className="space-y-2" aria-hidden="true">
-        {["skeleton-1", "skeleton-2", "skeleton-3"].map((key) => (
-          <div key={key} className="h-16 animate-pulse rounded-lg bg-muted" />
-        ))}
-      </div>
+      <SectionState
+        error={unanswered.error}
+        fetchStatus={unanswered.fetchStatus}
+        onRetry={() => void unanswered.refetch()}
+      />
     );
   }
 

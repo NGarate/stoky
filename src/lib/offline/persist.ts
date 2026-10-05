@@ -57,6 +57,10 @@ export const PERSISTED_QUERIES = new Set([
   "shopping.list",
   "inventory.getStockOverview",
   "inventory.getExpiringItems",
+  // Its neighbour on every screen that shows expiry. Left out, the dashboard
+  // and the inventory's expiry block had one answer offline and not the other,
+  // and could not say whether anything had gone off.
+  "inventory.getExpiredItems",
   "product.list",
 ]);
 
