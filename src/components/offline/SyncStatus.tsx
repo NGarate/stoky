@@ -137,7 +137,13 @@ export function SyncStatus(): JSX.Element {
                         {t("nameIt")}
                       </Link>
                     </Button>
-                    <Button onClick={() => discard(op.id)} type="button">
+                    {/* Discarding deletes an unsent change and nothing puts it
+                        back, so it wears the colour that says so. */}
+                    <Button
+                      onClick={() => discard(op.id)}
+                      type="button"
+                      variant="destructive"
+                    >
                       {t("discard")}
                     </Button>
                   </li>
@@ -161,6 +167,7 @@ export function SyncStatus(): JSX.Element {
                     <Button
                       onClick={() => discard(op.id)}
                       type="button"
+                      variant="destructive"
                     >
                       {t("discard")}
                     </Button>

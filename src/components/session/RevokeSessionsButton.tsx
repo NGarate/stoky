@@ -159,7 +159,13 @@ export function RevokeSessionsButton(): JSX.Element {
           </Button>
         ) : null}
 
-        <Button disabled={working} onClick={() => void run(leave)} type="button">
+        {/* With changes waiting it deletes them too, and says so in colour. */}
+        <Button
+          disabled={working}
+          onClick={() => void run(leave)}
+          type="button"
+          variant={pending > 0 || unsaved > 0 ? "destructive" : "default"}
+        >
           {working
             ? t("revokeAllWorking")
             : pending > 0 || unsaved > 0
