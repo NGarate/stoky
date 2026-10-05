@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,9 @@ export default function ShoppingListsPage() {
   const t = useTranslations();
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState("");
+  const [nameMissing, setNameMissing] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const nameId = useId();
 
   const listsQuery = api.shopping.list.useQuery({
     includeCompleted: false,
@@ -39,6 +42,16 @@ export default function ShoppingListsPage() {
         message: { key: "shopping.listCreated", values: { name: list.name } },
       });
     },
+    // A refusal used to say nothing: the form stayed open with the name in
+    // it, which is exactly what an unpressed button looks like. It says so
+    // now — and the form is left exactly as it was, name included, so trying
+    // again is one press rather than retyping.
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "shopping.createFailed" },
+      }),
   });
 
   const generateMutation = api.shopping.generateFromLowStock.useMutation({
@@ -54,13 +67,27 @@ export default function ShoppingListsPage() {
         message: { key: "shopping.autoListUpToDate" },
       });
     },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "shopping.generateFailed" },
+      }),
   });
 
+  // An empty name was silently ignored, so "Crear lista" on an empty field
+  // did nothing and said nothing. It now says what is missing, beside the
+  // field, and puts the cursor where the answer goes.
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newListName.trim()) {
-      createMutation.mutate({ name: newListName.trim() });
+    const name = newListName.trim();
+    if (!name) {
+      setNameMissing(true);
+      nameRef.current?.focus();
+      return;
     }
+    setNameMissing(false);
+    createMutation.mutate({ name });
   };
 
   // Back to the screen this used to be. Filing is not shopping.
@@ -72,9 +99,13 @@ export default function ShoppingListsPage() {
   // thing this screen is for; generating one is the shortcut beside it.
   const actions = (
     <>
-      <Button onClick={() => setIsCreating(true)} type="button">
-        {t("shopping.create")}
-      </Button>
+      {/* Gone while the form is open, as on the shops screen: the form's
+          own submit is called the same, and two of them is a guess. */}
+      {isCreating ? null : (
+        <Button onClick={() => setIsCreating(true)} type="button">
+          {t("shopping.create")}
+        </Button>
+      )}
       <Button
         disabled={generateMutation.isPending}
         onClick={() => generateMutation.mutate()}
@@ -114,20 +145,50 @@ export default function ShoppingListsPage() {
 
       {isCreating && (
         <form
+          noValidate
           onSubmit={handleCreate}
-          className="flex gap-2 rounded-lg border border-border bg-card p-4"
+          className="rounded-lg border border-border bg-card p-4"
         >
+          {/* A label, not a placeholder: a placeholder is the field's name
+              only until somebody types in it. */}
+          <label
+            className="mb-1 block text-sm font-medium text-foreground"
+            htmlFor={nameId}
+          >
+            {t("shopping.listName")}
+          </label>
           <Input
+            aria-describedby={
+              nameMissing ? `${nameId}-hint ${nameId}-error` : `${nameId}-hint`
+            }
+            aria-invalid={nameMissing ? true : undefined}
+            autoComplete="off"
+            id={nameId}
+            onChange={(e) => {
+              setNewListName(e.target.value);
+              if (e.target.value.trim()) setNameMissing(false);
+            }}
+            ref={nameRef}
             type="text"
-            placeholder={t("shopping.listName")}
             value={newListName}
-            onChange={(e) => setNewListName(e.target.value)}
           />
+          <p className="mt-1 text-sm text-muted-foreground" id={`${nameId}-hint`}>
+            {t("shopping.listNameHint")}
+          </p>
+          {nameMissing ? (
+            <p
+              className="mt-1 text-sm font-medium text-danger-foreground"
+              id={`${nameId}-error`}
+            >
+              {t("shopping.listNameRequired")}
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
           <Button
             type="submit"
             disabled={createMutation.isPending}
           >
-            {t("common.create")}
+            {t("shopping.create")}
           </Button>
           {/* Steps aside; it does not compete. Drawn as the filled primary
               it was indistinguishable from "Crear", which is the one action
@@ -136,12 +197,14 @@ export default function ShoppingListsPage() {
             onClick={() => {
               setIsCreating(false);
               setNewListName("");
+              setNameMissing(false);
             }}
             type="button"
             variant="outline"
           >
             {t("common.cancel")}
           </Button>
+          </div>
         </form>
       )}
 

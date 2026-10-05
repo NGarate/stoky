@@ -743,7 +743,11 @@
     "storeOf": "Dónde comprar «{name}»",
     "seePricesShort": "Precios",
     "removeItemOf": "Quitar «{name}» de la lista",
-    "removeShort": "Quitar"
+    "removeShort": "Quitar",
+    "listNameHint": "Por ejemplo: Compra del sábado.",
+    "listNameRequired": "Escribe un nombre para la lista.",
+    "createFailed": "No se ha podido crear la lista. El nombre sigue escrito: vuelve a intentarlo.",
+    "generateFailed": "No se ha podido generar la lista. Vuelve a intentarlo."
   },
   "prices": {
     "title": "Precios",
