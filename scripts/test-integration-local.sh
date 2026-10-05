@@ -12,41 +12,6 @@ MAX_WAIT=60
 KEEP_SERVICES=false
 TEST_DB_NAME="${TEST_DB_NAME:-stoky_test}"
 
-# The credentials the *running container* answers to, taken from the same place
-# the application takes them: `DATABASE_URL`.
-#
-# These used to be read from `POSTGRES_USER` / `POSTGRES_PASSWORD` with the
-# compose defaults as a fallback, and that fails in the one case a developer
-# actually hits. `.env` carries both a working `DATABASE_URL` and a
-# `POSTGRES_PASSWORD`, and nothing keeps the two in step — the second is only
-# read when the container is *created*. Source `.env` into your shell, which is
-# what the documented workflow does, and this script would build a connection
-# string from a password the database has never been told about, then fail with
-# a bare Prisma `P1000` naming neither the variable nor the mismatch.
-#
-# Deriving from `DATABASE_URL` and swapping only the database name means the
-# credentials are whatever already works.
-if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
-  # Only this one line, and only its value: sourcing the whole file would pull
-  # in every other variable and change what the tests run against.
-  DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2- | tr -d '"'"'"'"')"
-fi
-
-if [ -n "${DATABASE_URL:-}" ]; then
-  # postgresql://user:password@host:port/name?params → keep everything but name.
-  DB_PREFIX="${DATABASE_URL%/*}"
-  DB_QUERY=""
-  case "$DATABASE_URL" in
-    *\?*) DB_QUERY="?${DATABASE_URL#*\?}" ;;
-  esac
-  TEST_DATABASE_URL="${DB_PREFIX}/${TEST_DB_NAME}${DB_QUERY}"
-  POSTGRES_USER="$(printf '%s' "$DATABASE_URL" | sed -E 's#^[^:]+://([^:]+):.*#\1#')"
-else
-  POSTGRES_USER="${POSTGRES_USER:-stoky}"
-  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-stoky_dev_password}"
-  TEST_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${TEST_DB_NAME}?schema=public"
-fi
-
 if [[ "${KEEP_TEST_SERVICES:-}" == "1" || "${KEEP_TEST_SERVICES:-}" == "true" ]]; then
   KEEP_SERVICES=true
 fi
@@ -64,6 +29,45 @@ cd "$PROJECT_ROOT"
 if [ ! -f "$COMPOSE_FILE" ]; then
   echo "Error: $COMPOSE_FILE not found in project root."
   exit 1
+fi
+
+# The credentials the *running container* answers to, taken from the same place
+# the application takes them: `DATABASE_URL`.
+#
+# These used to be read from `POSTGRES_USER` / `POSTGRES_PASSWORD` with the
+# compose defaults as a fallback, and that fails in the one case a developer
+# actually hits. `.env` carries both a working `DATABASE_URL` and a
+# `POSTGRES_PASSWORD`, and nothing keeps the two in step — the second is only
+# read when the container is *created*. Source `.env` into your shell, which is
+# what the documented workflow does, and this script would build a connection
+# string from a password the database has never been told about, then fail with
+# a bare Prisma `P1000` naming neither the variable nor the mismatch.
+#
+# Deriving from `DATABASE_URL` and swapping only the database name means the
+# credentials are whatever already works.
+if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
+  # Only this one line, and only its value: sourcing the whole file would pull
+  # in every other variable and change what the tests run against.
+  # Read after the `cd` to the project root, so it is this repository's .env
+  # whatever directory the script was started from. `|| true`: under pipefail a
+  # .env with no such line (or one written `export DATABASE_URL=`) used to end
+  # the script with exit 1 and no message at all.
+  DATABASE_URL="$( { grep -E '^(export )?DATABASE_URL=' .env || true; } | tail -1 | cut -d= -f2- | tr -d '"'"'"'"')"
+fi
+
+if [ -n "${DATABASE_URL:-}" ]; then
+  # postgresql://user:password@host:port/name?params → keep everything but name.
+  DB_PREFIX="${DATABASE_URL%/*}"
+  DB_QUERY=""
+  case "$DATABASE_URL" in
+    *\?*) DB_QUERY="?${DATABASE_URL#*\?}" ;;
+  esac
+  TEST_DATABASE_URL="${DB_PREFIX}/${TEST_DB_NAME}${DB_QUERY}"
+  POSTGRES_USER="$(printf '%s' "$DATABASE_URL" | sed -E 's#^[^:]+://([^:]+):.*#\1#')"
+else
+  POSTGRES_USER="${POSTGRES_USER:-stoky}"
+  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-stoky_dev_password}"
+  TEST_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${TEST_DB_NAME}?schema=public"
 fi
 
 # Whether `db` or `cache` was already running before this script touched
