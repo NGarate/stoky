@@ -107,12 +107,23 @@ const ADDITIVE_POINTS: Record<AdditiveRisk, number> = {
 const RISK_ORDER: AdditiveRisk[] = ["none", "limited", "moderate", "high"];
 
 /**
- * `en:e322i` → `e322`. OFF tags carry a language prefix and sub-variant
- * suffixes; the risk table speaks in base E-numbers.
+ * `en:e322i` → `e322`, but `en:e150d` → `e150d`. OFF tags carry a language
+ * prefix and sub-variant suffixes, and the risk table mostly speaks in base
+ * E-numbers — **mostly**: caramel colour is four additives under one number,
+ * and only E150d (the 4-MEI one) is in the table. Stripping every suffix made
+ * that entry unreachable and rated E150d as an unknown `limited`.
+ *
+ * So the lettered form is tried first and kept when the table names it;
+ * otherwise the base number, which is what keeps `e322` and `e322i` one
+ * additive for de-duplication.
  */
 export function normaliseAdditiveTag(tag: string): string | null {
-  const match = /^(?:[a-z]{2}:)?(e\d+)/i.exec(tag.trim());
-  return match ? match[1].toLowerCase() : null;
+  const match = /^(?:[a-z]{2}:)?(e\d+)([a-z]?)/i.exec(tag.trim());
+  if (!match) return null;
+
+  const base = match[1].toLowerCase();
+  const lettered = base + match[2].toLowerCase();
+  return lettered in ADDITIVE_RISK ? lettered : base;
 }
 
 /** OFF canonicalises organic labels into the `en:` namespace — `en:organic`,

@@ -217,6 +217,23 @@ describe("tag normalisation", () => {
     expect(normaliseAdditiveTag("e330")).toBe("e330");
   });
 
+  it("keeps a letter the risk table distinguishes", () => {
+    // Caramel colour is four additives under E150; only E150d (4-MEI) is
+    // rated `moderate`. Stripping every suffix sent it to `e150`, which the
+    // table does not name, so it scored as an unknown `limited`.
+    expect(normaliseAdditiveTag("en:e150d")).toBe("e150d");
+    expect(normaliseAdditiveTag("en:E150D")).toBe("e150d");
+    // The other caramels are not in the table and fall back to the number.
+    expect(normaliseAdditiveTag("en:e150a")).toBe("e150");
+
+    const rating = computeRating({
+      nutriscore_grade: "a",
+      additives_tags: ["en:e150d"],
+    }) as Extract<Rating, { kind: "rated" }>;
+    expect(rating.breakdown.additives.tags).toEqual([{ tag: "e150d", risk: "moderate" }]);
+    expect(rating.breakdown.additives.worst).toBe("moderate");
+  });
+
   it("rejects what is not an E-number", () => {
     expect(normaliseAdditiveTag("en:added-sugar")).toBeNull();
     expect(normaliseAdditiveTag("")).toBeNull();
