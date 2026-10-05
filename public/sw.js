@@ -23,6 +23,23 @@ const STATIC_CACHE = `stoky-static-${VERSION}`;
 const OFFLINE_URL = "/offline";
 
 /**
+ * A cache an earlier worker wrote by mistake.
+ *
+ * Unlisted navigations were handed to the writer with the cache name `"none"`,
+ * meant as "keep nothing" but read by `putIfCacheable` as a real name — so
+ * every authenticated page anyone opened was kept, without bound, in a cache
+ * the `stoky-` purge below never matched. `caches.match` searches every cache,
+ * so offline the next account on the device was served the previous one's
+ * pages. Nothing writes it now; `activate` and `STOKY_FORGET` delete it.
+ */
+const LEGACY_UNLISTED_CACHE = "none";
+
+/** Whether a cache is this worker's to delete. */
+function isOwnCache(name) {
+  return name.startsWith("stoky-") || name === LEGACY_UNLISTED_CACHE;
+}
+
+/**
  * The documents worth keeping so the app opens without a signal.
  *
  * HTML only, and only these. Every dashboard page is a client component that
@@ -105,7 +122,11 @@ async function putIfCacheable(cacheName, request, response) {
   await cache.put(request, response.clone());
 }
 
-/** Network first, falling back to whatever was kept, then to /offline. */
+/**
+ * Network first, falling back to whatever was kept, then to /offline.
+ *
+ * `cacheName` is `null` for a navigation that is served but never kept.
+ */
 async function navigateWithFallback(request, cacheName) {
   const timeout = new Promise((resolve) =>
     self.setTimeout(() => resolve(null), NAVIGATION_TIMEOUT_MS),
@@ -123,7 +144,7 @@ async function navigateWithFallback(request, cacheName) {
   // with status 0, and treating that as a network failure would serve the
   // previous session's signed-in shell to a signed-out visitor.
   if (response) {
-    await putIfCacheable(cacheName, request, response);
+    if (cacheName !== null) await putIfCacheable(cacheName, request, response);
     return response;
   }
 
@@ -165,7 +186,7 @@ self.addEventListener("activate", (event) => {
         names
           .filter(
             (name) =>
-              name.startsWith("stoky-") &&
+              isOwnCache(name) &&
               name !== SHELL_CACHE &&
               name !== STATIC_CACHE,
           )
@@ -192,7 +213,7 @@ self.addEventListener("fetch", (event) => {
       // Handled, but never written: the allowlist governs what is *kept*, not
       // what is served, so an unlisted route still gets the offline page
       // rather than the browser's error.
-      event.respondWith(navigateWithFallback(request, "none"));
+      event.respondWith(navigateWithFallback(request, null));
       return;
     default:
       return;
@@ -215,9 +236,7 @@ self.addEventListener("message", (event) => {
     (async () => {
       const names = await self.caches.keys();
       await Promise.all(
-        names
-          .filter((name) => name.startsWith("stoky-"))
-          .map((name) => self.caches.delete(name)),
+        names.filter(isOwnCache).map((name) => self.caches.delete(name)),
       );
     })(),
   );

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SESSION_FILE } from "./session";
 
 /**
  * The service worker, actually running — the gap `REDESIGN_PLAN.md` §10 names.
@@ -107,27 +108,39 @@ test.describe("a production build's service worker", () => {
     expect(staticEntries).toBeGreaterThan(0);
   });
 
-  test("serves a page with the network cut off", async ({ page, context }) => {
-    // The whole point of the thing. Without a worker this is the browser's own
-    // "no internet" page, which is where a shop in a basement ends.
-    await page.goto("/login");
-    await waitForController(page);
-    await page.reload();
+  test.describe("signed in", () => {
+    test.use({ storageState: SESSION_FILE });
 
-    await context.setOffline(true);
+    test("serves a page with the network cut off", async ({ page, context }) => {
+      // The whole point of the thing. Without a worker this is the browser's
+      // own "no internet" page, which is where a shop in a basement ends.
+      //
+      // A shell route, signed in, because that is what the worker keeps. This
+      // used to use `/login`, which is not a shell route and only passed
+      // because every unlisted page was being kept, by mistake, in a cache
+      // sign-out never purged.
+      await page.goto("/inventory");
+      await waitForController(page);
+      // Under the worker's control this time, so it is the worker that keeps it.
+      await page.reload();
 
-    try {
-      await page.goto("/login", { waitUntil: "domcontentloaded" });
+      await context.setOffline(true);
 
-      // Asserted against *our* markup, not against "the body has text".
-      // Chromium's own "no internet" page has plenty of text, so a length
-      // check would pass with no worker at all — which is the failure this
-      // test exists to catch.
-      await expect(page.locator("form")).toBeVisible();
-      await expect(page.getByRole("button", { name: /iniciar sesión|sign in/i })).toBeVisible();
-    } finally {
-      await context.setOffline(false);
-    }
+      try {
+        await page.goto("/inventory", { waitUntil: "domcontentloaded" });
+
+        // Asserted against *our* markup, not against "the body has text".
+        // Chromium's own "no internet" page has plenty of text, so a length
+        // check would pass with no worker at all — which is the failure this
+        // test exists to catch.
+        await expect(
+          page.getByRole("navigation", { name: "Navegación principal" }),
+        ).toBeVisible();
+        await expect(page.getByRole("link", { name: "Inventario" }).first()).toBeVisible();
+      } finally {
+        await context.setOffline(false);
+      }
+    });
   });
 
   test("falls back to the offline page for a route it never cached", async ({
