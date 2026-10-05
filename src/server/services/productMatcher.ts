@@ -157,26 +157,23 @@ export async function matchReceiptItems(
     });
   }
 
-  // Determine if receipt needs review
-  const pendingItems = results.filter((r) => !r.autoMatch).length;
-  const autoMatchedItems = results.filter((r) => r.autoMatch).length;
+  // CONFIRMED only when there were lines and every one of them matched.
+  // `results.every(...)` is true of an empty list, and so was the "nothing
+  // pending" test this replaced: a receipt the parser read no lines from —
+  // a blurred photo, a till format it does not know — skipped review and
+  // landed CONFIRMED with nothing on it, as if it had been checked. It is
+  // the receipt that most needs a person to look at it.
+  const allAutoMatched =
+    results.length > 0 && results.every((result) => result.autoMatch);
 
-  if (pendingItems === 0) {
-    await prisma.receipt.update({
-      where: { id: receiptId },
-      data: { status: ReceiptStatus.CONFIRMED },
-    });
-  } else if (autoMatchedItems > 0) {
-    await prisma.receipt.update({
-      where: { id: receiptId },
-      data: { status: ReceiptStatus.NEEDS_REVIEW },
-    });
-  } else {
-    await prisma.receipt.update({
-      where: { id: receiptId },
-      data: { status: ReceiptStatus.NEEDS_REVIEW },
-    });
-  }
+  await prisma.receipt.update({
+    where: { id: receiptId },
+    data: {
+      status: allAutoMatched
+        ? ReceiptStatus.CONFIRMED
+        : ReceiptStatus.NEEDS_REVIEW,
+    },
+  });
 
   return results;
 }

@@ -869,6 +869,12 @@ leche 1,25
       const matches = await matchReceiptItems(receipt.id);
 
       expect(matches).toEqual([]);
+      // Nothing was read, so nothing was checked: it goes to a person, not
+      // straight to CONFIRMED.
+      const updated = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+      });
+      expect(updated?.status).toBe(ReceiptStatus.NEEDS_REVIEW);
     });
   });
 });
