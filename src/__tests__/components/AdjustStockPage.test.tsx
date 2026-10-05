@@ -1,5 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
+import { TRPCClientError } from "@trpc/client";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -45,6 +46,14 @@ mock.module("@/lib/offline/queue-context", () => ({
   }),
 }));
 
+const LOADED = {
+  data: { id: "p1", name: "Huevos", totalStock: 6, defaultUnit: "ud" } as unknown,
+  isPending: false,
+  error: null as { message: string } | null,
+  refetch: () => {},
+};
+let productQuery = { ...LOADED };
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
@@ -54,12 +63,7 @@ mock.module("@/lib/trpc/client", () => ({
     }),
     product: {
       getById: {
-        useQuery: () => ({
-          data: { id: "p1", name: "Huevos", totalStock: 6, defaultUnit: "ud" },
-          isPending: false,
-          error: null,
-          refetch: () => {},
-        }),
+        useQuery: () => productQuery,
       },
     },
     inventory: {
@@ -84,6 +88,7 @@ const { SnackbarProvider } = await import("@/components/ui/snackbar");
 beforeEach(() => {
   adjustCalls = [];
   replaced = [];
+  productQuery = { ...LOADED };
 });
 
 afterEach(cleanup);
@@ -96,6 +101,14 @@ function submit(actual: string, reason: string): void {
     target: { value: reason },
   });
   fireEvent.click(screen.getByRole("button", { name: "Guardar ajuste" }));
+}
+
+
+/** A refusal as the client receives it: the code is what RouteState reads. */
+function notFoundError(): TRPCClientError<never> {
+  const error = new TRPCClientError<never>("Product not found");
+  Object.defineProperty(error, "data", { value: { code: "NOT_FOUND", httpStatus: 404 } });
+  return error;
 }
 
 describe("the adjustment", () => {
@@ -208,5 +221,39 @@ describe("the adjustment", () => {
     const cancel = screen.getByRole("link", { name: "Cancelar" });
     expect(cancel).toHaveAttribute("href", "/products/p1");
     expect(cancel.querySelectorAll("svg").length).toBe(0);
+  });
+
+  it("says where it goes when the product could not load (WCAG 2.4.9)", () => {
+    // It said "Volver al producto" and went to /products — the list, not
+    // the product. After a failure the product is still the way back.
+    productQuery = { ...LOADED, data: undefined, error: { message: "boom" } };
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver al producto" }),
+    ).toHaveAttribute("href", "/products/p1");
+  });
+
+  it("goes to the products when there is no product to go back to", () => {
+    productQuery = {
+      ...LOADED,
+      data: undefined,
+      error: notFoundError(),
+    };
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver a productos" }),
+    ).toHaveAttribute("href", "/products");
   });
 });

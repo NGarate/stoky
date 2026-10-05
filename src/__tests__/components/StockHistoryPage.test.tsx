@@ -1,5 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
+import { TRPCClientError } from "@trpc/client";
 import { screen, cleanup, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -97,6 +98,14 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+
+/** A refusal as the client receives it: the code is what RouteState reads. */
+function notFoundError(): TRPCClientError<never> {
+  const error = new TRPCClientError<never>("Product not found");
+  Object.defineProperty(error, "data", { value: { code: "NOT_FOUND", httpStatus: 404 } });
+  return error;
+}
+
 describe("the stock history", () => {
   it("charts exact running totals, derived backwards from the current net", () => {
     renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
@@ -175,5 +184,29 @@ describe("the stock history", () => {
     expect(back).toHaveAttribute("href", "/products/p1");
     expect(back.querySelectorAll("svg").length).toBe(1);
     expect(back.textContent).toBe("Volver al producto");
+  });
+
+  it("says where it goes when the history could not load (WCAG 2.4.9)", () => {
+    // It said "Volver al producto" and went to /products — the list, not
+    // the product. After a failure the product is still the way back.
+    detailStub = { ...detailStub, data: undefined, error: { message: "boom" } };
+    renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
+
+    expect(
+      screen.getByRole("link", { name: "Volver al producto" }),
+    ).toHaveAttribute("href", "/products/p1");
+  });
+
+  it("goes to the products when there is no product to go back to", () => {
+    detailStub = {
+      ...detailStub,
+      data: undefined,
+      error: notFoundError(),
+    };
+    renderWithIntl(<StockHistoryView id="p1" />, { locale: "es" });
+
+    expect(
+      screen.getByRole("link", { name: "Volver a productos" }),
+    ).toHaveAttribute("href", "/products");
   });
 });

@@ -34,7 +34,9 @@ export function AutoListPreview() {
           </p>
         </div>
         <Button asChild variant="default">
-          <Link href={`/shopping/${autoList.id}`} > {t("view")} </Link>
+          {/* Says which list (WCAG 2.4.9): a bare "Ver" beside a heading
+              is a link whose purpose is only the heading's. */}
+          <Link href={`/shopping/${autoList.id}`} > {t("viewAutoList")} </Link>
         </Button>
       </div>
     </div>
