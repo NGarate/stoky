@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { ratingFromSnapshot, type AdditiveRisk } from "@/lib/rating";
 import type { JSX } from "react";
+import { Disclosure } from "@/components/ui/disclosure";
 
 /**
  * The rating, on the product detail screen — Phase 6.
@@ -89,11 +90,7 @@ export function ProductRating({ snapshot, barcode }: ProductRatingProps): JSX.El
             <span className="text-sm">{t("scoreOutOf", { score: rating.score })}</span>
           </p>
 
-          <details className="mt-3">
-            {/* 48px, the project's floor for anything a thumb hits. */}
-            <summary className="inline-flex min-h-[48px] cursor-pointer items-center text-primary underline">
-              {t("showWhy")}
-            </summary>
+          <Disclosure className="mt-3" summary={t("showWhy")} variant="inline">
             <ul className="mt-2 space-y-2 text-sm text-foreground">
               <li>
                 {t("nutritional", {
@@ -136,7 +133,7 @@ export function ProductRating({ snapshot, barcode }: ProductRatingProps): JSX.El
                 })}
               </li>
             </ul>
-          </details>
+          </Disclosure>
         </>
       ) : null}
 

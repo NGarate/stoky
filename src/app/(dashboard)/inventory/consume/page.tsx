@@ -18,6 +18,7 @@ import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { Disclosure } from "@/components/ui/disclosure";
 
 type FieldName = "product" | "quantity" | "unit";
 
@@ -324,13 +325,7 @@ export default function ConsumeStockPage(): JSX.Element {
         {/* The folded half (Phase 8 item 3): consuming is picking the product
             and saying how much — the unit is prefilled and the rest is rare.
             Same controlled-<details> shape as /inventory/add. */}
-        <details
-          className="rounded border border-border bg-muted"
-          ref={advancedRef}
-        >
-          <summary className="flex min-h-[48px] cursor-pointer items-center px-4 font-medium text-foreground">
-            {t("advancedSummary")}
-          </summary>
+        <Disclosure ref={advancedRef} summary={t("advancedSummary")}>
           <div className="space-y-6 px-4 pb-4">
             <div>
               <label
@@ -402,7 +397,7 @@ export default function ConsumeStockPage(): JSX.Element {
               </p>
             </div>
           </div>
-        </details>
+        </Disclosure>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button

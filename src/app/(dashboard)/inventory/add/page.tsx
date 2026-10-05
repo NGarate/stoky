@@ -19,6 +19,7 @@ import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { Disclosure } from "@/components/ui/disclosure";
 
 type FieldName = "product" | "quantity" | "unit" | "expiration" | "price" | "store";
 
@@ -421,13 +422,7 @@ export default function AddStockPage(): JSX.Element {
             rare. Native <details>, the pattern ProductRating set; controlled,
             so a refusal about the unit can open it rather than point at a
             closed drawer. */}
-        <details
-          className="rounded border border-border bg-muted"
-          ref={advancedRef}
-        >
-          <summary className="flex min-h-[48px] cursor-pointer items-center px-4 font-medium text-foreground">
-            {t("advancedSummary")}
-          </summary>
+        <Disclosure ref={advancedRef} summary={t("advancedSummary")}>
           <div className="space-y-6 px-4 pb-4">
             <div>
               <label
@@ -504,7 +499,7 @@ export default function AddStockPage(): JSX.Element {
               </p>
             </div>
           </div>
-        </details>
+        </Disclosure>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button
