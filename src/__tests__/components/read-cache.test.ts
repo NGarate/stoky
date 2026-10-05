@@ -195,3 +195,28 @@ describe("forgetting", () => {
     expect(() => forgetPersistedReads("nobody")).not.toThrow();
   });
 });
+
+describe("forgetting, against a write already on its way", () => {
+  it("does not put the reads back when a throttled save lands after sign-out", async () => {
+    // The persister batches writes on a timer, and unsubscribing stops new
+    // saves, not the one already queued. Sign-out forgot the key, and the save
+    // queued a moment earlier wrote it straight back.
+    await persistQueryClientSave({
+      queryClient: clientWith([{ id: "b1" }]),
+      ...persistOptions(USER, { throttleTime: 0 }),
+    });
+
+    forgetPersistedReads(USER);
+    await flushWrites();
+
+    expect(window.localStorage.getItem(persistKey(USER))).toBeNull();
+  });
+
+  it("writes again once the account signs back in", async () => {
+    // The other half: a key forgotten for good would leave that account with
+    // no offline reads for the rest of the page's life.
+    forgetPersistedReads(USER);
+
+    expect(await roundTrip(USER, [{ id: "b1" }])).toEqual([{ id: "b1" }]);
+  });
+});
