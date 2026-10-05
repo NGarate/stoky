@@ -783,3 +783,32 @@ describe("stock integrity after an adjustment and kitchen taps", () => {
     expect(await netStock()).toBe(3);
   });
 });
+
+/**
+ * Floating-point residue in the availability guards.
+ *
+ * 1 − 0.9 is 0.09999999999999998 in IEEE 754. Every screen rounds the ledger
+ * to two decimals and shows 0.1, so the guard must ask the same rounded
+ * question — or the last tenth on the shelf can never be used or moved.
+ */
+describe("the guards round the ledger the way the screens do", () => {
+  it("lets the last 0.1 L be consumed after 1 L − 0.9 L", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L" });
+    await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 0.9, unit: "L" });
+
+    await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 0.1, unit: "L" });
+
+    expect(await netStock()).toBeCloseTo(0, 6);
+  });
+
+  it("lets the last 0.1 L be moved after 1 L − 0.9 L", async () => {
+    const api = await caller();
+    await api.inventory.addStock({ ...envelope(OWNER.userId), productId, quantity: 1, unit: "L", locationId: shelfId });
+    await api.inventory.consumeStock({ ...envelope(OWNER.userId), productId, quantity: 0.9, unit: "L", consumeFromLocationId: shelfId });
+
+    await api.inventory.transferStock({ productId, quantity: 0.1, unit: "L", fromLocationId: shelfId, toLocationId: cupboardId });
+
+    expect(await netStock(cupboardId)).toBeCloseTo(0.1, 6);
+  });
+});
