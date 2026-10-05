@@ -11,8 +11,8 @@ import { closeRateLimiter } from "@/lib/rate-limit";
  * gone" case below does exactly that, by pointing the client at a port nothing
  * listens on.
  *
- * `docker-compose.prod.yml` gives `db` and `cache` a healthcheck each and gave
- * the app none, so Docker could not tell a working instance from a wedged one.
+ * The production compose gave `db` and `cache` a healthcheck each and gave the
+ * app none, so Docker could not tell a working instance from a wedged one.
  */
 
 afterAll(async () => {

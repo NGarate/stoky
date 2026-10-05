@@ -278,8 +278,9 @@ question. Start there; the table below is the short version.
 ## Deployment
 
 [The release installation guide](docs/INSTALL.md) is the supported path for
-self-hosting an alpha. `docker-compose.prod.yml` remains the source-build
-configuration for development/diagnosis; it is not the downloadable release bundle.
+self-hosting an alpha. `docker-compose.prod.yml` is a source-build override on top
+of that bundle (`docker compose -f deploy/docker-compose.yml -f docker-compose.prod.yml
+up -d --build`), for development and diagnosis; it adds the build and nothing else.
 
 ## Licence
 

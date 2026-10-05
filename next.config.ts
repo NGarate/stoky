@@ -10,7 +10,7 @@ const withNextIntl = createNextIntlPlugin();
 // Next's inline bootstrap scripts, which stops hydration and silently breaks the
 // login form.
 //
-// Some of these are also set by Traefik in docker-compose.prod.yml, but that
+// Some of these are also set by Traefik in deploy/traefik.yml, but that
 // only helps someone deploying behind that exact proxy. A self-hosted app runs
 // behind whatever the operator already has, so the defaults belong in the app.
 const securityHeaders = [

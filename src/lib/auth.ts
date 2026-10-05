@@ -61,7 +61,7 @@ export const authConfig: NextAuthConfig = {
    * check does not apply — passed throughout.
    *
    * The trade is real and acceptable here: trusting the header means a forged
-   * `Host` could steer a callback URL, and `docker-compose.prod.yml` puts
+   * `Host` could steer a callback URL, and the release bundle (`deploy/`) puts
    * Traefik in front with a `Host(...)` rule, so nothing reaches this process
    * without matching the configured domain first. A deployment that exposes the
    * container directly does not have that protection.
