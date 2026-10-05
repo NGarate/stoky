@@ -187,10 +187,38 @@ export async function closeRateLimiter(): Promise<void> {
 }
 
 /**
+ * Counts one attempt and makes sure the window it lands in will end.
+ *
+ * **One script, not `INCR` then `EXPIRE`.** As two commands, a timeout or a
+ * dropped connection between them — `commandTimeout` is 2s, and a blip is all
+ * it takes — left a counter with no TTL. The `EXPIRE` only ran on the first hit
+ * of a window, so nothing ever gave that key an expiry afterwards: one unlucky
+ * sign-in locked its address, or its account, out for good, and only a manual
+ * `DEL` on Valkey would let them back in. A script runs atomically, so the
+ * counter and its expiry exist together or not at all.
+ *
+ * And it checks the TTL rather than the count, so a key already stranded
+ * without one — by the old two-step code, or by anything else — is given a
+ * window on its next hit instead of refusing for ever.
+ *
+ * Returns the count and the seconds left, so a refusal costs no second round
+ * trip to ask.
+ */
+const CONSUME_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+local ttl = redis.call('TTL', KEYS[1])
+if ttl < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+return {count, ttl}
+`;
+
+/**
  * Counts one attempt against `identifier` and says whether it is allowed.
  *
- * A fixed window, not a sliding one: `INCR`, then `EXPIRE` on the first hit of
- * a window. A sliding window is fairer at the boundary — 5 attempts at 14:59
+ * A fixed window, not a sliding one: the first hit of a window starts its
+ * expiry. A sliding window is fairer at the boundary — 5 attempts at 14:59
  * and 5 more at 15:01 both pass here — but it costs a sorted set per
  * identifier, and the boundary case still leaves an attacker at 10 attempts
  * per 15 minutes against Argon2id. That is not the attack this defends
@@ -203,20 +231,17 @@ export async function consumeRateLimit(
   const key = `${limit.prefix}:${identifier}`;
 
   try {
-    const redis = valkey();
-    const count = await redis.incr(key);
-
-    if (count === 1) {
-      await redis.expire(key, limit.windowSeconds);
-    }
+    const [count, ttl] = (await valkey().eval(
+      CONSUME_SCRIPT,
+      1,
+      key,
+      limit.windowSeconds,
+    )) as [number, number];
 
     if (count > limit.attempts) {
-      const ttl = await redis.ttl(key);
       return {
         allowed: false,
         remaining: 0,
-        // A key with no expiry (-1) would otherwise refuse for ever. Treat it
-        // as a full window: wrong by at most one window rather than for ever.
         retryAfterSeconds: ttl > 0 ? ttl : limit.windowSeconds,
       };
     }

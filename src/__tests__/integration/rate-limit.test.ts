@@ -131,6 +131,25 @@ describe("consumeRateLimit", () => {
     expect(ttl).toBeLessThanOrEqual(LIMIT.windowSeconds);
   });
 
+  it("gives a counter stranded without an expiry one on its next hit", async () => {
+    // The state INCR-then-EXPIRE left behind when the EXPIRE was lost to a
+    // timeout: a count past the limit and no TTL. The EXPIRE only ran when the
+    // count was 1, so nothing ever repaired it and the address stayed refused
+    // for ever. Built by hand here because a lost command is not a state a
+    // test can produce on demand.
+    const id = nextIdentifier();
+    const key = `${LIMIT.prefix}:${id}`;
+    await inspector.set(key, String(LIMIT.attempts + 5));
+    expect(await inspector.ttl(key)).toBe(-1);
+
+    const refused = await consumeRateLimit(LIMIT, id);
+    expect(refused.allowed).toBe(false);
+
+    const ttl = await inspector.ttl(key);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(LIMIT.windowSeconds);
+  });
+
   it("reports how long is left when it refuses", async () => {
     const id = nextIdentifier();
     for (let i = 0; i <= LIMIT.attempts; i++) await consumeRateLimit(LIMIT, id);
