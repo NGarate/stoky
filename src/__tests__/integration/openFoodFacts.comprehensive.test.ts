@@ -70,6 +70,37 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
       expect(result?.brands).toBe("Test Brand");
     });
 
+    it("reads the fields in the shapes the live API sends them", async () => {
+      // `serving_quantity` as a number failed the whole parse, which this
+      // service reports as "not found"; and the calorie count is under
+      // `energy-kcal`, so a schema reading `energy_kcal` never filled it.
+      fetchSpy.mockResolvedValue(
+        createMockResponse({
+          code: "8410000678901",
+          product: {
+            code: "8410000678901",
+            product_name: "Leche entera",
+            serving_quantity: 250,
+            nutriments: { "energy-kcal": 63, "energy-kcal_100g": 63, proteins: 3.1 },
+          },
+          status: 1,
+          status_verbose: "product found",
+        }),
+      );
+
+      const result = await client.getProductByBarcode("8410000678901");
+
+      expect(result).not.toBeNull();
+      expect(result?.serving_quantity).toBe("250");
+      expect(result?.nutriments?.energy_kcal).toBe(63);
+      expect(result?.nutriments?.proteins).toBe(3.1);
+
+      // And the same once it has been cached and read back.
+      const cached = await client.getProductByBarcode("8410000678901");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(cached?.nutriments?.energy_kcal).toBe(63);
+    });
+
     it("should return null for non-existent barcode", async () => {
       fetchSpy.mockResolvedValue(
         createMockResponse({
