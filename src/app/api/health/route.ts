@@ -4,7 +4,7 @@ import { pingCache } from "@/lib/rate-limit";
 /**
  * Is this instance able to serve? — for the container runtime, not for a person.
  *
- * `docker-compose.prod.yml` gives `db` and `cache` a healthcheck each and gives
+ * The production compose gave `db` and `cache` a healthcheck each and gave
  * the app none, so Docker had no way to tell a working instance from a wedged
  * one: a Next process that has stopped answering is still "running", and
  * `restart: unless-stopped` never fires. This project has already lost a

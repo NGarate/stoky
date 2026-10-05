@@ -229,8 +229,8 @@ What is still open, and worth knowing before publishing an instance:
   client's, so nothing in the application can either.
 
   **So: do not expose this application without a reverse proxy that sets
-  `X-Forwarded-For` itself.** `docker-compose.prod.yml` puts Traefik in front and
-  Traefik does. A deployment that publishes the container's port directly has a
+  `X-Forwarded-For` itself.** The release bundle (`deploy/`) puts Traefik in front
+  and Traefik does. A deployment that publishes the container's port directly has a
   per-IP limit an attacker turns off with one header — bounded only by the
   per-account limit above, which is what keeps that from being an open door
   rather than what makes it safe.
@@ -412,13 +412,6 @@ screen reader**. Automated testing catches roughly a third of real accessibility
 problems. The tree can be verified to contain the right information; whether the
 result *sounds* sensible cannot. Any accessibility score in an older document
 was still not produced by a tool.
-
-### The legacy source-build proxy still has the Docker socket
-
-`docker-compose.prod.yml` mounts `/var/run/docker.sock` read-only for discovery.
-That still grants access to the Docker API and is a host-level privilege.
-The release bundle in `deploy/` avoids this entirely with a file provider. Prefer
-that bundle; do not copy the legacy socket mount into a release installation.
 
 ### Other things that do not exist
 

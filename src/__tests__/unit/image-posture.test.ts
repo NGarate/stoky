@@ -82,26 +82,31 @@ describe("the production compose runs read-only", () => {
     // Not a Dockerfile property — read-only lives in compose, with tmpfs for
     // the two paths Next and the OS must write and the uploads volume for the
     // one the app must. A `read_only: false`, or a missing tmpfs, is what this
-    // catches.
-    const compose = readFileSync(
-      join(ROOT, "docker-compose.prod.yml"),
-      "utf8",
-    );
-    // Scope to the app service: from just past `app:` to the next top-level
-    // service key (a two-space-indented `name:`), so a `read_only` on another
-    // service cannot satisfy this.
-    const marker = "\n  app:\n";
-    const appStart = compose.indexOf(marker);
-    expect(appStart).toBeGreaterThan(-1);
-    const rest = compose.slice(appStart + marker.length);
-    const nextService = rest.search(/^ {2}[a-z][\w-]*:/m);
-    const appBlock = nextService > -1 ? rest.slice(0, nextService) : rest;
+    // catches. deploy/ is the one production definition; the source build
+    // overrides it (below), so this is the file that has to hold.
+    const compose = Bun.YAML.parse(
+      readFileSync(join(ROOT, "deploy/docker-compose.yml"), "utf8"),
+    ) as { services: Record<string, Record<string, unknown>> };
+    const app = compose.services.app;
 
-    expect(appBlock).toContain("read_only: true");
-    expect(appBlock).toContain("no-new-privileges:true");
-    expect(appBlock).toContain("cap_drop: [ALL]");
-    expect(appBlock).toContain("- /tmp");
-    expect(appBlock).toContain("- /app/.next/cache");
-    expect(appBlock).toContain("uploads:/app/uploads");
+    expect(app.read_only).toBe(true);
+    expect(app.security_opt).toContain("no-new-privileges:true");
+    expect(app.cap_drop).toEqual(["ALL"]);
+    expect(app.tmpfs).toEqual(["/tmp", "/app/.next/cache"]);
+    expect(app.volumes).toContain("uploads:/app/uploads");
+  });
+
+  it("builds from source without restating, and so without drifting from, that definition", () => {
+    // docker-compose.prod.yml used to be a full second copy of the hardening
+    // and had already diverged (an older Traefik with the Docker socket). It
+    // may now only add the build. Anything else here would override deploy/.
+    const override = Bun.YAML.parse(
+      readFileSync(join(ROOT, "docker-compose.prod.yml"), "utf8"),
+    ) as { name: string; services: Record<string, Record<string, unknown>> };
+
+    expect(Object.keys(override).sort()).toEqual(["name", "services"]);
+    expect(override.name).not.toBe("stoky-release");
+    expect(Object.keys(override.services)).toEqual(["app"]);
+    expect(Object.keys(override.services.app).sort()).toEqual(["build", "pull_policy"]);
   });
 });
