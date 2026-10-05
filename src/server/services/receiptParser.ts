@@ -412,7 +412,7 @@ export async function saveParsedItems(
 ): Promise<void> {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
-    select: { householdId: true },
+    select: { householdId: true, storeId: true },
   });
   if (!receipt) {
     throw new NotFoundError("Receipt not found");
@@ -434,8 +434,12 @@ export async function saveParsedItems(
       },
     });
 
-    // Find or create store
-    if (parsed.storeName) {
+    // Find or create the store the header names — only when the receipt has
+    // none. A store chosen at upload is the person's answer and the header
+    // is a guess at it: this used to overwrite the one with the other, so
+    // choosing "Mercadona" and scanning a ticket whose header read as
+    // something else filed its prices under the something else.
+    if (parsed.storeName && receipt.storeId === null) {
       const existingStore = await tx.store.findFirst({
         where: {
           name: { equals: parsed.storeName, mode: "insensitive" },
