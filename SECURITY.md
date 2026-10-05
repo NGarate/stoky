@@ -290,7 +290,10 @@ Docker already collects and rotates: `docker compose logs app | jq 'select(.even
   NOT_FOUNDs and produce a log nobody greps.
 - **A failed sign-in logs the same line whether or not the account exists.**
   Recording which of the two it was would put back, in a file, exactly the
-  distinction the flattened error message refuses to tell the browser.
+  distinction the flattened error message refuses to tell the browser. **And it
+  takes as long**: an address with no account is verified against a dummy
+  Argon2id hash with the same parameters, so the response time does not answer
+  the question the message refuses to.
 - **No password, hash, token, cookie or request body ever reaches a line**, and
   the writer drops those keys defensively rather than relying on its own type
   to have no field for them. A credential in a log is a credential in every

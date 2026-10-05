@@ -39,6 +39,20 @@ export class AuthUnavailableSignin extends CredentialsSignin {
 }
 
 /**
+ * What a sign-in for an address with no account is verified against, so it
+ * costs the same Argon2id as one with a wrong password.
+ *
+ * The hash of a random value nobody kept, so no password matches it. **Its
+ * parameters must be the ones accounts are hashed with** (`m=65536,t=3,p=4`,
+ * `auth.register` and `household.addMember`): verifying runs at the cost the
+ * stored hash names, so a cheaper dummy would reopen the timing difference it
+ * exists to close. A constant rather than hashed at start-up, so the first
+ * unknown address is not the one request that pays for hashing it.
+ */
+export const DUMMY_PASSWORD_HASH =
+  "$argon2id$v=19$m=65536,t=3,p=4$VZSmoJF5HpXm3vHhXficPw$b/zA/ilF3dqpyfmO2KWJjiyH4WLE0yQQRj8LZxrAsvg";
+
+/**
  * Checked here because this is the module every server path goes through, and
  * because it must happen before a session is ever signed. See
  * `@/lib/auth/secret` for what it refuses and why it is fatal.
@@ -191,21 +205,22 @@ export const authConfig: NextAuthConfig = {
           where: { email: parsed.data.email },
         });
 
-        // Both branches log the same event with the same fields. The
-        // distinction between "no such account" and "wrong password" is
-        // exactly what the flattened error message refuses to tell the
-        // browser, and writing it into the log would put it back — the log is
-        // readable by anyone who can read the container's output.
-        if (!user) {
-          logSecurityEvent("auth.signin.failed", {
-            address: identifier,
-            email: parsed.data.email,
-          });
-          return null;
-        }
+        // Argon2id runs whether or not the account exists. Skipping it for a
+        // missing account answered "no such address" in a few milliseconds
+        // and "wrong password" in a quarter of a second, so a stopwatch told
+        // anyone which addresses are registered — the very thing the flattened
+        // message and the identical log lines below refuse to say.
+        const isValid = await argon2.verify(
+          user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+          parsed.data.password,
+        );
 
-        const isValid = await argon2.verify(user.passwordHash, parsed.data.password);
-        if (!isValid) {
+        // One event, the same fields, for both failures. The distinction
+        // between "no such account" and "wrong password" is exactly what the
+        // flattened error message refuses to tell the browser, and writing it
+        // into the log would put it back — the log is readable by anyone who
+        // can read the container's output.
+        if (!user || !isValid) {
           logSecurityEvent("auth.signin.failed", {
             address: identifier,
             email: parsed.data.email,
