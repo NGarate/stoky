@@ -284,11 +284,13 @@ export const receiptRouter = createTRPCRouter({
       }
 
       const totalItems = receipt.items.length;
+      // Every line that is no longer PENDING has been decided. This listed the
+      // decided states instead, and the list left out USER_CREATED — a line
+      // settled by creating its product in review — so a receipt with one
+      // showed n−1 of n processed for ever. Counting the one undecided state
+      // cannot fall behind a new decided one.
       const processedItems = receipt.items.filter(
-        (i) =>
-          i.matchStatus === MatchStatus.AUTO_MATCHED ||
-          i.matchStatus === MatchStatus.USER_CONFIRMED ||
-          i.matchStatus === MatchStatus.SKIPPED,
+        (i) => i.matchStatus !== MatchStatus.PENDING,
       ).length;
 
       return {

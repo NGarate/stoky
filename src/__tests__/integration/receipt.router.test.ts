@@ -524,6 +524,14 @@ describe("receipt.getStatus", () => {
     expect(status.progress).toEqual({ total: 2, processed: 1 });
   });
 
+  it("counts a line whose product was created in review as processed", async () => {
+    const { receipt } = await seedReceipt({ matchStatus: MatchStatus.USER_CREATED });
+
+    const status = await caller.receipt.getStatus({ receiptId: receipt.id });
+
+    expect(status.progress).toEqual({ total: 2, processed: 1 });
+  });
+
   it("is NOT_FOUND for a receipt that does not exist", async () => {
     await expectCode(
       () => caller.receipt.getStatus({ receiptId: "does-not-exist" }),
