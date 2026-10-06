@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_DAYS, MAX_PRICE } from "./bounds";
+import { MAX_DAYS, MAX_PRICE, MAX_QUANTITY } from "./bounds";
 
 export const priceRecordSchema = z.object({
   productId: z.string(),
@@ -7,7 +7,7 @@ export const priceRecordSchema = z.object({
   price: z.number().positive().finite().max(MAX_PRICE),
   currency: z.string().default("EUR"),
   unit: z.string(),
-  quantity: z.number().positive().default(1),
+  quantity: z.number().positive().finite().max(MAX_QUANTITY).default(1),
 });
 
 export const priceQuerySchema = z.object({
