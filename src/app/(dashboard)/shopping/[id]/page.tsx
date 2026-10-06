@@ -228,8 +228,13 @@ export function ShoppingListView({ id }: { id: string }) {
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex justify-between text-sm">
             <span>{t("shopping.progress")}</span>
+            {/* A sentence, not "2/5 elementos": what the bar counts is what
+                has been bought. */}
             <span>
-              {checkedItems}/{totalItems} {t("common.items")}
+              {t("shopping.progressValue", {
+                checked: checkedItems,
+                total: totalItems,
+              })}
             </span>
           </div>
           <div className="h-2 rounded-full bg-gauge-track">

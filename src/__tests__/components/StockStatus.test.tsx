@@ -30,7 +30,7 @@ describe("StockStatus", () => {
 
     // Both are true of this product. Run out is the stronger statement.
     expect(screen.getByText("Sin stock")).toBeInTheDocument();
-    expect(screen.queryByText("Stock bajo")).toBeAbsent();
+    expect(screen.queryByText("Queda poco")).toBeAbsent();
   });
 
   it("says run out for a product with no minimum at all", () => {
@@ -46,7 +46,7 @@ describe("StockStatus", () => {
       locale: "es",
     });
 
-    expect(screen.getByText("Stock bajo")).toBeInTheDocument();
+    expect(screen.getByText("Queda poco")).toBeInTheDocument();
   });
 
   it("says nothing is wrong when nothing is", () => {
@@ -79,13 +79,13 @@ describe("StockStatus on and off a tinted row", () => {
 
   it("outlines low on a row already tinted warn", () => {
     renderWithIntl(<StockStatus isLowStock={true} onTintedRow totalStock={1} />);
-    expect(pill("Stock bajo")).toContain("border-warn-foreground");
-    expect(pill("Stock bajo")).not.toContain("bg-warn");
+    expect(pill("Queda poco")).toContain("border-warn-foreground");
+    expect(pill("Queda poco")).not.toContain("bg-warn");
   });
 
   it("fills low on an untinted row, where an outline would be the faint one", () => {
     renderWithIntl(<StockStatus isLowStock={true} totalStock={1} />);
-    expect(pill("Stock bajo")).toContain("bg-warn");
+    expect(pill("Queda poco")).toContain("bg-warn");
   });
 
   it("fills run out on an untinted row", () => {

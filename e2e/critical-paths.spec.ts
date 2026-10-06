@@ -942,7 +942,7 @@ test.describe("The Panel summarises; its lists are the doors", () => {
     // What survives is Phase 8 item 2's invariant, not its wording: the rows
     // here come from the same `needsRestock` question the filtered inventory
     // asks, so the two cannot disagree. The seed holds three such products.
-    const section = page.getByRole("region", { name: "Necesita reposición" });
+    const section = page.getByRole("region", { name: es.dashboard.restockTitle });
     await expect(section).toBeVisible();
     for (const product of [
       "Leche entera",

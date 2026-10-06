@@ -91,7 +91,7 @@ describe("the restock filter", () => {
       },
     ]);
     expect(
-      screen.getByText("Solo lo que necesita reposición"),
+      screen.getByText("Solo lo que se está acabando"),
     ).toBeTruthy();
 
     const clear = screen.getByRole("link", { name: "Ver todo el inventario" });
@@ -161,7 +161,7 @@ describe("the restock filter", () => {
     renderWithIntl(<InventoryView />, { locale: "es" });
 
     expect(
-      screen.getByText("Nada necesita reposición ahora mismo."),
+      screen.getByText("Ahora mismo no se está acabando nada."),
     ).toBeTruthy();
   });
 
@@ -171,7 +171,7 @@ describe("the restock filter", () => {
     expect(overviewCalls).toEqual([
       { limit: 20, page: 1, sort: "name", direction: "asc" },
     ]);
-    expect(screen.queryByText("Solo lo que necesita reposición")).toBeAbsent();
+    expect(screen.queryByText("Solo lo que se está acabando")).toBeAbsent();
   });
 });
 

@@ -160,7 +160,7 @@ describe("ShoppingItem", () => {
     );
 
     // shopping.itemName in messages/es.json
-    expect(screen.getByText("Nombre del artículo")).toBeInTheDocument();
+    expect(screen.getByText("Producto sin nombre")).toBeInTheDocument();
   });
 
   it("reflects the checked state in the checkbox", () => {

@@ -242,6 +242,21 @@ describe("the shopping list someone is holding", () => {
     ).toHaveAttribute("type", "submit");
   });
 
+  it("says how much has been bought in words", () => {
+    // "0/1 elementos": a fraction and a word for nothing in particular,
+    // beside a bar that counts what is in the trolley.
+    queryStub = {
+      data: LOADED,
+      isPending: false,
+      error: null,
+      fetchStatus: "idle",
+      refetch: noop,
+    };
+    renderPage();
+
+    expect(screen.getByText("0 de 1 comprados")).toBeInTheDocument();
+  });
+
   it("keeps showing the list when a refetch cannot reach the server", () => {
     queryStub = {
       data: LOADED,
@@ -277,7 +292,7 @@ describe("an automatically drafted list", () => {
     // the list, not a state that needs attention (CLAUDE.md: `warn` is
     // reserved for state).
     const note = screen.getByText(
-      "Esta lista se generó automáticamente por stock bajo",
+      "Esta lista se llena sola con lo que se está acabando.",
     );
     expect(note.className).not.toMatch(/\b(?:text|bg)-(?:ok|warn|danger)/);
   });

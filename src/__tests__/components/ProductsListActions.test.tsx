@@ -85,7 +85,7 @@ describe("the catalogue's actions column", () => {
     // the number and by nothing else (WCAG 1.4.1) — and it worked the answer
     // out for itself, which made a fourth derivation of a rule that already
     // had a home in `StockStatus`.
-    expect(screen.getAllByText("Stock bajo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Queda poco").length).toBeGreaterThan(0);
     expect(screen.getAllByText("2 L").length).toBeGreaterThan(0);
   });
 

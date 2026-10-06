@@ -201,7 +201,7 @@ describe("what is urgent comes first", () => {
     expiringStub.data = [batch({ location: null })];
     renderKitchen();
 
-    expect(screen.getByText("Sin sitio")).toBeInTheDocument();
+    expect(screen.getByText("Sin ubicación")).toBeInTheDocument();
   });
 });
 
@@ -667,7 +667,7 @@ describe("what is running out", () => {
     };
     renderKitchen();
 
-    expect(screen.getByText("Stock bajo")).toBeInTheDocument();
+    expect(screen.getByText("Queda poco")).toBeInTheDocument();
   });
 
   it("keeps the list button with the row's actions, at the size of the card buttons", () => {
