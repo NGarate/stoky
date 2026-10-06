@@ -80,3 +80,14 @@ test("the sign-in page is titled in Spanish before anyone signs in", async ({
   await page.goto("/login");
   await expect(page).toHaveTitle(title(es.auth.login));
 });
+
+test("the offline page has one title, the same as every other page's", async ({
+  page,
+}) => {
+  // It exported its own metadata title beside the root layout's
+  // `<RouteTitle>`, so the document carried two `<title>` elements and which
+  // one the browser and the announcer used was a matter of insertion order.
+  await page.goto("/offline");
+  await expect(page.locator("title")).toHaveCount(1);
+  await expect(page).toHaveTitle(title(es.offlinePage.title));
+});
