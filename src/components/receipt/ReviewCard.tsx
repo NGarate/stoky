@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Check, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
 import { MatchSelector } from "./MatchSelector";
 import { CreateProductInline } from "./CreateProductInline";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 interface ProductCandidate {
   productId: string;
@@ -66,10 +67,6 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
 
   const isAutoMatched = item.matchStatus === "AUTO_MATCHED";
 
-  const moneyFormat = useMemo(
-    () => new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }),
-    [locale],
-  );
 
   return (
     <div
@@ -89,7 +86,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
           </p>
           {item.parsedPrice && (
             <p className="text-sm text-muted-foreground">
-              {moneyFormat.format(item.parsedPrice)}
+              {formatMoney(locale, item.parsedPrice, DEFAULT_CURRENCY)}
               {item.parsedQuantity && item.parsedQuantity > 1 &&
                 ` × ${item.parsedQuantity}`}
             </p>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 interface AppliedPageProps {
   params: Promise<{ id: string }>;
@@ -33,23 +34,6 @@ function serverErrorKey(message: string | undefined): string {
   if (normalized.includes("household")) return "errorNoHousehold";
 
   return "errorGeneric";
-}
-
-/**
- * Formats an amount in the currency the record was stored with.
- *
- * `PriceRecord.currency` is free text with a default, so a row written by
- * something other than this app could hold a code `Intl` rejects — a
- * `RangeError` there would take the page down over one bad row.
- */
-function formatMoney(locale: string, amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(locale, { style: "currency", currency }).format(
-      amount,
-    );
-  } catch {
-    return `${amount} ${currency}`;
-  }
 }
 
 /**
@@ -255,7 +239,7 @@ export default function ReceiptAppliedPage({
           <dd className="text-foreground md:text-lg">
             {summary.totalAmount === null
               ? t("totalUnknown")
-              : formatMoney(locale, summary.totalAmount, "EUR")}
+              : formatMoney(locale, summary.totalAmount, DEFAULT_CURRENCY)}
           </dd>
         </div>
       </dl>

@@ -11,6 +11,7 @@ import { ItemRow } from "@/components/ui/item-row";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
 import type { ReceiptStatus } from "@prisma/client";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 interface Receipt {
   id: string;
@@ -62,10 +63,6 @@ export default function ReceiptsPage() {
         month: "long",
         year: "numeric",
       }),
-    [locale],
-  );
-  const moneyFormat = useMemo(
-    () => new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }),
     [locale],
   );
 
@@ -133,7 +130,7 @@ export default function ReceiptsPage() {
                   ? [
                       {
                         label: t("totalAmount"),
-                        value: moneyFormat.format(receipt.totalAmount),
+                        value: formatMoney(locale, receipt.totalAmount, DEFAULT_CURRENCY),
                       },
                     ]
                   : []),
