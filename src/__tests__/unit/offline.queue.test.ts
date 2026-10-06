@@ -290,25 +290,50 @@ describe("a queue composed in another household", () => {
     expect(queue.getState().failed[0]?.reason).toBe("wrong-household");
   });
 
-  it("sends a change composed before any household was known", async () => {
+  it("sends a change composed before any household was known into the first one", async () => {
     // Stamped "" by a session whose token had no household while the
     // account created its first. Refusing it as wrong-household — which it
     // was, for ever, once the next sign-in carried the real one — discarded
     // a change that could only ever have been meant for this household.
     const send = mock(async () => {});
-    const queue = open(send);
+    const queue = open(send, { householdId: "" });
 
     queue.enqueue(tick());
-    const stored = queue.getState().pending[0] as QueuedOp;
-    queue.store.setState(
-      { ...queue.getState(), pending: [{ ...stored, householdId: "" }] },
-      true,
-    );
-
+    queue.setHousehold(HOUSEHOLD);
     await queue.drain();
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(queue.getState().failed).toHaveLength(0);
+  });
+
+  it("keeps it bound to that first household after the account moves on", async () => {
+    // "" is not a wildcard. Once the client has known a household, a change
+    // composed before it belongs to that one; the server derives the
+    // household from the session at send time, so letting it through after a
+    // move would write it into a household it was never composed in.
+    const send = mock(async () => {});
+    const queue = open(send, { householdId: "" });
+
+    queue.enqueue(tick());
+    queue.setHousehold(HOUSEHOLD);
+    queue.setHousehold("clsomeoneelsesomeoneelses");
+    await queue.drain();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(queue.getState().failed[0]?.reason).toBe("wrong-household");
+  });
+
+  it("binds a restored change to the household the queue opened with", async () => {
+    const storage = createMemoryStorage();
+    const earlier = open(async () => {}, { householdId: "", storage });
+    earlier.enqueue(tick());
+
+    const queue = open(async () => {}, { storage });
+    queue.hydrate();
+
+    expect(queue.getState().pending[0]?.householdId).toBe(HOUSEHOLD);
+    // Persisted, so the next session restores it bound rather than blank.
+    expect(storage.read(USER)).toMatchObject({ pending: [{ householdId: HOUSEHOLD }] });
   });
 
   it("stamps changes with the household it was told about since opening", () => {
