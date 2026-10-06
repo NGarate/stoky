@@ -14,6 +14,7 @@ import type { Session } from "next-auth";
 
 const OWNER = { userId: "", householdId: "" };
 let productId = "";
+let eggsId = "";
 let mercadona = "";
 let carrefour = "";
 let dia = "";
@@ -65,10 +66,25 @@ beforeAll(async () => {
       { productId, storeId: dia, price: 1, quantity: 0, unit: "unidad", recordedAt: at(5) },
     ],
   });
+
+  // Sightings of one product in three units. A dozen converts exactly; a
+  // kilo of eggs does not, and dividing by its own quantity would compare
+  // euros per kilo with euros per egg.
+  eggsId = (await prisma.product.create({
+    data: { name: "Huevos", defaultUnit: "unidad", householdId: household.id },
+  })).id;
+  await prisma.priceRecord.createMany({
+    data: [
+      { productId: eggsId, storeId: mercadona, price: 2.4, quantity: 1, unit: "docena", recordedAt: at(10) },
+      { productId: eggsId, storeId: carrefour, price: 1.5, quantity: 6, unit: "unidad", recordedAt: at(10) },
+      { productId: eggsId, storeId: dia, price: 3, quantity: 12, unit: "unidad", recordedAt: at(20) },
+      { productId: eggsId, storeId: dia, price: 0.5, quantity: 1, unit: "kg", recordedAt: at(5) },
+    ],
+  });
 });
 
 afterAll(async () => {
-  await prisma.priceRecord.deleteMany({ where: { productId } });
+  await prisma.priceRecord.deleteMany({ where: { productId: { in: [productId, eggsId] } } });
   await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
   await prisma.store.deleteMany({ where: { householdId: OWNER.householdId } });
   await prisma.user.deleteMany({ where: { id: OWNER.userId } });
@@ -93,6 +109,27 @@ describe("price.getLatestPrices", () => {
 
     expect(diaRow?.quantity).toBe(1);
     expect(diaRow?.unitPrice).toBeCloseTo(0.95, 10);
+  });
+});
+
+describe("sightings in different units", () => {
+  it("compares them in the product's unit and keeps each store's last comparable one", async () => {
+    const api = await caller();
+    const latest = await api.price.getLatestPrices({ productId: eggsId });
+    const byStore = new Map(latest.map((row) => [row.store.name, row]));
+
+    expect(byStore.get("Mercadona")?.unitPrice).toBeCloseTo(0.2, 10);
+    expect(byStore.get("Mercadona")?.unit).toBe("unidad");
+    expect(byStore.get("Carrefour")?.unitPrice).toBeCloseTo(0.25, 10);
+    // Dia's latest sighting is by the kilo; the one before it is comparable.
+    expect(byStore.get("Dia")?.unitPrice).toBeCloseTo(0.25, 10);
+  });
+
+  it("leaves the unconvertible sighting out of the history", async () => {
+    const api = await caller();
+    const history = await api.price.getHistory({ productId: eggsId, days: 30 });
+
+    expect(history.map((row) => row.unit)).toEqual(["unidad", "unidad", "unidad"]);
   });
 });
 

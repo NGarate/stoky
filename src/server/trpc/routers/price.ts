@@ -1,3 +1,4 @@
+import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { MAX_PAGE_SIZE, MAX_SEARCH_LENGTH } from "@/lib/validations/bounds";
@@ -6,7 +7,7 @@ import {
   priceRecordSchema,
   priceHistorySchema,
 } from "@/lib/validations/price";
-import { withUnitPrices } from "@/lib/prices/unitPrice";
+import { inUnit, withUnitPrices } from "@/lib/prices/unitPrice";
 
 /**
  * What things cost, and where — the price intelligence half of the product.
@@ -25,8 +26,23 @@ import { withUnitPrices } from "@/lib/prices/unitPrice";
  * units. Every read below therefore returns `unitPrice` beside it, computed
  * once here (`src/lib/prices/unitPrice.ts`), and leaves out a row with no
  * usable quantity — so no screen ranks a six-pack against a single carton by
- * what the whole pack cost.
+ * what the whole pack cost. The unit price is per the product's own unit
+ * (`inUnit`), so a dozen and a single egg are compared per egg, and a
+ * sighting in a unit that cannot be converted to it is left out.
  */
+/** The unit a product's prices are compared in, or null when it is not the caller's. */
+async function comparisonUnit(
+  db: PrismaClient,
+  productId: string,
+  householdId: string,
+): Promise<string | null> {
+  const product = await db.product.findFirst({
+    where: { id: productId, householdId },
+    select: { defaultUnit: true },
+  });
+  return product?.defaultUnit ?? null;
+}
+
 export const priceRouter = createTRPCRouter({
   /**
    * Records what something cost at a shop, by hand.
@@ -103,7 +119,8 @@ export const priceRouter = createTRPCRouter({
         },
       });
 
-      return withUnitPrices(history);
+      const unit = await comparisonUnit(ctx.db, input.productId, ctx.householdId);
+      return unit === null ? [] : withUnitPrices(inUnit(history, unit));
     }),
 
   /** The most recent sighting per store for a product — where it is cheapest now. */
@@ -129,9 +146,15 @@ export const priceRouter = createTRPCRouter({
         },
       });
 
+      // Converted before the per-store pick, for the same reason as the
+      // quantity filter above: the latest *comparable* sighting is reported.
+      const unit = await comparisonUnit(ctx.db, input.productId, ctx.householdId);
+      if (unit === null) return [];
+      const comparable = inUnit(latestPrices, unit);
+
       // Group by store and take the first (latest) for each
-      const pricesByStore = new Map<string, (typeof latestPrices)[number]>();
-      for (const price of latestPrices) {
+      const pricesByStore = new Map<string, (typeof comparable)[number]>();
+      for (const price of comparable) {
         if (!pricesByStore.has(price.storeId)) {
           pricesByStore.set(price.storeId, price);
         }
@@ -184,7 +207,7 @@ export const priceRouter = createTRPCRouter({
 
       return products.map((product) => ({
         ...product,
-        priceRecords: withUnitPrices(product.priceRecords),
+        priceRecords: withUnitPrices(inUnit(product.priceRecords, product.defaultUnit)),
       }));
     }),
 });
