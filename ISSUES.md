@@ -1544,6 +1544,13 @@ have meant writing the error branch twice.
 an empty state on error, which is wrong but recoverable and is a different
 defect; it is filed as UI-9.
 
+**Recurred, fixed 2026-10-06.** Four routes built later hand-rolled their own
+states instead of using `RouteState` and had the paused-query form of this
+defect: `/products/[id]`, `/products/[id]/adjust`, `/products/[id]/history`
+and `/receipts/[id]/applied` drew "Cargando…" for `isPending`, which a query
+paused offline also is. All four now render `RouteState`, and
+`route-query-states.test.tsx` covers them (DESIGN_AUDIT A5.5).
+
 **Original report follows.**
 
 **Two** routes render `if (isLoading || !result)`. When the query *fails*,
@@ -2298,6 +2305,11 @@ reloading rather than terminal. Kept separate because the fix is the same
 component (`RouteState`) applied to two routes whose loading branch has a
 different shape, and folding it into UI-8's commit would have made that commit
 touch four routes to fix a defect in two.
+
+**Recurred, fixed 2026-10-06.** `/settings/stores` gated on `isLoading` alone:
+a bare "Cargando…" with no title while loading, and a failed or paused query
+fell through to a screen with no shops on it. It now renders `RouteState`, and
+`route-query-failure.test.tsx` covers it (DESIGN_AUDIT A5.5).
 
 Note that an account with no household now reaches these two routes and sees
 the same lie, where before it saw a skeleton. That is not a regression from
