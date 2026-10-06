@@ -105,6 +105,18 @@ describe("answering the question", () => {
   });
 });
 
+describe("the scrim", () => {
+  it("dims the page with the theme's ink, like every other dialog", () => {
+    renderWithIntl(<ReconcileDialog onClose={() => {}} op={op} />);
+
+    // `bg-black/50` was the one scrim outside the tokens: Dialog and the nav
+    // sheet use `bg-foreground/60`, which follows the theme at night.
+    const scrim = document.querySelector(".fixed.inset-0") as HTMLElement;
+    expect(scrim.className).toContain("bg-foreground/60");
+    expect(scrim.className).not.toContain("bg-black");
+  });
+});
+
 describe("who may answer it", () => {
   it("does not offer a kitchen account a form the server will refuse", () => {
     // The product loads for KITCHEN — `getById` is a householdProcedure — so

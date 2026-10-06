@@ -204,7 +204,7 @@ export function ReconcileDialog({
     // The scrim is decoration and says so. `role="dialog"` and `aria-modal`
     // sat here, on a full-viewport box, so the dialog's accessible name
     // covered the whole screen and the card inside it was just content.
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/60 p-4 sm:items-center">
       <div
         aria-labelledby={`${fieldId}-title`}
         aria-modal="true"
