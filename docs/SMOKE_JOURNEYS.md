@@ -478,7 +478,9 @@ cluster on every surface including `/login`, writing the `locale` cookie that
 closed — I18N-1 through I18N-8 — and the class itself is now guarded twice:
 `messages.test.ts` fails when the catalogues diverge, and
 `message-usage.test.ts` scans every `t("…")` in the source for keys no
-catalogue holds, which is the gap the old note here said nothing could see.
+catalogue holds, which is the gap the old note here said nothing could see —
+and, since 2026-10-06, the catalogue for keys no screen asks for, after 94
+dead ones were removed.
 A unit-tier sweep also refuses a literal language tag anywhere under `src/`
 (D68).
 
