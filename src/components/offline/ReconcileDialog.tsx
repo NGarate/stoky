@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -224,7 +225,7 @@ export function ReconcileDialog({
           type="button"
           variant="ghost"
         >
-          <span aria-hidden="true">✕</span>
+          <X aria-hidden="true" className="size-5" />
         </Button>
 
         <h2

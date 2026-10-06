@@ -146,7 +146,7 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
             size="icon"
             variant="destructive"
           >
-            <X aria-hidden="true" className="w-4 h-4" />
+            <X aria-hidden="true" className="size-5" />
           </Button>
         </div>
       ) : (
@@ -167,7 +167,7 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
           <input {...getInputProps({ "aria-label": t("dropzoneLabel") })} />
           <div className="space-y-4">
             <div className="flex justify-center">
-              <Upload className="w-12 h-12 text-muted-foreground" />
+              <Upload aria-hidden="true" className="size-12 text-muted-foreground" />
             </div>
             <p className="text-foreground">
               {isDragActive ? t("dropActive") : t("dropPrompt")}

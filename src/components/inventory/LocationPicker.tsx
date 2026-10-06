@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/lib/trpc/client";
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 interface LocationPickerProps {
@@ -370,22 +371,12 @@ export function LocationPicker({
         ) : (
           <span className="text-muted-foreground">{prompt}</span>
         )}
-        <svg
-          className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform ${
+        <ChevronDown
+          aria-hidden="true"
+          className={`absolute right-2 top-1/2 size-5 -translate-y-1/2 transition-transform ${
             isOpen ? "rotate-180" : ""
           }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </button>
 
       {isOpen && (

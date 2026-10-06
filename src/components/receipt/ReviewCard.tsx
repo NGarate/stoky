@@ -134,7 +134,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                   onClick={() => setIsCreating(true)}
                   className="flex-1"
                 >
-                  <Plus className="w-4 h-4 mr-1" />
+                  <Plus aria-hidden="true" className="mr-1 size-5" />
                   {t("createProduct")}
                 </Button>
 
@@ -145,7 +145,7 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                     onClick={handleMatch}
                     className="flex-1"
                   >
-                    <Check className="w-4 h-4 mr-1" />
+                    <Check aria-hidden="true" className="mr-1 size-5" />
                     {t("confirmItem")}
                   </Button>
                 )}

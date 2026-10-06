@@ -1,7 +1,7 @@
 "use client";
 
 import * as Toast from "@radix-ui/react-toast";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   createContext,
@@ -368,7 +368,7 @@ function SnackbarRoot({
         aria-label={t("snackbar.dismiss")}
         className="min-h-[48px] min-w-[48px] shrink-0 rounded-md text-snackbar-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-snackbar-action"
       >
-        <span aria-hidden="true">✕</span>
+        <X aria-hidden="true" className="mx-auto size-5" />
       </Toast.Close>
     </Toast.Root>
   );

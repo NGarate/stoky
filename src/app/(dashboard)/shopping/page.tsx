@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronDown, ScanLine } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -92,20 +93,7 @@ export default function ShopPage(): JSX.Element {
         className="mt-4 min-h-[64px] w-full gap-3 rounded-xl py-4 text-lg font-semibold"
       >
         <Link href="/products/scan">
-        <svg
-          aria-hidden="true"
-          className="h-6 w-6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          viewBox="0 0 24 24"
-        >
-          <path
-            d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+          <ScanLine aria-hidden="true" className="size-5 shrink-0" />
           {t("scan")}
         </Link>
       </Button>
@@ -168,18 +156,12 @@ export default function ShopPage(): JSX.Element {
               <span className="font-normal">
                 {t("trolleyCount", { count: trolley.length })}
               </span>
-              <svg
+              <ChevronDown
                 aria-hidden="true"
-                className={`h-5 w-5 shrink-0 transition-transform motion-reduce:transition-none ${
+                className={`size-5 shrink-0 transition-transform motion-reduce:transition-none ${
                   trolleyOpen ? "rotate-180" : ""
                 }`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-              >
-                <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              />
             </span>
           </button>
         </h2>

@@ -81,7 +81,7 @@ export default function ReceiptsPage() {
             containing a button is not valid HTML either (DESIGN_AUDIT A4.2). */}
         <Button asChild>
           <Link href="/receipts/upload">
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus aria-hidden="true" className="mr-2 size-5" />
             {t("upload")}
           </Link>
         </Button>
@@ -89,7 +89,7 @@ export default function ReceiptsPage() {
 
       {receipts.length === 0 ? (
         <div className="text-center py-12 rounded-lg border border-border bg-muted">
-          <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <FileText aria-hidden="true" className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-foreground mb-2">{t("noReceipts")}</p>
           <p className="text-sm text-muted-foreground">{t("uploadFirst")}</p>
           <Button asChild variant="outline" className="mt-4">

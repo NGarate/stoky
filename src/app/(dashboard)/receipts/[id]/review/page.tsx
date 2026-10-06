@@ -189,7 +189,7 @@ export default function ReviewPage() {
 
       {receipt.status === "APPLIED" ? (
         <div className="text-center py-8 rounded-lg border border-ok-foreground bg-ok mb-6">
-          <Package className="w-12 h-12 text-ok-foreground mx-auto mb-4" />
+          <Package aria-hidden="true" className="w-12 h-12 text-ok-foreground mx-auto mb-4" />
           <p className="text-ok-foreground font-medium">{t("alreadyApplied")}</p>
           {/* The summary is what the apply redirects to; coming back to the
               review afterwards should be able to reach it too, rather than
@@ -226,7 +226,7 @@ export default function ReviewPage() {
                 onClick={handleApply}
                 disabled={applyReceiptMutation.isPending}
               >
-                <Package className="w-4 h-4 mr-2" />
+                <Package aria-hidden="true" className="mr-2 size-5" />
                 {applyReceiptMutation.isPending
                   ? t("applying")
                   : t("applyToInventory")}
@@ -237,7 +237,7 @@ export default function ReviewPage() {
                 onClick={handleConfirmAll}
                 disabled={pendingItems > 0 || confirmAllMutation.isPending}
               >
-                <Check className="w-4 h-4 mr-2" />
+                <Check aria-hidden="true" className="mr-2 size-5" />
                 {t("confirmAll")}
               </Button>
             )}
