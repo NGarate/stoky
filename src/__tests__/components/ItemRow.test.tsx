@@ -4,6 +4,8 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { Badge } from "@/components/ui/badge";
 import { ItemRow } from "@/components/ui/item-row";
 import { minimumHeight } from "../setup/tailwind";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * The one list row. Lifted from `/inventory`, which is the screen the owner
@@ -166,5 +168,54 @@ describe("ItemRow densities", () => {
     const className = screen.getByRole("link").className;
     expect(className).toContain("min-w-[48px]");
     expect(await minimumHeight(className)).toBeGreaterThanOrEqual(48);
+  });
+});
+
+describe("ItemRow's description", () => {
+  it("says in one sentence what the row is, under its title and outside the link", () => {
+    render(
+      <ul>
+        <ItemRow
+          description="Las tiendas donde compras."
+          href="/settings/stores"
+          title="Tiendas"
+        />
+      </ul>,
+    );
+
+    const link = screen.getByRole("link", { name: "Tiendas" });
+    const description = screen.getByText("Las tiendas donde compras.");
+    expect(link.contains(description)).toBe(false);
+    expect(
+      link.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
+
+describe("the settings index", () => {
+  /**
+   * Its five destinations were cards whose h2 held a `Button variant="link"`,
+   * so each title rendered at the button's text-sm — smaller than the
+   * sentence under it — and five headings were spent on a list of places to
+   * go. Below them sat "Todavía no hay más ajustes": a section whose only
+   * content was that it had no content.
+   */
+  it("lists its screens as ItemRows and carries no section about nothing", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "..", "..", "app", "(dashboard)", "settings", "page.tsx"),
+      "utf8",
+    );
+
+    for (const href of [
+      "/settings/locations",
+      "/settings/stores",
+      "/settings/people",
+      "/settings/screen",
+      "/settings/unsaved",
+    ]) {
+      expect(source).toMatch(new RegExp(`<ItemRow[^>]*href="${href}"`, "s"));
+    }
+    expect(source).not.toContain('variant="link"');
+    expect(source).not.toContain("pendingTitle");
   });
 });

@@ -109,6 +109,11 @@ export interface ItemRowProps extends VariantProps<typeof itemRowVariants> {
   href?: string;
   /** A `<Badge>`, sat opposite the title. */
   status?: ReactNode;
+  /**
+   * One sentence under the title, for a row whose details are prose rather
+   * than label/value pairs — an index of screens says what each one is for.
+   */
+  description?: ReactNode;
   /** Rendered as a two-column definition list under the title. */
   meta?: MetaEntry[];
   /** `<Button>`s. A link belongs here only when it genuinely navigates. */
@@ -122,6 +127,7 @@ export function ItemRow({
   title,
   href,
   status,
+  description,
   meta,
   actions,
   density,
@@ -148,6 +154,10 @@ export function ItemRow({
         )}
         {status}
       </div>
+
+      {description ? (
+        <p className="mt-1 text-muted-foreground">{description}</p>
+      ) : null}
 
       {meta && meta.length > 0 ? (
         <dl className={metaVariants({ density })}>
