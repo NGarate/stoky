@@ -86,7 +86,7 @@
     "happy-dom": "^20.11.1",
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1",
-    "react-doctor": "0.9.11",
+    "react-doctor": "0.9.17",
     "sharp": "^0.35.3"
   },
   "trustedDependencies": [
@@ -104,6 +104,8 @@
     "effect": "^3.22.1",
     "defu": "^6.1.7",
     "nanoid": "^3.3.18",
-    "deepmerge-ts": "^8.0.0"
+    "deepmerge-ts": "^8.0.0",
+    "fast-uri": "^3.1.8",
+    "brace-expansion": "^5.0.12"
   }
 }
