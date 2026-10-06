@@ -153,9 +153,9 @@ binary you happen to be holding.
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
-| Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
-| Unit tests | `bun run test:unit` | ✅ 713 pass / 80 files (2026-09-25) |
-| Component tests | `bun run test:components` | ✅ 658 pass / 60 files (2026-09-25) |
+| Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-06) |
+| Unit tests | `bun run test:unit` | ✅ 814 pass / 91 files (2026-10-06) |
+| Component tests | `bun run test:components` | ✅ 782 pass / 70 files (2026-10-06) |
 | Integration tests | `bun run test:integration` | ✅ 549 pass / 37 files (2026-09-25) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |

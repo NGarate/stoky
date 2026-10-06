@@ -83,9 +83,10 @@ component that did this was part of the design lab and was deleted with it.
 - ~~**A1.3**~~ **Done.** Reachable from every screen, including **before
   sign-in**. Someone whose system is set to light but who needs dark for a visual
   reason must not have to log in first.
-- ~~**A1.4**~~ **Done** — `check:contrast` is the gate (78 checks over 37
-  tokens × 2 themes, all AAA at the 2026-08-28 measurement), asserting both
-  themes on the tokens. No colour is hand-checked.
+- ~~**A1.4**~~ **Done** — `check:contrast` is the gate (96 checks over 37
+  tokens × 2 themes, all AAA at the 2026-10-06 measurement; 78 until A6.1
+  added the state inks off their fills), asserting both themes on the tokens.
+  No colour is hand-checked.
 
 ---
 
@@ -557,3 +558,81 @@ Sequenced by what unblocks what, not by severity.
 4. **Is AAA the target for everything, or AA with AAA for contrast?** Full AAA is
    demanding — 1.4.8 constrains line length and justification, 2.4.9 rules out
    bare "Ver" links. Worth confirming, because it shapes copy as well as layout.
+
+---
+
+## 10. Vocabulary, primitives and formatting — the 2026-10-06 alignment pass
+
+Found by a screenshot audit of every route (light and dark, 390 and 1280)
+and by reading the primitives against the rules CLAUDE.md states for them.
+Nothing here is a new design: each item aligns a screen with the system the
+owner already picked, and each closed item names the test that holds it.
+
+- ~~**A6.1 — the contrast audit missed the inks where they land.**~~ **Done.**
+  `ok`/`warn`/`danger-foreground` were measured only on their own pill fills,
+  but some thirty call sites (stock amounts, field errors, every outline
+  badge) put them on the page or a card, and `destructive` was measured only
+  as a 3:1 fill though rows write it as ink. Eighteen pairs added:
+  **96 checks over 37 tokens × 2 themes**, lowest 8.00:1.
+- ~~**A6.2 — the price chart wrote store names in series colours.**~~ **Done.**
+  2.17–4.42:1 on the light card. The legend is ours (name in `foreground`,
+  hue in an `aria-hidden` swatch); every Recharts tooltip spreads
+  `CHART_TOOLTIP` (`src/lib/chart-tooltip.ts`) — the stock history's was mint
+  on white at night, 1.59:1 — and the price tooltip names each store instead
+  of labelling every row "Precio por unidad". `chart-tooltip.test.ts`.
+- ~~**A6.3 — the link button was underlined only on hover.**~~ **Done.**
+  `primary` against body ink is 1.78:1 light, 1.36:1 dark — under 1.4.1's 3:1
+  for a colour-only cue, and touch has no hover. `variant="link"` is
+  underlined at rest, like `ItemRow`'s title and `BackLink`.
+- ~~**A6.4 — StockStatus fixed its pill variant per state.**~~ **Done.**
+  "Sin stock" filled on a `bg-danger` row (invisible), "Stock bajo" outlined
+  on untinted rows. The variant now follows the row: `onTintedRow`.
+- ~~**A6.5 — four vocabularies for "when does it go off".**~~ **Done.**
+  `ExpiryStatus` (`src/components/inventory/ExpiryStatus.tsx`): one tone rule
+  (past = danger, within `EXPIRING_SOON_DAYS` = warn, later = neutral) and one
+  ICU-plural vocabulary ("Caduca hoy / mañana / en # días", "Caducó ayer /
+  hace # días"). "Caducó hace 1 días" is gone; the two `ExpiryRow` copies are
+  one. The threshold is shared with the server's `isExpiringSoon`.
+- ~~**A6.6 — the kitchen's rows.**~~ **Done.** Running-out rows wear
+  `StockStatus`; "Añadir a la lista" sits in `actions` at touch size; each
+  button's accessible name starts with its visible words (2.5.3); the
+  unused "Actualizado a las {time}" is shown.
+- ~~**A6.7 — a plain `ItemRow` kept a card's inset.**~~ **Done.** Titles sat
+  12–20px right of their section heading.
+- ~~**A6.8 — the count unit printed as its stored token.**~~ **Done.**
+  "24 unidad", "He usado 1 unit". `useQuantityFormat()`
+  (`src/lib/inventory/quantity.ts`) writes count units as the ICU-plural
+  `common.unitCount` everywhere a quantity is shown, including queued labels;
+  stored data is unchanged.
+- ~~**A6.9 — state tones on things that are not states.**~~ **Done.** "Mejor
+  precio", the drafted list and "Auto-detectado" are neutral; the review
+  card's status is a `Badge`, and a skipped line no longer says "Confirmado".
+- ~~**A6.10 — one rule for destruction.**~~ **Done.** A row trigger is
+  `Button variant="destructive-ghost"`; the confirming button is
+  `destructive`. The product page drew trigger, confirmation and cancel in
+  the primary fill. The shopping row's bin says "Quitar" and names its item.
+- ~~**A6.11 — controls outside the primitives.**~~ **Done.** `StoreSelector`
+  wears `Select`; `Disclosure` (`src/components/ui/disclosure.tsx`) replaces
+  three hand-written `<details>`; the upload camera action is a `Button`; the
+  review card's icon-only X is "No añadir esta línea"; the reconcile scrim is
+  `bg-foreground/60`. `target-floor.test.ts`'s allow-list is down from 11 to
+  7 entries.
+- ~~**A6.12 — money and dates formatted in place.**~~ **Done.**
+  `money-formatting.test.ts` bans `style: "currency"` outside
+  `src/lib/money.ts`. `src/lib/dates.ts` (`formatDate(locale, value,
+  "long" | "short")`, `formatDateTime`, `formatTime`) replaces nine call sites
+  in six shapes, and pins date-only values (expiry, stored at UTC midnight)
+  to UTC: west of UTC the product page listed a batch good until the 6th as
+  the 5th. `dates.test.ts` bans a formatter built anywhere else.
+- ~~**A6.13 — three icon conventions.**~~ **Done.** lucide only, 20px in a
+  control and 16px inline, always `aria-hidden`: no "✕" characters, no
+  hand-drawn paths for glyphs lucide ships (the scanner's torch, which
+  carries `<title>`s, is the one allow-listed exception). `icons.test.ts`.
+  The preferences cluster aligns its labels (`items-start`).
+
+**Still open from this pass.** The new-product form prefills the unit field
+with the stored token `unit`, so a Spanish reader still sees the English
+word *inside the input* (the hint beside it no longer repeats it); changing
+the prefill changes stored data and is a decision, not an alignment. The
+kitchen's warn cards and the error/empty-state illustrations were left to
+the pass restructuring page headers and states.
