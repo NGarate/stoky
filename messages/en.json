@@ -998,6 +998,7 @@
     "tickedOff": "You ticked off “{name}”",
     "untickedOff": "You unticked “{name}”",
     "removedItem": "You removed “{name}” from the list",
+    "removeWhileSending": "“{name}” is being sent; you can remove it in a moment",
     "usedUp": "You used {quantity} {unit} of “{name}”",
     "addedStock": "You added {quantity} {unit} of “{name}”",
     "addedItem": "You added “{name}” to the list",
