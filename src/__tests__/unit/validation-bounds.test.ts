@@ -49,6 +49,11 @@ describe("quantities and prices are finite and bounded", () => {
       accepts(updateShoppingItemSchema, { id: "i", quantity: Infinity, quantityUnit: "unidad" }),
     ).toBe(false);
     expect(accepts(productSchema, { name: "Leche", minStock: Infinity })).toBe(false);
+    // The divisor of every unit price: Infinity made a real price read as 0 €
+    // per unit, the best price on the screen, and the premiums beside it NaN.
+    expect(
+      accepts(priceRecordSchema, { productId: "p", storeId: "s", price: 1, unit: "unidad", quantity: Infinity }),
+    ).toBe(false);
     expect(accepts(updateProductSchema, { id: "p", minStock: Infinity })).toBe(false);
   });
 
@@ -56,6 +61,9 @@ describe("quantities and prices are finite and bounded", () => {
     expect(accepts(addStockSchema, { ...stock, quantity: MAX_QUANTITY + 1 })).toBe(false);
     expect(accepts(addStockSchema, { ...stock, quantity: MAX_QUANTITY })).toBe(true);
     expect(accepts(addStockSchema, { ...stock, quantity: 0.5 })).toBe(true);
+    expect(
+      accepts(priceRecordSchema, { productId: "p", storeId: "s", price: 1, unit: "unidad", quantity: MAX_QUANTITY + 1 }),
+    ).toBe(false);
     // Signed, so a reconciliation downwards still passes.
     expect(accepts(adjustStockSchema, { ...stock, quantity: -3, reason: "recuento" })).toBe(true);
   });
