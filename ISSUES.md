@@ -3074,6 +3074,26 @@ docker run --rm -v "$PWD:/app:ro" -v /app/node_modules stoky-dev:ci \
 
 ---
 
+### TEST-8: `resolveScan` "refuses the same key carrying a different barcode" fails about one full run in four
+
+**Location:** `src/__tests__/integration/resolveScan.test.ts:150`  
+**Severity:** LOW (test reliability; no product defect found yet)  
+**Status:** OPEN — reproduced on `master`, not introduced by the review branches
+
+**Measured 2026-10-06:** the integration tier failed this one test in 1 of 4
+full runs on `fix/project-review-2026-10-05` and in 1 of the 3 clean full runs
+on `master` (two further master runs were disturbed by a dependency reinstall
+and are not counted). Alone, the file passed 3 of 3. CI passed it.
+
+The failure is an uncaught `TRPCError: This key was already used for a
+different change` (`replay.ts` `answerFromRecord`) reported against the test
+itself, not the `expect(error.code)` inside `refusal()`. That points at the
+*first* `resolveScan` call meeting an already-claimed key, although
+`envelope()` draws a fresh `crypto.randomUUID()` per test. Not yet explained;
+the receipt tests that run just before it alphabetically leave background
+processing that logs P2025 after their cleanup, which is the first thing to
+rule in or out.
+
 ### ✅ TEST-7: ProductRating tests fail in the component suite but pass alone
 
 Found 2026-09-08 while verifying the local dependency setup repair, using Bun
