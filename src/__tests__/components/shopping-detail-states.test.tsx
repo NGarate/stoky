@@ -1,6 +1,7 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TRPCClientError } from "@trpc/client";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -219,6 +220,26 @@ describe("the shopping list someone is holding", () => {
     const row = screen.getByText("Leche entera").closest("li");
     expect(row).not.toBeNull();
     expect(row?.parentElement?.tagName).toBe("UL");
+  });
+
+  it("calls adding by one name from the button that opens it to the one that commits it", async () => {
+    // "Añadir artículo" opened a form whose commit said only "Añadir" — the
+    // same action under two names, and the second said nothing about where
+    // the product would go.
+    queryStub = {
+      data: LOADED,
+      isPending: false,
+      error: null,
+      fetchStatus: "idle",
+      refetch: noop,
+    };
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Añadir un producto" }));
+
+    expect(
+      screen.getByRole("button", { name: "Añadir a la lista" }),
+    ).toHaveAttribute("type", "submit");
   });
 
   it("keeps showing the list when a refetch cannot reach the server", () => {

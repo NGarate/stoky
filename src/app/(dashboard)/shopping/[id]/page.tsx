@@ -345,8 +345,11 @@ export function ShoppingListView({ id }: { id: string }) {
                   value={newItem.unit}
                 />
               </div>
+              {/* "Añadir a la lista", not a bare "Añadir": the button that
+                  opened this form says "Añadir un producto", and the one
+                  that commits it says where the product goes. */}
               <Button disabled={createProduct.isPending} type="submit">
-                {t("common.add")}
+                {t("shopping.addToList")}
               </Button>
               <Button onClick={resetForm} type="button" variant="outline">
                 {t("common.cancel")}

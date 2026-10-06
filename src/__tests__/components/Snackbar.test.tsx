@@ -197,7 +197,7 @@ describe("what the snackbar says", () => {
 
     // The op label is `{key, values}` so that a queue composed in Spanish and
     // read after a language switch is not half in each (queue.ts:41-47).
-    expect(await screen.findAllByText("Marcaste «Leche»")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Marcaste «Leche» como comprado")).not.toHaveLength(0);
   });
 
   it("writes a stored count unit as a word, in the reader's plural", async () => {
@@ -216,7 +216,7 @@ describe("what the snackbar says", () => {
     render();
     await press("confirmar");
 
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
     expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
   });
 });
@@ -226,7 +226,7 @@ describe("a failure", () => {
     const { baseElement } = render();
 
     await press("confirmar");
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
     const success = baseElement.querySelector('[data-testid="snackbar"]');
     const successMarkup = success?.innerHTML ?? "";
 
@@ -262,11 +262,11 @@ describe("a failure", () => {
     try {
       render();
       fireEvent.click(screen.getByRole("button", { name: "confirmar" }));
-      expect(screen.getAllByText("Marcaste «Leche»").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Marcaste «Leche» como comprado").length).toBeGreaterThan(0);
       act(() => {
         jest.advanceTimersByTime(7_000);
       });
-      expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+      expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
 
       fireEvent.click(screen.getByRole("button", { name: "fallo" }));
       act(() => {
@@ -292,7 +292,7 @@ describe("a failure", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Descartar el aviso" }));
     await waitFor(() => {
-      expect(screen.getAllByText("Marcaste «Leche»").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Marcaste «Leche» como comprado").length).toBeGreaterThan(0);
     });
   });
 });
@@ -403,14 +403,14 @@ describe("two things at once", () => {
   it("replaces one confirmation with the next: nobody needs the previous one", async () => {
     render();
     await press("confirmar");
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
 
     await press("confirmar otro");
 
     await waitFor(() => {
       expect(screen.getAllByText("Quitaste «Pan» de la lista")).not.toHaveLength(0);
     });
-    expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+    expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
   });
 
   it("gives a second undoable action its own undo, not one ten seconds late", async () => {
@@ -440,7 +440,7 @@ describe("two things at once", () => {
     // The exact failure D54 rejected toasts over: the button someone is
     // reaching for must not vanish because something else happened.
     expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
-    expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+    expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
   });
 });
 
@@ -448,14 +448,14 @@ describe("dismissing", () => {
   it("can be closed by hand, whatever the timer says", async () => {
     render();
     await press("confirmar");
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
 
     await userEvent.click(
       screen.getByRole("button", { name: "Descartar el aviso" }),
     );
 
     await waitFor(() => {
-      expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+      expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
     });
   });
 });
