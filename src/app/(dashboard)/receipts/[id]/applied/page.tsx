@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { BackLink } from "@/components/ui/back-link";
 import { useLocale, useTranslations } from "next-intl";
-import { use, useMemo } from "react";
+import { use } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/trpc/client";
 import type { JSX } from "react";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 
 interface AppliedPageProps {
   params: Promise<{ id: string }>;
@@ -71,15 +72,6 @@ export default function ReceiptAppliedPage({
   );
   const summary = query.data;
 
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-    [locale],
-  );
 
   if (query.isPending) {
     return (
@@ -228,7 +220,7 @@ export default function ReceiptAppliedPage({
           </dt>
           <dd className="text-foreground md:text-lg">
             {receipt.purchaseDate
-              ? dateFormat.format(receipt.purchaseDate)
+              ? formatDate(locale, receipt.purchaseDate, "long")
               : t("dateUnknown")}
           </dd>
         </div>

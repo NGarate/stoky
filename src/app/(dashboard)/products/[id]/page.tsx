@@ -20,6 +20,7 @@ import { UNDO_HOLD_MS } from "@/lib/offline/queue";
 import { projectStockTotals } from "@/lib/offline/project";
 import { daysUntilExpiry, remainingByBatch, startOfToday } from "@/lib/inventory/batches";
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
@@ -149,15 +150,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     },
   });
 
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-    [locale],
-  );
 
   /** Sum the surviving batches; unknown withdrawals never become a fake shelf balance. */
   const stockByLocation = useMemo<LocationTotal[]>(() => {
@@ -427,7 +419,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
             {batches.map((batch) => (
               <li key={batch.id} className="px-4 py-3">
                 <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                  {dateFormat.format(batch.expiresAt)}
+                  {formatDate(locale, batch.expiresAt, "long", { dateOnly: true })}
                   {/* A date, not an instant: dated today is not yet expired.
                       The words and tone are the ones every other screen
                       uses for a batch's date — this was a bare red
@@ -482,7 +474,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                       {t("priceDateHeader")}
                     </dt>
                     <dd className="mt-1 text-foreground">
-                      {dateFormat.format(record.recordedAt)}
+                      {formatDate(locale, record.recordedAt, "long")}
                     </dd>
                   </div>
                   <div>
@@ -521,7 +513,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               {product.priceRecords.map((record) => (
                 <tr key={record.id} className="border-b border-border">
                   <td className="px-4 py-2">
-                    {dateFormat.format(record.recordedAt)}
+                    {formatDate(locale, record.recordedAt, "long")}
                   </td>
                   <td className="px-4 py-2">{record.store.name}</td>
                   <td className="px-4 py-2">
@@ -545,7 +537,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
       <ProductDetailsForm
         canEdit={canWrite}
-        formattedDate={dateFormat.format(product.createdAt)}
+        formattedDate={formatDate(locale, product.createdAt, "long")}
         product={product}
       />
 

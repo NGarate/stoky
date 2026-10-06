@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Check, Package } from "lucide-react";
@@ -14,6 +14,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { ReviewCard } from "@/components/receipt/ReviewCard";
 import { ReceiptStatusStep } from "@/components/receipt/ReceiptStatus";
+import { formatDate } from "@/lib/dates";
 
 export default function ReviewPage() {
   const t = useTranslations("receipts");
@@ -101,7 +102,6 @@ export default function ReviewPage() {
       }),
   });
 
-  const dateFormat = useMemo(() => new Intl.DateTimeFormat(locale), [locale]);
 
   // "Not found" only when the server said so. Gated on `isLoading`, a query
   // paused offline or refused with a 500 fell through to this branch and
@@ -179,7 +179,7 @@ export default function ReviewPage() {
         <p className="text-muted-foreground">
           {receipt.store?.name || t("storeUnknown")}
           {receipt.purchaseDate &&
-            ` • ${dateFormat.format(new Date(receipt.purchaseDate))}`}
+            ` • ${formatDate(locale, receipt.purchaseDate, "long")}`}
         </p>
       </div>
 

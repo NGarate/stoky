@@ -19,6 +19,7 @@ import {
   projectStockTotals,
 } from "@/lib/offline/project";
 import type { JSX } from "react";
+import { formatTime } from "@/lib/dates";
 
 /**
  * Screen B — the kitchen, "at home" (`REDESIGN_PLAN.md` §4).
@@ -487,10 +488,7 @@ export default function KitchenPage(): JSX.Element {
       {expiring.dataUpdatedAt > 0 ? (
         <p className="mt-10 text-lg text-muted-foreground">
           {t("updated", {
-            time: new Intl.DateTimeFormat(locale, {
-              hour: "2-digit",
-              minute: "2-digit",
-            }).format(expiring.dataUpdatedAt),
+            time: formatTime(locale, expiring.dataUpdatedAt),
           })}
         </p>
       ) : null}

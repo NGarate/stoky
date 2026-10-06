@@ -8,6 +8,7 @@ import { DEFAULT_CURRENCY, formatMoney, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
 
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 /**
  * Where this product is cheapest.
@@ -166,7 +167,7 @@ export function StoreComparison({
                 <span aria-hidden="true"> · </span>
                 <span className="sr-only">. </span>
                 {t("prices.recordedOn", {
-                  date: new Date(price.recordedAt).toLocaleDateString(locale),
+                  date: formatDate(locale, price.recordedAt, "short"),
                 })}
               </p>
             </li>

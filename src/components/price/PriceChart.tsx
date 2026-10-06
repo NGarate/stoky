@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 interface PriceDataPoint {
   date: string;
@@ -81,7 +82,7 @@ export function PriceChart({
 
   const chartData: ChartDataPoint[] = Object.values(
     data.reduce((acc: Record<string, ChartDataPoint>, item) => {
-      const date = new Date(item.date).toLocaleDateString(locale);
+      const date = formatDate(locale, item.date, "short");
       // `??=` rather than this reads better and the React Compiler does not
       // support it — it declines to optimise the whole component and
       // `bun run check:react` fails on the syntax.

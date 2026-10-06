@@ -317,4 +317,27 @@ describe("a batch's expiry is read as a date", () => {
     const expired = screen.getByText("Caducó ayer").closest("li");
     expect(expired?.textContent).toContain("5");
   });
+
+  it("names the day that was stored, west of UTC too", () => {
+    // Stored as UTC midnight of the 6th; in New York that instant is the
+    // evening of the 5th, and the batch list said "05 de octubre".
+    const previous = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      setSystemTime(new Date("2026-10-01T15:00:00Z"));
+      // The premise, checked rather than assumed: if the runtime did not
+      // take the zone, this test would pass for the wrong reason.
+      expect(new Date("2026-10-06T00:00:00Z").getDate()).toBe(5);
+      stockEntries = [
+        fridgeEntry({ id: "dated", expirationDate: new Date("2026-10-06") }),
+      ];
+      renderDetail();
+
+      expect(screen.getByText(/6 de octubre de 2026/)).toBeInTheDocument();
+      expect(screen.queryByText(/5 de octubre de 2026/)).toBeAbsent();
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
+  });
 });

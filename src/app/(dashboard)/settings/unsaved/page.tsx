@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { BackLink } from "@/components/ui/back-link";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 import type { JSX } from "react";
+import { formatDateTime } from "@/lib/dates";
 
 /**
  * Everything that did not save, in one place.
@@ -62,7 +63,7 @@ export default function UnsavedPage(): JSX.Element {
   // namespace was shown raw: "offline.shopping.itemUpdated".
   const tLabel = useTranslations();
   const units = useQuantityFormat();
-  const format = useFormatter();
+  const locale = useLocale();
   const { state, retry, discard } = useWriteQueue();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
 
@@ -97,10 +98,7 @@ export default function UnsavedPage(): JSX.Element {
                 meta={[
                   {
                     label: t("unsavedWhenLabel"),
-                    value: format.dateTime(op.createdAt, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }),
+                    value: formatDateTime(locale, op.createdAt),
                   },
                   { label: t("unsavedWhyLabel"), value: t(REASON_KEY[op.reason]) },
                 ]}

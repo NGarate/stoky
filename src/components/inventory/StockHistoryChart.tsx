@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { useLocale, useTranslations } from "next-intl";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { formatDate } from "@/lib/dates";
 
 /**
  * Net stock over time — the history screen's chart (Phase 8 item 5).
@@ -40,7 +41,7 @@ export function StockHistoryChart({
   const locale = useLocale();
 
   const chartData = points.map((point) => ({
-    date: new Date(point.date).toLocaleDateString(locale),
+    date: formatDate(locale, point.date, "short"),
     total: point.total,
   }));
 

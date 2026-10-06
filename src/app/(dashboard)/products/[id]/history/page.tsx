@@ -9,6 +9,7 @@ import { runningTotals } from "@/lib/inventory/stockLedger";
 import { StockHistoryChart } from "@/components/inventory/StockHistoryChart";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 /**
  * The product's ledger, made visible — "the only screen that shows why the
@@ -66,15 +67,6 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
     [entries, product],
   );
 
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-    [locale],
-  );
 
   const failed = detail.error ?? history.error;
   if (failed) {
@@ -170,7 +162,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                   return (
                     <tr key={entry.id} className="border-t border-border">
                       <td className="px-4 py-3 text-foreground">
-                        {dateFormat.format(new Date(entry.createdAt))}
+                        {formatDate(locale, entry.createdAt, "short")}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {t(`op${entry.operationType}`)}

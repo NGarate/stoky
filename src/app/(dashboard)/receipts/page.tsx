@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo } from "react";
+
 import { Plus, FileText } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -12,6 +12,7 @@ import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
 import type { ReceiptStatus } from "@prisma/client";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 
 interface Receipt {
   id: string;
@@ -50,21 +51,9 @@ export default function ReceiptsPage() {
   const data = query.data;
   const receipts: Receipt[] = data?.items ?? [];
 
-  // Formatted here rather than by a shared helper, because a shared one has to
-  // be told the locale and the only thing that knows it is a component. There
-  // used to be a `formatDate` in `lib/utils` with `es-ES` written into it
-  // (ISSUES.md I18N-3); it is gone rather than parameterised, because nothing
-  // called it and a locale-pinning helper on the shelf is a trap for whoever
-  // reaches for it next.
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }),
-    [locale],
-  );
+  // Dates go through `lib/dates`, which takes the locale as an argument. The
+  // `formatDate` that once lived in `lib/utils` had `es-ES` written into it
+  // (ISSUES.md I18N-3); the shared helper is fine, the pinned locale was not.
 
   // `!data` rather than `isLoading`, which is false for a query that is
   // paused offline or has failed — so with no signal, or after a 500, this
@@ -120,11 +109,11 @@ export default function ReceiptsPage() {
                 receipt.purchaseDate
                   ? {
                       label: t("purchaseDate"),
-                      value: dateFormat.format(receipt.purchaseDate),
+                      value: formatDate(locale, receipt.purchaseDate, "long"),
                     }
                   : {
                       label: t("uploadedAt"),
-                      value: dateFormat.format(receipt.createdAt),
+                      value: formatDate(locale, receipt.createdAt, "long"),
                     },
                 ...(receipt.totalAmount
                   ? [
