@@ -100,7 +100,7 @@ function satisfiesFloor(version: string, range: string): boolean {
 }
 
 describe("the dependency overrides", () => {
-  it("are exactly the five that were carried across, by name", () => {
+  it("are exactly the ones docs/STATUS.md explains, by name", () => {
     // `toEqual` on the whole set, not a count and not a loop over whatever
     // happens to be declared.
     //
@@ -111,9 +111,11 @@ describe("the dependency overrides", () => {
     // `capabilities.test.ts`. Adding one is a decision too: it fails here until
     // `docs/STATUS.md` § Dependency security says why it exists.
     expect(Object.keys(manifest.overrides ?? {}).sort()).toEqual([
+      "brace-expansion",
       "deepmerge-ts",
       "defu",
       "effect",
+      "fast-uri",
       "lodash",
       "nanoid",
     ]);

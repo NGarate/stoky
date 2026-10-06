@@ -755,7 +755,7 @@ dependency stayed within its major. The overrides were scoped to the single
 parent that pulled them — `recharts>lodash`, not a bare `lodash` — for as long
 as pnpm was the thing resolving them.
 
-**The five overrides live in `package.json`'s `overrides` now, and they are
+**The overrides live in `package.json`'s `overrides` now, and they are
 global rather than parent-scoped.** They had to be rewritten rather than
 carried across from `pnpm-workspace.yaml`, because pnpm's `parent>child` key is
 a **silent no-op** under bun: it matches no package, it warns about nothing,
@@ -763,6 +763,19 @@ and the install that looks like it worked has quietly resolved the vulnerable
 version again. lodash, effect, defu, nanoid and deepmerge-ts are pinned
 wherever they appear, which is wider than the advisories strictly need and the
 direction an override should err in.
+
+**2026-10-06: two more, brace-expansion and fast-uri**, after advisories
+published since the 2026-09-25 measurement turned CI red. Both arrive only
+through `react-doctor` (the `check:react` dev tool, not in the image):
+brace-expansion <5.0.12 via eslint's minimatch (GHSA-qhr7-859c-m2p7,
+GHSA-6j4f-fj2g-mc7p, GHSA-q2hr-2g5m-vwhr) and fast-uri 3.1.6 via conf's ajv
+(GHSA-qw65-cvwx-89v3, GHSA-58mr-gqgx-xq4g, GHSA-hrr3-gc8f-f4qj). Each fixed
+release sits inside its parent's range (`^5.0.8`, `^3.0.1`) and the tree holds
+one copy of each, so neither crosses a major. The third chain, `braces` (no
+fixed release exists), was removed by moving react-doctor from 0.9.11 to
+0.9.17, which no longer depends on deslop-js. The same day Next.js went to
+16.3.8 for GHSA-vcvr-r3jv-pc5j (critical, `next/og`). `bun audit`: no
+vulnerabilities across 564 packages.
 
 GitHub's Dependabot count is higher than `bun audit`'s because it counts one
 alert per advisory-path pair.
