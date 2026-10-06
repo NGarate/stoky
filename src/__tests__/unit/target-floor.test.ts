@@ -38,8 +38,6 @@ const FLOOR = /min-h-\[(48|56|64)px\]/;
 const ALLOWED: Record<string, string> = {
   "app/(dashboard)/shopping/page.tsx":
     "Screen A's trolley disclosure: a full-width row read with a trolley in one hand (D54, REDESIGN_PLAN §3)",
-  "app/offline/page.tsx":
-    "the offline page is served without JavaScript and cannot import a component",
   "components/dashboard/CompactNav.tsx":
     "the phone bar and the tablet rail: a navigation destination is 56px and 76px by design, not a control (DESIGN_AUDIT A3.5)",
   "components/dashboard/DashboardNav.tsx":

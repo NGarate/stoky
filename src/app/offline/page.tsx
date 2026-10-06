@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { Button } from "@/components/ui/button";
 import type { JSX } from "react";
 import type { Metadata } from "next";
 
@@ -49,12 +50,15 @@ export default async function OfflinePage(): Promise<JSX.Element> {
         {t("heading")}
       </h1>
       <p className="text-base text-muted-foreground">{t("body")}</p>
-      <a
-        className="inline-flex min-h-[48px] w-fit items-center rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        href="/"
-      >
-        {t("back")}
-      </a>
+      {/* `Button asChild` over a plain `<a>`: the primitive's colour, focus
+          ring and 48px floor, rendered into the server's HTML like everything
+          else here — a Slot needs no JavaScript to be an anchor. It was a
+          hand-written copy of the primary button, which is a copy that stops
+          matching the moment the primitive changes. Still `<a>`, not `Link`:
+          a full navigation is what a page with no app around it needs. */}
+      <Button asChild className="w-fit">
+        <a href="/">{t("back")}</a>
+      </Button>
     </main>
   );
 }
