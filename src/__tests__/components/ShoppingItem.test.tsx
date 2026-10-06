@@ -107,6 +107,20 @@ describe("an addition that has not been sent", () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
+  it("says so when the addition is already on its way and cannot be taken back", async () => {
+    // Too late to cancel means it is being sent right now. The tap used to
+    // do nothing and say nothing; the addition then landed regardless.
+    cancel.mockImplementationOnce(() => false);
+    render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Quitar «Leche entera» de la lista" }));
+
+    expect(
+      await screen.findByText("«Leche entera» se está enviando; podrás quitarlo en un momento"),
+    ).toBeInTheDocument();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it("offers no tick until there is something on the server to tick", () => {
     render(<ShoppingItem canWrite stores={STORES} item={queuedItem} />);
 

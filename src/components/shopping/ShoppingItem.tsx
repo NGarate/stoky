@@ -130,9 +130,15 @@ export function ShoppingItem({
     // removal queued against its id was refused as a row that does not exist
     // — and the addition, still queued ahead of it, put the item on the list
     // anyway. Too late to cancel means it is being sent right now; it becomes
-    // a real row in a moment and can be removed like one.
+    // a real row in a moment and can be removed like one — which is what the
+    // person is told, rather than a tap that did nothing.
     if (item.queued === true) {
-      if (cancel(item.id)) snackbar.show({ kind: "confirm", message: label });
+      snackbar.show({
+        kind: "confirm",
+        message: cancel(item.id)
+          ? label
+          : { key: "offline.removeWhileSending", values: { name } },
+      });
       return;
     }
 

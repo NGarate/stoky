@@ -33,7 +33,7 @@ supports Linux amd64 and trusted testers; registration remains open. The release
 workflow runs the published image by its pushed digest on a fresh database before
 creating a draft; the maintainer publishes the reviewed prerelease afterward.
 
-`bun audit --audit-level moderate` reports no vulnerabilities across 586 packages.
+`bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-06).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
 production image with zero fixable HIGH/CRITICAL findings. The image was exported
 and scanned read-only, without exposing the Docker socket to the scanner.
@@ -161,7 +161,7 @@ binary you happen to be holding.
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
 | E2E | `bunx --bun playwright test` | ✅ 154 pass / 0 fail in 3.3 minutes (2026-09-25), Bun driver and Bun standalone server; browser binaries/libraries staged under `/tmp` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 586 packages (2026-09-25) |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 564 packages (2026-10-06) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the

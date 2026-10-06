@@ -908,6 +908,7 @@
     "tickedOff": "Marcaste «{name}» como comprado",
     "untickedOff": "Devolviste «{name}» a la lista",
     "removedItem": "Quitaste «{name}» de la lista",
+    "removeWhileSending": "«{name}» se está enviando; podrás quitarlo en un momento",
     "usedUp": "Usaste {quantity} {unit} de «{name}»",
     "addedStock": "Añadiste {quantity} {unit} de «{name}»",
     "addedItem": "Añadiste «{name}» a la lista",

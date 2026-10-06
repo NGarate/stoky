@@ -1,3 +1,5 @@
+import { unitConversion } from "@/lib/inventory/units";
+
 /**
  * What one unit cost.
  *
@@ -12,6 +14,30 @@
  */
 export function unitPrice(price: number, quantity: number): number | null {
   return quantity > 0 && Number.isFinite(price / quantity) ? price / quantity : null;
+}
+
+/**
+ * The records restated in one unit, so their unit prices can be compared.
+ *
+ * A product's sightings need not share a unit: the schema takes any, and
+ * `addStock` used to write whatever the form held. Dividing each by its own
+ * quantity then compares euros per gram with euros per kilo — 1 € for 500 g
+ * came out a thousand times cheaper than 2 € for 1 kg, which is the same
+ * price. Each record's quantity is converted to `unit` instead, and a record
+ * that cannot be is left out, for the reason stock is refused rather than
+ * summed in that case (`src/lib/inventory/units.ts` only converts what is
+ * exact). `price` is untouched: it is still what was paid.
+ */
+export function inUnit<T extends { quantity: number; unit: string }>(
+  records: readonly T[],
+  unit: string,
+): T[] {
+  return records.flatMap((record) => {
+    const factor = unitConversion(record.unit, unit);
+    return factor === undefined
+      ? []
+      : [{ ...record, quantity: record.quantity * factor, unit }];
+  });
 }
 
 /** `record` with its unit price beside it, or null when it has none. */

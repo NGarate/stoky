@@ -226,6 +226,12 @@ export interface WriteQueue {
    * every change with "" — and after signing in again, with the real
    * household in the token, every one of them was refused as
    * "wrong-household", for ever.
+   *
+   * Those changes are bound here, to the first household the client learns
+   * of, and persisted that way. "" is not a wildcard: the server derives the
+   * household from the session at send time, so a blank change still queued
+   * after the account had left that household and joined another would have
+   * been written into the second.
    */
   setHousehold(id: string): void;
   /** How long to wait before the next attempt, or null when there is nothing. */
@@ -321,6 +327,26 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
     }));
   }
 
+  /**
+   * Stamp the changes composed before any household was known with the one
+   * that now is. A no-op, and no write, until there is one — or nothing to
+   * stamp. See {@link WriteQueue.setHousehold}.
+   */
+  function bindUnstamped(): void {
+    if (householdId === "") return;
+    const state = store.getState();
+    const blank = (op: QueuedOp) => op.householdId === "";
+    if (!state.pending.some(blank) && !state.failed.some(blank)) return;
+
+    const bind = <T extends QueuedOp>(op: T): T =>
+      op.householdId === "" ? { ...op, householdId } : op;
+    commit((current) => ({
+      ...current,
+      pending: current.pending.map(bind),
+      failed: current.failed.map(bind),
+    }));
+  }
+
   let draining = false;
   /** The operation currently in flight, which cannot be taken back. */
   let inFlightId: string | null = null;
@@ -372,6 +398,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
       }),
       true,
     );
+    bindUnstamped();
   }
 
   return {
@@ -434,11 +461,10 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
           // window closes.
           if (holdRemainingMs(op) > 0) return sent;
 
-          // "" is "composed before the client knew of any household" — the
-          // token said none, and the account was creating its first. There
-          // was no other household it could have been meant for, so it is
-          // sent into the one there is rather than refused for ever.
-          if (op.householdId !== householdId && op.householdId !== "") {
+          // A change composed before any household was known was stamped ""
+          // and has been bound to the first one since (`bindUnstamped`), so
+          // the comparison is exact.
+          if (op.householdId !== householdId) {
             // Composed in one household and drained in another. The server
             // would derive the household from the session and write this into
             // the wrong one.
@@ -513,6 +539,7 @@ export function openWriteQueue(options: WriteQueueOptions): WriteQueue {
 
     setHousehold(id) {
       householdId = id;
+      bindUnstamped();
     },
 
     holdRemainingMs(id) {
