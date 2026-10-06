@@ -11,7 +11,7 @@ import es from "../messages/es.json";
  * the *accessibility tree* — the roles, names, states and order the browser
  * computes — and that tree is machine-readable through the DevTools protocol
  * (`Accessibility.getFullAXTree`). What needs a person is whether the result
- * *sounds* sensible: whether "Cantidad consumida" is the right words, whether
+ * *sounds* sensible: whether "Cantidad usada" is the right words, whether
  * four announcements in a row are three too many. What does not need a person
  * is whether the information is in the tree at all.
  *

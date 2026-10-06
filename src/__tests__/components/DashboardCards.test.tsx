@@ -140,7 +140,7 @@ describe("the Panel's opening order", () => {
     ).toBeAbsent();
     // The other three actions have no other home on this tier and stay.
     expect(screen.getByRole("link", { name: "Añadir stock" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Consumir stock" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apuntar consumo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Subir un ticket" })).toBeInTheDocument();
   });
 });

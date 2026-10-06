@@ -134,6 +134,43 @@ describe("one word for one thing", () => {
 });
 
 /**
+ * One action, one name: the link that opens a flow, its page's title and the
+ * button that commits it say the same words.
+ *
+ * Recording what was used was "Consumir stock" in Spanish and, in English,
+ * "Use stock" on the inventory's link and "Consume stock" on the dashboard's,
+ * the page's title and its button — one action wearing two names in one
+ * language. The vocabulary of an interface is how people find their way round
+ * it, so the names are pinned to each other rather than to a spelling.
+ */
+describe("one action, one name", () => {
+  const FLOWS: Record<string, string[]> = {
+    "recording what was used": [
+      "dashboard.quickConsumeStock",
+      "inventory.consumeStock",
+      "inventory.consume.title",
+      "inventory.consume.submit",
+    ],
+  };
+
+  for (const [flow, keys] of Object.entries(FLOWS)) {
+    for (const [language, catalogue] of [
+      ["es", es],
+      ["en", en],
+    ] as const) {
+      test(`${flow} keeps one name in ${language}`, () => {
+        const names = keys.map((key) =>
+          key
+            .split(".")
+            .reduce<unknown>((node, part) => (node as Catalogue)?.[part], catalogue),
+        );
+        expect(new Set(names).size).toBe(1);
+      });
+    }
+  }
+});
+
+/**
  * Arrows belong to the component, never to the string.
  *
  * `BackLink` draws an `aria-hidden` `<ArrowLeft/>`, and eight catalogue
