@@ -55,6 +55,17 @@ describe("PreferencesCluster", () => {
     expect(screen.getByLabelText("Idioma")).toBeInTheDocument();
   });
 
+  it("lines the two controls up by their labels, not their bottoms", () => {
+    const { container } = renderWithIntl(<PreferencesCluster />);
+
+    // `items-end` aligned the controls' bottom edges, and since "Tema" heads
+    // a radio group and "Idioma" a select of a different height, the second
+    // label sat about 10px lower than the first.
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.className).toContain("items-start");
+    expect(row.className).not.toContain("items-end");
+  });
+
   it("offers no setting that needs an account to store", () => {
     renderWithIntl(<PreferencesCluster />);
 
