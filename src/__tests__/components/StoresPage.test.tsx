@@ -165,7 +165,7 @@ describe("the stores settings screen", () => {
     expect(screen.queryByRole("button", { name: /Eliminar/ })).toBeAbsent();
     expect(screen.queryByRole("button", { name: /Editar/ })).toBeAbsent();
     expect(
-      screen.getByText(/Sólo quien administra el hogar/),
+      screen.getByText(/Solo quien administra el hogar/),
     ).toBeInTheDocument();
   });
 
@@ -176,7 +176,7 @@ describe("the stores settings screen", () => {
     expect(
       screen.getByRole("button", { name: "Crear tienda" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Sólo quien administra el hogar/)).toBeAbsent();
+    expect(screen.queryByText(/Solo quien administra el hogar/)).toBeAbsent();
   });
 
   it("says when a store could not be saved", async () => {

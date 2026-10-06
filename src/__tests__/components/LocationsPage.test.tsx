@@ -310,7 +310,7 @@ describe("the storage locations screen", () => {
     expect(screen.queryByRole("button", { name: /Editar Nevera/ })).toBeAbsent();
     expect(screen.queryByRole("button", { name: /Eliminar Nevera/ })).toBeAbsent();
     expect(
-      screen.getByText(/Sólo quien administra el hogar/),
+      screen.getByText(/Solo quien administra el hogar/),
     ).toBeInTheDocument();
   });
 

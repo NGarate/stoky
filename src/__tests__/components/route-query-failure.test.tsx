@@ -180,7 +180,7 @@ describe("a route whose query failed", () => {
       expect(
         screen.getByText("No se han podido cargar los datos"),
       ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
       expect(screen.queryByText(emptyState)).toBeAbsent();
     });
 

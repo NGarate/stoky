@@ -284,7 +284,7 @@ describe("a change that did not save", () => {
 
   it("draws letting it go as the destructive action it is", () => {
     // Discarding deletes an unsent change once its undo has gone. It was
-    // drawn in the same filled primary as "Reintentar" beside it.
+    // drawn in the same filled primary as "Volver a intentarlo" beside it.
     queueState = {
       ...queueState,
       failed: [failed("f1", "refused"), { ...failed("s1", "needs-review"), path: "product.resolveScan", input: { barcode: "1" } }],
@@ -300,7 +300,7 @@ describe("a change that did not save", () => {
     queueState = { ...queueState, failed: [failed("f1", "refused")] };
     renderWithIntl(<SyncStatus />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
     expect(retry).toHaveBeenCalledWith("f1");
 
     await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
@@ -343,7 +343,7 @@ describe("a scanned barcode nobody knows yet", () => {
     );
     // No retry button for it — retry would only 404 again.
     expect(
-      screen.queryByRole("button", { name: "Reintentar" }),
+      screen.queryByRole("button", { name: "Volver a intentarlo" }),
     ).toBeNull();
   });
 

@@ -199,7 +199,7 @@ describe("what can be done about it", () => {
     failed = [failure("refused")];
     renderWithIntl(<UnsavedPage />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
 
     expect(retry).toHaveBeenCalledWith("op-1");
   });
@@ -219,7 +219,7 @@ describe("what can be done about it", () => {
 
     // Retrying would be refused again for the same reason. The question is
     // for a person.
-    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: "Volver a intentarlo" })).toBeAbsent();
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 

@@ -199,7 +199,7 @@ describe("RouteState", () => {
     );
 
     expect(screen.queryByLabelText(/hogar/i)).toBeAbsent();
-    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
   });
 
   it("retries the query when asked", async () => {
@@ -214,7 +214,7 @@ describe("RouteState", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /reintentar/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
 
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -450,7 +450,7 @@ describe("the page around the state", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
   });
 
   it("explains a failure in plain words, not the system's", () => {

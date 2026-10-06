@@ -218,7 +218,7 @@ describe("a route whose query cannot answer", () => {
       mount(render());
 
       expect(await screen.findByText("No se han podido cargar los datos")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Volver a intentarlo" })).toBeInTheDocument();
       expect(screen.queryByText(lie)).toBeAbsent();
     });
   }
