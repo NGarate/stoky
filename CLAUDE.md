@@ -190,12 +190,17 @@ lands (a fan-out of subagents, a review-and-fix sweep, a session the owner
 checks only at the end), it works on a branch cut from `master` named
 `<type>/<topic>-<YYYY-MM-DD>` (e.g. `fix/project-review-2026-10-05`), pushes
 it, and opens a pull request. The branch is a review buffer, not a place for
-work to live: it is merged or closed once reviewed, keeping history linear
-(rebase or fast-forward, never a merge commit), and never used for a second,
-unrelated task. If the owner asks for a branch explicitly, that settles it.
+work to live: it is closed, or **squash-merged into `master` once the owner
+has reviewed and approved it**, and never used for a second, unrelated task.
+On the branch itself a merge commit is fine — bringing `master` or the
+branch a stacked PR sits on into it is a merge, not a rebase and a force
+push over what the owner may already be reading. `master` stays linear
+because the squash is what lands there. If the owner asks for a branch
+explicitly, that settles it.
 
-Either way, the commit is the reviewable unit and `git revert` is the only
-undo once it reaches `master`. That is what makes the rules below hard, on a
+Either way, the commit is the reviewable unit — on a branch, the unit the
+owner reviews; on `master`, the squash — and `git revert` is the only undo
+once it reaches `master`. That is what makes the rules below hard, on a
 branch as much as on the trunk:
 
 - **One commit, one change.** If the subject line needs "and", split it.
