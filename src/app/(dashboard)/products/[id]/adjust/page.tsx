@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useState, useId } from "react";
+import { useRouter } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -72,6 +73,16 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const reasonHintId = useId();
   const reasonErrorId = useId();
 
+  const router = useRouter();
+
+  /**
+   * Saved: back to the product, which is where the new number is, with the
+   * sentence carried across by the snackbar — the shape the product page's
+   * delete has. Staying left a form still holding what was typed, so the
+   * screen after "Guardar ajuste" looked like the screen before it, with a
+   * second, double-counting press one tap away. `replace`, because a
+   * finished adjustment is not somewhere Back should return to.
+   */
   const adjustStock = api.inventory.adjustStock.useMutation({
     onSuccess: async (_entry, variables) => {
       snackbar.show({
@@ -85,6 +96,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           },
         },
       });
+      router.replace(`/products/${id}`);
       await utils.invalidate();
     },
     onError: (error) => {

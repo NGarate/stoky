@@ -13,6 +13,19 @@ import { renderWithIntl } from "../utils/render";
  * payload is asserted signed, both directions.
  */
 let adjustCalls: Array<Record<string, unknown>>;
+let replaced: string[] = [];
+
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: (href: string) => replaced.push(href),
+    refresh: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/products/p1/adjust",
+  useParams: () => ({ id: "p1" }),
+  redirect: () => {},
+}));
 
 // The real snackbar rather than a stub: `mock.module` replaces a module for
 // the whole bun process, so stubbing it would reach every suite that renders
@@ -70,6 +83,7 @@ const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 beforeEach(() => {
   adjustCalls = [];
+  replaced = [];
 });
 
 afterEach(cleanup);
@@ -111,6 +125,28 @@ describe("the adjustment", () => {
         reason: "Se rompieron dos",
       },
     ]);
+  });
+
+  /**
+   * A saved adjustment used to leave the person on a form still holding what
+   * they had typed — so the screen after "Guardar ajuste" looked exactly like
+   * the screen before it, with a second press one tap away. It now goes back
+   * to the product, which is where the new number is, and says so there.
+   */
+  it("returns to the product once saved, and says what the stock is now", async () => {
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    submit("4", "Se rompieron dos");
+
+    expect(replaced).toEqual(["/products/p1"]);
+    expect(
+      await screen.findByText("Ajustado. «Huevos» queda en 4 unidades."),
+    ).toBeInTheDocument();
   });
 
   it("computes it upwards too — the sign is the point", () => {
