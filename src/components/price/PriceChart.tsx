@@ -13,6 +13,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CHART_TOOLTIP } from "@/lib/chart-tooltip";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 
 import type { JSX } from "react";
@@ -154,11 +155,9 @@ export function PriceChart({
                   tickFormatter={money}
                 />
                 <Tooltip
-                  contentStyle={TOOLTIP_SURFACE}
+                  {...CHART_TOOLTIP}
                   formatter={(value: number, name: string) => [money(value), name]}
-                  itemStyle={TOOLTIP_INK}
                   labelFormatter={(label) => label}
-                  labelStyle={TOOLTIP_INK}
                 />
                 {storeNames.map((storeName, index) => (
                     <Line
@@ -228,16 +227,6 @@ export function PriceChart({
     </div>
   );
 }
-
-/** The tooltip's box, in the surface tokens so night does not get a white card. */
-const TOOLTIP_SURFACE = {
-  backgroundColor: "var(--card)",
-  borderColor: "var(--border)",
-  color: "var(--foreground)",
-} as const;
-
-/** Every glyph in the tooltip, including the per-store rows Recharts tints. */
-const TOOLTIP_INK = { color: "var(--foreground)" } as const;
 
 /** The chart's values, for anything that cannot read a canvas. */
 function PriceTable({

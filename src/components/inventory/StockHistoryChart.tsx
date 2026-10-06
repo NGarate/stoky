@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { useLocale, useTranslations } from "next-intl";
+import { CHART_TOOLTIP } from "@/lib/chart-tooltip";
 import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { formatDate } from "@/lib/dates";
 
@@ -63,6 +64,7 @@ export function StockHistoryChart({
             allowDecimals={false}
           />
           <Tooltip
+            {...CHART_TOOLTIP}
             formatter={(value: number) => [units.quantity(value, unit), t("totalHeader")]}
             labelFormatter={(label) => label}
           />
