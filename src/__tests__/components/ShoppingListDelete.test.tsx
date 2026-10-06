@@ -21,6 +21,7 @@ let role: string;
 let deleteOptions: Options = {};
 let deleteCalls: Array<Record<string, unknown>>;
 let replaced: string[];
+let shoppingInvalidated: number;
 
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
@@ -55,6 +56,10 @@ mock.module("@/lib/trpc/client", () => ({
     useUtils: () => ({
       invalidate: () => Promise.resolve(),
       shopping: {
+        invalidate: () => {
+          shoppingInvalidated += 1;
+          return Promise.resolve();
+        },
         getById: { invalidate: noop },
         list: { invalidate: () => Promise.resolve() },
       },
@@ -106,6 +111,7 @@ beforeEach(() => {
   deleteOptions = {};
   deleteCalls = [];
   replaced = [];
+  shoppingInvalidated = 0;
 });
 
 afterEach(cleanup);
@@ -140,6 +146,18 @@ describe("deleting a list", () => {
     expect(
       await screen.findByText("Eliminaste la lista «Compra del sábado»"),
     ).toBeInTheDocument();
+  });
+
+  it("leaves no cached read still holding the list it deleted", () => {
+    // Only `shopping.list` was invalidated, so the buy list and this list's
+    // own read — both persisted — still held the deleted list and its items.
+    // /shopping showed them for the freshness window, and indefinitely
+    // offline, where ticking one queued a write against a row that was gone.
+    renderPage();
+
+    deleteOptions.onSuccess?.();
+
+    expect(shoppingInvalidated).toBe(1);
   });
 
   it("says so when the server refuses", async () => {

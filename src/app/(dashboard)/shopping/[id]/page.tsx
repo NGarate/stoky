@@ -83,7 +83,13 @@ export function ShoppingListView({ id }: { id: string }) {
         message: { key: "shopping.listDeleted", values: { name: list?.name ?? "" } },
       });
       router.replace("/shopping/lists");
-      void utils.shopping.list.invalidate();
+      // Every shopping read, not only the lists: the buy list and this
+      // list's own read are persisted too, and both still held the deleted
+      // list and its items — on /shopping for the freshness window, and
+      // offline for as long as there was no signal. Marked stale without
+      // refetching now, so this page does not re-ask for the list it just
+      // deleted on its way out; each screen refetches when it mounts.
+      void utils.shopping.invalidate(undefined, { refetchType: "none" });
     },
     onError: () =>
       snackbar.show({
