@@ -29,6 +29,24 @@ const line = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+describe("leaving a line out", () => {
+  it("is a worded button named for its line, not an X", () => {
+    const skipped: string[] = [];
+    renderWithIntl(
+      <ReviewCard item={line()} onConfirm={(action) => skipped.push(action)} />,
+      { locale: "es" },
+    );
+
+    const skip = screen.getByRole("button", {
+      name: "No añadir esta línea: «Leche entera»",
+    });
+    expect(skip.textContent).toBe("No añadir esta línea");
+    expect(skip.querySelector("svg")).toBeNull();
+    skip.click();
+    expect(skipped).toEqual(["SKIP"]);
+  });
+});
+
 describe("ReviewCard status", () => {
   it("says an automatic match in a neutral pill, without a glyph or a tint", () => {
     const { container } = renderWithIntl(

@@ -565,7 +565,6 @@
     "items": "Items",
     "matchProduct": "Match product",
     "createProduct": "Create product",
-    "skip": "Skip",
     "confirm": "Confirm receipt",
     "status": {
       "uploading": "Uploading",
@@ -670,7 +669,9 @@
     "confirmAllFailed": "Could not finish the review. Try again.",
     "confirmItemFailed": "Could not confirm that line. Try again.",
     "applyFailed": "Could not apply the receipt to the inventory. Try again.",
-    "itemSkipped": "Won't be added"
+    "itemSkipped": "Won't be added",
+    "skipLine": "Don't add this line",
+    "skipLineOf": "Don't add this line: “{name}”"
   },
   "shopping": {
     "title": "Shopping lists",

@@ -565,7 +565,6 @@
     "items": "Artículos",
     "matchProduct": "Emparejar producto",
     "createProduct": "Crear producto",
-    "skip": "Omitir",
     "confirm": "Confirmar ticket",
     "status": {
       "uploading": "Subiendo",
@@ -670,7 +669,9 @@
     "confirmAllFailed": "No se ha podido terminar la revisión. Vuelve a intentarlo.",
     "confirmItemFailed": "No se ha podido confirmar esa línea. Vuelve a intentarlo.",
     "applyFailed": "No se ha podido aplicar el ticket al inventario. Vuelve a intentarlo.",
-    "itemSkipped": "No se añadirá"
+    "itemSkipped": "No se añadirá",
+    "skipLine": "No añadir esta línea",
+    "skipLineOf": "No añadir esta línea: «{name}»"
   },
   "shopping": {
     "title": "Listas de compra",

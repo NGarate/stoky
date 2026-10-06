@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, X, Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isItemReviewed } from "@/lib/receipts";
@@ -153,16 +153,19 @@ export function ReviewCard({ item, onConfirm }: ReviewCardProps) {
                   </Button>
                 )}
 
-                {/* Icon-only, so the name has to come from the label rather
-                    than from the glyph. */}
+                {/* Words, not an X. The X read as "close this card", was
+                    about 40px wide (under the 48px floor at `size="sm"` with
+                    no label to widen it) and was named "Omitir" on every
+                    line, so a list of twenty said one name twenty times.
+                    The visible words start the per-line name (2.5.3). */}
                 <Button
                   type="button"
-                  aria-label={t("skip")}
-                  variant="ghost"
+                  aria-label={t("skipLineOf", { name: item.parsedName || item.rawText })}
+                  variant="outline"
                   size="sm"
                   onClick={() => onConfirm("SKIP")}
                 >
-                  <X aria-hidden="true" className="w-4 h-4" />
+                  {t("skipLine")}
                 </Button>
               </div>
             </>
