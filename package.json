@@ -87,7 +87,7 @@
     "oxlint": "^0.16.12",
     "playwright": "^1.62.1",
     "react-doctor": "0.9.17",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.5"
   },
   "trustedDependencies": [
     "@parcel/watcher",
