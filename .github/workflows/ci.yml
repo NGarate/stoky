@@ -262,17 +262,15 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      # setup-bun caches only the Bun executable — its `no-cache` input is
-      # about the binary, not the
-      # dependency tree. Without this step every run of this job fetches the
-      # whole tree again, inside a ten-minute budget. Keyed on the lockfile, so
-      # a dependency change misses and nothing else does.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-store-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-store-${{ runner.os }}-
-
+      # No dependency cache, deliberately. There was one (`actions/cache` on
+      # ~/.bun/install/cache), and measured it cost more than it saved: on run
+      # 37460988658 restoring its 471 MB took 23s and the install after it 12s,
+      # while `quality` fetched the same tree from the network with no cache in
+      # 11s. Worse, after any lockfile change the cache's post-step save ran
+      # past this job's ten minutes — every test passed (154 in 7.2m) and the
+      # job was cancelled during the upload, twice on the same commit, because
+      # a cancelled job never saves and so the next run saved again.
+      #
       # argon2 and sharp both resolve to prebuilt binaries on linux-x64
       # (argon2 through its `prebuilds/` directory, sharp through
       # `@img/sharp-linux-x64`), so nothing here compiles and the image needs
