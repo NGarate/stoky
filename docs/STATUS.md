@@ -285,8 +285,12 @@ standalone-artefact suite: green push → published image **627s** — e2e 563s
 image build 195s warm beside it, publish 59s. The verification inside `e2e`
 got faster; the job's tail grew a cache save — `~/.bun/install/cache` through
 `actions/cache` since the migration, because `setup-node`'s `cache: pnpm` left
-with pnpm and `setup-bun` caches the executable rather than the tree. If that
-tail ever matters, it is a workflow knob, not a test problem.
+with pnpm and `setup-bun` caches the executable rather than the tree. That
+tail came to matter on 2026-10-06 and the cache is gone: after a lockfile
+change its save pushed `e2e` past ten minutes with every test passed, and a
+cancelled job never saves, so it repeated on every run. Measured, it was not
+paying for itself either — a 23s restore plus a 12s install, against 11s for
+the uncached install `quality` does.
 
 `e2e` no longer installs browsers — it runs in `mcr.microsoft.com/playwright`,
 pinned and asserted against `package.json` — which took its setup from 106–193s
