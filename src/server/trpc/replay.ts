@@ -185,7 +185,11 @@ export async function withReplay<T>(
     }, TRANSACTION_BOUNDS);
   } catch (error) {
     if (error instanceof KeyAlreadyClaimed) {
-      return answerFromRecord(ctx, options, hash);
+      // Awaited, not returned bare. A promise returned from here is only
+      // adopted once `finally` has finished its sweep, so a refusal that
+      // settled first sat rejected with no handler — an unhandled rejection,
+      // reported against whatever was running (ISSUES TEST-8).
+      return await answerFromRecord(ctx, options, hash);
     }
     if (isBusy(error)) {
       throw new TRPCError({
