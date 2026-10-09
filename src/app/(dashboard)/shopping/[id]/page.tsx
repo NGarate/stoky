@@ -83,6 +83,19 @@ export function ShoppingListView({ id }: { id: string }) {
         message: { key: "shopping.listDeleted", values: { name: list?.name ?? "" } },
       });
       router.replace("/shopping/lists");
+      // Taken out of the persisted copies first. Being marked stale below
+      // corrects a screen only when it mounts with signal; signal lost
+      // between here and /shopping left the restored buy list showing the
+      // deleted items, and ticking one queued a write against a row that was
+      // gone. Not refetched instead: a read restored from storage has no
+      // query function until a screen mounts it, so refetching it now would
+      // turn it into an error.
+      utils.shopping.getBuyList.setData(undefined, (items) =>
+        items?.filter((item) => item.listId !== id),
+      );
+      utils.shopping.list.setQueriesData({}, {}, (lists) =>
+        lists?.filter((each) => each.id !== id),
+      );
       // Every shopping read, not only the lists: the buy list and this
       // list's own read are persisted too, and both still held the deleted
       // list and its items — on /shopping for the freshness window, and

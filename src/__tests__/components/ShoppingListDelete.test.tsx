@@ -22,6 +22,9 @@ let deleteOptions: Options = {};
 let deleteCalls: Array<Record<string, unknown>>;
 let replaced: string[];
 let shoppingInvalidated: number;
+type Updater = (old: Array<Record<string, unknown>> | undefined) => unknown;
+let buyListUpdaters: Updater[];
+let listsUpdaters: Updater[];
 
 const noop = (): void => {};
 const idleMutation = { mutate: noop, isPending: false };
@@ -61,7 +64,14 @@ mock.module("@/lib/trpc/client", () => ({
           return Promise.resolve();
         },
         getById: { invalidate: noop },
-        list: { invalidate: () => Promise.resolve() },
+        getBuyList: {
+          setData: (_input: unknown, updater: Updater) => buyListUpdaters.push(updater),
+        },
+        list: {
+          invalidate: () => Promise.resolve(),
+          setQueriesData: (_input: unknown, _filters: unknown, updater: Updater) =>
+            listsUpdaters.push(updater),
+        },
       },
     }),
     household: { create: { useMutation: () => idleMutation } },
@@ -112,6 +122,8 @@ beforeEach(() => {
   deleteCalls = [];
   replaced = [];
   shoppingInvalidated = 0;
+  buyListUpdaters = [];
+  listsUpdaters = [];
 });
 
 afterEach(cleanup);
@@ -158,6 +170,28 @@ describe("deleting a list", () => {
     deleteOptions.onSuccess?.();
 
     expect(shoppingInvalidated).toBe(1);
+  });
+
+  it("takes the list out of the copies an offline screen would restore", () => {
+    // Marking them stale corrects a screen only when it mounts with signal.
+    // Signal lost on the way to /shopping restored the deleted items, and
+    // ticking one queued a write against a row that was gone.
+    renderPage();
+
+    deleteOptions.onSuccess?.();
+
+    const buyList = [
+      { id: "item-1", listId: "list-1" },
+      { id: "item-2", listId: "list-2" },
+    ];
+    expect(buyListUpdaters.map((update) => update(buyList))).toEqual([
+      [{ id: "item-2", listId: "list-2" }],
+    ]);
+    expect(listsUpdaters.map((update) => update([{ id: "list-1" }, { id: "list-2" }]))).toEqual([
+      [{ id: "list-2" }],
+    ]);
+    // Nothing cached is not something to invent an empty list for.
+    expect(buyListUpdaters[0]?.(undefined)).toBeUndefined();
   });
 
   it("says so when the server refuses", async () => {
