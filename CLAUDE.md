@@ -231,7 +231,7 @@ branch as much as on the trunk:
    measured was actually running — `docs/STATUS.md` lists the traps that have
    produced confident wrong answers here.
 4. **Validate before committing**, not after a batch: `bun run verify:ci`, plus
-   `bunx playwright test` for anything that renders. Then judge whether the
+   `bun run test:e2e` for anything that renders. Then judge whether the
    change introduced a regression, a security weakness, or a standards drift —
    green gates are necessary, not sufficient.
 5. **Update the owning document** when a change makes it wrong. `docs/README.md`

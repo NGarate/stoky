@@ -14,8 +14,10 @@ version`, ignores it and resolves an unpinned tree rather than stopping — only
 table.
 
 All application Docker stages and project JavaScript commands now run on Bun.
-Use `bunx --bun playwright test` for the browser driver; the E2E directory
-declares ES modules so Bun retains its TypeScript loader (see `TEST_SETUP.md`).
+Run the browser suite with `bun run test:e2e`, which brings its own browsers
+(see "Playwright browsers come from the project" below); inside it, the driver
+is `bunx --bun playwright test`, and the E2E directory declares ES modules so
+Bun retains its TypeScript loader (see `TEST_SETUP.md`).
 The `node` command in the Bun image is a compatibility symlink to Bun itself.
 
 ## Command ladder
@@ -65,7 +67,7 @@ Run when a slice changes visible flows in auth, inventory, receipts, shopping,
 or prices:
 
 ```bash
-bunx --bun playwright test e2e/critical-paths.spec.ts
+bun run test:e2e -- e2e/critical-paths.spec.ts
 ```
 
 ## Environment assumptions
@@ -124,53 +126,29 @@ times. `screen-reader.spec.ts` is chromium-only for a harder reason: it reads
 the accessibility tree over the Chrome DevTools Protocol, which does not exist
 elsewhere.
 
-## Playwright browsers on this machine
+## Playwright browsers come from the project
 
-**2026-09-12, Ubuntu 26.04:** the download/extraction failure below did not
-reproduce. Chromium was present, but Firefox 1538 and WebKit 2336 were missing.
-`PLAYWRIGHT_BROWSERS_PATH=/tmp/stoky-playwright-browsers bunx playwright install firefox webkit`
-downloaded both. WebKit needed `libharfbuzz-icu0`, `libmanette-0.2-0`,
-`libenchant-2-2`, `libhyphen0` and `libhidapi-hidraw0`; these were downloaded with
-`apt-get download` and extracted with `dpkg-deb -x` under
-`/tmp/stoky-webkit-deps`, without changing system packages. Their shared-library
-files were linked into both WebKit bundles' `sys/lib` directories because the
-bundled MiniBrowser launcher replaces `LD_LIBRARY_PATH`. The existing Chromium
-directories were linked into the temporary browser root. With that root and
-`LD_LIBRARY_PATH=/tmp/stoky-webkit-deps/usr/lib/x86_64-linux-gnu`, the full suite
-passes (154 tests). These paths are temporary; recreate them after cleanup.
-
-The following notes record the older environment:
-
-
-`playwright install` hangs. The download completes, then extraction stalls
-indefinitely on a single file — reproducible across attempts, and the reason
-the tool warns *"your OS is not officially supported"*. Plain `unzip` on the
-very same archive finishes in seconds, so it is the bundled extractor, not the
-network or the filesystem.
-
-Workaround, if a browser needs reinstalling: let `playwright install` download
-(the zip lands in `/tmp/playwright-download-*/`), kill it once the download
-reports 100%, then extract by hand into
-`~/.cache/ms-playwright/<browser>-<revision>/` and `touch` the
-`INSTALLATION_COMPLETE` marker beside it. Revisions must match the ones in
-`node_modules/playwright-core/browsers.json` — currently chromium 1234, firefox
-1538, webkit 2336 for Playwright 1.62.1. These change on every Playwright bump,
-so re-check after one. Do not install with `bunx playwright`; that resolves a
-newer Playwright and fetches revisions this project cannot use.
-
-WebKit additionally needs system libraries, installed once with root:
+`bun run test:e2e` runs the browser suite inside Playwright's own image,
+`mcr.microsoft.com/playwright:v<version>-noble` — the image CI's `e2e` job runs
+in — with Bun from `.bun-version` layered on (`scripts/e2e-in-image.sh`). The
+image carries Chromium, Firefox and WebKit *and* the system libraries they link
+against, and its tag is the installed `@playwright/test`, so the browsers always
+match the driver. Nothing is installed on the machine; Docker is the only
+requirement, as it already is for `verify:ci`. Arguments pass through to
+`playwright test`:
 
 ```bash
-sudo ./node_modules/.bin/playwright install-deps webkit
+bun run test:e2e
+bun run test:e2e -- e2e/critical-paths.spec.ts
+bun run test:e2e -- --project=webkit
 ```
 
-After that, `webkit` and `Mobile Safari` both run. The libraries are installed
-system-wide, so a browser-revision bump does not need it repeating. `ldd` still
-reports
-`libjxl.so.0.8`, `libwpe-1.0.so.1` and `libWPEWebKit-2.0.so.1` as unresolved,
-but only against the bundled `minibrowser-wpe` binary and optional codecs.
-Playwright drives `minibrowser-gtk` on Linux, so this is harmless — do not
-chase those three.
+A bare `bunx --bun playwright test` still works where the browsers happen to be
+installed, but a failure reading `Executable doesn't exist` is the machine, not
+the application. It replaced a recorded procedure — browsers unpacked under
+`/tmp`, WebKit's libraries extracted from `.deb`s and linked into its bundle,
+`LD_LIBRARY_PATH` — that had to be recreated after every cleanup and every
+Playwright bump.
 
 Two environment traps on this machine:
 
