@@ -1,23 +1,44 @@
 #!/bin/bash
 
-# Checks a running release bundle through its front door: Traefik on the
-# host's ports 80/443, with DOMAIN resolved to this machine. Used by the release
-# smoke in CI, and runnable by hand against a local `docker compose up`.
+# Checks a running release bundle through its front door: Traefik on ports
+# 80/443. Used by the release smoke in CI, and runnable by hand.
 #
-# The certificate is not verified (-k): a smoke host has no public DNS, so ACME
-# cannot issue and Traefik serves its default certificate. What this proves is
-# the routing — the Host rule rendered from `{{ env "DOMAIN" }}`, the redirect
-# and the upstream — not certificate issuance.
+#   smoke-proxy.sh DOMAIN          a local `docker compose up`: every request
+#                                  is sent to 127.0.0.1, whatever DOMAIN
+#                                  resolves to, and the certificate is not
+#                                  verified (-k) — a smoke host has no public
+#                                  DNS, so ACME cannot issue and Traefik serves
+#                                  its default certificate.
+#   smoke-proxy.sh --live DOMAIN   a real installation, through public DNS, with
+#                                  the certificate verified. What the local run
+#                                  cannot prove: that the ingress actually in
+#                                  front of the app — the operator's network,
+#                                  any proxy ahead of Traefik — behaves the same.
 #
 # **It spends one sign-in window for the address it runs from.** The forwarded-
 # header check below fills the per-address sign-in limit on purpose, so for up
 # to 15 minutes (RATE_LIMIT_LOGIN_WINDOW_SECONDS) nobody can sign in from that
-# address. Harmless in CI and against a throwaway local bundle.
+# address. Harmless in CI; on --live, run it from somewhere other than where
+# the household signs in.
 set -euo pipefail
 
-DOMAIN="${1:?Usage: smoke-proxy.sh DOMAIN}"
-RESOLVE=(--resolve "$DOMAIN:80:127.0.0.1" --resolve "$DOMAIN:443:127.0.0.1")
-CURL=(curl --silent --show-error --max-time 10 "${RESOLVE[@]}")
+LIVE=false
+if [ "${1:-}" = "--live" ]; then
+  LIVE=true
+  shift
+fi
+DOMAIN="${1:?Usage: smoke-proxy.sh [--live] DOMAIN}"
+
+CURL=(curl --silent --show-error --max-time 10)
+if [ "$LIVE" = true ]; then
+  # Everything to wherever DOMAIN really resolves, so the off-host requests
+  # below reach the same front door without needing their own DNS.
+  CURL+=(--connect-to "::$DOMAIN:")
+  VERIFY=()
+else
+  CURL+=(--connect-to "::127.0.0.1:")
+  VERIFY=(--insecure)
+fi
 
 # Plain HTTP must only redirect.
 REDIRECT="$("${CURL[@]}" --output /dev/null --write-out '%{http_code} %{redirect_url}' "http://$DOMAIN/api/health")"
@@ -35,7 +56,7 @@ esac
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 HEADERS="$WORK/headers"
-STATUS="$("${CURL[@]}" --insecure --dump-header "$HEADERS" --output /dev/null --write-out '%{http_code}' "https://$DOMAIN/api/health")"
+STATUS="$("${CURL[@]}" "${VERIFY[@]}" --dump-header "$HEADERS" --output /dev/null --write-out '%{http_code}' "https://$DOMAIN/api/health")"
 if [ "$STATUS" != 200 ]; then
   echo "Error: https://$DOMAIN/api/health answered $STATUS through Traefik, expected 200." >&2
   cat "$HEADERS" >&2
@@ -53,6 +74,9 @@ done
 # Traefik's own refusal is a 404 (or a 421, when it notices the TLS name and
 # the Host disagree). Anything else — a 401, a redirect to /login — is a
 # response the application wrote, so "not 200" is not enough.
+#
+# -k on these whatever the mode: an unrouted name gets Traefik's default
+# certificate, and what is being proven is the routing, not the certificate.
 refused_by_proxy() {
   local what="$1" status="$2"
   case "$status" in
@@ -66,7 +90,7 @@ refused_by_proxy() {
 
 # Another name, in both the TLS handshake and the Host header.
 refused_by_proxy "https://other.$DOMAIN/" \
-  "$("${CURL[@]}" --insecure --resolve "other.$DOMAIN:443:127.0.0.1" --output /dev/null --write-out '%{http_code}' "https://other.$DOMAIN/api/health")"
+  "$("${CURL[@]}" --insecure --output /dev/null --write-out '%{http_code}' "https://other.$DOMAIN/api/health")"
 
 # The right TLS name with another Host: what a client that controls its own
 # headers sends to slip past a router that only looked at the handshake.
@@ -86,7 +110,7 @@ refused_by_proxy "https://$DOMAIN/ with Host: other.$DOMAIN" \
 # limit counts an attempt before it reads one. The outcome is the `code` Auth.js
 # puts on the redirect to the sign-in page.
 COOKIES="$WORK/cookies"
-CSRF="$("${CURL[@]}" --insecure --cookie-jar "$COOKIES" "https://$DOMAIN/api/auth/csrf" \
+CSRF="$("${CURL[@]}" "${VERIFY[@]}" --cookie-jar "$COOKIES" "https://$DOMAIN/api/auth/csrf" \
   | sed -n 's/.*"csrfToken":"\([^"]*\)".*/\1/p')"
 if [ -z "$CSRF" ]; then
   echo "Error: https://$DOMAIN/api/auth/csrf returned no CSRF token." >&2
@@ -99,7 +123,7 @@ MAX_ATTEMPTS="${SMOKE_MAX_SIGNIN_ATTEMPTS:-20}"
 THROTTLED=""
 for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   FORGED="203.0.113.$attempt"
-  LOCATION="$("${CURL[@]}" --insecure --cookie "$COOKIES" \
+  LOCATION="$("${CURL[@]}" "${VERIFY[@]}" --cookie "$COOKIES" \
     --header "X-Forwarded-For: $FORGED" --header "X-Real-IP: $FORGED" \
     --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=" --data-urlencode "password=" \
     --output /dev/null --write-out '%{redirect_url}' \

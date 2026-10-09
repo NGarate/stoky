@@ -239,8 +239,9 @@ What is still open, and worth knowing before publishing an instance:
   **So: do not expose this application without a reverse proxy that sets
   `X-Forwarded-For` itself.** The release bundle (`deploy/`) puts Traefik in front
   and Traefik does — the release smoke (`scripts/smoke-proxy.sh`) forges both
-  headers through it on every release and fails unless the limit still holds.
-  A deployment that publishes the container's port directly has a
+  headers through it on every release and fails unless the limit still holds,
+  and `--live DOMAIN` runs the same check against a real installation's
+  ingress. A deployment that publishes the container's port directly has a
   per-IP limit an attacker turns off with one header — bounded only by the
   per-account limit above, which is what keeps that from being an open door
   rather than what makes it safe.

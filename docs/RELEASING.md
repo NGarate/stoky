@@ -65,6 +65,16 @@ alpha upgrade policy.
 
 ## Verification boundaries
 
+The release smoke (`scripts/smoke-proxy.sh`) runs the shipped bundle on the CI
+runner. It proves the routing — HTTP redirects, only the configured host reaches
+the application, by TLS name and by `Host` header — and that Traefik discards a
+client's forged `X-Forwarded-For`/`X-Real-IP`, so the per-address sign-in limit
+cannot be sidestepped through the front door. It cannot prove that the network in
+front of a real installation behaves the same, and it does not verify the
+certificate, which a smoke host cannot obtain. For that, run
+`bash scripts/smoke-proxy.sh --live DOMAIN` against the installation, from an
+address nobody signs in from: the check spends that address's sign-in window.
+
 The current image pipeline scans one build and publishes a rebuild from its cache;
 it does not compare the two image digests. Docker base and
 support-service tags can change across rebuilds; application/CLI dependencies use
