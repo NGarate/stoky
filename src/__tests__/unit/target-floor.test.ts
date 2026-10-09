@@ -36,18 +36,8 @@ const FLOOR = /min-h-\[(48|56|64)px\]/;
  * no explanation is indistinguishable from one nobody looked at.
  */
 const ALLOWED: Record<string, string> = {
-  "app/(dashboard)/inventory/add/page.tsx":
-    "a <summary> disclosure — a native control the design system has no primitive for",
-  "app/(dashboard)/inventory/consume/page.tsx":
-    "a <summary> disclosure — as above",
-  "components/products/ProductRating.tsx":
-    "a <summary> disclosure — as above",
-  "app/(dashboard)/receipts/upload/page.tsx":
-    "sizing passed to StoreSelector, which should own its own geometry — a real loose end, not an exception",
   "app/(dashboard)/shopping/page.tsx":
     "Screen A's trolley disclosure: a full-width row read with a trolley in one hand (D54, REDESIGN_PLAN §3)",
-  "app/offline/page.tsx":
-    "the offline page is served without JavaScript and cannot import a component",
   "components/dashboard/CompactNav.tsx":
     "the phone bar and the tablet rail: a navigation destination is 56px and 76px by design, not a control (DESIGN_AUDIT A3.5)",
   "components/dashboard/DashboardNav.tsx":

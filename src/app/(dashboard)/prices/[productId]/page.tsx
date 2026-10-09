@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { sectionHeading } from "@/components/ui/section";
 import { Select } from "@/components/ui/select";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -38,6 +39,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
+        back={{ href: "/prices", label: t("prices.backToPrices") }}
         onRetry={() => void query.refetch()}
         title={t("prices.history")}
       />
@@ -49,13 +51,12 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
   const chartData = toChartPoints(history);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <BackLink href="/prices">{t("common.back")}</BackLink>
-        <h1 className="mt-2 text-2xl font-bold text-heading md:text-4xl">
-          {t("prices.history")}
-        </h1>
-      </div>
+    <PageShell width="index">
+      <PageHeader
+        back={{ href: "/prices", label: t("prices.backToPrices") }}
+        title={t("prices.history")}
+      />
+      <div className="space-y-6">
 
       <div className="flex flex-wrap items-center gap-4">
         <label htmlFor="days-select" className="text-sm font-medium md:text-lg">{t("common.date")}:</label>
@@ -72,7 +73,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-heading">{t("prices.chart.title")}</h2>
+        <h2 className={`mb-4 ${sectionHeading()}`}>{t("prices.chart.title")}</h2>
         {chartData.length > 0 ? (
           <PriceChart data={chartData} />
         ) : (
@@ -81,6 +82,7 @@ export default function ProductPricePage({ params }: ProductPricePageProps) {
       </div>
 
       <StoreComparison productId={productId} />
-    </div>
+      </div>
+    </PageShell>
   );
 }

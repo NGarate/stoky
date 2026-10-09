@@ -67,6 +67,19 @@ describe("SnackbarDurationControl", () => {
     ).toBeInTheDocument();
   });
 
+  it("says it also sets how long there is to undo", () => {
+    // The undo window follows this choice (`undoHoldMs`), which nobody could
+    // know from three words on three buttons. Said where the choice is made,
+    // and attached to the group so a screen reader hears it with the name.
+    renderWithIntl(<SnackbarDurationControl />);
+
+    const group = screen.getByRole("group", { name: "Duración de los avisos" });
+    const describedBy = group.getAttribute("aria-describedby") ?? "";
+    expect(document.getElementById(describedBy)?.textContent).toBe(
+      "También es el tiempo para deshacer: 10, 30 o 60 segundos.",
+    );
+  });
+
   it("records the choice against the account", async () => {
     renderWithIntl(<SnackbarDurationControl />);
 

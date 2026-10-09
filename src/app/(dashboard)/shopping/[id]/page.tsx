@@ -2,21 +2,22 @@
 
 import React, { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { BackLink } from "@/components/ui/back-link";
+import { useRouter } from "next/navigation";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { sectionHeading } from "@/components/ui/section";
 import { ProductPicker, type PickedProduct } from "@/components/inventory/ProductPicker";
 import { CreateProductInline } from "@/components/receipt/CreateProductInline";
 import { api } from "@/lib/trpc/client";
 import { ShoppingItem } from "@/components/shopping/ShoppingItem";
-import { RouteState, isNotFoundError } from "@/components/household/RouteState";
+import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { projectShoppingItems } from "@/lib/offline/project";
-
-/** The same window the kitchen and the row's bin use (D100). */
-const UNDO_HOLD_MS = 10_000;
 
 interface ShoppingListPageProps {
   params: Promise<{ id: string }>;
@@ -65,10 +66,50 @@ export function ShoppingListView({ id }: { id: string }) {
   // dialog is told by hand where to put focus back.
   const deleteRef = useRef<HTMLButtonElement>(null);
 
+  const router = useRouter();
+  const utils = api.useUtils();
+  /**
+   * Leave, and say so on the way out — the shape the product page's delete
+   * has. This was `window.location.href = "/shopping"`: a full reload that
+   * dropped the client cache and the snackbar with it, so nothing said the
+   * list was gone, and it landed on the shop screen rather than on the lists
+   * the person came from. `replace`, because the deleted list is no longer
+   * a place Back should return to.
+   */
   const deleteListMutation = api.shopping.delete.useMutation({
     onSuccess: () => {
-      window.location.href = "/shopping";
+      snackbar.show({
+        kind: "confirm",
+        message: { key: "shopping.listDeleted", values: { name: list?.name ?? "" } },
+      });
+      router.replace("/shopping/lists");
+      // Taken out of the persisted copies first. Being marked stale below
+      // corrects a screen only when it mounts with signal; signal lost
+      // between here and /shopping left the restored buy list showing the
+      // deleted items, and ticking one queued a write against a row that was
+      // gone. Not refetched instead: a read restored from storage has no
+      // query function until a screen mounts it, so refetching it now would
+      // turn it into an error.
+      utils.shopping.getBuyList.setData(undefined, (items) =>
+        items?.filter((item) => item.listId !== id),
+      );
+      utils.shopping.list.setQueriesData({}, {}, (lists) =>
+        lists?.filter((each) => each.id !== id),
+      );
+      // Every shopping read, not only the lists: the buy list and this
+      // list's own read are persisted too, and both still held the deleted
+      // list and its items — on /shopping for the freshness window, and
+      // offline for as long as there was no signal. Marked stale without
+      // refetching now, so this page does not re-ask for the list it just
+      // deleted on its way out; each screen refetches when it mounts.
+      void utils.shopping.invalidate(undefined, { refetchType: "none" });
     },
+    onError: () =>
+      snackbar.show({
+        kind: "confirm",
+        tone: "danger",
+        message: { key: "shopping.deleteFailed" },
+      }),
   });
 
   function resetForm(): void {
@@ -95,7 +136,7 @@ export function ShoppingListView({ id }: { id: string }) {
         unit: newItem.unit || chosen.defaultUnit,
       },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
     resetForm();
 
@@ -124,17 +165,25 @@ export function ShoppingListView({ id }: { id: string }) {
   // for a paused query — so with no signal this fell straight through to
   // "not found" and told someone standing in a shop that the list they were
   // shopping from does not exist (ISSUES.md UI-9).
+  //
+  // A list that really is gone — most often deleted by someone else in the
+  // household, under the person holding it — gets a page that says so, why,
+  // and the way back. It was a bare "No encontrado" with no heading and no
+  // link: a dead end reached from a link that used to work.
   if (!list) {
-    if (isNotFoundError(listQuery.error)) {
-      return <div className="p-8">{t("errors.notFound")}</div>;
-    }
     return (
       <RouteState
+        back={{ href: "/shopping/lists", label: t("shopping.backToLists") }}
         error={listQuery.error}
         fetchStatus={listQuery.fetchStatus}
         isLoading={listQuery.isPending}
+        notFound={{
+          title: t("shopping.notFoundTitle"),
+          body: t("shopping.notFoundBody"),
+        }}
         onRetry={() => void listQuery.refetch()}
         title={t("shopping.title")}
+        width="detail"
       />
     );
   }
@@ -150,27 +199,31 @@ export function ShoppingListView({ id }: { id: string }) {
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <BackLink href="/shopping">{t("common.back")}</BackLink>
-          <div>
-            <h1 className="text-2xl font-bold text-heading">{list.name}</h1>
-            {list.isAutoGenerated && (
-              <p className="text-sm text-warn-foreground">{t("shopping.autoDescription")}</p>
-            )}
-          </div>
-        </div>
-        <Button
-          disabled={deleteListMutation.isPending}
-          onClick={() => setConfirmingDelete(true)}
-          ref={deleteRef}
-          type="button"
-          variant="ghost"
-        >
-          {t("shopping.delete")}
-        </Button>
-      </div>
+    <PageShell width="detail">
+      <PageHeader
+        actions={
+          /* Destructive, so it looks it: as a plain ghost it wore the same
+             dress as "Editar". The trigger is destructive-ghost and the
+             confirming button solid destructive (the one destructive-control
+             rule). Only for the roles `writeProcedure` admits — a KITCHEN
+             account was offered a delete the server refuses. */
+          canWrite ? (
+            <Button
+              disabled={deleteListMutation.isPending}
+              onClick={() => setConfirmingDelete(true)}
+              ref={deleteRef}
+              type="button"
+              variant="destructive-ghost"
+            >
+              {t("shopping.delete")}
+            </Button>
+          ) : undefined
+        }
+        back={{ href: "/shopping/lists", label: t("shopping.backToLists") }}
+        intro={list.isAutoGenerated ? t("shopping.autoDescription") : undefined}
+        title={list.name}
+      />
+      <div className="space-y-6">
 
       {/* Destructive, irreversible, and with no inverse to offer afterwards —
           the one shape a snackbar cannot serve. Deleting a list cascades its
@@ -194,8 +247,13 @@ export function ShoppingListView({ id }: { id: string }) {
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex justify-between text-sm">
             <span>{t("shopping.progress")}</span>
+            {/* A sentence, not "2/5 elementos": what the bar counts is what
+                has been bought. */}
             <span>
-              {checkedItems}/{totalItems} {t("common.items")}
+              {t("shopping.progressValue", {
+                checked: checkedItems,
+                total: totalItems,
+              })}
             </span>
           </div>
           <div className="h-2 rounded-full bg-gauge-track">
@@ -208,7 +266,7 @@ export function ShoppingListView({ id }: { id: string }) {
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-heading">{t("shopping.items")}</h2>
+        <h2 className={sectionHeading()}>{t("shopping.items")}</h2>
         {!isAdding && (
           <Button onClick={() => setIsAdding(true)} type="button">
             {t("shopping.addItem")}
@@ -311,8 +369,11 @@ export function ShoppingListView({ id }: { id: string }) {
                   value={newItem.unit}
                 />
               </div>
+              {/* "Añadir a la lista", not a bare "Añadir": the button that
+                  opened this form says "Añadir un producto", and the one
+                  that commits it says where the product goes. */}
               <Button disabled={createProduct.isPending} type="submit">
-                {t("common.add")}
+                {t("shopping.addToList")}
               </Button>
               <Button onClick={resetForm} type="button" variant="outline">
                 {t("common.cancel")}
@@ -327,10 +388,9 @@ export function ShoppingListView({ id }: { id: string }) {
           `<div>`, so each row was an orphaned list item: drawn with a bullet,
           and announced without the count that makes a list worth being one. */}
       {items.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-          <p>{t("shopping.emptyList")}</p>
-          <p className="mt-2 text-sm">{t("shopping.addItems")}</p>
-        </div>
+        // No button of its own: "Añadir artículo" sits directly above, and a
+        // second one a line below it would be the same control twice.
+        <EmptyState body={t("shopping.addItems")} title={t("shopping.emptyList")} />
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
@@ -343,6 +403,7 @@ export function ShoppingListView({ id }: { id: string }) {
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </PageShell>
   );
 }

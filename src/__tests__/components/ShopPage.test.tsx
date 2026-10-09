@@ -44,8 +44,12 @@ mock.module("@/lib/trpc/client", () => ({
     useUtils: () => ({ invalidate: () => Promise.resolve() }),
     household: { create: { useMutation: () => ({ mutate: () => {}, isPending: false }) } },
     shopping: { getBuyList: { useQuery: () => queryStub } },
+    // Who is looking decides whether a row is a control at all.
+    auth: { me: { useQuery: () => ({ data: { role } }) } },
   },
 }));
+
+let role = "MEMBER";
 
 const { default: ShopPage } = await import("@/app/(dashboard)/shopping/page");
 
@@ -66,6 +70,7 @@ function row(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  role = "MEMBER";
   enqueue.mockClear();
   pending = [];
   queryStub = {
@@ -84,7 +89,8 @@ describe("one task per screen", () => {
     renderWithIntl(<ShopPage />);
 
     const scan = screen.getByRole("link", { name: "Escanear" });
-    expect(scan).toHaveAttribute("href", "/products/scan");
+    // `?from=shopping`, so the scan page leads back here, not to the catalogue.
+    expect(scan).toHaveAttribute("href", "/products/scan?from=shopping");
   });
 
   it("keeps managing lists as a link, not a second primary action", () => {
@@ -353,5 +359,34 @@ describe("with no connection and nothing saved", () => {
       screen.getByText("Aquí todavía no hay nada guardado"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No hay nada apuntado")).toBeAbsent();
+  });
+});
+
+describe("an account that cannot tick things off", () => {
+  /**
+   * A tick is `shopping.updateItem`, a `writeProcedure`: the server refuses
+   * it for KITCHEN. Every row was still a button for that account, so the
+   * tap was queued, refused, and landed in "Cambios sin guardar" — a
+   * failure manufactured by offering what the server will not take. The
+   * list detail already gates its ticks on the same role (`ShoppingItem`'s
+   * `canWrite`); this is the same courtesy, with the server still the
+   * control.
+   */
+  it("reads the list without offering a tick the server would refuse", () => {
+    role = "KITCHEN";
+    renderWithIntl(<ShopPage />, { locale: "es" });
+
+    expect(screen.getByText("Leche entera")).toBeInTheDocument();
+    expect(document.querySelector("[aria-pressed]")).toBeAbsent();
+  });
+
+  it("still ticks when it cannot ask who is looking, because offline it never can", () => {
+    // `auth.me` is not a persisted read, so with no signal it stays
+    // unanswered. Treating "unknown" as "kitchen" would leave the one screen
+    // built to work offline unable to tick anything.
+    role = undefined as unknown as string;
+    renderWithIntl(<ShopPage />, { locale: "es" });
+
+    expect(document.querySelector("[aria-pressed]")).not.toBeNull();
   });
 });

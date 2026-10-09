@@ -59,6 +59,11 @@ const itemRowVariants = cva("transition-colors", {
     compoundVariants: [
       // Only a card has a surface of its own to tint.
       { variant: "card", tone: "neutral", class: "bg-card" },
+      // A card's padding is inside its surface; a plain row has no surface,
+      // so the inset only pushed every title 12–20px right of the heading it
+      // sits under. The vertical rhythm stays. `md:` too, or `md:p-5` brings
+      // the inset back at the tablet tier.
+      { variant: "plain", class: "px-0 md:px-0" },
     ],
     defaultVariants: { variant: "card", density: "default", tone: "neutral" },
   });
@@ -104,6 +109,11 @@ export interface ItemRowProps extends VariantProps<typeof itemRowVariants> {
   href?: string;
   /** A `<Badge>`, sat opposite the title. */
   status?: ReactNode;
+  /**
+   * One sentence under the title, for a row whose details are prose rather
+   * than label/value pairs — an index of screens says what each one is for.
+   */
+  description?: ReactNode;
   /** Rendered as a two-column definition list under the title. */
   meta?: MetaEntry[];
   /** `<Button>`s. A link belongs here only when it genuinely navigates. */
@@ -117,6 +127,7 @@ export function ItemRow({
   title,
   href,
   status,
+  description,
   meta,
   actions,
   density,
@@ -143,6 +154,10 @@ export function ItemRow({
         )}
         {status}
       </div>
+
+      {description ? (
+        <p className="mt-1 text-muted-foreground">{description}</p>
+      ) : null}
 
       {meta && meta.length > 0 ? (
         <dl className={metaVariants({ density })}>

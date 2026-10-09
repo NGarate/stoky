@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 import { api } from "@/lib/trpc/client";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 interface BestPriceIndicatorProps {
   productId: string;
@@ -20,6 +21,7 @@ export function BestPriceIndicator({
   currentStoreId,
 }: BestPriceIndicatorProps) {
   const t = useTranslations("prices");
+  const units = useQuantityFormat();
   const locale = useLocale();
   const { data: prices, isLoading } = api.price.getLatestPrices.useQuery({
     productId,
@@ -76,9 +78,10 @@ export function BestPriceIndicator({
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">{t("bestPrice")}:</span>
-      <span className="font-medium text-ok-foreground">
+      {/* Ink, not `ok`: a ranking is not a state (see the note above). */}
+      <span className="font-medium text-foreground">
         {formatUnitPrice(locale, bestPrice.unitPrice, bestPrice.currency ?? DEFAULT_CURRENCY)}{" "}
-        {t("perUnit", { unit: bestPrice.unit })}
+        {t("perUnit", { unit: units.unit(bestPrice.unit, 1) })}
       </span>
       <span className="text-sm text-muted-foreground">{t("atStore", { store: bestPrice.store.name })}</span>
     </div>

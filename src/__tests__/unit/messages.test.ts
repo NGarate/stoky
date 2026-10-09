@@ -134,6 +134,85 @@ describe("one word for one thing", () => {
 });
 
 /**
+ * Typography each language expects, checked rather than remembered.
+ *
+ * Spanish quotes with «», English with “”; both use the ellipsis character
+ * rather than three full stops; and "solo" lost its accent in 2010. The
+ * catalogues had all of these wrong somewhere — English strings quoting a
+ * product name in «», 23 values ending "...", a hint quoting "Casa" in
+ * straight quotes — and nothing could see it but a reader.
+ */
+describe("typography", () => {
+  const valueOf = (catalogue: Catalogue, key: string): string =>
+    key
+      .split(".")
+      .reduce<unknown>((node, part) => (node as Catalogue)?.[part], catalogue) as string;
+
+  const offending = (
+    catalogue: Catalogue,
+    keys: string[],
+    pattern: RegExp,
+  ): string[] => keys.filter((key) => pattern.test(valueOf(catalogue, key)));
+
+  test("uses the ellipsis character, never three full stops", () => {
+    expect(offending(es as Catalogue, spanish, /\.\.\./)).toEqual([]);
+    expect(offending(en as Catalogue, english, /\.\.\./)).toEqual([]);
+  });
+
+  test("quotes Spanish with «» and English with “”, never straight quotes", () => {
+    expect(offending(es as Catalogue, spanish, /["“”]/)).toEqual([]);
+    expect(offending(en as Catalogue, english, /["«»]/)).toEqual([]);
+  });
+
+  test("writes solo without its retired accent", () => {
+    expect(offending(es as Catalogue, spanish, /\b[Ss]ólo\b/)).toEqual([]);
+  });
+
+  test("would notice each of them", () => {
+    expect(/\.\.\./.test("Cargando...")).toBe(true);
+    expect(/["«»]/.test("Could not delete «Lidl».")).toBe(true);
+    expect(/\b[Ss]ólo\b/.test("Sólo quien administra")).toBe(true);
+  });
+});
+
+/**
+ * One action, one name: the link that opens a flow, its page's title and the
+ * button that commits it say the same words.
+ *
+ * Recording what was used was "Consumir stock" in Spanish and, in English,
+ * "Use stock" on the inventory's link and "Consume stock" on the dashboard's,
+ * the page's title and its button — one action wearing two names in one
+ * language. The vocabulary of an interface is how people find their way round
+ * it, so the names are pinned to each other rather than to a spelling.
+ */
+describe("one action, one name", () => {
+  const FLOWS: Record<string, string[]> = {
+    "recording what was used": [
+      "dashboard.quickConsumeStock",
+      "inventory.consumeStock",
+      "inventory.consume.title",
+      "inventory.consume.submit",
+    ],
+  };
+
+  for (const [flow, keys] of Object.entries(FLOWS)) {
+    for (const [language, catalogue] of [
+      ["es", es],
+      ["en", en],
+    ] as const) {
+      test(`${flow} keeps one name in ${language}`, () => {
+        const names = keys.map((key) =>
+          key
+            .split(".")
+            .reduce<unknown>((node, part) => (node as Catalogue)?.[part], catalogue),
+        );
+        expect(new Set(names).size).toBe(1);
+      });
+    }
+  }
+});
+
+/**
  * Arrows belong to the component, never to the string.
  *
  * `BackLink` draws an `aria-hidden` `<ArrowLeft/>`, and eight catalogue

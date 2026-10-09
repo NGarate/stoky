@@ -13,7 +13,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
@@ -99,6 +101,7 @@ export default function InventoryPage(): JSX.Element {
 export function InventoryView(): JSX.Element {
   const t = useTranslations("inventory");
   const common = useTranslations("common");
+  const tProducts = useTranslations("products");
   const router = useRouter();
   const params = useSearchParams();
   const searchId = useId();
@@ -166,9 +169,23 @@ export function InventoryView(): JSX.Element {
   // the skeleton for ever, with no message and no way forward — ISSUES.md
   // UI-8 — and the one failure no amount of waiting fixes is an account
   // with no household, which is HOUSE-1.
+  // Neither needs the list to have arrived, so both are drawn while it has
+  // not — RouteState puts them in the same place the loaded screen does.
+  const actions = (
+    <>
+      <Button asChild>
+        <Link href="/inventory/add">{t("addStock")}</Link>
+      </Button>
+      <Button asChild variant="outline">
+        <Link href="/inventory/consume">{t("consumeStock")}</Link>
+      </Button>
+    </>
+  );
+
   if (!result) {
     return (
       <RouteState
+        actions={actions}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -181,20 +198,8 @@ export function InventoryView(): JSX.Element {
   const products = result.products;
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          {t("title")}
-        </h1>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild className="md:text-lg" variant="default">
-            <Link href="/inventory/add" > {t("addStock")} </Link>
-          </Button>
-          <Button asChild className="md:text-lg" variant="outline">
-            <Link href="/inventory/consume" > {t("consumeStock")} </Link>
-          </Button>
-        </div>
-      </div>
+    <PageShell width="index">
+      <PageHeader actions={actions} title={t("title")} />
 
       {filterRestock ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-warn-foreground bg-warn px-4 py-3">
@@ -287,15 +292,41 @@ export function InventoryView(): JSX.Element {
       </p>
 
       {products.length === 0 && search ? (
-        <p className="rounded border border-border bg-card p-4 text-muted-foreground">
-          {t("searchEmpty", { search })}
-        </p>
+        <EmptyState
+          action={
+            <Button onClick={() => go({ q: null })} type="button" variant="outline">
+              {t("searchClear")}
+            </Button>
+          }
+          title={t("searchEmpty", { search })}
+        />
       ) : null}
 
       {filterRestock && products.length === 0 ? (
-        <p className="rounded border border-border bg-card p-4 text-muted-foreground">
-          {t("filterRestockEmpty")}
-        </p>
+        // No action of its own: the filter banner directly above already
+        // offers "Ver todo el inventario", and twice is the same control.
+        <EmptyState title={t("filterRestockEmpty")} />
+      ) : null}
+
+      {/* A household with no products at all. This drew a table header
+          over nothing and "0 productos" above it — accurate, and no help to
+          somebody who has just arrived. The header's "Añadir stock" needs a
+          product to add stock *to*, so the way in is making the first one. */}
+      {result.total === 0 && !search && !filterRestock ? (
+        <EmptyState
+          action={
+            <>
+              <Button asChild>
+                <Link href="/products/new">{tProducts("list.new")}</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/products/scan">{tProducts("list.scan")}</Link>
+              </Button>
+            </>
+          }
+          body={tProducts("addFirst")}
+          title={tProducts("noProducts")}
+        />
       ) : null}
 
       {/* A page past the end used to be a blank screen with a pager reading
@@ -303,16 +334,16 @@ export function InventoryView(): JSX.Element {
           above both need a search or a filter to speak, and a stray page
           number has neither. */}
       {result.pageCount > 0 && result.page > result.pageCount ? (
-        <div className="rounded border border-border bg-card p-4">
-          <p className="text-muted-foreground">
-            {t("pagePastEnd", { pages: result.pageCount })}
-          </p>
-          <Button asChild className="mt-2" variant="outline">
-            <Link href={hrefForPage(result.pageCount)}>
-              {t("goToLastPage")}
-            </Link>
-          </Button>
-        </div>
+        <EmptyState
+          action={
+            <Button asChild variant="outline">
+              <Link href={hrefForPage(result.pageCount)}>
+                {t("goToLastPage")}
+              </Link>
+            </Button>
+          }
+          title={t("pagePastEnd", { pages: result.pageCount })}
+        />
       ) : null}
 
       {/* Desktop: the table, which is legitimate at this tier and only here.
@@ -322,6 +353,7 @@ export function InventoryView(): JSX.Element {
           which copy a `.first()` selector resolves to, and resolving to the
           hidden one makes "the product is on the page" assert false on the tier
           where it is true. */}
+      {products.length > 0 ? (
       <div className="hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
         <table className="w-full">
           <thead className="bg-muted text-muted-foreground">
@@ -360,6 +392,7 @@ export function InventoryView(): JSX.Element {
                 <td className="px-4 py-3 text-center">
                   <StockStatus
                     isLowStock={product.isLowStock}
+                    onTintedRow
                     totalStock={product.totalStock}
                   />
                 </td>
@@ -368,6 +401,7 @@ export function InventoryView(): JSX.Element {
           </tbody>
         </table>
       </div>
+      ) : null}
 
       {/* Phone and tablet: one card per product. */}
       <ul className="space-y-3 lg:hidden">
@@ -394,6 +428,7 @@ export function InventoryView(): JSX.Element {
             status={
               <StockStatus
                 isLowStock={product.isLowStock}
+                onTintedRow
                 totalStock={product.totalStock}
               />
             }
@@ -412,6 +447,6 @@ export function InventoryView(): JSX.Element {
         previousLabel={common("previous")}
         status={t("pageStatus", { page: result.page, pages: result.pageCount })}
       />
-    </div>
+    </PageShell>
   );
 }

@@ -115,6 +115,17 @@ function Harness({
       <button
         onClick={() =>
           snackbar.show({
+            kind: "confirm",
+            message: { key: "offline.usedUp", values: { quantity: 2, unit: "unit", name: "Huevos" } },
+          })
+        }
+        type="button"
+      >
+        contado
+      </button>
+      <button
+        onClick={() =>
+          snackbar.show({
             kind: "undo-inverse",
             message: { key: "offline.addedItem", values: { name: "Pan" } },
             undo: () => onUndo?.(),
@@ -186,14 +197,26 @@ describe("what the snackbar says", () => {
 
     // The op label is `{key, values}` so that a queue composed in Spanish and
     // read after a language switch is not half in each (queue.ts:41-47).
-    expect(await screen.findAllByText("Marcaste «Leche»")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Marcaste «Leche» como comprado")).not.toHaveLength(0);
+  });
+
+  it("writes a stored count unit as a word, in the reader's plural", async () => {
+    render();
+    await press("contado");
+
+    // The queue stores the unit token as it was sent ("unit"); the label is
+    // translated here, so this is where the token becomes a word. It read
+    // "Usaste 2 unit de «Huevos»" in a Spanish interface.
+    expect(
+      await screen.findAllByText("Usaste 2 unidades de «Huevos»"),
+    ).not.toHaveLength(0);
   });
 
   it("offers no undo on a plain confirmation", async () => {
     render();
     await press("confirmar");
 
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
     expect(screen.queryByRole("button", { name: "Deshacer" })).toBeAbsent();
   });
 });
@@ -203,7 +226,7 @@ describe("a failure", () => {
     const { baseElement } = render();
 
     await press("confirmar");
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
     const success = baseElement.querySelector('[data-testid="snackbar"]');
     const successMarkup = success?.innerHTML ?? "";
 
@@ -226,6 +249,51 @@ describe("a failure", () => {
     // are what a screen reader has. They have to carry it on their own.
     const said = await screen.findAllByText(/No se ha podido eliminar/);
     expect(said.length).toBeGreaterThan(0);
+  });
+
+  it("waits to be dismissed, where a success leaves on its own", () => {
+    // WCAG 2.2.3 (AAA, no timing). A failure — a receipt that would not
+    // apply, an upload refused, a store that could not be saved — was gone
+    // after six seconds like any confirmation, so somebody who looked away
+    // never learned it had not worked. The success half is the control: it
+    // proves the fake clock really drives the close, so the failure staying
+    // is the code's doing and not a timer that never ran.
+    jest.useFakeTimers();
+    try {
+      render();
+      fireEvent.click(screen.getByRole("button", { name: "confirmar" }));
+      expect(screen.getAllByText("Marcaste «Leche» como comprado").length).toBeGreaterThan(0);
+      act(() => {
+        jest.advanceTimersByTime(7_000);
+      });
+      expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
+
+      fireEvent.click(screen.getByRole("button", { name: "fallo" }));
+      act(() => {
+        jest.advanceTimersByTime(10 * 60_000);
+      });
+      expect(screen.getAllByText(/No se ha podido eliminar/).length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("is not pushed off the screen by the next confirmation", async () => {
+    // A confirmation replaces a confirmation because nobody needs the old
+    // one. Somebody does need to know an action failed: the success waits
+    // behind it instead, and shows once the failure has been dismissed.
+    render();
+    await press("fallo");
+    await screen.findAllByText(/No se ha podido eliminar/);
+
+    await press("confirmar");
+
+    expect(screen.getAllByText(/No se ha podido eliminar/).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Descartar el aviso" }));
+    await waitFor(() => {
+      expect(screen.getAllByText("Marcaste «Leche» como comprado").length).toBeGreaterThan(0);
+    });
   });
 });
 
@@ -335,14 +403,14 @@ describe("two things at once", () => {
   it("replaces one confirmation with the next: nobody needs the previous one", async () => {
     render();
     await press("confirmar");
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
 
     await press("confirmar otro");
 
     await waitFor(() => {
       expect(screen.getAllByText("Quitaste «Pan» de la lista")).not.toHaveLength(0);
     });
-    expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+    expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
   });
 
   it("gives a second undoable action its own undo, not one ten seconds late", async () => {
@@ -372,7 +440,7 @@ describe("two things at once", () => {
     // The exact failure D54 rejected toasts over: the button someone is
     // reaching for must not vanish because something else happened.
     expect(screen.getByRole("button", { name: "Deshacer" })).toBeInTheDocument();
-    expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+    expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
   });
 });
 
@@ -380,14 +448,14 @@ describe("dismissing", () => {
   it("can be closed by hand, whatever the timer says", async () => {
     render();
     await press("confirmar");
-    await screen.findAllByText("Marcaste «Leche»");
+    await screen.findAllByText("Marcaste «Leche» como comprado");
 
     await userEvent.click(
       screen.getByRole("button", { name: "Descartar el aviso" }),
     );
 
     await waitFor(() => {
-      expect(screen.queryAllByText("Marcaste «Leche»")).toHaveLength(0);
+      expect(screen.queryAllByText("Marcaste «Leche» como comprado")).toHaveLength(0);
     });
   });
 });

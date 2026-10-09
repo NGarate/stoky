@@ -191,6 +191,7 @@ export function WriteQueueProvider({
         drain();
       },
       discard: (id) => queue.discard(id),
+      restore: (op) => queue.restore(op),
       // Read back from the queue rather than from `state`: `state` is this
       // render's snapshot and the drain just changed it.
       flush: async () => {

@@ -124,7 +124,7 @@ describe("BarcodeScanner", () => {
 
     expect(screen.getByTestId("barcode-scanner")).toBeInTheDocument();
     expect(
-      screen.getByText("Coloca el código de barras dentro del rectángulo verde"),
+      screen.getByText("Coloca el código de barras dentro del recuadro"),
     ).toBeInTheDocument();
   });
 
@@ -155,7 +155,7 @@ describe("BarcodeScanner", () => {
       lastScannerProps?.onError(failure);
     });
 
-    expect(screen.getByText("Error al acceder a la cámara")).toBeInTheDocument();
+    expect(screen.getByText("No se ha podido usar la cámara")).toBeInTheDocument();
     expect(onError).toHaveBeenCalledWith(failure);
 
     consoleError.mockRestore();
@@ -206,7 +206,7 @@ describe("BarcodeScanner", () => {
     });
     rerender(<BarcodeScanner isScanning={false} onScan={() => {}} />);
 
-    expect(screen.getByText("Error al acceder a la cámara")).toBeInTheDocument();
+    expect(screen.getByText("No se ha podido usar la cámara")).toBeInTheDocument();
     expect(screen.getByText(/Permite el acceso a la cámara para este sitio/)).toBeInTheDocument();
 
     consoleError.mockRestore();
@@ -221,7 +221,10 @@ describe("BarcodeScanner", () => {
       lastScannerProps?.onError(undefined);
     });
 
-    expect(screen.getByText("Error desconocido")).toBeInTheDocument();
+    expect(screen.getByText("El navegador no ha dicho por qué.")).toBeInTheDocument();
+    // What to do, not only that it failed (§7 rule 4): the hint names the
+    // setting and the way round it.
+    expect(screen.getByText(/escribe el código abajo/)).toBeInTheDocument();
     // No Error instance means nothing to forward to the caller.
     expect(onError).not.toHaveBeenCalled();
 
@@ -245,7 +248,7 @@ describe("BarcodeScanner", () => {
   it("hides the error panel until something fails", () => {
     renderWithIntl(<BarcodeScanner onScan={() => {}} />);
 
-    expect(screen.queryByText("Error al acceder a la cámara")).toBeAbsent();
+    expect(screen.queryByText("No se ha podido usar la cámara")).toBeAbsent();
   });
 
   it("omits the torch control on a camera that has none", () => {

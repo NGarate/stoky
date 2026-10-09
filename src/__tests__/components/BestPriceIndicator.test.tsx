@@ -47,6 +47,20 @@ describe("BestPriceIndicator", () => {
     expect(container.textContent).toContain("por unidad");
   });
 
+  it("does not paint the best price in a state's colour", () => {
+    prices = [row("a", "Carrefour", 0.99), row("b", "Mercadona", 5.34, 6)];
+    const { container } = renderWithIntl(<BestPriceIndicator productId="p1" />, {
+      locale: "es",
+    });
+
+    // `ok` means "this is healthy", and CLAUDE.md names "best price" as the
+    // example of something that is not a state. The price was `text-ok-
+    // foreground`, spending the tone that has to keep meaning "fine".
+    for (const node of container.querySelectorAll("*")) {
+      expect(node.getAttribute("class") ?? "").not.toMatch(/\b(?:text|bg|border)-(?:ok|warn|danger)(?:-foreground)?\b/);
+    }
+  });
+
   it("compares a current unit price against the best unit price", () => {
     prices = [row("a", "Carrefour", 0.99), row("b", "Mercadona", 5.34, 6)];
     renderWithIntl(

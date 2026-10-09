@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import es from "../messages/es.json";
 import { DEMO_EMAIL, DEMO_PASSWORD } from "./session";
 
 /**
@@ -73,6 +74,13 @@ test("somebody can actually sign in", async ({ page }) => {
   await page.fill('input[name="password"]', DEMO_PASSWORD);
   await page.click('button[type="submit"]');
 
+  // `/start`: a fresh context is a device nobody has chosen a screen on, and
+  // signing in goes through `/`, which asks (Journey 8). The landing redirect
+  // is a server component reading the session — under this CSP too.
+  await expect(page).toHaveURL(/\/start/, { timeout: 30_000 });
+  // Answering it is a server action, and it lands on the authenticated shell
+  // this test has always ended on.
+  await page.getByRole("button", { name: new RegExp(es.start.dashboard) }).click();
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
   await expect(page.locator("main:visible")).toBeVisible();
   // Instant validation reports asynchronously over the dev HMR websocket,

@@ -2,12 +2,16 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { use, useMemo } from "react";
-import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
+import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
 import { runningTotals } from "@/lib/inventory/stockLedger";
 import { StockHistoryChart } from "@/components/inventory/StockHistoryChart";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 /**
  * The product's ledger, made visible — "the only screen that shows why the
@@ -19,15 +23,6 @@ import type { JSX } from "react";
  * points; loading more extends the line leftwards and never moves a point
  * already drawn.
  */
-function serverErrorKey(message: string | undefined): string {
-  const normalized = message?.toLowerCase() ?? "";
-
-  if (normalized.includes("product not found")) return "errorNotFound";
-  if (normalized.includes("household")) return "errorNoHousehold";
-
-  return "errorGeneric";
-}
-
 interface StockHistoryPageProps {
   params: Promise<{ id: string }>;
 }
@@ -42,6 +37,8 @@ export default function StockHistoryPage({
 /** Exported apart from the route so the component suite can render it. */
 export function StockHistoryView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.history");
+  const units = useQuantityFormat();
+  const tDetail = useTranslations("products.detail");
   const locale = useLocale();
 
   const detail = api.product.getById.useQuery({ id }, { retry: false });
@@ -64,70 +61,47 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
     [entries, product],
   );
 
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-    [locale],
-  );
 
-  const failed = detail.error ?? history.error;
-  if (failed) {
-    const errorKey = serverErrorKey(failed.message);
+  const back = { href: `/products/${id}`, label: t("backToProduct") };
 
-    return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/products">{t("backToProduct")}</BackLink>
-
-        <div
-          role="alert"
-          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("errorTitle")}</h1>
-          <p className="mt-2">{t(errorKey)}</p>
-        </div>
-
-        {errorKey === "errorNotFound" ? null : (
-          <Button
-            type="button"
-            onClick={() => {
-              void detail.refetch();
-              void history.refetch();
-            }}
-          >
-            {t("retry")}
-          </Button>
-        )}
-      </div>
-    );
-  }
-
+  // Two questions, one screen: whichever has not answered is the one the
+  // screen is waiting on, and the product's first, because a product that
+  // does not exist has no history to wait for.
   if (!product || !history.data) {
+    const waiting = !product ? detail : history;
     return (
-      <div className="mx-auto max-w-3xl">
-        <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
-          {t("loading")}
-        </p>
-      </div>
+      <RouteState
+        back={back}
+        error={waiting.error}
+        fetchStatus={waiting.fetchStatus}
+        isLoading={waiting.isPending}
+        notFound={{
+          title: tDetail("notFoundTitle"),
+          body: t("errorNotFound"),
+          back: { href: "/products", label: tDetail("backToProducts") },
+        }}
+        onRetry={() => {
+          void detail.refetch();
+          void history.refetch();
+        }}
+        title={t("title")}
+        width="detail"
+      />
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <BackLink href={`/products/${id}`}>{t("backToProduct")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading">
-        {t("titleOf", { name: product.name })}
-      </h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
+    <PageShell width="detail">
+      <PageHeader
+        back={back}
+        className="mb-0"
+        intro={t("intro")}
+        title={t("titleOf", { name: product.name })}
+      />
       <p className="mt-2 font-medium text-foreground">
         {t("currentTotal", {
           stock: product.totalStock,
-          unit: product.defaultUnit,
+          unit: units.unit(product.defaultUnit, product.totalStock),
         })}
       </p>
 
@@ -149,7 +123,40 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
             />
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card shadow">
+          {/* Phone and tablet: one card per movement. Five columns at 390px
+              under `overflow-hidden` clipped "Ubicación" and "Quedó" off the
+              edge — lost as completely as if never sent (DESIGN_AUDIT A3.3).
+              Every column is on the card; the table is for `lg` only, as on
+              /inventory and /products (A3.2). */}
+          <ul className="mt-6 space-y-3 lg:hidden">
+            {points.map((point) => {
+              const entry = entries.find((row) => row.id === point.id);
+              if (!entry) return null;
+              return (
+                <ItemRow
+                  key={entry.id}
+                  meta={[
+                    { label: t("typeHeader"), value: t(`op${entry.operationType}`) },
+                    {
+                      label: t("changeHeader"),
+                      value: `${entry.quantity > 0 ? "+" : ""}${units.quantity(entry.quantity, entry.unit)}`,
+                    },
+                    {
+                      label: t("locationHeader"),
+                      value: entry.location?.name ?? t("noLocation"),
+                    },
+                    {
+                      label: t("totalHeader"),
+                      value: units.quantity(point.total, product.defaultUnit),
+                    },
+                  ]}
+                  title={formatDate(locale, entry.createdAt, "short")}
+                />
+              );
+            })}
+          </ul>
+
+          <div className="mt-6 hidden overflow-hidden rounded-lg border border-border bg-card shadow lg:block">
             <table className="w-full">
               <caption className="sr-only">{t("tableCaption")}</caption>
               <thead className="bg-muted text-muted-foreground">
@@ -168,7 +175,7 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                   return (
                     <tr key={entry.id} className="border-t border-border">
                       <td className="px-4 py-3 text-foreground">
-                        {dateFormat.format(new Date(entry.createdAt))}
+                        {formatDate(locale, entry.createdAt, "short")}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {t(`op${entry.operationType}`)}
@@ -180,14 +187,14 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
                             : "text-ok-foreground"
                         }`}
                       >
-                        {entry.quantity > 0 ? `+${entry.quantity}` : entry.quantity}{" "}
-                        {entry.unit}
+                        {entry.quantity > 0 ? "+" : ""}
+                        {units.quantity(entry.quantity, entry.unit)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {entry.location?.name ?? t("noLocation")}
                       </td>
                       <td className="px-4 py-3 text-right text-foreground">
-                        {point.total} {product.defaultUnit}
+                        {units.quantity(point.total, product.defaultUnit)}
                       </td>
                     </tr>
                   );
@@ -207,6 +214,6 @@ export function StockHistoryView({ id }: { id: string }): JSX.Element {
           ) : null}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

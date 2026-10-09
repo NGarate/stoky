@@ -30,7 +30,7 @@ describe("StockStatus", () => {
 
     // Both are true of this product. Run out is the stronger statement.
     expect(screen.getByText("Sin stock")).toBeInTheDocument();
-    expect(screen.queryByText("Stock bajo")).toBeAbsent();
+    expect(screen.queryByText("Queda poco")).toBeAbsent();
   });
 
   it("says run out for a product with no minimum at all", () => {
@@ -46,7 +46,7 @@ describe("StockStatus", () => {
       locale: "es",
     });
 
-    expect(screen.getByText("Stock bajo")).toBeInTheDocument();
+    expect(screen.getByText("Queda poco")).toBeInTheDocument();
   });
 
   it("says nothing is wrong when nothing is", () => {
@@ -55,6 +55,47 @@ describe("StockStatus", () => {
     });
 
     expect(screen.getByText("Correcto")).toBeInTheDocument();
+  });
+});
+
+/**
+ * Whether the pill is filled or outlined follows the row it sits on, never
+ * the state. `badge.tsx`'s rule is that `outline` is for a badge whose row is
+ * already tinted with its own tone. This component used to hard-code the
+ * opposite in two places: "Sin stock" filled `bg-danger` on a `bg-danger`
+ * inventory row, where the pill vanished into it, and "Stock bajo" outlined on
+ * the Panel and /products, whose rows are not tinted at all.
+ */
+describe("StockStatus on and off a tinted row", () => {
+  function pill(text: string): string {
+    return screen.getByText(text).className;
+  }
+
+  it("outlines run out on a row already tinted danger", () => {
+    renderWithIntl(<StockStatus isLowStock={true} onTintedRow totalStock={0} />);
+    expect(pill("Sin stock")).toContain("border-danger-foreground");
+    expect(pill("Sin stock")).not.toContain("bg-danger");
+  });
+
+  it("outlines low on a row already tinted warn", () => {
+    renderWithIntl(<StockStatus isLowStock={true} onTintedRow totalStock={1} />);
+    expect(pill("Queda poco")).toContain("border-warn-foreground");
+    expect(pill("Queda poco")).not.toContain("bg-warn");
+  });
+
+  it("fills low on an untinted row, where an outline would be the faint one", () => {
+    renderWithIntl(<StockStatus isLowStock={true} totalStock={1} />);
+    expect(pill("Queda poco")).toContain("bg-warn");
+  });
+
+  it("fills run out on an untinted row", () => {
+    renderWithIntl(<StockStatus isLowStock={false} totalStock={0} />);
+    expect(pill("Sin stock")).toContain("bg-danger");
+  });
+
+  it("keeps healthy filled either way: a healthy row has no tint to clash with", () => {
+    renderWithIntl(<StockStatus isLowStock={false} onTintedRow totalStock={5} />);
+    expect(pill("Correcto")).toContain("bg-ok");
   });
 });
 
@@ -81,6 +122,18 @@ describe("StockAmount", () => {
     expect(stockTone(0, false)).toBe("danger");
     expect(stockTone(1, true)).toBe("warn");
     expect(stockTone(5, false)).toBe("neutral");
+  });
+
+  it("writes the stored count unit as a word, pluralised", () => {
+    renderWithIntl(
+      <StockAmount defaultUnit="unit" isLowStock={false} totalStock={24} />,
+      { locale: "es" },
+    );
+
+    // The schema stores the count unit as the token "unit"; it was printed
+    // as stored, so the inventory said "24 unit" — or "24 unidad" for rows
+    // that had been folded from dozens.
+    expect(screen.getByText("24 unidades")).toBeInTheDocument();
   });
 
   it("always carries the unit, because a bare number is not an amount", () => {

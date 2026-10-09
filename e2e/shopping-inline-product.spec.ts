@@ -40,9 +40,9 @@ test.describe("Creating a product from the shopping list", () => {
     await settle(page);
 
     await page.getByRole("button", { name: es.shopping.create }).click();
-    await page.getByPlaceholder(es.shopping.listName).fill(listName);
+    await page.getByLabel(es.shopping.listName).fill(listName);
     await page
-      .getByRole("button", { name: es.common.create, exact: true })
+      .getByRole("button", { name: es.shopping.create })
       .click();
 
     const link = page.getByRole("link", { name: new RegExp(listName) });

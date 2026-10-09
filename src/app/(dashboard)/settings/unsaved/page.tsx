@@ -1,15 +1,19 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
-import { BackLink } from "@/components/ui/back-link";
+import { useLocale, useTranslations } from "next-intl";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { ReconcileDialog } from "@/components/offline/ReconcileDialog";
+import { useDiscardChange } from "@/components/offline/useDiscardChange";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 import type { JSX } from "react";
+import { formatDateTime } from "@/lib/dates";
 
 /**
  * Everything that did not save, in one place.
@@ -60,31 +64,26 @@ export default function UnsavedPage(): JSX.Element {
   // the `offline` namespace with the prefix stripped, any label from another
   // namespace was shown raw: "offline.shopping.itemUpdated".
   const tLabel = useTranslations();
-  const format = useFormatter();
-  const { state, retry, discard } = useWriteQueue();
+  const units = useQuantityFormat();
+  const locale = useLocale();
+  const { state, retry } = useWriteQueue();
+  const discardChange = useDiscardChange();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
 
   const failed = state.failed;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">
-          {t("unsavedTitle")}
-        </h1>
-        <BackLink href="/settings">{t("backToSettings")}</BackLink>
-      </div>
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/settings", label: t("backToSettings") }}
+        intro={failed.length > 0 ? t("unsavedIntro") : undefined}
+        title={t("unsavedTitle")}
+      />
 
       {failed.length === 0 ? (
-        <div className="rounded-xl border border-ok-foreground bg-ok p-6">
-          <p className="text-ok-foreground">{t("unsavedEmpty")}</p>
-          <p className="mt-2 text-sm text-ok-foreground">
-            {t("unsavedEmptyHint")}
-          </p>
-        </div>
+        <EmptyState body={t("unsavedEmptyHint")} title={t("unsavedEmpty")} />
       ) : (
         <>
-          <p className="text-muted-foreground">{t("unsavedIntro")}</p>
 
           {/* `ItemRow`, the one list row: a hand-written card per change had
               its own title, its own meta paragraphs and no status at all. */}
@@ -95,10 +94,7 @@ export default function UnsavedPage(): JSX.Element {
                 meta={[
                   {
                     label: t("unsavedWhenLabel"),
-                    value: format.dateTime(op.createdAt, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }),
+                    value: formatDateTime(locale, op.createdAt),
                   },
                   { label: t("unsavedWhyLabel"), value: t(REASON_KEY[op.reason]) },
                 ]}
@@ -107,7 +103,7 @@ export default function UnsavedPage(): JSX.Element {
                     {t(statusOf(op.reason).key)}
                   </Badge>
                 }
-                title={tLabel(op.label.key, op.label.values)}
+                title={tLabel(op.label.key, units.labelValues(op.label.values))}
                 actions={
                   <>
                     {op.reason === "needs-reconciliation" ? (
@@ -126,10 +122,14 @@ export default function UnsavedPage(): JSX.Element {
                       </Button>
                     )}
   
-                    {/* Deletes the change for good, so it is not drawn in the
-                        colour of the retry beside it. */}
+                    {/* Deletes the change once its undo has gone, so it is not
+                        drawn in the colour of the retry beside it — and names
+                        the change, because every row's says the same word. */}
                     <Button
-                      onClick={() => discard(op.id)}
+                      aria-label={t("discardNamed", {
+                        label: tLabel(op.label.key, op.label.values),
+                      })}
+                      onClick={() => discardChange(op)}
                       type="button"
                       variant="destructive"
                     >
@@ -149,6 +149,6 @@ export default function UnsavedPage(): JSX.Element {
           op={reconciling}
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Minus, Plus } from "lucide-react";
 import type { JSX } from "react";
 
 /**
@@ -51,19 +52,7 @@ export function QuantityStepper({
         type="button"
         variant="outline"
       >
-        <svg
-          aria-hidden="true"
-          className="h-6 w-6"
-          focusable="false"
-          viewBox="0 0 24 24"
-        >
-          <path
-            d="M5 12h14"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="2.5"
-          />
-        </svg>
+        <Minus aria-hidden="true" className="size-5" />
         <span className="sr-only">{removeLabel}</span>
       </Button>
 
@@ -79,19 +68,7 @@ export function QuantityStepper({
       </p>
 
       <Button onClick={onAdd} size="icon" type="button" variant="outline">
-        <svg
-          aria-hidden="true"
-          className="h-6 w-6"
-          focusable="false"
-          viewBox="0 0 24 24"
-        >
-          <path
-            d="M12 5v14M5 12h14"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="2.5"
-          />
-        </svg>
+        <Plus aria-hidden="true" className="size-5" />
         <span className="sr-only">{addLabel}</span>
       </Button>
     </div>

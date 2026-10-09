@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ScreenChoiceForm } from "@/components/settings/ScreenChoiceForm";
 import { DEVICE_ID_COOKIE, isDeviceId } from "@/lib/device";
 import type { JSX } from "react";
@@ -56,13 +56,13 @@ export default async function ScreenSettingsPage(): Promise<JSX.Element> {
     : null;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <BackLink href="/settings">{t("backToSettings")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading">
-        {t("settingsTitle")}
-      </h1>
-      <p className="mt-2 text-muted-foreground">{t("settingsDescription")}</p>
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/settings", label: t("backToSettings") }}
+        className="mb-0"
+        intro={t("settingsDescription")}
+        title={t("settingsTitle")}
+      />
 
       {/* Permanent, and polite. It exists before there is anything to announce
           — a region created at the moment it has something to say is one some
@@ -82,6 +82,6 @@ export default async function ScreenSettingsPage(): Promise<JSX.Element> {
       <div className="mt-6">
         <ScreenChoiceForm current={choice?.screen} then="stay" />
       </div>
-    </div>
+    </PageShell>
   );
 }

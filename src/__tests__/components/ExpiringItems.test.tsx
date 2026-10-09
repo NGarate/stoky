@@ -104,8 +104,8 @@ describe("ExpiringItems", () => {
     // Singular ICU branch — also proves the plural rule actually evaluates
     // rather than the guard's substring check being satisfied by dead markup.
     expect(await screen.findByText("Expired product (1)")).toBeInTheDocument();
-    expect(screen.getByText("3 days ago")).toBeInTheDocument();
-    expect(screen.getByText("Today")).toBeInTheDocument();
+    expect(screen.getByText("Expired 3 days ago")).toBeInTheDocument();
+    expect(screen.getByText("Expires today")).toBeInTheDocument();
     expect(screen.queryByText(/Hace/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Caduca/)).not.toBeInTheDocument();
     expect(screen.queryByText(/próximos/)).not.toBeInTheDocument();

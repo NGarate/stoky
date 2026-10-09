@@ -2,7 +2,7 @@ import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { createContext, useState } from "react";
-import { renderWithIntl } from "../utils/render";
+import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import type { FailedOp } from "@/lib/offline/queue";
 
 /**
@@ -12,7 +12,8 @@ import type { FailedOp } from "@/lib/offline/queue";
  * every screen still showing the old one is wrong until it asks again.
  */
 
-const discard = mock((_id: string) => {});
+const discard = mock((_id: string): FailedOp | null => null);
+const restore = mock((_op: FailedOp) => {});
 let invalidated: string[] = [];
 let role = "OWNER";
 
@@ -26,6 +27,7 @@ mock.module("@/lib/offline/queue-context", () => ({
     holdRemainingMs: () => 0,
     retry: () => {},
     discard,
+    restore,
     flush: async () => 0,
     purgeAll: () => {},
   }),
@@ -64,6 +66,17 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { ReconcileDialog } = await import("@/components/offline/ReconcileDialog");
+
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
+
+/**
+ * Inside the snackbar, as the shell mounts it: discarding a change offers its
+ * undo there, so the component cannot render without one.
+ */
+const renderWithIntl = (
+  ui: React.ReactElement,
+  options?: Parameters<typeof renderWithIntlOnly>[1],
+) => renderWithIntlOnly(<SnackbarProvider>{ui}</SnackbarProvider>, options);
 
 const op: FailedOp = {
   id: "op-1",
@@ -105,6 +118,18 @@ describe("answering the question", () => {
   });
 });
 
+describe("the scrim", () => {
+  it("dims the page with the theme's ink, like every other dialog", () => {
+    renderWithIntl(<ReconcileDialog onClose={() => {}} op={op} />);
+
+    // `bg-black/50` was the one scrim outside the tokens: Dialog and the nav
+    // sheet use `bg-foreground/60`, which follows the theme at night.
+    const scrim = document.querySelector(".fixed.inset-0") as HTMLElement;
+    expect(scrim.className).toContain("bg-foreground/60");
+    expect(scrim.className).not.toContain("bg-black");
+  });
+});
+
 describe("who may answer it", () => {
   it("does not offer a kitchen account a form the server will refuse", () => {
     // The product loads for KITCHEN — `getById` is a householdProcedure — so
@@ -114,7 +139,7 @@ describe("who may answer it", () => {
     renderWithIntl(<ReconcileDialog onClose={() => {}} op={op} />);
 
     expect(screen.queryByLabelText(/¿Cuánto hay ahora/)).toBeAbsent();
-    expect(screen.getByRole("dialog")).toHaveTextContent(/no ajustar el stock/i);
+    expect(screen.getByRole("dialog")).toHaveTextContent(/no corregir la cantidad/i);
   });
 });
 

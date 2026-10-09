@@ -123,6 +123,16 @@ describe("the stores settings screen", () => {
     expect(invalidated).toContain("store.list");
   });
 
+  it("draws a row's delete as a destructive button, not a coloured span", () => {
+    renderPage();
+
+    // The red word was a `<span className="text-destructive">` inside a
+    // ghost button; the button itself is now the variant that says it.
+    const remove = screen.getByRole("button", { name: /Eliminar Mercadona/ });
+    expect(remove.className).toContain("text-destructive");
+    expect(remove.querySelector(".text-destructive")).toBeNull();
+  });
+
   it("refetches the list after deleting one", async () => {
     renderPage();
 
@@ -155,7 +165,7 @@ describe("the stores settings screen", () => {
     expect(screen.queryByRole("button", { name: /Eliminar/ })).toBeAbsent();
     expect(screen.queryByRole("button", { name: /Editar/ })).toBeAbsent();
     expect(
-      screen.getByText(/Sólo quien administra el hogar/),
+      screen.getByText(/Solo quien administra el hogar/),
     ).toBeInTheDocument();
   });
 
@@ -166,7 +176,7 @@ describe("the stores settings screen", () => {
     expect(
       screen.getByRole("button", { name: "Crear tienda" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Sólo quien administra el hogar/)).toBeAbsent();
+    expect(screen.queryByText(/Solo quien administra el hogar/)).toBeAbsent();
   });
 
   it("says when a store could not be saved", async () => {

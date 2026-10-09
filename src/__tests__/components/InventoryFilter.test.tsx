@@ -91,7 +91,7 @@ describe("the restock filter", () => {
       },
     ]);
     expect(
-      screen.getByText("Solo lo que necesita reposición"),
+      screen.getByText("Solo lo que se está acabando"),
     ).toBeTruthy();
 
     const clear = screen.getByRole("link", { name: "Ver todo el inventario" });
@@ -146,6 +146,13 @@ describe("the restock filter", () => {
       expect(row?.className ?? "").toContain("bg-danger");
       expect(row?.className ?? "").not.toContain("bg-warn");
     }
+
+    // And the pill on a tinted row is outlined, in both tiers: a filled
+    // `bg-danger` pill on a `bg-danger` row is not there at all.
+    for (const pill of screen.getAllByText("Sin stock")) {
+      expect(pill.className).toContain("border-danger-foreground");
+      expect(pill.className).not.toContain("bg-danger");
+    }
   });
 
   it("says so when nothing needs restocking, instead of a bare empty list", () => {
@@ -154,7 +161,7 @@ describe("the restock filter", () => {
     renderWithIntl(<InventoryView />, { locale: "es" });
 
     expect(
-      screen.getByText("Nada necesita reposición ahora mismo."),
+      screen.getByText("Ahora mismo no se está acabando nada."),
     ).toBeTruthy();
   });
 
@@ -164,7 +171,7 @@ describe("the restock filter", () => {
     expect(overviewCalls).toEqual([
       { limit: 20, page: 1, sort: "name", direction: "asc" },
     ]);
-    expect(screen.queryByText("Solo lo que necesita reposición")).toBeAbsent();
+    expect(screen.queryByText("Solo lo que se está acabando")).toBeAbsent();
   });
 });
 

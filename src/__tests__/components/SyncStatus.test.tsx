@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
-import { renderWithIntl } from "../utils/render";
+import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
 
 /**
@@ -15,7 +15,10 @@ import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
  */
 
 const adjustMutate = mock((_input: unknown) => {});
-const discard = mock((_id: string) => {});
+const discard = mock(
+  (id: string) => queueState.failed.find((op) => op.id === id) ?? null,
+);
+const restore = mock((_op: FailedOp) => {});
 const retry = mock((_id: string) => {});
 const drain = mock(() => {});
 
@@ -47,6 +50,9 @@ mock.module("@/lib/offline/queue-context", () => ({
     drain,
     retry,
     discard,
+    restore,
+    cancel: () => true,
+    holdRemainingMs: () => 0,
   }),
 }));
 
@@ -69,6 +75,17 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SyncStatus } = await import("@/components/offline/SyncStatus");
+
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
+
+/**
+ * Inside the snackbar, as the shell mounts it: discarding a change offers its
+ * undo there, so the component cannot render without one.
+ */
+const renderWithIntl = (
+  ui: React.ReactElement,
+  options?: Parameters<typeof renderWithIntlOnly>[1],
+) => renderWithIntlOnly(<SnackbarProvider>{ui}</SnackbarProvider>, options);
 
 function op(id: string): QueuedOp {
   return {
@@ -266,15 +283,15 @@ describe("a change that did not save", () => {
   });
 
   it("draws letting it go as the destructive action it is", () => {
-    // Discarding deletes an unsent change and nothing puts it back. It was
-    // drawn in the same filled primary as "Reintentar" beside it.
+    // Discarding deletes an unsent change once its undo has gone. It was
+    // drawn in the same filled primary as "Volver a intentarlo" beside it.
     queueState = {
       ...queueState,
       failed: [failed("f1", "refused"), { ...failed("s1", "needs-review"), path: "product.resolveScan", input: { barcode: "1" } }],
     };
     renderWithIntl(<SyncStatus />);
 
-    for (const button of screen.getAllByRole("button", { name: "Descartar" })) {
+    for (const button of screen.getAllByRole("button", { name: /^Descartar: / })) {
       expect(button.className).toContain("bg-destructive");
     }
   });
@@ -283,10 +300,10 @@ describe("a change that did not save", () => {
     queueState = { ...queueState, failed: [failed("f1", "refused")] };
     renderWithIntl(<SyncStatus />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
     expect(retry).toHaveBeenCalledWith("f1");
 
-    await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
     expect(discard).toHaveBeenCalledWith("f1");
   });
 
@@ -326,7 +343,7 @@ describe("a scanned barcode nobody knows yet", () => {
     );
     // No retry button for it — retry would only 404 again.
     expect(
-      screen.queryByRole("button", { name: "Reintentar" }),
+      screen.queryByRole("button", { name: "Volver a intentarlo" }),
     ).toBeNull();
   });
 
@@ -334,7 +351,7 @@ describe("a scanned barcode nobody knows yet", () => {
     queueState = { ...queueState, failed: [scan("s1")] };
     renderWithIntl(<SyncStatus />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
     expect(discard).toHaveBeenCalledWith("s1");
   });
 });
@@ -437,7 +454,7 @@ describe("a refused consumption", () => {
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
-      /no ajustar el stock/i,
+      /no corregir la cantidad/i,
     );
     expect(screen.queryByLabelText(/cuánto hay ahora/i)).toBeAbsent();
   });
@@ -521,7 +538,7 @@ describe("the dialog itself", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
-    // "Descartar" deletes an unsent change and no procedure puts it back.
+    // "Descartar" deletes an unsent change once its undo has gone.
     // Drawn as the filled primary beside "Guardar", it was the same colour
     // as the action that keeps the work — the design system's rule is that
     // the colour says what kind of action it is.

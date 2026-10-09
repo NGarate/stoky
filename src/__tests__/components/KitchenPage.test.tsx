@@ -152,12 +152,28 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+describe("how fresh the answer is", () => {
+  it("says when it last heard from the server, for a tablet nobody touches", () => {
+    const at = new Date(2026, 9, 6, 9, 5);
+    expiringStub = { ...expiringStub, dataUpdatedAt: at.getTime() };
+    renderKitchen();
+
+    const time = new Intl.DateTimeFormat("es", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(at);
+    expect(screen.getByText(`Actualizado a las ${time}`)).toBeInTheDocument();
+  });
+});
+
 describe("what is urgent comes first", () => {
   it("puts anything within three days in 'usar ya'", () => {
     renderKitchen();
 
     expect(screen.getByText("Leche entera")).toBeInTheDocument();
-    expect(screen.getByText("Quedan 2 días")).toBeInTheDocument();
+    // `ExpiryStatus`'s words — the kitchen said "Quedan 2 días" while the
+    // Panel said "En 2 días" for the same batch.
+    expect(screen.getByText("Caduca en 2 días")).toBeInTheDocument();
   });
 
   it("leaves what is further off in the reading columns", () => {
@@ -185,14 +201,14 @@ describe("what is urgent comes first", () => {
     expiringStub.data = [batch({ location: null })];
     renderKitchen();
 
-    expect(screen.getByText("Sin sitio")).toBeInTheDocument();
+    expect(screen.getByText("Sin ubicación")).toBeInTheDocument();
   });
 });
 
 describe("using something up", () => {
   it("two separate taps each enqueue exactly one from the selected batch", async () => {
     renderKitchen();
-    const button = screen.getByRole("button", { name: /He usado un L/ });
+    const button = screen.getByRole("button", { name: /He usado 1 L/ });
     await userEvent.click(button);
     await userEvent.click(button);
     expect(enqueue).toHaveBeenCalledTimes(2);
@@ -213,20 +229,20 @@ describe("using something up", () => {
     expiringStub.data = [batch({ quantity: 1 })];
     pending = [{ ...consumeOp("p1"), input: { productId: "p1", batchId: "batch-1", quantity: 1, unit: "L" } }];
     renderKitchen();
-    expect(screen.getByRole("button", { name: /He usado un L/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /He usado 1 L/ })).toBeDisabled();
   });
 
   it("leaves ambiguous quantities unconfirmed rather than inventing a remainder", () => {
     expiringStub.data = [batch({ quantity: null })];
     renderKitchen();
     expect(screen.getByText("Cantidad sin confirmar")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /He usado un L/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /He usado 1 L/ })).toBeDisabled();
   });
 
   it("enqueues one unit, so it works on a tablet with no signal", async () => {
     renderKitchen();
 
-    await userEvent.click(screen.getByRole("button", { name: /He usado un L/ }));
+    await userEvent.click(screen.getByRole("button", { name: /He usado 1 L/ }));
 
     expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
       path: "inventory.consumeStock",
@@ -244,8 +260,43 @@ describe("using something up", () => {
     // Read from a metre away or not read at all: "He usado uno" alone tells a
     // screen reader nothing about which card it belongs to.
     expect(
-      screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
+      screen.getByRole("button", { name: /He usado 1 L de «Leche entera»/ }),
     ).toBeInTheDocument();
+  });
+
+  it("says a counted unit as a word, singular for one and plural for more", () => {
+    expiringStub.data = [batch({ unit: "unit", quantity: 3 })];
+    renderKitchen();
+
+    // "He usado 1 unit" and "Quedan 3 unit", in a Spanish kitchen.
+    expect(screen.getByText("Quedan 3 unidades")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "He usado 1 unidad de «Leche entera»" }),
+    ).toBeInTheDocument();
+  });
+
+  it("puts the words it shows at the start of the name it announces", () => {
+    stockStub = {
+      data: {
+        products: [
+          { id: "p9", name: "Café", totalStock: 0, minStock: 2, onListQuantity: 0, defaultUnit: "paquete" },
+        ],
+      },
+      isPending: false,
+      error: null,
+    };
+    renderKitchen();
+
+    // WCAG 2.5.3, Level A: a voice user says what they see. The card showed
+    // "He usado 1 L" and announced "He usado un L de Leche entera", so
+    // "pulsa He usado 1 L" matched nothing. The same for the list button,
+    // whose visible words were not in its name at all.
+    for (const button of screen.getAllByRole("button")) {
+      const visible = button.querySelector("[aria-hidden='true']")?.textContent ?? "";
+      const name = button.querySelector(".sr-only")?.textContent ?? button.textContent ?? "";
+      expect(visible.length).toBeGreaterThan(0);
+      expect(name.startsWith(visible)).toBe(true);
+    }
   });
 
   it("offers one action per row and nothing that opens a form", () => {
@@ -290,7 +341,7 @@ describe("writing it on the list", () => {
     renderKitchen();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+      screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ }),
     );
 
     expect(createList).not.toHaveBeenCalled();
@@ -312,7 +363,7 @@ describe("writing it on the list", () => {
     renderKitchen();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+      screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ }),
     );
 
     expect(createList.mock.calls[0]?.[0]).toMatchObject({
@@ -331,7 +382,7 @@ describe("writing it on the list", () => {
     createListHeld = true;
     renderKitchen();
 
-    const tap = screen.getByRole("button", { name: /Apuntar «Café molido»/ });
+    const tap = screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ });
     await userEvent.click(tap);
     await userEvent.click(tap);
 
@@ -354,7 +405,7 @@ describe("writing it on the list", () => {
     renderKitchen();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+      screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ }),
     );
 
     expect(enqueue).not.toHaveBeenCalled();
@@ -367,7 +418,7 @@ describe("writing it on the list", () => {
     renderKitchen();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+      screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ }),
     );
 
     expect(
@@ -376,7 +427,7 @@ describe("writing it on the list", () => {
     // And the row keeps its one action rather than swapping it for an undo:
     // a row whose button changes label under the thumb is a row you mis-tap.
     expect(
-      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+      screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ }),
     ).toBeInTheDocument();
   });
 });
@@ -394,7 +445,7 @@ describe("undo", () => {
     renderKitchen();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
+      screen.getByRole("button", { name: /He usado 1 L de «Leche entera»/ }),
     );
 
     expect(
@@ -415,7 +466,7 @@ describe("undo", () => {
     renderKitchen();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /He usado un L de Leche entera/ }),
+      screen.getByRole("button", { name: /He usado 1 L de «Leche entera»/ }),
     );
 
     // The shell's own banner reports a full queue, which is a state. Telling
@@ -513,7 +564,7 @@ describe("what the lists already cover", () => {
     renderKitchen();
 
     expect(
-      screen.queryByRole("button", { name: /Apuntar/ }),
+      screen.queryByRole("button", { name: /Añadir a la lista/ }),
     ).toBeAbsent();
     expect(screen.getByText("Ya en la lista: 1 paquete")).toBeInTheDocument();
   });
@@ -524,7 +575,7 @@ describe("what the lists already cover", () => {
     renderKitchen();
 
     expect(
-      screen.getByRole("button", { name: /Apuntar «Café molido»/ }),
+      screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ }),
     ).toBeInTheDocument();
   });
 
@@ -545,7 +596,7 @@ describe("what the lists already cover", () => {
 
     // The server has not heard yet. Without folding the queue in, the button
     // stays lit offline and the second tap writes a second item.
-    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: /Añadir a la lista/ })).toBeAbsent();
   });
 
   it("says nothing about a product with no minimum, rather than suppressing it", () => {
@@ -553,7 +604,7 @@ describe("what the lists already cover", () => {
     stockStub = runningOut(0, 0, null as unknown as number);
     renderKitchen();
 
-    expect(screen.queryByRole("button", { name: /Apuntar/ })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: /Añadir a la lista/ })).toBeAbsent();
   });
 });
 
@@ -597,8 +648,52 @@ describe("what is running out", () => {
     };
     renderKitchen();
 
-    expect(screen.getByText("Nada")).toBeInTheDocument();
+    // StockStatus's word, the one every other screen wears for this state.
+    // The row used to say "Queda: Nada" and no badge, re-deriving the state
+    // the inventory already names "Sin stock".
+    expect(screen.getByText("Sin stock")).toBeInTheDocument();
+    expect(screen.getByText("0 de 2 paquete")).toBeInTheDocument();
   });
+
+  it("calls a product that is still there but short low, in StockStatus's word", () => {
+    stockStub = {
+      data: {
+        products: [
+          { id: "p9", name: "Café molido", totalStock: 1, minStock: 2, onListQuantity: 0, defaultUnit: "paquete" },
+        ],
+      },
+      isPending: false,
+      error: null,
+    };
+    renderKitchen();
+
+    expect(screen.getByText("Queda poco")).toBeInTheDocument();
+  });
+
+  it("keeps the list button with the row's actions, at the size of the card buttons", () => {
+    stockStub = {
+      data: {
+        products: [
+          { id: "p9", name: "Café molido", totalStock: 0, minStock: 2, onListQuantity: 0, defaultUnit: "paquete" },
+        ],
+      },
+      isPending: false,
+      error: null,
+    };
+    renderKitchen();
+
+    // It sat in the status slot beside the title, so it jumped left and right
+    // with the length of the product's name, at `text-sm`, on a screen read
+    // from a metre away. Actions come after the details, at touch size.
+    const button = screen.getByRole("button", { name: /Añadir a la lista: «Café molido»/ });
+    const details = button.closest("li")?.querySelector("dl");
+    expect(details).toBeTruthy();
+    expect(
+      details!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(button.className).toContain("min-h-[56px]");
+  });
+
 
   it("counts a queued use against what is left", () => {
     stockStub = {

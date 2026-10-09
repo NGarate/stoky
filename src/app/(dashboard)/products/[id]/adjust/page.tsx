@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { use, useState, useId } from "react";
-import { BackLink } from "@/components/ui/back-link";
+import { useRouter } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Stock correction — "what is actually there" (Phase 8 item 5).
@@ -45,7 +48,9 @@ export default function AdjustStockPage({
 /** Exported apart from the route so the component suite can render it. */
 export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.adjust");
+  const units = useQuantityFormat();
   const tCommon = useTranslations("common");
+  const tDetail = useTranslations("products.detail");
   const snackbar = useSnackbar();
   const utils = api.useUtils();
 
@@ -68,6 +73,16 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
   const reasonHintId = useId();
   const reasonErrorId = useId();
 
+  const router = useRouter();
+
+  /**
+   * Saved: back to the product, which is where the new number is, with the
+   * sentence carried across by the snackbar — the shape the product page's
+   * delete has. Staying left a form still holding what was typed, so the
+   * screen after "Guardar ajuste" looked like the screen before it, with a
+   * second, double-counting press one tap away. `replace`, because a
+   * finished adjustment is not somewhere Back should return to.
+   */
   const adjustStock = api.inventory.adjustStock.useMutation({
     onSuccess: async (_entry, variables) => {
       snackbar.show({
@@ -81,6 +96,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           },
         },
       });
+      router.replace(`/products/${id}`);
       await utils.invalidate();
     },
     onError: (error) => {
@@ -130,57 +146,43 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
     });
   }
 
-  if (query.error) {
-    const errorKey = serverErrorKey(query.error.message);
+  const back = { href: `/products/${id}`, label: t("backToProduct") };
 
-    return (
-      <div className="mx-auto max-w-2xl">
-        <BackLink href="/products">{t("backToProduct")}</BackLink>
-
-        <div
-          role="alert"
-          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("errorTitle")}</h1>
-          <p className="mt-2">{t(errorKey)}</p>
-        </div>
-
-        {errorKey === "errorNotFound" ? null : (
-          <Button
-            type="button"
-            onClick={() => void query.refetch()}
-          >
-            {t("retry")}
-          </Button>
-        )}
-      </div>
-    );
-  }
-
+  // Only while there is no product. A refetch that fails after a refused
+  // adjustment used to replace the whole form — and what had been typed in
+  // it — with an alert titled "No se ha podido guardar el ajuste", which
+  // described the adjustment rather than the read.
   if (!product) {
     return (
-      <div className="mx-auto max-w-2xl">
-        <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
-          {t("loading")}
-        </p>
-      </div>
+      <RouteState
+        back={back}
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        notFound={{
+          title: tDetail("notFoundTitle"),
+          body: t("errorNotFound"),
+          back: { href: "/products", label: tDetail("backToProducts") },
+        }}
+        onRetry={() => void query.refetch()}
+        title={t("title")}
+        width="form"
+      />
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <BackLink href={`/products/${id}`}>{t("backToProduct")}</BackLink>
+    <PageShell width="form">
+      <PageHeader
+        back={back}
+        intro={t("intro")}
+        title={t("titleOf", { name: product.name })}
+      />
 
-      <h1 className="mt-2 text-2xl font-bold text-heading">
-        {t("titleOf", { name: product.name })}
-      </h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-
-      <p className="mt-4 rounded border border-border bg-muted p-4 text-foreground">
+      <p className="rounded border border-border bg-muted p-4 text-foreground">
         {t("currentLabel", {
           stock: product.totalStock,
-          unit: product.defaultUnit,
+          unit: units.unit(product.defaultUnit, product.totalStock),
         })}
       </p>
 
@@ -216,7 +218,7 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
             }
           />
           <p id={actualHintId} className="mt-1 text-sm text-muted-foreground">
-            {t("actualHint", { unit: product.defaultUnit })}
+            {t("actualHint", { unit: units.measure(product.defaultUnit) })}
           </p>
           {fieldErrors.actual ? (
             <p
@@ -287,6 +289,6 @@ export function AdjustStockView({ id }: { id: string }): JSX.Element {
           </p>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

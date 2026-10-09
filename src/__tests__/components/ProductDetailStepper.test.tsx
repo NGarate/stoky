@@ -293,7 +293,7 @@ describe("who gets the control", () => {
 });
 
 /**
- * The batch list's "Caducado" is a calendar question. The picker's date is
+ * The batch list's expiry status is a calendar question. The picker's date is
  * stored as UTC midnight, and comparing that instant with `Date.now()` called
  * a carton expired from 02:00 on the day printed on it, in Madrid.
  */
@@ -311,8 +311,33 @@ describe("a batch's expiry is read as a date", () => {
     ];
     renderDetail();
 
-    expect(screen.getAllByText("Caducado")).toHaveLength(1);
-    const expired = screen.getByText("Caducado").closest("li");
+    // `ExpiryStatus`'s words: the batch dated today goes off today, the one
+    // dated yesterday went off yesterday — not "expired" from 02:00 today.
+    expect(screen.getByText("Caduca hoy").closest("li")?.textContent).toContain("6");
+    const expired = screen.getByText("Caducó ayer").closest("li");
     expect(expired?.textContent).toContain("5");
+  });
+
+  it("names the day that was stored, west of UTC too", () => {
+    // Stored as UTC midnight of the 6th; in New York that instant is the
+    // evening of the 5th, and the batch list said "05 de octubre".
+    const previous = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      setSystemTime(new Date("2026-10-01T15:00:00Z"));
+      // The premise, checked rather than assumed: if the runtime did not
+      // take the zone, this test would pass for the wrong reason.
+      expect(new Date("2026-10-06T00:00:00Z").getDate()).toBe(5);
+      stockEntries = [
+        fridgeEntry({ id: "dated", expirationDate: new Date("2026-10-06") }),
+      ];
+      renderDetail();
+
+      expect(screen.getByText(/6 de octubre de 2026/)).toBeInTheDocument();
+      expect(screen.queryByText(/5 de octubre de 2026/)).toBeAbsent();
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
   });
 });

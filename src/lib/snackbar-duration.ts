@@ -29,11 +29,13 @@
  * of the screen you are looking at, and it has to work on `/login` where there
  * is no account; `src/lib/theme.ts` says so at more length.
  *
- * The undo snackbar is the one exception, and the provider enforces it: its
- * life is the queue's hold window, because the button stops working when the
- * window closes and offering a button that does nothing is worse than offering
- * none. Under 2.2.1 that duration is essential — extending it would invalidate
- * the activity.
+ * There are two exceptions, and the provider enforces both. The undo
+ * snackbar's life is the queue's hold window, because the button stops
+ * working when the window closes and offering a button that does nothing is
+ * worse than offering none. Under 2.2.1 that duration is essential — extending
+ * it would invalidate the activity. And a failure always waits to be
+ * dismissed (2.2.3): a message saying something did not happen is the one
+ * that must not leave while somebody looks away.
  */
 
 export const SNACKBAR_DURATIONS = ["default", "long", "forever"] as const;
@@ -51,6 +53,37 @@ export const DURATION_MS: Record<SnackbarDuration, number | null> = {
   long: 15_000,
   forever: null,
 };
+
+/**
+ * How long a one-tap change can still be taken back — and therefore how long
+ * the write queue holds it before sending (§4's undo window, D100; the hold
+ * itself is `QueuedOp.holdMs` in `src/lib/offline/queue.ts`).
+ *
+ * It follows the same preference, because the undo is a time limit too (WCAG
+ * 2.2.3). It was ten seconds whatever the person chose, so "Larga" bought
+ * longer to read a snackbar whose button had already stopped working.
+ *
+ * Ten seconds by default: long enough to read the snackbar and change your
+ * mind, short enough that the change still lands while the person is
+ * standing there. "Hasta descartar" cannot mean for ever here, and that is
+ * the queue's doing rather than a choice: a held change blocks every change
+ * queued behind it, so an undo that never expired would be a shop that never
+ * sent. A minute is the cap.
+ *
+ * Written once, here, and read through `undoHoldMs()` at the moment a change
+ * is queued. It used to be written three times, each copy promising to be
+ * "the same window the kitchen uses" — `undo-hold.test.ts` refuses a fourth.
+ */
+export const UNDO_HOLD_MS: Record<SnackbarDuration, number> = {
+  default: 10_000,
+  long: 30_000,
+  forever: 60_000,
+};
+
+/** The undo window for a change queued now, under the current preference. */
+export function undoHoldMs(): number {
+  return UNDO_HOLD_MS[current];
+}
 
 export function isSnackbarDuration(value: unknown): value is SnackbarDuration {
   return (

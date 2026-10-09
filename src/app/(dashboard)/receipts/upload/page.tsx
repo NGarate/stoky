@@ -8,6 +8,7 @@ import { StoreSelector } from "@/components/store/StoreSelector";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 import { api } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useSnackbar } from "@/components/ui/snackbar";
 
 /**
@@ -92,6 +93,13 @@ export default function UploadPage() {
     }
   };
 
+  const status = statusQuery.data?.status;
+  const failed = status === "FAILED";
+  const ready = status === "NEEDS_REVIEW" || status === "CONFIRMED";
+  const processed = t("processed", {
+    count: statusQuery.data?.progress?.processed || 0,
+  });
+
   const handleContinue = () => {
     if (uploadedReceiptId) {
       router.push(`/receipts/${uploadedReceiptId}/review`);
@@ -99,8 +107,14 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 text-heading">{t("upload")}</h1>
+    // No padding of its own: the layout's `p-4` is the gutter (ISSUES UI-5).
+    // And a way back, which this was the one sub-page without — the list it
+    // came from was reachable only through the navigation.
+    <PageShell width="form">
+      <PageHeader
+        back={{ href: "/receipts", label: t("backToList") }}
+        title={t("upload")}
+      />
 
       {!uploadedReceiptId ? (
         <div className="space-y-6">
@@ -115,7 +129,6 @@ export default function UploadPage() {
               id="receipt-store"
               value={storeId}
               onChange={setStoreId}
-              className="min-h-[48px] w-full"
             />
             <p className="mt-1 text-sm text-muted-foreground">
               {t("uploadStoreHint")}
@@ -137,9 +150,13 @@ export default function UploadPage() {
                 progress={statusQuery.data.progress}
               />
 
-              {statusQuery.data.status === "FAILED" && (
+              {failed && (
                 <div className="rounded-lg border border-danger-foreground bg-danger p-4">
-                  <p className="text-danger-foreground">{t("processingFailed")}</p>
+                  {/* The sentence is said by the region below; drawn here
+                      beside the button that acts on it. */}
+                  <p aria-hidden="true" className="text-danger-foreground">
+                    {t("processingFailed")}
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -151,13 +168,10 @@ export default function UploadPage() {
                 </div>
               )}
 
-              {(statusQuery.data.status === "NEEDS_REVIEW" ||
-                statusQuery.data.status === "CONFIRMED") && (
-                <div className="text-center">
-                  <p className="text-ok-foreground mb-4">
-                    {t("processed", {
-                      count: statusQuery.data.progress?.processed || 0,
-                    })}
+              {ready && (
+                <div>
+                  <p aria-hidden="true" className="mb-4 text-ok-foreground">
+                    {processed}
                   </p>
                   <Button type="button" onClick={handleContinue}>
                     {t("reviewItems")}
@@ -168,6 +182,22 @@ export default function UploadPage() {
           )}
         </div>
       )}
-    </div>
+
+      {/* How the wait ended, said once. The result used to appear in a
+          plain block after seconds of nothing, so somebody looking elsewhere
+          — or listening — was never told the wait was over (WCAG 4.1.3).
+          Mounted from the first render and empty until there is something to
+          say, because a region created at the moment it gains text is the
+          one some readers skip. The visible copies above are aria-hidden so
+          the sentence is not read twice. */}
+      <p
+        aria-live="polite"
+        className="sr-only"
+        data-slot="upload-result"
+        role="status"
+      >
+        {failed ? t("processingFailed") : ready ? processed : ""}
+      </p>
+    </PageShell>
   );
 }

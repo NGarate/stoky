@@ -137,6 +137,19 @@ describe("Button", () => {
   });
 });
 
+describe("the destructive-ghost variant", () => {
+  it("writes the destructive word in ink, with no fill of its own", () => {
+    render(<Button variant="destructive-ghost">Eliminar</Button>);
+
+    // A row's delete trigger. The screens wrapped a `<span className=
+    // "text-destructive">` inside a ghost button to get this, and the red
+    // fill is kept for the button that confirms.
+    const classes = screen.getByRole("button", { name: "Eliminar" }).className.split(/\s+/);
+    expect(classes).toContain("text-destructive");
+    expect(classes).not.toContain("bg-destructive");
+  });
+});
+
 describe("the link variant", () => {
   it("does not indent its text by a button's padding", () => {
     render(<Button variant="link">Volver al inventario</Button>);
@@ -156,6 +169,21 @@ describe("the link variant", () => {
     expect(
       screen.getByRole("button", { name: "Volver al inventario" }).className,
     ).toContain("min-h-[48px]");
+  });
+
+  it("is underlined at rest, not only under the pointer", () => {
+    render(<Button variant="link">Volver al inventario</Button>);
+
+    // Colour was the only thing telling these apart from the sentence around
+    // them, and `primary` against body ink measured 1.78:1 light and 1.36:1
+    // dark — under the 3:1 that 1.4.1 asks of a colour-only cue. A touch
+    // screen has no hover, so `hover:underline` was no cue at all. The rule
+    // now matches `ItemRow`'s title and `BackLink`: a link is underlined.
+    const className = screen.getByRole("button", {
+      name: "Volver al inventario",
+    }).className.split(/\s+/);
+    expect(className).toContain("underline");
+    expect(className).not.toContain("hover:underline");
   });
 
   it("leaves every other variant padded", () => {

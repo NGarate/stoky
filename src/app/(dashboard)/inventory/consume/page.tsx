@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
@@ -17,6 +17,8 @@ import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { Disclosure } from "@/components/ui/disclosure";
 
 type FieldName = "product" | "quantity" | "unit";
 
@@ -49,6 +51,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function ConsumeStockPage(): JSX.Element {
   const t = useTranslations("inventory.consume");
+  const units = useQuantityFormat();
   const envelope = useEnvelope();
   const router = useRouter();
   const utils = api.useUtils();
@@ -108,16 +111,18 @@ export default function ConsumeStockPage(): JSX.Element {
         ? t("availableUnknown")
         : t("availableValue", {
             quantity: availableStock,
-            unit: product.defaultUnit,
+            unit: units.unit(product.defaultUnit, availableStock),
           });
 
   const consumeStock = api.inventory.consumeStock.useMutation({
     /**
      * Report what was written, rather than redirecting in silence.
      *
-     * The redirect's only confirmation was Next's route announcer reading
-     * "Inventario", which is what it reads when somebody navigates there and
-     * saves nothing — it answers "where am I", never "did that work"
+     * The redirect confirmed nothing: Next's route announcer speaks only when
+     * `document.title` changes, which it then never did. Even with a title per
+     * route it would read "Inventario · Stoky", which is what it reads when
+     * somebody navigates there and saves nothing — "where am I", never "did
+     * that work"
      * (ISSUES.md A11Y-1). Saying it here also answers *how much is left*,
      * which is the question somebody consuming stock actually has next.
      */
@@ -137,7 +142,7 @@ export default function ConsumeStockPage(): JSX.Element {
     },
     onError: (error) => {
       const key = serverErrorKey(error.message);
-      setServerError(t(key, { unit: product?.defaultUnit ?? "" }));
+      setServerError(t(key, { unit: units.measure(product?.defaultUnit) }));
       if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
       setErrorSignal((signal) => signal + 1);
     },
@@ -184,7 +189,7 @@ export default function ConsumeStockPage(): JSX.Element {
       // and lets the message say how much there actually is.
       errors.quantity = t("errorNotEnoughStock", {
         available: availableStock,
-        unit: product.defaultUnit,
+        unit: units.unit(product.defaultUnit, availableStock),
       });
     }
 
@@ -216,7 +221,7 @@ export default function ConsumeStockPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <PageShell width="form">
       {/* Over the form rather than instead of it — see the note on the same
           dialog in inventory/add. Closing it is what "Apuntar otro consumo"
           used to be. */}
@@ -225,9 +230,10 @@ export default function ConsumeStockPage(): JSX.Element {
           saved
             ? t("successBody", {
                 quantity: saved.quantity,
-                unit: saved.unit,
+                unit: units.unit(saved.unit, saved.quantity),
                 name: saved.name,
                 left: saved.left,
+                leftUnit: units.unit(saved.unit, saved.left),
               })
             : undefined
         }
@@ -246,12 +252,13 @@ export default function ConsumeStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <BackLink href="/inventory">{t("backToInventory")}</BackLink>
+      <PageHeader
+        back={{ href: "/inventory", label: t("backToInventory") }}
+        intro={t("intro")}
+        title={t("title")}
+      />
 
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-
-      <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form noValidate onSubmit={handleSubmit} className="space-y-6">
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
@@ -321,13 +328,7 @@ export default function ConsumeStockPage(): JSX.Element {
         {/* The folded half (Phase 8 item 3): consuming is picking the product
             and saying how much — the unit is prefilled and the rest is rare.
             Same controlled-<details> shape as /inventory/add. */}
-        <details
-          className="rounded border border-border bg-muted"
-          ref={advancedRef}
-        >
-          <summary className="flex min-h-[48px] cursor-pointer items-center px-4 font-medium text-foreground">
-            {t("advancedSummary")}
-          </summary>
+        <Disclosure ref={advancedRef} summary={t("advancedSummary")}>
           <div className="space-y-6 px-4 pb-4">
             <div>
               <label
@@ -399,7 +400,7 @@ export default function ConsumeStockPage(): JSX.Element {
               </p>
             </div>
           </div>
-        </details>
+        </Disclosure>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button
@@ -418,6 +419,6 @@ export default function ConsumeStockPage(): JSX.Element {
           </p>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

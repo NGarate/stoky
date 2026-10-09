@@ -139,6 +139,13 @@ export function daysUntilExpiry(expiry: Date, today: Date): number {
   return Math.round((dayOf(expiry) - dayOf(today)) / DAY_MS);
 }
 
+/**
+ * How close an expiry has to be before it needs attention: today and the next
+ * three days. The server's `isExpiringSoon`, the kitchen's "Usar ya" and
+ * `ExpiryStatus`'s warn tone are one threshold, so they read it from here.
+ */
+export const EXPIRING_SOON_DAYS = 3;
+
 /** The first instant after the day `days` days after `today`. */
 export function endOfDayAfter(today: Date, days: number): Date {
   return new Date(dayOf(today) + (days + 1) * DAY_MS);

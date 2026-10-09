@@ -159,3 +159,118 @@ describe("the keys components actually ask for", () => {
     expect(missing).toEqual([]);
   });
 });
+
+/**
+ * And the other direction: every key in the catalogue is asked for.
+ *
+ * Nothing ever removed a string. On 2026-10-06 the catalogues held 94 keys no
+ * screen could render — a whole `errors` namespace from before `RouteState`, a
+ * `confirmations` block nobody called, `common.success`, `common.optional` —
+ * each one translated twice, offered to every future search for "which string
+ * says this", and kept in step by `messages.test.ts` for nothing. A dead key
+ * is also how copy goes stale: the live string gets edited and the dead twin
+ * that grep finds first does not.
+ *
+ * A key counts as used when any of these finds it:
+ *
+ * - a `t("…")` call, resolved against its translator's namespace (the scan
+ *   above);
+ * - a `key: "…"` literal, the snackbar and op-label shape (the scan above);
+ * - its full dotted path as a string literal anywhere — tables such as
+ *   `ROUTE_TITLES` hold keys as data;
+ * - its last segment as a string literal in a file whose translator has the
+ *   key's namespace — the maps from a state to its key, `REASON_KEY` and
+ *   `serverErrorKey` and their kind, which feed `t(variable)`;
+ * - a prefix in `DYNAMIC_PREFIXES`: keys composed at runtime from a value
+ *   (`receipts.status.${status}`), which no static scan can see. Each entry
+ *   names where it is composed, so it can be checked when it stops being true.
+ */
+const DYNAMIC_PREFIXES: Record<string, string> = {
+  // `ReceiptStatus` and the applied summary: statusLabel(status.toLowerCase()).
+  "receipts.status.": "src/components/receipt/ReceiptStatus.tsx",
+  // The ladder: t(`steps.${step}`).
+  "receipts.steps.": "src/components/receipt/ReceiptStatus.tsx",
+  // The people page: t(`role${role}`) and t(`role${role}Hint`).
+  "household.role": "src/app/(dashboard)/settings/people/page.tsx",
+  // The stock history: t(`op${entry.operationType}`).
+  "products.history.op": "src/app/(dashboard)/products/[id]/history/page.tsx",
+};
+
+function literalsIn(file: string): Set<string> {
+  const source = readFileSync(file, "utf8");
+  return new Set(
+    [...source.matchAll(/["'`]([A-Za-z][\w.]*)["'`]/g)].map(
+      (match) => match[1] as string,
+    ),
+  );
+}
+
+function catalogueKeys(node: Record<string, unknown>, prefix = ""): string[] {
+  return Object.entries(node).flatMap(([key, value]) =>
+    typeof value === "object" && value !== null
+      ? catalogueKeys(value as Record<string, unknown>, `${prefix}${key}.`)
+      : [`${prefix}${key}`],
+  );
+}
+
+describe("the keys the catalogue holds", () => {
+  const files = sourceFiles(SOURCE_ROOT);
+  const called = new Set(ALL_USAGES.map((usage) => usage.key));
+  const everyLiteral = new Set<string>();
+  /** namespace → literals written in files that translate in it. */
+  const byNamespace = new Map<string, Set<string>>();
+
+  /** Literals in files with no translator of their own. */
+  const untranslatedLiterals = new Set<string>();
+
+  for (const file of files) {
+    const literals = literalsIn(file);
+    for (const literal of literals) everyLiteral.add(literal);
+    const source = readFileSync(file, "utf8");
+    if (translatorsIn(source).size === 0) {
+      for (const literal of literals) untranslatedLiterals.add(literal);
+    }
+    for (const namespace of translatorsIn(source).values()) {
+      const bucket = byNamespace.get(namespace) ?? new Set<string>();
+      for (const literal of literals) bucket.add(literal);
+      byNamespace.set(namespace, bucket);
+    }
+  }
+
+  function used(key: string): boolean {
+    if (called.has(key) || everyLiteral.has(key)) return true;
+    if (Object.keys(DYNAMIC_PREFIXES).some((prefix) => key.startsWith(prefix))) {
+      return true;
+    }
+    const cut = key.lastIndexOf(".");
+    const namespace = key.slice(0, cut);
+    const last = key.slice(cut + 1);
+    if (byNamespace.get(namespace)?.has(last)) return true;
+    // The key's last segment written as data in a file that does not translate
+    // — `navigation.ts`'s `labelKey: "scan"`, `getAuthErrorKey`'s return
+    // values — and read through `t(variable)` elsewhere. Loose on purpose: a
+    // false "used" leaves one dead key standing; a false "unused" would fail
+    // correct code.
+    return untranslatedLiterals.has(last) && byNamespace.has(namespace);
+  }
+
+  it("are all asked for somewhere", () => {
+    const unused = catalogueKeys(es as Record<string, unknown>).filter(
+      (key) => !used(key),
+    );
+
+    expect(unused).toEqual([]);
+  });
+
+  it("would notice one that is not", () => {
+    // Without this, a scan that matched everything would pass for ever.
+    expect(used("common.thisKeyIsNotInAnyFile")).toBe(false);
+  });
+
+  it("names a real file for every dynamic prefix", () => {
+    const missing = Object.values(DYNAMIC_PREFIXES).filter(
+      (path) => !files.some((file) => file.endsWith(path.replace(/^src\//, ""))),
+    );
+    expect(missing).toEqual([]);
+  });
+});

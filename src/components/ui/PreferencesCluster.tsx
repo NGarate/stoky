@@ -40,7 +40,9 @@ export function PreferencesCluster({
   className?: string;
 }): JSX.Element {
   return (
-    <div className={`flex flex-wrap items-end gap-x-6 gap-y-3 ${className}`}>
+    // `items-start`: the two controls have labels of different heights, and
+    // aligning their bottoms dropped "Idioma" about 10px below "Tema".
+    <div className={`flex flex-wrap items-start gap-x-6 gap-y-3 ${className}`}>
       <ThemeControl />
       <LocaleSwitcher />
     </div>

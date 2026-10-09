@@ -61,9 +61,9 @@ async function openOwnList(page: Page, items: number): Promise<void> {
   await settle(page);
 
   await page.getByRole("button", { name: es.shopping.create }).click();
-  await page.getByPlaceholder(es.shopping.listName).fill(name);
+  await page.getByLabel(es.shopping.listName).fill(name);
   await page
-    .getByRole("button", { name: es.common.create, exact: true })
+    .getByRole("button", { name: es.shopping.create })
     .click();
 
   const link = page.getByRole("link", { name: new RegExp(name) });
@@ -89,7 +89,7 @@ async function openOwnList(page: Page, items: number): Promise<void> {
     chosen.push((label ?? "").split("—")[0]!.trim());
 
     await page
-      .getByRole("button", { name: es.common.add, exact: true })
+      .getByRole("button", { name: es.shopping.addToList, exact: true })
       .click();
     await expect(page.getByText(chosen[i]!, { exact: false }).first()).toBeVisible({
       timeout: 15_000,

@@ -1,17 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { Search } from "lucide-react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { BestPriceIndicator } from "@/components/price/BestPriceIndicator";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 export default function PricesPage() {
   const t = useTranslations();
+  const units = useQuantityFormat();
   const locale = useLocale();
   const [search, setSearch] = useState("");
 
@@ -43,10 +50,9 @@ export default function PricesPage() {
     // Bounded like every other index. Unbounded, it ran the full width of the
     // layout's 7xl while `/inventory` and `/products` beside it stopped at
     // 6xl — the same list, two line lengths, depending which one you opened.
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("prices.title")}</h1>
-      </div>
+    <PageShell width="index">
+      <PageHeader title={t("prices.title")} />
+      <div className="space-y-6">
 
       {/* The placeholder was doing the job of the label, which means the field
           loses its name the moment someone types in it — and keeps it lost for
@@ -70,20 +76,10 @@ export default function PricesPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
           />
-          <svg
+          <Search
             aria-hidden="true"
-            className="-translate-y-1/2 absolute top-1/2 left-3 h-5 w-5 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
+            className="-translate-y-1/2 absolute top-1/2 left-3 size-5 text-muted-foreground"
+          />
         </div>
       </div>
 
@@ -93,11 +89,34 @@ export default function PricesPage() {
           concrete reason (DESIGN_AUDIT A5.4). The inventory and the
           catalogue already list into a bare `<ul>`. */}
       <div>
-        {products.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-            <p>{t("prices.noPrices")}</p>
-            <p className="mt-2 text-sm">{t("prices.addFirst")}</p>
-          </div>
+        {/* Two different empties. A search that found nothing says so and
+            offers the way back to everything; a household with no prices at
+            all is told where prices come from — this screen cannot record
+            one, so "Registra tu primer precio" asked for the impossible. */}
+        {products.length === 0 && search ? (
+          <EmptyState
+            action={
+              <Button onClick={() => setSearch("")} type="button" variant="outline">
+                {t("inventory.searchClear")}
+              </Button>
+            }
+            title={t("prices.searchEmpty", { search })}
+          />
+        ) : products.length === 0 ? (
+          <EmptyState
+            action={
+              <>
+                <Button asChild>
+                  <Link href="/inventory/add">{t("inventory.addStock")}</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/receipts/upload">{t("receipts.upload")}</Link>
+                </Button>
+              </>
+            }
+            body={t("prices.emptyBody")}
+            title={t("prices.emptyTitle")}
+          />
         ) : (
           <ul className="space-y-3">
             {products.map((product) => (
@@ -120,7 +139,7 @@ export default function PricesPage() {
                             locale,
                             product.priceRecords[0].unitPrice,
                             product.priceRecords[0].currency ?? DEFAULT_CURRENCY,
-                          )} ${t("prices.perUnit", { unit: product.priceRecords[0].unit })}`
+                          )} ${t("prices.perUnit", { unit: units.unit(product.priceRecords[0].unit, 1) })}`
                         : t("prices.noPrices"),
                   },
                 ]}
@@ -131,6 +150,7 @@ export default function PricesPage() {
           </ul>
         )}
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }

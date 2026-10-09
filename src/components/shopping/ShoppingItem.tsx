@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 
 import { Select } from "@/components/ui/select";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,15 +15,7 @@ import { ItemRow } from "@/components/ui/item-row";
 import { useSnackbar } from "@/components/ui/snackbar";
 
 import type { JSX } from "react";
-
-/**
- * How long a removal can still be taken back.
- *
- * The same ten seconds the kitchen holds a consumption for (D100), and for
- * the same reason: long enough to notice the wrong row went, short enough
- * that the change still lands while the person is standing in the aisle.
- */
-const UNDO_HOLD_MS = 10_000;
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 interface ShoppingItemProps {
   item: {
@@ -82,6 +75,7 @@ export function ShoppingItem({
   stores,
 }: ShoppingItemProps): JSX.Element {
   const t = useTranslations("shopping");
+  const units = useQuantityFormat();
   const { enqueue, cancel } = useWriteQueue();
   const snackbar = useSnackbar();
   const quantityId = useId();
@@ -152,7 +146,7 @@ export function ShoppingItem({
       path: "shopping.removeItem",
       input: { id: item.id },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
 
     if (!queued.ok) return;
@@ -184,14 +178,19 @@ export function ShoppingItem({
             </Button>
           ) : null}
           {canWrite ? (
+            /* A word as well as the bin, and the item in the name. It was an
+               icon-only control named "Eliminar artículo" on every row, so a
+               list read aloud said it ten times and a voice user had nothing
+               visible to say. The visible word starts the name (2.5.3). */
             <Button
-              aria-label={t("removeItem")}
+              aria-label={t("removeItemOf", { name })}
               onClick={remove}
-              size="icon"
+              size="sm"
               type="button"
-              variant="ghost"
+              variant="destructive-ghost"
             >
-              <Trash2 aria-hidden="true" className="h-5 w-5 text-destructive" />
+              <Trash2 aria-hidden="true" className="mr-1 size-5" />
+              {t("removeShort")}
             </Button>
           ) : null}
         </>
@@ -233,10 +232,10 @@ export function ShoppingItem({
                 step="any"
                 type="number"
               />
-              <span>{item.unit ?? ""}</span>
+              <span>{units.unit(item.unit, item.quantity)}</span>
             </div>
           ) : (
-            `${item.quantity} ${item.unit ?? ""}`.trim()
+            units.quantity(item.quantity, item.unit)
           ),
         },
         {

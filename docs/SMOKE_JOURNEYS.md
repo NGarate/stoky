@@ -294,6 +294,12 @@ Visible outcome, in all four cases:
   barcode already filled in — never a refusal
 - **no camera**: an error that says what to do instead, with a barcode field
   already focused
+- **a lookup the server refuses**: said beside the field, with the code
+  already in it, rather than the camera silently starting again
+
+The focus half of "no camera" and the refused lookup were only built on
+2026-10-06; until then the camera error left focus where it was and a refused
+lookup restarted the scanner without a word. `ScanPage.test.tsx` pins both.
 
 Proof required:
 
@@ -451,6 +457,12 @@ Evidence:
 - `src/__tests__/unit/landing.test.ts` covers the precedence, including the
   omission that matters — no quiet fallback to the Panel for the unasked.
 
+- *Signing in goes through the decision*: until 2026-10-06 the login and
+  registration forms replaced straight to `/dashboard`, so the question was
+  only ever asked of someone who later typed `/` — the kitchen tablet signed in
+  to the panel, and a new account never met `/start`. Both now replace to `/`;
+  `auth-pages.test.tsx` pins it, and every browser sign-in (`session.setup.ts`,
+  `auth.prod.spec.ts`, `critical-paths`) now arrives at `/start`.
 - *Changeable from settings*: `/settings/screen` shows which screen is current,
   changes it without walking you out of settings, and announces the new answer
   in a live region — and a second device is unaffected by the change.
@@ -466,7 +478,9 @@ cluster on every surface including `/login`, writing the `locale` cookie that
 closed — I18N-1 through I18N-8 — and the class itself is now guarded twice:
 `messages.test.ts` fails when the catalogues diverge, and
 `message-usage.test.ts` scans every `t("…")` in the source for keys no
-catalogue holds, which is the gap the old note here said nothing could see.
+catalogue holds, which is the gap the old note here said nothing could see —
+and, since 2026-10-06, the catalogue for keys no screen asks for, after 94
+dead ones were removed.
 A unit-tier sweep also refuses a literal language tag anywhere under `src/`
 (D68).
 

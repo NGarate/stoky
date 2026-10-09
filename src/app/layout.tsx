@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { RouteTitle } from "@/components/ui/route-title";
 import { TRPCProvider } from "@/components/providers/TRPCProvider";
 import { ServiceWorkerProvider } from "@/components/providers/ServiceWorkerProvider";
 import { THEME_NO_FLASH_SCRIPT } from "@/lib/theme";
@@ -18,10 +19,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Stoky - Inventory Management",
-  description: "Privacy-first household inventory management",
-};
+/**
+ * No `title` here, deliberately: `<RouteTitle>` below renders the one
+ * `<title>` the document has, per route and in the reader's language
+ * (`src/lib/route-titles.ts` has the case). A metadata title would be a second
+ * `<title>` element, and which of two wins is a question of mount order.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("metadata");
+  return { description: t("description") };
+}
 
 /**
  * This layout is allowed to block, and that is the answer rather than a to-do.
@@ -78,6 +85,7 @@ export default async function RootLayout({
       >
         <TRPCProvider>
           <NextIntlClientProvider messages={messages}>
+            <RouteTitle />
             <ServiceWorkerProvider />
             {children}
           </NextIntlClientProvider>

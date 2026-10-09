@@ -11,7 +11,7 @@ import es from "../messages/es.json";
  * the *accessibility tree* — the roles, names, states and order the browser
  * computes — and that tree is machine-readable through the DevTools protocol
  * (`Accessibility.getFullAXTree`). What needs a person is whether the result
- * *sounds* sensible: whether "Cantidad consumida" is the right words, whether
+ * *sounds* sensible: whether "Cantidad usada" is the right words, whether
  * four announcements in a row are three too many. What does not need a person
  * is whether the information is in the tree at all.
  *
@@ -468,7 +468,7 @@ test.describe("Screen-reader journeys", () => {
     await page.fill('input[name="email"]', DEMO_EMAIL);
     await page.fill('input[name="password"]', "definitely-not-the-password");
     await page.click('button[type="submit"]');
-    await expect(page.getByText(/inválid|invalid/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/no son correctos|is not right/i)).toBeVisible({ timeout: 20_000 });
 
     const rejected = await snapshot(page);
     assertTree(rejected, "/login after a rejected sign-in");
@@ -484,9 +484,11 @@ test.describe("Screen-reader journeys", () => {
 
     await page.fill('input[name="password"]', DEMO_PASSWORD);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+    // A fresh context is a device nobody has chosen a screen on, so signing
+    // in asks (Journey 8) — the first screen a new reader actually meets.
+    await page.waitForURL(/\/start/, { timeout: 30_000 });
     await settle(page);
-    assertTree(await snapshot(page), "/dashboard");
+    assertTree(await snapshot(page), "/start");
   });
 
   test.describe("signed in", () => {
@@ -694,17 +696,16 @@ test.describe("Screen-reader journeys", () => {
       await page.goto(reviewable as string);
       await settle(page);
 
-      // ISSUES.md I18N-6. This receipt still has lines to decide, so the button
-      // that ends the review must say so and must be unusable: it finalises the
-      // receipt *after* the work rather than instead of it. It used to be called
-      // "Confirmar todos", which promises a bulk action that skips the reviewing
-      // — the one thing it cannot do — and a name that offers what the disabled
-      // state then refuses is worse than an unclear one.
-      const finishReview = page.getByRole("button", {
-        name: /^(terminar revisión|finish review)$/i,
-      });
-      await expect(finishReview).toBeVisible();
-      await expect(finishReview).toBeDisabled();
+      // ISSUES.md I18N-6. This receipt still has lines to decide, so the
+      // button that finishes it — confirm and add to the inventory, one press —
+      // is not offered at all: it finalises the receipt *after* the work rather
+      // than instead of it. It used to be a disabled "Confirmar todos", which
+      // promised a bulk action that skips the reviewing, and a disabled button
+      // is one a keyboard cannot even reach to ask why. The pending count
+      // beside it says what is left.
+      await expect(
+        page.getByRole("button", { name: es.receipts.applyToInventory }),
+      ).toHaveCount(0);
 
       const count = page.getByRole("status").first();
       const wasSaying = ((await count.textContent()) ?? "").trim();

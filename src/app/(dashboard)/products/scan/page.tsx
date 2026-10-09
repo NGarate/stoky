@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { onlineManager } from "@tanstack/react-query";
 import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { sectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BarcodeScanner } from "@/components/barcode/Scanner";
 import { useSnackbar } from "@/components/ui/snackbar";
@@ -23,6 +25,28 @@ export default function ScanPage() {
   const [isScanning, setIsScanning] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  /** The code a lookup was refused for, said beside the field that can retry it. */
+  const [lookupFailed, setLookupFailed] = useState<string | null>(null);
+  const manualField = useRef<HTMLInputElement>(null);
+
+  /**
+   * Hand the person the typed alternative, ready to use (§7 rule 4: "No
+   * camera available. Type the barcode instead" — with the field already
+   * focused). `value` fills it with a code worth sending again.
+   */
+  function offerManualEntry(value?: string): void {
+    const field = manualField.current;
+    if (!field) return;
+    if (value !== undefined) field.value = value;
+    field.focus();
+  }
+
+  // After the commit, not in `onError`: while the lookup ran the page showed
+  // its "looking up" panel instead of the field, so there was no field to
+  // fill until the failure had rendered it back.
+  useEffect(() => {
+    if (lookupFailed) offerManualEntry(lookupFailed);
+  }, [lookupFailed]);
 
   /**
    * Queue the scan instead of sending it — the offline path (T7).
@@ -100,7 +124,7 @@ export default function ScanPage() {
         );
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       setIsProcessing(false);
       // A transport failure with no status is a captive portal or a dropped
       // connection — `onlineManager` said online but nothing got through. Queue
@@ -109,6 +133,13 @@ export default function ScanPage() {
       if (scannedBarcode && httpStatusOf(error) === null) {
         queueScan(scannedBarcode);
         setScannedBarcode(null);
+      } else {
+        // A refusal used to restart the camera and say nothing, so the code
+        // seemed simply not to have been read — and scanning it again failed
+        // again, silently. Say so, and leave the code in the field so one
+        // press sends it again. The code is what was sent, not state, which
+        // a fast second scan may already have replaced.
+        setLookupFailed(variables.barcode);
       }
       setIsScanning(true);
     },
@@ -117,6 +148,7 @@ export default function ScanPage() {
   const handleScan = (barcode: string) => {
     if (isProcessing) return;
 
+    setLookupFailed(null);
     setScannedBarcode(barcode);
     setIsScanning(false);
 
@@ -137,14 +169,26 @@ export default function ScanPage() {
   const handleError = (error: Error) => {
     console.error("Scan error:", error);
     setIsScanning(false);
+    // The scanner says what went wrong; the field is what to do about it.
+    offerManualEntry();
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <BackLink href="/products">{t("backToProducts")}</BackLink>
-      </div>
+    // No padding of its own: the layout's `p-4` is the gutter, and a second
+    // `p-6` cost 48px of a 390px screen (ISSUES UI-5).
+    <PageShell width="form">
+      <PageHeader
+        back={
+          /* Its own Suspense boundary: reading the query string opts a
+             subtree out of prerendering, and this link is all that reads it. */
+          <Suspense
+            fallback={<BackLink href="/products">{t("backToProducts")}</BackLink>}
+          >
+            <ScanBackLink />
+          </Suspense>
+        }
+        title={t("title")}
+      />
 
       {isProcessing ? (
         <div className="p-8 bg-muted rounded-lg text-center">
@@ -177,7 +221,22 @@ export default function ScanPage() {
           )}
 
           <div className="mt-8 p-4 bg-muted rounded-lg">
-            <h2 className="font-semibold mb-2 text-heading">{t("manualTitle")}</h2>
+            <h2 className={`mb-2 ${sectionHeading()}`}>{t("manualTitle")}</h2>
+            {/* Present while empty, so the sentence is announced when it
+                arrives rather than inserted together with its region. */}
+            <p
+              aria-live="polite"
+              className={
+                lookupFailed
+                  ? "mb-3 rounded-md border border-danger-foreground bg-danger px-3 py-2 text-sm text-danger-foreground"
+                  : "sr-only"
+              }
+              role="status"
+            >
+              {lookupFailed
+                ? t("lookupFailed", { barcode: lookupFailed })
+                : null}
+            </p>
             {/* A label, not only a placeholder: the placeholder is gone the
                 moment somebody types, and with it the field's only name. */}
             <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="manual-barcode">
@@ -200,6 +259,7 @@ export default function ScanPage() {
                 id="manual-barcode"
                 name="barcode"
                 placeholder={t("manualPlaceholder")}
+                ref={manualField}
                 type="text"
               />
               <Button type="submit" variant="outline">
@@ -209,6 +269,25 @@ export default function ScanPage() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
+  );
+}
+
+/**
+ * The way back, to wherever scanning started.
+ *
+ * The shop's scan button (Screen A, `/shopping`) opens this page with
+ * `?from=shopping`. The link always led to the product catalogue — a place
+ * the person in the aisle had never been — so from there it goes back to the
+ * shop. Anywhere else, the catalogue is the natural parent.
+ */
+function ScanBackLink() {
+  const t = useTranslations("products.scan");
+  const fromShopping = useSearchParams().get("from") === "shopping";
+
+  return fromShopping ? (
+    <BackLink href="/shopping">{t("backToShopping")}</BackLink>
+  ) : (
+    <BackLink href="/products">{t("backToProducts")}</BackLink>
   );
 }

@@ -50,7 +50,10 @@ export default function LoginPage(): JSX.Element {
       }
 
       startTransition(() => {
-        router.replace("/dashboard");
+        // `/`, not a screen: it is where this device's screen choice is
+        // honoured (`src/app/page.tsx`, Journey 8). Naming `/dashboard` here
+        // walked the kitchen tablet past the kitchen and never asked anyone.
+        router.replace("/");
         router.refresh();
       });
     } catch (error: unknown) {

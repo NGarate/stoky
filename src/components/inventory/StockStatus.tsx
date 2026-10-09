@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 import type { JSX } from "react";
 
@@ -50,6 +51,7 @@ export function StockAmount({
   isLowStock: boolean;
   totalStock: number;
 }): JSX.Element {
+  const units = useQuantityFormat();
   return (
     <span
       className={`font-medium ${
@@ -60,7 +62,7 @@ export function StockAmount({
             : "text-ok-foreground"
       }`}
     >
-      {totalStock} {defaultUnit}
+      {units.quantity(totalStock, defaultUnit)}
     </span>
   );
 }
@@ -76,29 +78,51 @@ export function StockAmount({
  * screens, one product, two words for one state. Run out is the stronger
  * statement, so it wins; there is now one place that decides.
  *
- * The low-stock badge is outlined rather than filled: its row is already
- * tinted `bg-warn`, so a filled warn pill would vanish into it.
+ * **Filled or outlined follows the row, not the state.** The rule in
+ * `badge.tsx`: an outline is for a badge sitting on a row already tinted with
+ * its own tone. This used to be hard-coded per state — "Sin stock" always
+ * filled, "Stock bajo" always outlined — which got both wrong somewhere: the
+ * filled danger pill vanished into the inventory's `bg-danger` row, and the
+ * outlined warn pill was the faint one on the Panel and /products, which do
+ * not tint. `onTintedRow` says the row wears `stockTone`'s colour; the caller
+ * knows, because the caller tinted it.
  */
 export function StockStatus({
+  className,
   isLowStock,
+  onTintedRow = false,
   totalStock,
 }: {
+  /** Type size only — the kitchen reads it from a metre away. */
+  className?: string;
   isLowStock: boolean;
+  /** The row this sits on is tinted with `stockTone(totalStock, isLowStock)`. */
+  onTintedRow?: boolean;
   totalStock: number;
 }): JSX.Element {
   const t = useTranslations("inventory");
+  // A healthy row is never tinted, so `ok` has nothing to clash with.
+  const variant = onTintedRow ? "outline" : "solid";
 
   if (totalStock <= 0) {
-    return <Badge tone="danger">{t("noStock")}</Badge>;
+    return (
+      <Badge className={className} tone="danger" variant={variant}>
+        {t("noStock")}
+      </Badge>
+    );
   }
 
   if (isLowStock) {
     return (
-      <Badge tone="warn" variant="outline">
+      <Badge className={className} tone="warn" variant={variant}>
         {t("lowStock")}
       </Badge>
     );
   }
 
-  return <Badge tone="ok">{t("stockOk")}</Badge>;
+  return (
+    <Badge className={className} tone="ok">
+      {t("stockOk")}
+    </Badge>
+  );
 }

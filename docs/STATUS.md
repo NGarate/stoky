@@ -73,7 +73,8 @@ household receipts. Browser registration reaches the authenticated dashboard.
 Chromium, Firefox and WebKit projects. The first browser run lacked Firefox and
 WebKit; the successful run used `PLAYWRIGHT_BROWSERS_PATH=/tmp/stoky-playwright-browsers`
 and `LD_LIBRARY_PATH=/tmp/stoky-webkit-deps/usr/lib/x86_64-linux-gnu`. See
-`VERIFICATION_SEQUENCE.md` for the temporary browser setup.
+`VERIFICATION_SEQUENCE.md`, where `bun run test:e2e` has since replaced that
+temporary setup (2026-10-09).
 
 The regression follows the product list's “Ajustar” link and checks two separate
 kitchen uses, a reload and the persisted ledger. Unknown batch amounts stay
@@ -153,14 +154,14 @@ binary you happen to be holding.
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
-| Contrast | `bun run check:contrast` | ✅ 78 checks over 37 tokens × 2 themes, all AAA (2026-08-28) |
-| Unit tests | `bun run test:unit` | ✅ 713 pass / 80 files (2026-09-25) |
-| Component tests | `bun run test:components` | ✅ 658 pass / 60 files (2026-09-25) |
+| Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-06) |
+| Unit tests | `bun run test:unit` | ✅ 814 pass / 91 files (2026-10-06) |
+| Component tests | `bun run test:components` | ✅ 782 pass / 70 files (2026-10-06) |
 | Integration tests | `bun run test:integration` | ✅ 549 pass / 37 files (2026-09-25) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bunx --bun playwright test` | ✅ 154 pass / 0 fail in 3.3 minutes (2026-09-25), Bun driver and Bun standalone server; browser binaries/libraries staged under `/tmp` |
+| E2E | `bun run test:e2e` | ✅ 176 pass / 0 fail in 2.9 minutes (2026-10-09), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.0 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. The same day a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
 | Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 564 packages (2026-10-08) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,

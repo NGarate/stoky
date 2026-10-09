@@ -2,7 +2,6 @@
 
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -14,9 +13,11 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CHART_TOOLTIP } from "@/lib/chart-tooltip";
 import { DEFAULT_CURRENCY, formatUnitPrice } from "@/lib/money";
 
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 interface PriceDataPoint {
   date: string;
@@ -49,6 +50,16 @@ interface PriceDataPoint {
  *
  * Colour is never the only carrier: a legend is always present for two or
  * more series, and the table view names every store beside every price.
+ *
+ * **Words are ink, colour is a swatch.** Recharts' own legend and tooltip
+ * paint each store's *name* in that store's series colour, which on the light
+ * card measured 2.17–4.42:1 — under AA, let alone the 7:1 this application
+ * holds text to. The series hues are audited for telling series apart, not
+ * for being read (see the note beside PAIRS in `check-contrast.ts`), so they
+ * are kept off every glyph: the legend is ours, in `foreground`, with the hue
+ * in a swatch beside the name, and the tooltip names each store in
+ * `foreground` too — where it used to label every row "Precio por unidad",
+ * leaving the colour alone to say which shop a price was.
  */
 export function PriceChart({
   data,
@@ -72,7 +83,7 @@ export function PriceChart({
 
   const chartData: ChartDataPoint[] = Object.values(
     data.reduce((acc: Record<string, ChartDataPoint>, item) => {
-      const date = new Date(item.date).toLocaleDateString(locale);
+      const date = formatDate(locale, item.date, "short");
       // `??=` rather than this reads better and the React Compiler does not
       // support it — it declines to optimise the whole component and
       // `bun run check:react` fails on the syntax.
@@ -144,7 +155,8 @@ export function PriceChart({
                   tickFormatter={money}
                 />
                 <Tooltip
-                  formatter={(value: number) => [money(value), t("yAxis")]}
+                  {...CHART_TOOLTIP}
+                  formatter={(value: number, name: string) => [money(value), name]}
                   labelFormatter={(label) => label}
                 />
                 {storeNames.map((storeName, index) => (
@@ -186,10 +198,24 @@ export function PriceChart({
                       type="monotone"
                     />
                 ))}
-                {storeNames.length > 1 ? <Legend /> : null}
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {storeNames.length > 1 ? (
+            <ul aria-label={t("legend")} className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {storeNames.map((storeName, index) => (
+                <li className="flex items-center gap-2 text-sm text-foreground" key={storeName}>
+                  <span
+                    aria-hidden="true"
+                    className="inline-block size-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: colours[index] }}
+                  />
+                  {storeName}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           {hiddenStores > 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">

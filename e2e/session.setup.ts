@@ -26,11 +26,14 @@ setup("sign in", async ({ page }) => {
   await page.fill('input[name="password"]', DEMO_PASSWORD);
   await page.click('button[type="submit"]');
 
+  // `/start`: signing in lands on `/`, and this context is a device the demo
+  // account has never chosen a screen on, so it is asked (Journey 8). Nothing
+  // is chosen here — the suites that reuse this session go where they mean to.
   await expect(
     page,
     `Could not sign in as ${DEMO_EMAIL}. The demo account comes from the seed — ` +
       "run `bun run db:seed` and try again.",
-  ).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+  ).toHaveURL(/\/start/, { timeout: 30_000 });
 
   await page.context().storageState({ path: SESSION_FILE });
 });

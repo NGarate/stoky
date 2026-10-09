@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -10,14 +9,20 @@ import { isLowStock } from "@/lib/stock/low-stock";
 import { ProductDetailsForm } from "@/components/products/ProductDetailsForm";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Button } from "@/components/ui/button";
+import { sectionHeading } from "@/components/ui/section";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { RouteState } from "@/components/household/RouteState";
 import { api } from "@/lib/trpc/client";
 import { ProductRating } from "@/components/products/ProductRating";
 import { QuantityStepper } from "@/components/inventory/QuantityStepper";
+import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { useWriteQueue } from "@/lib/offline/queue-context";
-import { UNDO_HOLD_MS } from "@/lib/offline/queue";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { projectStockTotals } from "@/lib/offline/project";
 import { daysUntilExpiry, remainingByBatch, startOfToday } from "@/lib/inventory/batches";
 import type { JSX } from "react";
+import { formatDate } from "@/lib/dates";
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
@@ -40,30 +45,6 @@ interface Batch {
   locationName: string | null;
 }
 
-/**
- * Turns a tRPC error into something a person can act on.
- *
- * The procedures throw plain English `Error`s, so there is no error code to
- * switch on. Matching on the message is fragile, which is why anything
- * unrecognised falls back to a generic, still-actionable message rather than
- * showing the raw text.
- *
- * `getById` looks the product up with `findFirst({ id, householdId })` and
- * throws the same "Product not found" whether the id is nonsense, belongs to a
- * deleted product, or belongs to another household. That is deliberate on the
- * server's part — distinguishing them would confirm to an outsider that a given
- * id exists — so this page says the one thing that is true in all three cases:
- * it is not in your household's catalogue.
- */
-function serverErrorKey(message: string | undefined): string {
-  const normalized = message?.toLowerCase() ?? "";
-
-  if (normalized.includes("product not found")) return "errorNotFound";
-  if (normalized.includes("household")) return "errorNoHousehold";
-
-  return "errorGeneric";
-}
-
 export default function ProductDetailPage({
   params,
 }: ProductDetailPageProps): JSX.Element {
@@ -74,6 +55,7 @@ export default function ProductDetailPage({
 /** Exported apart from the route so the component suite can render it. */
 export function ProductDetailView({ id }: { id: string }): JSX.Element {
   const t = useTranslations("products.detail");
+  const units = useQuantityFormat();
   const locale = useLocale();
   const router = useRouter();
   const snackbar = useSnackbar();
@@ -146,15 +128,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
     },
   });
 
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-    [locale],
-  );
 
   /** Sum the surviving batches; unknown withdrawals never become a fake shelf balance. */
   const stockByLocation = useMemo<LocationTotal[]>(() => {
@@ -216,46 +189,31 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime());
   }, [product]);
 
-  if (query.isPending) {
-    return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/products">{t("backToProducts")}</BackLink>
-        <h1 className="mt-2 text-2xl font-bold text-heading">{t("loadingTitle")}</h1>
-        <p role="status" aria-live="polite" className="mt-2 text-muted-foreground">
-          {t("loading")}
-        </p>
-      </div>
-    );
-  }
+  const back = { href: "/products", label: t("backToProducts") };
 
+  /**
+   * Every state without a product, through the one component that tells them
+   * apart. This screen hand-rolled two: `isPending` drew "Cargando…" — which
+   * a query paused offline also is, so with no signal it said loading for
+   * ever (UI-8) — and everything else was one red alert that matched the
+   * server's English to guess whether the household was missing.
+   *
+   * `getById` answers NOT_FOUND alike for a nonsense id, a deleted product
+   * and another household's — deliberately, so an outsider cannot confirm an
+   * id exists — and the sentence says the one thing true of all three.
+   */
   if (!product) {
-    const errorKey = serverErrorKey(query.error?.message);
-
     return (
-      <div className="mx-auto max-w-3xl">
-        <BackLink href="/products">{t("backToProducts")}</BackLink>
-
-        <div
-          role="alert"
-          className="mt-2 rounded border border-danger-foreground bg-danger p-4 text-danger-foreground"
-        >
-          <h1 className="text-2xl font-bold">{t("errorTitle")}</h1>
-          <p className="mt-2">{t(errorKey)}</p>
-        </div>
-
-        {/* Retrying a product that is not in the catalogue would fail the same
-            way every time; a transport failure is the case worth offering. */}
-        {errorKey === "errorNotFound" ? null : (
-          <Button
-            type="button"
-            onClick={() => {
-              void query.refetch();
-            }}
-          >
-            {t("retry")}
-          </Button>
-        )}
-      </div>
+      <RouteState
+        back={back}
+        error={query.error}
+        fetchStatus={query.fetchStatus}
+        isLoading={query.isPending}
+        notFound={{ title: t("notFoundTitle"), body: t("errorNotFound") }}
+        onRetry={() => void query.refetch()}
+        title={t("loadingTitle")}
+        width="detail"
+      />
     );
   }
 
@@ -302,7 +260,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               unit: product.defaultUnit,
             },
             label,
-            holdMs: UNDO_HOLD_MS,
+            holdMs: undoHoldMs(),
           }
         : {
             path: "inventory.consumeStock",
@@ -312,7 +270,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               unit: product.defaultUnit,
             },
             label,
-            holdMs: UNDO_HOLD_MS,
+            holdMs: undoHoldMs(),
           },
     );
 
@@ -324,10 +282,8 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <BackLink href="/products">{t("backToProducts")}</BackLink>
-
-      <h1 className="mt-2 text-2xl font-bold text-heading">{product.name}</h1>
+    <PageShell width="detail">
+      <PageHeader back={back} className="mb-0" title={product.name} />
 
       {/* Decorative: the name it illustrates is directly above it, so an alt
           text would only repeat the heading. Open Food Facts is the only thing
@@ -341,7 +297,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         />
       ) : null}
 
-      <h2 className="mt-6 text-lg font-semibold text-heading">{t("stockTitle")}</h2>
+      <h2 className={`mt-6 ${sectionHeading()}`}>{t("stockTitle")}</h2>
       {/* §3 flow 3: changing stock is the stepper, not a form. Offered only to
           the roles `writeProcedure` admits — plus is `addStock`, which a
           KITCHEN account would be refused — so a kitchen tablet reads the
@@ -351,26 +307,23 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         <div className="mt-2">
           <QuantityStepper
             addLabel={t("stepperAdd", {
-              unit: product.defaultUnit,
+              unit: units.unit(product.defaultUnit, 1),
               name: product.name,
             })}
             onAdd={() => stepStock("add")}
             onRemove={() => stepStock("remove")}
             removeDisabled={shownStock <= 0}
             removeLabel={t("stepperRemove", {
-              unit: product.defaultUnit,
+              unit: units.unit(product.defaultUnit, 1),
               name: product.name,
             })}
-            unit={product.defaultUnit}
+            unit={units.unit(product.defaultUnit, shownStock)}
             value={shownStock}
           />
         </div>
       ) : (
         <p className="mt-2 text-2xl font-bold text-heading">
-          {t("stockValue", {
-            quantity: shownStock,
-            unit: product.defaultUnit,
-          })}
+          {units.quantity(shownStock, product.defaultUnit)}
         </p>
       )}
       {shownStock <= 0 ? (
@@ -379,7 +332,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         <p className="mt-1 font-medium text-danger-foreground">
           {t("stockLow", {
             minimum: product.minStock,
-            unit: product.defaultUnit,
+            unit: units.unit(product.defaultUnit, product.minStock ?? 0),
           })}
         </p>
       ) : null}
@@ -392,7 +345,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         <ProductRating barcode={product.barcode} snapshot={product.openFoodFactsData} />
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("locationsTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("locationsTitle")}</h2>
       {stockByLocation.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("locationsEmpty")}</p>
       ) : (
@@ -407,10 +360,9 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                   {total.name ?? t("locationNone")}
                 </span>
                 <span className="font-medium text-foreground">
-                  {t("stockValue", {
-                    quantity: total.quantity ?? t("quantityUnknown"),
-                    unit: product.defaultUnit,
-                  })}
+                  {total.quantity === null
+                    ? t("quantityUnknown")
+                    : units.quantity(total.quantity, product.defaultUnit)}
                 </span>
               </li>
             ))}
@@ -419,7 +371,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("expiryTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("expiryTitle")}</h2>
       {batches.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
       ) : (
@@ -427,19 +379,26 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           <ul className="mt-2 divide-y divide-border rounded border border-border bg-card">
             {batches.map((batch) => (
               <li key={batch.id} className="px-4 py-3">
-                <p className="font-medium text-foreground">
-                  {dateFormat.format(batch.expiresAt)}
-                  {/* A date, not an instant: dated today is not yet expired. */}
-                  {daysUntilExpiry(batch.expiresAt, startOfToday(new Date(now))) < 0 ? (
-                    <span className="ml-2 font-semibold text-danger-foreground">
-                      {t("expiryExpired")}
-                    </span>
-                  ) : null}
+                <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                  {formatDate(locale, batch.expiresAt, "long", { dateOnly: true })}
+                  {/* A date, not an instant: dated today is not yet expired.
+                      The words and tone are the ones every other screen
+                      uses for a batch's date — this was a bare red
+                      "Caducado" span, not a pill, saying nothing at all
+                      about a batch that goes off tomorrow. */}
+                  <ExpiryStatus
+                    daysUntilExpiry={daysUntilExpiry(
+                      batch.expiresAt,
+                      startOfToday(new Date(now)),
+                    )}
+                  />
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("expiryBatch", {
-                    quantity: batch.quantity ?? t("quantityUnknown"),
-                    unit: batch.unit,
+                    amount:
+                      batch.quantity === null
+                        ? t("quantityUnknown")
+                        : units.quantity(batch.quantity, batch.unit),
                     location: batch.locationName ?? t("locationNone"),
                   })}
                 </p>
@@ -450,7 +409,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
         </>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("pricesTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("pricesTitle")}</h2>
       {product.priceRecords.length === 0 ? (
         <p className="mt-2 text-muted-foreground">{t("pricesEmpty")}</p>
       ) : (
@@ -476,7 +435,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                       {t("priceDateHeader")}
                     </dt>
                     <dd className="mt-1 text-foreground">
-                      {dateFormat.format(record.recordedAt)}
+                      {formatDate(locale, record.recordedAt, "long")}
                     </dd>
                   </div>
                   <div>
@@ -484,10 +443,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                       {t("priceQuantityHeader")}
                     </dt>
                     <dd className="mt-1 text-foreground">
-                      {t("stockValue", {
-                        quantity: record.quantity,
-                        unit: record.unit,
-                      })}
+                      {units.quantity(record.quantity, record.unit)}
                     </dd>
                   </div>
                 </dl>
@@ -518,17 +474,14 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               {product.priceRecords.map((record) => (
                 <tr key={record.id} className="border-b border-border">
                   <td className="px-4 py-2">
-                    {dateFormat.format(record.recordedAt)}
+                    {formatDate(locale, record.recordedAt, "long")}
                   </td>
                   <td className="px-4 py-2">{record.store.name}</td>
                   <td className="px-4 py-2">
                     {formatMoney(locale, record.price, record.currency)}
                   </td>
                   <td className="px-4 py-2">
-                    {t("stockValue", {
-                      quantity: record.quantity,
-                      unit: record.unit,
-                    })}
+                    {units.quantity(record.quantity, record.unit)}
                   </td>
                 </tr>
               ))}
@@ -545,11 +498,11 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
 
       <ProductDetailsForm
         canEdit={canWrite}
-        formattedDate={dateFormat.format(product.createdAt)}
+        formattedDate={formatDate(locale, product.createdAt, "long")}
         product={product}
       />
 
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("actionsTitle")}</h2>
+      <h2 className={`mt-8 ${sectionHeading()}`}>{t("actionsTitle")}</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         {t("actionsHint", { name: product.name })}
       </p>
@@ -583,7 +536,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           four-way count is still the control behind it. */}
       {isAdmin ? (
         <section aria-labelledby="product-delete" className="mt-10 rounded border border-border bg-muted p-4">
-          <h2 id="product-delete" className="text-lg font-semibold text-heading">
+          <h2 id="product-delete" className={sectionHeading()}>
             {t("deleteTitle")}
           </h2>
           {product.stockEntries.length > 0 ? (
@@ -609,6 +562,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                   type="button"
                   disabled={deleteProduct.isPending}
                   onClick={() => deleteProduct.mutate({ id: product.id })}
+                  variant="destructive"
                 >
                   {t("deleteConfirm")}
                 </Button>
@@ -618,6 +572,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
                     setConfirmingDelete(false);
                     setDeleteError(null);
                   }}
+                  variant="outline"
                 >
                   {t("deleteCancel")}
                 </Button>
@@ -629,6 +584,7 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
               <Button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
+                variant="destructive-ghost"
               >
                 {t("deleteButton")}
               </Button>
@@ -640,6 +596,6 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
           </p>
         </section>
       ) : null}
-    </div>
+    </PageShell>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -24,20 +24,6 @@ export function MatchSelector({
   autoMatch,
 }: MatchSelectorProps) {
   const t = useTranslations("receipts");
-  const locale = useLocale();
-
-  const formatScore = (score: number) => {
-    return new Intl.NumberFormat(locale, {
-      style: "percent",
-      maximumFractionDigits: 0,
-    }).format(score);
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 0.7) return "text-ok-foreground";
-    if (score >= 0.5) return "text-warn-foreground";
-    return "text-muted-foreground";
-  };
 
   return (
     <div className="space-y-2">
@@ -81,15 +67,17 @@ export function MatchSelector({
               selectedId === candidate.productId ? "border-primary bg-accent" : ""
             }`}
           >
+            {/* The name and nothing else. The matcher's similarity used to
+                sit beside it as "82 %", tinted by thresholds nobody is told
+                — the system's confidence in its own guess, read aloud as part
+                of the choice (§7 rule 2). The order already says which it
+                thinks likeliest. */}
             <div className="flex items-center gap-2">
               {selectedId === candidate.productId && (
                 <Check aria-hidden="true" className="w-4 h-4 text-primary" />
               )}
               <span className="text-sm">{candidate.name}</span>
             </div>
-            <span className={`text-xs font-medium ${getScoreColor(candidate.similarity)}`}>
-              {formatScore(candidate.similarity)}
-            </span>
           </Button>
         ))}
       </div>

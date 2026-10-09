@@ -64,8 +64,8 @@ bun run test:integration
 # 4. Run full test suite
 bun run test
 
-# 5. Run E2E tests
-bunx --bun playwright test
+# 5. Run E2E tests (in Playwright's image, which brings the browsers)
+bun run test:e2e
 ```
 
 The Playwright driver also runs under Bun. `e2e/package.json` marks only the
@@ -147,18 +147,19 @@ KEEP_TEST_SERVICES=true bun run test:integration
 
 ### E2E Tests
 ```bash
-# Run all E2E tests
-bunx --bun playwright test
+# Run all E2E tests — inside Playwright's own image, which carries Chromium,
+# Firefox, WebKit and their system libraries (scripts/e2e-in-image.sh)
+bun run test:e2e
 
-# Run specific test file
-bunx --bun playwright test e2e/critical-paths.spec.ts
-
-# Run with UI mode for debugging
-bunx --bun playwright test --ui
-
-# Run in headed mode (see browser)
-bunx --bun playwright test --headed
+# Run specific test file, or anything else `playwright test` takes
+bun run test:e2e -- e2e/critical-paths.spec.ts
+bun run test:e2e -- --project=webkit
 ```
+
+`--ui` and `--headed` need a display, which the container does not have. For
+those, run `bunx --bun playwright test --ui` on the host, with whichever
+browsers the host has; a host run that fails with `Executable doesn't exist`
+is the machine missing a browser, not a failing test.
 
 **It owns its data.** The suite runs against its **own database and cache** —
 `stoky_e2e` in the same Postgres, Valkey db index 1 — derived in

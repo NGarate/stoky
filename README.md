@@ -131,7 +131,7 @@ gate proves.
 ```bash
 bun run verify:local         # lint + typecheck + unit + component tests
 bun run verify:ci            # the above + integration tests + build
-bunx --bun playwright test e2e/critical-paths.spec.ts
+bun run test:e2e -- e2e/critical-paths.spec.ts  # browsers come from Playwright's image
 ```
 
 Individually:

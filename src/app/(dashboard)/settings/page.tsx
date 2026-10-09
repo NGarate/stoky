@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { ItemRow } from "@/components/ui/item-row";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
+import { sectionHeading } from "@/components/ui/section";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
@@ -46,58 +47,39 @@ export default function SettingsPage(): JSX.Element {
   const tStart = useTranslations("start");
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
+    <PageShell width="form">
+      <PageHeader intro={t("intro")} title={t("title")} />
 
-      <ul className="mt-6 space-y-4">
-        <li className="rounded border border-border bg-card p-4">
-          <h2 className="text-lg font-semibold text-heading">
-            <Button asChild variant="link">
-              <Link href="/settings/locations" > {t("locationsTitle")} </Link>
-            </Button>
-          </h2>
-          <p className="mt-1 text-muted-foreground">{t("locationsDescription")}</p>
-        </li>
-
-        <li className="rounded border border-border bg-card p-4">
-          <h2 className="text-lg font-semibold text-heading">
-            <Button asChild variant="link">
-              <Link href="/settings/stores" > {t("storesTitle")} </Link>
-            </Button>
-          </h2>
-          <p className="mt-1 text-muted-foreground">{t("storesDescription")}</p>
-        </li>
-        <li className="rounded border border-border bg-card p-4">
-          <h2 className="text-lg font-semibold text-heading">
-            <Button asChild variant="link">
-              <Link href="/settings/people" > {tHousehold("peopleTitle")} </Link>
-            </Button>
-          </h2>
-          <p className="mt-1 text-muted-foreground">
-            {tHousehold("peopleDescription")}
-          </p>
-        </li>
-        <li className="rounded border border-border bg-card p-4">
-          <h2 className="text-lg font-semibold text-heading">
-            <Button asChild variant="link">
-              <Link href="/settings/screen" > {tStart("settingsLink")} </Link>
-            </Button>
-          </h2>
-          <p className="mt-1 text-muted-foreground">
-            {tStart("settingsLinkDescription")}
-          </p>
-        </li>
-        <li className="rounded border border-border bg-card p-4">
-          <h2 className="text-lg font-semibold text-heading">
-            <Button asChild variant="link">
-              <Link href="/settings/unsaved" > {tOffline("unsavedTitle")} </Link>
-            </Button>
-          </h2>
-          <p className="mt-1 text-muted-foreground">
-            {tOffline("unsavedDescription")}
-          </p>
-        </li>
+      {/* Each screen is one ItemRow whose title is the link. They were cards
+          whose h2 held a link-styled Button — so the title, at the
+          button's text-sm, rendered smaller than the sentence under it, and
+          five h2s were spent on what is a list of places to go. */}
+      <ul className="space-y-3">
+        <ItemRow
+          description={t("locationsDescription")}
+          href="/settings/locations"
+          title={t("locationsTitle")}
+        />
+        <ItemRow
+          description={t("storesDescription")}
+          href="/settings/stores"
+          title={t("storesTitle")}
+        />
+        <ItemRow
+          description={tHousehold("peopleDescription")}
+          href="/settings/people"
+          title={tHousehold("peopleTitle")}
+        />
+        <ItemRow
+          description={tStart("settingsLinkDescription")}
+          href="/settings/screen"
+          title={tStart("settingsLink")}
+        />
+        <ItemRow
+          description={tOffline("unsavedDescription")}
+          href="/settings/unsaved"
+          title={tOffline("unsavedTitle")}
+        />
       </ul>
 
       {/* Not in the list above, because it is an action rather than a screen —
@@ -128,7 +110,7 @@ export default function SettingsPage(): JSX.Element {
           in the top bar and in the "Más" sheet as well, which put settings
           controls across the top of every screen — including the household
           overview, whose whole job is what to buy and what is running out. */}
-      <h2 className="mt-8 text-lg font-semibold text-heading">
+      <h2 className={`mt-8 ${sectionHeading()}`}>
         {t("preferencesTitle")}
       </h2>
       <p className="mt-2 text-muted-foreground">{t("preferencesDescription")}</p>
@@ -142,9 +124,6 @@ export default function SettingsPage(): JSX.Element {
           "Tema" ended and "Duración de los avisos" began on the same pixel —
           so three controls of one kind read as two groups with a seam. */}
       <SnackbarDurationControl className="mt-3" />
-
-      <h2 className="mt-8 text-lg font-semibold text-heading">{t("pendingTitle")}</h2>
-      <p className="mt-2 text-muted-foreground">{t("pendingDescription")}</p>
-    </div>
+    </PageShell>
   );
 }

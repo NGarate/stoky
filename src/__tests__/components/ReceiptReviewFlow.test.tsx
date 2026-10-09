@@ -4,20 +4,21 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
+import es from "../../../messages/es.json";
 
 /**
- * Finishing a review must leave you where the next step is.
+ * Finishing a review is one press, and it ends on the summary.
  *
  * `confirmAll` sets the receipt to CONFIRMED; only `applyReceipt` sets
- * APPLIED. Navigating to /applied on confirmation therefore landed on the one
- * page whose first job is to refuse to say "applied" over a receipt that is
- * not — so the ordinary outcome of the review journey was a screen reading
- * "todavía no se ha aplicado", with the button that would apply it back on
- * the page just left.
- */
-const pushes: string[] = [];
+ * APPLIED. The page used to make those two presses — "Terminar revisión",
+ * then "Aplicar al inventario" — with a snackbar between them saying the
+ * second was now possible. Once every line is reviewed the first decides
+ * nothing a person can see, so the one button does both, in that order, and
+ * the summary at /applied is where it lands.
+ */const pushes: string[] = [];
 const invalidated: string[] = [];
 const confirmAllCalls: unknown[] = [];
+let applyCalls = 0;
 
 /** When true, every mutation reports a failure instead of succeeding. */
 let failing = false;
@@ -131,6 +132,7 @@ mock.module("@/lib/trpc/client", () => ({
       applyReceipt: {
         useMutation: (opts?: Callbacks) => ({
           mutate: () => {
+            applyCalls += 1;
             if (failing) {
               opts?.onError?.();
               return;
@@ -160,48 +162,83 @@ beforeEach(() => {
   pushes.length = 0;
   invalidated.length = 0;
   confirmAllCalls.length = 0;
+  applyCalls = 0;
   failing = false;
 });
 
 afterEach(cleanup);
 
 describe("finishing a receipt review", () => {
-  it("stays on the review, because applying happens here", async () => {
+  it("adds it to the inventory with one press once every line is reviewed", async () => {
+    // It took two: "Terminar revisión", a snackbar saying the receipt could
+    // now be applied, and then "Aplicar al inventario" in the same place.
+    // The first press decided nothing a person could see — every line was
+    // already reviewed — so it was a step that only the state machine
+    // needed. Now the one press does both, in order.
     render();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Terminar revisión" }),
+      screen.getByRole("button", { name: es.receipts.applyToInventory }),
     );
 
     expect(confirmAllCalls).toHaveLength(1);
-    // /applied would say the receipt has not been applied — true, and useless.
-    expect(pushes).toEqual([]);
+    expect(applyCalls).toBe(1);
+    expect(pushes).toEqual(["/receipts/r1/applied"]);
   });
 
-  it("refetches, so the lines show as confirmed without a reload", async () => {
+  it("offers only that one button", () => {
     render();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Terminar revisión" }),
-    );
-
-    expect(invalidated).toContain("getReceiptWithItems");
-  });
-
-  it("says what happened, and what is now possible", async () => {
-    render();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Terminar revisión" }),
-    );
-
-    // The page's own live region already says "Todo revisado", which is the
-    // state. This says what the state now makes possible, which nothing else
-    // on the screen does — the button quietly becoming "Aplicar al
-    // inventario" is the only other sign.
     expect(
-      await screen.findAllByText(/Ya puedes aplicarlo al inventario/),
-    ).not.toHaveLength(0);
+      screen.queryByRole("button", { name: "Terminar revisión" }),
+    ).toBeAbsent();
+  });
+
+  it("refreshes stock, products, prices and the shopping list", async () => {
+    // Applying moves stock and records prices, and nothing was refetched:
+    // the inventory and the price history kept their pre-receipt answers.
+    render();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: es.receipts.applyToInventory }),
+    );
+
+    expect(invalidated).toEqual(
+      expect.arrayContaining(["inventory", "product", "shopping", "price"]),
+    );
+  });
+
+  it("offers nothing to press while a line still needs a decision", () => {
+    // The line count says what is left; a finish button before then could
+    // only be a disabled one, which a keyboard cannot reach to ask why.
+    const items = receipt.items;
+    receipt.items = [{ ...items[0]!, matchStatus: "NEEDS_REVIEW" }];
+    try {
+      render();
+
+      expect(
+        screen.queryByRole("button", { name: es.receipts.applyToInventory }),
+      ).toBeAbsent();
+    } finally {
+      receipt.items = items;
+    }
+  });
+
+  it("applies directly a receipt that is already confirmed", async () => {
+    const status = receipt.status;
+    receipt.status = "CONFIRMED";
+    try {
+      render();
+
+      await userEvent.click(
+        screen.getByRole("button", { name: es.receipts.applyToInventory }),
+      );
+
+      expect(confirmAllCalls).toHaveLength(0);
+      expect(applyCalls).toBe(1);
+    } finally {
+      receipt.status = status;
+    }
   });
 });
 
@@ -211,7 +248,7 @@ describe("when it does not work", () => {
     render();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Terminar revisión" }),
+      screen.getByRole("button", { name: es.receipts.applyToInventory }),
     );
 
     // There was no error path at all. The button re-enabled, the pending
@@ -220,40 +257,19 @@ describe("when it does not work", () => {
     // screen-reader user was told nothing had happened and a sighted one
     // reasonably pressed it again (WCAG 3.3.1).
     expect(
-      await screen.findAllByText(/No se ha podido terminar la revisión/),
+      await screen.findAllByText(es.receipts.confirmAllFailed),
     ).not.toHaveLength(0);
   });
 
-  it("does not claim the review finished when it did not", async () => {
+  it("does not apply what it could not confirm", async () => {
     failing = true;
     render();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Terminar revisión" }),
+      screen.getByRole("button", { name: es.receipts.applyToInventory }),
     );
 
-    expect(screen.queryByText(/Ya puedes aplicarlo al inventario/)).toBeAbsent();
-  });
-});
-
-describe("applying a receipt", () => {
-  it("refreshes stock, products, prices and the shopping list", async () => {
-    // Applying moves stock and records prices, and nothing was refetched:
-    // the inventory and the price history kept their pre-receipt answers.
-    const status = receipt.status;
-    receipt.status = "CONFIRMED";
-    try {
-      render();
-
-      await userEvent.click(
-        screen.getByRole("button", { name: "Aplicar al inventario" }),
-      );
-
-      expect(invalidated).toEqual(
-        expect.arrayContaining(["inventory", "product", "shopping", "price"]),
-      );
-    } finally {
-      receipt.status = status;
-    }
+    expect(applyCalls).toBe(0);
+    expect(pushes).toEqual([]);
   });
 });

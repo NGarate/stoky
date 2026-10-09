@@ -85,6 +85,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
+| TEST-8 | `resolveScan` key-reuse test fails about one full run in four | ✅ Resolved `395570d` — an unawaited refusal in `withReplay` was an unhandled rejection |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | BUILD-2 | Development image cannot run Bash fixtures or inspect its mounted checkout | ✅ Resolved 2026-09-25 — Bash installed and Git trusts only `/app` |
 | RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
@@ -1544,6 +1545,13 @@ have meant writing the error branch twice.
 an empty state on error, which is wrong but recoverable and is a different
 defect; it is filed as UI-9.
 
+**Recurred, fixed 2026-10-06.** Four routes built later hand-rolled their own
+states instead of using `RouteState` and had the paused-query form of this
+defect: `/products/[id]`, `/products/[id]/adjust`, `/products/[id]/history`
+and `/receipts/[id]/applied` drew "Cargando…" for `isPending`, which a query
+paused offline also is. All four now render `RouteState`, and
+`route-query-states.test.tsx` covers them (DESIGN_AUDIT A5.5).
+
 **Original report follows.**
 
 **Two** routes render `if (isLoading || !result)`. When the query *fails*,
@@ -1761,6 +1769,15 @@ it can fail — restoring the redirect turns it red.
 One consequence in the browser suite: a journey that added stock and then
 clicked through to `/inventory/consume` was relying on the redirect. The page
 object navigates directly when it is not already there, and says why.
+
+**Correction (2026-10-06).** The announcer did not read "Inventario"; it read
+nothing. It speaks on a client navigation only when `document.title` changes
+(`next/dist/client/components/app-router-announcer.js`), and every route then
+wore the same hardcoded English title. The conclusion stands — a route's name
+answers "where am I", not "did that work" — and the silence was wider than this
+entry knew: it applied to every navigation, not only to saves. Each route now
+has its own title (`src/lib/route-titles.ts`, pinned by
+`e2e/page-titles.spec.ts`).
 
 ---
 
@@ -2298,6 +2315,11 @@ reloading rather than terminal. Kept separate because the fix is the same
 component (`RouteState`) applied to two routes whose loading branch has a
 different shape, and folding it into UI-8's commit would have made that commit
 touch four routes to fix a defect in two.
+
+**Recurred, fixed 2026-10-06.** `/settings/stores` gated on `isLoading` alone:
+a bare "Cargando…" with no title while loading, and a failed or paused query
+fell through to a screen with no shops on it. It now renders `RouteState`, and
+`route-query-failure.test.tsx` covers it (DESIGN_AUDIT A5.5).
 
 Note that an account with no household now reaches these two routes and sees
 the same lie, where before it saw a skeleton. That is not a regression from
@@ -3052,6 +3074,38 @@ docker run --rm -v "$PWD:/app:ro" -v /app/node_modules stoky-dev:ci \
 ```
 
 ---
+
+### ✅ TEST-8: `resolveScan` "refuses the same key carrying a different barcode" fails about one full run in four
+
+**Location:** `src/__tests__/integration/resolveScan.test.ts:150`  
+**Severity:** LOW (test reliability; the cause was a small product defect)  
+**Status:** RESOLVED 2026-10-08 in `395570d` — reproduced on `master`, not introduced by the review branches
+
+**Resolved 2026-10-08.** It was not the test. `withReplay` answered a reused
+key with `return answerFromRecord(...)` from a `catch` whose `finally` awaits
+`sweepExpired`; an async function adopts a returned promise only once
+`finally` completes, so a refusal that settled before the sweep sat rejected
+with no handler — an unhandled rejection, which Bun reports against the
+running test even though the caller then received it. That is why the trace
+had no `refusal()` frame. `return await` fixes it. `replay.refusal.test.ts`
+makes the sweep slow so the race always goes the bad way: 3 of 3 failures
+before, 3 of 3 passes after, and three full integration runs green. It failed
+CI on PR #8 on 2026-10-07, which is what moved it from documented to fixed.
+The receipt-processing hypothesis below was wrong.
+
+**Measured 2026-10-06:** the integration tier failed this one test in 1 of 4
+full runs on `fix/project-review-2026-10-05` and in 1 of the 3 clean full runs
+on `master` (two further master runs were disturbed by a dependency reinstall
+and are not counted). Alone, the file passed 3 of 3. CI passed it.
+
+The failure is an uncaught `TRPCError: This key was already used for a
+different change` (`replay.ts` `answerFromRecord`) reported against the test
+itself, not the `expect(error.code)` inside `refusal()`. That points at the
+*first* `resolveScan` call meeting an already-claimed key, although
+`envelope()` draws a fresh `crypto.randomUUID()` per test. Not yet explained;
+the receipt tests that run just before it alphabetically leave background
+processing that logs P2025 after their cleanup, which is the first thing to
+rule in or out.
 
 ### ✅ TEST-7: ProductRating tests fail in the component suite but pass alone
 

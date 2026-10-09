@@ -75,6 +75,16 @@ describe("StoreComparison", () => {
     expect(within(first).getByText("Mejor precio")).toBeInTheDocument();
   });
 
+  it("labels the best price as a neutral pill, not a state", () => {
+    prices = [row("a", "Carrefour", 1.45), row("b", "Mercadona", 1.19)];
+    renderWithIntl(<StoreComparison productId="p1" />, { locale: "es" });
+
+    // It was `text-ok-foreground`: the healthy-state ink on a ranking.
+    const label = screen.getByText("Mejor precio");
+    expect(label.className).toContain("bg-muted");
+    expect(label.className).not.toMatch(/\b(?:text|bg|border)-(?:ok|warn|danger)(?:-foreground)?\b/);
+  });
+
   it("writes every price as text, so the bars add nothing that is only a bar", () => {
     prices = [row("a", "Carrefour", 1.45), row("b", "Mercadona", 1.19)];
     renderWithIntl(<StoreComparison productId="p1" />, { locale: "es" });
@@ -133,5 +143,21 @@ describe("StoreComparison", () => {
     expect(first!.textContent).toContain("5,34");
     expect(first!.textContent).toContain("por 6 unidad");
     expect(second!.textContent).toContain("11% más caro que el mejor");
+  });
+});
+
+describe("its place in the page outline", () => {
+  it("is a section of the page, at the page's section level and size", () => {
+    // It was an h3 at md:text-2xl straight after the chart's h2 at text-lg:
+    // the outline said "part of the chart", the type said "bigger than it"
+    // (WCAG 1.3.1).
+    prices = [row("a", "Carrefour", 1.45), row("b", "Mercadona", 1.19)];
+    const { container } = renderWithIntl(<StoreComparison productId="p1" />, {
+      locale: "es",
+    });
+
+    const heading = container.querySelector("#store-comparison");
+    expect(heading?.tagName).toBe("H2");
+    expect(heading?.className).not.toContain("md:text-2xl");
   });
 });

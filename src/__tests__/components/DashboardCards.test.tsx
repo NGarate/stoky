@@ -121,7 +121,7 @@ describe("the Panel's opening order", () => {
 
     const addStock = screen.getByRole("link", { name: "Añadir stock" });
     const restock = screen.getByRole("heading", {
-      name: "Necesita reposición",
+      name: "Se está acabando",
     });
 
     // The person opening this screen came to *do* something; what needs
@@ -140,7 +140,7 @@ describe("the Panel's opening order", () => {
     ).toBeAbsent();
     // The other three actions have no other home on this tier and stay.
     expect(screen.getByRole("link", { name: "Añadir stock" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Consumir stock" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apuntar consumo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Subir un ticket" })).toBeInTheDocument();
   });
 });
@@ -168,7 +168,7 @@ describe("what the Panel does not say twice", () => {
     // What replaced it is what was always underneath: the sections, which
     // are the doors, still carry every row.
     expect(
-      screen.getByRole("heading", { name: "Necesita reposición" }),
+      screen.getByRole("heading", { name: "Se está acabando" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Café molido" })).toBeInTheDocument();
   });
@@ -260,7 +260,7 @@ describe("the restock list's state", () => {
     };
     renderWithIntl(<DashboardPage />, { locale: "es" });
 
-    expect(screen.getByText("Stock bajo")).toBeInTheDocument();
+    expect(screen.getByText("Queda poco")).toBeInTheDocument();
     // How much is left is still said, as a detail rather than as the state.
     expect(screen.getByText(/Quedan 1 paquete \(mínimo 2\)/)).toBeInTheDocument();
   });

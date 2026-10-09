@@ -61,7 +61,8 @@ test.describe("ending every session", () => {
       await householdField.fill(`Revoke Household ${stamp}`);
     }
     await page.click('button[type="submit"]');
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    // A new account is asked which screen it wants (Journey 8).
+    await expect(page).toHaveURL(/\/start/, { timeout: 30_000 });
 
     // A second device, holding the very same session.
     const state = await page.context().storageState();
@@ -119,7 +120,8 @@ test.describe("ending every session", () => {
       await householdField.fill(`Revoke Cancel Household ${stamp}`);
     }
     await page.click('button[type="submit"]');
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    // A new account is asked which screen it wants (Journey 8).
+    await expect(page).toHaveURL(/\/start/, { timeout: 30_000 });
 
     await page.goto("/settings");
     await page

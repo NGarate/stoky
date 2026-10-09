@@ -1,20 +1,28 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
+import { ExpiryStatus } from "@/components/inventory/ExpiryStatus";
+import { StockStatus } from "@/components/inventory/StockStatus";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { EXPIRING_SOON_DAYS } from "@/lib/inventory/batches";
+import { Section } from "@/components/ui/section";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { useWriteQueue } from "@/lib/offline/queue-context";
-import { UNDO_HOLD_MS } from "@/lib/offline/queue";
+import { undoHoldMs } from "@/lib/snackbar-duration";
 import { useSnackbar } from "@/components/ui/snackbar";
 import {
   projectOnListQuantities,
   projectStockTotals,
 } from "@/lib/offline/project";
 import type { JSX } from "react";
+import { formatTime } from "@/lib/dates";
 
 /**
  * Screen B — the kitchen, "at home" (`REDESIGN_PLAN.md` §4).
@@ -64,6 +72,8 @@ import type { JSX } from "react";
  */
 export default function KitchenPage(): JSX.Element {
   const t = useTranslations("kitchen");
+  const locale = useLocale();
+  const units = useQuantityFormat();
   const { state: queue, enqueue } = useWriteQueue();
   const snackbar = useSnackbar();
 
@@ -111,15 +121,21 @@ export default function KitchenPage(): JSX.Element {
         error={expiring.error}
         fetchStatus={expiring.fetchStatus}
         isLoading={expiring.isPending}
+        density="touch"
         onRetry={() => void expiring.refetch()}
         title={t("title")}
+        width="screen"
       />
     );
   }
 
   const batches = expiring.data;
-  const urgent = batches.filter((batch) => batch.daysUntilExpiry <= 3);
-  const later = batches.filter((batch) => batch.daysUntilExpiry > 3);
+  const urgent = batches.filter(
+    (batch) => batch.daysUntilExpiry <= EXPIRING_SOON_DAYS,
+  );
+  const later = batches.filter(
+    (batch) => batch.daysUntilExpiry > EXPIRING_SOON_DAYS,
+  );
 
   const lowStock = stock.data?.products ?? [];
   /**
@@ -163,7 +179,7 @@ export default function KitchenPage(): JSX.Element {
         unit: product.defaultUnit,
       },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
 
     // Refused for want of room: the queue is full and says so in the shell's
@@ -239,7 +255,7 @@ export default function KitchenPage(): JSX.Element {
         unit: batch.unit,
       },
       label,
-      holdMs: UNDO_HOLD_MS,
+      holdMs: undoHoldMs(),
     });
 
     if (!queued.ok) return;
@@ -251,34 +267,23 @@ export default function KitchenPage(): JSX.Element {
     });
   }
 
-  function when(days: number): string {
-    if (days < 0) return t("expired");
-    if (days === 0) return t("expiresToday");
-    if (days === 1) return t("expiresTomorrow");
-    return t("expiresInDays", { days });
-  }
-
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-4xl font-bold text-heading">{t("title")}</h1>
+    <PageShell width="screen">
+      <PageHeader density="touch" title={t("title")} />
 
-      <section aria-labelledby="use-now" className="mt-8">
-        <h2
-          className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
-          id="use-now"
-        >
-          {t("useNow")}
-        </h2>
-
+      {/* Sentence case. These were tracked uppercase grey labels: the
+          commonest tell of a template, and on a tablet read from a metre
+          away, uppercase is the slower thing to read. */}
+      <Section density="touch" title={t("useNow")}>
         {urgent.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-ok-foreground bg-ok p-6">
+          <div className="rounded-xl border border-ok-foreground bg-ok p-6">
             <p className="text-2xl text-ok-foreground">{t("nothingUrgent")}</p>
             <p className="mt-2 text-xl text-ok-foreground">
               {t("nothingUrgentHint")}
             </p>
           </div>
         ) : (
-          <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {urgent.map((batch) => {
               return (
                 <li
@@ -288,15 +293,22 @@ export default function KitchenPage(): JSX.Element {
                   <p className="text-2xl font-bold text-warn-foreground">
                     {batch.product.name}
                   </p>
-                  <p className="mt-1 text-xl text-warn-foreground">
-                    {when(batch.daysUntilExpiry)}
+                  {/* `ExpiryStatus`'s word, the one every screen uses. This
+                      said "Quedan 2 días" while the Panel said "En 2 días"
+                      for the same batch. Outlined: the card is already warn. */}
+                  <p className="mt-2">
+                    <ExpiryStatus
+                      className="text-xl"
+                      daysUntilExpiry={batch.daysUntilExpiry}
+                      onTintedRow
+                    />
                   </p>
                   <p className="mt-1 text-xl text-warn-foreground">
                     {batch.location?.name ?? t("noLocation")}
                   </p>
 
                   <p className="mt-1 text-xl text-warn-foreground">
-                    {batchLeft(batch) === null ? t("quantityUnknown") : t("batchLeft", { quantity: batchLeft(batch) ?? 0, unit: batch.unit })}
+                    {batchLeft(batch) === null ? t("quantityUnknown") : t("batchLeft", { quantity: batchLeft(batch) ?? 0, unit: units.unit(batch.unit, batchLeft(batch) ?? 0) })}
                   </p>
                   <Button
                     disabled={batchLeft(batch) === null || (batchLeft(batch) ?? 0) < 1}
@@ -305,10 +317,10 @@ export default function KitchenPage(): JSX.Element {
                     size="lg"
                     type="button"
                   >
-                    <span aria-hidden="true">{t("useOneUnit", { unit: batch.unit })}</span>
+                    <span aria-hidden="true">{t("useOneUnit", { unit: units.unit(batch.unit, 1) })}</span>
                     <span className="sr-only">
                       {t("useOneOf", {
-                        unit: batch.unit,
+                        unit: units.unit(batch.unit, 1),
                         name: batch.product.name,
                       })}
                     </span>
@@ -318,30 +330,23 @@ export default function KitchenPage(): JSX.Element {
             })}
           </ul>
         )}
-      </section>
+      </Section>
 
       <div className="mt-10 grid gap-8 md:grid-cols-2">
-        <section aria-labelledby="this-week">
-          <h2
-            className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
-            id="this-week"
-          >
-            {t("thisWeek")}
-          </h2>
+        <Section density="touch" title={t("thisWeek")}>
           {later.length === 0 ? (
-            <p className="mt-3 text-xl text-muted-foreground">
-              {t("nothingThisWeek")}
-            </p>
+            <EmptyState density="touch" title={t("nothingThisWeek")} />
           ) : (
-            <ul className="mt-3">
+            <ul>
               {later.map((batch) => (
                 <ItemRow
                   density="touch"
                   key={batch.id}
                   status={
-                    <span className="shrink-0 text-muted-foreground">
-                      {when(batch.daysUntilExpiry)}
-                    </span>
+                    <ExpiryStatus
+                      className="text-lg md:text-xl"
+                      daysUntilExpiry={batch.daysUntilExpiry}
+                    />
                   }
                   title={batch.product.name}
                   variant="plain"
@@ -349,27 +354,21 @@ export default function KitchenPage(): JSX.Element {
               ))}
             </ul>
           )}
-        </section>
+        </Section>
 
-        <section aria-labelledby="running-out">
-          <h2
-            className="text-2xl font-semibold uppercase tracking-wide text-muted-foreground"
-            id="running-out"
-          >
-            {t("runningOut")}
-          </h2>
+        <Section density="touch" title={t("runningOut")}>
           {/* Announced politely: the one failure this section can produce is
               "no connection to create the first list", and a tablet read from
               a metre away must say it rather than swallow the tap. */}
           <p
             aria-live="polite"
-            className={listError ? "mt-3 text-lg text-danger-foreground" : "sr-only"}
+            className={listError ? "mb-3 text-lg text-danger-foreground" : "sr-only"}
             role="status"
           >
             {listError ? t("listCreateFailed") : ""}
           </p>
           {restock === "failed" ? (
-            <div className="mt-3">
+            <div>
               <p className="text-xl text-danger-foreground">
                 {t("runningOutFailed")}
               </p>
@@ -383,15 +382,13 @@ export default function KitchenPage(): JSX.Element {
               </Button>
             </div>
           ) : restock === "checking" ? (
-            <p className="mt-3 text-xl text-muted-foreground">
+            <p className="text-xl text-muted-foreground">
               {t("runningOutLoading")}
             </p>
           ) : lowStock.length === 0 ? (
-            <p className="mt-3 text-xl text-muted-foreground">
-              {t("nothingRunningOut")}
-            </p>
+            <EmptyState density="touch" title={t("nothingRunningOut")} />
           ) : (
-            <ul className="mt-3">
+            <ul>
               {lowStock.map((product) => {
                 const left = totals.get(product.id) ?? product.totalStock;
                 const already = onList.get(product.id) ?? 0;
@@ -404,19 +401,30 @@ export default function KitchenPage(): JSX.Element {
                         // The label says "Queda"; the value used to say it
                         // again — "Queda / Queda 1 de 2 L", and "Queda / No
                         // queda nada" — which on a tablet read from a metre
-                        // away is a word of the sentence spent twice.
+                        // away is a word of the sentence spent twice. At
+                        // zero it is the amount like any other: what that
+                        // *means* is the status badge's job.
                         label: t("leftLabel"),
-                        value:
-                          left <= 0
-                            ? t("noneLeft")
-                            : t("leftOf", {
-                                stock: left,
-                                minimum: product.minStock ?? 0,
-                                unit: product.defaultUnit,
-                              }),
+                        value: t("leftOf", {
+                          stock: Math.max(0, left),
+                          minimum: product.minStock ?? 0,
+                          unit: units.unit(product.defaultUnit, product.minStock ?? 0),
+                        }),
                       },
                     ]}
+                    /* StockStatus's word, the one the inventory and the Panel
+                       wear. This row worked the state out for itself — "Queda:
+                       Nada" and no badge — which is ISSUES UI-11 on a sixth
+                       screen. Every row here came from the `lowStock`
+                       question, so each is low by construction. */
                     status={
+                      <StockStatus
+                        className="text-lg md:text-xl"
+                        isLowStock
+                        totalStock={left}
+                      />
+                    }
+                    actions={
                       /* Offered only while it would change anything. Six
                          litres already written down and a minimum of six is
                          not a product that needs buying, and a button that
@@ -424,8 +432,14 @@ export default function KitchenPage(): JSX.Element {
                          button somebody presses again. What replaces it is
                          the reason, not a blank. */
                       needsMoreOnList(left, already, product.minStock) ? (
+                        // In `actions`, not `status`: beside the title it
+                        // moved with the length of the product's name, at
+                        // `text-sm`, on a screen read from a metre away. Same
+                        // size as the cards' "He usado" button.
                         <Button
+                          className="text-xl"
                           onClick={() => addToList(product)}
+                          size="lg"
                           type="button"
                           variant="outline"
                         >
@@ -435,12 +449,12 @@ export default function KitchenPage(): JSX.Element {
                           </span>
                         </Button>
                       ) : (
-                        <span className="shrink-0 text-lg text-muted-foreground">
+                        <p className="text-lg text-muted-foreground md:text-xl">
                           {t("onList", {
                             quantity: already,
-                            unit: product.defaultUnit,
+                            unit: units.unit(product.defaultUnit, already),
                           })}
-                        </span>
+                        </p>
                       )
                     }
                     title={product.name}
@@ -450,8 +464,19 @@ export default function KitchenPage(): JSX.Element {
               })}
             </ul>
           )}
-        </section>
+        </Section>
       </div>
-    </div>
+
+      {/* A tablet nobody touches refreshes itself every five minutes; this
+          is how a person reading it from across the room can tell it did.
+          Not live: announcing the clock every five minutes would be noise. */}
+      {expiring.dataUpdatedAt > 0 ? (
+        <p className="mt-10 text-lg text-muted-foreground">
+          {t("updated", {
+            time: formatTime(locale, expiring.dataUpdatedAt),
+          })}
+        </p>
+      ) : null}
+    </PageShell>
   );
 }

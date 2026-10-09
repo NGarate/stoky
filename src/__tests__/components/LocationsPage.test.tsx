@@ -259,6 +259,14 @@ describe("the storage locations screen", () => {
     ]);
   });
 
+  it("draws a row's delete as a destructive button, not a coloured span", () => {
+    renderPage();
+
+    const remove = screen.getByRole("button", { name: /Eliminar Despensa/ });
+    expect(remove.className).toContain("text-destructive");
+    expect(remove.querySelector(".text-destructive")).toBeNull();
+  });
+
   it("refetches the tree after every write", async () => {
     renderPage();
 
@@ -302,7 +310,7 @@ describe("the storage locations screen", () => {
     expect(screen.queryByRole("button", { name: /Editar Nevera/ })).toBeAbsent();
     expect(screen.queryByRole("button", { name: /Eliminar Nevera/ })).toBeAbsent();
     expect(
-      screen.getByText(/Sólo quien administra el hogar/),
+      screen.getByText(/Solo quien administra el hogar/),
     ).toBeInTheDocument();
   });
 

@@ -6,7 +6,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { syncStatus, isUrgent } from "@/lib/offline/status";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { ReconcileDialog } from "./ReconcileDialog";
+import { useDiscardChange } from "./useDiscardChange";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { JSX } from "react";
 
@@ -35,7 +37,9 @@ export function SyncStatus(): JSX.Element {
   // the `offline` namespace with the prefix stripped, any label from another
   // namespace was shown raw: "offline.shopping.itemUpdated".
   const tLabel = useTranslations();
-  const { state, drain, retry, discard } = useWriteQueue();
+  const units = useQuantityFormat();
+  const { state, drain, retry } = useWriteQueue();
+  const discardChange = useDiscardChange();
   const [reconciling, setReconciling] = useState<FailedOp | null>(null);
 
   const summary = syncStatus(state);
@@ -106,7 +110,7 @@ export function SyncStatus(): JSX.Element {
                 {toReconcile.map((op) => (
                   <li key={op.id} className="flex flex-wrap items-center gap-2">
                     <span className="flex-1">
-                      {tLabel(op.label.key, op.label.values)}
+                      {tLabel(op.label.key, units.labelValues(op.label.values))}
                     </span>
                     <Button
                       onClick={() => setReconciling(op)}
@@ -124,7 +128,7 @@ export function SyncStatus(): JSX.Element {
                 {toReview.map((op) => (
                   <li key={op.id} className="flex flex-wrap items-center gap-2">
                     <span className="flex-1">
-                      {tLabel(op.label.key, op.label.values)}
+                      {tLabel(op.label.key, units.labelValues(op.label.values))}
                     </span>
                     {/* The barcode carries into the create form, which
                         discards this queued scan once the product is named. */}
@@ -137,10 +141,15 @@ export function SyncStatus(): JSX.Element {
                         {t("nameIt")}
                       </Link>
                     </Button>
-                    {/* Discarding deletes an unsent change and nothing puts it
-                        back, so it wears the colour that says so. */}
+                    {/* Discarding deletes an unsent change once its undo has
+                        gone, so it wears the colour that says so — and names
+                        the change, because every row's button says the same
+                        word. */}
                     <Button
-                      onClick={() => discard(op.id)}
+                      aria-label={t("discardNamed", {
+                        label: tLabel(op.label.key, op.label.values),
+                      })}
+                      onClick={() => discardChange(op)}
                       type="button"
                       variant="destructive"
                     >
@@ -156,7 +165,7 @@ export function SyncStatus(): JSX.Element {
                 {otherFailures.map((op) => (
                   <li key={op.id} className="flex flex-wrap items-center gap-2">
                     <span className="flex-1">
-                      {tLabel(op.label.key, op.label.values)}
+                      {tLabel(op.label.key, units.labelValues(op.label.values))}
                     </span>
                     <Button
                       onClick={() => retry(op.id)}
@@ -165,7 +174,10 @@ export function SyncStatus(): JSX.Element {
                       {t("retry")}
                     </Button>
                     <Button
-                      onClick={() => discard(op.id)}
+                      aria-label={t("discardNamed", {
+                        label: tLabel(op.label.key, op.label.values),
+                      })}
+                      onClick={() => discardChange(op)}
                       type="button"
                       variant="destructive"
                     >

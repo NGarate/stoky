@@ -116,7 +116,8 @@ class RegisterPage {
     householdName?: string,
   ) {
     await this.register(name, email, password, householdName);
-    await expect(this.page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+    // A new account is asked which screen it wants (Journey 8).
+    await expect(this.page).toHaveURL(/\/start/, { timeout: 15_000 });
   }
 
   async expectErrorMessage(message: string) {
@@ -127,7 +128,22 @@ class RegisterPage {
 class DashboardPage {
   constructor(private page: Page) {}
 
+  /**
+   * Arrive on the panel after registering or signing in.
+   *
+   * Signing in lands on `/`, which sends a device nobody has chosen a screen
+   * on to `/start` (Journey 8) — and every account these journeys create is
+   * new to this browser context. So they answer the question the way a person
+   * does, by choosing the panel, rather than typing its URL. A second sign-in
+   * on the same context has already answered and goes straight there.
+   */
   async expectLoaded() {
+    await expect(this.page).toHaveURL(/\/(start|dashboard)/, { timeout: 15_000 });
+    if (new URL(this.page.url()).pathname === "/start") {
+      await this.page
+        .getByRole("button", { name: new RegExp(es.start.dashboard) })
+        .click();
+    }
     await expect(this.page).toHaveURL(/\/dashboard/);
     // Wait for dashboard content to load
     await this.page.waitForLoadState("networkidle");
@@ -363,7 +379,7 @@ class InventoryPage {
  * E2E Critical Path Tests
  * 
  * These tests cover the most important user flows:
- * 1. Onboarding Flow: Register → Create household → Land on dashboard
+ * 1. Onboarding Flow: Register → Create household → Choose a screen → Land on dashboard
  * 2. Product Creation: Login → Navigate to products → Add product → Verify in list
  * 3. Inventory Management: Login → Add stock → View inventory → Consume stock
  */
@@ -385,7 +401,7 @@ test.describe("Onboarding Flow", () => {
     // Fill registration form with household
     await registerPage.register(testName, testEmail, testPassword, householdName);
 
-    // Should redirect to dashboard after successful registration
+    // Asked which screen to start on, then on the one chosen
     await dashboardPage.expectLoaded();
 
     // Verify navigation items are present
@@ -777,15 +793,15 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await page.goto("/kitchen");
   const use = page.getByRole("button", { name: new RegExp(`He usado.*${name}`) });
   const card = page.locator("li").filter({ has: use });
-  await expect(card).toContainText("Quedan 36 unidad");
+  await expect(card).toContainText("Quedan 36 unidades");
   for (const left of [35, 34]) {
     const saved = page.waitForResponse((response) => response.url().includes("inventory.consumeStock") && response.request().method() === "POST");
     await use.click();
     expect((await saved).ok()).toBe(true);
-    await expect(card).toContainText(`Quedan ${left} unidad`);
+    await expect(card).toContainText(`Quedan ${left} unidades`);
   }
   await page.reload();
-  await expect(card).toContainText("Quedan 34 unidad");
+  await expect(card).toContainText("Quedan 34 unidades");
   await page.goto(`${productUrl}/history`);
   await expect(page.getByRole("cell", { name: es.products.history.opCONSUME, exact: true })).toHaveCount(2);
 
@@ -795,13 +811,13 @@ test("a recount leaves unknown details blank and two kitchen taps consume two eg
   await page.getByLabel(es.products.adjust.actualLabel, { exact: true }).fill("35");
   await page.getByLabel(es.products.adjust.reasonLabel, { exact: true }).fill("Recuento real");
   await page.getByRole("button", { name: es.products.adjust.submit, exact: true }).click();
-  await expect(page.getByTestId("snackbar")).toContainText("35 unidad");
+  await expect(page.getByTestId("snackbar")).toContainText("35 unidades");
   await page.goto(productUrl);
   await expect(page.getByTestId("stepper-value")).toContainText("35");
   // Only the 34 eggs left in the dated purchase have a known expiry. The
   // recounted extra egg acquires neither its date nor a location.
-  await expect(page.getByText("34 unidad · Sin ubicación", { exact: true })).toBeVisible();
-  await expect(page.getByText("35 unidad · Sin ubicación", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("34 unidades · Sin ubicación", { exact: true })).toBeVisible();
+  await expect(page.getByText("35 unidades · Sin ubicación", { exact: true })).toHaveCount(0);
 });
 
 test.describe("Login Flow", () => {
@@ -832,7 +848,7 @@ test.describe("Login Flow", () => {
     await page.goto("/login");
     await loginPage.login(testEmail, testPassword);
 
-    // Should redirect to dashboard
+    // Already answered on this context, so straight to the panel
     await dashboardPage.expectLoaded();
   });
 
@@ -926,7 +942,7 @@ test.describe("The Panel summarises; its lists are the doors", () => {
     // What survives is Phase 8 item 2's invariant, not its wording: the rows
     // here come from the same `needsRestock` question the filtered inventory
     // asks, so the two cannot disagree. The seed holds three such products.
-    const section = page.getByRole("region", { name: "Necesita reposición" });
+    const section = page.getByRole("region", { name: es.dashboard.restockTitle });
     await expect(section).toBeVisible();
     for (const product of [
       "Leche entera",

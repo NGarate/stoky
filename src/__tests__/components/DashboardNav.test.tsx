@@ -58,7 +58,7 @@ describe("DashboardNav", () => {
       ["Inventario", "/inventory"],
       ["Productos", "/products"],
       ["Tickets", "/receipts"],
-      ["Lista de compras", "/shopping"],
+      ["Lista de la compra", "/shopping"],
       ["Precios", "/prices"],
       ["Configuración", "/settings"],
     ];

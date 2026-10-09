@@ -1,6 +1,7 @@
 "use client";
 
 import * as RadixDialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRef } from "react";
 
@@ -134,7 +135,7 @@ export function Dialog({
               type="button"
               variant="ghost"
             >
-              <span aria-hidden="true">✕</span>
+              <X aria-hidden="true" className="size-5" />
             </Button>
           </RadixDialog.Close>
 

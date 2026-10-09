@@ -20,6 +20,7 @@
     "test:components": "bun test --preload ./src/__tests__/setup/register-dom.ts src/__tests__/components",
     "test:integration": "bash scripts/test-integration-local.sh",
     "test:integration:only": "bun test src/__tests__/integration",
+    "test:e2e": "bash scripts/e2e-in-image.sh",
     "verify:local": "bash scripts/verify-local.sh",
     "verify:ci": "bash scripts/verify-local.sh --ci",
     "db:migrate": "bun --bun node_modules/prisma/build/index.js migrate dev",

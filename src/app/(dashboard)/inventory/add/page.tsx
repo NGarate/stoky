@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/inventory/LocationPicker";
 import { ProductPicker } from "@/components/inventory/ProductPicker";
 import { StoreSelector } from "@/components/store/StoreSelector";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
@@ -18,6 +18,8 @@ import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useEnvelope } from "@/components/offline/Composer";
 import type { PickedProduct } from "@/components/inventory/ProductPicker";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
+import { Disclosure } from "@/components/ui/disclosure";
 
 type FieldName = "product" | "quantity" | "unit" | "expiration" | "price" | "store";
 
@@ -44,6 +46,7 @@ function serverErrorKey(message: string | undefined): string {
 
 export default function AddStockPage(): JSX.Element {
   const t = useTranslations("inventory.add");
+  const units = useQuantityFormat();
   const envelope = useEnvelope();
   const router = useRouter();
   const utils = api.useUtils();
@@ -101,11 +104,13 @@ export default function AddStockPage(): JSX.Element {
      * Report what was written, rather than redirecting in silence.
      *
      * This used to `router.push("/inventory")`, and the destination has no
-     * live region — so the entire confirmation a screen-reader user received
-     * was Next's route announcer reading "Inventario". That is the same word
-     * it reads when somebody clicks Inventario in the navigation and saves
-     * nothing: it answers "where am I", never "did that work" (ISSUES.md
-     * A11Y-1).
+     * live region — so a screen-reader user received no confirmation at all.
+     * Next's route announcer speaks only when `document.title` changes, and
+     * every route then shared one title, so it said nothing. Now that each
+     * route has its own (`src/lib/route-titles.ts`) it would read
+     * "Inventario · Stoky" — the same words it reads when somebody clicks
+     * Inventario in the navigation and saves nothing: "where am I", never
+     * "did that work" (ISSUES.md A11Y-1).
      *
      * Saying it here also answers *how much* and *of what* without walking the
      * table, which the redirect could never do. Same shape as
@@ -122,7 +127,7 @@ export default function AddStockPage(): JSX.Element {
     },
     onError: (error) => {
       const key = serverErrorKey(error.message);
-      setServerError(t(key, { unit: product?.defaultUnit ?? "" }));
+      setServerError(t(key, { unit: units.measure(product?.defaultUnit) }));
       // The unit lives in the folded half; a refusal about it must not point
       // at a closed drawer.
       if (key === "errorUnitMismatch") advancedRef.current?.setAttribute("open", "");
@@ -220,18 +225,18 @@ export default function AddStockPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <PageShell width="form">
       {/* Over the form rather than instead of it. A11Y-1 is why this is a
           dialog and not a snackbar: focus moves into it, so the confirmation
-          is announced rather than left to Next's route announcer reading the
-          destination's name. Closing it is what "Añadir otro" used to be —
+          is announced rather than left to Next's route announcer, which only
+          ever reads the destination's title. Closing it is what "Añadir otro" used to be —
           the form is still underneath, exactly as it was left. */}
       <Dialog
         description={
           saved
             ? t("successBody", {
                 quantity: saved.quantity,
-                unit: saved.unit,
+                unit: units.unit(saved.unit, saved.quantity),
                 name: saved.name,
               })
             : undefined
@@ -251,12 +256,13 @@ export default function AddStockPage(): JSX.Element {
         title={t("successTitle")}
       />
 
-      <BackLink href="/inventory">{t("backToInventory")}</BackLink>
+      <PageHeader
+        back={{ href: "/inventory", label: t("backToInventory") }}
+        intro={t("intro")}
+        title={t("title")}
+      />
 
-      <h1 className="mt-2 text-2xl font-bold text-heading">{t("title")}</h1>
-      <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-
-      <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form noValidate onSubmit={handleSubmit} className="space-y-6">
         <FormErrorSummary
           focusSignal={errorSignal}
           messages={summaryMessages}
@@ -358,7 +364,6 @@ export default function AddStockPage(): JSX.Element {
               fieldErrors.store ? `${storeHintId} ${storeErrorId}` : storeHintId
             }
             ariaInvalid={fieldErrors.store ? true : undefined}
-            className="min-h-[48px] w-full"
           />
           <p id={storeHintId} className="mt-1 text-sm text-muted-foreground">
             {t("storeHint")}
@@ -420,13 +425,7 @@ export default function AddStockPage(): JSX.Element {
             rare. Native <details>, the pattern ProductRating set; controlled,
             so a refusal about the unit can open it rather than point at a
             closed drawer. */}
-        <details
-          className="rounded border border-border bg-muted"
-          ref={advancedRef}
-        >
-          <summary className="flex min-h-[48px] cursor-pointer items-center px-4 font-medium text-foreground">
-            {t("advancedSummary")}
-          </summary>
+        <Disclosure ref={advancedRef} summary={t("advancedSummary")}>
           <div className="space-y-6 px-4 pb-4">
             <div>
               <label
@@ -503,7 +502,7 @@ export default function AddStockPage(): JSX.Element {
               </p>
             </div>
           </div>
-        </details>
+        </Disclosure>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button
@@ -522,6 +521,6 @@ export default function AddStockPage(): JSX.Element {
           </p>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

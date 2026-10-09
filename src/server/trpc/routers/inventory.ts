@@ -13,6 +13,7 @@ import {
   allocateFefo,
   daysUntilExpiry,
   endOfDayAfter,
+  EXPIRING_SOON_DAYS,
   netStock,
   remainingByBatch,
   startOfToday,
@@ -999,7 +1000,7 @@ export const inventoryRouter = createTRPCRouter({
    * database can answer (`remainingByBatch`). Getting that wrong was INV-1 —
    * six litres bought and four drunk read as six expiring.
    *
-   * `isExpiringSoon` at three days is the threshold the kitchen screen uses to
+   * `isExpiringSoon` at `EXPIRING_SOON_DAYS` is the threshold the kitchen uses to
    * decide what takes space.
    */
   getExpiringItems: householdProcedure
@@ -1027,7 +1028,7 @@ export const inventoryRouter = createTRPCRouter({
         return {
           ...batch,
           daysUntilExpiry: daysLeft,
-          isExpiringSoon: daysLeft <= 3,
+          isExpiringSoon: daysLeft <= EXPIRING_SOON_DAYS,
         };
       });
     }),

@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo } from "react";
-import { Plus, FileText } from "lucide-react";
+import { Plus } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ReceiptStatusBadge } from "@/components/receipt/ReceiptStatus";
 
 import type { ReceiptStatus } from "@prisma/client";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 
 interface Receipt {
   id: string;
@@ -49,33 +52,31 @@ export default function ReceiptsPage() {
   const data = query.data;
   const receipts: Receipt[] = data?.items ?? [];
 
-  // Formatted here rather than by a shared helper, because a shared one has to
-  // be told the locale and the only thing that knows it is a component. There
-  // used to be a `formatDate` in `lib/utils` with `es-ES` written into it
-  // (ISSUES.md I18N-3); it is gone rather than parameterised, because nothing
-  // called it and a locale-pinning helper on the shelf is a trap for whoever
-  // reaches for it next.
-  const dateFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }),
-    [locale],
-  );
-  const moneyFormat = useMemo(
-    () => new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }),
-    [locale],
-  );
+  // Dates go through `lib/dates`, which takes the locale as an argument. The
+  // `formatDate` that once lived in `lib/utils` had `es-ES` written into it
+  // (ISSUES.md I18N-3); the shared helper is fine, the pinned locale was not.
 
   // `!data` rather than `isLoading`, which is false for a query that is
   // paused offline or has failed — so with no signal, or after a 500, this
   // fell straight through to the empty state and told somebody they had
   // nothing. RouteState says which of loading, offline or failed it is.
+  // `asChild` so the anchor *is* the button: a `<Link>` wrapping a `<Button>`
+  // produced an `<a>` with no box of its own — 103×17, well under the target
+  // floor — around a button that had one, and an anchor containing a button
+  // is not valid HTML either (DESIGN_AUDIT A4.2).
+  const upload = (
+    <Button asChild>
+      <Link href="/receipts/upload">
+        <Plus aria-hidden="true" className="mr-2 size-5" />
+        {t("upload")}
+      </Link>
+    </Button>
+  );
+
   if (!data) {
     return (
       <RouteState
+        actions={upload}
         error={query.error}
         fetchStatus={query.fetchStatus}
         isLoading={query.isPending}
@@ -86,30 +87,19 @@ export default function ReceiptsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-heading md:text-4xl">{t("title")}</h1>
-        {/* `asChild` so the anchor *is* the button: a `<Link>` wrapping a
-            `<Button>` produced an `<a>` with no box of its own — 103×17, well
-            under the target floor — around a button that had one, and an anchor
-            containing a button is not valid HTML either (DESIGN_AUDIT A4.2). */}
-        <Button asChild>
-          <Link href="/receipts/upload">
-            <Plus className="w-4 h-4 mr-2" />
-            {t("upload")}
-          </Link>
-        </Button>
-      </div>
+    <PageShell width="index">
+      <PageHeader actions={upload} title={t("title")} />
 
       {receipts.length === 0 ? (
-        <div className="text-center py-12 rounded-lg border border-border bg-muted">
-          <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-foreground mb-2">{t("noReceipts")}</p>
-          <p className="text-sm text-muted-foreground">{t("uploadFirst")}</p>
-          <Button asChild variant="outline" className="mt-4">
-            <Link href="/receipts/upload">{t("upload")}</Link>
-          </Button>
-        </div>
+        <EmptyState
+          action={
+            <Button asChild variant="outline">
+              <Link href="/receipts/upload">{t("upload")}</Link>
+            </Button>
+          }
+          body={t("uploadFirst")}
+          title={t("noReceipts")}
+        />
       ) : (
         <ul className="space-y-3">
           {receipts.map((receipt) => (
@@ -123,17 +113,17 @@ export default function ReceiptsPage() {
                 receipt.purchaseDate
                   ? {
                       label: t("purchaseDate"),
-                      value: dateFormat.format(receipt.purchaseDate),
+                      value: formatDate(locale, receipt.purchaseDate, "long"),
                     }
                   : {
                       label: t("uploadedAt"),
-                      value: dateFormat.format(receipt.createdAt),
+                      value: formatDate(locale, receipt.createdAt, "long"),
                     },
                 ...(receipt.totalAmount
                   ? [
                       {
                         label: t("totalAmount"),
-                        value: moneyFormat.format(receipt.totalAmount),
+                        value: formatMoney(locale, receipt.totalAmount, DEFAULT_CURRENCY),
                       },
                     ]
                   : []),
@@ -152,6 +142,6 @@ export default function ReceiptsPage() {
           ))}
         </ul>
       )}
-    </div>
+    </PageShell>
   );
 }

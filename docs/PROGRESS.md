@@ -2026,6 +2026,13 @@ change restored after a reload owes no second wait; a held head blocks the
 queue behind it, because order is correctness (`consumeStock` refuses when
 the quantity exceeds what the writes in front of it leave). Only the kitchen
 opts in: shopping ticks keep D54's trolley-as-undo and sync immediately.
+*Amended 2026-10-06:* ten seconds is now the default, not the rule. The hold
+follows the snackbar-duration preference — 10, 30 or 60 seconds, the last
+capped because a held head blocks the queue — since an undo is a time limit
+too (WCAG 2.2.3), and "Larga" had bought longer to read a button that had
+already stopped working. One table, `UNDO_HOLD_MS` in
+`src/lib/snackbar-duration.ts`, read through `undoHoldMs()`; it had been
+written three times.
 
 **D101 — One snackbar for events, and four other surfaces that are not it.**
 Feedback had no pattern: five ways of saying a thing had happened, and six

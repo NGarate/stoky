@@ -64,6 +64,7 @@ export function SnackbarDurationControl({
 } = {}): JSX.Element {
   const t = useTranslations("settings");
   const groupName = useId();
+  const hintId = useId();
   const value = useSyncExternalStore(
     subscribeSnackbarDuration,
     getSnackbarDurationSnapshot,
@@ -79,7 +80,10 @@ export function SnackbarDurationControl({
   }
 
   return (
-    <fieldset className={`min-w-0 border-0 p-0 ${className}`}>
+    <fieldset
+      aria-describedby={hintId}
+      className={`min-w-0 border-0 p-0 ${className}`}
+    >
       <legend className="mb-1 text-sm font-medium text-foreground">
         {t("snackbarDuration")}
       </legend>
@@ -96,6 +100,11 @@ export function SnackbarDurationControl({
           </RadioOption>
         ))}
       </div>
+      {/* The undo window follows this choice too (`undoHoldMs`), which the
+          three option names cannot say on their own. */}
+      <p className="mt-1 text-sm text-muted-foreground" id={hintId}>
+        {t("snackbarDurationHint")}
+      </p>
     </fieldset>
   );
 }

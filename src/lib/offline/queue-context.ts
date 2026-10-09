@@ -4,6 +4,7 @@ import { createContext, useContext } from "react";
 import type {
   EnqueueInput,
   EnqueueResult,
+  FailedOp,
   QueueState,
 } from "@/lib/offline/queue";
 
@@ -37,7 +38,10 @@ export interface WriteQueueValue {
    */
   holdRemainingMs: (id: string) => number;
   retry: (id: string) => void;
-  discard: (id: string) => void;
+  /** Give up on a failed change. Returns it, so `restore` can undo that. */
+  discard: (id: string) => FailedOp | null;
+  /** Put a discarded change back where it was. */
+  restore: (op: FailedOp) => void;
   /**
    * Send what can be sent, and resolve with **how many writes are still
    * unsent**.

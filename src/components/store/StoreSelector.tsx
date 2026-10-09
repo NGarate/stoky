@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+
+import { Select } from "@/components/ui/select";
 import { api } from "@/lib/trpc/client";
 
 interface StoreSelectorProps {
@@ -14,6 +16,14 @@ interface StoreSelectorProps {
   ariaInvalid?: boolean;
 }
 
+/**
+ * The household's shops, as the `Select` primitive.
+ *
+ * It was a raw `<select>` of its own: `bg-card` where every other field is
+ * `bg-background`, no focus outline of its own, and no target floor, so both
+ * callers restated the 48px floor — the loose end `target-floor.test.ts`
+ * named. The primitive owns all three now.
+ */
 export function StoreSelector({
   value,
   onChange,
@@ -28,20 +38,20 @@ export function StoreSelector({
 
   if (isLoading) {
     return (
-      <select disabled id={id} className={`rounded-md border border-input bg-card px-3 py-2 text-foreground ${className}`}>
+      <Select className={className} disabled id={id}>
         <option>{t("select")}...</option>
-      </select>
+      </Select>
     );
   }
 
   return (
-    <select
-      id={id}
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
+    <Select
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid}
-      className={`rounded-md border border-input bg-card px-3 py-2 text-foreground ${className}`}
+      className={className}
+      id={id}
+      onChange={(e) => onChange(e.target.value)}
+      value={value || ""}
     >
       <option value="">{placeholder || t("select")}</option>
       {stores?.map((store: { id: string; name: string }) => (
@@ -49,6 +59,6 @@ export function StoreSelector({
           {store.name}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }

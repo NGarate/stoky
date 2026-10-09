@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
+import { ExpiryRow } from "@/components/inventory/ExpiryStatus";
 import { StockStatus } from "@/components/inventory/StockStatus";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 import { Button } from "@/components/ui/button";
 import { ItemRow } from "@/components/ui/item-row";
+import { Section } from "@/components/ui/section";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState, SectionState } from "@/components/household/RouteState";
-import type { JSX, ReactNode } from "react";
+import type { JSX } from "react";
 
 /**
  * Household overview — the screen every login lands on.
@@ -51,6 +54,7 @@ const MAX_ROWS = 5;
 
 export default function DashboardPage(): JSX.Element {
   const t = useTranslations("dashboard");
+  const units = useQuantityFormat();
 
   // The summary asks the server for the same set the section below shows
   // (`needsRestock`, the filter /inventory?filter=restock uses) — a number
@@ -105,6 +109,7 @@ export default function DashboardPage(): JSX.Element {
         isLoading={restockQuery.isPending}
         onRetry={() => void restockQuery.refetch()}
         title={t("title")}
+        width="screen"
       />
     );
   }
@@ -122,11 +127,9 @@ export default function DashboardPage(): JSX.Element {
   const atRisk = expiredItems.length + expiringItems.length;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-heading">{t("title")}</h1>
-        <p className="mt-2 text-muted-foreground">{t("intro")}</p>
-      </div>
+    <PageShell width="screen">
+      <PageHeader intro={t("intro")} title={t("title")} />
+      <div className="space-y-8">
 
       <section aria-labelledby="dashboard-quick">
         <h2 id="dashboard-quick" className="sr-only">
@@ -139,27 +142,22 @@ export default function DashboardPage(): JSX.Element {
         </ul>
       </section>
 
-      <section aria-labelledby="dashboard-restock">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2
-            id="dashboard-restock"
-            className="text-lg font-semibold text-heading"
-          >
-            {t("restockTitle")}
-          </h2>
+      <Section
+        aside={
           <Button asChild variant="link">
-              <Link href="/shopping">{t("restockListLink")}</Link>
-            </Button>
-        </div>
-
+            <Link href="/shopping">{t("restockListLink")}</Link>
+          </Button>
+        }
+        title={t("restockTitle")}
+      >
         {restock.length === 0 ? (
-          <p className="mt-2 text-muted-foreground">{t("restockEmpty")}</p>
+          <p className="text-muted-foreground">{t("restockEmpty")}</p>
         ) : (
           <>
             {/* A list, not a card: rows separate with dividers, and the box
                 that used to frame them is gone (Noel's rule, 2026-08-19 —
                 cards only where a card is justified). */}
-            <ul className="mt-3">
+            <ul>
               {restock.slice(0, MAX_ROWS).map((product) => (
                 <ItemRow
                   density="compact"
@@ -178,7 +176,10 @@ export default function DashboardPage(): JSX.Element {
                             value: t("restockLow", {
                               quantity: product.totalStock,
                               minimum: product.minStock ?? 0,
-                              unit: product.defaultUnit,
+                              unit: units.unit(
+                                product.defaultUnit,
+                                product.totalStock,
+                              ),
                             }),
                           },
                         ]
@@ -208,20 +209,16 @@ export default function DashboardPage(): JSX.Element {
             ) : null}
           </>
         )}
-      </section>
+      </Section>
 
-      <section aria-labelledby="dashboard-expiry">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2
-            id="dashboard-expiry"
-            className="text-lg font-semibold text-heading"
-          >
-            {t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
-          </h2>
+      <Section
+        aside={
           <Button asChild variant="link">
-              <Link href="/inventory">{t("expiryInventoryLink")}</Link>
-            </Button>
-        </div>
+            <Link href="/inventory">{t("expiryInventoryLink")}</Link>
+          </Button>
+        }
+        title={t("expiryTitle", { days: EXPIRY_WINDOW_DAYS })}
+      >
 
         {expiryUnanswered !== null ? (
           <SectionState
@@ -230,52 +227,22 @@ export default function DashboardPage(): JSX.Element {
             onRetry={() => void expiryUnanswered.refetch()}
           />
         ) : atRisk === 0 ? (
-          <p className="mt-2 text-muted-foreground">{t("expiryEmpty")}</p>
+          <p className="text-muted-foreground">{t("expiryEmpty")}</p>
         ) : (
           <>
-            <ul className="mt-3 divide-y divide-border">
+            <ul className="divide-y divide-border">
               {expiredItems.slice(0, MAX_ROWS).map((item) => (
                 <ExpiryRow
+                  batch={item}
+                  daysUntilExpiry={-item.daysExpired}
                   key={item.id}
-                  location={item.location?.name ?? null}
-                  name={item.product.name}
-                  noLocationLabel={t("expiryNoLocation")}
-                  productId={item.product.id}
-                  locationLabel={t("expiryLocationLabel")}
-                  quantity={t("expiryQuantity", {
-                    quantity: item.quantity ?? t("quantityUnknown"),
-                    unit: item.unit,
-                  })}
-                  quantityLabel={t("expiryQuantityLabel")}
-                  status={
-                    <Badge tone="danger">
-                      {t("expiryExpired", { days: item.daysExpired })}
-                    </Badge>
-                  }
                 />
               ))}
               {expiringItems.slice(0, MAX_ROWS).map((item) => (
                 <ExpiryRow
+                  batch={item}
+                  daysUntilExpiry={item.daysUntilExpiry}
                   key={item.id}
-                  location={item.location?.name ?? null}
-                  name={item.product.name}
-                  noLocationLabel={t("expiryNoLocation")}
-                  productId={item.product.id}
-                  locationLabel={t("expiryLocationLabel")}
-                  quantity={t("expiryQuantity", {
-                    quantity: item.quantity ?? t("quantityUnknown"),
-                    unit: item.unit,
-                  })}
-                  quantityLabel={t("expiryQuantityLabel")}
-                  status={
-                    <Badge tone={item.isExpiringSoon ? "danger" : "warn"}>
-                      {item.daysUntilExpiry <= 0
-                        ? t("expiryToday")
-                        : item.daysUntilExpiry === 1
-                          ? t("expiryTomorrow")
-                          : t("expiryInDays", { days: item.daysUntilExpiry })}
-                    </Badge>
-                  }
                 />
               ))}
             </ul>
@@ -287,44 +254,9 @@ export default function DashboardPage(): JSX.Element {
             ) : null}
           </>
         )}
-      </section>
-
-    </div>
-  );
-}
-
-/** One batch that has expired or is about to. */
-function ExpiryRow({
-  location,
-  locationLabel,
-  name,
-  noLocationLabel,
-  productId,
-  quantity,
-  quantityLabel,
-  status,
-}: {
-  location: string | null;
-  name: string;
-  noLocationLabel: string;
-  productId: string;
-  quantity: string;
-  quantityLabel: string;
-  locationLabel: string;
-  status: ReactNode;
-}): JSX.Element {
-  return (
-    <ItemRow
-      density="compact"
-      href={`/products/${productId}`}
-      meta={[
-        { label: quantityLabel, value: quantity },
-        { label: locationLabel, value: location ?? noLocationLabel },
-      ]}
-      status={status}
-      title={name}
-      variant="plain"
-    />
+      </Section>
+      </div>
+    </PageShell>
   );
 }
 

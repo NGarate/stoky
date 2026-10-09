@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { createContext } from "react";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderWithIntl } from "../utils/render";
+import { renderWithIntl as renderWithIntlOnly } from "../utils/render";
 import type { FailedOp, FailureReason } from "@/lib/offline/queue";
 
 /**
@@ -18,7 +18,10 @@ import type { FailedOp, FailureReason } from "@/lib/offline/queue";
  */
 
 const retry = mock((_id: string) => {});
-const discard = mock((_id: string) => {});
+const discard = mock(
+  (id: string) => failed.find((op) => op.id === id) ?? null,
+);
+const restore = mock((_op: FailedOp) => {});
 
 let failed: FailedOp[] = [];
 
@@ -31,6 +34,8 @@ mock.module("@/lib/offline/queue-context", () => ({
     drain: () => {},
     retry,
     discard,
+    restore,
+    holdRemainingMs: () => 0,
     flush: async () => {},
     purgeAll: () => {},
   }),
@@ -61,6 +66,17 @@ const { default: UnsavedPage } = await import(
   "@/app/(dashboard)/settings/unsaved/page"
 );
 
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
+
+/**
+ * Inside the snackbar, as the shell mounts it: discarding a change offers its
+ * undo there, so the component cannot render without one.
+ */
+const renderWithIntl = (
+  ui: React.ReactElement,
+  options?: Parameters<typeof renderWithIntlOnly>[1],
+) => renderWithIntlOnly(<SnackbarProvider>{ui}</SnackbarProvider>, options);
+
 function failure(reason: FailureReason, id = "op-1"): FailedOp {
   return {
     id,
@@ -77,6 +93,7 @@ function failure(reason: FailureReason, id = "op-1"): FailedOp {
 beforeEach(() => {
   retry.mockClear();
   discard.mockClear();
+  restore.mockClear();
   failed = [];
 });
 
@@ -105,7 +122,7 @@ describe("what each change says", () => {
   it("draws letting it go as the destructive action it is", () => {
     renderWithIntl(<UnsavedPage />);
 
-    expect(screen.getByRole("button", { name: "Descartar" }).className).toContain(
+    expect(screen.getByRole("button", { name: /^Descartar: / }).className).toContain(
       "bg-destructive",
     );
   });
@@ -182,7 +199,7 @@ describe("what can be done about it", () => {
     failed = [failure("refused")];
     renderWithIntl(<UnsavedPage />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Volver a intentarlo" }));
 
     expect(retry).toHaveBeenCalledWith("op-1");
   });
@@ -191,7 +208,7 @@ describe("what can be done about it", () => {
     failed = [failure("exhausted")];
     renderWithIntl(<UnsavedPage />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Descartar" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
 
     expect(discard).toHaveBeenCalledWith("op-1");
   });
@@ -202,7 +219,7 @@ describe("what can be done about it", () => {
 
     // Retrying would be refused again for the same reason. The question is
     // for a person.
-    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeAbsent();
+    expect(screen.queryByRole("button", { name: "Volver a intentarlo" })).toBeAbsent();
 
     await userEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
@@ -223,5 +240,47 @@ describe("more than one", () => {
     renderWithIntl(<UnsavedPage />);
 
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("names each discard after its own change", () => {
+    // Every row's button was "Descartar", so a screen reader's list of
+    // buttons read the same word down the page with nothing to tell them
+    // apart (WCAG 2.4.6 / 2.4.9). The visible word stays, first, so the
+    // name still contains what is on screen (2.5.3).
+    failed = [
+      failure("refused", "a"),
+      {
+        ...failure("exhausted", "b"),
+        label: { key: "offline.removedItem", values: { name: "Pan" } },
+      },
+    ];
+    renderWithIntl(<UnsavedPage />);
+
+    const names = screen
+      .getAllByRole("button", { name: /^Descartar/ })
+      .map((button) => button.getAttribute("aria-label"));
+    expect(names).toEqual([
+      "Descartar: Usaste 1 L de «Leche entera»",
+      "Descartar: Quitaste «Pan» de la lista",
+    ]);
+  });
+});
+
+describe("taking a discard back", () => {
+  it("says what was discarded and offers to undo it", async () => {
+    // One tap deleted somebody's change for good. §7 rule 3: undo, not
+    // confirm — and the undo puts back the change itself, not a copy.
+    const change = failure("refused");
+    failed = [change];
+    renderWithIntl(<UnsavedPage />);
+
+    await userEvent.click(screen.getByRole("button", { name: /^Descartar: / }));
+
+    expect(
+      (await screen.findAllByText("Cambio descartado: Usaste 1 L de «Leche entera»"))
+        .length,
+    ).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Deshacer" }));
+    expect(restore).toHaveBeenCalledWith(change);
   });
 });

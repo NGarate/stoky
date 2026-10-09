@@ -1,5 +1,6 @@
 import "../setup/matchers";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
+import { TRPCClientError } from "@trpc/client";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
@@ -13,6 +14,19 @@ import { renderWithIntl } from "../utils/render";
  * payload is asserted signed, both directions.
  */
 let adjustCalls: Array<Record<string, unknown>>;
+let replaced: string[] = [];
+
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: (href: string) => replaced.push(href),
+    refresh: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/products/p1/adjust",
+  useParams: () => ({ id: "p1" }),
+  redirect: () => {},
+}));
 
 // The real snackbar rather than a stub: `mock.module` replaces a module for
 // the whole bun process, so stubbing it would reach every suite that renders
@@ -32,6 +46,14 @@ mock.module("@/lib/offline/queue-context", () => ({
   }),
 }));
 
+const LOADED = {
+  data: { id: "p1", name: "Huevos", totalStock: 6, defaultUnit: "ud" } as unknown,
+  isPending: false,
+  error: null as { message: string } | null,
+  refetch: () => {},
+};
+let productQuery = { ...LOADED };
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
@@ -41,12 +63,7 @@ mock.module("@/lib/trpc/client", () => ({
     }),
     product: {
       getById: {
-        useQuery: () => ({
-          data: { id: "p1", name: "Huevos", totalStock: 6, defaultUnit: "ud" },
-          isPending: false,
-          error: null,
-          refetch: () => {},
-        }),
+        useQuery: () => productQuery,
       },
     },
     inventory: {
@@ -70,6 +87,8 @@ const { SnackbarProvider } = await import("@/components/ui/snackbar");
 
 beforeEach(() => {
   adjustCalls = [];
+  replaced = [];
+  productQuery = { ...LOADED };
 });
 
 afterEach(cleanup);
@@ -82,6 +101,14 @@ function submit(actual: string, reason: string): void {
     target: { value: reason },
   });
   fireEvent.click(screen.getByRole("button", { name: "Guardar ajuste" }));
+}
+
+
+/** A refusal as the client receives it: the code is what RouteState reads. */
+function notFoundError(): TRPCClientError<never> {
+  const error = new TRPCClientError<never>("Product not found");
+  Object.defineProperty(error, "data", { value: { code: "NOT_FOUND", httpStatus: 404 } });
+  return error;
 }
 
 describe("the adjustment", () => {
@@ -111,6 +138,28 @@ describe("the adjustment", () => {
         reason: "Se rompieron dos",
       },
     ]);
+  });
+
+  /**
+   * A saved adjustment used to leave the person on a form still holding what
+   * they had typed — so the screen after "Guardar ajuste" looked exactly like
+   * the screen before it, with a second press one tap away. It now goes back
+   * to the product, which is where the new number is, and says so there.
+   */
+  it("returns to the product once saved, and says what the stock is now", async () => {
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    submit("4", "Se rompieron dos");
+
+    expect(replaced).toEqual(["/products/p1"]);
+    expect(
+      await screen.findByText("Ajustado. «Huevos» queda en 4 unidades."),
+    ).toBeInTheDocument();
   });
 
   it("computes it upwards too — the sign is the point", () => {
@@ -172,5 +221,39 @@ describe("the adjustment", () => {
     const cancel = screen.getByRole("link", { name: "Cancelar" });
     expect(cancel).toHaveAttribute("href", "/products/p1");
     expect(cancel.querySelectorAll("svg").length).toBe(0);
+  });
+
+  it("says where it goes when the product could not load (WCAG 2.4.9)", () => {
+    // It said "Volver al producto" and went to /products — the list, not
+    // the product. After a failure the product is still the way back.
+    productQuery = { ...LOADED, data: undefined, error: { message: "boom" } };
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver al producto" }),
+    ).toHaveAttribute("href", "/products/p1");
+  });
+
+  it("goes to the products when there is no product to go back to", () => {
+    productQuery = {
+      ...LOADED,
+      data: undefined,
+      error: notFoundError(),
+    };
+    renderWithIntl(
+      <SnackbarProvider>
+        <AdjustStockView id="p1" />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Volver a productos" }),
+    ).toHaveAttribute("href", "/products");
   });
 });

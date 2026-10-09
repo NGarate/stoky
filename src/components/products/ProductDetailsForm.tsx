@@ -8,6 +8,7 @@ import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { api } from "@/lib/trpc/client";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 import type { JSX } from "react";
 
@@ -69,6 +70,7 @@ export function ProductDetailsForm({
   formattedDate: string;
 }): JSX.Element {
   const tDetail = useTranslations("products.detail");
+  const units = useQuantityFormat();
 
   const [editing, setEditing] = useState(false);
 
@@ -111,16 +113,16 @@ export function ProductDetailsForm({
             mono
             value={product.barcode || tDetail("notSet")}
           />
-          <Row label={tDetail("unitLabel")} value={product.defaultUnit} />
+          <Row
+            label={tDetail("unitLabel")}
+            value={units.unit(product.defaultUnit, 1)}
+          />
           <Row
             label={tDetail("minStockLabel")}
             value={
               product.minStock === null
                 ? tDetail("minStockNone")
-                : tDetail("stockValue", {
-                    quantity: product.minStock,
-                    unit: product.defaultUnit,
-                  })
+                : units.quantity(product.minStock, product.defaultUnit)
             }
           />
           <Row label={tDetail("addedLabel")} value={formattedDate} />

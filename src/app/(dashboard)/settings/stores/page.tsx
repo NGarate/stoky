@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSnackbar } from "@/components/ui/snackbar";
-import { BackLink } from "@/components/ui/back-link";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { RouteState } from "@/components/household/RouteState";
 import type { StoreInput } from "@/lib/validations/store";
 
 interface Store {
@@ -28,7 +30,8 @@ export default function StoresPage() {
 
   const snackbar = useSnackbar();
   const utils = api.useUtils();
-  const { data: stores, isLoading } = api.store.list.useQuery({ limit: 100 });
+  const storesQuery = api.store.list.useQuery({ limit: 100 });
+  const stores = storesQuery.data;
 
   // All three writes here are `adminProcedure`, and this screen drew "Crear
   // tienda", "Editar" and "Eliminar" for everyone — so a MEMBER was offered
@@ -107,33 +110,48 @@ export default function StoresPage() {
     setFormData({ name: "", address: "" });
   };
 
-  if (isLoading) {
-    return <div className="p-8">{t("common.loading")}</div>;
+  const back = { href: "/settings", label: t("stores.backToSettings") };
+
+  // Three states, not two (ISSUES.md UI-9). Gated on `isLoading` alone, this
+  // drew a bare "Cargando…" with no title and no way back while loading, and
+  // a failed or paused query — for which `isLoading` is false — fell through
+  // to a screen with a heading and no shops at all, which reads as "you have
+  // none".
+  if (!stores) {
+    return (
+      <RouteState
+        back={back}
+        error={storesQuery.error}
+        fetchStatus={storesQuery.fetchStatus}
+        isLoading={storesQuery.isPending}
+        onRetry={() => void storesQuery.refetch()}
+        title={t("stores.title")}
+        width="form"
+      />
+    );
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    // A settings screen, so a settings screen's width: it was the one sibling
+    // at an index's 6xl, so moving between "Ubicaciones" and "Tiendas" —
+    // the same screen with a different noun — changed the line length.
+    <PageShell width="form">
       {/* The way back out, which this screen was the only settings sub-page
           not to have. `/settings` is the one route that links here, so
           leaving meant the browser's own back button — which the compact
-          tiers do not draw at all, and which a tap on "Configuración" in the
-          navigation does not replace: that goes to the hub as a fresh
-          destination rather than back out of this one.
-
-          Above the heading rather than beside it, which is where
-          `/products/[id]` and `/inventory/add` put theirs. `people` and
-          `unsaved` share their heading row with it because they have nothing
-          else in it; this row already holds "Crear tienda". */}
-      <BackLink href="/settings">{t("stores.backToSettings")}</BackLink>
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-heading">{t("stores.title")}</h1>
-        {canManage && !isCreating && (
-          <Button onClick={() => setIsCreating(true)} type="button">
-            {t("stores.create")}
-          </Button>
-        )}
-      </div>
+          tiers do not draw at all. */}
+      <PageHeader
+        actions={
+          canManage && !isCreating ? (
+            <Button onClick={() => setIsCreating(true)} type="button">
+              {t("stores.create")}
+            </Button>
+          ) : undefined
+        }
+        back={back}
+        title={t("stores.title")}
+      />
+      <div className="space-y-6">
 
       {/* Said once, plainly, rather than left to be discovered by pressing
           something. A reader who cannot change the shops can still read
@@ -193,14 +211,21 @@ export default function StoresPage() {
           concrete reason (DESIGN_AUDIT A5.4). The inventory and the
           catalogue already list into a bare `<ul>`. */}
       <div>
-        {stores?.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
-            <p>{t("stores.noStores")}</p>
-            <p className="mt-2 text-sm">{t("stores.addFirst")}</p>
-          </div>
+        {stores.length === 0 ? (
+          <EmptyState
+            action={
+              canManage && !isCreating ? (
+                <Button onClick={() => setIsCreating(true)} type="button" variant="outline">
+                  {t("stores.create")}
+                </Button>
+              ) : undefined
+            }
+            body={t("stores.addFirst")}
+            title={t("stores.noStores")}
+          />
         ) : (
           <ul className="space-y-3">
-            {stores?.map((store: Store) => (
+            {stores.map((store: Store) => (
               <ItemRow
                 actions={
                   canManage ? (
@@ -253,9 +278,9 @@ export default function StoresPage() {
                       }
                       size="sm"
                       type="button"
-                      variant="ghost"
+                      variant="destructive-ghost"
                     >
-                      <span className="text-destructive">{t("common.delete")}</span>
+                      {t("common.delete")}
                       <span className="sr-only"> {store.name}</span>
                     </Button>
                   </>
@@ -273,6 +298,7 @@ export default function StoresPage() {
           </ul>
         )}
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }

@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronDown, ScanLine } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Section, sectionHeading } from "@/components/ui/section";
+import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { api } from "@/lib/trpc/client";
 import { RouteState } from "@/components/household/RouteState";
 import { useWriteQueue } from "@/lib/offline/queue-context";
 import { projectShoppingItems } from "@/lib/offline/project";
 import type { JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * Screen A — the phone, "day to day" (`REDESIGN_PLAN.md` §3).
@@ -41,6 +45,18 @@ export default function ShopPage(): JSX.Element {
   const [trolleyOpen, setTrolleyOpen] = useState(false);
 
   const query = api.shopping.getBuyList.useQuery();
+  // A tick is `shopping.updateItem`, a `writeProcedure` the server refuses
+  // for KITCHEN — so for that account a row is something to read, not a
+  // control whose tap would be queued, refused and filed under "Cambios sin
+  // guardar". Courtesy, the same as the list detail's; the server is the
+  // control.
+  //
+  // Unknown counts as *yes* here, unlike on the list detail. `auth.me` is
+  // not among the persisted reads, so in a shop with no signal the answer
+  // never arrives — and gating on it would turn this screen, whose whole
+  // reason is working offline, into a list nobody can tick.
+  const me = api.auth.me.useQuery(undefined, { retry: false });
+  const canWrite = me.data?.role !== "KITCHEN";
 
   if (!query.data) {
     return (
@@ -50,6 +66,7 @@ export default function ShopPage(): JSX.Element {
         isLoading={query.isPending}
         onRetry={() => void query.refetch()}
         title={t("shopTitle")}
+        width="form"
       />
     );
   }
@@ -74,10 +91,8 @@ export default function ShopPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-bold text-heading md:text-4xl">
-        {t("shopTitle")}
-      </h1>
+    <PageShell width="form">
+      <PageHeader className="mb-0" title={t("shopTitle")} />
 
       {/* The primary action, always on top and always the same size.
           Its colour, hover and focus ring come from `Button` rather than
@@ -90,38 +105,26 @@ export default function ShopPage(): JSX.Element {
         asChild
         className="mt-4 min-h-[64px] w-full gap-3 rounded-xl py-4 text-lg font-semibold"
       >
-        <Link href="/products/scan">
-        <svg
-          aria-hidden="true"
-          className="h-6 w-6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          viewBox="0 0 24 24"
-        >
-          <path
-            d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Link href="/products/scan?from=shopping">
+          <ScanLine aria-hidden="true" className="size-5 shrink-0" />
           {t("scan")}
         </Link>
       </Button>
 
-      <section aria-labelledby="to-buy" className="mt-8">
-        <h2
-          className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-          id="to-buy"
-        >
-          {t("toBuy")}
-          <span className="text-base font-bold text-foreground">
-            {toBuy.length}
+      {/* Sentence case, in the one section size. "PARA COMPRAR" in small
+          tracked grey capitals was a label rather than a heading, and the
+          count is said in words beside it rather than as a bare number. */}
+      <Section
+        aside={
+          <span className="text-muted-foreground">
+            {t("itemsCount", { count: toBuy.length })}
           </span>
-        </h2>
-
+        }
+        className="mt-8"
+        title={t("toBuy")}
+      >
         {toBuy.length === 0 ? (
-          <div className="mt-3">
+          <div>
             <p className="text-foreground">{t("nothingToBuy")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {t("nothingToBuyHint")}
@@ -134,15 +137,19 @@ export default function ShopPage(): JSX.Element {
           // Rows, not cards: a border and a background around every item of a
           // list is visual overhead (Noel's review, 2026-08-19). A divider is
           // all the separation a list needs.
-          <ul className="mt-1 divide-y divide-border">
+          <ul className="divide-y divide-border">
             {toBuy.map((item) => (
               <li key={item.id}>
-                <ShopRow item={item} onToggle={() => setChecked(item, true)} />
+                <ShopRow
+                  canWrite={canWrite}
+                  item={item}
+                  onToggle={() => setChecked(item, true)}
+                />
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
       <section aria-labelledby="trolley" className="mt-8">
         {/* Folded away, because what is already in the trolley is not the
@@ -158,27 +165,21 @@ export default function ShopPage(): JSX.Element {
         <h2 id="trolley">
           <button
             aria-expanded={trolleyOpen}
-            className="flex min-h-[48px] w-full items-center justify-between gap-3 text-left text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+            className={`flex min-h-[48px] w-full items-center justify-between gap-3 text-left ${sectionHeading()}`}
             onClick={() => setTrolleyOpen((open) => !open)}
             type="button"
           >
             {t("inTrolley")}
-            <span className="flex items-center gap-2 normal-case tracking-normal">
+            <span className="flex items-center gap-2 text-base text-muted-foreground">
               <span className="font-normal">
                 {t("trolleyCount", { count: trolley.length })}
               </span>
-              <svg
+              <ChevronDown
                 aria-hidden="true"
-                className={`h-5 w-5 shrink-0 transition-transform motion-reduce:transition-none ${
+                className={`size-5 shrink-0 transition-transform motion-reduce:transition-none ${
                   trolleyOpen ? "rotate-180" : ""
                 }`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-              >
-                <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              />
             </span>
           </button>
         </h2>
@@ -188,6 +189,7 @@ export default function ShopPage(): JSX.Element {
             {trolley.map((item) => (
               <li key={item.id}>
                 <ShopRow
+                  canWrite={canWrite}
                   item={item}
                   onToggle={() => setChecked(item, false)}
                 />
@@ -200,7 +202,7 @@ export default function ShopPage(): JSX.Element {
       <Button asChild className="mt-8" variant="link">
         <Link href="/shopping/lists" > {t("manageLists")} </Link>
       </Button>
-    </div>
+    </PageShell>
   );
 }
 
@@ -231,13 +233,16 @@ interface Row {
  * exist and the tap was lost. The row says so in words and the control waits.
  */
 function ShopRow({
+  canWrite,
   item,
   onToggle,
 }: {
+  canWrite: boolean;
   item: Row;
   onToggle: () => void;
 }): JSX.Element {
   const t = useTranslations("shopping");
+  const units = useQuantityFormat();
 
   // `== null`, not `=== null`: a row composed offline is spread from the
   // queued `addItem` input, which has no stock figures at all — `undefined`
@@ -249,17 +254,7 @@ function ShopRow({
       ? Math.min(100, ((item.stock as number) / (item.minStock as number)) * 100)
       : 0;
 
-  return (
-    // A row, not a card: the tick circle, the words and the list's dividers
-    // carry the state, so the box that used to wrap each item is gone
-    // (Noel's review, 2026-08-19).
-    <button
-      aria-pressed={item.isChecked}
-      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent disabled:hover:bg-transparent"
-      disabled={item.queued}
-      onClick={onToggle}
-      type="button"
-    >
+  const circle = (
       <span
         aria-hidden="true"
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
@@ -270,7 +265,9 @@ function ShopRow({
       >
         {item.isChecked ? "✓" : null}
       </span>
+  );
 
+  const words = (
       <span className="min-w-0 flex-1">
         <span
           className={`block font-medium ${
@@ -293,7 +290,7 @@ function ShopRow({
               : t("stockOf", {
                   stock: item.stock,
                   minimum: item.minStock,
-                  unit: item.unit ?? "",
+                  unit: units.unit(item.unit, item.minStock),
                 })}
         </span>
 
@@ -309,7 +306,31 @@ function ShopRow({
           </span>
         ) : null}
       </span>
+  );
 
+  // Read-only: the same words, no control and no tick circle — a circle
+  // with nothing behind it would look like a checkbox that does nothing.
+  if (!canWrite) {
+    return (
+      <div className="flex min-h-[64px] w-full items-center gap-3 py-3">
+        {words}
+      </div>
+    );
+  }
+
+  return (
+    // A row, not a card: the tick circle, the words and the list's dividers
+    // carry the state, so the box that used to wrap each item is gone
+    // (Noel's review, 2026-08-19).
+    <button
+      aria-pressed={item.isChecked}
+      className="flex min-h-[64px] w-full items-center gap-3 py-3 text-left hover:bg-accent disabled:hover:bg-transparent"
+      disabled={item.queued}
+      onClick={onToggle}
+      type="button"
+    >
+      {circle}
+      {words}
       <span className="sr-only">
         {item.isChecked
           ? t("untick", { name: item.name })

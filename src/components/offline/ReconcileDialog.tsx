@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,10 @@ import { tabbableWithin } from "@/lib/focus";
 import { api } from "@/lib/trpc/client";
 import { invalidateAfterStockChange } from "@/lib/trpc/stale";
 import { useWriteQueue } from "@/lib/offline/queue-context";
+import { useDiscardChange } from "./useDiscardChange";
 import type { FailedOp } from "@/lib/offline/queue";
 import type { FormEvent, JSX } from "react";
+import { useQuantityFormat } from "@/lib/inventory/quantity";
 
 /**
  * The question a refused consumption becomes.
@@ -58,8 +61,12 @@ export function ReconcileDialog({
   onClose: () => void;
 }): JSX.Element {
   const t = useTranslations("offline");
+  const units = useQuantityFormat();
   const tCommon = useTranslations("common");
   const { discard } = useWriteQueue();
+  // The person's own discard, which can be undone. The one after a
+  // successful adjustment above is the change being answered, not dropped.
+  const discardChange = useDiscardChange();
   const utils = api.useUtils();
   const fieldId = useId();
   const hintId = useId();
@@ -202,7 +209,7 @@ export function ReconcileDialog({
     // The scrim is decoration and says so. `role="dialog"` and `aria-modal`
     // sat here, on a full-viewport box, so the dialog's accessible name
     // covered the whole screen and the card inside it was just content.
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/60 p-4 sm:items-center">
       <div
         aria-labelledby={`${fieldId}-title`}
         aria-modal="true"
@@ -222,7 +229,7 @@ export function ReconcileDialog({
           type="button"
           variant="ghost"
         >
-          <span aria-hidden="true">✕</span>
+          <X aria-hidden="true" className="size-5" />
         </Button>
 
         <h2
@@ -246,7 +253,7 @@ export function ReconcileDialog({
               className="block text-sm font-medium text-foreground"
               htmlFor={`${fieldId}-amount`}
             >
-              {t("reconcileQuestion", { unit: product.data?.defaultUnit ?? "" })}
+              {t("reconcileQuestion", { unit: units.measure(product.data?.defaultUnit) })}
             </label>
             <Input
               aria-describedby={hintId}
@@ -285,12 +292,12 @@ export function ReconcileDialog({
               >
                 {adjust.isPending ? t("reconcileSaving") : t("reconcileSubmit")}
               </Button>
-              {/* It throws away an unsent change, and no procedure puts it
-                  back. Drawn as the filled primary beside "Guardar", it was
-                  the same colour as the action that keeps the work. */}
+              {/* It throws away an unsent change — for the length of an undo,
+                  then for good. Drawn as the filled primary beside "Guardar",
+                  it was the same colour as the action that keeps the work. */}
               <Button
                 onClick={() => {
-                  discard(op.id);
+                  discardChange(op);
                   onClose();
                 }}
                 type="button"
