@@ -7,6 +7,7 @@ import {
   closeRateLimiter,
   loginAccountRateLimit,
   consumeRateLimit,
+  refundRateLimit,
   registerRateLimit,
   resetRateLimit,
   type RateLimit,
@@ -169,6 +170,51 @@ describe("consumeRateLimit", () => {
     await resetRateLimit(LIMIT, id);
 
     expect((await consumeRateLimit(LIMIT, id)).allowed).toBe(true);
+  });
+
+  it("refunds one attempt into the window that counted it", async () => {
+    const id = nextIdentifier();
+    const key = `${LIMIT.prefix}:${id}`;
+    await consumeRateLimit(LIMIT, id);
+    const { window } = await consumeRateLimit(LIMIT, id);
+
+    await refundRateLimit(LIMIT, id, window);
+
+    expect(await inspector.get(key)).toBe("1");
+    // DECR keeps the TTL: the refund must not move the window's end.
+    expect(await inspector.pexpiretime(key)).toBe(window);
+  });
+
+  it("does not refund into a later window than the one that counted it", async () => {
+    // A sign-in counted just before its window ends can succeed just after,
+    // when the key already holds a newer window full of somebody else's
+    // guesses. Refunding there would erase one of them. The expiry is forced
+    // here because waiting out a real window is not something a suite does.
+    const id = nextIdentifier();
+    const key = `${LIMIT.prefix}:${id}`;
+    const { window: stale } = await consumeRateLimit(LIMIT, id);
+
+    await inspector.pexpire(key, 1);
+    while ((await inspector.exists(key)) === 1) await Bun.sleep(2);
+    for (let i = 0; i < LIMIT.attempts; i++) await consumeRateLimit(LIMIT, id);
+
+    await refundRateLimit(LIMIT, id, stale);
+
+    expect(await inspector.get(key)).toBe(String(LIMIT.attempts));
+    expect((await consumeRateLimit(LIMIT, id)).allowed).toBe(false);
+  });
+
+  it("does not resurrect a window that has already ended", async () => {
+    // With no counter left, the refund is a no-op, not a SET to zero or
+    // below: a negative count would be a budget larger than the limit.
+    const id = nextIdentifier();
+    const key = `${LIMIT.prefix}:${id}`;
+    const { window } = await consumeRateLimit(LIMIT, id);
+    await inspector.del(key);
+
+    await refundRateLimit(LIMIT, id, window);
+
+    expect(await inspector.exists(key)).toBe(0);
   });
 
   it("fails closed when the cache cannot be reached", async () => {

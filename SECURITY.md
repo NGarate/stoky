@@ -187,7 +187,10 @@ refunded — so a household signing in from several devices is not locked out by
 a limit meant for someone guessing. It is refunded rather than the counter
 cleared, because anybody can sign in successfully from an address: clearing let
 an attacker with an account of their own interleave guesses at other people's
-passwords with sign-ins to their own and never fill the bucket.
+passwords with sign-ins to their own and never fill the bucket. The refund goes
+to the window that counted the attempt and to no other: a sign-in counted just
+before its window ends that succeeds just after finds a newer window under the
+same key, and refunding there would erase a guess made after it.
 
 **Sign-in is also counted per account**, at 10 attempts per 15 minutes. NIST
 SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
