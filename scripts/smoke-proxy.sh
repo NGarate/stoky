@@ -8,6 +8,11 @@
 # cannot issue and Traefik serves its default certificate. What this proves is
 # the routing — the Host rule rendered from `{{ env "DOMAIN" }}`, the redirect
 # and the upstream — not certificate issuance.
+#
+# **It spends one sign-in window for the address it runs from.** The forwarded-
+# header check below fills the per-address sign-in limit on purpose, so for up
+# to 15 minutes (RATE_LIMIT_LOGIN_WINDOW_SECONDS) nobody can sign in from that
+# address. Harmless in CI and against a throwaway local bundle.
 set -euo pipefail
 
 DOMAIN="${1:?Usage: smoke-proxy.sh DOMAIN}"
@@ -27,8 +32,9 @@ esac
 # HTTPS for the configured host reaches the application, and the security
 # headers survive the proxy. Both the application and Traefik's middleware set
 # them, so this cannot tell which one did: it checks what the browser receives.
-HEADERS="$(mktemp)"
-trap 'rm -f "$HEADERS"' EXIT
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+HEADERS="$WORK/headers"
 STATUS="$("${CURL[@]}" --insecure --dump-header "$HEADERS" --output /dev/null --write-out '%{http_code}' "https://$DOMAIN/api/health")"
 if [ "$STATUS" != 200 ]; then
   echo "Error: https://$DOMAIN/api/health answered $STATUS through Traefik, expected 200." >&2
@@ -67,4 +73,54 @@ refused_by_proxy "https://other.$DOMAIN/" \
 refused_by_proxy "https://$DOMAIN/ with Host: other.$DOMAIN" \
   "$("${CURL[@]}" --insecure --header "Host: other.$DOMAIN" --output /dev/null --write-out '%{http_code}' "https://$DOMAIN/api/health")"
 
-echo "Proxy smoke: OK ($DOMAIN)"
+# The forwarded-header chain. The per-address sign-in limit counts against the
+# last hop of X-Forwarded-For, falling back to X-Real-IP
+# (`src/lib/rate-limit.ts`), and that is a client address only if the proxy
+# drops what the client sent and writes its own. Every attempt here forges a
+# different address in both. Behind a proxy that strips them, the attempts
+# share the one real address and the limit refuses once its budget is spent;
+# behind one that passes them through, each attempt is a stranger with a fresh
+# budget and the refusal never comes.
+#
+# Malformed credentials, so nothing is looked up and nothing is hashed: the
+# limit counts an attempt before it reads one. The outcome is the `code` Auth.js
+# puts on the redirect to the sign-in page.
+COOKIES="$WORK/cookies"
+CSRF="$("${CURL[@]}" --insecure --cookie-jar "$COOKIES" "https://$DOMAIN/api/auth/csrf" \
+  | sed -n 's/.*"csrfToken":"\([^"]*\)".*/\1/p')"
+if [ -z "$CSRF" ]; then
+  echo "Error: https://$DOMAIN/api/auth/csrf returned no CSRF token." >&2
+  exit 1
+fi
+
+# Well past the default of 5, so an installation that raised its limit still
+# fails loudly here rather than passing a check it never reached.
+MAX_ATTEMPTS="${SMOKE_MAX_SIGNIN_ATTEMPTS:-20}"
+THROTTLED=""
+for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+  FORGED="203.0.113.$attempt"
+  LOCATION="$("${CURL[@]}" --insecure --cookie "$COOKIES" \
+    --header "X-Forwarded-For: $FORGED" --header "X-Real-IP: $FORGED" \
+    --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=" --data-urlencode "password=" \
+    --output /dev/null --write-out '%{redirect_url}' \
+    "https://$DOMAIN/api/auth/callback/credentials")"
+  case "$LOCATION" in
+    "https://$DOMAIN/login?"*"code=rate_limited"*)
+      THROTTLED="$attempt"
+      break
+      ;;
+    "https://$DOMAIN/login?"*"code=credentials"*) ;;
+    *)
+      echo "Error: sign-in attempt $attempt should have been refused as malformed or throttled; it redirected to: ${LOCATION:-nothing}" >&2
+      exit 1
+      ;;
+  esac
+done
+if [ -z "$THROTTLED" ]; then
+  echo "Error: $MAX_ATTEMPTS sign-in attempts, each forging a different X-Forwarded-For and X-Real-IP, were never throttled." >&2
+  echo "The proxy is passing client-supplied forwarded headers to the application, so its per-address limit is off for anyone who sends one." >&2
+  echo "(Or this installation's RATE_LIMIT_LOGIN_ATTEMPTS is above $MAX_ATTEMPTS: set SMOKE_MAX_SIGNIN_ATTEMPTS higher.)" >&2
+  exit 1
+fi
+
+echo "Proxy smoke: OK ($DOMAIN; forged forwarded headers ignored, throttled at attempt $THROTTLED)"
