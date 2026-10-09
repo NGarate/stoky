@@ -44,11 +44,27 @@ for header in strict-transport-security x-content-type-options x-frame-options; 
 done
 
 # Any other host must not reach the application: the router is Host-scoped.
-OTHER="$("${CURL[@]}" --insecure --output /dev/null --write-out '%{http_code}' \
-  --resolve "other.$DOMAIN:443:127.0.0.1" "https://other.$DOMAIN/api/health")"
-if [ "$OTHER" = 200 ]; then
-  echo "Error: a request for other.$DOMAIN reached the application." >&2
-  exit 1
-fi
+# Traefik's own refusal is a 404 (or a 421, when it notices the TLS name and
+# the Host disagree). Anything else — a 401, a redirect to /login — is a
+# response the application wrote, so "not 200" is not enough.
+refused_by_proxy() {
+  local what="$1" status="$2"
+  case "$status" in
+    404 | 421) ;;
+    *)
+      echo "Error: $what answered $status; only the proxy's own 404/421 proves it did not reach the application." >&2
+      exit 1
+      ;;
+  esac
+}
+
+# Another name, in both the TLS handshake and the Host header.
+refused_by_proxy "https://other.$DOMAIN/" \
+  "$("${CURL[@]}" --insecure --resolve "other.$DOMAIN:443:127.0.0.1" --output /dev/null --write-out '%{http_code}' "https://other.$DOMAIN/api/health")"
+
+# The right TLS name with another Host: what a client that controls its own
+# headers sends to slip past a router that only looked at the handshake.
+refused_by_proxy "https://$DOMAIN/ with Host: other.$DOMAIN" \
+  "$("${CURL[@]}" --insecure --header "Host: other.$DOMAIN" --output /dev/null --write-out '%{http_code}' "https://$DOMAIN/api/health")"
 
 echo "Proxy smoke: OK ($DOMAIN)"
