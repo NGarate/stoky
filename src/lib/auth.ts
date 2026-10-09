@@ -122,8 +122,13 @@ export const authConfig: NextAuthConfig = {
         // Counted before the credentials are looked at, not after. A limit
         // that only counts attempts it has already spent ~250ms of Argon2id
         // on is also a way to make the server do that work on demand.
+        let addressWindow: number;
         try {
-          const { allowed, retryAfterSeconds } = await consumeRateLimit(limit, identifier);
+          const { allowed, retryAfterSeconds, window } = await consumeRateLimit(
+            limit,
+            identifier,
+          );
+          addressWindow = window;
           if (!allowed) {
             logSecurityEvent("auth.signin.throttled", {
               address: identifier,
@@ -237,8 +242,10 @@ export const authConfig: NextAuthConfig = {
         // refunded by this one attempt and no more, because clearing it let
         // anybody with an account of their own wipe the failures beside it —
         // four guesses at other people's passwords, one good sign-in to their
-        // own, repeat, and the per-address limit never filled.
-        await refundRateLimit(limit, identifier);
+        // own, repeat, and the per-address limit never filled. Refunded to
+        // the window it was counted in, so a success that lands after that
+        // window ended cannot take an attempt off the next one.
+        await refundRateLimit(limit, identifier, addressWindow);
         await resetRateLimit(accountLimit, account);
 
         return {

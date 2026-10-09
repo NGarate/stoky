@@ -187,7 +187,10 @@ refunded — so a household signing in from several devices is not locked out by
 a limit meant for someone guessing. It is refunded rather than the counter
 cleared, because anybody can sign in successfully from an address: clearing let
 an attacker with an account of their own interleave guesses at other people's
-passwords with sign-ins to their own and never fill the bucket.
+passwords with sign-ins to their own and never fill the bucket. The refund goes
+to the window that counted the attempt and to no other: a sign-in counted just
+before its window ends that succeeds just after finds a newer window under the
+same key, and refunding there would erase a guess made after it.
 
 **Sign-in is also counted per account**, at 10 attempts per 15 minutes. NIST
 SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
@@ -235,7 +238,10 @@ What is still open, and worth knowing before publishing an instance:
 
   **So: do not expose this application without a reverse proxy that sets
   `X-Forwarded-For` itself.** The release bundle (`deploy/`) puts Traefik in front
-  and Traefik does. A deployment that publishes the container's port directly has a
+  and Traefik does — the release smoke (`scripts/smoke-proxy.sh`) forges both
+  headers through it on every release and fails unless the limit still holds,
+  and `--live DOMAIN` runs the same check against a real installation's
+  ingress. A deployment that publishes the container's port directly has a
   per-IP limit an attacker turns off with one header — bounded only by the
   per-account limit above, which is what keeps that from being an open door
   rather than what makes it safe.
