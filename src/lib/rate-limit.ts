@@ -139,6 +139,14 @@ export interface RateLimitResult {
   remaining: number;
   /** Seconds until the window resets. Meaningful only when refused. */
   retryAfterSeconds: number;
+  /**
+   * Which window this attempt was counted in: the instant, in epoch
+   * milliseconds, at which that window's counter expires.
+   *
+   * Opaque to callers. It exists so `refundRateLimit` can give an attempt back
+   * to the window that charged it and to no other — see there.
+   */
+  window: number;
 }
 
 /**
@@ -202,7 +210,10 @@ export async function closeRateLimiter(): Promise<void> {
  * window on its next hit instead of refusing for ever.
  *
  * Returns the count and the seconds left, so a refusal costs no second round
- * trip to ask.
+ * trip to ask — and the window's absolute expiry, which is set once when the
+ * window opens and never moved afterwards, so it names this window and no
+ * later one. Two windows of one key cannot share it: the next opens only after
+ * this one has expired, and so expires after it too.
  */
 const CONSUME_SCRIPT = `
 local count = redis.call('INCR', KEYS[1])
@@ -211,7 +222,7 @@ if ttl < 0 then
   redis.call('EXPIRE', KEYS[1], ARGV[1])
   ttl = tonumber(ARGV[1])
 end
-return {count, ttl}
+return {count, ttl, redis.call('PEXPIRETIME', KEYS[1])}
 `;
 
 /**
@@ -231,18 +242,19 @@ export async function consumeRateLimit(
   const key = `${limit.prefix}:${identifier}`;
 
   try {
-    const [count, ttl] = (await valkey().eval(
+    const [count, ttl, window] = (await valkey().eval(
       CONSUME_SCRIPT,
       1,
       key,
       limit.windowSeconds,
-    )) as [number, number];
+    )) as [number, number, number];
 
     if (count > limit.attempts) {
       return {
         allowed: false,
         remaining: 0,
         retryAfterSeconds: ttl > 0 ? ttl : limit.windowSeconds,
+        window,
       };
     }
 
@@ -250,6 +262,7 @@ export async function consumeRateLimit(
       allowed: true,
       remaining: limit.attempts - count,
       retryAfterSeconds: 0,
+      window,
     };
   } catch (error) {
     throw new RateLimitUnavailableError(error);
@@ -284,7 +297,8 @@ export async function resetRateLimit(
 }
 
 /**
- * Gives back one attempt counted against `identifier`, and only one.
+ * Gives back one attempt counted against `identifier` in `window`, and only
+ * one.
  *
  * What a successful sign-in does to the **per-address** counter. Clearing it
  * outright — which is what this used to do — handed the reset to whoever can
@@ -299,12 +313,24 @@ export async function resetRateLimit(
  * spends nothing doing so — without letting a success erase the failures
  * beside it. Guesses stay counted whoever else signs in from the same place.
  *
- * In one script so the read and the decrement cannot interleave with another
- * request's `INCR`, and floored at zero so a counter that has already expired
- * is not driven negative into a budget larger than the limit. `DECR` keeps the
- * key's TTL, so the window still ends when it was going to.
+ * **Only to the window that charged it.** A sign-in counted just before its
+ * window ends can succeed just after — Argon2id alone is a quarter of a
+ * second — and by then the same key may hold a newer window, counting
+ * attempts this success never made. Refunding into that one would erase a
+ * guess somebody else made after it. So the caller passes back the `window`
+ * that `consumeRateLimit` reported, and a counter in any other window, or no
+ * counter at all, is left alone: the attempt it would have refunded expired
+ * with its window, which is a refund already.
+ *
+ * In one script so the check, the read and the decrement cannot interleave
+ * with another request's `INCR`, and floored at zero so a counter is never
+ * driven negative into a budget larger than the limit. `DECR` keeps the key's
+ * TTL, so the window still ends when it was going to.
  */
 const REFUND_SCRIPT = `
+if redis.call('PEXPIRETIME', KEYS[1]) ~= tonumber(ARGV[1]) then
+  return -1
+end
 local count = tonumber(redis.call('GET', KEYS[1]) or '0')
 if count > 0 then
   return redis.call('DECR', KEYS[1])
@@ -315,9 +341,10 @@ return 0
 export async function refundRateLimit(
   limit: RateLimit,
   identifier: string,
+  window: number,
 ): Promise<void> {
   try {
-    await valkey().eval(REFUND_SCRIPT, 1, `${limit.prefix}:${identifier}`);
+    await valkey().eval(REFUND_SCRIPT, 1, `${limit.prefix}:${identifier}`, window);
   } catch {
     // The same reasoning as `resetRateLimit`: the attempt stays counted until
     // the window ends, which is safe, and failing the sign-in that just
