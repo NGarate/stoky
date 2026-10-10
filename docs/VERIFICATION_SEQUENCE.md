@@ -30,13 +30,18 @@ Runs the checks that should stay cheap enough for most iteration loops:
 bun run verify:local
 ```
 
-Seven steps:
+Eight steps:
 
 - `bun run lint`
 - `bun run typecheck`
 - `bun run check:react` — react-doctor, gating on errors, not the score
 - `bun run check:links` — every internal link points at a route that exists
 - `bun run check:contrast` — every theme token pair meets WCAG AAA
+- `bun run check:audit` — `bun audit --audit-level moderate`. The one step
+  that needs the network: it sends package names and versions to the npm
+  advisory endpoint. Offline it reports **skipped**, not failed, because
+  offline is not a finding; CI's `audit` job calls `bun audit` directly and
+  stays a hard gate.
 - `bun run test:unit`
 - `bun run test:components`
 

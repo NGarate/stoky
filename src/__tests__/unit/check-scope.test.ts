@@ -36,7 +36,7 @@ function repo() {
   writeFileSync(join(fixture, "scripts/check-ci.sh"), `#!/bin/bash\n${logger("check-ci")}\n`);
   writeFileSync(
     join(fixture, "bin/bun"),
-    `#!/bin/bash\n${logger("bun")}\nif [ -n "$FAIL" ] && [[ "$*" == *"$FAIL"* ]]; then exit 3; fi\n`,
+    `#!/bin/bash\n${logger("bun")}\nif [ -n "$FAIL" ] && [[ "$*" == *"$FAIL"* ]]; then exit "$FAIL_CODE"; fi\n`,
     { mode: 0o755 },
   );
   const callsPath = join(fixture, "calls");
@@ -58,11 +58,18 @@ function repo() {
   git("add", ".");
   git("commit", "-q", "-m", "base");
 
-  const run = (args: string[], fail = "") => {
+  const run = (args: string[], fail = "", failCode = 3) => {
     writeFileSync(callsPath, "");
     const result = Bun.spawnSync(["bash", "scripts/check-scope.sh", ...args], {
       cwd: fixture,
-      env: { ...process.env, ...gitEnv, PATH: `${join(fixture, "bin")}:${process.env.PATH}`, CALLS: callsPath, FAIL: fail },
+      env: {
+        ...process.env,
+        ...gitEnv,
+        PATH: `${join(fixture, "bin")}:${process.env.PATH}`,
+        CALLS: callsPath,
+        FAIL: fail,
+        FAIL_CODE: String(failCode),
+      },
     });
     return {
       exitCode: result.exitCode,
@@ -96,6 +103,7 @@ describe("check-scope.sh", () => {
       "bun [run] [check:react] [--scope] [full]",
       "check-ci [actionlint]",
       "check-ci [shellcheck]",
+      "bun [run] [check:audit]",
       "bun [run] [typecheck]",
     ]);
   });
@@ -197,6 +205,7 @@ describe("check-scope.sh", () => {
       expect(result.stdout).toContain(`skipped  ${check}: no staged`);
       expect(result.stdout).not.toContain(`ok       ${check}`);
     }
+    expect(result.stdout).toContain("skipped  dependency audit: no dependency change");
     expect(result.stdout).toContain("ok       typecheck");
   });
 
@@ -208,6 +217,31 @@ describe("check-scope.sh", () => {
     expect(result.calls).toHaveLength(5);
     expect(result.stdout).toContain("FAILED   React Doctor (exit 3)");
     expect(result.stdout).toContain("ok       typecheck");
+  });
+
+  for (const manifest of ["bun.lock", "package.json"]) {
+    it(`audits the dependencies when ${manifest} is staged`, () => {
+      const fixture = repo();
+      fixture.write(manifest);
+      fixture.git("add", ".");
+      const result = fixture.run(["staged"]);
+      expect(result.calls).toEqual(["bun [run] [check:audit]", "bun [run] [typecheck]"]);
+    });
+  }
+
+  it("does not audit when no dependency changed", () => {
+    const fixture = repo();
+    fixture.write("src/only.tsx");
+    fixture.git("add", ".");
+    const result = fixture.run(["staged"]);
+    expect(result.calls).not.toContain("bun [run] [check:audit]");
+    expect(result.stdout).toContain("skipped  dependency audit: no dependency change");
+  });
+
+  it("reports an audit that could not reach the network as skipped, and passes", () => {
+    const result = repo().run(["all"], "check:audit", 75);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("skipped  dependency audit: offline");
   });
 
   it("leaves actionlint and shellcheck to check-ci.sh with --no-pipeline-lint", () => {
@@ -239,6 +273,40 @@ describe("check-scope.sh", () => {
       expect(flags).toContain(flag);
     }
     expect(flags[flags.indexOf("--blocking") + 1]).toBe("error");
+  });
+});
+
+describe("check-audit.sh", () => {
+  function audit(output: string, exitCode: number) {
+    const fixture = mkdtempSync(join(tmpdir(), "stoky-check-audit-"));
+    fixtures.push(fixture);
+    mkdirSync(join(fixture, "scripts"));
+    mkdirSync(join(fixture, "bin"));
+    copyFileSync(join(root, "scripts/check-audit.sh"), join(fixture, "scripts/check-audit.sh"));
+    writeFileSync(join(fixture, "bin/bun"), `#!/bin/bash\necho "$*" > args\nprintf '%s\\n' "$OUTPUT" >&2\nexit ${exitCode}\n`, {
+      mode: 0o755,
+    });
+    const result = Bun.spawnSync(["bash", "scripts/check-audit.sh"], {
+      cwd: fixture,
+      env: { ...process.env, PATH: `${join(fixture, "bin")}:${process.env.PATH}`, OUTPUT: output },
+    });
+    return { exitCode: result.exitCode, args: readFileSync(join(fixture, "args"), "utf8").trim() };
+  }
+
+  it("audits at the moderate level and passes a clean tree", () => {
+    expect(audit("No vulnerabilities found (checked 564 packages)", 0)).toEqual({
+      exitCode: 0,
+      args: "audit --audit-level moderate",
+    });
+  });
+
+  it("fails on a vulnerable tree", () => {
+    expect(audit("lodash  <4.17.21\n  high: Prototype Pollution", 1).exitCode).toBe(1);
+  });
+
+  it("exits 75 when the advisory endpoint cannot be reached", () => {
+    const offline = "error: POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk - DNSResolveFailed";
+    expect(audit(offline, 1).exitCode).toBe(75);
   });
 });
 

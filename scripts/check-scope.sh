@@ -86,6 +86,7 @@ esac
 SOURCES=()
 WORKFLOWS=()
 SCRIPTS=()
+DEPENDENCIES=()
 for file in "${FILES[@]}"; do
   case "$file" in
     *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs) SOURCES+=("$file") ;;
@@ -97,6 +98,9 @@ for file in "${FILES[@]}"; do
   case "$file" in
     scripts/*/*) ;;
     scripts/*.sh) SCRIPTS+=("$file") ;;
+  esac
+  case "$file" in
+    package.json | bun.lock) DEPENDENCIES+=("$file") ;;
   esac
 done
 
@@ -112,6 +116,9 @@ run() {
   "$@" || code=$?
   if [ "$code" -eq 0 ]; then
     RESULTS+=("ok       $label")
+  elif [ "$code" -eq 75 ]; then
+    # EX_TEMPFAIL: could not run here. Only check-audit.sh, offline.
+    RESULTS+=("skipped  $label: offline")
   else
     RESULTS+=("FAILED   $label (exit $code)")
     FAILED=1
@@ -142,6 +149,7 @@ case "$SCOPE" in
       run "actionlint" bash scripts/check-ci.sh actionlint
       run "shellcheck" bash scripts/check-ci.sh shellcheck
     fi
+    run "dependency audit" bun run check:audit
     ;;
   staged | changed)
     if [ "${#SOURCES[@]}" -gt 0 ]; then
@@ -168,6 +176,13 @@ case "$SCOPE" in
       else
         skip "shellcheck" "no $SCOPE scripts"
       fi
+    fi
+
+    # A new dependency is when the risk arrives, so that is when to look.
+    if [ "${#DEPENDENCIES[@]}" -gt 0 ]; then
+      run "dependency audit" bun run check:audit
+    else
+      skip "dependency audit" "no dependency change"
     fi
     ;;
 esac

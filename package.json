@@ -15,6 +15,7 @@
     "check:react": "bun --bun node_modules/react-doctor/bin/react-doctor.js . --no-telemetry --no-supply-chain --no-warnings --blocking error --max-duration 120",
     "check:contrast": "bun scripts/check-contrast.ts",
     "check:links": "bun scripts/check-links.ts",
+    "check:audit": "bash scripts/check-audit.sh",
     "check:all": "bash scripts/check-scope.sh all",
     "check:staged": "bash scripts/check-scope.sh staged",
     "check:changed": "bash scripts/check-scope.sh changed",
