@@ -209,6 +209,21 @@ upgrades and troubleshooting. Owns the self-hosted installation path.
 Maintainer checklist for versioning, verification, tagging and publishing. Release
 notes live in `docs/releases/` and describe the specific tagged version.
 
+### Proposed — read, then decide; nothing here is scheduled
+
+**[`superpowers/plans/2026-10-10-scoped-checks-and-dev-scripts.md`](superpowers/plans/2026-10-10-scoped-checks-and-dev-scripts.md)**
+Not started. React Doctor, actionlint/shellcheck and the dependency audit,
+each in three scopes: everything, what is staged, and what differs from a PR's
+base. Also candidate scripts (`preview`, `dev:https`, `dev:tailscale`). It
+records two findings worth acting on before the plan itself: `check:react`
+sends the dependency list to Socket.dev, and `check-ci.sh` needs a host
+`shellcheck`.
+
+**[`superpowers/plans/2026-10-10-product-review.md`](superpowers/plans/2026-10-10-product-review.md)**
+Missing features, ease-of-use friction and a comparison with Grocy. It is input
+for `REDESIGN_PLAN.md`, not a schedule. It starts with the interface's false
+promises (household rename, password change), which are the cheapest fixes.
+
 ### Historical — do not update, do not act on
 
 **[`DESIGN_PROPOSALS.md`](DESIGN_PROPOSALS.md)** · 159 lines
