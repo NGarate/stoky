@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
@@ -34,6 +34,28 @@ const geistMono = Geist_Mono({
  */
 export const metadata: Metadata = {
   description: "Gestión de inventario del hogar con privacidad",
+  applicationName: "Stoky",
+  // `src/app/manifest.ts` is linked by Next on its own. iOS reads none of the
+  // manifest's icons, so the home-screen icon and the standalone launch are
+  // declared here as well.
+  icons: {
+    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: { capable: true, title: "Stoky", statusBarStyle: "default" },
+};
+
+/**
+ * The browser chrome's colour, per system theme: `--background` from
+ * `src/app/globals.css` in each. A theme chosen in-app rather than by the
+ * system is not followed — `theme-color` cannot read `data-theme` — and the
+ * cost is a toolbar that differs from the page, not a contrast failure.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f6f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1411" },
+  ],
 };
 
 /**

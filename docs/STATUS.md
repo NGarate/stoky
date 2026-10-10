@@ -1025,7 +1025,16 @@ Two things that sequence surfaced, both operational rather than defects:
   outside every provider.
 - ~~No health-check endpoint.~~ **Closed.** `/api/health` checks Postgres and
   Valkey; the image and Compose both use it.
-- No PWA. Deferred deliberately on iOS grounds, not overlooked.
+- ~~No PWA.~~ **Installable since 2026-10-10.** The worker had shipped for
+  months with no web app manifest, icon or `<link rel="manifest">`, so no
+  browser could install the app and nothing went red. `src/app/manifest.ts`,
+  `public/icons/` and the iOS `apple-touch-icon` closed it.
+  `pwa-manifest.test.ts` checks the install criteria and that the PNG sizes
+  match their declarations. `service-worker.prod.spec.ts` checks that Chromium
+  parses the manifest cleanly and loads every icon. What stays deferred on iOS
+  grounds (`REDESIGN_PLAN.md` §5.4) is an install *prompt*, push and background
+  sync. Measured trap: CDP's `Page.getInstallabilityErrors` answers `[]` even
+  for a manifest with no icons, so it cannot be the assertion.
 - ~~No data export.~~ **Closed.** `/settings` downloads the household as JSON;
   password hashes are never in it, and a test proves that by breaking the query
   that keeps them out.

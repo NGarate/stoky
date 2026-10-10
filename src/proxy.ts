@@ -83,14 +83,14 @@ export function proxy(request: NextRequest): NextResponse {
 
 export const config = {
   matcher: [
-    // Everything except static assets, the image optimiser and the service
-    // worker. The first two are served straight from disk and gain nothing
-    // from a per-request nonce. `sw.js` is excluded for a stronger reason: a
+    // Everything except static assets, the image optimiser, the app icons and
+    // the service worker. The first three are served straight from disk and
+    // gain nothing from a per-request nonce. `sw.js` is excluded for a stronger reason: a
     // nonce'd page policy applied to the worker script becomes the *worker's*
     // own policy, and the worker has no page to inherit from. Its policy is
     // set in next.config.ts instead.
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|sw\\.js).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico|icons/|sw\\.js).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

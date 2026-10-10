@@ -143,6 +143,37 @@ test.describe("a production build's service worker", () => {
     });
   });
 
+  test("links a manifest Chromium parses cleanly, with icons that load", async ({
+    page,
+  }) => {
+    // The unit tier checks the manifest's fields; this asks the browser. For
+    // months the worker above passed every test here while the application
+    // had no manifest at all, so no browser could install it.
+    //
+    // **Not `Page.getInstallabilityErrors`**, though it is the obvious call.
+    // Measured 2026-10-10 against this suite's Chromium: it answered `[]` for
+    // a manifest with no icons and for `display: "browser"`, so asserting on it
+    // proves nothing. `getAppManifest`'s `errors` does discriminate — an
+    // unknown `display` came back as "unknown 'display' value ignored." — and
+    // the icons are fetched the way the installer would fetch them.
+    await page.goto("/login");
+    const cdp = await page.context().newCDPSession(page);
+
+    const { errors, url, data } = await cdp.send("Page.getAppManifest");
+    expect(url).toMatch(/\/manifest\.webmanifest$/);
+    expect(errors).toEqual([]);
+
+    const manifest = JSON.parse(data ?? "{}") as {
+      icons?: Array<{ src: string; type?: string }>;
+    };
+    expect(manifest.icons?.length ?? 0).toBeGreaterThan(0);
+    for (const icon of manifest.icons ?? []) {
+      const response = await page.request.get(icon.src);
+      expect(response.status(), icon.src).toBe(200);
+      expect(response.headers()["content-type"], icon.src).toBe(icon.type);
+    }
+  });
+
   test("falls back to the offline page for a route it never cached", async ({
     page,
     context,

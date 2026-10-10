@@ -9,8 +9,10 @@
  * `public/` verbatim.
  *
  * `REDESIGN_PLAN.md` §5.4: the worker ships without ever prompting anyone to
- * "install the app". Installability and push are deferred on iOS grounds; the
- * worker and the offline cache are not, and iOS Safari supports both.
+ * "install the app". The app *is* installable through the browser's own
+ * action (`src/app/manifest.ts`); an install prompt and push are deferred on
+ * iOS grounds. The worker and the offline cache are not, and iOS Safari
+ * supports both.
  *
  * Every global is `self.`-prefixed, **including `self.fetch`**. Without that
  * the test harness resolves a bare `fetch` to Bun's real global and the tests
