@@ -1,7 +1,6 @@
 {
   "metadata": {
-    "title": "Stoky · Inventario de la casa",
-    "description": "Gestión de inventario del hogar con privacidad"
+    "title": "Stoky · Inventario de la casa"
   },
   "auth": {
     "login": "Iniciar sesión",

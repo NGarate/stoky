@@ -1,7 +1,6 @@
 {
   "metadata": {
-    "title": "Stoky · Household inventory",
-    "description": "Privacy-first household inventory management"
+    "title": "Stoky · Household inventory"
   },
   "auth": {
     "login": "Sign in",

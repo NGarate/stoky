@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { getLocale, getMessages } from "next-intl/server";
 import { RouteTitle } from "@/components/ui/route-title";
 import { TRPCProvider } from "@/components/providers/TRPCProvider";
 import { ServiceWorkerProvider } from "@/components/providers/ServiceWorkerProvider";
@@ -24,11 +24,17 @@ const geistMono = Geist_Mono({
  * `<title>` the document has, per route and in the reader's language
  * (`src/lib/route-titles.ts` has the case). A metadata title would be a second
  * `<title>` element, and which of two wins is a question of mount order.
+ *
+ * The description is static and Spanish, and not a catalogue key. Its only
+ * readers are link previews and crawlers, which carry neither a session nor
+ * the locale cookie, so the per-request translation it used to be resolved to
+ * Spanish for every one of them and its English twin was never served. What
+ * that lookup did cost was every route: request-bound metadata is reported by
+ * Cache Components as "uncached data in `generateMetadata()`".
  */
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("metadata");
-  return { description: t("description") };
-}
+export const metadata: Metadata = {
+  description: "Gestión de inventario del hogar con privacidad",
+};
 
 /**
  * This layout is allowed to block, and that is the answer rather than a to-do.
