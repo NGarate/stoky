@@ -14,6 +14,10 @@ import type { JSX } from "react";
  * `/settings/screen` so the two places that ask it cannot describe the screens
  * differently.
  */
+// Entering waits for the session, the same trade as the `(dashboard)` layout:
+// an anonymous caller is redirected before anything renders.
+export const instant = false;
+
 export default async function StartPage(): Promise<JSX.Element> {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");

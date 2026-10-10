@@ -16,7 +16,11 @@ import { landingPath } from "@/lib/landing";
  *
  * It reads request data, so it can never prerender, which is correct and not a
  * limitation: a redirect that depends on who is asking has nothing to cache.
+ * Hence `instant = false`: there is no shell to show before the answer, so
+ * blocking is the intent, and saying so stops dev validation reporting it.
  */
+export const instant = false;
+
 export default async function Home() {
   const session = await auth();
   const userId = session?.user?.id;
