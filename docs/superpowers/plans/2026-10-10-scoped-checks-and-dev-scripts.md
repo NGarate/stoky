@@ -1,7 +1,9 @@
 # Scoped checks and developer scripts — plan
 
-Date: 2026-10-10. Status: **proposed, not started.** Nothing below exists yet
-unless it says so.
+Date: 2026-10-10. Status: **steps 1–7 implemented on 2026-10-11**; *Other
+scripts worth adding* remain candidates. `docs/VERIFICATION_SEQUENCE.md` owns
+how to use what exists. The plan is kept as written below; *As implemented* at
+the end records where the implementation departed from it, and why.
 
 ## Why
 
@@ -166,3 +168,42 @@ Housekeeping found on the way: the working copy still holds a root
 `pnpm-lock.yaml` and `pnpm-workspace.yaml`. Both are gitignored leftovers from
 before the migration. Deleting them locally removes the temptation to run
 `pnpm` against them.
+
+## As implemented (2026-10-11)
+
+Where the implementation departed from the plan above, and why. Each commit
+message has the evidence.
+
+- **Step 1's predicted verification was wrong.** Offline, the old
+  `check:react` neither failed nor stalled: React Doctor wraps the Socket.dev
+  fetch in `orElseSucceed`, so it passed with "No issues found". The leak was
+  silent. The evidence used instead is React Doctor's own cache: with a fresh
+  `REACT_DOCTOR_CACHE_DIR`, the old command left 51 Socket.dev responses under
+  `supply-chain/`, and the new one leaves none.
+- **React Doctor's shared flags live in `package.json`'s `check:react`**, not
+  in `check-scope.sh`. `verify-local.sh` and the development image already run
+  `check:react`, so putting the flags in the script would have made two copies.
+  Every scope calls `bun run check:react` and adds only the scope.
+- **`check-ci.sh` was not renamed.** It takes `actionlint|shellcheck
+  [FILE...]`, owns the pinned image, and `check-scope.sh` only picks the files.
+  The image path is the default everywhere, CI included, so the runner and the
+  developer run the same shellcheck; the checksummed binary is the fallback
+  when no Docker daemon answers, or with `CHECK_CI_TOOLS=binary`.
+- **`changed` compares the working tree with the merge base**, not
+  `HEAD`. React Doctor's `--scope changed` does that (measured: it scanned an
+  uncommitted edit), and the file lists have to agree with it.
+- **Scoped shellcheck takes `scripts/*.sh` only**, not every `*.sh`: a narrow
+  scope never checks what `all` does not, so it cannot fail on something CI
+  accepts.
+- **CI scopes pull requests only.** The step runs inside the development image
+  like every other gate, through `ci-in-image.sh changed`. That image has no
+  Docker, so `check-scope.sh --no-pipeline-lint` skips actionlint and
+  shellcheck; the job's first step has already run them over everything. A push
+  to master runs only the `all` gates, so `github.event.before` is not used.
+- **`check:audit` is `scripts/check-audit.sh`, not the bare command.** Offline,
+  `bun audit` exits 1, the same status as a vulnerable tree. The script tells
+  the two apart and exits 75 when offline; `verify-local.sh` and
+  `check-scope.sh` report 75 as skipped. CI's `audit` job still calls `bun
+  audit` directly, so there an unreachable endpoint fails the gate.
+- **The housekeeping was left to the owner**: the gitignored `pnpm-lock.yaml`
+  and `pnpm-workspace.yaml` in the working copy were not deleted.
