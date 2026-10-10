@@ -1,6 +1,6 @@
 # Stoky Local Bootstrap
 
-Updated: 2026-09-25
+Updated: 2026-10-10
 
 This is the shortest supported path from clone to a running local app.
 For an installed alpha with prebuilt images, use [Install](INSTALL.md).
@@ -116,6 +116,127 @@ Dockerfile, because a `FROM` cannot read a file.
 `src/__tests__/unit/bun-version.test.ts` fails if they disagree, which they did
 once: the image moved to 1.4.0 while CI stayed on 1.3.14, and a green pipeline
 was proving the suites passed on a runtime nobody deploys.
+
+## Running the development server
+
+Five ways to reach it, in the order you will need them. **What you can test
+depends on whether the origin is a secure context**: the barcode camera and the
+service worker exist only on `https://` or `localhost`, so a plain-HTTP LAN or
+tailnet address renders the app and nothing more.
+
+| Way | URL | Camera | Service worker / install | Reachable from |
+|---|---|---|---|---|
+| 1. Local | `http://localhost:3000` | ✅ | ❌ dev tears it down | this machine |
+| 2. LAN, plain HTTP | `http://<lan-ip>:3000` | ❌ | ❌ | your network |
+| 3. Local TLS | `https://localhost:3000` | ✅ | ❌ dev tears it down | this machine |
+| 4. Tailscale + TLS | `https://<machine>.<tailnet>.ts.net` | ✅ | ❌ dev tears it down | your tailnet, a phone included |
+| 5. Production build | any of the above | ✅ | ✅ | as the row it is served through |
+
+The service worker is **never** registered by `bun run dev`: development
+actively unregisters it (`src/lib/sw/register.ts`), because a worker left from
+a production build serves chunks that no longer exist. Testing offline or
+"Install app" therefore needs row 5.
+
+### 1. Local
+
+```bash
+bun run dev:setup          # first time: install, start db + cache, generate, migrate, start
+bun run dev:services       # afterwards: db + cache, if they are not running
+bun run dev                # http://localhost:3000
+```
+
+Or `docker compose up -d --build app` for the container path above. It
+publishes `127.0.0.1:3000` only, so rows 2 and 3 do not apply to it. Row 4 does,
+because `tailscale serve` proxies to loopback.
+
+### 2. From another device on the LAN (plain HTTP)
+
+`next dev` listens on every interface and prints the `Network:` address. Next
+answers **403 to `/_next/*` from an origin it was not told about**, and the
+symptom is a page that renders and never hydrates: the login form falls back
+to a native GET. `192.168.8.*` is allowed in `next.config.ts`; any other
+address goes in `.env`, and `next dev` must be restarted to read it:
+
+```bash
+DEV_ALLOWED_ORIGIN=192.168.1.20
+```
+
+Useful for layout on a real screen. The camera says it needs `https://`, and it
+is right.
+
+### 3. Local TLS, without Tailscale
+
+```bash
+bun run dev --experimental-https
+```
+
+Next creates a certificate with `mkcert` and, the first time, **installs a
+local certificate authority into this machine's trust store** (it may ask for
+your password). Only this machine trusts it, so a phone does not: use row 4
+for a phone. Set `NEXTAUTH_URL="https://localhost:3000"` in `.env` while you
+use it, so Auth.js builds its callback URLs with the right scheme. *Not run
+while writing this section* (2026-10-10), because it changes the system trust
+store. The flag is from `node_modules/next/dist/docs/01-app/03-api-reference/06-cli/next.md`.
+
+### 4. Tailscale with TLS — the phone path
+
+`tailscale serve` terminates TLS with a real Let's Encrypt certificate for the
+machine's tailnet name and proxies to the dev server. The phone needs only the
+Tailscale app, with no certificate to trust by hand. This is how the scanner was
+tested on a real device (`docs/PROGRESS.md`, "the owner's second pass").
+
+Once per tailnet, in the admin console under **DNS**: enable **MagicDNS** and
+**HTTPS Certificates**. Then:
+
+```bash
+# The name to use (strip the trailing dot)
+tailscale status --json | jq -r '.Self.DNSName'      # e.g. my-machine.tail1234.ts.net.
+
+# .env — then restart `bun run dev`, which reads it at start-up
+DEV_ALLOWED_ORIGIN=my-machine.tail1234.ts.net
+NEXTAUTH_URL="https://my-machine.tail1234.ts.net"
+
+bun run dev                         # terminal 1
+tailscale serve --bg 3000           # once; persists across reboots
+tailscale serve status              # https://my-machine…ts.net (tailnet only) |-- / proxy http://127.0.0.1:3000
+```
+
+Open `https://my-machine.tail1234.ts.net` on any device signed in to the
+tailnet. The first request after enabling HTTPS can take several seconds
+while the certificate is issued.
+
+- **Tailnet only.** `serve` is not `funnel`. Nothing is exposed to the
+  internet, and it must stay that way for a development server.
+- **To stop:** `tailscale serve --https=443 off`. **Not `tailscale serve
+  reset`**, which deletes every serve rule on the machine, not just this one.
+- `DEV_ALLOWED_ORIGIN` takes a comma-separated list. Add the tailnet IP
+  (`tailscale ip -4`) as well if you also open `http://100.x.y.z:3000`
+  directly. That plain-HTTP route behaves like row 2.
+
+Verified on 2026-10-10: on this project's development machine, `tailscale serve
+status` reports `https://<machine>.ts.net (tailnet only) |-- / proxy
+http://127.0.0.1:3000`, which is the configuration above.
+
+### 5. A production build, to test offline and installing
+
+```bash
+bun run build
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
+NODE_ENV=production PORT=3000 HOSTNAME=127.0.0.1 bun .next/standalone/server.js
+```
+
+These are the steps the browser suite runs (`playwright.config.ts`,
+`webServer`) and the image runs. `bun run start` *appears* to work, but it warns
+`"next start" does not work with "output: standalone"` and serves `.next/`
+rather than the bundle the image ships, so it can hide a tracing defect.
+`NEXTAUTH_SECRET` must not be the example value, because production refuses to
+start on it.
+
+Served through row 4, this is the one setup where a phone can **install** the
+app. On Android, Chrome's menu shows **Install app**. On iOS, use Safari's
+**Share → Add to Home Screen**. The manifest is `src/app/manifest.ts`, and the
+icons are generated from `public/icons/*.svg` by `bun scripts/generate-icons.ts`.
 
 ## Optional seeded bootstrap
 
