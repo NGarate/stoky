@@ -23,6 +23,14 @@
 # this script rather than skipping the check — a guard nobody runs is not a
 # guard.
 #
+# Usage:
+#   bash scripts/check-ci.sh                       # both, over everything
+#   bash scripts/check-ci.sh actionlint [FILE...]  # the workflows, or these
+#   bash scripts/check-ci.sh shellcheck [FILE...]  # scripts/*.sh, or these
+#
+# The file forms are how scripts/check-scope.sh lints only what is staged or
+# changed. Choosing the files is its job; an empty list here means everything.
+#
 # Environment:
 #   CHECK_CI_TOOLS  `image` or `binary`. Defaults to `image` when a Docker
 #                   daemon answers, `binary` otherwise.
@@ -38,6 +46,17 @@ ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
+
+TOOL="${1:-both}"
+case "$TOOL" in
+  both) ;;
+  actionlint | shellcheck) shift ;;
+  *)
+    echo "usage: $0 [actionlint|shellcheck] [FILE...]" >&2
+    exit 2
+    ;;
+esac
+FILES=("$@")
 
 if [ -z "${CHECK_CI_TOOLS:-}" ]; then
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
@@ -97,14 +116,22 @@ case "$CHECK_CI_TOOLS" in
     ;;
 esac
 
-echo "==> actionlint (${CHECK_CI_TOOLS})"
-# Also runs shellcheck over every `run:` block in the workflow — shell that
-# lives nowhere in scripts/ and is otherwise linted by nothing.
-actionlint -no-color
+if [ "$TOOL" != shellcheck ]; then
+  echo "==> actionlint (${CHECK_CI_TOOLS})"
+  # Also runs shellcheck over every `run:` block in the workflow — shell that
+  # lives nowhere in scripts/ and is otherwise linted by nothing. With no
+  # files it finds .github/workflows/ itself.
+  actionlint -no-color "${FILES[@]}"
+fi
 
-echo "==> shellcheck scripts/ (${CHECK_CI_TOOLS})"
-# -S warning: correctness, not style. The scripts predate this gate; style
-# churn would bury the findings that matter.
-shellcheck -S warning scripts/*.sh
+if [ "$TOOL" != actionlint ]; then
+  if [ "${#FILES[@]}" -eq 0 ]; then
+    FILES=(scripts/*.sh)
+  fi
+  echo "==> shellcheck (${CHECK_CI_TOOLS})"
+  # -S warning: correctness, not style. The scripts predate this gate; style
+  # churn would bury the findings that matter.
+  shellcheck -S warning "${FILES[@]}"
+fi
 
 echo "CI lint: OK"
