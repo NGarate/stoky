@@ -337,9 +337,12 @@ and needs no credential. A gate whose failure mode is "does nothing quietly" has
 to be watched being exercised, which is what the docs-only push is for.
 
 **The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
-(pinned to 1.7.12 and checksummed, like the Dockerfile's tessdata fetch) over
-the workflow and shellcheck over `scripts/*.sh`, and runs as the first step of
-the `quality` job. It exists because a workflow bug has no suite to fail: it
+over the workflow and shellcheck over `scripts/*.sh`, and runs as the first step
+of the `quality` job. Both come from `rhysd/actionlint:1.7.12` pinned by its
+multi-platform index digest, which bundles shellcheck 0.11.0, so neither is
+installed on the host (2026-10-11). Without Docker, or with
+`CHECK_CI_TOOLS=binary`, it falls back to the actionlint binary checked against
+a SHA-256, like the Dockerfile's tessdata fetch, and a system shellcheck. It exists because a workflow bug has no suite to fail: it
 surfaces as a red run on a trunk with no PR gate, which is what most of this
 repository's red runs actually were. Verified able to fail in both halves —
 an injected `SC2168` and an `env` context in `runs-on:` were each caught, then
