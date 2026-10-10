@@ -793,17 +793,17 @@ Application release: **0.1.0-alpha.1**, from `package.json`.
 
 | Package | Version |
 |---|---|
-| next | 16.3.0 |
+| next | 16.4.0 |
 | react | 19.2.8 |
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
 | next-auth | 5.0.0-beta.32 |
-| next-intl | 4.13.4 |
+| next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
 | bun | 1.4.0 — `.bun-version` and the Dockerfile pin; all application image stages use Bun |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
-| sharp | 0.35.3, **devDependency only** — not shipped, not loaded at runtime |
+| sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next
 dev` and `next start` run under `bun --bun` (`b81102d`), the production image
