@@ -210,6 +210,18 @@ describe("check-scope.sh", () => {
     expect(result.stdout).toContain("ok       typecheck");
   });
 
+  it("leaves actionlint and shellcheck to check-ci.sh with --no-pipeline-lint", () => {
+    const fixture = repo();
+    stageMixedChange(fixture);
+    for (const scope of ["all", "staged"]) {
+      const result = fixture.run([scope, "--no-pipeline-lint"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.calls.filter((call) => call.startsWith("check-ci"))).toEqual([]);
+      expect(result.stdout).toContain("skipped  actionlint: --no-pipeline-lint");
+      expect(result.stdout).toContain("skipped  shellcheck: --no-pipeline-lint");
+    }
+  });
+
   it("refuses an unknown scope, and --base outside `changed`", () => {
     const fixture = repo();
     expect(fixture.run(["everything"]).exitCode).toBe(2);

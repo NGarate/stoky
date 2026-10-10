@@ -6,6 +6,10 @@
 #   bash scripts/check-scope.sh staged              # before a commit
 #   bash scripts/check-scope.sh changed [--base R]  # a PR, or a branch before pushing
 #
+# --no-pipeline-lint reports actionlint and shellcheck as skipped. It is for
+# the development image in CI, which has neither Docker nor shellcheck, and
+# where check-ci.sh has already linted every workflow and script on the runner.
+#
 # Exists because a whole-project scan before a commit reports old findings in
 # files nobody touched, and that teaches people to stop reading it. `staged`
 # and `changed` answer the question actually being asked: is what *I* did
@@ -30,7 +34,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 usage() {
-  echo "usage: $0 {all|staged|changed [--base REF]}" >&2
+  echo "usage: $0 {all|staged|changed [--base REF]} [--no-pipeline-lint]" >&2
   exit 2
 }
 
@@ -38,12 +42,17 @@ SCOPE="${1:-}"
 [ -n "$SCOPE" ] || usage
 shift
 BASE_REF=""
+PIPELINE_LINT=true
 while [ $# -gt 0 ]; do
   case "$1" in
     --base)
       [ "$SCOPE" = changed ] && [ $# -ge 2 ] || usage
       BASE_REF="$2"
       shift 2
+      ;;
+    --no-pipeline-lint)
+      PIPELINE_LINT=false
+      shift
       ;;
     *) usage ;;
   esac
@@ -129,8 +138,10 @@ case "$SCOPE" in
   all)
     run "oxlint" bun run lint
     run "React Doctor" bun run check:react --scope full
-    run "actionlint" bash scripts/check-ci.sh actionlint
-    run "shellcheck" bash scripts/check-ci.sh shellcheck
+    if $PIPELINE_LINT; then
+      run "actionlint" bash scripts/check-ci.sh actionlint
+      run "shellcheck" bash scripts/check-ci.sh shellcheck
+    fi
     ;;
   staged | changed)
     if [ "${#SOURCES[@]}" -gt 0 ]; then
@@ -145,19 +156,26 @@ case "$SCOPE" in
       skip "React Doctor" "no $SCOPE source files"
     fi
 
-    if [ "${#WORKFLOWS[@]}" -gt 0 ]; then
-      run "actionlint ($(count WORKFLOWS))" bash scripts/check-ci.sh actionlint "${WORKFLOWS[@]}"
-    else
-      skip "actionlint" "no $SCOPE workflows"
-    fi
+    if $PIPELINE_LINT; then
+      if [ "${#WORKFLOWS[@]}" -gt 0 ]; then
+        run "actionlint ($(count WORKFLOWS))" bash scripts/check-ci.sh actionlint "${WORKFLOWS[@]}"
+      else
+        skip "actionlint" "no $SCOPE workflows"
+      fi
 
-    if [ "${#SCRIPTS[@]}" -gt 0 ]; then
-      run "shellcheck ($(count SCRIPTS))" bash scripts/check-ci.sh shellcheck "${SCRIPTS[@]}"
-    else
-      skip "shellcheck" "no $SCOPE scripts"
+      if [ "${#SCRIPTS[@]}" -gt 0 ]; then
+        run "shellcheck ($(count SCRIPTS))" bash scripts/check-ci.sh shellcheck "${SCRIPTS[@]}"
+      else
+        skip "shellcheck" "no $SCOPE scripts"
+      fi
     fi
     ;;
 esac
+
+if ! $PIPELINE_LINT; then
+  skip "actionlint" "--no-pipeline-lint"
+  skip "shellcheck" "--no-pipeline-lint"
+fi
 
 # Types do not scope by file: a change to one signature breaks its callers,
 # which are not in the list. Whole project, every scope.

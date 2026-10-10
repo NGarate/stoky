@@ -22,12 +22,16 @@
 # Usage:
 #   scripts/ci-in-image.sh quality
 #   scripts/ci-in-image.sh test
+#   CHANGED_BASE=<sha> scripts/ci-in-image.sh changed
 #
 # Environment:
 #   CI_NETWORK    Docker network for the container. Defaults to `host`, which
 #                 is how a GitHub runner reaches its service containers through
 #                 their published ports. Locally, pass the compose network
 #                 (`stoky_default`) and address the services by name.
+#   CHANGED_BASE  For `changed`: the commit a pull request is compared with.
+#                 Its merge base with HEAD has to be in the clone, which is
+#                 why the quality job checks out the full history.
 #   DATABASE_URL  Passed through. The integration suite needs it; `quality`
 #                 does not and does not read it.
 #   VALKEY_URL    As above. Locally, give it a spare database index —
@@ -42,8 +46,12 @@ SUITE="${1:-}"
 IMAGE_TAG="${IMAGE_TAG:-stoky-dev:ci}"
 CI_NETWORK="${CI_NETWORK:-host}"
 
-if [ "$SUITE" != "quality" ] && [ "$SUITE" != "test" ]; then
-  echo "usage: $0 {quality|test}" >&2
+if [ "$SUITE" != "quality" ] && [ "$SUITE" != "test" ] && [ "$SUITE" != "changed" ]; then
+  echo "usage: $0 {quality|test|changed}" >&2
+  exit 2
+fi
+if [ "$SUITE" = "changed" ] && [ -z "${CHANGED_BASE:-}" ]; then
+  echo "Error: the changed suite needs CHANGED_BASE, the commit to compare with." >&2
   exit 2
 fi
 
@@ -59,6 +67,16 @@ case "$SUITE" in
       && bun run check:react \
       && bun run check:contrast \
       && bun run check:links'
+    ;;
+  changed)
+    # The pull request's own changes, before the whole-project gates: a fast
+    # answer about what this change did. It proves nothing on its own — a
+    # change can break a file it did not touch — so `quality` still runs.
+    # --no-pipeline-lint: this image has no Docker to run actionlint and
+    # its bundled shellcheck from, and check-ci.sh has already linted every
+    # workflow and script on the runner. CHANGED_BASE expands inside the container, which
+    # receives it below.
+    COMMANDS='bash scripts/check-scope.sh changed --base "$CHANGED_BASE" --no-pipeline-lint'
     ;;
   test)
     # Migrations first, against an empty database. A migration that only works
@@ -82,6 +100,7 @@ docker run --rm \
   --volume /app/node_modules \
   --env "DATABASE_URL=${DATABASE_URL:-}" \
   --env "VALKEY_URL=${VALKEY_URL:-}" \
+  --env "CHANGED_BASE=${CHANGED_BASE:-}" \
   --env "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-ci-only-not-a-real-secret}" \
   --env "NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}" \
   --env CI=true \
