@@ -32,6 +32,23 @@ function setup(options: { volumeExists?: boolean } = {}) {
   const sums = () =>
     writeFileSync(join(release, "SHA256SUMS"), files.map((name) => `${sha256(join(release, name))}  ${name}\n`).join(""));
   sums();
+  // curl serves the release from the directory, as `--fail` would: the test
+  // image has no curl, and what is under test is the script, not curl.
+  writeFileSync(
+    join(bin, "curl"),
+    `#!/bin/bash
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output="$2"; shift ;;
+    file://*) source="\${1#file://}" ;;
+  esac
+  shift
+done
+[ -f "$source" ] || { echo "curl: (37) Couldn't open file $source" >&2; exit 37; }
+cp "$source" "$output"
+`,
+    { mode: 0o755 },
+  );
   // Records every call, so a test can prove nothing was started or pulled.
   const calls = join(fixture, "docker-calls");
   writeFileSync(calls, "");

@@ -57,7 +57,8 @@ echo "==> Comprobando las sumas SHA-256"
 for file in "${FILES[@]}"; do
   grep -E "^[0-9a-f]{64}  $file\$" "$WORK/SHA256SUMS" > "$WORK/check" \
     || fail "el SHA256SUMS de $VERSION no incluye $file."
-  (cd "$WORK" && sha256sum --quiet -c check) \
+  # Not --quiet: BusyBox's sha256sum, on Alpine hosts, does not have it.
+  (cd "$WORK" && sha256sum -c check > /dev/null) \
     || fail "$file no coincide con la suma publicada para $VERSION. No se ha cambiado nada."
 done
 
