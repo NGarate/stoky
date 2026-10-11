@@ -1,6 +1,6 @@
 # Install Stoky with Docker Compose
 
-This guide is for **v0.1.0-alpha.2**, the second testing release. Keep backups;
+This guide is for **v0.1.0-alpha.3**, the third testing release. Keep backups;
 alpha upgrades can change the database and may require manual migration steps.
 For development from source, use [Local Bootstrap](LOCAL_BOOTSTRAP.md).
 
@@ -51,16 +51,19 @@ upgrade, below), and **never starts anything**: you review `.env` and start
 Stoky yourself in step 3. Running it again is safe.
 
 ```bash
-curl --fail --location --remote-name \
-  https://raw.githubusercontent.com/NGarate/stoky/master/deploy/install.sh
-less install.sh      # read what you are about to run
+STOKY_RELEASE=v0.1.0-alpha.3
+for asset in install.sh SHA256SUMS; do
+  curl --fail --location --output "$asset" \
+    "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
+done
+grep -E '  install\.sh$' SHA256SUMS | sha256sum -c
+less install.sh      # read what you are about to run; q to quit
 bash install.sh
 ```
 
-This alpha was published before the script existed, so it comes from the
-repository; it downloads and verifies this alpha's files by their tag. From
-the next release on, `install.sh` is attached to the release and listed in its
-`SHA256SUMS`. Continue with step 2: only `DOMAIN` and `ACME_EMAIL` are left.
+`sha256sum -c` must print `install.sh: OK` before you run it. The script
+installs the release it came with. Continue with step 2: only `DOMAIN` and
+`ACME_EMAIL` are left.
 
 ### By hand
 
@@ -68,7 +71,7 @@ Download the exact alpha by its tag. Prereleases are not available through
 GitHub's `releases/latest/download` URL.
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.2
+STOKY_RELEASE=v0.1.0-alpha.3
 for asset in docker-compose.yml example.env traefik.yml SHA256SUMS; do
   curl --fail --location --output "$asset" \
     "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
@@ -104,7 +107,7 @@ Open `.env` in your editor and fill in:
 
 | Setting | Value |
 |---|---|
-| `STOKY_VERSION` | Keep `v0.1.0-alpha.2` for this release |
+| `STOKY_VERSION` | Keep `v0.1.0-alpha.3` for this release |
 | `DOMAIN` | The hostname alone, for example `stoky.example.com`; no scheme or path |
 | `ACME_EMAIL` | Your email address for Let's Encrypt |
 | `POSTGRES_PASSWORD` | The first generated hex value |

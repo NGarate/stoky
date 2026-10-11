@@ -12,6 +12,21 @@ say what measured it.
 
 ## Gate status
 
+**2026-10-11 third-alpha preparation:** `v0.1.0-alpha.3` changes installation,
+not the application: `git diff v0.1.0-alpha.2` touches no file under `src/`
+outside tests, nor `prisma/`, the `Dockerfile`, dependencies, or the Compose and
+Traefik files. The repository and `ghcr.io/ngarate/stoky` are public; with no
+saved credentials the alpha.2 image pulled by its verified digest, and the
+guide's install-script path ran in an empty directory through `docker compose
+pull` of all four images. `deploy/install.sh` is now a release asset listed in
+`SHA256SUMS`; `release-assets.sh v0.1.0-alpha.3` packaged it with its guide links
+and `DEFAULT_VERSION` pinned, and the packaged script, verified with the guide's
+`grep … | sha256sum -c` line, installed from the packaged files. `bun run
+verify:ci` passes in 114 seconds (897 unit, 879 component, 598 integration, build);
+`bash scripts/check-ci.sh` passes; `bun run test:e2e` passes **177/177 in 2.9
+minutes**. The production image was not rebuilt locally: its source is the tree
+the alpha.2 entry below tested, and the tag's CI smoke runs the published one.
+
 **2026-10-11 second-alpha preparation:** `v0.1.0-alpha.2` ships the 2026-10-05
 project review, the 2026-10-06 UI alignment, the installable PWA and the scoped
 checks. The one new migration, `normalise_user_email`, refuses to run while two
@@ -816,7 +831,7 @@ alert per advisory-path pair.
 
 ## Versions
 
-Application release: **0.1.0-alpha.2**, from `package.json`.
+Application release: **0.1.0-alpha.3**, from `package.json`.
 
 | Package | Version |
 |---|---|
