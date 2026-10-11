@@ -1,6 +1,6 @@
 # Install Stoky with Docker Compose
 
-This guide is for **v0.1.0-alpha.1**, the first testing release. Keep backups;
+This guide is for **v0.1.0-alpha.2**, the second testing release. Keep backups;
 alpha upgrades can change the database and may require manual migration steps.
 For development from source, use [Local Bootstrap](LOCAL_BOOTSTRAP.md).
 
@@ -47,7 +47,7 @@ available through GitHub's `releases/latest/download` URL):
 
 ```bash
 gh auth login
-gh release download v0.1.0-alpha.1 --repo NGarate/stoky \
+gh release download v0.1.0-alpha.2 --repo NGarate/stoky \
   --pattern docker-compose.yml --pattern example.env --pattern traefik.yml --pattern SHA256SUMS
 sha256sum -c SHA256SUMS
 cp example.env .env
@@ -58,7 +58,7 @@ chmod 644 traefik.yml
 If the repository and release are public, the equivalent download is:
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.1
+STOKY_RELEASE=v0.1.0-alpha.2
 for asset in docker-compose.yml example.env traefik.yml SHA256SUMS; do
   curl --fail --location --output "$asset" \
     "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
@@ -90,7 +90,7 @@ Open `.env` in your editor and fill in:
 
 | Setting | Value |
 |---|---|
-| `STOKY_VERSION` | Keep `v0.1.0-alpha.1` for this release |
+| `STOKY_VERSION` | Keep `v0.1.0-alpha.2` for this release |
 | `DOMAIN` | The hostname alone, for example `stoky.example.com`; no scheme or path |
 | `ACME_EMAIL` | Your email address for Let's Encrypt |
 | `POSTGRES_PASSWORD` | The first generated hex value |

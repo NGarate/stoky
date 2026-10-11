@@ -9,10 +9,10 @@ there is no external service holding your data.
 **Primary language:** Spanish (`es`), with English (`en`) as secondary.
 **Default currency:** EUR.
 
-> **Status: v0.1.0-alpha.1 — first alpha.** Intended for testing with backups,
+> **Status: v0.1.0-alpha.2 — second alpha.** Intended for testing with backups,
 > with Spanish as the default language and EUR as the default currency. Inventory,
 > receipt review, prices, shopping and offline shopping synchronization are built.
-> See [installation](docs/INSTALL.md), [release notes](docs/releases/v0.1.0-alpha.1.md)
+> See [installation](docs/INSTALL.md), [release notes](docs/releases/v0.1.0-alpha.2.md)
 > and the [verified status and known gaps](docs/STATUS.md).
 
 ---
@@ -49,7 +49,7 @@ constraint for the MVP.
 ## Install the alpha
 
 Follow **[Install with Docker Compose](docs/INSTALL.md)**. Download the files
-attached to `v0.1.0-alpha.1`, set the hostname, certificate email and two secrets,
+attached to `v0.1.0-alpha.2`, set the hostname, certificate email and two secrets,
 then run `docker compose up -d --wait`. The release runs from a prebuilt Linux
 amd64 image; it does not require a source checkout or a local Node/Bun installation.
 The guide covers private GitHub/GHCR access, first registration, backup/restore,

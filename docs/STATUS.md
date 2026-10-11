@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-09-25
+Updated: 2026-10-11
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,30 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-10-11 second-alpha preparation:** `v0.1.0-alpha.2` ships the 2026-10-05
+project review, the 2026-10-06 UI alignment, the installable PWA and the scoped
+checks. The one new migration, `normalise_user_email`, refuses to run while two
+accounts differ only by letter case; the release notes tell an upgrader how to
+clear it. The shipped bundle (`deploy/`, unmodified but for a loopback-ports
+override, because Tailscale holds TCP 443 on the test host) was started on fresh
+volumes with an image built by `git archive master | docker build --target
+production` from `6007533` — the application tree of this release, since the
+later commits change only scripts, tests and documents. Migrations applied;
+HTTP redirected to HTTPS; an unknown `Host` got 404; HSTS, `nosniff` and
+`X-Frame-Options: DENY` arrived; `/register` and `/login` answered 200;
+`auth.register` created an account and household that survived
+`docker compose down` and `up`; the app ran as UID 1000 with a read-only root
+and a writable uploads volume. **Found:** a `traefik.yml` copied under
+`umask 077` is `0600`, which Traefik (root, all capabilities dropped) cannot
+read, so it serves `404 page not found` everywhere while every container is
+healthy. `chmod 644` fixed it; `docs/INSTALL.md` now says so. Let's Encrypt
+issuance was not exercised.
+
+`bun run verify:ci` passes in 104 seconds: 881 unit, 879 component and 598
+integration tests plus the production build. `bash scripts/check-ci.sh` passes.
+`bun run test:e2e` passes **177/177 in 2.9 minutes** across Chromium, Firefox
+and WebKit (2026-10-11).
 
 **2026-09-25 first-alpha preparation:** `v0.1.0-alpha.1` adds a standalone
 release bundle (`deploy/docker-compose.yml`, `example.env`, `traefik.yml`). It
@@ -792,7 +816,7 @@ alert per advisory-path pair.
 
 ## Versions
 
-Application release: **0.1.0-alpha.1**, from `package.json`.
+Application release: **0.1.0-alpha.2**, from `package.json`.
 
 | Package | Version |
 |---|---|
