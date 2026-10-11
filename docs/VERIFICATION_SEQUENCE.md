@@ -1,6 +1,6 @@
 # Stoky Verification Sequence
 
-Updated: 2026-08-28
+Updated: 2026-10-11
 
 Use this as the source of truth for local and CI-style validation.
 
@@ -30,13 +30,18 @@ Runs the checks that should stay cheap enough for most iteration loops:
 bun run verify:local
 ```
 
-Seven steps:
+Eight steps:
 
 - `bun run lint`
 - `bun run typecheck`
 - `bun run check:react` — react-doctor, gating on errors, not the score
 - `bun run check:links` — every internal link points at a route that exists
 - `bun run check:contrast` — every theme token pair meets WCAG AAA
+- `bun run check:audit` — `bun audit --audit-level moderate`. The one step
+  that needs the network: it sends package names and versions to the npm
+  advisory endpoint. Offline it reports **skipped**, not failed, because
+  offline is not a finding; CI's `audit` job calls `bun audit` directly and
+  stays a hard gate.
 - `bun run test:unit`
 - `bun run test:components`
 
@@ -70,9 +75,66 @@ or prices:
 bun run test:e2e -- e2e/critical-paths.spec.ts
 ```
 
+## Scoped checks — feedback, not a gate
+
+The static checks in three scopes, through one script:
+
+```bash
+bun run check:all                    # everything: what CI runs on master
+bun run check:staged                 # what is staged: before a commit
+bun run check:changed                # what differs from origin/master: before a push
+bun run check:changed --base <ref>   # ...or from another base
+```
+
+| Check | `all` | `staged` / `changed` |
+|---|---|---|
+| oxlint | the project | the listed `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` files |
+| React Doctor | `--scope full` | `--staged` / `--scope changed --base <merge base>` — only issues the change introduced |
+| actionlint | every workflow | listed `.github/workflows/*.yml` |
+| shellcheck | `scripts/*.sh` | listed `scripts/*.sh` |
+| dependency audit | always | only when `bun.lock` or `package.json` is listed |
+| typecheck | the project | the project — a changed signature breaks callers that are not listed |
+
+**`staged` and `changed` prove nothing.** They answer "is what I did clean", not
+"is the tree mergeable": a change can break a file it did not touch, and only
+`verify:ci` and the CI run show that. What they are for is attention — a
+whole-project scan that reports old findings in untouched files teaches people
+to stop reading it.
+
+How to read the output:
+
+- **The summary says `ok`, `FAILED` or `skipped` for every check.** Every check
+  runs even after one fails. An empty file list is `skipped`, never `ok`.
+- **`changed` compares the working tree** with the merge base of the base and
+  `HEAD`, so uncommitted work counts. That is what React Doctor's own
+  `--scope changed` compares. `origin/master` is fetched if the clone has never
+  seen it.
+- **A narrow scope never checks what `all` does not**: `docs/reproductions/*.sh`
+  is not shellchecked by any of them.
+- **React Doctor's `--staged` refuses while `package.json` has unstaged
+  edits** ("configuration differs between the index and worktree"). Stage or
+  stash the edit; it is a guard, not a finding.
+- actionlint and shellcheck come from the pinned `rhysd/actionlint` image
+  (`scripts/check-ci.sh`), so they need Docker but nothing installed.
+
+React Doctor's flags (no telemetry, **no supply-chain upload to Socket.dev**,
+errors only) live once, in `check:react`; every scope calls it and only adds
+the scope.
+
+**On a pull request, CI runs `changed`** against the PR's base inside the
+development image, before the whole-project `quality` step, which still runs.
+
+**Before every commit, if you want it:** `bash scripts/install-hooks.sh`
+installs a git pre-commit hook that runs `check:staged`; `--uninstall` removes
+it, and `git commit --no-verify` skips it once. Opt-in, and it will not replace
+a pre-commit hook it did not write.
+
 ## Environment assumptions
 
-- `verify:local` does not require Docker
+- `verify:local` does not require Docker. It does use the network, for the
+  dependency audit only, and reports that step skipped when offline
+- `check:all`, `check:staged` and `check:changed` require Docker for
+  actionlint and shellcheck
 - `verify:ci` requires Docker (the integration harness runs its own services)
 - **The browser suite is self-contained.** `playwright.config.ts` builds the
   standalone production artefact, serves it on port 3100 (`PLAYWRIGHT_PORT`

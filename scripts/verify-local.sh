@@ -77,6 +77,13 @@ run_step() {
   local code=0
   timeout "$ceiling" "$@" || code=$?
 
+  # 75 (EX_TEMPFAIL): the step could not run here, which is not a finding.
+  # Only the dependency audit uses it, offline (scripts/check-audit.sh).
+  if [ "$code" -eq 75 ]; then
+    echo "    ${label}: skipped, could not run here"
+    return 0
+  fi
+
   if [ "$code" -ne 0 ]; then
     if [ "$code" -eq 124 ]; then
       echo "!! $label exceeded its ${ceiling}s ceiling and was stopped." >&2
@@ -104,6 +111,7 @@ run_step "Typecheck" 180 "${RUN_CMD[@]}" typecheck
 run_step "React doctor" 120 "${RUN_CMD[@]}" check:react
 run_step "Internal links" 120 "${RUN_CMD[@]}" check:links
 run_step "Contrast" 120 "${RUN_CMD[@]}" check:contrast
+run_step "Dependency audit" 60 "${RUN_CMD[@]}" check:audit
 run_step "Unit tests" 120 "${RUN_CMD[@]}" test:unit
 run_step "Component tests" 180 "${RUN_CMD[@]}" test:components
 

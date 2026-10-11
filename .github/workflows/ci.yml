@@ -47,9 +47,16 @@ jobs:
       # the job by default. Nothing in this pipeline pushes, so no step needs
       # it — and a credential nothing needs is only ever available to an
       # attacker in a compromised dependency.
+      #
+      # Full history, so a pull request's merge base with master is in the
+      # clone for the scoped step below. Fetching it later would need the
+      # credential just declined, which on a private repository is the
+      # "could not read Username" the `changes` job ran into. The whole
+      # history is under 8 MB.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       # The pipeline linting itself. A workflow bug has no test to fail — it
       # surfaces as a red run on the trunk after push — so it gets a gate that
@@ -87,6 +94,17 @@ jobs:
       #
       # `scripts/ci-in-image.sh` is the same script a developer runs, and
       # `check-ci.sh` above shellchecks it.
+      # A pull request's own changes first: oxlint over the files it touched
+      # and React Doctor reporting only issues it introduced, so the first red
+      # line is about this change rather than buried in a whole-project scan.
+      # Feedback, not the gate — a change can break a file it did not touch —
+      # so the full step below still runs. Its image build is a cache hit.
+      - name: Lint the pull request's changes — in the image
+        if: github.event_name == 'pull_request'
+        env:
+          CHANGED_BASE: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/ci-in-image.sh changed
+
       - name: Lint, types, contrast — in the image
         run: bash scripts/ci-in-image.sh quality
 

@@ -212,12 +212,11 @@ notes live in `docs/releases/` and describe the specific tagged version.
 ### Proposed — read, then decide; nothing here is scheduled
 
 **[`superpowers/plans/2026-10-10-scoped-checks-and-dev-scripts.md`](superpowers/plans/2026-10-10-scoped-checks-and-dev-scripts.md)**
-Not started. React Doctor, actionlint/shellcheck and the dependency audit,
-each in three scopes: everything, what is staged, and what differs from a PR's
-base. Also candidate scripts (`preview`, `dev:https`, `dev:tailscale`). It
-records two findings worth acting on before the plan itself: `check:react`
-sends the dependency list to Socket.dev, and `check-ci.sh` needs a host
-`shellcheck`.
+Steps 1–7 done on 2026-10-11 (`check:all`/`check:staged`/`check:changed`, the
+pinned actionlint image, `check:audit`, the opt-in hook); the plan records where
+the implementation departed from it. `VERIFICATION_SEQUENCE.md` now owns how
+to use them. Still proposed: the candidate scripts (`preview`, `dev:https`,
+`dev:tailscale`, `check:pwa`).
 
 **[`superpowers/plans/2026-10-10-product-review.md`](superpowers/plans/2026-10-10-product-review.md)**
 Missing features, ease-of-use friction and a comparison with Grocy. It is input
