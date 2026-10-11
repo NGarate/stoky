@@ -52,6 +52,7 @@ gh release download v0.1.0-alpha.1 --repo NGarate/stoky \
 sha256sum -c SHA256SUMS
 cp example.env .env
 chmod 600 .env
+chmod 644 traefik.yml
 ```
 
 If the repository and release are public, the equivalent download is:
@@ -65,7 +66,13 @@ done
 sha256sum -c SHA256SUMS
 cp example.env .env
 chmod 600 .env
+chmod 644 traefik.yml
 ```
+
+`traefik.yml` must stay readable by everyone (`644`); it holds no secrets. Traefik
+runs with every capability dropped, so it cannot read a file only its owner can,
+and a restrictive `umask` (such as `077`) creates the downloads that way. It then
+starts without its routes and answers every request with `404 page not found`.
 
 Do not download files from `master` for a tagged release. Checksums detect
 damaged/mismatched files; they are not a separate signature of the publisher.
@@ -127,7 +134,7 @@ there is no manual Prisma command and no demo account to seed.
 Visit `https://YOUR_DOMAIN/register`, create your account and provide a household
 name. Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
-**Ajustes → Personas**. Separate registration creates a separate household.
+**Configuración → Personas del hogar**. Separate registration creates a separate household.
 
 ```bash
 curl --fail --show-error https://YOUR_DOMAIN/api/health
@@ -181,9 +188,11 @@ certificates again, subject to your DNS and ACME rate limits.
 
 **Test restoration on an empty installation on another host**, using the same
 release and the saved `.env`, Compose and Traefik files. These commands assume its database and
-uploads are empty and the backup files have been copied into its directory:
+uploads are empty and the backup files have been copied into its directory.
+The backup was written under `umask 077`, so make `traefik.yml` readable again:
 
 ```bash
+chmod 644 traefik.yml
 docker compose pull
 docker compose up -d --wait db cache
 docker compose exec -T db pg_restore -U stoky -d stoky \
@@ -205,6 +214,7 @@ the installed Compose and Traefik files with that release's files and set `STOKY
 its exact tag, then:
 
 ```bash
+chmod 644 traefik.yml
 docker compose config --quiet
 docker compose pull
 docker compose up -d --wait --wait-timeout 180
@@ -229,6 +239,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | Image pull says `denied` | GHCR login, `read:packages` scope, package access and exact tag |
 | `no matching manifest` | This alpha publishes Linux amd64 only |
 | Traefik configuration file missing | Download `traefik.yml` beside the Compose file from the same release |
+| Every page is `404 page not found` | `docker compose logs traefik` shows `permission denied` for `dynamic.yml`: run `chmod 644 traefik.yml`, then `docker compose restart traefik` |
 | `P1000` / database authentication | Password differs from the one stored when the volume was initialized; changing `.env` is not rotation |
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
