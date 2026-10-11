@@ -6,22 +6,25 @@ not stable releases. Repository/package visibility is a separate owner decision.
 
 ## Prepare a reviewable version
 
-1. Update `package.json` and `deploy/example.env` to the same version. The
-   Compose file has no default image tag: it requires `STOKY_VERSION` from `.env`,
-   so `example.env` is the one place the bundle names its version. Commit no secrets.
+1. Update `package.json`, `deploy/example.env` and `DEFAULT_VERSION` in
+   `deploy/install.sh` to the same version. The Compose file has no default image
+   tag: it requires `STOKY_VERSION` from `.env`, so `example.env` is the one place
+   the bundle names the image, and `install.sh` names the release it downloads.
+   Commit no secrets.
 2. Write `docs/releases/vVERSION.md`: introduction, highlights, installation link,
    upgrade instructions, known limitations and verification. Describe user-visible
    behavior; do not claim that automated tests settle the outstanding human checks.
 3. Update the installation guide and owning documents whenever configuration or
-   support changes. Keep release assets self-contained: Compose, `example.env` and
-   `traefik.yml` must work without a checkout.
+   support changes. Keep release assets self-contained: Compose, `example.env`,
+   `traefik.yml` and `install.sh` must work without a checkout. `install.sh` only
+   downloads, verifies and creates missing configuration; it never starts Stoky.
 4. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
    for a release. New tests must be shown to fail against the broken behavior.
 5. Build and test the production image with fresh, isolated volumes. Check migrations,
    proxy routing, registration/login, health, restart persistence and backup/restore.
    Record what was actually tested in `STATUS.md`, including any TLS/host limitations.
 6. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets`.
-   The script rejects version mismatches (package, `example.env`, and any version
+   The script rejects version mismatches (package, `example.env`, `install.sh`, and any version
    named in `docs/INSTALL.md` or `README.md`) and missing notes, pins the assets'
    guide links to the tag, and produces `SHA256SUMS`.
 

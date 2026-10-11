@@ -29,6 +29,14 @@ if [ "$(grep -c '^STOKY_VERSION=' deploy/example.env)" != 1 ] \
   exit 1
 fi
 
+# The install script downloads the release it names. Attached to another
+# release, it would install that one's predecessor instead of its own.
+if [ "$(grep -c '^DEFAULT_VERSION=' deploy/install.sh)" != 1 ] \
+   || ! grep -Fxq "DEFAULT_VERSION=$RELEASE_TAG" deploy/install.sh; then
+  echo "Error: deploy/install.sh must set DEFAULT_VERSION=$RELEASE_TAG exactly once." >&2
+  exit 1
+fi
+
 # The guide and README name the version in prose and in copy-paste commands
 # (`gh release download vX`). Nothing else ties those to the tag, so a release
 # that forgets them ships instructions that download the previous one.
@@ -51,11 +59,12 @@ mkdir -p "$ASSET_DIR"
 # The templates link to the guide on master, which is right for a checkout and
 # wrong for a download: once the next release lands, master's guide describes
 # that release. Each asset points at the guide written for its own tag.
-for asset in docker-compose.yml example.env traefik.yml; do
+for asset in docker-compose.yml example.env traefik.yml install.sh; do
   sed "s#/blob/master/#/blob/$RELEASE_TAG/#g" "deploy/$asset" > "$ASSET_DIR/$asset"
 done
 (
   cd "$ASSET_DIR"
-  sha256sum docker-compose.yml example.env traefik.yml > SHA256SUMS
+  chmod 755 install.sh
+  sha256sum docker-compose.yml example.env traefik.yml install.sh > SHA256SUMS
   sha256sum -c SHA256SUMS
 )

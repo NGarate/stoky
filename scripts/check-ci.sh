@@ -26,7 +26,7 @@
 # Usage:
 #   bash scripts/check-ci.sh                       # both, over everything
 #   bash scripts/check-ci.sh actionlint [FILE...]  # the workflows, or these
-#   bash scripts/check-ci.sh shellcheck [FILE...]  # scripts/*.sh, or these
+#   bash scripts/check-ci.sh shellcheck [FILE...]  # scripts/*.sh and deploy/*.sh, or these
 #
 # The file forms are how scripts/check-scope.sh lints only what is staged or
 # changed. Choosing the files is its job; an empty list here means everything.
@@ -126,7 +126,11 @@ fi
 
 if [ "$TOOL" != actionlint ]; then
   if [ "${#FILES[@]}" -eq 0 ]; then
-    FILES=(scripts/*.sh)
+    # nullglob: a tree with no deploy/*.sh must not hand shellcheck the
+    # literal pattern as a file name.
+    shopt -s nullglob
+    FILES=(scripts/*.sh deploy/*.sh)
+    shopt -u nullglob
   fi
   echo "==> shellcheck (${CHECK_CI_TOOLS})"
   # -S warning: correctness, not style. The scripts predate this gate; style

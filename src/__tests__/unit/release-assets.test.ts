@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,7 +14,9 @@ afterEach(() => {
   }
 });
 
-function setup(options: { packageVersion?: string; envVersion?: string; notes?: boolean; guideVersion?: string } = {}) {
+function setup(
+  options: { packageVersion?: string; envVersion?: string; installVersion?: string; notes?: boolean; guideVersion?: string } = {},
+) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-release-"));
   fixtures.push(fixture);
   for (const directory of ["scripts", "deploy", "docs/releases", "bin"]) {
@@ -26,6 +28,10 @@ function setup(options: { packageVersion?: string; envVersion?: string; notes?: 
   writeFileSync(join(fixture, "package.json"), JSON.stringify({ version: options.packageVersion ?? "0.1.0-alpha.1" }));
   writeFileSync(join(fixture, "deploy/example.env"), `# ${guide("master")}\nSTOKY_VERSION=${options.envVersion ?? tag}\nNEXTAUTH_SECRET=\n`);
   writeFileSync(join(fixture, "deploy/docker-compose.yml"), `# ${guide("master")}\nservices:\n  app:\n    image: ghcr.io/example/stoky:\${STOKY_VERSION:?}\n`);
+  writeFileSync(
+    join(fixture, "deploy/install.sh"),
+    `#!/bin/bash\n# ${guide("master")}\nDEFAULT_VERSION=${options.installVersion ?? tag}\n`,
+  );
   writeFileSync(join(fixture, "deploy/traefik.yml"), "http:\n  services:\n    stoky:\n      loadBalancer:\n        servers:\n          - url: http://app:3000\n");
   // An operator's local credentials must never become a release attachment.
   writeFileSync(join(fixture, "deploy/.env"), "NEXTAUTH_SECRET=private-local-value\n");
@@ -49,7 +55,7 @@ describe("release installation assets", () => {
     const { fixture, output, run } = setup();
     const result = run();
     expect(result.exitCode).toBe(0);
-    for (const name of ["docker-compose.yml", "example.env", "traefik.yml"]) {
+    for (const name of ["docker-compose.yml", "example.env", "traefik.yml", "install.sh"]) {
       const source = readFileSync(join(fixture, "deploy", name), "utf8");
       expect(readFileSync(join(output, name), "utf8")).toBe(source.replaceAll(guide("master"), guide(tag)));
     }
@@ -60,10 +66,25 @@ describe("release installation assets", () => {
     expect(verify().exitCode).not.toBe(0);
   });
 
+  it("attaches the install script, executable and covered by the checksums", () => {
+    const { output, run } = setup();
+    expect(run().exitCode).toBe(0);
+    expect(statSync(join(output, "install.sh")).mode & 0o111).not.toBe(0);
+    expect(readFileSync(join(output, "SHA256SUMS"), "utf8")).toMatch(/^[0-9a-f]{64} {2}install\.sh$/m);
+  });
+
+  it("rejects an install script that would download another release", () => {
+    const { output, run } = setup({ installVersion: "v0.0.9" });
+    const result = run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(`DEFAULT_VERSION=${tag}`);
+    expect(existsSync(output)).toBe(false);
+  });
+
   it("points a download at the guide for its own release, not master's", () => {
     const { output, run } = setup();
     expect(run().exitCode).toBe(0);
-    for (const name of ["docker-compose.yml", "example.env"]) {
+    for (const name of ["docker-compose.yml", "example.env", "install.sh"]) {
       const asset = readFileSync(join(output, name), "utf8");
       expect(asset).toContain(guide(tag));
       expect(asset).not.toContain("/blob/master/");

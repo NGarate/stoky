@@ -88,6 +88,8 @@ function stageMixedChange(fixture: ReturnType<typeof repo>) {
   fixture.write("src/old.ts", "y\n");
   fixture.write(".github/workflows/ci.yml");
   fixture.write("scripts/release.sh");
+  fixture.write("deploy/install.sh");
+  fixture.write("deploy/examples/old.sh");
   fixture.write("docs/repro.sh");
   fixture.write("docs/notes.md");
   fixture.git("rm", "-q", "src/gone.tsx");
@@ -117,7 +119,7 @@ describe("check-scope.sh", () => {
       "bun [run] [lint] [src/new file.tsx] [src/old.ts]",
       "bun [run] [check:react] [--staged]",
       "check-ci [actionlint] [.github/workflows/ci.yml]",
-      "check-ci [shellcheck] [scripts/release.sh]",
+      "check-ci [shellcheck] [deploy/install.sh] [scripts/release.sh]",
       "bun [run] [typecheck]",
     ]);
   });
@@ -156,7 +158,7 @@ describe("check-scope.sh", () => {
       "bun [run] [lint] [src/new file.tsx] [src/old.ts]",
       `bun [run] [check:react] [--scope] [changed] [--base] [${base}]`,
       "check-ci [actionlint] [.github/workflows/ci.yml]",
-      "check-ci [shellcheck] [scripts/release.sh] [scripts/stable.sh] [scripts/uncommitted.sh]",
+      "check-ci [shellcheck] [deploy/install.sh] [scripts/release.sh] [scripts/stable.sh] [scripts/uncommitted.sh]",
       "bun [run] [typecheck]",
     ]);
   });
@@ -311,11 +313,15 @@ describe("check-audit.sh", () => {
 });
 
 describe("check-ci.sh file arguments", () => {
-  function runCheckCi(args: string[]) {
+  function runCheckCi(args: string[], options: { deploy?: boolean } = {}) {
     const fixture = mkdtempSync(join(tmpdir(), "stoky-check-ci-"));
     fixtures.push(fixture);
     mkdirSync(join(fixture, "scripts"));
     mkdirSync(join(fixture, "bin"));
+    if (options.deploy) {
+      mkdirSync(join(fixture, "deploy"));
+      writeFileSync(join(fixture, "deploy/install.sh"), "");
+    }
     copyFileSync(join(root, "scripts/check-ci.sh"), join(fixture, "scripts/check-ci.sh"));
     for (const name of ["a.sh", "b.sh"]) writeFileSync(join(fixture, "scripts", name), "");
     writeFileSync(join(fixture, "bin/docker"), `#!/bin/bash\n[ "$1" = info ] && exit 0\n${logger("docker")}\n`, {
@@ -341,6 +347,12 @@ describe("check-ci.sh file arguments", () => {
     expect(result.tools).toEqual([
       "/usr/local/bin/actionlint [-no-color]",
       "shellcheck [-S] [warning] [scripts/a.sh] [scripts/b.sh] [scripts/check-ci.sh]",
+    ]);
+  });
+
+  it("lints the operator's install script beside the project's own", () => {
+    expect(runCheckCi(["shellcheck"], { deploy: true }).tools).toEqual([
+      "shellcheck [-S] [warning] [scripts/a.sh] [scripts/b.sh] [scripts/check-ci.sh] [deploy/install.sh]",
     ]);
   });
 

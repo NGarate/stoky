@@ -82,7 +82,7 @@ case "$SCOPE" in
 esac
 
 # The same sets `all` covers: oxlint and React Doctor walk the project's
-# sources, actionlint the workflow directory, shellcheck scripts/*.sh.
+# sources, actionlint the workflow directory, shellcheck scripts/*.sh and deploy/*.sh.
 SOURCES=()
 WORKFLOWS=()
 SCRIPTS=()
@@ -96,8 +96,8 @@ for file in "${FILES[@]}"; do
     .github/workflows/*.yml | .github/workflows/*.yaml) WORKFLOWS+=("$file") ;;
   esac
   case "$file" in
-    scripts/*/*) ;;
-    scripts/*.sh) SCRIPTS+=("$file") ;;
+    scripts/*/* | deploy/*/*) ;;
+    scripts/*.sh | deploy/*.sh) SCRIPTS+=("$file") ;;
   esac
   case "$file" in
     package.json | bun.lock) DEPENDENCIES+=("$file") ;;

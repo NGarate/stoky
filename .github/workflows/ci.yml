@@ -706,7 +706,7 @@ jobs:
         run: |
           PRERELEASE=false
           case "$RELEASE_TAG" in *-*) PRERELEASE=true ;; esac
-          ASSETS=("$RUNNER_TEMP/release/docker-compose.yml" "$RUNNER_TEMP/release/example.env" "$RUNNER_TEMP/release/traefik.yml" "$RUNNER_TEMP/release/SHA256SUMS")
+          ASSETS=("$RUNNER_TEMP/release/docker-compose.yml" "$RUNNER_TEMP/release/example.env" "$RUNNER_TEMP/release/traefik.yml" "$RUNNER_TEMP/release/install.sh" "$RUNNER_TEMP/release/SHA256SUMS")
           if DRAFT="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
             if [ "$DRAFT" != true ]; then
               echo "::error::Release $RELEASE_TAG is already published; refusing to replace its assets."
