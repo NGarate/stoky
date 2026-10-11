@@ -22,14 +22,14 @@ and Traefik. You do not need Git, Node.js, Bun or a local build.
   Both ports must be free. An existing proxy or a LAN-only/VPN-only installation
   needs its own trusted TLS configuration; the supplied ACME setup does not work
   for `localhost`, a bare private IP, or an unreachable hostname.
-- `curl`, `openssl`, `sha256sum` and a text editor; GitHub CLI (`gh`) when
-  downloading from the private repository.
+- `curl`, `openssl`, `sha256sum` and a text editor. No GitHub account is needed:
+  the release files and the image download anonymously.
 
 Registration creates a new account and, when named, a household. This alpha has
 no invitation-only registration switch. Restrict access to trusted testers at
 your network/proxy boundary. Read [Security](../SECURITY.md) before deployment.
 
-## 1. Download the release files
+## 1. Download and prepare the release files
 
 Use an empty directory and retain it for this installation. The bundle uses project
 name `stoky-release`; keep it unchanged. Overriding it
@@ -41,21 +41,31 @@ mkdir stoky-app
 cd stoky-app
 ```
 
-**While the repository is private**, sign into GitHub CLI with an account that
-has repository access, then download the exact alpha (prereleases are not
-available through GitHub's `releases/latest/download` URL):
+### With the install script
+
+`install.sh` does this step for you and stops: it downloads the release files,
+verifies every one against `SHA256SUMS`, sets their permissions, and creates
+`.env` from `example.env` with both secrets generated. It changes no value that
+is already set, never replaces an installed file that differs (that is an
+upgrade, below), and **never starts anything**: you review `.env` and start
+Stoky yourself in step 3. Running it again is safe.
 
 ```bash
-gh auth login
-gh release download v0.1.0-alpha.2 --repo NGarate/stoky \
-  --pattern docker-compose.yml --pattern example.env --pattern traefik.yml --pattern SHA256SUMS
-sha256sum -c SHA256SUMS
-cp example.env .env
-chmod 600 .env
-chmod 644 traefik.yml
+curl --fail --location --remote-name \
+  https://raw.githubusercontent.com/NGarate/stoky/master/deploy/install.sh
+less install.sh      # read what you are about to run
+bash install.sh
 ```
 
-If the repository and release are public, the equivalent download is:
+This alpha was published before the script existed, so it comes from the
+repository; it downloads and verifies this alpha's files by their tag. From
+the next release on, `install.sh` is attached to the release and listed in its
+`SHA256SUMS`. Continue with step 2: only `DOMAIN` and `ACME_EMAIL` are left.
+
+### By hand
+
+Download the exact alpha by its tag. Prereleases are not available through
+GitHub's `releases/latest/download` URL.
 
 ```bash
 STOKY_RELEASE=v0.1.0-alpha.2
@@ -63,7 +73,7 @@ for asset in docker-compose.yml example.env traefik.yml SHA256SUMS; do
   curl --fail --location --output "$asset" \
     "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
-sha256sum -c SHA256SUMS
+grep -E '  (docker-compose\.yml|example\.env|traefik\.yml)$' SHA256SUMS | sha256sum -c
 cp example.env .env
 chmod 600 .env
 chmod 644 traefik.yml
@@ -74,12 +84,16 @@ runs with every capability dropped, so it cannot read a file only its owner can,
 and a restrictive `umask` (such as `077`) creates the downloads that way. It then
 starts without its routes and answers every request with `404 page not found`.
 
-Do not download files from `master` for a tagged release. Checksums detect
-damaged/mismatched files; they are not a separate signature of the publisher.
+`sha256sum -c` must print `OK` for all three files. Take the Compose, Traefik
+and environment files from the release, never from `master`: `master` may
+already describe the next release. Checksums detect damaged/mismatched files;
+they are not a separate signature of the publisher.
 
 ## 2. Configure `.env`
 
-Generate **two different** random values:
+If you used the install script, the two secrets are already in `.env`: fill in
+`DOMAIN` and `ACME_EMAIL` and review the rest. By hand, generate **two
+different** random values:
 
 ```bash
 openssl rand -hex 32
@@ -104,18 +118,6 @@ Keep `.env` private and out of version control.
 PostgreSQL uses its password setting **only when creating a new data volume**.
 Editing `POSTGRES_PASSWORD` later does not rotate the database password; it
 breaks the application's connection until the stored password agrees.
-
-If GHCR requires authentication, use a GitHub classic personal access token
-with `read:packages` and access to the package. Sign in without putting the
-token in shell history:
-
-```bash
-docker login ghcr.io --username YOUR_GITHUB_USERNAME
-```
-
-Paste the token at the password prompt. A token for GitHub repository downloads
-does not necessarily have package access. Preserve the existing package visibility;
-changing visibility is not part of installation.
 
 ## 3. Start and check
 
@@ -235,8 +237,8 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 
 | Symptom | Check |
 |---|---|
-| Release download returns 404 | Exact alpha tag, repository access and GitHub login; the stable `latest` URL excludes prereleases |
-| Image pull says `denied` | GHCR login, `read:packages` scope, package access and exact tag |
+| Release download returns 404 | Exact alpha tag; the stable `latest` URL excludes prereleases |
+| Image pull says `denied` or `unauthorized` | Exact tag in `STOKY_VERSION`; stale saved credentials for `ghcr.io` are sent even to a public image, so try `docker logout ghcr.io` |
 | `no matching manifest` | This alpha publishes Linux amd64 only |
 | Traefik configuration file missing | Download `traefik.yml` beside the Compose file from the same release |
 | Every page is `404 page not found` | `docker compose logs traefik` shows `permission denied` for `dynamic.yml`: run `chmod 644 traefik.yml`, then `docker compose restart traefik` |
