@@ -724,6 +724,85 @@ describe("the per-address limit, through authorize", () => {
 });
 
 /**
+ * An IPv6 client, through authorize: counted by its /64, logged in full.
+ *
+ * The unit suite pins the bucket `rateLimitIdentifier` computes. This pins
+ * that sign-in counts on it and logs the other thing — one value used to do
+ * both, so the grouping could be undone at the call site, or could erase the
+ * address from the log, with every unit test still green.
+ */
+describe("an IPv6 client, through authorize", () => {
+  const ATTEMPTS = 3;
+  const original = process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
+  // A /64 of the documentation prefix that is this run's alone: Valkey is
+  // shared, and a fixed prefix would inherit whatever another run left in it.
+  const PREFIX = `2001:db8:${(process.pid & 0xffff).toString(16)}:${(Date.now() & 0xffff).toString(16)}`;
+  const NEIGHBOUR = `2001:db8:${(process.pid & 0xffff).toString(16)}:${((Date.now() + 1) & 0xffff).toString(16)}`;
+  const realWarn = console.warn;
+
+  beforeEach(async () => {
+    process.env.RATE_LIMIT_LOGIN_ATTEMPTS = String(ATTEMPTS);
+    await inspector.del(`rl:login:${PREFIX}::/64`, `rl:login:${NEIGHBOUR}::/64`);
+  });
+
+  afterAll(async () => {
+    console.warn = realWarn;
+    if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
+    else process.env.RATE_LIMIT_LOGIN_ATTEMPTS = original;
+    await inspector.del(`rl:login:${PREFIX}::/64`, `rl:login:${NEIGHBOUR}::/64`);
+  });
+
+  // Malformed, so nothing is looked up and nothing is hashed: the per-address
+  // limit counts an attempt before it reads one.
+  const malformed = { email: "not an address", password: "" };
+
+  it("refuses a client that rotates through its own /64", async () => {
+    // A fresh address every attempt — what privacy extensions do on their own
+    // and what an attacker does on purpose. Per address, none of these would
+    // ever be refused.
+    for (let host = 1; host <= ATTEMPTS; host++) {
+      expect(await signInWith(malformed, { address: `${PREFIX}::${host}` })).toBeNull();
+    }
+
+    let refused: unknown;
+    try {
+      await signInWith(malformed, { address: `${PREFIX}:dead:beef:1234:5678` });
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(RateLimitedSignin);
+
+    // The next subscriber's /64 is somebody else, and keeps its own budget.
+    expect(await signInWith(malformed, { address: `${NEIGHBOUR}::1` })).toBeNull();
+  });
+
+  it("writes the full address to the security log, not the /64", async () => {
+    const lines: Record<string, string>[] = [];
+    console.warn = (...args: unknown[]) => {
+      const first = args[0];
+      if (typeof first === "string" && first.startsWith('{"ts":')) {
+        lines.push(JSON.parse(first));
+        return;
+      }
+      realWarn(...args);
+    };
+
+    try {
+      await signInWith(malformed, { address: `${PREFIX}:dead:beef:1234:5678` });
+    } finally {
+      console.warn = realWarn;
+    }
+
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        event: "auth.signin.failed",
+        address: `${PREFIX}:dead:beef:1234:5678`,
+      }),
+    );
+  });
+});
+
+/**
  * The registration limit, through the router that serves it
  * (`docs/SECURITY_REVIEW.md` finding 10).
  *
@@ -816,5 +895,26 @@ describe("the registration limit, through the router", () => {
 
     const bystander = await callerFrom(nextIdentifier());
     expect((await bystander.auth.register(account("bystander"))).success).toBe(true);
+  });
+
+  it("counts an IPv6 client by its /64, so rotating addresses buys nothing", async () => {
+    // The sign-in block pins that authorize counts on the /64; this pins the
+    // other per-address limit. Register could count the raw address again
+    // with every unit test still green.
+    const prefix = `2001:db8:${(process.pid & 0xffff).toString(16)}:${(Date.now() & 0xffff).toString(16)}`;
+    for (let host = 1; host <= ATTEMPTS; host++) {
+      const caller = await callerFrom(`${prefix}::${host}`);
+      expect((await caller.auth.register(account(`v6-${host}`))).success).toBe(true);
+    }
+
+    const rotated = await callerFrom(`${prefix}:dead:beef:1234:5678`);
+    let thrown: unknown;
+    try {
+      await rotated.auth.register(account("v6-over"));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(TRPCError);
+    expect((thrown as TRPCError).code).toBe("TOO_MANY_REQUESTS");
   });
 });

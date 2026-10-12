@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "bun:test";
 import {
   accountIdentifier,
   addMemberRateLimit,
+  clientAddress,
   loginAccountRateLimit,
   loginDeviceRateLimit,
   loginRateLimit,
@@ -60,6 +61,83 @@ describe("rateLimitIdentifier", () => {
     // Over-restricting is the safe direction. Returning something unique per
     // caller here would mean no limit at all when the app is reached directly.
     expect(rateLimitIdentifier(new Headers())).toBe("unknown");
+  });
+});
+
+/**
+ * One IPv6 subscriber is a /64, not an address: a host picks addresses inside
+ * its prefix at will. Counted per address, each of the 2^64 would be a fresh
+ * budget, so these go red the moment the identifier is the raw address again.
+ */
+describe("rateLimitIdentifier on IPv6", () => {
+  const from = (address: string) =>
+    rateLimitIdentifier(new Headers({ "x-forwarded-for": `198.51.100.4, ${address}` }));
+
+  it("puts two addresses in one /64 in one bucket", () => {
+    // The rotation an attacker gets for free, privacy extensions included.
+    expect(from("2001:db8:aa:bb::1")).toBe(from("2001:db8:aa:bb:dead:beef:1234:5678"));
+    expect(from("2001:db8:aa:bb::1")).toBe("2001:db8:aa:bb::/64");
+  });
+
+  it("keeps different /64s apart", () => {
+    // Grouping is not collapsing: the next subscriber's prefix is someone else.
+    expect(from("2001:db8:aa:bb::1")).not.toBe(from("2001:db8:aa:bc::1"));
+    expect(from("2001:db8:aa:bb::1")).not.toBe(from("2001:db9:aa:bb::1"));
+  });
+
+  it("reads one address the same however it is spelled", () => {
+    // Case, leading zeros, `::`, brackets, a port and a zone are spellings,
+    // not clients. Each one left raw is another bucket for the same host.
+    const canonical = from("2001:db8:0:1::7");
+    for (const spelling of [
+      "2001:DB8:0:1::7",
+      "2001:0db8:0000:0001:0000:0000:0000:0007",
+      "2001:db8::1:0:0:0:7",
+      "[2001:db8:0:1::7]",
+      "[2001:db8:0:1::7]:443",
+      "2001:db8:0:1::7%eth0",
+    ]) {
+      expect(from(spelling)).toBe(canonical);
+    }
+  });
+
+  it("counts an IPv4-mapped address as the IPv4 client it is", () => {
+    // What a dual-stack socket reports for an IPv4 peer. As a /64 it would be
+    // `0:0:0:0::/64` — every IPv4 client in the world in one bucket.
+    expect(from("::ffff:192.0.2.1")).toBe("192.0.2.1");
+    expect(from("::FFFF:c000:201")).toBe("192.0.2.1");
+    expect(from("::ffff:192.0.2.1")).not.toBe(from("::ffff:192.0.2.2"));
+  });
+
+  it("leaves IPv4 and anything that is not an address alone", () => {
+    expect(from("192.0.2.1")).toBe("192.0.2.1");
+    expect(from("192.0.2.1:51234")).toBe("192.0.2.1");
+    expect(rateLimitIdentifier(new Headers())).toBe("unknown");
+    expect(from("not-an-address")).toBe("not-an-address");
+  });
+});
+
+describe("clientAddress", () => {
+  it("keeps the full address, so the security log can name the host", () => {
+    // The /64 is what a limit counts; an operator reading the log needs the
+    // address. One value used to serve both, and the grouping would have
+    // erased the second.
+    const headers = new Headers({
+      "x-forwarded-for": "198.51.100.4, 2001:db8:aa:bb:dead:beef:1234:5678",
+    });
+
+    expect(clientAddress(headers)).toBe("2001:db8:aa:bb:dead:beef:1234:5678");
+    expect(rateLimitIdentifier(headers)).toBe("2001:db8:aa:bb::/64");
+  });
+
+  it("reads the same hop the limiter does", () => {
+    // Two functions reading the header two ways would log one client and
+    // count another.
+    expect(clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 10.0.0.7" }))).toBe(
+      "10.0.0.7",
+    );
+    expect(clientAddress(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe("10.0.0.8");
+    expect(clientAddress(new Headers())).toBe("unknown");
   });
 });
 

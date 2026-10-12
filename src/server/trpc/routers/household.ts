@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { enforceRateLimit } from "../throttle";
-import { addMemberRateLimit, rateLimitIdentifier } from "@/lib/rate-limit";
+import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
@@ -489,7 +489,7 @@ export const householdRouter = createTRPCRouter({
         userId: callerId,
         householdId: ctx.householdId,
         targetUserId: member.id,
-        address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
 
       return { success: true };

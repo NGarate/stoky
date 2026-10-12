@@ -1132,6 +1132,33 @@ What is still open, and worth knowing before publishing an instance:
   `src/__tests__/unit/rate-limit.test.ts` pins the current behaviour under
   "what the identifier cannot know", so changing the trust model means changing
   those tests and this paragraph together.
+- **An IPv6 client is counted by its /64, and logged by its address.** One
+  IPv6 subscriber is at least a whole /64 — the smallest block a line is
+  given — and a host picks addresses inside it at will, so counted per address
+  it would have 2^64 budgets. `rateLimitIdentifier` normalises the address first (case,
+  leading zeros, `::`, brackets, a port, a zone), keys it by its first four
+  hextets, and counts an IPv4-mapped `::ffff:a.b.c.d` as the IPv4 client it
+  is; IPv4 is counted per address as before. The security log keeps the full
+  address (`clientAddress`): the bucket is what a limit needs, the address is
+  what an operator reading the log needs. The cost is the one a NAT already
+  has, a household's devices sharing a budget. A line delegated more than a
+  /64 — a /56 or a /48, as many home connections are — still has one budget
+  per /64 in it (256 or 65,536): that is the attacker with a range of
+  addresses above, and the per-account limit is what bounds it.
+- **Under the release bundle as shipped, IPv6 clients are not told apart at
+  all.** Traefik's network is IPv4-only, so a client connecting over IPv6
+  reaches it through Docker's userland proxy, which opens a connection of its
+  own: the application sees the network's gateway (`172.x.0.1`) in place of
+  every IPv6 client. They share one sign-in and one registration budget, so
+  anyone on IPv6 can keep every other IPv6 visitor waiting, and the security
+  log names the gateway for all of them. Established from Docker's
+  documentation and the proxy's source (security review, 2026-10-12), not
+  reproduced: that needs ports published on a dual-stack host. IPv6 is
+  not turned on in the bundle because it breaks Engines before 27, hosts with
+  IPv6 disabled, and an existing network on upgrade; it is an opt-in, and
+  [the installation guide](docs/INSTALL.md#clients-on-ipv6) says how to take
+  it, how to avoid the question with an A record only, and how to tell from
+  the log which applies. The /64 grouping above is what makes taking it safe.
 - **A refusal says how long to wait.** A 429 from tRPC carries `Retry-After`,
   read off the refusal rather than recomputed, so the header and the message
   cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
@@ -1612,6 +1639,8 @@ The app rejects short signing keys and the published development placeholder.
 Use the release bundle, which exposes only Traefik. Development Compose files
 publish local infrastructure and carry known passwords; they are not deployments.
 A proxy that sanitizes forwarded addresses remains mandatory for per-IP limits.
+If the hostname has an AAAA record, read
+[Clients on IPv6](docs/INSTALL.md#clients-on-ipv6) first.
 
 ### Where to run it
 

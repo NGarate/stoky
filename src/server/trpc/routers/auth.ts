@@ -10,6 +10,7 @@ import {
   passwordProblems,
 } from "@/lib/validations/password";
 import {
+  clientAddress,
   passwordChangeRateLimit,
   rateLimitIdentifier,
   registerRateLimit,
@@ -336,7 +337,7 @@ export const authRouter = createTRPCRouter({
     .input(changePasswordSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const address = ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined;
+      const address = ctx.headers ? clientAddress(ctx.headers) : undefined;
 
       await enforceRateLimit(
         passwordChangeRateLimit(),

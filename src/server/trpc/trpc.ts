@@ -8,7 +8,7 @@ import { translatePrismaError, underlying } from "./prisma-errors";
 import { translateServiceError } from "./service-errors";
 import { logSecurityEvent } from "@/lib/security-log";
 import { describeError } from "@/server/log-error";
-import { rateLimitIdentifier } from "@/lib/rate-limit";
+import { clientAddress } from "@/lib/rate-limit";
 
 export const createTRPCContext = cache(
   async (opts: {
@@ -142,13 +142,13 @@ const securityEvents = t.middleware(async ({ ctx, next, path }) => {
         path,
         code,
         userId: ctx.session?.user?.id,
-        address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
     } else if (code === "TOO_MANY_REQUESTS") {
       logSecurityEvent("request.throttled", {
         path,
         userId: ctx.session?.user?.id,
-        address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
     }
   }
@@ -312,7 +312,7 @@ export const householdProcedure = protectedProcedure.use(async ({ ctx, next }) =
       reason: "not-found",
       userId: ctx.session.user.id,
       householdId: ctx.householdId,
-      address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+      address: ctx.headers ? clientAddress(ctx.headers) : undefined,
     });
   }
 

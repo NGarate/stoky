@@ -365,6 +365,65 @@ because the counter never stores the address itself. On macOS use
 it, but the first browser the person signs in on afterwards keeps its own
 attempts from then on.
 
+An address like `172.18.0.1` in those lines is not a person; see
+[Clients on IPv6](#clients-on-ipv6).
+
+## Clients on IPv6
+
+As released, Traefik's network is IPv4-only. A client that connects over IPv6
+(most mobile networks, and any connection your AAAA record attracts) reaches
+Traefik through Docker's userland proxy, and Stoky sees the network's gateway,
+an address like `172.18.0.1`, instead of the client. Every IPv6 client then
+shares one budget: 5 sign-in attempts per 15 minutes and 3 registrations per
+hour. One of them spending it makes the rest wait, and the security log shows
+the gateway for all of them. IPv4 clients and people already signed in are not
+affected.
+
+Choose one:
+
+- **Publish only an A record**, with no AAAA. Every client connects over IPv4
+  and is counted by its own address.
+- **Accept the shared budget**, for a small household.
+- **Give Traefik's network IPv6.** This needs Docker Engine 27 or newer
+  (`docker version --format '{{.Server.Version}}'`), IPv6 enabled on the host
+  (`cat /proc/sys/net/ipv6/conf/all/disable_ipv6` prints `0`), and `ip6tables`
+  not set to `false` in `/etc/docker/daemon.json`. From Engine 27 Docker gives
+  such a network an IPv6 range of its own and forwards it with ip6tables, so
+  the client's address arrives intact. Create `docker-compose.override.yml`
+  beside the Compose file; Compose reads it on every command, and a release
+  never ships or replaces it:
+
+  ```yaml
+  networks:
+    traefik:
+      enable_ipv6: true
+  ```
+
+  Docker does not change an existing network, so recreate it with
+  `docker compose down` and then `docker compose up -d --wait`; `down` without
+  `-v` keeps your data. On an older Engine or a host without IPv6 the network
+  cannot be created and nothing starts: delete the override file and start
+  again.
+
+From the release after v0.1.0-alpha.3, Stoky counts an IPv6 client by its
+/64, the smallest block an internet provider gives one connection
+(v0.1.0-alpha.3 counts each address on its own). Devices in one home share a budget, as they do
+behind one IPv4 router, and nobody gets a fresh budget by changing address
+inside their /64.
+
+To see which case you are in, sign in once with a wrong password from a device
+on IPv6, for example a phone on mobile data with Wi-Fi off, then run:
+
+```bash
+docker compose logs app | grep auth.signin.failed | tail -n 1
+docker network inspect stoky-release_traefik --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}'
+```
+
+If the `address` in the first line is one of the gateways the second prints,
+IPv6 clients are sharing. An address with colons that is not a gateway is the
+device's own. A dotted address that is not a gateway means the device used
+IPv4; try another one.
+
 ## Backup and restore
 
 The JSON export in Settings is useful for inspection, but is not a full restore
@@ -490,6 +549,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
+| People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
 | `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |

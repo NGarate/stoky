@@ -61,7 +61,7 @@ export interface SecurityDetails {
   userId?: string;
   /** The household the request was made against, when there was one. */
   householdId?: string;
-  /** The client address, as the rate limiter identifies it. */
+  /** The client address in full (`clientAddress`), not the /64 a limit counts. */
   address?: string;
   /** The tRPC path, for an access-control failure. */
   path?: string;

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isIPv4, isIPv6 } from "node:net";
 import { closeValkey, valkey } from "@/lib/valkey";
 
 /**
@@ -464,8 +465,10 @@ export async function refundRateLimit(
 }
 
 /**
- * The identifier a limit is counted against: the client's IP, from the proxy
- * headers a self-hosted deployment puts in front of the app.
+ * The client's address, from the proxy headers a self-hosted deployment puts
+ * in front of the app — in full, as the proxy wrote it. This is what the
+ * security log records; what a limit is *counted* against is
+ * `rateLimitIdentifier` below, which is coarser on purpose.
  *
  * **The last entry of `X-Forwarded-For`, not the first.** The header is a list
  * each proxy appends to, so the leftmost entry is whatever the client sent —
@@ -475,12 +478,12 @@ export async function refundRateLimit(
  * entry a client cannot forge.
  *
  * With no proxy header at all — reaching the app directly, which is how it
- * runs in development — every caller shares the `unknown` bucket. That is
- * deliberate and it is the safe direction: a shared bucket over-restricts, and
- * the alternative of treating an unidentifiable caller as unlimited is the
- * hole this module closes.
+ * runs in development — every caller is `unknown`, and so shares one bucket.
+ * That is deliberate and it is the safe direction: a shared bucket
+ * over-restricts, and the alternative of treating an unidentifiable caller as
+ * unlimited is the hole this module closes.
  */
-export function rateLimitIdentifier(headers: Headers): string {
+export function clientAddress(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
     const hops = forwarded
@@ -496,6 +499,104 @@ export function rateLimitIdentifier(headers: Headers): string {
   if (real) return real;
 
   return "unknown";
+}
+
+/**
+ * The identifier an address limit is counted against: the client's address,
+ * except that **an IPv6 client is counted by its /64**.
+ *
+ * One IPv6 subscriber is not one address. An ISP delegates at least a /64 to
+ * a line — the smallest prefix SLAAC works on (RFC 4291 §2.5.1, RFC 7421) —
+ * and a host picks addresses inside it at will; privacy extensions
+ * (RFC 8981) rotate them by design. Keyed per address, every one of the 2^64
+ * is a fresh budget, so the per-address limit would hold nothing back from
+ * anyone on IPv6. The /64 is the smallest block a line is given, so it is
+ * the finest grouping that still holds one host's rotating addresses
+ * together; the cost is the one IPv4 already has behind a NAT, a household's
+ * devices sharing a budget. A line delegated a /56 or a /48 still has one budget per
+ * /64 in it — the attacker-with-a-range case the per-account limit bounds.
+ *
+ * Normalised before it is cut, so one client cannot fall into several
+ * buckets by spelling the same address differently: brackets, a port and a
+ * zone (`%eth0`) are dropped, hextets are read as numbers so case and leading
+ * zeros stop mattering, and `::` is expanded. An IPv4-mapped address
+ * (`::ffff:192.0.2.1`, in either spelling) is the IPv4 client it maps, and is
+ * counted as that — it is what a dual-stack socket reports for an IPv4 peer.
+ *
+ * IPv4 is counted per address as before, and anything that is not an address
+ * at all — `unknown`, or whatever a caller typed into a header nothing
+ * appended to — is passed through unchanged.
+ *
+ * Under the default release bundle this grouping does not yet change anything
+ * for IPv6: Docker's userland proxy hands the app the bridge gateway in place
+ * of every IPv6 client, so they share one budget whatever this does
+ * (`docs/INSTALL.md`, *Clients on IPv6*). It is the half of that fix that
+ * lives here, so opting in to real IPv6 addresses does not open the hole
+ * above.
+ */
+export function rateLimitIdentifier(headers: Headers): string {
+  return addressBucket(clientAddress(headers));
+}
+
+/** The bucket an address is counted in; see `rateLimitIdentifier`. */
+function addressBucket(address: string): string {
+  const host = withoutPort(address.trim());
+
+  if (isIPv4(host)) return host;
+
+  const zoneless = host.split("%")[0];
+  if (!isIPv6(zoneless)) return address;
+
+  const hextets = expandIPv6(zoneless);
+
+  // ::ffff:a.b.c.d — RFC 4291 §2.5.5.2. The first 80 bits zero, then 0xffff.
+  if (hextets.slice(0, 5).every((h) => h === 0) && hextets[5] === 0xffff) {
+    return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
+  }
+
+  return `${hextets
+    .slice(0, 4)
+    .map((h) => h.toString(16))
+    .join(":")}::/64`;
+}
+
+/**
+ * `[2001:db8::1]:443` and `[2001:db8::1]` to `2001:db8::1`, and
+ * `192.0.2.1:443` to `192.0.2.1`. A bare IPv6 address has colons of its own,
+ * so it is only ever unbracketed, never split on its last one.
+ */
+function withoutPort(address: string): string {
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(address);
+  if (bracketed) return bracketed[1];
+
+  const ipv4WithPort = /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/.exec(address);
+  if (ipv4WithPort) return ipv4WithPort[1];
+
+  return address;
+}
+
+/**
+ * The eight hextets of an address `isIPv6` has already accepted, as numbers.
+ * A trailing dotted quad (`::ffff:192.0.2.1`, `64:ff9b::192.0.2.1`) is the
+ * last two hextets written another way.
+ */
+function expandIPv6(address: string): number[] {
+  let text = address;
+  const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (dotted) {
+    const [a, b, c, d] = dotted.slice(1).map(Number);
+    text = `${text.slice(0, dotted.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+
+  const [head, tail] = text.split("::");
+  const parse = (part: string | undefined) =>
+    part ? part.split(":").map((hextet) => Number.parseInt(hextet, 16)) : [];
+  const left = parse(head);
+  const right = parse(tail);
+
+  if (tail === undefined) return left;
+  const zeros = Array.from({ length: 8 - left.length - right.length }, () => 0);
+  return [...left, ...zeros, ...right];
 }
 
 /**

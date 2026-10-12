@@ -17,6 +17,7 @@ import {
 import {
   RateLimitUnavailableError,
   accountIdentifier,
+  clientAddress,
   consumeRateLimit,
   loginAccountRateLimit,
   loginDeviceRateLimit,
@@ -168,7 +169,11 @@ export const authConfig: NextAuthConfig = {
       },
       authorize: async (credentials, request) => {
         const limit = loginRateLimit();
+        // Counted against the /64 for an IPv6 client, logged with the
+        // address in full: the bucket is what stops a client rotating through
+        // its own prefix, and the address is what an operator needs to read.
         const identifier = rateLimitIdentifier(request.headers);
+        const address = clientAddress(request.headers);
 
         // Counted before the credentials are looked at, not after. A limit
         // that only counts attempts it has already spent ~250ms of Argon2id
@@ -182,7 +187,7 @@ export const authConfig: NextAuthConfig = {
           addressWindow = window;
           if (!allowed) {
             logSecurityEvent("auth.signin.throttled", {
-              address: identifier,
+              address,
               code: `retry-after=${retryAfterSeconds}`,
             });
             throw new RateLimitedSignin();
@@ -194,7 +199,7 @@ export const authConfig: NextAuthConfig = {
             // Both: the structured line so the event is greppable alongside
             // the refusals, and the prose so an operator reading the container
             // output is told what to check rather than left with a code.
-            logSecurityEvent("auth.unavailable", { address: identifier });
+            logSecurityEvent("auth.unavailable", { address });
             console.error(
               "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
               error.cause,
@@ -207,7 +212,7 @@ export const authConfig: NextAuthConfig = {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) {
           logSecurityEvent("auth.signin.failed", {
-            address: identifier,
+            address,
             code: "malformed",
           });
           return null;
@@ -265,7 +270,7 @@ export const authConfig: NextAuthConfig = {
           );
           if (!allowed) {
             logSecurityEvent("auth.signin.throttled", {
-              address: identifier,
+              address,
               email: parsed.data.email,
               code: `${charged.kind} retry-after=${retryAfterSeconds}`,
             });
@@ -276,7 +281,7 @@ export const authConfig: NextAuthConfig = {
             // Both: the structured line so the event is greppable alongside
             // the refusals, and the prose so an operator reading the container
             // output is told what to check rather than left with a code.
-            logSecurityEvent("auth.unavailable", { address: identifier });
+            logSecurityEvent("auth.unavailable", { address });
             console.error(
               "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
               error.cause,
@@ -309,7 +314,7 @@ export const authConfig: NextAuthConfig = {
         // can read the container's output.
         if (!user || !isValid) {
           logSecurityEvent("auth.signin.failed", {
-            address: identifier,
+            address,
             email: parsed.data.email,
           });
           return null;

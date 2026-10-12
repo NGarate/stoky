@@ -1,7 +1,7 @@
 import type { AnyTRPCRouter, inferRouterContext } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Session } from "next-auth";
-import { rateLimitIdentifier } from "@/lib/rate-limit";
+import { clientAddress } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
@@ -145,7 +145,7 @@ function refuseCrossSite(req: Request): Response | null {
     // Both caller-supplied: bounded, so a refusal cannot be a long line.
     fetchSite: site.slice(0, 32),
     path: new URL(req.url).pathname.replace(/^\/api\/trpc\/?/, "").slice(0, 200),
-    address: rateLimitIdentifier(req.headers),
+    address: clientAddress(req.headers),
   });
   return refusal(403, "Cross-site requests are refused");
 }
