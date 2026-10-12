@@ -412,7 +412,10 @@ Docker already collects and rotates: `docker compose logs app | jq 'select(.even
 - **No password, hash, token, cookie or request body ever reaches a line**, and
   the writer drops those keys defensively rather than relying on its own type
   to have no field for them. A credential in a log is a credential in every
-  copy, rotation and backup of that log.
+  copy, rotation and backup of that log. The same holds for the *other* log,
+  the server-fault lines below: a Prisma error is written through
+  `describeError` (`src/server/log-error.ts`), because Prisma's own message
+  is the failed call with its arguments.
 
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still
@@ -515,6 +518,26 @@ failure reached the browser with its SQL and the file it ran from, and was
 logged nowhere. Every other code keeps the message its resolver or translator
 chose, because the screens read those. `src/__tests__/unit/trpc-error-shape.test.ts`
 checks both halves over HTTP.
+
+"The original" is not written verbatim when it is Prisma's. Prisma 6 renders a
+`PrismaClientValidationError` as the whole call, argument values included —
+measured on 6.19.3, with `errorFormat: "minimal"` as well, a `user.create`
+that fails validation prints the email, the name and the Argon2id hash it was
+writing — and Bun's `error.stack` and `console.error` repeat the message and
+the error's `meta`, where a raw query's Postgres error quotes the input it
+refused. No request reaches such a validation failure today (Zod leaves no
+typed field for one), so this was a latent leak a future bug would have
+opened. `describeError` (`src/server/log-error.ts`) now reduces a Prisma error
+to its class, code and client version, the call that failed and the file it
+was made from, the last line of a validation error (which names the argument
+and the expected type, and in every case measured not the value), the names of
+the `meta` keys, a raw query's SQLSTATE, and the stack frames, less any line
+that is also a line of the message, since a raw query's input can carry its
+own "    at "; an initialisation error keeps its
+message, the "database is down" line, which names host and port but not the
+credentials. Anything that is not a Prisma error is logged as before. The
+tRPC `errorFormatter` and the receipt pipeline's background processing both
+log through it; `src/__tests__/unit/log-error.test.ts` checks each kind.
 
 ### ~~Household roles are decorative~~ — this section was false
 

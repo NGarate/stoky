@@ -17,6 +17,7 @@ import { matchReceiptItems, getItemCandidates } from "@/server/services/productM
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
 import { reencodeAsJpeg } from "@/server/services/image";
+import { describeError } from "@/server/log-error";
 import {
   MAX_RECEIPT_BASE64_LENGTH,
   MAX_RECEIPT_BYTES,
@@ -285,7 +286,9 @@ export const receiptRouter = createTRPCRouter({
       });
 
       // Trigger async processing
-      processReceiptAsync(receipt.id).catch(console.error);
+      processReceiptAsync(receipt.id).catch((error: unknown) =>
+        console.error("Failed to mark receipt as failed:", describeError(error)),
+      );
 
       return receipt;
     }),
@@ -952,7 +955,7 @@ async function processReceiptAsync(receiptId: string): Promise<void> {
     await saveParsedItems(receiptId, parseReceiptText(text));
     await matchReceiptItems(receiptId);
   } catch (error) {
-    console.error("Failed to process receipt:", error);
+    console.error("Failed to process receipt:", describeError(error));
     await prisma.receipt.update({
       where: { id: receiptId },
       data: { status: ReceiptStatus.FAILED },

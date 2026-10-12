@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { translatePrismaError, underlying } from "./prisma-errors";
 import { translateServiceError } from "./service-errors";
 import { logSecurityEvent } from "@/lib/security-log";
+import { describeError } from "@/server/log-error";
 import { rateLimitIdentifier } from "@/lib/rate-limit";
 
 export const createTRPCContext = cache(
@@ -67,13 +68,19 @@ export const INTERNAL_ERROR_MESSAGE = "Something went wrong on the server.";
  * The original goes to the server log instead. Until this there was no
  * `onError` on the route either, so an unexpected failure was not written
  * anywhere at all — the only copy of it was the one sent to the browser.
+ * A Prisma error goes there through `describeError`, because its message is
+ * the call with its arguments: a write that fails validation would otherwise
+ * print the email and password hash it was writing.
  */
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter: ({ shape, error, path }) => {
     if (error.code !== "INTERNAL_SERVER_ERROR") return shape;
 
-    console.error(`[trpc] ${path ?? "(no path)"} failed`, error.cause ?? error);
+    console.error(
+      `[trpc] ${path ?? "(no path)"} failed`,
+      describeError(error.cause ?? error),
+    );
     return { ...shape, message: INTERNAL_ERROR_MESSAGE };
   },
 });
