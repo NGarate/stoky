@@ -28,10 +28,17 @@ attestation and anonymous-pull steps below depend on that (see
 5. Build and test the production image with fresh, isolated volumes. Check migrations,
    proxy routing, registration/login, health, restart persistence and backup/restore.
    Record what was actually tested in `STATUS.md`, including any TLS/host limitations.
-6. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets`.
+6. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets
+   "sha256:$(printf '%064d' 0)"`.
    The script rejects version mismatches (package, `example.env`, `install.sh`, and any version
    named in `docs/INSTALL.md` or `README.md`) and missing notes, pins the assets'
-   guide links to the tag, and produces `SHA256SUMS`.
+   guide links to the tag, and produces `SHA256SUMS`. Its third argument is the
+   image digest the packaged Compose file names (`…:${STOKY_VERSION}@sha256:…`).
+   Before the tag no image exists, so a local check passes a placeholder, as the
+   tag run's first validation does; `release-draft` packages the attached files
+   with the digest it promoted. To package a published release by hand, take the
+   digest from `docker buildx imagetools inspect ghcr.io/ngarate/stoky:vVERSION
+   --format '{{.Manifest.Digest}}'`.
 
 Commit each independent change only after its gates pass. Stage explicit paths,
 push `master`, and wait for **all** CI jobs, including image publication, to pass.
@@ -58,12 +65,18 @@ it is pushed only as `ghcr.io/ngarate/stoky:candidate-vVERSION`; the `release-dr
 job scans that digest from the registry with Trivy (fixable CRITICAL/HIGH fail
 it), installs it with the shipped Compose file on fresh volumes, and only when
 both pass retags the same digest (no rebuild) as `:vVERSION`. A failed scan or
-smoke leaves no version tag behind. The job then creates a draft with the
-checked-in release notes and the installation files plus checksums. Draft retries may replace draft attachments;
+smoke leaves no version tag behind. The job then packages the installation files
+with that digest written into the Compose file's image line, checks that
+`docker compose config --images` of the packaged file names
+`ghcr.io/ngarate/stoky:vVERSION@<digest>` and that Compose pulls it, and creates
+a draft with the checked-in release notes and the installation files plus checksums. Draft retries may replace draft attachments;
 published releases must not be reused for a different build. Fixes get a new tag.
 
 Download and review the draft assets with `gh release download`, run
-`sha256sum -c SHA256SUMS`, and compare them with the tagged source. Confirm that
+`sha256sum -c SHA256SUMS`, and compare them with the tagged source: the Compose
+file differs from `deploy/docker-compose.yml` by its guide link and by the
+`@sha256:` digest on the application's image line, which must be the digest
+`docker buildx imagetools inspect ghcr.io/ngarate/stoky:vVERSION` reports. Confirm that
 the versioned image exists and the tag points to the intended commit. The GHCR
 package is public, so the image pulls with no saved credentials, as an operator's
 does. Verify its provenance with the `gh attestation verify` command in
@@ -121,7 +134,11 @@ so a tag's `image-publish` has 30 minutes to master's 10.
 Docker base and support-service tags can change across rebuilds;
 application/CLI dependencies use the frozen Bun lockfile.
 Release tags identify the source/version, not a reproducible byte-for-byte build.
-Record the published digest when auditing an installation. SBOM, build provenance
+Record the published digest when auditing an installation. A GHCR tag can be
+moved by anything holding `packages: write`, the tag run and any master run
+included; the release's Compose file names the image by digest as well as tag,
+so a moved tag does not change what an installation of it pulls, and
+`SHA256SUMS` covers that line. Bundles up to `v0.1.0-alpha.3` name the tag only. SBOM, build provenance
 and a signed GitHub attestation are enabled for published images; releases
 before `v0.1.0-alpha.3` were built while the repository was private and have no
 attestation. See [Security](../SECURITY.md#verifying-an-images-provenance).

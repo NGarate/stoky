@@ -98,11 +98,15 @@ jobs:
 
       # A tag must name the version actually packaged. Check this before the
       # publish gate so a typo cannot create an image with the wrong version.
+      # No image exists yet, so the digest is a placeholder: this run checks
+      # the versions and that the image line can take a digest, and its output
+      # is discarded. release-draft packages with the digest it promoted.
       - name: Validate release assets
         if: github.ref_type == 'tag'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release"
+          PLACEHOLDER_DIGEST: sha256:0000000000000000000000000000000000000000000000000000000000000000
+        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release" "$PLACEHOLDER_DIGEST"
 
       # Every gate below this line runs inside this project's own development
       # image, not on the runner's toolchain.
@@ -792,10 +796,36 @@ jobs:
             echo "::error::$IMAGE:$RELEASE_TAG resolves to $PROMOTED, not the verified $EXPECTED_DIGEST."
             exit 1
           fi
+      # The packaged Compose file names the image by this digest as well as
+      # the tag. A GHCR tag can be moved by anything holding packages: write;
+      # the digest cannot, and SHA256SUMS covers the line that carries it.
       - name: Package installation files
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release"
+          EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
+        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release" "$EXPECTED_DIGEST"
+      # What an operator's Compose resolves, read from the file being attached,
+      # and pulled by it. The values are placeholders: `config` needs every
+      # required variable, and nothing here starts.
+      - name: Check the packaged Compose file pulls the promoted digest
+        env:
+          STOKY_VERSION: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
+          POSTGRES_PASSWORD: unused
+          NEXTAUTH_SECRET: unused
+          DOMAIN: release-check.invalid
+          ACME_EMAIL: release-check@example.invalid
+        run: |
+          COMPOSE=(docker compose --project-name "stoky-release-check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file "$RUNNER_TEMP/release/docker-compose.yml")
+          EXPECTED="${REGISTRY}/${IMAGE_NAME,,}:$RELEASE_TAG@$EXPECTED_DIGEST"
+          IMAGES="$("${COMPOSE[@]}" config --images)"
+          if ! grep -Fxq "$EXPECTED" <<< "$IMAGES"; then
+            echo "::error::The packaged Compose file does not name $EXPECTED; it names:"
+            echo "$IMAGES"
+            exit 1
+          fi
+          "${COMPOSE[@]}" pull app
       - name: Create or refresh the draft
         env:
           GH_TOKEN: ${{ github.token }}

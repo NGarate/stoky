@@ -90,7 +90,11 @@ starts without its routes and answers every request with `404 page not found`.
 `sha256sum -c` must print `OK` for all three files. Take the Compose, Traefik
 and environment files from the release, never from `master`: `master` may
 already describe the next release. Checksums detect damaged/mismatched files;
-they are not a separate signature of the publisher.
+they are not a separate signature of the publisher. Releases after
+v0.1.0-alpha.3 also fix the image through them: the Compose file names it by
+digest as well as tag (`…:${STOKY_VERSION}@sha256:…`), so a tag moved on the
+registry later does not change what you pull. To check who built that image,
+see [Verifying an image's provenance](../SECURITY.md#verifying-an-images-provenance).
 
 ## 2. Configure `.env`
 
@@ -216,7 +220,9 @@ Read the target release's notes first. Back up the current installation, downloa
 the target release's assets **into a separate directory**, and verify their
 checksums. Compare `example.env` with your `.env`; preserve your secrets. Replace
 the installed Compose and Traefik files with that release's files and set `STOKY_VERSION` to
-its exact tag, then:
+its exact tag. The Compose file is what selects the image: from releases after
+v0.1.0-alpha.3 it names it by digest, Docker pulls that digest whatever tag
+`STOKY_VERSION` gives, and changing `STOKY_VERSION` alone changes nothing. Then:
 
 ```bash
 chmod 644 traefik.yml
@@ -228,8 +234,9 @@ docker compose up -d --wait --wait-timeout 180
 Confirm health, sign-in and your data. Automatic alpha updates are not supported.
 Migrations run automatically and are not automatically reversible: a rollback may
 require restoring **both** the pre-upgrade database and uploads into an empty
-installation with the previous image and configuration. Changing only the image
-tag is not a guaranteed rollback.
+installation with the previous image and configuration. A rollback takes the
+previous release's Compose file, not only its tag, and returning to the previous
+image is not by itself a guaranteed rollback.
 
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`

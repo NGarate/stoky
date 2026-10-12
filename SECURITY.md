@@ -320,6 +320,18 @@ Verified against the files named in each row.
   the published digests on 2026-10-12, the same scan passes `v0.1.0-alpha.3`
   and fails `v0.1.0-alpha.1` (Next.js 16.3.3: one CRITICAL, one HIGH, both
   fixed upstream).
+- **A release's Compose file names that digest.** GHCR tags can be moved by
+  anything holding `packages: write`, which includes every master run's
+  `image-publish` and a maintainer token. `release-assets.sh` writes the
+  promoted digest into the packaged application image line
+  (`…:${STOKY_VERSION}@sha256:…`) and `SHA256SUMS` covers it; `release-draft`
+  checks that Compose resolves and pulls exactly that reference before the
+  draft exists. Docker then pulls the digest and ignores the tag, so a moved
+  tag does not reach an installation. Bundles up to `v0.1.0-alpha.3` name the
+  tag only. The pin is as fixed as the release's files: immutable releases are
+  off (`gh api repos/NGarate/stoky/immutable-releases` answered
+  `"enabled":false` on 2026-10-12), so anything holding `contents: write` can
+  still replace a published release's files and their `SHA256SUMS` together.
 - The published image carries an **SBOM** (`sbom: true`) and **build provenance**
   (`provenance: mode=max`), and a **signed provenance attestation** pushed to the
   registry via `actions/attest-build-provenance`, which an operator can check
@@ -796,9 +808,10 @@ repository; `--source-ref` is what ties the image to the release tag. For a
 This step is optional. It needs the [GitHub CLI](https://cli.github.com/) signed
 in to a GitHub account (`gh auth login`): without one it stops with
 `gh auth login` and exit code 4 before checking anything. The installation path
-needs no account and relies on `SHA256SUMS` for the release files and on the
-exact version tag for the image; the attestation is the check that the image
-behind that tag was built here.
+needs no account and relies on `SHA256SUMS` for the release files and, for the
+image, on the digest those files name (on the exact version tag alone up to
+`v0.1.0-alpha.3`); the attestation is the check that the image behind it was
+built here.
 
 From `v0.1.0-alpha.3` on, **a missing attestation or a failed verification means
 do not run the image**: report it as a [vulnerability](#reporting-a-vulnerability).
@@ -814,7 +827,8 @@ install smoke passes on that digest; it never rewrites the `sha-` tag. The
 attestation is bound to the digest, not the tag, so the version tag verifies with
 the provenance of the tag run that built it. `latest` is the development channel
 from `master`. Pinning to a digest or to an exact version tag rather than `latest`
-is the safer choice for a deployment you want to be reproducible.
+is the safer choice for a deployment you want to be reproducible, and of the two
+only the digest cannot be moved: release bundles after `v0.1.0-alpha.3` name it.
 
 The image also carries an SBOM, which lists the packages it contains:
 

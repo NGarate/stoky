@@ -95,6 +95,11 @@ supports Linux amd64 and trusted testers; registration remains open. The release
 workflow scans the published image by its pushed digest with Trivy (since
 2026-10-12; no tag has run it yet) and runs it on a fresh database before
 creating a draft; the maintainer publishes the reviewed prerelease afterward.
+The draft's Compose file names that digest beside the tag (since 2026-10-12, no
+tag has run it yet): packaged locally with the alpha.3 digest, `docker compose
+config --images` of it prints `ghcr.io/ngarate/stoky:v0.1.0-alpha.3@sha256:81ebf432…`
+and `pull app` succeeds; with `STOKY_VERSION=v0.1.0-alpha.1` it pulls the same
+digest, and with one hex digit of the digest changed it fails with `not found`.
 
 `bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-08).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
