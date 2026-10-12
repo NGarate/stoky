@@ -92,7 +92,8 @@ certificate: routing, redirect, registration/login, service health and restored
 household/upload persistence passed. **Public DNS and Let's Encrypt issuance were
 not exercised**; operators must check their actual HTTPS hostname. This alpha
 supports Linux amd64 and trusted testers; registration remains open. The release
-workflow runs the published image by its pushed digest on a fresh database before
+workflow scans the published image by its pushed digest with Trivy (since
+2026-10-12; no tag has run it yet) and runs it on a fresh database before
 creating a draft; the maintainer publishes the reviewed prerelease afterward.
 
 `bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-08).

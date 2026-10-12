@@ -34,9 +34,12 @@ const workflow = Bun.YAML.parse(
       "timeout-minutes"?: unknown;
       steps?: Array<{
         id?: string;
+        name?: unknown;
         if?: unknown;
+        "continue-on-error"?: unknown;
         uses?: unknown;
         run?: unknown;
+        env?: Record<string, unknown>;
         with?: Record<string, unknown>;
       }>;
     }
@@ -354,6 +357,96 @@ describe("the CI workflow's release path restores no cache", () => {
     for (const step of using("aquasecurity/trivy-action")) {
       expect(input(step, "cache", tag)).toBe("false");
     }
+  });
+});
+
+// image-build's Trivy gate scans a build that is never pushed; on a tag the
+// pushed image is a clean rebuild, and nothing compares the two digests. So
+// release-draft scans the digest it is about to promote, from the registry,
+// before the version tag can name it.
+describe("the CI workflow's release scans the digest it promotes", () => {
+  const steps = workflow.jobs?.["release-draft"]?.steps ?? [];
+  const at = (found: number, what: string) => {
+    if (found < 0) throw new Error(`release-draft has no ${what}`);
+    return found;
+  };
+  const scanAt = at(
+    steps.findIndex(
+      (s) =>
+        typeof s.uses === "string" &&
+        s.uses.startsWith("aquasecurity/trivy-action@"),
+    ),
+    "Trivy step",
+  );
+  const scan = steps[scanAt];
+  const promoteAt = at(
+    steps.findIndex(
+      (s) => typeof s.run === "string" && s.run.includes("imagetools create"),
+    ),
+    "promotion step",
+  );
+  const loginAt = at(
+    steps.findIndex(
+      (s) =>
+        typeof s.uses === "string" && s.uses.startsWith("docker/login-action@"),
+    ),
+    "registry login",
+  );
+
+  const digest =
+    "sha256:0000000000000000000000000000000000000000000000000000000000000001";
+  const nameStep = String(scan.with?.["image-ref"]).match(
+    /\$\{\{\s*steps\.([\w-]+)\.outputs\.name\s*\}\}/,
+  )?.[1];
+  const context: Context = {
+    ...run("push", "refs/tags/v0.1.0-alpha.3", "tag"),
+    "needs.image-publish.outputs.digest": digest,
+    [`steps.${nameStep}.outputs.name`]: "ghcr.io/ngarate/stoky",
+  };
+
+  it("scans before the version tag is created, after logging in", () => {
+    expect(scanAt).toBeLessThan(promoteAt);
+    expect(scanAt).toBeGreaterThan(loginAt);
+  });
+
+  it("scans the exact digest the promotion retags", () => {
+    expect(interpolate(scan.with?.["image-ref"], context)).toBe(
+      `ghcr.io/ngarate/stoky@${digest}`,
+    );
+    expect(interpolate(steps[promoteAt].env?.EXPECTED_DIGEST, context)).toBe(
+      digest,
+    );
+    expect(steps[promoteAt].run).toContain('"$IMAGE@$EXPECTED_DIGEST"');
+  });
+
+  it("names the image in lowercase, before the scan, as the promotion does", () => {
+    const nameAt = at(
+      steps.findIndex((s) => s.id === nameStep),
+      `step with id ${nameStep}`,
+    );
+    expect(nameAt).toBeLessThan(scanAt);
+    expect(steps[nameAt].run).toContain("${IMAGE_NAME,,}");
+    // The name the scan reads is the image the promotion retags.
+    const name = String(steps[nameAt].run).match(/name=([^"\s]+)/)?.[1];
+    expect(name).toBe("${REGISTRY}/${IMAGE_NAME,,}");
+    expect(steps[promoteAt].run).toContain(`IMAGE="${name}"`);
+  });
+
+  it("blocks the job on every tag, never skipped or tolerated", () => {
+    expect(scan.if).toBeUndefined();
+    expect(scan["continue-on-error"]).toBeUndefined();
+  });
+
+  it("reads the image from the registry, never a local copy", () => {
+    expect(scan.env?.TRIVY_IMAGE_SRC).toBe("remote");
+  });
+
+  it("fails on fixable critical or high findings, with a pinned Trivy", () => {
+    expect(String(scan.with?.["exit-code"])).toBe("1");
+    expect(scan.with?.severity).toBe("CRITICAL,HIGH");
+    expect(String(scan.with?.["ignore-unfixed"])).toBe("true");
+    expect(String(scan.with?.cache)).toBe("false");
+    expect(scan.with?.version).toBe("v0.69.3");
   });
 });
 

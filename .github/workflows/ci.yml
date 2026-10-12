@@ -722,6 +722,34 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # image-build's Trivy gate scanned a different build: on a tag the pushed
+      # image is a clean rebuild, and nothing compares the two digests. So the
+      # exact digest the version tag will name is scanned here, from the
+      # registry, before the smoke and the promotion; the build scan stays as
+      # the pull-request and master gate. It closes the scanned-is-not-shipped
+      # gap, not cache poisoning: Trivy matches known CVEs and does not detect
+      # an implanted layer. A CVE disclosed since image-build's scan stops the
+      # release here too (RELEASING.md says how to recover).
+      # `version` is the action's default, pinned so a bump of the default
+      # cannot change the scanner of a release unseen; `cache: false` because
+      # this is the release's gate (see image-build's). OCI names are
+      # lowercase; `github.repository` is NGarate/stoky.
+      - name: Lowercase image name
+        id: image
+        run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+      - name: Scan the pushed digest
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        env:
+          # Never a copy in the local daemon: what the registry serves.
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ steps.image.outputs.name }}@${{ needs.image-publish.outputs.digest }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          cache: false
+          version: v0.69.3
       # Run the downloaded registry image, including its migrations, against
       # new volumes. This checks the actual publication, beyond the build and
       # source tests. Public DNS/certificate issuance is an operator check.

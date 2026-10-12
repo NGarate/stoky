@@ -55,8 +55,9 @@ git push origin vVERSION
 The `v*` tag runs the complete CI pipeline and validates the package/environment
 version. The image is built and scanned before publication. After all gates pass
 it is pushed only as `ghcr.io/ngarate/stoky:candidate-vVERSION`; the `release-draft`
-job installs that digest with the shipped Compose file on fresh volumes, and only
-when that smoke passes retags the same digest (no rebuild) as `:vVERSION`. A failed
+job scans that digest from the registry with Trivy (fixable CRITICAL/HIGH fail
+it), installs it with the shipped Compose file on fresh volumes, and only when
+both pass retags the same digest (no rebuild) as `:vVERSION`. A failed scan or
 smoke leaves no version tag behind. The job then creates a draft with the
 checked-in release notes and the installation files plus checksums. Draft retries may replace draft attachments;
 published releases must not be reused for a different build. Fixes get a new tag.
@@ -96,7 +97,16 @@ certificate, which a smoke host cannot obtain. For that, run
 address nobody signs in from: the check spends that address's sign-in window.
 
 The image pipeline scans one build and publishes a second; it does not compare
-the two image digests. On `master` the second is rebuilt from the Actions layer
+the two image digests. On a tag, `release-draft` therefore scans the pushed
+digest itself — the one the version tag will name, read from the registry
+rather than a local copy — before it promotes it, so a version tag only ever
+names a scanned image; `latest` and `sha-` are covered only by the scan of the
+first build. That closes the scanned-is-not-shipped gap, not the cache one
+below: Trivy matches known CVEs and does not detect an implanted layer. A CVE
+disclosed between the two scans stops the release too. Re-running
+`release-draft` alone rescans the same digest; an Alpine fix arrives by
+re-running the whole tag run, whose clean build runs `apk upgrade`, and a
+dependency fix needs a new tag. On `master` the second build is rebuilt from the Actions layer
 cache the first wrote. On a tag it is built from nothing — no `cache-from`,
 `no-cache: true` — and the jobs that check, scan and package the release
 download Bun and Trivy (with its database) instead of restoring them. The cache

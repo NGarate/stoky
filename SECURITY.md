@@ -309,6 +309,17 @@ Verified against the files named in each row.
   pushed** — scanning after publication would be the wrong order. Results are
   uploaded as SARIF, and a separate step fails the job on CRITICAL or HIGH
   findings (`ignore-unfixed: true`).
+- **A release's version tag names only a scanned digest.** The scanned build is
+  never pushed: the published image is a second build, and on a tag a clean
+  one, so the two digests differ. `release-draft` scans the pushed digest from
+  the registry with the same gate (Trivy 0.69.3 pinned, CRITICAL/HIGH,
+  `ignore-unfixed`, no Actions cache) before it retags it as the version.
+  `latest` and `sha-` rely on the first build's scan. This catches a known CVE
+  that only the shipped build carries; it is not a defence against a poisoned
+  build, since Trivy does not detect an implanted layer. Run by hand against
+  the published digests on 2026-10-12, the same scan passes `v0.1.0-alpha.3`
+  and fails `v0.1.0-alpha.1` (Next.js 16.3.3: one CRITICAL, one HIGH, both
+  fixed upstream).
 - The published image carries an **SBOM** (`sbom: true`) and **build provenance**
   (`provenance: mode=max`), and a **signed provenance attestation** pushed to the
   registry via `actions/attest-build-provenance`, which an operator can check
@@ -749,7 +760,8 @@ Use exact release tags and follow the target release notes and
 does not replace running containers; `docker compose up -d --wait` does.
 Do not automatically follow `latest` for an alpha installation.
 
-Trivy checks images before publication for fixable CRITICAL/HIGH findings.
+Trivy checks images before publication for fixable CRITICAL/HIGH findings,
+and a release's exact digest again before its version tag exists.
 Published images are not continuously rescanned; a clean publication scan is not
 an assurance about vulnerabilities disclosed later. Updates require a newly built
 image, not an in-place package upgrade inside a running container.
