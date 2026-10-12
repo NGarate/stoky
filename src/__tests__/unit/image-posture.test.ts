@@ -66,6 +66,33 @@ describe("the application images use only the Bun runtime", () => {
   });
 });
 
+describe("the production image ships no demo seed", () => {
+  it("copies only the schema and the migrations out of prisma/", () => {
+    // `prisma/seed.ts` creates an OWNER with the password the README
+    // publishes. A whole-directory COPY is how it got into the image, and any
+    // new file in prisma/ would follow it the same way.
+    const prismaCopy = /^COPY --from=builder \/app\/prisma(\S*) (\S+)$/gm;
+    const copies = [...productionStage().matchAll(prismaCopy)].map(([, source, target]) => [
+      source,
+      target,
+    ]);
+    expect(copies).toEqual([
+      ["/schema.prisma", "./prisma/schema.prisma"],
+      ["/migrations", "./prisma/migrations"],
+    ]);
+  });
+
+  it("fails the build if the seed is present anyway", () => {
+    // The text check above cannot see a seed that arrives some other way (a
+    // standalone trace, a broader COPY of /app). The build assertion can, and
+    // it also proves the migrations landed in prisma/migrations rather than
+    // flattened into prisma/.
+    const stage = productionStage();
+    expect(stage).toContain("test ! -e /app/prisma/seed.ts");
+    expect(stage).toContain("test -f /app/prisma/migrations/migration_lock.toml");
+  });
+});
+
 describe("the production image's health check", () => {
   it("asks /api/health, not merely whether the port answers", () => {
     // The reasoning the Dockerfile spells out: a listener that is up but

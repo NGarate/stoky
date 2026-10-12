@@ -107,6 +107,12 @@ Verified against the files named in each row.
   the same frozen Bun installation used to build the application. There is
   no second package resolution or npm installation. Startup runs that bundled
   CLI through Bun and does not download packages or OCR language data.
+- From `prisma/`, the production image copies only `schema.prisma` and
+  `migrations/`, which is what startup's `migrate deploy` reads. The demo seed
+  (`prisma/seed.ts`), which creates an `OWNER` with the password the README
+  publishes, is not in the image: the build fails if `/app/prisma/seed.ts`
+  exists, and `src/__tests__/unit/image-posture.test.ts` fails on a broader
+  `COPY` of `prisma/`.
 - A `HEALTHCHECK` reports database/cache reachability through `/api/health`.
   Docker does not restart a running container solely because it is unhealthy.
 - The Bun base image uses the version pinned in `.bun-version`. Production

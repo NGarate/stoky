@@ -64,7 +64,12 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
+# Migrations need the schema and the migrations directory, nothing else in
+# prisma/. The demo seed stays out: it hard-codes an OWNER with a password the
+# README publishes, and nothing at runtime reads it. Two COPYs, because a
+# directory source copies its contents, not itself.
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
+COPY --from=builder /app/prisma/migrations ./prisma/migrations
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/tessdata ./tessdata
 ENV TESSDATA_PATH=/app/tessdata
@@ -74,7 +79,9 @@ COPY --from=builder /opt/ocr/ ./node_modules/
 COPY --from=builder /opt/prisma/ /opt/prisma/
 RUN test -f /app/node_modules/tesseract.js/src/worker-script/index.js \
     && test -d /app/node_modules/tesseract.js/node_modules/tesseract.js-core \
-    && test -f /opt/prisma/node_modules/prisma/build/index.js
+    && test -f /opt/prisma/node_modules/prisma/build/index.js \
+    && test -f /app/prisma/migrations/migration_lock.toml \
+    && test ! -e /app/prisma/seed.ts
 
 # Assert the apparent node command is Bun, not a second runtime. A missing
 # migration engine or a reintroduced Node/npm installation fails the build.

@@ -2511,9 +2511,12 @@ The two previous answers were local: make *this* test create its own state. That
 does not work here, because producing a receipt with parsed lines means an
 upload and an OCR pass — minutes, and a language download (OCR-1). So the
 fixture is restored instead: `e2e/seed.setup.ts` is a project that the sign-in
-setup depends on, and it re-seeds before anything reads. The seed deletes only
-the demo household's rows, so it resets what the suite owns and touches nothing
-else in the same database.
+setup depends on, and it re-seeds before anything reads. The seed deletes the
+rows of the household named *Hogar Demo*; in the suite's own database that is
+the demo household and nothing else, so it resets what the suite owns. (In a
+database where a real household carries that name, it would delete that one —
+which is why the seed is a development fixture and is left out of the
+production image.)
 
 Proven by running the journey three times with no manual seeding between, which
 is the sequence that used to fail on the third.

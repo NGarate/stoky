@@ -108,7 +108,11 @@ unseeded database fails the whole matrix at its first step.
 
 Log in as **`demo@stoky.local`** / **`Demo1234!`**.
 
-Re-running the seed is safe — it clears the demo household first.
+Re-running the seed resets the demo data: it first deletes a household named
+*Hogar Demo* — any household with that name, not only the one it created — with
+its receipts, stock and member accounts. It is a development fixture with a
+published password, so run it only against a development or test database. The
+production image does not contain it.
 
 ---
 
