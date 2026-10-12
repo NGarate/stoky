@@ -123,9 +123,32 @@ Verified against the files named in each row.
   `uploads` volume plus tmpfs mounts for `/tmp` and `/app/.next/cache`.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
   ports**. Only Traefik publishes anything, and only 80 and 443.
-- Memory limits on every service, so one runaway process cannot take the host
-  down. Valkey is also bounded inside its own limit, with `--maxmemory`, because
-  it does not read the container's: see "It fails closed" below.
+- Memory limits on every service, so one service's runaway allocation stops at
+  its own limit. Valkey is also bounded inside its own limit, with
+  `--maxmemory`, because it does not read the container's: see "It fails
+  closed" below.
+- A process limit on every service (`deploy.resources.limits.pids`, which
+  counts threads as well as processes): app 512, db 256, cache 128, traefik
+  128. A fork loop or a runaway thread pool stops at its own container's
+  ceiling instead of using up the host's process table. These are ceilings, not
+  sizing. Measured on the bundle (8 cores, `v0.1.0-alpha.3`), from the cgroup's
+  `pids.peak` after a sign-up, a sign-in, six receipt uploads run through OCR
+  and 900 concurrent page and health requests through Traefik: app 50, db 25,
+  cache 14, traefik 26. Postgres runs one process per connection, and its
+  default `max_connections` of 100 keeps it under 256 however many connections
+  the app's pool asks for. Forking 300 `sleep`s inside the cache container
+  stopped at 127 of 128, with `pids.events` counting the refused forks.
+  `docker exec` into that container was refused until they exited, the host
+  was unaffected, and Valkey stayed healthy with no restart.
+- **No CPU limit, deliberately.** Docker refuses to create a container whose
+  `cpus` is above the host's core count ("range of CPUs is from 0.01 to 8.00,
+  as there are only 8 CPUs available" here), and small hosts are the common
+  install, so a fixed value would stop the bundle from starting on them. A busy
+  service can therefore still use every core. The expensive path an account
+  can trigger, OCR, runs on one shared worker (`src/server/services/ocr.ts`)
+  and receipt upload is metered per account (below).
+  `src/__tests__/unit/deployment.test.ts` pins each process limit and the
+  absence of a `cpus` limit.
 - Traefik uses a read-only file provider, with no Docker socket access.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
   HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.

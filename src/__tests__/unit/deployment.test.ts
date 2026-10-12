@@ -16,7 +16,7 @@ interface Service {
   cap_drop: string[];
   security_opt: string[];
   restart: string;
-  deploy: { resources: { limits: { memory: string } } };
+  deploy: { resources: { limits: { memory: string; pids?: number; cpus?: unknown } } };
   command?: string[];
   configs?: { source: string; target: string }[];
   healthcheck?: { test: string[] };
@@ -122,6 +122,28 @@ describe("the downloadable installation", () => {
     // Headroom for the copy-on-write of a background save, which the cgroup
     // counts and maxmemory does not.
     expect(bound).toBeLessThanOrEqual(limit * 0.75);
+  });
+
+  it("caps how many processes each service may start, without a CPU limit small hosts would refuse", () => {
+    // A fork loop or a runaway thread pool stops at its container's ceiling
+    // instead of exhausting the host's process table. Ceilings, not sizing:
+    // five to ten times the peak measured under load.
+    const limits = Object.fromEntries(
+      Object.entries(compose.services).map(([name, service]) => [name, service.deploy.resources.limits]),
+    );
+    // Strict: toEqual ignores an undefined value, so a new service without a
+    // pids entry would pass it.
+    expect(Object.fromEntries(Object.entries(limits).map(([name, limit]) => [name, limit.pids]))).toStrictEqual({
+      db: 256,
+      cache: 128,
+      app: 512,
+      traefik: 128,
+    });
+    // Docker rejects a cpus value above the host's core count, so a fixed one
+    // stops the bundle from starting on the small hosts it is meant for.
+    for (const [name, limit] of Object.entries(limits)) {
+      expect({ name, cpus: limit.cpus }).toEqual({ name, cpus: undefined });
+    }
   });
 
   it("rotates every service's logs instead of letting them fill the disk", () => {

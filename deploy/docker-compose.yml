@@ -18,6 +18,14 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
+# Each service also has a pids limit: the most processes and threads it may run
+# at once, so a fork loop or a runaway thread pool stops at its own ceiling and
+# does not use up the host's process table. The values are ceilings, not
+# sizing: five to ten times the peak measured under load (SECURITY.md).
+# There is deliberately no cpus limit: Docker refuses to start a container whose
+# cpus value is higher than the host's core count, and small hosts are the
+# common install.
+
 services:
   db:
     image: postgres:16-alpine
@@ -31,6 +39,7 @@ services:
       resources:
         limits:
           memory: 1g
+          pids: 256
     environment:
       POSTGRES_USER: stoky
       POSTGRES_DB: stoky
@@ -61,6 +70,7 @@ services:
       resources:
         limits:
           memory: 256m
+          pids: 128
     # Valkey does not read the container limit: without --maxmemory it grows
     # until the kernel kills it, and the sign-in limiter, which fails closed,
     # goes down with it. 160mb leaves the rest of the 256m for the copy-on-write
@@ -97,6 +107,7 @@ services:
       resources:
         limits:
           memory: 1g
+          pids: 512
     environment:
       NODE_ENV: production
       # One password configures BOTH services; hex avoids URL escaping issues.
@@ -131,6 +142,7 @@ services:
       resources:
         limits:
           memory: 256m
+          pids: 128
     environment:
       DOMAIN: "${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
     command:
