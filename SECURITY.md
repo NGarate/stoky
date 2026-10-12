@@ -103,6 +103,16 @@ Verified against the files named in each row.
   no separate Node.js runtime, npm or npx is installed.
 - The production image runs as `USER bun`, not root. Its UID/GID is 1000,
   matching the former `node` account so existing upload volumes remain writable.
+  Everything else under `/app` and `/opt` is root-owned and read-only to it.
+- The image does not depend on the build host's `umask`. `COPY` keeps the
+  context's modes, so a source build from a checkout made under `umask 077`
+  used to ship root-owned `0600` files and `0700` directories (`package.json`,
+  `public/`, `prisma/`) that `bun` could not read, and the server died with
+  `EACCES` at start. The builder's last step runs
+  `chmod -R a+rX,go-w` over every path production copies: readable and
+  traversable by all, writable by root alone, executables kept executable.
+  `src/__tests__/unit/image-posture.test.ts` fails if a production `COPY` reads
+  a builder path the step does not cover, or if the step stops being last.
 - `dumb-init` is PID 1, so signals are forwarded and zombies reaped.
 - The Prisma CLI and its dependency tree are copied into `/opt/prisma` from
   the same frozen Bun installation used to build the application. There is

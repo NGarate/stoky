@@ -136,6 +136,43 @@ describe("the Prisma engines are verified against pinned checksums", () => {
   });
 });
 
+describe("the production image does not depend on the build host's umask", () => {
+  // COPY keeps the context's modes. Built from a checkout made under umask 077
+  // (measured 2026-10-12 with a `git archive` extracted that way), the image
+  // held root-owned 0600 /app/package.json and 0700 /app/public, and
+  // `bun server.js` died with EACCES as the bun user. The builder normalises
+  // what production copies; these pin that it covers all of it, last.
+  const NORMALISE = /^RUN chmod -R a\+rX,go-w ((?:\S+ \\\n\s*|\S+ )*\S+)$/m;
+
+  function normalised(): string[] {
+    const run = builderStage().match(NORMALISE);
+    expect(run).not.toBeNull();
+    return run![1].split(/\s+\\?\s*/).filter((path) => path !== "\\");
+  }
+
+  it("adds read and traverse for everyone and write for no one but root", () => {
+    // Not `u=rwX,go=rX`: BusyBox clears the bits before it tests X, so that
+    // form turned a 0700 executable into 0644 when tried in the base image.
+    expect(builderStage()).toMatch(NORMALISE);
+  });
+
+  it("covers every path production copies out of the builder", () => {
+    const paths = normalised();
+    const sources = [...productionStage().matchAll(/^COPY --from=builder (\S+) /gm)].map(
+      ([, source]) => source.replace(/\/$/, ""),
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(paths.some((path) => source === path || source.startsWith(`${path}/`))).toBe(true);
+    }
+  });
+
+  it("runs after everything else the builder writes", () => {
+    const runs = [...builderStage().matchAll(/^RUN .*/gm)].map(([line]) => line);
+    expect(runs.at(-1)).toMatch(/^RUN chmod -R a\+rX,go-w /);
+  });
+});
+
 describe("the production image ships no demo seed", () => {
   it("copies only the schema and the migrations out of prisma/", () => {
     // `prisma/seed.ts` creates an OWNER with the password the README

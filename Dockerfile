@@ -71,6 +71,15 @@ RUN mkdir -p /app/tessdata \
        https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/spa.traineddata \
     && echo "${TESSDATA_SPA_SHA256}  /app/tessdata/spa.traineddata" | sha256sum -c -
 
+# COPY keeps the build context's modes, so a checkout made under umask 077 put
+# root-owned 0600 files and 0700 directories into production, where bun cannot
+# read them and the server dies with EACCES. Normalise everything production
+# copies, last, so nothing written after it escapes: readable and traversable by
+# all, writable by root alone, executables still executable. Not `go=rX`:
+# BusyBox clears the bits before testing X, so it strips execute from files.
+RUN chmod -R a+rX,go-w /app/.next/standalone /app/.next/static /app/public \
+      /app/prisma /app/package.json /app/tessdata /opt/ocr /opt/prisma
+
 FROM bun AS production
 USER root
 WORKDIR /app
