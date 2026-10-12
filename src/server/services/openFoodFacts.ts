@@ -5,6 +5,20 @@ import { valkeyProductCache, type ProductCache } from "./product-cache";
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
 const OFF_USER_AGENT = "Stoky/1.0 (contact@stoky.app)";
 
+/**
+ * How long a barcode lookup may take, from the request to the last byte of
+ * the answer, before it counts as Open Food Facts being unavailable.
+ *
+ * Without one, Bun's only bound is its five-minute idle timer, which every
+ * byte resets: an Open Food Facts brownout, or an answer dripping in, held
+ * `scanBarcode` and `resolveScan` open for minutes while the person waited
+ * for a form they could have been filling in. The signal also covers the body
+ * read (measured under Bun 1.4.2: a stalled body rejects at the deadline like
+ * a stalled request), so the bound is the whole lookup. Five seconds is the
+ * security audit's figure; past it the person is better served by the form.
+ */
+const OFF_TIMEOUT_MS = 5_000;
+
 /** What `extractUnit` answers for a count, or for anything it cannot read. */
 const COUNT_UNIT = "unit";
 
@@ -113,8 +127,14 @@ export class OpenFoodFactsClient {
    * Valkey by default, so replicas share one answer instead of each fetching
    * the same barcode and disagreeing after an upstream edit. Injectable because
    * the unit tier must not need a service running; see `product-cache.ts`.
+   *
+   * `timeoutMs` is injectable so a test can prove the deadline without waiting
+   * out the real one.
    */
-  constructor(private readonly cache: ProductCache = valkeyProductCache) {}
+  constructor(
+    private readonly cache: ProductCache = valkeyProductCache,
+    private readonly timeoutMs: number = OFF_TIMEOUT_MS,
+  ) {}
 
   /**
    * Fetch product by barcode from Open Food Facts API
@@ -140,6 +160,12 @@ export class OpenFoodFactsClient {
           headers: {
             "User-Agent": OFF_USER_AGENT,
           },
+          // A timeout lands in the catch below like any other failure: null,
+          // the same fail-open answer as an outage, and never cached. It must
+          // stay that way — `resolveScan` throws NOT_FOUND on null *before* it
+          // claims its replay key, which is what leaves a retry of the same key
+          // free to succeed once Open Food Facts answers again.
+          signal: AbortSignal.timeout(this.timeoutMs),
         }
       );
 

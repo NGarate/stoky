@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { OpenFoodFactsClient, openFoodFacts } from "@/server/services/openFoodFacts";
-import { memoryProductCache } from "@/server/services/product-cache";
+import { memoryProductCache, type ProductCache } from "@/server/services/product-cache";
 
 describe("OpenFoodFacts Service", () => {
   let client: OpenFoodFactsClient;
@@ -165,6 +165,127 @@ describe("OpenFoodFacts Service", () => {
       } finally {
         restore();
       }
+    });
+  });
+
+  describe("deadline", () => {
+    // A real fetch against a loopback server rather than a stubbed one: a stub
+    // ignores whatever `signal` it is handed, so it could not tell a lookup
+    // with a deadline from one without. Only the address is redirected; the
+    // request, the abort and the body read are Bun's own.
+    const barcode = "8480000654321";
+    const deadlineMs = 100;
+    let server: ReturnType<typeof Bun.serve>;
+    let requests: number;
+    let originalFetch: typeof fetch;
+    // The service logs every failed lookup; a timeout's DOMException would
+    // bury the run's output.
+    let quiet: ReturnType<typeof spyOn>;
+
+    beforeEach(() => {
+      quiet = spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    function serve(answer: () => Response | Promise<Response>) {
+      requests = 0;
+      server = Bun.serve({
+        port: 0,
+        hostname: "127.0.0.1",
+        fetch() {
+          requests += 1;
+          return answer();
+        },
+      });
+      originalFetch = global.fetch;
+      global.fetch = ((url: string | URL, init?: RequestInit) => {
+        const { pathname, search } = new URL(String(url));
+        return originalFetch(`http://127.0.0.1:${server.port}${pathname}${search}`, init);
+      }) as typeof fetch;
+    }
+
+    afterEach(() => {
+      quiet.mockRestore();
+      global.fetch = originalFetch;
+      // Drops the connections a lookup without a deadline would still hold.
+      server.stop(true);
+    });
+
+    /** A cache that also counts what was written to it. */
+    function countingCache(): { cache: ProductCache; writes: () => number } {
+      const inner = memoryProductCache();
+      let writes = 0;
+      return {
+        cache: {
+          ...inner,
+          set: async (key, value) => {
+            writes += 1;
+            await inner.set(key, value);
+          },
+        },
+        writes: () => writes,
+      };
+    }
+
+    /**
+     * The lookup, or "still waiting" if it has not settled well past the
+     * deadline — so a missing deadline fails the test instead of hanging the
+     * run behind a request that never ends.
+     */
+    async function lookUp(client: OpenFoodFactsClient) {
+      let guard: ReturnType<typeof setTimeout> | undefined;
+      const result = await Promise.race([
+        client.getProductByBarcode(barcode),
+        new Promise<"still waiting">((resolve) => {
+          guard = setTimeout(() => resolve("still waiting"), deadlineMs * 20);
+        }),
+      ]);
+      clearTimeout(guard);
+      return result;
+    }
+
+    it("gives up on Open Food Facts when it never answers", async () => {
+      serve(() => new Promise<Response>(() => {}));
+      const { cache, writes } = countingCache();
+      const client = new OpenFoodFactsClient(cache, deadlineMs);
+
+      const result = await lookUp(client);
+
+      expect(result).toBeNull();
+      expect(requests).toBe(1);
+      expect(writes()).toBe(0);
+    });
+
+    it("gives up when the answer starts but never finishes", async () => {
+      // Headers at once, then a body that stops mid-JSON: the deadline has
+      // to cover reading the answer, not just receiving its first byte.
+      serve(
+        () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode(`{"code":"${barcode}",`));
+              },
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+      );
+      const client = new OpenFoodFactsClient(memoryProductCache(), deadlineMs);
+
+      const result = await lookUp(client);
+
+      expect(result).toBeNull();
+    });
+
+    it("asks again after a timeout instead of remembering it as unknown", async () => {
+      // A timeout means "unavailable", not "no such product". Remembered as a
+      // miss, one slow minute at Open Food Facts would hide a product it knows.
+      serve(() => new Promise<Response>(() => {}));
+      const client = new OpenFoodFactsClient(memoryProductCache(), deadlineMs);
+
+      await lookUp(client);
+      await lookUp(client);
+
+      expect(requests).toBe(2);
     });
   });
 
