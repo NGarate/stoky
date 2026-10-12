@@ -332,6 +332,27 @@ Verified against the files named in each row.
   off (`gh api repos/NGarate/stoky/immutable-releases` answered
   `"enabled":false` on 2026-10-12), so anything holding `contents: write` can
   still replace a published release's files and their `SHA256SUMS` together.
+  The attestation in the next point is what such a replacement does not carry.
+- **A release's installation files are attested.** `release-draft` signs build
+  provenance (`actions/attest-build-provenance`, `subject-path`) for the five
+  files it attaches — `docker-compose.yml`, `example.env`, `traefik.yml`,
+  `install.sh` and `SHA256SUMS` — after the packaged Compose file has been
+  checked and before the draft exists. The attestation is stored by GitHub, not
+  in the release, and names the signing workflow and the tag, so a file swapped
+  on the release later fails `gh attestation verify` pinned to `ci.yml` and
+  that tag ([the guide's optional
+  check](docs/INSTALL.md#optional-check-who-published-the-files)). It binds a
+  file to a run of `ci.yml` on that tag, not to an unmoved tag: a writer who can
+  move the tag and push a changed workflow can have a new run attest other files
+  under the same ref, which only a tag ruleset on `v*` stops, and none exists
+  yet. It also vouches only for what that run wrote: every earlier step of
+  `release-draft` (the Trivy action and its scanner, the downloaded Bun, the
+  smoke) shares the runner and, with `id-token: write` granted to the job, can
+  request the OIDC token the signing certificate is issued for, so the
+  attestation is no stronger than they are. Releases after `v0.1.0-alpha.3` carry it; for alpha.3's `SHA256SUMS` the
+  command answered `HTTP 404` and exit 1 on 2026-10-12. Gated on
+  `github.event.repository.private == false` like the image's, for the same
+  private-fork reason.
 - The published image carries an **SBOM** (`sbom: true`) and **build provenance**
   (`provenance: mode=max`), and a **signed provenance attestation** pushed to the
   registry via `actions/attest-build-provenance`, which an operator can check
@@ -811,7 +832,9 @@ in to a GitHub account (`gh auth login`): without one it stops with
 needs no account and relies on `SHA256SUMS` for the release files and, for the
 image, on the digest those files name (on the exact version tag alone up to
 `v0.1.0-alpha.3`); the attestation is the check that the image behind it was
-built here.
+built here. Releases after `v0.1.0-alpha.3` attest their installation files
+too, checked the same way ([the guide's optional
+step](docs/INSTALL.md#optional-check-who-published-the-files)).
 
 From `v0.1.0-alpha.3` on, **a missing attestation or a failed verification means
 do not run the image**: report it as a [vulnerability](#reporting-a-vulnerability).

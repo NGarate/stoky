@@ -61,9 +61,10 @@ less install.sh      # read what you are about to run; q to quit
 bash install.sh
 ```
 
-`sha256sum -c` must print `install.sh: OK` before you run it. The script
-installs the release it came with. Continue with step 2: only `DOMAIN` and
-`ACME_EMAIL` are left.
+`sha256sum -c` must print `install.sh: OK` before you run it. If you have the
+GitHub CLI, [check who published the files](#optional-check-who-published-the-files)
+between `sha256sum -c` and `bash install.sh`. The script installs the release
+it came with. Continue with step 2: only `DOMAIN` and `ACME_EMAIL` are left.
 
 ### By hand
 
@@ -90,11 +91,41 @@ starts without its routes and answers every request with `404 page not found`.
 `sha256sum -c` must print `OK` for all three files. Take the Compose, Traefik
 and environment files from the release, never from `master`: `master` may
 already describe the next release. Checksums detect damaged/mismatched files;
-they are not a separate signature of the publisher. Releases after
+they are not a separate signature of the publisher, which the
+[attestation below](#optional-check-who-published-the-files) is. Releases after
 v0.1.0-alpha.3 also fix the image through them: the Compose file names it by
 digest as well as tag (`…:${STOKY_VERSION}@sha256:…`), so a tag moved on the
 registry later does not change what you pull. To check who built that image,
 see [Verifying an image's provenance](../SECURITY.md#verifying-an-images-provenance).
+
+### Optional: check who published the files
+
+`SHA256SUMS` comes from the same release as the files it covers, so a writer who
+replaced a file could replace its checksum line too. Releases after
+v0.1.0-alpha.3 also carry a signed provenance attestation for each installation
+file, `SHA256SUMS` included, made by the CI run of the release tag and stored by
+GitHub rather than in the release. With the [GitHub CLI](https://cli.github.com/)
+signed in to any GitHub account (`gh auth login`), in the directory you
+downloaded into:
+
+```bash
+gh attestation verify SHA256SUMS \
+  --repo NGarate/stoky \
+  --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
+  --source-ref "refs/tags/${STOKY_RELEASE}"
+```
+
+It must exit 0 before you go on. One verified `SHA256SUMS` is enough:
+`sha256sum -c` then vouches for the files it lists, and `install.sh` stops
+without changing anything if the `SHA256SUMS` it downloads differs from the one
+already in the directory. Any single file verifies the same way
+(`gh attestation verify install.sh …`). `--source-ref` is what ties the file to
+the tag you chose; `--repo` alone accepts any run of the repository.
+v0.1.0-alpha.3 was packaged before CI attested its files, so for it the command
+fails with `HTTP 404` from the attestations API and the checksums are the only
+check. For any later release, a missing attestation or a failed verification
+means do not install those files; report it as a
+[vulnerability](../SECURITY.md#reporting-a-vulnerability).
 
 ## 2. Configure `.env`
 
@@ -218,7 +249,9 @@ not covered by these commands. Never delete the original volumes to test a backu
 
 Read the target release's notes first. Back up the current installation, download
 the target release's assets **into a separate directory**, and verify their
-checksums. Compare `example.env` with your `.env`; preserve your secrets. Replace
+checksums and, with the GitHub CLI, [who published
+them](#optional-check-who-published-the-files), with `STOKY_RELEASE` set to the
+target tag. Compare `example.env` with your `.env`; preserve your secrets. Replace
 the installed Compose and Traefik files with that release's files and set `STOKY_VERSION` to
 its exact tag. The Compose file is what selects the image: from releases after
 v0.1.0-alpha.3 it names it by digest, Docker pulls that digest whatever tag

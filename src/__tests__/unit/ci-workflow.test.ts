@@ -32,6 +32,7 @@ const workflow = Bun.YAML.parse(
     {
       if?: unknown;
       "timeout-minutes"?: unknown;
+      permissions?: Record<string, unknown>;
       steps?: Array<{
         id?: string;
         name?: unknown;
@@ -46,7 +47,11 @@ const workflow = Bun.YAML.parse(
   >;
 };
 
-type Context = Record<string, string>;
+/**
+ * Expression contexts: strings, and booleans such as
+ * `github.event.repository.private`.
+ */
+type Context = Record<string, string | boolean>;
 
 /**
  * Just enough of GitHub's expression language for the conditions below:
@@ -447,6 +452,84 @@ describe("the CI workflow's release scans the digest it promotes", () => {
     expect(String(scan.with?.["ignore-unfixed"])).toBe("true");
     expect(String(scan.with?.cache)).toBe("false");
     expect(scan.with?.version).toBe("v0.69.3");
+  });
+});
+
+// SHA256SUMS comes from the same release as the files it covers, so it detects
+// damage, not replacement: anything holding contents: write can swap a
+// published file and its checksum line together. release-draft therefore
+// attests every installation file it attaches, so an operator can check each
+// against this workflow and tag (`gh attestation verify`, INSTALL.md). The
+// action skips a path that matches nothing without failing, so the attested
+// list is compared with the draft's own, file for file.
+describe("the CI workflow's release attests its installation files", () => {
+  const job = workflow.jobs?.["release-draft"];
+  const steps = job?.steps ?? [];
+  const attestAction = "actions/attest-build-provenance@";
+  const usesAttest = (s: { uses?: unknown }) =>
+    typeof s.uses === "string" && s.uses.startsWith(attestAction);
+
+  const attestAt = steps.findIndex(usesAttest);
+  const attest = steps[attestAt];
+  const runs = (needle: string) =>
+    steps.findIndex((s) => typeof s.run === "string" && s.run.includes(needle));
+  const packageAt = runs("scripts/release-assets.sh");
+  const checkAt = runs("config --images");
+  const draftAt = runs("gh release create");
+
+  const runnerTemp = "/home/runner/work/_temp";
+  const tag: Context = {
+    ...run("push", "refs/tags/v0.1.0-alpha.3", "tag"),
+    "github.event.repository.private": false,
+    "runner.temp": runnerTemp,
+  };
+
+  /** The files the draft step attaches: its `ASSETS=(...)` array, expanded. */
+  const draftAssets = () => {
+    const script = String(steps[draftAt]?.run ?? "");
+    const list = script.match(/^\s*ASSETS=\(([^)]*)\)/m)?.[1];
+    if (!list) throw new Error("the draft step has no ASSETS=(...) array");
+    return [...list.matchAll(/"([^"]+)"/g)].map(([, path]) =>
+      path.replaceAll("$RUNNER_TEMP", runnerTemp),
+    );
+  };
+
+  const attested = () =>
+    interpolate(attest?.with?.["subject-path"], tag)
+      .split(/[\n,]/)
+      .map((path) => path.trim())
+      .filter(Boolean);
+
+  it("grants the job what a provenance attestation needs", () => {
+    expect(job?.permissions?.["id-token"]).toBe("write");
+    expect(job?.permissions?.attestations).toBe("write");
+  });
+
+  it("attests once, after packaging and checking, before the draft exists", () => {
+    expect(steps.filter(usesAttest)).toHaveLength(1);
+    expect(packageAt).toBeGreaterThanOrEqual(0);
+    expect(checkAt).toBeGreaterThan(packageAt);
+    expect(attestAt).toBeGreaterThan(checkAt);
+    expect(attestAt).toBeLessThan(draftAt);
+  });
+
+  it("attests exactly the files the draft attaches, SHA256SUMS included", () => {
+    const assets = draftAssets();
+    expect(assets).toHaveLength(5);
+    expect(assets).toContain(`${runnerTemp}/release/SHA256SUMS`);
+    expect(attested().toSorted()).toEqual(assets.toSorted());
+  });
+
+  it("names each file, never a glob that could match nothing", () => {
+    for (const path of attested()) expect(path).not.toMatch(/[*?[{]/);
+  });
+
+  it("runs on every public tag run, gated as the image's attestation is", () => {
+    const image = workflow.jobs?.["image-publish"]?.steps?.find(usesAttest);
+    expect(image).toBeDefined();
+    expect(attest?.if).toBe(image?.if);
+    expect(condition(attest?.if, tag)).toBe(true);
+    expect(attest?.["continue-on-error"]).toBeUndefined();
   });
 });
 

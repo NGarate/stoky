@@ -706,6 +706,8 @@ jobs:
     permissions:
       contents: write
       packages: write # promote the verified candidate to the version tag
+      id-token: write # provenance attestation of the installation files
+      attestations: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -826,6 +828,26 @@ jobs:
             exit 1
           fi
           "${COMPOSE[@]}" pull app
+      # SHA256SUMS comes from the same release as the files it covers, so it
+      # detects damage, not replacement: anything holding contents: write can
+      # swap a published file and its checksum line together. A signed
+      # provenance attestation per file ties each one to this workflow, this
+      # tag and this commit, and is stored by GitHub, not in the release.
+      # Attested after the checks above and before the draft exists, so no
+      # draft carries a file without one; the list is the draft's, file for
+      # file. A path that matched nothing would be skipped silently, which
+      # ci-workflow.test.ts guards. Gated like the image's attestation, for
+      # the same private-fork reason.
+      - name: Attest the installation files
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            ${{ runner.temp }}/release/docker-compose.yml
+            ${{ runner.temp }}/release/example.env
+            ${{ runner.temp }}/release/traefik.yml
+            ${{ runner.temp }}/release/install.sh
+            ${{ runner.temp }}/release/SHA256SUMS
       - name: Create or refresh the draft
         env:
           GH_TOKEN: ${{ github.token }}

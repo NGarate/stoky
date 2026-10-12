@@ -68,12 +68,29 @@ both pass retags the same digest (no rebuild) as `:vVERSION`. A failed scan or
 smoke leaves no version tag behind. The job then packages the installation files
 with that digest written into the Compose file's image line, checks that
 `docker compose config --images` of the packaged file names
-`ghcr.io/ngarate/stoky:vVERSION@<digest>` and that Compose pulls it, and creates
-a draft with the checked-in release notes and the installation files plus checksums. Draft retries may replace draft attachments;
-published releases must not be reused for a different build. Fixes get a new tag.
+`ghcr.io/ngarate/stoky:vVERSION@<digest>` and that Compose pulls it, attests
+each of the five installation files (build provenance signed for this tag's run,
+stored by GitHub), and creates a draft with the checked-in release notes and the
+installation files plus checksums. Draft retries may replace draft attachments
+and attest the new files again; published releases must not be reused for a
+different build. Fixes get a new tag.
 
 Download and review the draft assets with `gh release download`, run
-`sha256sum -c SHA256SUMS`, and compare them with the tagged source: the Compose
+`sha256sum -c SHA256SUMS`, and verify that every file carries this tag's
+attestation, which is the check operators are offered in
+[the guide](INSTALL.md#optional-check-who-published-the-files):
+
+```bash
+for asset in docker-compose.yml example.env traefik.yml install.sh SHA256SUMS; do
+  gh attestation verify "$asset" --repo NGarate/stoky \
+    --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
+    --source-ref refs/tags/vVERSION || echo "NOT ATTESTED: $asset"
+done
+```
+
+A file that does not verify was not attested by a `ci.yml` run of this tag, and
+the release must not be published. Files packaged by hand carry no attestation,
+so never attach them to a release. Then compare the files with the tagged source: the Compose
 file differs from `deploy/docker-compose.yml` by its guide link and by the
 `@sha256:` digest on the application's image line, which must be the digest
 `docker buildx imagetools inspect ghcr.io/ngarate/stoky:vVERSION` reports. Confirm that
@@ -142,3 +159,8 @@ so a moved tag does not change what an installation of it pulls, and
 and a signed GitHub attestation are enabled for published images; releases
 before `v0.1.0-alpha.3` were built while the repository was private and have no
 attestation. See [Security](../SECURITY.md#verifying-an-images-provenance).
+The installation files are attested from the release after `v0.1.0-alpha.3`;
+immutable releases are off, so a published release's files can still be
+replaced by anything holding `contents: write`, and the attestation is what a
+replaced file lacks. The check pins the tag (`--source-ref`), not its commit,
+so it is only as fixed as the `v*` tag, which no ruleset protects yet.
