@@ -1227,7 +1227,7 @@ Two things that sequence surfaced, both operational rather than defects:
   rather than implied by a green suite.
 - The 2,500 ms navigation timeout in `public/sw.js` is a guess calibrated on
   "supermarket lie-fi", not a measurement.
-- ~~Read persistence is not implemented.~~ **Built.** Six allowlisted queries
+- ~~Read persistence is not implemented.~~ **Built.** Seven allowlisted queries
   are kept per account in `localStorage` for 24 hours. Restoration happens
   after the first render rather than before it, so a screen opened with no
   signal shows the "nothing saved" panel for a moment before the cache
