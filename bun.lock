@@ -63,14 +63,10 @@
     },
   },
   "trustedDependencies": [
-    "sharp",
     "@prisma/engines",
     "argon2",
     "@prisma/client",
-    "@swc/core",
-    "tesseract.js",
     "prisma",
-    "@parcel/watcher",
   ],
   "overrides": {
     "brace-expansion": "^5.0.12",

@@ -61,8 +61,12 @@ Verified against the files named in each row.
 
 ### Container and runtime — `Dockerfile`
 
-- Multi-stage build. The compiler toolchain needed for `argon2` and `@swc/core`
-  stays in the `deps` stage and never reaches the production image.
+- Multi-stage build. The compiler toolchain (`python3 make g++`) stays in the
+  `deps` stage and never reaches the production image. Nothing needs it today:
+  it is the fallback for `argon2`, whose `node-gyp-build` loads the shipped
+  musl prebuild (a clean `--target deps` build on 2026-10-12 left no
+  `node_modules/argon2/build`). Until then this line also named `@swc/core`,
+  which compiles nothing.
 - All application image stages use the pinned `oven/bun` Alpine image. Bun
   installs dependencies, builds Next, runs migrations and serves the app.
   The upstream `node` compatibility command resolves to the Bun executable;
@@ -292,7 +296,7 @@ Verified against the files named in each row.
   that procedure's case fail ("blocked" after the 5-second ceiling) and left
   the other three passing.
 
-### Supply chain — `.github/workflows/`, `bunfig.toml`
+### Supply chain — `.github/workflows/`, `bunfig.toml`, `package.json`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
   can be moved and a SHA cannot. The comment beside each pin names the exact
@@ -412,6 +416,29 @@ Verified against the files named in each row.
   empty. Dependabot's seven-day cooldown is longer than the gate, so a version
   it proposes is already old enough to clear it. `package-overrides.test.ts`
   holds the value, the empty exclusion list and that ordering.
+- **Four packages may run install scripts**: `argon2`, `prisma`,
+  `@prisma/engines` and `@prisma/client` (`trustedDependencies` in
+  `package.json`, which replaces Bun's default allow-list rather than extending
+  it). A trusted script runs at install time with network access and, on a
+  developer machine, the repository's `.env` in its environment: Bun exports
+  it to lifecycle scripts, and neither `--no-env-file` nor bunfig `env = false`
+  stops that (a probe dependency's `postinstall` printed a value set only in
+  `.env` under both, Bun 1.4.0 and 1.4.2). CI and the image build have no
+  `.env`. Until 2026-10-12 the list also held `@swc/core`, `@parcel/watcher`,
+  `sharp` and `tesseract.js`, carried over from pnpm in `f643550`: sharp
+  0.35.5 has no install script, tesseract.js's is a donation banner,
+  `@parcel/watcher`'s builds from source only when asked to, and `@swc/core`'s
+  checks its prebuilt binding and, if that fails, runs `npm install
+  @swc/wasm` outside the lockfile. The last two are next-intl's, for its
+  message extractor, which is not enabled — but its plugin imports both
+  whenever `next.config.ts` loads, so every `next build` and `next dev` loads
+  their native bindings, from optional platform packages that have no script
+  (measured: importing `next.config.ts` under Bun loads
+  `@swc/core-linux-x64-gnu` and `@parcel/watcher-linux-x64-glibc`). After the
+  change, a clean `--target deps` build reports those three as blocked in
+  `bun pm untrusted`, and SWC, the watcher, sharp, argon2 hash/verify and the
+  Prisma engines all load in it; the production image builds.
+  `package-overrides.test.ts` holds the exact list.
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.

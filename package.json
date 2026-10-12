@@ -95,14 +95,10 @@
     "sharp": "^0.35.5"
   },
   "trustedDependencies": [
-    "@parcel/watcher",
     "@prisma/client",
     "@prisma/engines",
-    "@swc/core",
     "argon2",
-    "prisma",
-    "sharp",
-    "tesseract.js"
+    "prisma"
   ],
   "overrides": {
     "lodash": "^4.18.1",

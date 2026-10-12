@@ -6,8 +6,10 @@ FROM oven/bun:1.4.0-alpine AS bun
 FROM bun AS deps
 USER root
 WORKDIR /app
-# Native package lifecycle scripts run through Bun's compatibility link.
-# Toolchains stay in this stage; production receives only built dependencies.
+# Only package.json's trustedDependencies run install scripts, through Bun's
+# compatibility link. argon2's node-gyp-build loads its shipped musl prebuild;
+# the toolchain is only its fallback if none matches. Toolchains stay in this
+# stage; production receives only built dependencies.
 RUN apk add --no-cache libc6-compat python3 make g++ openssl
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile

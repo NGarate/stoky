@@ -73,6 +73,21 @@ package to `minimumReleaseAgeExcludes`: either one weakens the gate for
 every later update too. `bun install --frozen-lockfile`, which is everything
 above, is unaffected.
 
+### `bun install` hands `.env` to the packages it trusts
+
+Four packages run code at install time (`trustedDependencies` in
+`package.json`: argon2 and Prisma's three), and Bun gives each of them the
+repository's `.env` in its environment — `DATABASE_URL` with its password,
+`NEXTAUTH_SECRET`. `--no-env-file` and bunfig `env = false` do not stop it;
+both were measured not to, on Bun 1.4.0 and 1.4.2. Nothing in the repository
+can, which is why that list is kept to what the install needs and
+`package-overrides.test.ts` refuses an addition. If a dependency asks to run
+its script (`bun pm untrusted` lists the ones that were blocked), adding it is
+a security decision for `SECURITY.md` (Supply chain), not a fix for a warning.
+To keep `.env` out of reach, install before creating it, as the fast path's
+first run does (`scripts/dev-local.sh` does not: it writes `.env` before it
+installs), or install in the container: its `deps` stage has no `.env`.
+
 ### Existing checkout fails with `Failed to load external module argon2-…`
 
 Stop the dev server and run `bun run dev:setup` again. The helper now repairs
