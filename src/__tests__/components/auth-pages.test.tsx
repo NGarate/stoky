@@ -385,6 +385,47 @@ describe("what a refused sign-in says", () => {
   });
 });
 
+describe("what a refused sign-in says when it has been tried too often", () => {
+  // Two limits refuse with two codes. The address's says "this connection";
+  // the account's must not, because a different network cannot help and the
+  // person may be the one someone else is spending the attempts of.
+  for (const [locale, code, words, labels] of [
+    [
+      "es",
+      "account_rate_limited",
+      "Demasiados intentos con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu hogar.",
+      { email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión" },
+    ],
+    [
+      "en",
+      "account_rate_limited",
+      "Too many attempts with this account. Wait a few minutes; if it keeps happening, tell whoever runs your household.",
+      { email: "Email", password: "Password", submit: "Sign in" },
+    ],
+    [
+      "es",
+      "rate_limited",
+      "Demasiados intentos desde esta conexión. Espera unos minutos y vuelve a probar.",
+      { email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión" },
+    ],
+  ] as const) {
+    it(`says what ran out for ${code}, in ${locale}`, async () => {
+      signInResult = { ok: false, error: "CredentialsSignin", code };
+      try {
+        renderWithIntl(<LoginPage />, { locale });
+
+        await userEvent.type(screen.getByLabelText(labels.email), "a@b.es");
+        await userEvent.type(screen.getByLabelText(labels.password), "secreta123");
+        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+
+        expect(await screen.findByText(words)).toBeInTheDocument();
+      } finally {
+        signInResult = { ok: true, error: null };
+      }
+    });
+  }
+});
+
 describe("what a refused registration says", () => {
   // `STOKY_REGISTRATION` closed, or first-user with the instance claimed: the
   // server's FORBIDDEN carries the shared constant, and the form must say the

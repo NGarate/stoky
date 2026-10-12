@@ -9,14 +9,22 @@ import { logSecurityEvent } from "@/lib/security-log";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { verifyPassword } from "@/lib/auth/password-hash";
 import {
+  deviceFingerprint,
+  deviceIdFromRequest,
+  isKnownDevice,
+  rememberDevice,
+} from "@/lib/auth/known-devices";
+import {
   RateLimitUnavailableError,
   accountIdentifier,
   consumeRateLimit,
   loginAccountRateLimit,
+  loginDeviceRateLimit,
   loginRateLimit,
   rateLimitIdentifier,
   refundRateLimit,
   resetRateLimit,
+  type RateLimit,
 } from "@/lib/rate-limit";
 
 /**
@@ -31,6 +39,23 @@ import {
  */
 export class RateLimitedSignin extends CredentialsSignin {
   code = "rate_limited";
+}
+
+/**
+ * Sign-in refused because the *account* has run out of attempts — the shared
+ * counter, or this browser's own budget on it — rather than the address.
+ *
+ * Its own code because the person needs a different sentence. "Too many
+ * attempts from this connection" sends them to another network, which cannot
+ * help when the counter is keyed on the account; and when someone else is
+ * spending it (the lockout SECURITY.md accepts), being told so is how the
+ * operator comes to hear about it. A subclass of `RateLimitedSignin`, so code
+ * that asks "was this rate-limited?" still gets yes. Saying "account" leaks
+ * nothing: the counter runs only after the address check has passed, and for
+ * registered and unregistered addresses alike.
+ */
+export class AccountRateLimitedSignin extends RateLimitedSignin {
+  code = "account_rate_limited";
 }
 
 /** Sign-in refused because the rate limiter could not reach Valkey. */
@@ -185,22 +210,51 @@ export const authConfig: NextAuthConfig = {
          * so a difference in behaviour cannot be used to learn which addresses
          * are registered. Counted before Argon2id, for the same reason as the
          * limit above.
+         *
+         * **Except from a browser this account has signed in from before.**
+         * A full account counter refuses the right password too, so anyone
+         * who knows the address could keep spending it and keep the member
+         * out (security review, 2026-10-12). A known device is counted on a
+         * budget of its own instead — the OWASP device-cookie pattern — and
+         * a stranger's guesses never touch it. Whether the device is known is
+         * asked for registered and unregistered addresses alike, so this adds
+         * no way to tell them apart; and a device id nobody has recorded is
+         * counted on the shared budget exactly as before, so minting cookies
+         * buys nothing. See `@/lib/auth/known-devices`.
          */
-        const accountLimit = loginAccountRateLimit();
         const account = accountIdentifier(parsed.data.email);
+        const deviceId = deviceIdFromRequest(request);
+        let charged: {
+          kind: "device" | "account";
+          limit: RateLimit;
+          identifier: string;
+        };
 
         try {
+          charged =
+            deviceId && (await isKnownDevice(account, deviceId))
+              ? {
+                  kind: "device",
+                  limit: loginDeviceRateLimit(),
+                  identifier: `${account}:${deviceFingerprint(deviceId)}`,
+                }
+              : {
+                  kind: "account",
+                  limit: loginAccountRateLimit(),
+                  identifier: account,
+                };
+
           const { allowed, retryAfterSeconds } = await consumeRateLimit(
-            accountLimit,
-            account,
+            charged.limit,
+            charged.identifier,
           );
           if (!allowed) {
             logSecurityEvent("auth.signin.throttled", {
               address: identifier,
               email: parsed.data.email,
-              code: `account retry-after=${retryAfterSeconds}`,
+              code: `${charged.kind} retry-after=${retryAfterSeconds}`,
             });
-            throw new RateLimitedSignin();
+            throw new AccountRateLimitedSignin();
           }
         } catch (error) {
           if (error instanceof RateLimitUnavailableError) {
@@ -250,8 +304,12 @@ export const authConfig: NextAuthConfig = {
         // than failures, and a household signing in from three devices is
         // three attempts before anybody has mistyped anything.
         //
-        // **The two counters are not treated alike.** The account's counter is
-        // cleared: only its own password gets here. The address's counter is
+        // **The two counters are not treated alike.** The account's counter —
+        // or this device's, whichever the attempt was charged to — is
+        // cleared: only its own password gets here. Only that one: a known
+        // device signing in leaves the shared counter as it found it, so the
+        // owner signing in on their phone does not hand whoever is filling
+        // it a fresh budget. The address's counter is
         // refunded by this one attempt and no more, because clearing it let
         // anybody with an account of their own wipe the failures beside it —
         // four guesses at other people's passwords, one good sign-in to their
@@ -259,7 +317,11 @@ export const authConfig: NextAuthConfig = {
         // the window it was counted in, so a success that lands after that
         // window ended cannot take an attempt off the next one.
         await refundRateLimit(limit, identifier, addressWindow);
-        await resetRateLimit(accountLimit, account);
+        await resetRateLimit(charged.limit, charged.identifier);
+
+        // Only after the password has been accepted, which is what makes a
+        // recorded device worth a budget of its own.
+        if (deviceId) await rememberDevice(account, deviceId);
 
         return {
           id: user.id,

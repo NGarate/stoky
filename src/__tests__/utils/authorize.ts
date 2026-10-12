@@ -1,4 +1,5 @@
 import { authConfig } from "@/lib/auth";
+import { DEVICE_ID_COOKIE } from "@/lib/device";
 
 /**
  * Drives the credentials provider's `authorize` the way Auth.js does.
@@ -60,12 +61,20 @@ function configuredAuthorize(): AuthorizeFn {
   return fn;
 }
 
+/**
+ * `deviceId` is sent as the `stoky_device` cookie, the way a browser that has
+ * been here before sends it; leave it out for a browser that has not.
+ */
 export async function signInWith(
   credentials: { email: string; password: string },
-  options: { address?: string } = {},
+  options: { address?: string; deviceId?: string } = {},
 ): Promise<AuthorizeResult> {
+  const headers: Record<string, string> = {
+    "x-forwarded-for": options.address ?? freshTestAddress(),
+  };
+  if (options.deviceId) headers.cookie = `${DEVICE_ID_COOKIE}=${options.deviceId}`;
   const request = new Request("http://localhost/api/auth/callback/credentials", {
-    headers: { "x-forwarded-for": options.address ?? freshTestAddress() },
+    headers,
   });
 
   return (await configuredAuthorize()(credentials, request)) as AuthorizeResult;

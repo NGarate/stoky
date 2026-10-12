@@ -103,6 +103,29 @@ export function loginAccountRateLimit(): RateLimit {
   );
 }
 
+/**
+ * Sign-in attempts against one account **from one browser that has signed in
+ * to it before**, counted instead of the per-account limit above.
+ *
+ * The per-account limit refuses the right password once it is full, so anyone
+ * who knows an address could keep its owner out by spending those ten attempts
+ * every window. A known device (`@/lib/auth/known-devices`) is counted here
+ * instead, so a stranger's guesses never reach it. Five, because it is one
+ * browser — the per-address number — and because it is still a limit: a
+ * stolen device cookie buys five guesses a window, not an unlimited number.
+ * Keyed on the account and the device together, so one browser shared by two
+ * accounts has a budget for each.
+ */
+export function loginDeviceRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:login:dev",
+    "RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS",
+    "RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS",
+    5,
+    15 * 60,
+  );
+}
+
 export function registerRateLimit(): RateLimit {
   return limitFromEnv(
     "rl:register",

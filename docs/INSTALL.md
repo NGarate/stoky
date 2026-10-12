@@ -333,6 +333,38 @@ application's own Argon2id library with its own parameters, and setting
 application does. This path skips the application's password rules: choose at
 least 12 characters that do not contain your name or address.
 
+## Somebody keeps being told to wait
+
+Sign-in allows 10 attempts per account every 15 minutes, counted before the
+password is checked, so once they are spent even the right password is refused.
+From the release after v0.1.0-alpha.3 the person is told "Demasiados intentos
+con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu
+hogar." v0.1.0-alpha.3 says "Demasiados intentos desde esta conexión" instead,
+the words of the per-address limit, although another connection does not help.
+From the release after v0.1.0-alpha.3, a browser that has signed in to that
+account before has 5 of its own and is not affected; a new phone, a private
+window or a browser whose cookies were cleared shares the 10 with everyone
+else. So, after updating from a release without this, does every browser until
+its first sign-in since. On v0.1.0-alpha.3 every browser shares the 10.
+If that keeps happening to a person who is waiting as told, somebody who knows
+their address may be spending those attempts. `docker compose logs app | grep
+auth.signin` shows the addresses the attempts come from.
+
+To give that account its attempts back now rather than at the end of the
+window, run this in the installation directory with the person's address:
+
+```bash
+STOKY_ACCOUNT=$(printf '%s' 'person@example.com' | tr '[:upper:]' '[:lower:]' | sha256sum | cut -c1-32)
+docker compose exec cache valkey-cli DEL "rl:login:acct:$STOKY_ACCOUNT"
+```
+
+`1` means a counter was cleared, `0` that there was none to clear. The key is
+the first 32 hexadecimal characters of the SHA-256 of the address in lower case,
+because the counter never stores the address itself. On macOS use
+`shasum -a 256` for `sha256sum`. Clearing it does not stop whoever is spending
+it, but the first browser the person signs in on afterwards keeps its own
+attempts from then on.
+
 ## Backup and restore
 
 The JSON export in Settings is useful for inspection, but is not a full restore
@@ -450,6 +482,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
+| The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
 | `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |

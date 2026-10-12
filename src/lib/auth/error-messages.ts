@@ -7,6 +7,7 @@ export type AuthErrorKey =
   | "emailExists"
   | "invalidCredentials"
   | "tooManyAttempts"
+  | "accountTooManyAttempts"
   | "authUnavailable"
   | "loginError"
   | "registerError"
@@ -26,6 +27,9 @@ export type AuthErrorKey =
  */
 const CODE_KEYS: Record<string, AuthErrorKey> = {
   rate_limited: "tooManyAttempts",
+  // The account's counter, not the address's: a different network cannot
+  // help, and the person may be the one someone else is locking out.
+  account_rate_limited: "accountTooManyAttempts",
   auth_unavailable: "authUnavailable",
 };
 

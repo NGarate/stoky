@@ -6,13 +6,23 @@ import {
   accountIdentifier,
   closeRateLimiter,
   loginAccountRateLimit,
+  loginDeviceRateLimit,
   consumeRateLimit,
   refundRateLimit,
   registerRateLimit,
   resetRateLimit,
   type RateLimit,
 } from "@/lib/rate-limit";
-import { AuthUnavailableSignin, RateLimitedSignin } from "@/lib/auth";
+import {
+  AccountRateLimitedSignin,
+  AuthUnavailableSignin,
+  RateLimitedSignin,
+} from "@/lib/auth";
+import {
+  KNOWN_DEVICE_CAP,
+  KNOWN_DEVICE_TTL_SECONDS,
+  isKnownDevice,
+} from "@/lib/auth/known-devices";
 import { enforceRateLimit, retryAfterSeconds } from "@/server/trpc/throttle";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
@@ -356,7 +366,9 @@ describe("the per-account limit, through authorize", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(RateLimitedSignin);
+    // The account's own refusal, not the address's: the person is told the
+    // account is being tried, because another network would not help them.
+    expect(thrown).toBeInstanceOf(AccountRateLimitedSignin);
   });
 
   it("counts an address that does not exist, so it cannot be used to find one that does", async () => {
@@ -400,6 +412,237 @@ describe("the per-account limit, through authorize", () => {
       await cleanupTestUsers(email);
       await cleanupTestHouseholds(`Rate Limit Household ${process.pid}`);
     }
+  });
+});
+
+/**
+ * Known devices, through authorize (security review, 2026-10-12).
+ *
+ * The per-account limit above refuses the right password once it is full, so
+ * anyone who knows an address could spend it every window and keep its owner
+ * out. A browser that has signed in to the account before is counted on a
+ * budget of its own instead. What has to hold is both halves: the owner's
+ * device gets in while a stranger has the shared budget full, and nothing a
+ * stranger can send — no cookie, a minted one, one recorded for another
+ * account — is treated as that device.
+ */
+describe("known devices, through authorize", () => {
+  const ACCOUNT_ATTEMPTS = 3;
+  const DEVICE_ATTEMPTS = 2;
+  const MARKER = `known-device-${process.pid}-${Date.now().toString(36)}`;
+  const PASSWORD = "cocina despensa nevera";
+  const WRONG = "wrong password here";
+  const originalAccount = process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+  const originalDevice = process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS;
+  /** Every account this block signs in to, so cleanup touches only its own keys. */
+  const accounts: string[] = [];
+
+  beforeEach(() => {
+    process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = String(ACCOUNT_ATTEMPTS);
+    process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = String(DEVICE_ATTEMPTS);
+  });
+
+  afterAll(async () => {
+    if (originalAccount === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = originalAccount;
+    if (originalDevice === undefined) delete process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS;
+    else process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = originalDevice;
+
+    // Valkey is shared with whatever else is running against it, so only the
+    // keys of this block's own accounts are removed.
+    for (const email of accounts) {
+      const account = accountIdentifier(email);
+      const keys = [
+        ...(await inspector.keys(`${loginDeviceRateLimit().prefix}:${account}:*`)),
+        `${loginAccountRateLimit().prefix}:${account}`,
+        `rl:known:${account}`,
+      ];
+      await inspector.del(...keys);
+    }
+    await cleanupTestUsers(MARKER);
+    await cleanupTestHouseholds(MARKER);
+  });
+
+  async function member(label: string): Promise<string> {
+    const email = generateTestEmail(`${MARKER}-${label}`);
+    const household = await createTestHousehold({ name: `${MARKER} ${label}` });
+    await createTestUser({
+      email,
+      name: generateTestName("Known"),
+      password: PASSWORD,
+      householdId: household.id,
+    });
+    accounts.push(email);
+    return email;
+  }
+
+  /** A browser that has signed in to `email` once, successfully. */
+  async function knownDevice(email: string): Promise<string> {
+    const deviceId = crypto.randomUUID();
+    expect(await signInWith({ email, password: PASSWORD }, { deviceId })).not.toBeNull();
+    return deviceId;
+  }
+
+  /**
+   * What the attacker does: spend the shared budget, a different address each
+   * time, no cookie, until it refuses.
+   */
+  async function fillSharedBudget(email: string): Promise<void> {
+    for (let i = 0; i < ACCOUNT_ATTEMPTS; i++) {
+      expect(await signInWith({ email, password: WRONG })).toBeNull();
+    }
+    await expect(signInWith({ email, password: WRONG })).rejects.toBeInstanceOf(
+      RateLimitedSignin,
+    );
+  }
+
+  it("lets a device recorded by an earlier sign-in in while a stranger holds the shared budget", async () => {
+    const email = await member("owner");
+    const phone = await knownDevice(email);
+
+    await fillSharedBudget(email);
+
+    expect(await signInWith({ email, password: PASSWORD }, { deviceId: phone })).not.toBeNull();
+  });
+
+  it("still refuses a browser with no device cookie once the shared budget is full", async () => {
+    const email = await member("no-cookie");
+    await knownDevice(email);
+
+    await fillSharedBudget(email);
+
+    await expect(signInWith({ email, password: PASSWORD })).rejects.toBeInstanceOf(
+      RateLimitedSignin,
+    );
+  });
+
+  it("does not trust a freshly minted device id", async () => {
+    // Anyone can send any well-formed `stoky_device`. If presence were enough,
+    // a new UUID per guess would be a new budget per guess, and the limit that
+    // bounds a distributed guess would be gone.
+    const email = await member("minted");
+    await knownDevice(email);
+
+    await fillSharedBudget(email);
+
+    await expect(
+      signInWith({ email, password: PASSWORD }, { deviceId: crypto.randomUUID() }),
+    ).rejects.toBeInstanceOf(RateLimitedSignin);
+  });
+
+  it("does not remember a device whose sign-in failed", async () => {
+    // Only a success may record a device. Were a failure enough, a guesser
+    // could mint a cookie, spend one wrong guess on it, and own a budget of
+    // its own per cookie — the minted-id case above, one step later.
+    const email = await member("failed");
+    const guesser = crypto.randomUUID();
+
+    expect(await signInWith({ email, password: WRONG }, { deviceId: guesser })).toBeNull();
+    for (let i = 1; i < ACCOUNT_ATTEMPTS; i++) {
+      expect(await signInWith({ email, password: WRONG })).toBeNull();
+    }
+
+    await expect(
+      signInWith({ email, password: WRONG }, { deviceId: guesser }),
+    ).rejects.toBeInstanceOf(RateLimitedSignin);
+    expect(await inspector.exists(`rl:known:${accountIdentifier(email)}`)).toBe(0);
+  });
+
+  it("does not trust a device recorded for another account", async () => {
+    // One shared kitchen tablet signs in to two people's accounts; being
+    // known to one of them says nothing about the other.
+    const victim = await member("victim");
+    const other = await member("other");
+    const tablet = await knownDevice(other);
+
+    await fillSharedBudget(victim);
+
+    await expect(
+      signInWith({ email: victim, password: PASSWORD }, { deviceId: tablet }),
+    ).rejects.toBeInstanceOf(RateLimitedSignin);
+  });
+
+  it("gives a known device a budget of its own that still runs out, without touching the shared one", async () => {
+    // A stolen device cookie buys a few guesses a window, not an unlimited
+    // number — and the guesses made on it are not the shared budget's.
+    const email = await member("own-budget");
+    const phone = await knownDevice(email);
+
+    for (let i = 0; i < DEVICE_ATTEMPTS; i++) {
+      expect(await signInWith({ email, password: WRONG }, { deviceId: phone })).toBeNull();
+    }
+    await expect(
+      signInWith({ email, password: PASSWORD }, { deviceId: phone }),
+    ).rejects.toBeInstanceOf(AccountRateLimitedSignin);
+
+    const shared = `${loginAccountRateLimit().prefix}:${accountIdentifier(email)}`;
+    expect(await inspector.get(shared)).toBeNull();
+    expect(await signInWith({ email, password: PASSWORD })).not.toBeNull();
+  });
+
+  it("leaves the shared budget as it found it when a known device signs in", async () => {
+    // Clearing it would hand whoever is filling it a fresh budget every time
+    // the owner signs in on their phone.
+    const email = await member("leaves-shared");
+    const phone = await knownDevice(email);
+
+    for (let i = 0; i < ACCOUNT_ATTEMPTS - 1; i++) {
+      expect(await signInWith({ email, password: WRONG })).toBeNull();
+    }
+    expect(await signInWith({ email, password: PASSWORD }, { deviceId: phone })).not.toBeNull();
+
+    const shared = `${loginAccountRateLimit().prefix}:${accountIdentifier(email)}`;
+    expect(await inspector.get(shared)).toBe(String(ACCOUNT_ATTEMPTS - 1));
+  });
+
+  it("keeps the twenty most recent devices and forgets the oldest", async () => {
+    const email = await member("cap");
+    const devices: string[] = [];
+    for (let i = 0; i <= KNOWN_DEVICE_CAP; i++) devices.push(await knownDevice(email));
+
+    const key = `rl:known:${accountIdentifier(email)}`;
+    expect(await inspector.zcard(key)).toBe(KNOWN_DEVICE_CAP);
+    expect(await inspector.ttl(key)).toBeGreaterThan(KNOWN_DEVICE_TTL_SECONDS - 60);
+
+    await fillSharedBudget(email);
+
+    // The first one recorded is the one pushed out, so it is a stranger again…
+    await expect(
+      signInWith({ email, password: PASSWORD }, { deviceId: devices[0] }),
+    ).rejects.toBeInstanceOf(RateLimitedSignin);
+    // …and the newest is still known.
+    expect(
+      await signInWith({ email, password: PASSWORD }, { deviceId: devices[KNOWN_DEVICE_CAP] }),
+    ).not.toBeNull();
+  });
+
+  it("cannot be pre-empted by a forged address naming the device set", async () => {
+    // Without a proxy the per-address identifier is whatever X-Forwarded-For
+    // says. Were the set under the per-address prefix, this address's INCR
+    // would plant a string at its key and every sign-in to the account would
+    // then fail closed on WRONGTYPE.
+    const email = await member("forged");
+    const address = `known:${accountIdentifier(email)}`;
+    const deviceId = crypto.randomUUID();
+
+    expect(await signInWith({ email, password: WRONG }, { address })).toBeNull();
+    expect(
+      await signInWith({ email, password: PASSWORD }, { address, deviceId }),
+    ).not.toBeNull();
+    await fillSharedBudget(email);
+    expect(await signInWith({ email, password: PASSWORD }, { deviceId })).not.toBeNull();
+  });
+
+  it("fails closed when it cannot ask whether a device is known", async () => {
+    let thrown: unknown;
+    await withUnreachableCache(async () => {
+      try {
+        await isKnownDevice(accountIdentifier("anyone@example.com"), crypto.randomUUID());
+      } catch (error) {
+        thrown = error;
+      }
+    });
+    expect(thrown).toBeInstanceOf(RateLimitUnavailableError);
   });
 });
 
@@ -464,6 +707,8 @@ describe("the per-address limit, through authorize", () => {
     }
 
     expect(refused).toBeInstanceOf(RateLimitedSignin);
+    // The address's refusal, which says "this connection" — not the account's.
+    expect(refused).not.toBeInstanceOf(AccountRateLimitedSignin);
   });
 
   it("still does not charge a household for signing in successfully", async () => {

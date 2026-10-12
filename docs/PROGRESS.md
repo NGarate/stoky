@@ -2431,3 +2431,26 @@ in the same transaction, which also ends the orphan households a failed
 registration used to leave. The claim window on a fresh install — whoever
 registers first owns it — is accepted and documented rather than closed with a
 setup token, which would be a bootstrap flow out of proportion for an alpha.
+
+**D124 — A browser that has signed in before gets its own sign-in budget.**
+The 2026-10-12 security review found that the per-account limit, which refuses
+even the right password once full, let anyone who knew a member's address keep
+them out by spending ten attempts every window from two addresses. Following
+OWASP's device-cookie pattern, a `stoky_device` id recorded by a successful
+sign-in to that account is counted on its own 5 per 15 minutes instead of the
+shared 10. Trust is a server-side record, not the cookie: the id is
+attacker-controlled, so an id nobody recorded — or one recorded for another
+account — stays on the shared budget, and minting cookies buys nothing. A
+Valkey sorted set (`rl:known:<account>`, fingerprints, newest twenty, a year)
+was chosen over a signed token or a table: the id is already a 122-bit
+`httpOnly` secret, so a lookup gives what a signature would without a key to
+derive or rotate, and the limiter's store needs no migration. The set lives
+outside `rl:login:` because a forged `X-Forwarded-For` could otherwise plant a
+string there and make every sign-in to the account fail closed. "Count only
+failures", the review's cheaper suggestion, was rejected: the attacker's
+attempts are all failures, and a success already clears the counter. A success
+on a known device clears only that device's counter, so the owner signing in
+does not refill an attacker's budget. Accepted, not solved: a browser that has
+never signed in to the account still shares the budget, because that is what
+bounds a distributed guess; INSTALL.md gives operators the command that clears
+an account's counter.

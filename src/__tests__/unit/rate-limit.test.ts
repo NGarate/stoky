@@ -3,6 +3,7 @@ import {
   accountIdentifier,
   addMemberRateLimit,
   loginAccountRateLimit,
+  loginDeviceRateLimit,
   loginRateLimit,
   passwordChangeRateLimit,
   productLookupRateLimit,
@@ -211,6 +212,30 @@ describe("the configured limits", () => {
     });
   });
 
+  it("gives a known device five attempts per fifteen minutes of its own", () => {
+    // The budget a browser that has signed in before is counted on instead of
+    // the account's (security review, 2026-10-12). Still a limit: a stolen
+    // device cookie buys this many guesses a window, and the browser suite's
+    // override must not become the product's number.
+    delete process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS;
+    delete process.env.RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS;
+
+    expect(loginDeviceRateLimit()).toEqual({
+      prefix: "rl:login:dev",
+      attempts: 5,
+      windowSeconds: 900,
+    });
+  });
+
+  it("reads the known-device override, and refuses one that would disable it", () => {
+    process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS = "60";
+    expect(loginDeviceRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+
+    process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = "0";
+    expect(loginDeviceRateLimit().attempts).toBe(5);
+  });
+
   it("meters adding a member at twenty per admin per hour", () => {
     // Every call is a 64 MiB Argon2id hash before the database is asked
     // anything (security review, 2026-10-12). The default is the product's
@@ -265,6 +290,9 @@ describe("the configured limits", () => {
     expect(loginAccountRateLimit().prefix).not.toBe(registerRateLimit().prefix);
     // And adding a member shares a counter with nothing: an admin who signed
     // in a few times has not spent any of it.
+    // A known device's budget is not the account's either: sharing it would
+    // put the owner's phone back on the counter a stranger can fill.
+    expect(loginDeviceRateLimit().prefix).not.toBe(loginAccountRateLimit().prefix);
     const others = [loginRateLimit(), loginAccountRateLimit(), registerRateLimit(), uploadRateLimit()];
     expect(others.map((limit) => limit.prefix)).not.toContain(addMemberRateLimit().prefix);
     // Nor does changing a password: sign-in clears the account's sign-in

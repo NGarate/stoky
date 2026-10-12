@@ -27,6 +27,7 @@
     "loggingIn": "Signing in…",
     "registering": "Creating account…",
     "tooManyAttempts": "Too many attempts from this connection. Wait a few minutes and try again.",
+    "accountTooManyAttempts": "Too many attempts with this account. Wait a few minutes; if it keeps happening, tell whoever runs your household.",
     "authUnavailable": "The sign-in service is unavailable right now. Try again in a few minutes.",
     "loginError": "Signing in did not work. Try again in a moment.",
     "registerError": "The account could not be created. Check the details and try again.",

@@ -320,6 +320,10 @@ export default defineConfig({
       // shares one account counter however many addresses they come from —
       // which is precisely what that limit is for.
       RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS: "10000",
+      // And the known-device one, which takes over from it once a browser has
+      // signed in to that account: a spec that signs in twice in one context
+      // is one browser counted on its own five per window.
+      RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS: "10000",
       // And the Open Food Facts lookup meter, for the same shared-account
       // reason: every worker scans as the demo user, so the whole matrix
       // spends one per-account budget of 60 new codes an hour, and repeated

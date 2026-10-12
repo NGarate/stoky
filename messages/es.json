@@ -27,6 +27,7 @@
     "loggingIn": "Entrando…",
     "registering": "Creando cuenta…",
     "tooManyAttempts": "Demasiados intentos desde esta conexión. Espera unos minutos y vuelve a probar.",
+    "accountTooManyAttempts": "Demasiados intentos con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu hogar.",
     "authUnavailable": "El servicio de acceso no está disponible ahora mismo. Inténtalo de nuevo en unos minutos.",
     "loginError": "No se ha podido iniciar sesión. Vuelve a intentarlo en un momento.",
     "registerError": "No se ha podido crear la cuenta. Revisa los datos y vuelve a intentarlo.",

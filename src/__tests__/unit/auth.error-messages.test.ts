@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
+import { AccountRateLimitedSignin, RateLimitedSignin } from "@/lib/auth";
 import { registerSchema } from "@/lib/validations/auth";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
 
@@ -57,6 +58,24 @@ describe("getAuthErrorKey", () => {
     expect(getAuthErrorKey(refused.error?.message, "register")).toBe(
       "registerError",
     );
+  });
+
+  it("tells an account refusal from an address refusal", () => {
+    // The codes are read off the classes `authorize` throws, so renaming one
+    // cannot leave this passing against a code the server no longer sends.
+    // "From this connection" is right for the address limit and wrong for the
+    // account's: another network cannot help, and the person may be the one
+    // somebody else is locking out.
+    expect(
+      getAuthErrorKey("CredentialsSignin", "login", new RateLimitedSignin().code),
+    ).toBe("tooManyAttempts");
+    expect(
+      getAuthErrorKey(
+        "CredentialsSignin",
+        "login",
+        new AccountRateLimitedSignin().code,
+      ),
+    ).toBe("accountTooManyAttempts");
   });
 
   it("falls back to the action-specific generic error", () => {

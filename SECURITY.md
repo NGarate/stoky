@@ -934,8 +934,8 @@ SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
 addresses gets the per-IP budget from each of them, which is five hundred
 attempts against one password. With both limits in force, a hundred addresses
 buy ten. The number is higher than the per-IP one because this counter cannot
-tell a household's phone from its tablet, and a successful sign-in clears it —
-safe here, since only that account's own password can.
+tell a household's phone from its tablet, and a successful sign-in charged to
+it clears it — safe here, since only that account's own password can.
 
 The counter is keyed on a SHA-256 of the normalised address rather than the
 address, so a `KEYS rl:login:acct:*` on Valkey — available to anything on the
@@ -943,6 +943,56 @@ Docker network — does not come back as a list of who has tried to sign in. It
 counts attempts on addresses that are not registered too, so the difference
 between "refused" and "rejected" cannot be used to discover which addresses
 exist.
+
+**A full account counter refuses the right password too**, and anyone can fill
+it: ten wrong guesses at a member's address, from two addresses at the per-IP
+five each, at the start of every window. Until 2026-10-12 that kept the member
+from signing in on any device for as long as somebody kept doing it, and this
+section said nothing about it (security review, 2026-10-12, medium; ASVS 4.0.3
+V2.2.1 asks anti-automation to resist exactly this). So **a browser that has signed in
+to the account before is counted on its own budget instead** — 5 attempts per
+15 minutes per account and device — and a stranger's guesses never reach it.
+This is OWASP's device-cookie pattern, and NIST SP 800-63B §5.2.2's "accept
+authentication only from known devices":
+
+- The device is the existing `stoky_device` cookie: a random v4 UUID,
+  `httpOnly`, a year. Anyone can send any value, so **a cookie being present
+  buys nothing**. A device is known only if a successful sign-in *to that
+  account* recorded it, in a Valkey sorted set `rl:known:<account hash>` of
+  SHA-256 fingerprints (never the cookie value), newest twenty kept, expiring a
+  year after the last success. Any other id — none, a minted one, one recorded
+  for a different account — is counted on the shared budget exactly as before,
+  so a distributed guess is still bounded at ten per window.
+  `src/lib/auth/known-devices.ts`; the integration suite proves each case and
+  the twenty-device cap.
+- The set is deliberately not under `rl:login:`. Without a proxy the per-IP
+  counter is `rl:login:<whatever X-Forwarded-For says>`, and a forged header
+  naming the set would plant a string at its key and, failing closed, stop
+  every sign-in to that account. A test forges exactly that header.
+- A known device's own budget still runs out: a stolen device cookie is five
+  guesses a window. A success clears only the counter it was charged to, so the
+  owner signing in on their phone does not hand whoever is filling the shared
+  counter a fresh one.
+- Asking whether a device is known fails closed like the counters, and is asked
+  for registered and unregistered addresses alike.
+
+**What is left is accepted:** somebody who knows a member's address can still
+keep them from signing in **on a browser that has never signed in to that
+account** — a new phone, a private window, a cleared cookie jar — because that
+budget must stay shared to bound guessing. A browser pushed out of the newest
+twenty is a new browser again, and so, on an installation updated from a
+release before this one, is every browser until it next signs in: nothing was
+recorded before, and a session still open from then is not a record. Ending
+sessions or changing the password does not forget devices: a device only ever
+buys its own five guesses, not access. The person refused is told it is the
+account — "Demasiados intentos con esta cuenta… si se repite, avisa a quien
+administra tu hogar" — not the per-address "desde esta conexión", because
+another network cannot help them and their report is how the operator hears
+that somebody is spending the counter. Naming the account reveals nothing: the
+counter runs only after the per-address check passes, and for unregistered
+addresses alike. An operator can clear an account's shared counter by hand —
+[docs/INSTALL.md](docs/INSTALL.md#somebody-keeps-being-told-to-wait) has the
+command.
 
 What is still open, and worth knowing before publishing an instance:
 
@@ -993,8 +1043,8 @@ What is still open, and worth knowing before publishing an instance:
   accounts it creates to admin (`household.updateRole`), and each of those
   starts with a budget of its own. Nor is this the cheapest way left to make
   the server run Argon2id: signing in runs `argon2.verify` at the same cost,
-  and a sign-in that succeeds is refunded and clears the account's counter
-  (above), so anyone with a password can repeat it without being counted. What
+  and a sign-in that succeeds is refunded and clears the counter it was charged
+  to (above), so anyone with a password can repeat it without being counted. What
   this limit removes is the unmetered, batchable, account-creating form of the
   cost — not every way an authenticated caller can ask for a hash.
 
@@ -1108,15 +1158,17 @@ What is still open, and worth knowing before publishing an instance:
   at or below three quarters of the container limit.
 - **The limits are configurable** through `RATE_LIMIT_LOGIN_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS`,
-  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
+  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS`,
+  `RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
   `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
   `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`,
   `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS` and
   `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`. Raising them raises the
-  exposure; the browser suite raises the sign-in, registration, add-member and
-  product-lookup attempts (`playwright.config.ts` says why for each), and a
+  exposure; the browser suite raises the sign-in, known-device, registration,
+  add-member and product-lookup attempts (`playwright.config.ts` says why for
+  each), and a
   unit test asserts the shipped defaults with the environment unset so that
   override cannot become the product's behaviour.
 
@@ -1497,7 +1549,11 @@ own.
 - No invitations: with registration closed, an admin sets a new person's first
   password and hands it over. The person can change it from Settings once
   signed in; nothing makes them.
-- No account lockout, no email verification, no two-factor authentication,
+- No permanent account lockout — but the per-account sign-in limit is a
+  temporary one that a stranger can renew every fifteen minutes against a
+  browser that has never signed in to the account (see *Rate limiting* above
+  for the known-device budget that keeps it off the rest).
+- No email verification, no two-factor authentication,
   and no self-service password reset: there is no email to send a link to. A
   forgotten password is set again by a household admin; an owner's by another
   owner or, for a sole owner, by the operator in the database.
