@@ -1,7 +1,10 @@
 # Stoky uses Bun for dependency installation, builds, migrations and serving.
 # The pinned upstream image includes a node-named symlink to Bun for third-party
 # shebangs; no separate Node.js, npm or npx runtime is installed in any stage.
-FROM oven/bun:1.4.3-alpine AS bun
+# Pinned by the digest of the multi-platform index, because a tag can be
+# re-pushed and a digest cannot; the tag is kept for readers and must name the
+# same index (`docker buildx imagetools inspect oven/bun:<version>-alpine`).
+FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS bun
 
 FROM bun AS deps
 USER root

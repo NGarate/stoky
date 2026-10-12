@@ -27,6 +27,8 @@ describe("the Bun version is pinned once", () => {
     const pinned = readFileSync(join(ROOT, ".bun-version"), "utf8").trim();
     const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
 
+    // The version is the tag in front of the `@sha256:` digest. Whether the
+    // digest is there is `image-posture.test.ts`'s to assert, not this one's.
     const from = /FROM\s+oven\/bun:([0-9]+\.[0-9]+\.[0-9]+)-alpine/.exec(
       dockerfile,
     );

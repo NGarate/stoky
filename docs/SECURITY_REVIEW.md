@@ -473,11 +473,12 @@ became an override of the release bundle** (`eb44561`, 2026-10-05). The
 2026-08-26 bullets stay as that day's record — `pnpm audit` and
 `node:24-alpine` were what ran then. What holds today, and what asserts it:
 
-- Every stage derives from the pinned `oven/bun` Alpine image, and the
-  production stage runs `USER bun` and never returns to root
-  (`unit/image-posture.test.ts`). `bun` is uid and gid 1000, the old `node`
-  account's, so uploads written before the change stay writable; a `RUN` in the
-  production stage fails the build if that stops being true.
+- Every stage derives from the `oven/bun` Alpine image, pinned by version and
+  index digest since 2026-10-12, and the production stage runs `USER bun` and
+  never returns to root (`unit/image-posture.test.ts`). `bun` is uid and gid
+  1000, the old `node` account's, so uploads written before the change stay
+  writable; a `RUN` in the production stage fails the build if that stops being
+  true.
 - No stage installs Node.js, npm or npx, so there is nothing to delete. The
   test refuses an `npm install` or an `apk add nodejs`, and a build-time `RUN`
   fails unless the `node` on the path resolves to the Bun binary and neither

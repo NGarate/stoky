@@ -96,8 +96,9 @@ Verified against the files named in each row.
   musl prebuild (a clean `--target deps` build on 2026-10-12 left no
   `node_modules/argon2/build`). Until then this line also named `@swc/core`,
   which compiles nothing.
-- All application image stages use the pinned `oven/bun` Alpine image. Bun
-  installs dependencies, builds Next, runs migrations and serves the app.
+- All application image stages use the `oven/bun` Alpine image, pinned by
+  version and digest. Bun installs dependencies, builds Next, runs migrations
+  and serves the app.
   The upstream `node` compatibility command resolves to the Bun executable;
   no separate Node.js runtime, npm or npx is installed.
 - The production image runs as `USER bun`, not root. Its UID/GID is 1000,
@@ -141,9 +142,19 @@ Verified against the files named in each row.
   clean CI checkout and never held these files.
 - A `HEALTHCHECK` reports database/cache reachability through `/api/health`.
   Docker does not restart a running container solely because it is unhealthy.
-- The Bun base image uses the version pinned in `.bun-version`. Production
-  runs `apk upgrade --no-cache` during the build to take Alpine security fixes;
-  Trivy scans the completed image before publication.
+- The Bun base image is the version pinned in `.bun-version`, named by tag and
+  by the digest of its multi-platform index
+  (`oven/bun:1.4.3-alpine@sha256:…`). A tag can be re-pushed and a digest
+  cannot, so a re-pushed or substituted upstream tag cannot change what a
+  release builds without a change in this repository.
+  `src/__tests__/unit/image-posture.test.ts` fails if the digest is dropped
+  and `src/__tests__/unit/bun-version.test.ts` if the tag and `.bun-version`
+  disagree; neither can check offline that the tag and the digest name the
+  same image, which is checked with `docker buildx imagetools inspect` when the
+  pin moves. Production runs `apk upgrade --no-cache` during the build to take
+  Alpine security fixes, so the packages on top of the pinned base are still
+  whatever Alpine serves that day; Trivy scans the completed image before
+  publication.
 
 ### Release deployment — `deploy/docker-compose.yml`
 
@@ -452,7 +463,10 @@ Verified against the files named in each row.
   pins were tag objects until 2026-10-12.
   `src/__tests__/unit/ci-workflow.test.ts` refuses a tag, a major-only comment
   and those two SHAs; that a new SHA is a commit is checked with
-  `gh api repos/<owner>/<repo>/commits/<sha>`.
+  `gh api repos/<owner>/<repo>/commits/<sha>`. Container images follow the
+  same rule: the `Dockerfile`'s Bun base and the bundle's service images are
+  pinned by digest ([Container and runtime](#container-and-runtime--dockerfile),
+  [Release deployment](#release-deployment--deploydocker-composeyml)).
 - `bun audit --audit-level moderate` runs as its own job and fails the build. It
   answers from `bun.lock` alone, so the job installs nothing.
 - The image is built and **loaded locally, then scanned by Trivy before it is

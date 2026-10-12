@@ -12,6 +12,17 @@ say what measured it.
 
 ## Gate status
 
+**2026-10-12 Bun base by digest:** the Dockerfile names its base
+`oven/bun:1.4.3-alpine@sha256:629e1741…`, the index digest
+`docker buildx imagetools inspect oven/bun:1.4.3-alpine` printed that day (it
+lists amd64 and arm64), so a re-pushed tag no longer changes what a release
+builds. `src/__tests__/unit/image-posture.test.ts` requires
+`@sha256:<64 hex>` on the base; dropping, truncating or changing the digest's
+algorithm each turned it red (1 fail, 18 pass across it and
+`bun-version.test.ts`). The pinned reference, run with `--network none`, reports
+Bun 1.4.3 with `node` resolving to `/usr/local/bin/bun` and no npm; the full
+production image builds from the tracked files and reports the same, as `bun`.
+
 **2026-10-12 Bun 1.4.3:** `.bun-version` and the Dockerfile's base move
 together from 1.4.0 to 1.4.3 (`oven/bun:1.4.3-alpine`, index digest
 `sha256:629e1741…`, built 2026-10-10), for the security section of its release
@@ -500,6 +511,8 @@ reverted.
 
 **Bun is pinned** in `.bun-version` (**1.4.3** since 2026-10-12; 1.4.0 from
 2026-08-26, 1.3.14 before), read by CI through `bun-version-file` where `setup-bun` still runs.
+The Dockerfile names the same version by tag and by index digest (since
+2026-10-12), so moving the version moves the digest too.
 Unpinned, `setup-bun` resolved to whatever had shipped most recently, so a Bun
 release could turn the trunk red with nothing to revert; the pin made the
 version reviewable.
@@ -971,7 +984,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
-| bun | 1.4.3 — `.bun-version` and the Dockerfile pin; all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
+| bun | 1.4.3 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:629e1741…`); all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
 | traefik | v3.7.14 — `deploy/docker-compose.yml`, the release bundle's proxy; the newest v3 release on 2026-10-12 (`gh api repos/traefik/traefik/releases`) |

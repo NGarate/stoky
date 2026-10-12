@@ -364,10 +364,11 @@ cache on a tag; it is never pushed. `latest` and `sha-` images are still
 cache-derived; they are the development channel, not what an installation is
 told to run. A clean build takes minutes rather than the cached publish's one,
 so a tag's `image-publish` has 30 minutes to master's 10.
-The Docker base tag can change across rebuilds; the bundle's service images are
-pinned by digest, application/CLI dependencies use the frozen Bun lockfile, and
-the Prisma engines and the OCR model it does not cover are checked against
-SHA-256 values in the `Dockerfile`.
+The Bun base image and the bundle's service images are pinned by digest,
+application/CLI dependencies use the frozen Bun lockfile, and the Prisma engines
+and the OCR model it does not cover are checked against SHA-256 values in the
+`Dockerfile`. The Alpine packages are not pinned: the build's `apk add` and
+`apk upgrade` take what Alpine serves that day.
 Release tags identify the source/version, not a reproducible byte-for-byte build.
 Record the published digest when auditing an installation. A GHCR tag can be
 moved by anything holding `packages: write`, the tag run and any master run

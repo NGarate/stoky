@@ -52,7 +52,9 @@ describe("the application images use only the Bun runtime", () => {
   it("derives all stages from the pinned Bun image", () => {
     const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
     const bases = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
-    expect(bases[0]).toMatch(/^oven\/bun:[\d.]+-alpine$/);
+    // By version tag *and* index digest: a tag can be re-pushed, so the tag
+    // alone lets the release build a different base with no change here.
+    expect(bases[0]).toMatch(/^oven\/bun:\d+\.\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/);
     expect(bases.slice(1)).toEqual(["bun", "bun", "bun", "bun"]);
     const instructions = dockerfile.replace(/^#.*$/gm, "");
     expect(instructions).not.toMatch(/npm (?:install|init)\b|apk add[^\n]*nodejs/);

@@ -150,7 +150,11 @@ Four traps, each of which cost an afternoon:
 Dockerfile, because a `FROM` cannot read a file.
 `src/__tests__/unit/bun-version.test.ts` fails if they disagree, which they did
 once: the image moved to 1.4.0 while CI stayed on 1.3.14, and a green pipeline
-was proving the suites passed on a runtime nobody deploys.
+was proving the suites passed on a runtime nobody deploys. The Dockerfile names
+the image by tag and by the digest of its multi-platform index, so moving the
+version means moving the digest with it: take the `Digest:` line of
+`docker buildx imagetools inspect oven/bun:<version>-alpine`, not one
+platform's manifest. No test can tell offline that the two name the same image.
 
 ## Running the development server
 
