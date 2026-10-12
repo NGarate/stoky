@@ -53,6 +53,26 @@ The helper runs `bun install --frozen-lockfile` on every setup, including when
 `--force` to replace retained pnpm symlinks and removes that marker only after
 installation succeeds. A failed install stops setup before Prisma runs.
 
+### Adding or updating a dependency refuses anything under three days old
+
+`bunfig.toml` sets `minimumReleaseAge = 259200`, so `bun add`, `bun update`
+and a plain `bun install` that resolves something new skip every version,
+direct or transitive, published in the last three days. Asking for one by
+exact version fails:
+
+```text
+error: No version matching "typescript" found for specifier "7.1.0-dev.20261011.1" (blocked by minimum-release-age: 259200 seconds)
+```
+
+That is the gate working, not a registry fault; `SECURITY.md` (Supply chain)
+says why it exists. Wait, or take an older version. A security fix that cannot
+wait goes in through `bun audit fix`, or through `--minimum-release-age 0` on
+that one command (`bun add --minimum-release-age 0 <package>@<version>`), and
+the commit says which advisory it answers. Do not lower the value or add the
+package to `minimumReleaseAgeExcludes`: either one weakens the gate for
+every later update too. `bun install --frozen-lockfile`, which is everything
+above, is unaffected.
+
 ### Existing checkout fails with `Failed to load external module argon2-…`
 
 Stop the dev server and run `bun run dev:setup` again. The helper now repairs

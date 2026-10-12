@@ -1,0 +1,18 @@
+# Bun reads this file for `bun install`, `bun add`, `bun update` and
+# `bun remove`, and also for `bun run` and `bun test`. Only `[install]` is set.
+
+[install]
+# Refuse any package version published less than three days ago, direct or
+# transitive. A hijacked npm release is often found and pulled within hours or
+# a day or two; a lockfile refresh run during that window would lock one
+# in with every gate green, because `bun audit` only knows published
+# advisories. Applies only when Bun resolves something new: a
+# `--frozen-lockfile` install (CI, the Dockerfile, scripts/dev-local.sh)
+# installs exactly what bun.lock names, whatever its age.
+#
+# A security fix younger than three days: `bun audit fix` installs it anyway
+# and marks the row "(newer than --minimum-release-age)", or pass
+# `--minimum-release-age 0` to that one command. Do not lower this value or
+# add a permanent entry to `minimumReleaseAgeExcludes` for it. SECURITY.md,
+# "Supply chain", has the reasoning; package-overrides.test.ts holds the value.
+minimumReleaseAge = 259200 # seconds: 3 days

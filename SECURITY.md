@@ -292,7 +292,7 @@ Verified against the files named in each row.
   that procedure's case fail ("blocked" after the 5-second ceiling) and left
   the other three passing.
 
-### Supply chain — `.github/workflows/`
+### Supply chain — `.github/workflows/`, `bunfig.toml`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
   can be moved and a SHA cannot. The comment beside each pin names the exact
@@ -391,6 +391,27 @@ Verified against the files named in each row.
   or the Bun binary itself. [Releasing](docs/RELEASING.md#after-publication-weekly-re-scans)
   says what a red run asks for. `ci-workflow.test.ts` holds the schedule, the
   permissions, the pins and the gate.
+- **A package version younger than three days is not installed.** `bunfig.toml`
+  sets `[install] minimumReleaseAge = 259200`, so `bun add`, `bun update` and
+  any install that resolves something new skip versions, direct or transitive,
+  published within the last three days. A hijacked release is often found
+  and pulled within that window, and before an advisory exists `bun audit` has
+  nothing to say about it. Until 2026-10-12 nothing held one back: commit
+  `f643550` locked next-intl 4.14.0, a shipped runtime package, 27.9 hours
+  after it was published, with `@eloqnt/config` 0.0.2 at 46.6 hours. The gate
+  does not touch a frozen install: CI, the Dockerfile and `scripts/dev-local.sh`
+  install exactly what `bun.lock` names (a copy of the lockfile installed with
+  a ten-year gate exited 0 and left it byte-identical, Bun 1.4.2). Measured on
+  Bun 1.4.0, the pinned image, and 1.4.2: `bun add` of a TypeScript nightly 20
+  hours old fails with `blocked by minimum-release-age: 259200 seconds`.
+  **A security fix younger than three days** goes in through `bun audit fix`,
+  which Bun documents as installing the safe version anyway and marking the row
+  `(newer than --minimum-release-age)`, or through `--minimum-release-age 0` on
+  that one command, which was measured to override the file. Neither lowers the
+  gate for the next update; `minimumReleaseAgeExcludes` would, so it stays
+  empty. Dependabot's seven-day cooldown is longer than the gate, so a version
+  it proposes is already old enough to clear it. `package-overrides.test.ts`
+  holds the value, the empty exclusion list and that ordering.
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.

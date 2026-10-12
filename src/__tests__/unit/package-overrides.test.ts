@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -171,6 +172,49 @@ describe("the packages allowed to run install scripts", () => {
     // from a different manifest than the committed one.
     expect([...(lock.trustedDependencies ?? [])].sort()).toEqual(
       [...(manifest.trustedDependencies ?? [])].sort(),
+    );
+  });
+});
+
+describe("the release-age gate", () => {
+  // `bunfig.toml` holds no other setting, so nothing else would notice it gone:
+  // installs keep working, every gate stays green, and the next `bun add` or
+  // `bun update` locks in whatever the registry published a minute earlier.
+  // SECURITY.md § Supply chain has the reasoning.
+  const bunfig = require(join(ROOT, "bunfig.toml")) as {
+    install?: { minimumReleaseAge?: unknown; minimumReleaseAgeExcludes?: unknown };
+  };
+  const THREE_DAYS = 3 * 24 * 60 * 60;
+
+  it("holds back anything published in the last three days", () => {
+    const age = bunfig.install?.minimumReleaseAge;
+    expect(typeof age, "bunfig.toml [install] minimumReleaseAge is missing").toBe("number");
+    expect(age as number).toBeGreaterThanOrEqual(THREE_DAYS);
+  });
+
+  it("exempts no package", () => {
+    // An exclusion is permanent where the gate's own bypasses are not: a fix
+    // too young for the gate goes in through `bun audit fix` or a one-off
+    // `--minimum-release-age 0`, and the gate stays whole for the next update.
+    const excludes = bunfig.install?.minimumReleaseAgeExcludes;
+    expect(excludes === undefined || (Array.isArray(excludes) && excludes.length === 0)).toBe(true);
+  });
+
+  it("is no longer than Dependabot's cooldown for the lockfile", () => {
+    // Dependabot proposes a version once it is `default-days` old and rewrites
+    // bun.lock with its own Bun in a checkout of this repository, where Bun
+    // reads bunfig.toml. Not yet observed (no Dependabot pull request has run
+    // here), but if it does, a gate longer than that wait refuses the version
+    // the pull request exists to add.
+    const dependabot = Bun.YAML.parse(
+      readFileSync(join(ROOT, ".github", "dependabot.yml"), "utf8"),
+    ) as { updates: { "package-ecosystem": string; cooldown?: { "default-days"?: number } }[] };
+    const bun = dependabot.updates.find((update) => update["package-ecosystem"] === "bun");
+    const cooldownDays = bun?.cooldown?.["default-days"];
+
+    expect(typeof cooldownDays, "the bun entry in .github/dependabot.yml has no cooldown").toBe("number");
+    expect(bunfig.install?.minimumReleaseAge as number).toBeLessThanOrEqual(
+      (cooldownDays as number) * 24 * 60 * 60,
     );
   });
 });
