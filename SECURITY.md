@@ -117,6 +117,16 @@ Verified against the files named in each row.
   `src/__tests__/unit/seed-guard.test.ts`), and its reset finds the demo
   household through the `demo@stoky.local` account rather than the free-text
   name *Hogar Demo*, in one transaction.
+- The build context leaves out env files at every depth (`**/.env*`, with only
+  the root `.env.example` let back in), so the `deploy/.env` that the
+  source build in `docker-compose.prod.yml` has the operator write does not
+  enter the `builder` or `development` layers through `COPY . .`. Nested
+  `node_modules` and `.next`, local agent and tool state (`.claude`, `.codex`,
+  `.opencode`, `.playwright`, whose `auth/` holds session cookies), stray
+  `*.traineddata` and `*.tsbuildinfo` are excluded too.
+  `src/__tests__/unit/image-posture.test.ts` fails if a rule goes back to
+  root-only or a second negation appears. Published images are built from a
+  clean CI checkout and never held these files.
 - A `HEALTHCHECK` reports database/cache reachability through `/api/health`.
   Docker does not restart a running container solely because it is unhealthy.
 - The Bun base image uses the version pinned in `.bun-version`. Production

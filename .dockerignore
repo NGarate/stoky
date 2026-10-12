@@ -1,5 +1,8 @@
+# Patterns match from the context root: `node_modules` alone is only the
+# top-level one. `**/` is what reaches a nested copy.
+
 # Dependencies
-node_modules
+**/node_modules
 # Host package caches and obsolete package-manager manifests are not source.
 store
 .pnpm-store
@@ -7,8 +10,9 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 
 # Build output
-.next
+**/.next
 out
+*.tsbuildinfo
 
 # Version control
 .git
@@ -16,9 +20,21 @@ out
 
 # Environment (secrets). Every variant, not a list of the usual three: Next's
 # standalone output copies `.env.production` into the image, and Bun loads it at
-# start, so an unlisted one ships its secrets in a layer.
-.env*
+# start, so an unlisted one ships its secrets in a layer. At every depth, not
+# only the root: the documented source build (`docker-compose.prod.yml`) has the
+# operator write `deploy/.env` with the real database password and
+# NEXTAUTH_SECRET inside this context, and `COPY . .` would put it in the
+# builder and development layers. `deploy/example.env` does not match and stays.
+**/.env*
 !.env.example
+
+# Local agent and tool state: agent worktrees (each with its own node_modules
+# and possibly its own .env), and `.playwright/auth/`, which holds real session
+# cookies (e2e/session.ts). None of it is source.
+.claude
+.codex
+.opencode
+.playwright
 
 # IDE / editor
 .vscode
@@ -40,6 +56,11 @@ playwright-report
 
 # Upload data (mounted as volume)
 uploads
+
+# OCR models. The builder downloads the checksummed one into /app/tessdata; a
+# stray local copy would otherwise be traced into the standalone output as an
+# unverified /app/spa.traineddata beside it.
+*.traineddata
 
 # OS files
 .DS_Store

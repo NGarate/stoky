@@ -137,3 +137,35 @@ describe("the production compose runs read-only", () => {
     expect(Object.keys(override.services.app).sort()).toEqual(["build", "pull_policy"]);
   });
 });
+
+describe("the build context leaves out local secrets and state", () => {
+  // `COPY . .` in the builder and development stages takes whatever the
+  // context holds, and .dockerignore patterns match from the context root: a
+  // bare `.env*` misses `deploy/.env`, which the documented source build has
+  // the operator fill with the real database password and NEXTAUTH_SECRET.
+  // Measured with sentinels sent through a throwaway build: with root-only
+  // rules, deploy/.env, nested node_modules and .next, `.claude/`,
+  // `.playwright/auth/` and a stray traineddata all arrived.
+  const rules = readFileSync(join(ROOT, ".dockerignore"), "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+
+  it("excludes env files, dependencies and build output at every depth", () => {
+    expect(rules).toContain("**/.env*");
+    expect(rules).toContain("**/node_modules");
+    expect(rules).toContain("**/.next");
+  });
+
+  it("re-includes only the documented example, after the rule it relaxes", () => {
+    // Later rules win, so a negation placed before `**/.env*` would be inert,
+    // and any other negation is a hole someone has to justify.
+    expect(rules.filter((rule) => rule.startsWith("!"))).toEqual(["!.env.example"]);
+    expect(rules.indexOf("!.env.example")).toBeGreaterThan(rules.indexOf("**/.env*"));
+  });
+
+  it("excludes agent and tool state, OCR models and incremental build info", () => {
+    const local = [".claude", ".codex", ".opencode", ".playwright", "*.traineddata", "*.tsbuildinfo"];
+    for (const rule of local) expect(rules).toContain(rule);
+  });
+});
