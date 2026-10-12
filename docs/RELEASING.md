@@ -71,6 +71,29 @@ only the newest push to `master`: an older run re-tags `latest` to its own
 commit, and once a newer push has published, its image already carries the
 older commit's changes.
 
+## Upgrading Prisma
+
+The image build checks the native Prisma engines against
+`PRISMA_SCHEMA_ENGINE_SHA256` and `PRISMA_QUERY_ENGINE_SHA256` in the
+`Dockerfile`, because Prisma downloads them at install time, outside
+`bun.lock` ([Security](../SECURITY.md#container-and-runtime--dockerfile)).
+An upgrade that changes the engines (`@prisma/engines-version` names the
+commit they were built from; 6.19.3 is `c2990dca…`) fails `docker build` with
+`sha256sum: WARNING: N of 4 computed checksums did NOT match` until both values
+are refreshed. That failure is the intended signal; never remove the check to
+get past it. Take the new values from the upgraded lockfile's install:
+
+```bash
+docker build --target deps -t stoky-deps .
+docker run --rm --network none --entrypoint sh stoky-deps -c \
+  'sha256sum /app/node_modules/@prisma/engines/*-linux-musl-openssl-3.0.x*'
+```
+
+Confirm `bun.lock` changed only by the intended Prisma version, write the two
+values into the `ARG`s, and commit them with the upgrade. The pins are for the
+amd64 image; an arm64 build would need its own (`linux-musl-arm64-openssl-3.0.x`),
+chosen by `TARGETARCH`.
+
 ## Tag, inspect, publish
 
 ```bash
@@ -342,7 +365,9 @@ cache-derived; they are the development channel, not what an installation is
 told to run. A clean build takes minutes rather than the cached publish's one,
 so a tag's `image-publish` has 30 minutes to master's 10.
 The Docker base tag can change across rebuilds; the bundle's service images are
-pinned by digest, and application/CLI dependencies use the frozen Bun lockfile.
+pinned by digest, application/CLI dependencies use the frozen Bun lockfile, and
+the Prisma engines and the OCR model it does not cover are checked against
+SHA-256 values in the `Dockerfile`.
 Release tags identify the source/version, not a reproducible byte-for-byte build.
 Record the published digest when auditing an installation. A GHCR tag can be
 moved by anything holding `packages: write`, the tag run and any master run

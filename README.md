@@ -292,6 +292,9 @@ question. Start there; the table below is the short version.
 self-hosting an alpha. `docker-compose.prod.yml` is a source-build override on top
 of that bundle (`docker compose -f deploy/docker-compose.yml -f docker-compose.prod.yml
 up -d --build`), for development and diagnosis; it adds the build and nothing else.
+Like the published image, it is amd64 only: the `Dockerfile` checks the Prisma
+engines against checksums pinned for `linux-musl-openssl-3.0.x`, which an arm64
+build does not download ([Releasing](docs/RELEASING.md#upgrading-prisma)).
 
 ## Licence
 

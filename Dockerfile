@@ -45,6 +45,22 @@ RUN bun run build
 RUN bun scripts/stage-runtime-deps.ts tesseract.js /opt/ocr \
     && bun scripts/stage-runtime-deps.ts prisma /opt/prisma/node_modules
 
+# Prisma's postinstall downloads the native engines from binaries.prisma.sh and
+# checks them only against a .sha256 from the same origin; bun.lock covers the
+# npm tarballs, not these. Pin them as tessdata is, at the four paths that ship:
+# migrate deploy runs the schema engine, the server loads the standalone query
+# engine. The count catches a copy this list does not name. A Prisma upgrade
+# fails here until both values are refreshed (docs/RELEASING.md). amd64 only.
+ARG PRISMA_SCHEMA_ENGINE_SHA256=955e3bff1be23248a0922a219f7c4e200acc8fdd1fc72479557c0a9d782bd64a
+ARG PRISMA_QUERY_ENGINE_SHA256=28abc36457335e1a45fe2fe79a4c781b55347e696d6f4410c83bf232d92a726c
+RUN printf '%s  %s\n' \
+      "${PRISMA_SCHEMA_ENGINE_SHA256}" /opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-linux-musl-openssl-3.0.x \
+      "${PRISMA_QUERY_ENGINE_SHA256}" /opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node \
+      "${PRISMA_QUERY_ENGINE_SHA256}" /opt/prisma/node_modules/prisma/libquery_engine-linux-musl-openssl-3.0.x.so.node \
+      "${PRISMA_QUERY_ENGINE_SHA256}" /app/.next/standalone/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node \
+    | sha256sum -c - \
+    && test "$(find /opt/prisma /app/.next/standalone \( -name 'schema-engine*' -o -name 'query-engine*' -o -name '*.so.node' \) | wc -l)" = 4
+
 # Bundle the Spanish OCR model so receipt scanning needs no runtime download.
 ARG TESSDATA_SPA_SHA256=6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
 RUN mkdir -p /app/tessdata \

@@ -66,6 +66,74 @@ describe("the application images use only the Bun runtime", () => {
   });
 });
 
+/** The builder stage only, up to the next `FROM`. */
+function builderStage(): string {
+  const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
+  const start = dockerfile.search(/^FROM .* AS builder$/m);
+  expect(start).toBeGreaterThan(-1);
+  const rest = dockerfile.slice(start + 1);
+  const end = rest.search(/^FROM /m);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+describe("the Prisma engines are verified against pinned checksums", () => {
+  // Prisma's postinstall downloads the native engines from binaries.prisma.sh
+  // and checks them only against a .sha256 from the same origin; bun.lock's
+  // integrity covers the npm tarballs, not these. The schema engine runs on
+  // every start (`migrate deploy`) and the standalone query engine is loaded
+  // into the server. Measured in a fresh `--target builder` build: these four
+  // paths are every native engine under /opt/prisma and .next/standalone,
+  // which are what the production stage copies.
+  const ENGINE = "linux-musl-openssl-3.0.x";
+  const shipped = [
+    ["SCHEMA", `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-${ENGINE}`],
+    ["QUERY", `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-${ENGINE}.so.node`],
+    ["QUERY", `/opt/prisma/node_modules/prisma/libquery_engine-${ENGINE}.so.node`],
+    ["QUERY", `/app/.next/standalone/node_modules/.prisma/client/libquery_engine-${ENGINE}.so.node`],
+  ];
+
+  function checkInstruction(): string {
+    const stage = builderStage();
+    const start = stage.search(/^RUN printf '%s {2}%s\\n'/m);
+    expect(start).toBeGreaterThan(-1);
+    // A RUN continues while its lines end in a backslash.
+    const lines = stage.slice(start).split("\n");
+    const end = lines.findIndex((line) => !line.endsWith("\\"));
+    return lines.slice(0, end + 1).join("\n");
+  }
+
+  it("pins each engine's SHA-256 in an ARG", () => {
+    const stage = builderStage();
+    expect(stage).toMatch(/^ARG PRISMA_SCHEMA_ENGINE_SHA256=[0-9a-f]{64}$/m);
+    expect(stage).toMatch(/^ARG PRISMA_QUERY_ENGINE_SHA256=[0-9a-f]{64}$/m);
+  });
+
+  it("checks every shipped copy against its pin with sha256sum -c", () => {
+    const run = checkInstruction();
+    const pairs = [...run.matchAll(/"\$\{PRISMA_(\w+)_ENGINE_SHA256\}" (\S+)/g)].map(([, kind, path]) => [
+      kind,
+      path,
+    ]);
+    expect(pairs).toEqual(shipped);
+    expect(run).toContain("| sha256sum -c -");
+  });
+
+  it("fails the build on an engine copy the list does not name", () => {
+    // The text check cannot see a fifth copy (a new binaryTarget, a second
+    // generator output). The count in the same RUN can.
+    const run = checkInstruction();
+    const count = run.match(/find \/opt\/prisma \/app\/\.next\/standalone .*\| wc -l\)" = (\d+)$/m);
+    expect(count?.[1]).toBe(String(shipped.length));
+  });
+
+  it("checks after the engines are staged, so it sees what ships", () => {
+    const stage = builderStage();
+    const check = stage.indexOf(checkInstruction());
+    expect(check).toBeGreaterThan(stage.indexOf("RUN bun run build"));
+    expect(check).toBeGreaterThan(stage.indexOf("stage-runtime-deps.ts prisma /opt/prisma/node_modules"));
+  });
+});
+
 describe("the production image ships no demo seed", () => {
   it("copies only the schema and the migrations out of prisma/", () => {
     // `prisma/seed.ts` creates an OWNER with the password the README
