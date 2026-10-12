@@ -1121,12 +1121,11 @@ expires. The counting itself is proven against a real Valkey in
 
 ### The session signing key cannot be the example one
 
-`NEXTAUTH_SECRET` signs the session JWT, and Auth.js reads it from the
-environment itself without ever inspecting it — so until Phase 7's slice nothing
-in this application had looked at what it was. `.env.example` ships a
-placeholder, and that placeholder is **published in this repository**: an
-instance deployed without changing it signs sessions with a key anybody can
-read, and nothing about the running system looks wrong.
+`NEXTAUTH_SECRET` signs the session JWT, and Auth.js never inspects it — so
+until Phase 7's slice nothing in this application had looked at what it was.
+`.env.example` ships a placeholder, and that placeholder is **published in this
+repository**: an instance deployed without changing it signs sessions with a key
+anybody can read, and nothing about the running system looks wrong.
 
 `src/lib/auth/secret.ts` refuses to serve in production if the secret is
 missing, is the example value, or is shorter than 32 characters — with a message
@@ -1145,6 +1144,26 @@ reading it is looking at a container that will not start.
 - **`/api/health` checks it too**, answering 503 with the same opaque body as
   any other failed dependency, so an instance that somehow got past start-up
   with an unusable key is reported unhealthy rather than healthy.
+- **The key it checks is the key that signs.** `authConfig` in
+  `src/lib/auth.ts` passes `secret: process.env.NEXTAUTH_SECRET` to Auth.js
+  explicitly. Until 2026-10-12 it passed nothing, and next-auth 5.0.0-beta.32
+  resolves an absent secret as `AUTH_SECRET ?? NEXTAUTH_SECRET`: `AUTH_SECRET`
+  — the name the Auth.js v5 docs and `npx auth secret` use — won whenever it was
+  set, while the guard and `/api/health` read only `NEXTAUTH_SECRET`. A valid
+  `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme` started, answered healthy, and
+  signed every session with `changeme`. The release bundle was never exposed —
+  `deploy/docker-compose.yml` hands the container an explicit `environment:`
+  map with no `env_file`, so an `AUTH_SECRET` added to `deploy/.env` never
+  reaches it — but a hand-edited compose file or a source deployment was.
+  `AUTH_SECRET` is now ignored, not refused: once it signs nothing, refusing to
+  start over it is only one more way not to start. Auth.js's key rotation
+  through `AUTH_SECRET_1..3` was never available here and still is not —
+  `@auth/core` reads that list only when the secret is empty, and next-auth has
+  already filled it from `NEXTAUTH_SECRET`, which production requires — so
+  rotating means changing `NEXTAUTH_SECRET`, which signs everyone out.
+  `src/__tests__/unit/auth-secret.test.ts` imports `@/lib/auth` in a fresh
+  process with both variables set and asserts the resolved key is
+  `NEXTAUTH_SECRET`; without the explicit `secret` it receives `changeme`.
 - **Production only.** Development and the suites use whatever is to hand;
   refusing there would trade a risk nobody faces for an obstacle everybody does.
 - **Not during `next build`.** The image is built without a runtime secret and

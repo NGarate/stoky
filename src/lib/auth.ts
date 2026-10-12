@@ -84,6 +84,31 @@ export const authConfig: NextAuthConfig = {
   trustHost: true,
 
   /**
+   * The signing key is the one `assertUsableSecret()` above checked, named
+   * here rather than left for Auth.js to find.
+   *
+   * Left to itself, next-auth 5's `setEnvDefaults` resolves it as
+   * `config.secret ??= process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET`:
+   * **`AUTH_SECRET` wins whenever it is set** — the name the Auth.js v5 docs
+   * and `npx auth secret` use — while the guard and `/api/health` read only
+   * `NEXTAUTH_SECRET`. So a valid `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme`
+   * started, reported healthy, and signed every session with `changeme`.
+   * Setting the key explicitly means neither `setEnvDefaults` nor
+   * `@auth/core`'s own fallback (`AUTH_SECRET`, `AUTH_SECRET_1..3`, read only
+   * when `secret` is empty) is ever consulted.
+   *
+   * `AUTH_SECRET` is ignored rather than refused: once it signs nothing, a
+   * fatal check for it would only be one more way not to start. Auth.js's
+   * `AUTH_SECRET_1..3` rotation list was never reachable here and still is
+   * not — `@auth/core` reads it only when the secret is empty, and with
+   * `NEXTAUTH_SECRET` set (production requires it) it never was — so rotating
+   * means changing `NEXTAUTH_SECRET`, which signs everyone out. Where
+   * `NEXTAUTH_SECRET` is unset (development, the suites) this is `undefined`
+   * and the fallback above applies exactly as before.
+   */
+  secret: process.env.NEXTAUTH_SECRET,
+
+  /**
    * **There is deliberately no `adapter`.**
    *
    * There was one — `PrismaAdapter(prisma)` — and it did nothing.
