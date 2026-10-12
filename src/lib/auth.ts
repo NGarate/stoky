@@ -1,4 +1,4 @@
-import NextAuth, { CredentialsSignin } from "next-auth";
+import NextAuth, { AuthError, CredentialsSignin } from "next-auth";
 import { connection } from "next/server";
 import type { NextAuthConfig, Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -87,7 +87,66 @@ assertUsableSecret();
  */
 export const MAX_SESSION_AGE_S = 30 * 24 * 60 * 60;
 
+/**
+ * The Auth.js error types that are somebody's input being refused rather than
+ * something wrong with the server: a sign-in that failed, and a POST to Auth.js
+ * without its CSRF token. `type` rather than the class, because a subclass
+ * carries its parent's — `RateLimitedSignin` and `AuthUnavailableSignin` are
+ * both `CredentialsSignin` here, as they are to the browser.
+ */
+const REFUSED_INPUT = new Set(["CredentialsSignin", "MissingCSRF"]);
+
+/**
+ * Auth.js's `logger.error`, writing a refusal as one line instead of a stack.
+ *
+ * Auth.js logs every error a request ends in, and its built-in logger writes
+ * the stack trace with it — for a wrong password too, a dozen lines of
+ * `@auth/core` internals per failed sign-in. Those lines carry nothing: the
+ * stack of a `CredentialsSignin` is always the same stack, and the attempt
+ * itself is already on record as `auth.signin.failed` or
+ * `auth.signin.throttled` in the security log, with the address and the
+ * account tag the stack does not have. What they did do is multiply what an
+ * unauthenticated client could write to the log per request (security review,
+ * 2026-10-12). So a refusal gets the first line the built-in logger wrote —
+ * the type and the message — and nothing after it.
+ *
+ * **Everything else is written as Auth.js would have written it**, stack,
+ * cause and details included. Those are the errors an operator needs whole:
+ * a `Configuration` error, a `CallbackRouteError` from something `authorize`
+ * threw, `RUNTIME-1`'s kind. This reproduces `@auth/core` 0.41.3's
+ * `lib/utils/logger.js` rather than calling it because the package does not
+ * export it, and setting `logger.error` replaces it outright.
+ */
+export function logAuthError(error: Error): void {
+  const red = "\x1b[31m";
+  const reset = "\x1b[0m";
+  const name = error instanceof AuthError ? error.type : error.name;
+  console.error(`${red}[auth][error]${reset} ${name}: ${error.message}`);
+  if (error instanceof AuthError && REFUSED_INPUT.has(error.type)) return;
+
+  const cause: unknown = error.cause;
+  if (
+    cause &&
+    typeof cause === "object" &&
+    "err" in cause &&
+    cause.err instanceof Error
+  ) {
+    const { err, ...details } = cause as { err: Error } & Record<string, unknown>;
+    console.error(`${red}[auth][cause]${reset}:`, err.stack);
+    console.error(`${red}[auth][details]${reset}:`, JSON.stringify(details, null, 2));
+  } else if (error.stack) {
+    // The stack without its first line, which restates the line above.
+    console.error(error.stack.replace(/.*/, "").substring(1));
+  }
+}
+
 export const authConfig: NextAuthConfig = {
+  /**
+   * Refusals in one line each; see `logAuthError`. `warn` and `debug` are left
+   * to Auth.js.
+   */
+  logger: { error: logAuthError },
+
   /**
    * Trust the Host header, because a reverse proxy is the only thing in front
    * of this application.

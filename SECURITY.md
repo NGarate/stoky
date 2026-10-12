@@ -1330,6 +1330,28 @@ every device that was signed in when that upgrade was installed.
   tag**, so lines from before a rotation do not match lines from after it.
   Lines written before this change keep the address they were written with
   until the log holding them is removed.
+- **Auth.js writes a refused sign-in as one line, not a stack.** Its built-in
+  logger followed every `CredentialsSignin` — every wrong password — with the
+  stack trace of `@auth/core`'s callback, the same frames every time, so each
+  failed attempt cost several lines of log on top of the security event that
+  already records it (security review, 2026-10-12). `authConfig.logger.error`
+  (`logAuthError` in `src/lib/auth.ts`) now writes `CredentialsSignin` and
+  `MissingCSRF` as the single `[auth][error] <type>: <message>` line and stops.
+  Measured by calling `@auth/core`'s `Auth()` under Bun with a credentials
+  provider that refuses: 4 lines and 462 bytes per refused sign-in before, 1
+  line and 99 bytes after; a POST with no CSRF token, 508 bytes to 137. The
+  production build (`bun .next/standalone/server.js`, sign-ins posted with
+  `curl`) writes the same 99 and 137 bytes. **Every other Auth.js error is
+  still written whole**, cause, stack and details as Auth.js wrote them,
+  because a `Configuration` error or a `CallbackRouteError` from something
+  `authorize` threw is an operator's only signal that sign-in is broken. This
+  shortens what one refusal writes; it does not bound how many refusals can be
+  written. **Nor is a refused sign-in the largest thing an unauthenticated
+  request can make Auth.js write.** Measured against the same production
+  build: a session cookie that does not decrypt (`JWTSessionError`) writes 10
+  lines and 988 bytes on `/api/trpc`, and twice that on a page; an unknown
+  action under `/api/auth` (`UnknownAction`) writes 1,252 bytes, and an
+  unknown provider 1,022. Those still carry their stack.
 
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still
