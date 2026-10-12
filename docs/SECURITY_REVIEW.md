@@ -170,6 +170,38 @@ green — it read only inline Zod, and its schema scan truncated every schema at
 its first line. Both are recorded in the file, because a guard with a silent
 blind spot reports a pass it has not earned.
 
+**A third blind spot, found 2026-10-12: the fields it does not know.** The scan
+checks only the ids it lists — `storeId`, the four location ids, `productId`,
+`shoppingListId`, `receiptItemId`. It never looked at the primary `id` every
+update, delete and getById takes, nor at `parentId`. Removing the household
+filter from `store.update` or `location.delete`, or the parent check from
+`location.create`, left it green; and those, with `location.update`,
+`shopping.update` and `shopping.getById`, had no cross-household case in the
+integration suites either, so every gate stayed green. No guard was missing —
+each procedure was scoped when this was found — but nothing would have noticed
+one going.
+
+- `parentId` is now in the scan, which catches the deleted `location.create`
+  parent check. In `location.update` its existence lookup satisfies the same
+  pattern, so the field check there proves nothing.
+- The primary `id` is deliberately **not** in the scan. The one pattern that
+  fits every procedure — "the body mentions `householdId`" — is true of nearly
+  every body for unrelated reasons, so it would stay green with the guard
+  gone.
+- Both are guarded behaviourally instead: `integration/cross-household.test.ts`
+  now has household A call `store.update`, `location.create` (B's parent),
+  `location.update` (B's id; A's id under B's parent), `location.delete`,
+  `shopping.update` and `shopping.getById` on B's rows, and asserts NOT_FOUND
+  and that B's row is unchanged. Each case was watched to go red with its own
+  guard removed. `location.update` has two guards, the existence check and the
+  household in the write's own `where`; with either one removed it still
+  refuses, and it goes red only when both are removed.
+
+`shopping.removeItem`, `shopping.delete`, `store.delete` and member management
+already had cross-household cases (`cross-household.test.ts`,
+`shopping.delete.test.ts`, `delete-guards.test.ts`, `household.roles.test.ts`)
+and are unchanged.
+
 ~~**Reported, not verified:** the same audit lists ten queries whose household
 scoping it could not confirm by reading. The tripwire covers the *write* path;
 reads are a separate sweep and have not been done.~~ **Swept 2026-08-31.**
