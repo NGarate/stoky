@@ -295,7 +295,14 @@ Verified against the files named in each row.
 ### Supply chain — `.github/workflows/ci.yml`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
-  can be moved and a SHA cannot.
+  can be moved and a SHA cannot. The comment beside each pin names the exact
+  release (`# v5.1.0`, not `# v5`). The SHA must be the commit's, not an
+  annotated tag object's: the runner resolves both, but the commits API answers
+  422 for a tag object, so pin tooling cannot reliably check or bump it. Two
+  pins were tag objects until 2026-10-12.
+  `src/__tests__/unit/ci-workflow.test.ts` refuses a tag, a major-only comment
+  and those two SHAs; that a new SHA is a commit is checked with
+  `gh api repos/<owner>/<repo>/commits/<sha>`.
 - `bun audit --audit-level moderate` runs as its own job and fails the build. It
   answers from `bun.lock` alone, so the job installs nothing.
 - The image is built and **loaded locally, then scanned by Trivy before it is

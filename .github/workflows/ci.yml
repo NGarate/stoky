@@ -50,7 +50,11 @@ permissions:
 # no report, no trace, and nothing anyone can act on.
 #
 # Actions are pinned by commit SHA rather than tag: a tag can be moved to point
-# at different code, a SHA cannot. The comment records the human-readable version.
+# at different code, a SHA cannot. The comment records the exact version the
+# SHA is. It must be the commit's SHA, not an annotated tag object's: the runner
+# resolves both, but the commits API answers 422 for a tag object, so pin
+# tooling (Dependabot, SHA-pinning enforcement) cannot reliably check or bump
+# it. src/__tests__/unit/ci-workflow.test.ts holds both rules.
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -72,7 +76,7 @@ jobs:
       # credential just declined, which on a private repository is the
       # "could not read Username" the `changes` job ran into. The whole
       # history is under 8 MB.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -83,7 +87,7 @@ jobs:
       - name: Lint the pipeline itself
         run: bash scripts/check-ci.sh
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: github.ref_type == 'tag'
         with:
           bun-version-file: .bun-version
@@ -159,7 +163,7 @@ jobs:
       NEXTAUTH_SECRET: ci-only-not-a-real-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       # The three suites inside the development image, for the reason the
@@ -281,7 +285,7 @@ jobs:
       # is the fix Playwright's own error message names.
       HOME: /root
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       # The image ships browsers, not a general toolchain, and it has no
@@ -295,7 +299,7 @@ jobs:
       - name: unzip, which setup-bun needs and the image does not ship
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
@@ -340,7 +344,7 @@ jobs:
         env:
           PLAYWRIGHT_PORT: "3000"
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-report
@@ -353,10 +357,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
@@ -391,7 +395,7 @@ jobs:
       contents: read
       actions: read # find the last successful run on master
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
           # The whole history, so the base commit is already here and the
@@ -477,17 +481,17 @@ jobs:
       # succeeded, so the pipeline reported failure while shipping the image.
       actions: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       # Built and loaded locally first so it is scanned before anyone can pull
       # it. Publishing an image and scanning it afterwards is the wrong order.
       # cache-to here is what makes image-publish cheap: it rebuilds this same
       # commit from these layers.
       - name: Build for scanning
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           target: production
@@ -509,7 +513,7 @@ jobs:
       # the condition.
       - name: Scan image
         if: github.event.repository.private == false
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           image-ref: stoky:scan
           format: sarif
@@ -518,7 +522,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
         if: github.event.repository.private == false && always()
         with:
           sarif_file: trivy.sarif
@@ -527,7 +531,7 @@ jobs:
       # A separate gate so the SARIF above is always uploaded, even when this
       # fails. An image people self-host should not ship known criticals.
       - name: Fail on critical or high findings
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           image-ref: stoky:scan
           format: table
@@ -585,14 +589,14 @@ jobs:
             echo "::error::Release $RELEASE_TAG is already published; create a new version instead of replacing its image."
             exit 1
           fi
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Image metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # metadata-action otherwise adds latest automatically for tag refs.
@@ -613,7 +617,7 @@ jobs:
             type=raw,value=candidate-${{ github.ref_name }},enable=${{ github.ref_type == 'tag' }}
 
       - name: Log in to the registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -624,7 +628,7 @@ jobs:
       # nothing new.
       - name: Push
         id: push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           target: production
@@ -656,7 +660,7 @@ jobs:
         run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
       - name: Attest provenance
         if: github.event.repository.private == false
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -675,14 +679,14 @@ jobs:
       contents: write
       packages: write # promote the verified candidate to the version tag
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
       - name: Log in for the published image smoke
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

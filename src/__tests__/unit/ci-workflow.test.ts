@@ -262,3 +262,65 @@ describe("the CI workflow's image-skip base", () => {
     expect(query).toMatch(/--status[ =]success\b/);
   });
 });
+
+// Every action is pinned by commit SHA with its exact version beside it. Two
+// pins were once the SHAs of annotated tag objects (`# v2`, `# v3`): the runner
+// resolves those, but the commits API answers 422 for them, so Dependabot and
+// SHA-pinning enforcement cannot reliably check or bump them, and a major-only
+// comment does not say which release the SHA is. Whether a SHA is a commit can
+// only be asked of GitHub, so the known tag objects are named here and the rest
+// is checked by `gh api repos/<owner>/<repo>/commits/<sha>` when a pin changes.
+describe("the CI workflow's action pins", () => {
+  const source = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+  const lines = source
+    .split("\n")
+    .filter((line) => /^\s*(-\s+)?uses:/.test(line));
+  const pin =
+    /^\s*(?:-\s+)?uses: ([\w.-]+\/[\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40}) # (v?\d+\.\d+\.\d+)$/;
+
+  // The parsed workflow, so a pin written in a form the line scan misses (a
+  // quoted value, a flow mapping) is counted and fails the comparison below.
+  const parsedUses = Object.values(workflow.jobs ?? {}).flatMap((job) =>
+    ((job as { steps?: Array<{ uses?: unknown }> }).steps ?? [])
+      .map((step) => step.uses)
+      .filter((uses) => uses !== undefined),
+  );
+
+  const tagObjects = [
+    // actions/attest-build-provenance tag object `v2` -> commit e8998f9 (v2.4.0)
+    "96b4a1ef7235a096b17240c259729fdd70c83d45",
+    // github/codeql-action tag object `v3` -> commit c4dd10e (v3.37.6)
+    "c3400c2f38909e0dcf3c3a41f2030a8217be5d3e",
+  ];
+
+  it("scans every step that uses an action", () => {
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBe(parsedUses.length);
+  });
+
+  it.each(lines.map((line) => [line.trim()]))(
+    "pins by a 40-hex SHA with the exact version: %s",
+    (line) => {
+      expect(line).toMatch(pin);
+    },
+  );
+
+  it("pins no annotated tag object", () => {
+    for (const sha of tagObjects) expect(source).not.toContain(sha);
+  });
+
+  it("names one version for each SHA of an action, and one SHA per version", () => {
+    const versions = new Map<string, string>();
+    const shas = new Map<string, string>();
+    for (const line of lines) {
+      const match = line.match(pin);
+      if (!match) continue; // reported by the test above
+      const [, repo, sha, version] = match;
+      const plain = version.replace(/^v/, "");
+      expect(versions.get(`${repo}@${sha}`) ?? plain).toBe(plain);
+      expect(shas.get(`${repo}@${plain}`) ?? sha).toBe(sha);
+      versions.set(`${repo}@${sha}`, plain);
+      shas.set(`${repo}@${plain}`, sha);
+    }
+  });
+});
