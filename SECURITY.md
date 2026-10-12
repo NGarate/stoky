@@ -425,8 +425,9 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 `src/types/next-auth.d.ts` declares `role` on the session non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 60 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
-pinning every one against the matrix rather than sampling. Membership and role
+and all 63 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+pinning every one against the matrix rather than sampling, and failing when the
+count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request.
 

@@ -74,7 +74,11 @@ counted twice.
 ## 1. Authorisation, per procedure
 
 **Verified, and this half is genuinely solid.** There are **60 procedures**
-across ten routers. `src/__tests__/unit/capabilities.test.ts` pins every one of
+across ten routers — at `8bb2547`; **63 since 2026-08-31** (corrected
+2026-10-12: member management and session revocation added four, the dead
+pipeline pair took two away, `product.resolveScan` added one). `SECURITY.md`
+carries the current count, which `capabilities.test.ts` now holds to the
+router. `src/__tests__/unit/capabilities.test.ts` pins every one of
 them against `REDESIGN_PLAN.md` §5.2's matrix by declaration, exhaustively with
 `toEqual` rather than by sampling, and it fails on a router file with no table
 entry. Roles are re-read from the database on every call
@@ -152,8 +156,14 @@ procedure accepts a household-scoped id and never looks it up. It is
 deliberately crude — it cannot tell a correct check from a careless one, so it
 is a tripwire on the shape of the mistake rather than a proof of isolation. It
 catches all four instances when their guards are removed, verified one at a
-time. Ten exemptions carry their reason, and every one is a *read* whose query
-already filters by household, which is the distinction the rule turns on.
+time. ~~Ten exemptions carry their reason, and every one is a *read* whose query
+already filters by household, which is the distinction the rule turns on.~~
+**Corrected 2026-10-12: eleven at `8bb2547`, nine since the sweep below removed
+two dead keys, and not all of them reads.** Each carries its reason. Seven are
+reads whose query already filters by household; `product.update` and
+`product.delete` are writes that resolve the id against the household, by id
+and `householdId` together, before they write anything. The distinction the
+rule turns on is that lookup, not read against write.
 
 Its two blind spots were found by removing real guards and watching it stay
 green — it read only inline Zod, and its schema scan truncated every schema at
@@ -347,12 +357,18 @@ and `role` from the database and ignore what the token claims, and
 against a KITCHEN row is refused, a demotion written mid-session bites on the
 very next call, and a deleted account's token stops working immediately.
 
-But **nothing in the product can perform any of those changes.**
+~~But **nothing in the product can perform any of those changes.**
 `householdRouter` is `current`, `create`, `members`, `addMember` — there is no
 way to remove a member and no way to change a role. Every state change those
 tests make needs a direct database write. So "I have lost the tablet" has no
 answer from inside the application at all, not even a partial one, and the
-15-minute token is the whole of the bound.
+15-minute token is the whole of the bound.~~ **True at `8bb2547`; closed
+2026-08-27** (`a264c42`, `c358e96`; corrected here 2026-10-12, the table above
+having said so since). `household.updateRole` and `household.removeMember`
+change a role and remove a member, `household.revokeMemberSessions` ends a
+member's sessions and `auth.revokeMySessions` an account's own; both stamp
+`sessionsValidFrom`, which the `jwt` callback checks where the token is
+re-issued. "I have lost the tablet" is answered from `/settings/people`.
 
 **And the mitigation had no test.** Replacing that query with the token's own
 values — an obvious optimisation, one fewer database round trip per request —
@@ -360,9 +376,10 @@ leaves `integration/capabilities.test.ts` at 9 pass / 0 fail. Measured, by doing
 it. The existing suite would not have noticed the only thing this application
 can do about a session it wants to stop trusting; the new file fails all four.
 
-Still a finding with an owner, and now a sharper one: it is not only "should
+~~Still a finding with an owner, and now a sharper one: it is not only "should
 there be revocation" but "there is no member management at all", which is a
-product gap the review found by trying to write a test for the mitigation.
+product gap the review found by trying to write a test for the mitigation.~~
+Closed with the paragraph above — finding 8.
 
 **Both halves now have homes, and the open question is answered.** Two entries
 went into `REDESIGN_PLAN.md` §10's unowned table on 2026-08-27:
@@ -417,6 +434,43 @@ published image is never re-scanned, so an advisory affecting a
 shipped image is only noticed on the next push; and the placeholder-secret guard
 does not stop the container, which reports healthy while refusing to sign
 anybody in.
+
+**Corrected 2026-10-12: this section above describes the image before Bun
+became its only runtime** (`c117052`, 2026-09-25) **and before the source build
+became an override of the release bundle** (`eb44561`, 2026-10-05). The
+2026-08-26 bullets stay as that day's record — `pnpm audit` and
+`node:24-alpine` were what ran then. What holds today, and what asserts it:
+
+- Every stage derives from the pinned `oven/bun` Alpine image, and the
+  production stage runs `USER bun` and never returns to root
+  (`unit/image-posture.test.ts`). `bun` is uid and gid 1000, the old `node`
+  account's, so uploads written before the change stay writable; a `RUN` in the
+  production stage fails the build if that stops being true.
+- No stage installs Node.js, npm or npx, so there is nothing to delete. The
+  test refuses an `npm install` or an `apk add nodejs`, and a build-time `RUN`
+  fails unless the `node` on the path resolves to the Bun binary and neither
+  `npm` nor `npx` exists.
+- Read-only with its exceptions is asserted on `deploy/docker-compose.yml`, the
+  one production definition: `read_only: true`, `tmpfs` for `/tmp` and
+  `/app/.next/cache`, and the `uploads` volume. `docker-compose.prod.yml` is a
+  source-build override, and the test lets it add only `build` and
+  `pull_policy`, so it cannot restate the hardening and drift from it (the
+  same test).
+- The health check is the image's own `HEALTHCHECK` on `/api/health` (the
+  same test).
+
+On the running container, the release job starts the published image from
+`deploy/docker-compose.yml` and waits for it to report healthy, so a read-only
+start is exercised on every release tag. No job asserts the running user.
+
+The dependency audit is `bun audit --audit-level moderate`: CI's `audit` job
+runs it directly, and `scripts/check-audit.sh` locally. Of the two *Still
+open* items, the placeholder-secret guard has been closed since 2026-10-06:
+`src/instrumentation.ts` runs the check at start-up and the process exits with
+status 1, and `/api/health` answers 503 on the same check, so the container
+neither serves nor reports healthy (SECURITY.md, *The session signing key
+cannot be the example one*). The re-scanning item is not re-examined by this
+correction.
 
 ## 8. Headers in production
 
@@ -526,8 +580,9 @@ Named rather than omitted.
 - **Nothing was run against a deployment.** No TLS configuration, no proxy
   behaviour, no real Traefik. The per-IP finding in §3 in particular depends
   entirely on how an operator has deployed.
-- **The read path of household isolation.** The tripwire covers writes. Ten
-  queries were flagged as unconfirmed on the read side and have not been swept.
+- ~~**The read path of household isolation.** The tripwire covers writes. Ten
+  queries were flagged as unconfirmed on the read side and have not been swept.~~
+  **Swept 2026-08-31** — §2.
 - **iOS Safari, a real tablet, and a screen-reader pass** — three human passes
   §10 still owes. None is a security pass, and none substitutes for one.
 
@@ -544,7 +599,7 @@ in the order they would pay off.
 | ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~A successful upload does what it claims~~ | integration | **Built** — `integration/receipt.upload.test.ts` |
-| ~~The image posture holds~~ | build | **Built** — `unit/image-posture.test.ts` (text) + a `RUN ! command -v npm` in the Dockerfile (build); `USER node`/read-only on the running image stay the CI image job's |
+| ~~The image posture holds~~ | build | **Built** — `unit/image-posture.test.ts` (text) + a `RUN` in the Dockerfile that fails the build if `node` is not Bun or npm/npx exist (build); ~~`USER node`/read-only on the running image stay the CI image job's~~ the release job starts the image read-only; nothing asserts the running user (corrected 2026-10-12, §7) |
 
 ---
 

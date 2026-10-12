@@ -668,14 +668,16 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **62 procedures** — a count
-that has moved six times (44 → 45 → 55 → 59 → 64 → 62: it reached 64
-unrecorded while this file said 59, which is the drift this sentence exists to
-prevent, and fell to 62 when the two dead pipeline procedures were deleted) as
-phases closed and the export router arrived, which is why
-`capabilities.test.ts` asserts it structurally instead of anyone trusting a
-document. 10 Zod validation modules. 6 service
-modules: `ocr`, `receiptParser`, `productMatcher`, `openFoodFacts`,
+`shopping`) merged in `src/server/trpc/router.ts`, **63 procedures** — a count
+that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63: it reached 64
+unrecorded while this file said 59, fell to 62 when the two dead pipeline
+procedures were deleted, and reached 63 with `product.resolveScan` on
+2026-08-31 while this file went on saying 62 until 2026-10-12) as phases closed
+and the export router arrived. Asserting the count structurally did not stop
+the drift, because nothing compared it with this sentence; since 2026-10-12
+`capabilities.test.ts` does, and fails when the two disagree. 10 Zod
+validation modules. 6 service modules: `ocr`, `receiptParser`,
+`productMatcher`, `openFoodFacts`,
 `product-cache`, `errors` — plus `src/lib/rating.ts`, the pure module behind
 Phase 6.
 
@@ -730,7 +732,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 62 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 63 procedures assigned. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request rather than whenever the 15-minute
 token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment

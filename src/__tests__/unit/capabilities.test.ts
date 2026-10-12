@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CAPABILITY_ROLES } from "@/server/trpc/trpc";
+import { appRouter } from "@/server/trpc/router";
 
 /**
  * The capability matrix, per procedure.
@@ -187,6 +188,24 @@ function looseProcedureCount(file: string): number {
   return [...source.matchAll(pattern)].length;
 }
 
+const ROOT = join(import.meta.dir, "..", "..", "..");
+
+/**
+ * Where a document states how many procedures there are.
+ *
+ * Every one of these has been wrong. `docs/STATUS.md` reached 64 while it said
+ * 59, then still said 62 after `product.resolveScan` made it 63 (2026-08-31);
+ * `SECURITY.md` kept the 60 counted on 2026-08-26 through all four changes
+ * after it, until the 2026-10-12 review measured 63. A count kept in step by
+ * hand drifts, so the sentences that carry it are held to the router here: a
+ * procedure added or removed without them goes red.
+ */
+const DOCUMENTED_COUNTS = [
+  { file: "SECURITY.md", pattern: /\ball (\d+) procedures are assigned\b/g },
+  { file: "docs/STATUS.md", pattern: /\*\*(\d+) procedures\*\*/g },
+  { file: "docs/STATUS.md", pattern: /\ball (\d+) procedures assigned\b/g },
+];
+
 describe("capability matrix", () => {
   it("has a table entry for every router file", () => {
     const files = readdirSync(ROUTER_DIR).filter((f) => f.endsWith(".ts"));
@@ -208,6 +227,28 @@ describe("capability matrix", () => {
         Object.keys(declaredProcedures(file)).length,
         `${file}: a procedure is declared in a shape the matrix check cannot read`,
       ).toBe(looseProcedureCount(file));
+    }
+  });
+
+  it("is the number of procedures the documents say are assigned", () => {
+    // The router as it runs, not as this file parses it: `_def.procedures` is
+    // flat and dotted at runtime, one entry per callable procedure.
+    const actual = Object.keys(appRouter._def.procedures).length;
+    const tabled = Object.values(EXPECTED).reduce(
+      (total, table) => total + Object.keys(table).length,
+      0,
+    );
+    expect(actual, "the router and the matrix disagree on the count").toBe(tabled);
+
+    for (const { file, pattern } of DOCUMENTED_COUNTS) {
+      const claims = [...readFileSync(join(ROOT, file), "utf8").matchAll(pattern)];
+      // Exactly one: a reworded sentence must fail here rather than quietly
+      // take its number out of this check.
+      expect(claims.length, `${file} must state ${pattern} exactly once`).toBe(1);
+      expect(
+        Number(claims[0]?.[1]),
+        `${file} states a procedure count the router does not have`,
+      ).toBe(actual);
     }
   });
 

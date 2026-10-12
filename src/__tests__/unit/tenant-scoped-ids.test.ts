@@ -128,11 +128,14 @@ const SCOPED: Record<string, RegExp> = {
  * with the reason. A path with no reason is indistinguishable from one nobody
  * looked at.
  *
- * Note what they have in common: every one is a **read** whose query already
- * carries the household filter, so an id that is not yours narrows to nothing
- * instead of leaking. The rule this file enforces is about ids that get
- * *written*, where no later filter can save you — which is the line all four
- * defects crossed.
+ * Note what they have in common: every one puts the household beside the id
+ * before anything depends on it, so an id that is not yours narrows to nothing
+ * instead of leaking. Not every one is a read: seven are, with the household
+ * filter in their own query, but `product.update` and `product.delete` are
+ * writes that resolve the id by id and `householdId` together before they
+ * write anything. The rule this file enforces is about ids that get *written*
+ * without that lookup, where no later filter can save you — which is the line
+ * all four defects crossed.
  */
 const ALLOWED: Record<string, string> = {
   "product.getById":
