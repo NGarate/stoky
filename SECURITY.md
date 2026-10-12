@@ -124,7 +124,8 @@ Verified against the files named in each row.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
   ports**. Only Traefik publishes anything, and only 80 and 443.
 - Memory limits on every service, so one runaway process cannot take the host
-  down.
+  down. Valkey is also bounded inside its own limit, with `--maxmemory`, because
+  it does not read the container's: see "It fails closed" below.
 - Traefik uses a read-only file provider, with no Docker socket access.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
   HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
@@ -642,6 +643,38 @@ What is still open, and worth knowing before publishing an instance:
   sent, and the scan ends on the creation form as it would in an Open Food
   Facts outage — still closed for what the limit protects, since no uncounted
   request leaves, without refusing a person a form they can fill in anyway.
+- **So the cache must not die of being full.** Valkey shares its memory between
+  these counters and the Open Food Facts product cache, which keeps one entry
+  per barcode for thirty days (a day for a code Open Food Facts does not know)
+  and which any account can grow by scanning barcodes. Valkey does not read the container's memory limit, so without a
+  bound of its own it would grow until the kernel killed it, and the limiter
+  would take sign-in down with it. The release bundle starts it with
+  `--maxmemory 160mb` (Valkey's `mb` is MiB) under the 256 MiB container
+  limit, leaving the rest for the copy-on-write of a background save, and
+  `--maxmemory-policy allkeys-lru`. The policy is the part that matters.
+  `noeviction`, Valkey's default, refuses the limiter's `INCR` once the cache
+  is full, and a refused count is a refused sign-in: the same outage without
+  the crash. `volatile-ttl` evicts the soonest-expiring
+  keys first, which are these counters, so filling the cache would reset
+  somebody's lockout. Under LRU a live counter is touched on every attempt and
+  the cold product entries go first. Measured against the bundle's own `cache`
+  service: 400 MB of 2 KB product-shaped keys left used memory at 160 MiB with
+  121,933 keys evicted, a counter incremented between batches survived with its
+  count and TTL intact, a background save at the bound succeeded, and the
+  container stood at 183 MiB of 256 MiB afterwards, never OOM-killed. The same
+  full cache under `noeviction` answered the limiter's script with "OOM command
+  not allowed". The cost: under memory pressure, a counter idle for longer than
+  most of the product cache can be evicted, which forgets the attempts counted
+  on it. An attacker who stopped guessing in order to have its own counter
+  evicted would first have to make most of the 160 MiB more recently used than
+  that counter, by adding or re-reading products, before the counter's window
+  (fifteen minutes for sign-in) ran out on its own; that is reasoning, not a
+  measurement. Lookups that reach Open Food Facts are metered per account,
+  which slows how fast one account can add products, but re-reading a cached
+  product is not. The development compose files set no container memory limit
+  and leave Valkey unbounded.
+  `src/__tests__/unit/deployment.test.ts` pins the flags and that the bound sits
+  at or below three quarters of the container limit.
 - **The limits are configurable** through `RATE_LIMIT_LOGIN_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,

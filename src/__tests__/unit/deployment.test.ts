@@ -98,6 +98,32 @@ describe("the downloadable installation", () => {
     expect(compose.services.app.volumes).toContain("uploads:/app/uploads");
   });
 
+  it("bounds Valkey's memory below its container limit and evicts least-recently-used keys", () => {
+    // Valkey ignores the cgroup limit; without --maxmemory the kernel kills it,
+    // and the fail-closed sign-in limiter goes down with it.
+    const cache = compose.services.cache;
+    expect(cache.command).toEqual([
+      "valkey-server",
+      "--maxmemory",
+      "160mb",
+      "--maxmemory-policy",
+      "allkeys-lru",
+    ]);
+    const mebibytes = (size: string, units: Record<string, number>) => {
+      const match = /^(\d+)([a-z]+)$/.exec(size.toLowerCase());
+      expect(match).not.toBeNull();
+      const unit = units[match![2]!];
+      expect(unit).toBeDefined();
+      return Number(match![1]) * unit!;
+    };
+    // Valkey's "mb" is 2^20 bytes and its "m" is 10^6; Compose's "m" is 2^20.
+    const bound = mebibytes(cache.command![2]!, { mb: 1, gb: 1024, m: 1e6 / 2 ** 20, g: 1e9 / 2 ** 20 });
+    const limit = mebibytes(cache.deploy.resources.limits.memory, { m: 1, g: 1024 });
+    // Headroom for the copy-on-write of a background save, which the cgroup
+    // counts and maxmemory does not.
+    expect(bound).toBeLessThanOrEqual(limit * 0.75);
+  });
+
   it("rotates every service's logs instead of letting them fill the disk", () => {
     // Docker's json-file default keeps everything, and an unauthenticated
     // client can add security-log lines; the cap is what bounds the disk.

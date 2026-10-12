@@ -61,6 +61,15 @@ services:
       resources:
         limits:
           memory: 256m
+    # Valkey does not read the container limit: without --maxmemory it grows
+    # until the kernel kills it, and the sign-in limiter, which fails closed,
+    # goes down with it. 160mb leaves the rest of the 256m for the copy-on-write
+    # of a background save. allkeys-lru drops cold product-cache entries first;
+    # a live rate-limit counter is touched on every attempt. Not noeviction (a
+    # full cache refuses the limiter's writes: the same sign-in outage) and
+    # not volatile-ttl (it evicts the short-lived counters first). Starts with
+    # valkey-server so the image's entrypoint still drops root.
+    command: [valkey-server, --maxmemory, 160mb, --maxmemory-policy, allkeys-lru]
     volumes:
       - valkey_data:/data
     networks:
