@@ -377,8 +377,9 @@ Verified against the files named in each row.
   check](docs/INSTALL.md#optional-check-who-published-the-files)). It binds a
   file to a run of `ci.yml` on that tag, not to an unmoved tag: a writer who can
   move the tag and push a changed workflow can have a new run attest other files
-  under the same ref, which only a tag ruleset on `v*` stops, and none exists
-  yet. It also vouches only for what that run wrote: every earlier step of
+  under the same ref, which only a tag ruleset on `v*` stops, and none existed
+  on 2026-10-12 (`.github/rulesets/` holds the two the settings check applies).
+  It also vouches only for what that run wrote: every earlier step of
   `release-draft` (the Trivy action and its scanner, the downloaded Bun, the
   smoke) shares the runner and, with `id-token: write` granted to the job, can
   request the OIDC token the signing certificate is issued for, so the
@@ -491,6 +492,20 @@ Verified against the files named in each row.
   somebody's first install.
 - Workflow permissions default to `contents: read`; jobs request more
   explicitly.
+- **The repository's own settings are written down and checked.** Private
+  vulnerability reporting, immutable releases, secret scanning and push
+  protection, Dependabot alerts and security updates, CodeQL's default setup,
+  the Actions allow-list (`.github/selected-actions.json`) with SHA pinning
+  enforced, approval for every external contributor's fork run, squash-only
+  merges, the two `v*` tag rulesets (`.github/rulesets/`) and Dependabot's
+  branches left outside the branch ruleset live on GitHub, where a checkout
+  cannot see them. `bun scripts/github-settings.ts check`
+  compares each with what it should be, with GET requests only, and exits 1 on
+  any difference; `apply` writes what differs. It needs an administrator's `gh`,
+  so the owner runs it; CI cannot. Its first run, on 2026-10-12, found 11 of
+  those 12 settings not as written, Dependabot alerts the exception: written
+  down is not the same as on until `check` exits 0. [Releasing](docs/RELEASING.md#repository-settings)
+  says what each is for.
 
 Dependency status as of the last audit is recorded in `docs/STATUS.md` under
 *Dependency security*.
@@ -872,7 +887,9 @@ was still not produced by a tool.
 - No account lockout, no password reset flow, no email verification, no
   two-factor authentication.
 - No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the
-  only workflows; Trivy scans images, not the source.
+  only workflows; Trivy scans images, not the source. Secret scanning, push
+  protection and CodeQL are repository settings instead (see *Supply chain*),
+  and on 2026-10-12 all three were off.
 
 ---
 

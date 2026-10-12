@@ -73,7 +73,12 @@ each of the five installation files (build provenance signed for this tag's run,
 stored by GitHub), and creates a draft with the checked-in release notes and the
 installation files plus checksums. Draft retries may replace draft attachments
 and attest the new files again; published releases must not be reused for a
-different build. Fixes get a new tag.
+different build. Fixes get a new tag. Once the release-tag rulesets are on
+([Repository settings](#repository-settings)) that is the only way: nobody, the
+owner included, can move or delete a pushed `v*` tag, so a tag on the wrong
+commit, or one whose fix needs a code change, is abandoned for the next
+version. Disabling the ruleset to re-tag is a deliberate exception, and `check`
+reports it until it is enabled again.
 
 Download and review the draft assets with `gh release download`, run
 `sha256sum -c SHA256SUMS`, and verify that every file carries this tag's
@@ -108,6 +113,10 @@ Publish an alpha only after these checks:
 gh release edit vVERSION --draft=false --prerelease --latest=false
 gh release view vVERSION --json url,isDraft,isPrerelease,targetCommitish,assets
 ```
+
+With immutable releases on, that edit is one-way: a published release's files
+and tag can no longer be replaced, by `release-draft` or by hand. Its notes stay
+editable.
 
 Use the tag-specific download URLs in the notes. GitHub's `latest` release route
 does not select prereleases. Docker `latest` remains the development channel from
@@ -182,7 +191,8 @@ that shape.
 It opens nothing until an owner action lands: the branch ruleset restricts
 creating and updating every branch to the owner, so Dependabot cannot push its
 `dependabot/*` branches until they are excluded from it. Dependabot security
-updates are a second owner action, a repository setting rather than this file;
+updates are a second owner action, a repository setting rather than this file
+([Repository settings](#repository-settings) checks and applies both);
 they bypass the cooldown, and GitHub offers none for the `bun` ecosystem, so
 `bun audit` in CI remains the gate for the lockfile. Not yet measured: no
 Dependabot pull request has run here, so how its own Bun rewrites `bun.lock` is
@@ -218,6 +228,61 @@ Conventional Commits: `build(deps):` and `build(deps-dev):` for the lockfile,
 
 A major the project is not taking yet is closed with
 `@dependabot ignore this major version`, which Dependabot remembers.
+
+## Repository settings
+
+Several of a release's protections are GitHub settings, not files, so no checkout
+shows whether they are on and nothing goes red when one is turned off.
+`scripts/github-settings.ts` records what each should be and compares:
+
+```bash
+bun scripts/github-settings.ts check   # GET only; one DRIFT line per setting that differs, exit 1
+bun scripts/github-settings.ts apply   # writes only what differs; then run check again
+```
+
+Both need `gh` signed in as an administrator of the repository, so they are the
+owner's to run, never a CI step: most of these endpoints need the
+administration permission, which a workflow token cannot be granted. Exit 2
+means GitHub refused a request, not that anything drifted. `--repo OWNER/NAME`
+points it at a fork. `apply` sends the same PUT and PATCH
+requests every time and matches rulesets by name, so running it again changes
+nothing; CodeQL's setup completes asynchronously, which is why `check` follows
+it. `src/__tests__/unit/github-settings.test.ts` runs both against a stubbed
+`gh`.
+
+| Setting | Why |
+|---|---|
+| Private vulnerability reporting | The form [Security](../SECURITY.md#reporting-a-vulnerability) sends reporters to exists for people outside the project only while this is on. |
+| Immutable releases | A published release's files and tag cannot be replaced. Drafts stay editable, so `release-draft` retries still work. Not retroactive: a release published before it was on stays mutable. |
+| Secret scanning and push protection | Free on a public repository; push protection refuses a push that carries a recognised credential. |
+| Dependabot alerts and security updates | Security updates skip the seven-day cooldown ([Dependency updates](#dependency-updates)). |
+| CodeQL default setup, extended suite | Scans the TypeScript and the workflows themselves. |
+| Actions: GitHub's own plus `.github/selected-actions.json`, pinned by full commit SHA | Turns the pinning rule in `ci.yml` from a convention into a refusal. |
+| Fork pull requests need approval from every external contributor | The default covered first-time contributors only. |
+| Squash merges only, titled and described by the pull request, branch deleted | `CLAUDE.md` (Git Workflow) lands a branch on `master` as one squash, whose message is the pull request's body: write that as the commit message. |
+| Ruleset *Release tags are immutable* (`.github/rulesets/release-tags-immutable.json`) | Nobody, the owner included, can move or delete a `v*` tag, which is what the installation files' attestation check pins (`--source-ref`). |
+| Ruleset *Release tags are created by an admin* (`.github/rulesets/release-tags-creation.json`) | Only a repository administrator can push a `v*` tag, the event that publishes a release. CI never creates one (`--verify-tag`). |
+| Dependabot can push its branches | No enforced branch ruleset with a rule that refuses one of Dependabot's pushes (creation, update, deletion, `non_fast_forward`, or a pull request, status check or deployment requirement) reaches the branch it opens for any entry in `.github/dependabot.yml`. `apply` adds `refs/heads/dependabot/**` to the exclusions of a ruleset that does, and changes nothing else in it. Excluded rather than bypassed, because Dependabot also rewrites its own branch when it rebases a pull request, which `non_fast_forward` refuses. A ruleset narrowed to the default branch passes too. |
+
+On 2026-10-12, before any of it was applied, `check` reported 11 of the 12
+drifted: only Dependabot alerts were on.
+
+**Adding an action.** A workflow `uses:` that the allow-list does not cover is
+refused when the run starts, so it needs an entry in
+`.github/selected-actions.json` and an `apply` before the workflow change lands.
+`github-settings.test.ts` fails on such a `uses:`, and on an entry no workflow
+uses. The one listed exception is `aquasecurity/setup-trivy`, which
+`aquasecurity/trivy-action` calls from its own `action.yaml`. Read on
+2026-10-12: the composite actions the workflows call (`trivy-action`,
+`setup-trivy`, `attest-build-provenance`) pin their own nested actions by commit
+SHA too. After applying the Actions policy, confirm it with
+`gh workflow run ci.yml --repo NGarate/stoky --ref master`: nothing else
+exercises it until the next push.
+
+What it does not cover, because each is still an owner decision rather than a
+setting to hold: whether the branch ruleset's `required_signatures` rule is made
+real or removed (the only committer bypasses it), and whether unattended agents
+get an identity without the owner's bypass.
 
 ## Verification boundaries
 
@@ -265,7 +330,9 @@ and a signed GitHub attestation are enabled for published images; releases
 before `v0.1.0-alpha.3` were built while the repository was private and have no
 attestation. See [Security](../SECURITY.md#verifying-an-images-provenance).
 The installation files are attested from the release after `v0.1.0-alpha.3`;
-immutable releases are off, so a published release's files can still be
-replaced by anything holding `contents: write`, and the attestation is what a
-replaced file lacks. The check pins the tag (`--source-ref`), not its commit,
-so it is only as fixed as the `v*` tag, which no ruleset protects yet.
+immutable releases were off when measured on 2026-10-12, so a published
+release's files can still be replaced by anything holding `contents: write`,
+and the attestation is what a replaced file lacks. The check pins the tag
+(`--source-ref`), not its commit, so it is only as fixed as the `v*` tag, which
+no ruleset protected on that date either. Both are
+[repository settings](#repository-settings) that `check` reports.

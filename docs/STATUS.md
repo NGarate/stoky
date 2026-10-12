@@ -921,8 +921,10 @@ Dockerfile's base and the release bundle's service images: weekly, seven days
 after a release, minor and patch grouped, no PostgreSQL, Valkey or Traefik
 major. **Not yet in effect:** the branch ruleset does not let Dependabot create
 its branches, which no version update can open without; Dependabot security
-updates are separately off. Both are owner settings. No Dependabot pull request
-has run yet. `docs/RELEASING.md` (Dependency updates) says how one is reviewed.
+updates are separately off. Both are owner settings, which
+`bun scripts/github-settings.ts check` reports with the repository's other
+security settings. No Dependabot pull request has run yet. `docs/RELEASING.md`
+(Dependency updates) says how one is reviewed.
 
 ---
 

@@ -58,6 +58,7 @@ document.
 | How do I install or upgrade a released version? | `INSTALL.md` |
 | How do I get a development checkout running? | `LOCAL_BOOTSTRAP.md` |
 | How do I publish a release? | `RELEASING.md` |
+| Which GitHub repository settings must be on, and are they? | `RELEASING.md` (Repository settings) |
 | Which command do I run, and what does it prove? | `VERIFICATION_SEQUENCE.md` |
 | How are the test suites configured? | `TEST_SETUP.md` |
 | What does the product do? | `README.md` (root) |
@@ -209,7 +210,9 @@ upgrades and troubleshooting. Owns the self-hosted installation path.
 
 **[`RELEASING.md`](RELEASING.md)**
 Maintainer checklist for versioning, verification, tagging and publishing. Release
-notes live in `docs/releases/` and describe the specific tagged version.
+notes live in `docs/releases/` and describe the specific tagged version. Also
+owns the GitHub repository settings the release depends on, and the drift check
+(`scripts/github-settings.ts`) that holds them.
 
 ### Proposed — read, then decide; nothing here is scheduled
 

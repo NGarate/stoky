@@ -1,0 +1,13 @@
+{
+  "github_owned_allowed": true,
+  "verified_allowed": false,
+  "patterns_allowed": [
+    "aquasecurity/setup-trivy@*",
+    "aquasecurity/trivy-action@*",
+    "docker/build-push-action@*",
+    "docker/login-action@*",
+    "docker/metadata-action@*",
+    "docker/setup-buildx-action@*",
+    "oven-sh/setup-bun@*"
+  ]
+}
