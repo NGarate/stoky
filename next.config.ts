@@ -89,17 +89,37 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["tesseract.js"],
 
   /**
+   * The Image Optimization endpoint is off: `/_next/image` answers 404.
+   *
+   * Nothing renders `next/image`, but that never made the endpoint
+   * unreachable, though this file and a unit test both said so until
+   * 2026-10-12. Next 16 registers `/_next/image` whatever the source imports,
+   * and with the defaults it accepted any same-origin path with no query —
+   * `/dashboard`, `/api/trpc/…` — and fetched it with an internal request
+   * through the whole router: the proxy, the root layout, `auth()` and a
+   * database lookup, for anyone, on a route no limit or test watched. When
+   * the answer sniffed as a raster image it was sent back and cached under
+   * `.next/cache/images`. Without `sharp` nothing failed: Next catches the
+   * missing module and serves the original bytes (SECURITY_REVIEW §8).
+   *
+   * `unoptimized` is Next's one documented switch for this, and the only
+   * condition besides a custom loader under which the server answers the
+   * route with a 404 before reading a parameter. `next/image` would still
+   * work with it, serving the source file as it is.
+   */
+  images: { unoptimized: true },
+
+  /**
    * `sharp` is not shipped, because nothing can reach it.
    *
    * Next traces it into the standalone output whenever it is installed — 19 MB
    * of native image library — for one reason: the built-in Image Optimization
-   * endpoint, `/_next/image`, which only exists for `next/image`. This
-   * application does not use `next/image` anywhere, has no `images` config,
-   * and since the Bun migration no longer uses `sharp` itself: the receipt
-   * pipeline is `Bun.Image`.
+   * endpoint, `/_next/image`. That endpoint is switched off above, and since
+   * the Bun migration the application no longer uses `sharp` itself: the
+   * receipt pipeline is `Bun.Image`.
    *
    * The production target is treated as the security boundary, and a native
-   * decoder sitting in it for a route that cannot be reached is surface with
+   * decoder sitting in it for a route that is switched off is surface with
    * no purpose. `sharp` stays installed for the test suite, which uses it to
    * build the decompression bomb that proves the pixel bound — a fixture
    * nobody should commit — and that is why it is a devDependency now.
@@ -113,9 +133,9 @@ const nextConfig: NextConfig = {
    * to reach it.
    *
    * The condition that makes this safe is asserted rather than remembered:
-   * `src/__tests__/unit/next-image.test.ts` fails if anything imports
-   * `next/image`, because the optimiser would then need the library this line
-   * removes.
+   * `src/__tests__/unit/next-image.test.ts` fails if `images.unoptimized` is
+   * not `true`, and `e2e/security-headers.spec.ts` asks the production build
+   * for `/_next/image` and expects the 404.
    */
   outputFileTracingExcludes: {
     "*": ["node_modules/sharp/**", "node_modules/@img/**"],

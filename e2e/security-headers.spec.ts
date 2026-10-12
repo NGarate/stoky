@@ -407,6 +407,29 @@ test.describe("a page that is not there", () => {
   });
 });
 
+test.describe("the image optimiser", () => {
+  test("is not there, and its 404 is a page with the policy", async ({ request }) => {
+    // Nothing renders `next/image`, and until 2026-10-12 the endpoint was
+    // live anyway: it took any same-origin path, fetched it through the whole
+    // router for an anonymous caller and sent back what sniffed as an image
+    // (SECURITY_REVIEW §8). A real icon and parameters Next's own loader
+    // accepts, so the only reason left for a refusal is the switch: with
+    // `images.unoptimized` removed this is a 200 carrying the PNG.
+    //
+    // The 404 Next gives instead is the app's not-found document, so it must
+    // carry the policy like any other miss. With the matcher still skipping
+    // `/_next/image` it arrived with none — measured before the exclusion was
+    // dropped.
+    const response = await request.get("/_next/image?url=%2Ficons%2Ficon-192.png&w=64&q=75");
+
+    expect(response.status()).toBe(404);
+    expect(headerOf(response, "content-type")).toContain("text/html");
+    expect(headerOf(response, "content-security-policy")).toMatch(
+      /script-src 'self' 'nonce-[a-f0-9]{32}' 'strict-dynamic'/,
+    );
+  });
+});
+
 test.describe("the service worker's own policy", () => {
   test("is its own, and is not cached", async ({ request }) => {
     // A nonce'd page policy applied to the worker becomes the *worker's*

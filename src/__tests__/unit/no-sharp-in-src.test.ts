@@ -15,8 +15,9 @@ import { join, relative } from "node:path";
  * application leave `sharp` in the first place.
  *
  * **A build cannot notice**, because the trace exclusion is silent by design.
- * `next-image.test.ts` guards the sibling premise for the same reason and says
- * so in the same words; this is the half that had no guard
+ * `next-image.test.ts` guards the sibling premise for the same reason — that
+ * the image optimiser, the other thing that would load it, is switched off
+ * (`images.unoptimized`); this is the half that had no guard
  * (`docs/superpowers/plans/2026-08-27-finishing-the-bun-migration.md` §1, the
  * only item there that closes a hole rather than tidying one).
  *

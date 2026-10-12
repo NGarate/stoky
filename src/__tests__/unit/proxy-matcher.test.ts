@@ -28,9 +28,8 @@ describe("what the proxy leaves alone", () => {
     "/sw.js",
     // The icons — every file in public/icons/, asked by name below.
     ...readdirSync(ICONS).map((name) => `/icons/${name}`),
-    // The build's assets, and the optimiser (its query is not the pathname).
+    // The build's assets.
     "/_next/static/chunks/main.js",
-    "/_next/image",
   ])("%s", (pathname) => {
     expect(proxyRuns(pathname)).toBe(false);
   });
@@ -58,6 +57,16 @@ describe("what the proxy covers that the old prefixes did not", () => {
     "/_next/imagefoo",
   ])("%s", (pathname) => {
     expect(proxyRuns(pathname)).toBe(true);
+  });
+});
+
+describe("the switched-off image optimiser", () => {
+  // `images.unoptimized` makes Next answer `/_next/image` with the app's
+  // not-found document, so it is a render like any other miss and carries
+  // the policy. Measured on the production build while the path was still
+  // excluded: 404 `text/html`, no Content-Security-Policy.
+  it("/_next/image", () => {
+    expect(proxyRuns("/_next/image")).toBe(true);
   });
 });
 

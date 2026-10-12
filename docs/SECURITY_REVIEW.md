@@ -741,6 +741,47 @@ old source restored it fails on the first of them with an empty policy, after
 the status and the content type have passed — the finding, measured — and with
 the `[\w.-]+` pattern it fails the same way on the second.
 
+**Found 2026-10-12: the image optimiser was live.** Nothing renders
+`next/image`, and `next.config.ts` left `sharp` out of the production image on
+the grounds that `/_next/image` "cannot be reached"; `next-image.test.ts`
+guarded that premise by checking for an import, and said the route "would
+fail at runtime" without the library. Both were wrong. Next 16 registers
+`/_next/image` whatever the source imports, and with no `images` config it
+answers unless `unoptimized` is set or a custom loader is configured
+(`next-server.js`, the one branch that 404s the route). The built config had
+`unoptimized: false` and `localPatterns: [{ pathname: "**", search: "" }]`, so
+any same-origin path without a query was accepted — `/dashboard`,
+`/api/trpc/receipt.list` — and fetched with an internal request through the
+whole router, proxy, root layout, `auth()` and a database lookup, for an
+anonymous caller. An answer that sniffed as a raster image was sent back and
+cached under `.next/cache/images`; without `sharp`, Next catches the missing
+module and serves the original bytes. All of that was read from Next 16.4.0
+and the built config by the audit; measured on the production build without
+the switch, `GET /_next/image?url=%2Ficons%2Ficon-192.png&w=64&q=75` is 200
+`image/png`. Low, and unneeded surface rather than an exploit:
+`remotePatterns` is empty, the internal request carries no cookies
+(`headers: {}`), receipt images are only ever tRPC JSON, `public/` holds only
+the icons, and SVG is refused.
+
+**Fixed: `images: { unoptimized: true }`, and the matcher no longer skips the
+route.** It is Next's documented switch, and with it the route answers 404
+before reading a parameter. That 404 is the app's not-found document —
+`text/html`, a full page — and with `_next/image$` still in the matcher's
+exclusions, as the anchoring fix above left it, it arrived with no
+`Content-Security-Policy`: the defect just closed for `/icons/x`, reopened
+at a new path. Measured, before and after dropping the exclusion: 404
+`text/html` with an empty policy, then 404 `text/html` with the nonce'd
+`script-src`. `next-image.test.ts` now asserts the config Next is given has
+`images.unoptimized === true` and no custom loader; the import check is gone,
+because with the endpoint off `next/image` renders the source file as it is,
+in development and production alike. `proxy-matcher.test.ts` asks that the
+proxy run for `/_next/image`. "the image optimiser" in
+`security-headers.spec.ts` asks the production build for the icon above and
+expects 404 `text/html` with the nonce'd `script-src`. With the option removed
+it fails on the status — 200, the PNG — and with the exclusion restored on the
+policy, an empty string; the unit tests fail on the same two mutations, and
+the loader assertion on `loader: "custom"`.
+
 ---
 
 ## The `SECURITY.md` corrections

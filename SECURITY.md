@@ -274,13 +274,22 @@ Verified against the files named in each row.
   inlines critical CSS that cannot carry a nonce.
 - **The policy is on every page the app renders, including its not-found
   page.** The proxy's matcher excludes only what is served from disk —
-  `/_next/static/`, the image optimiser, the icon files by name, and `/sw.js`,
-  which has a policy of its own in `next.config.ts` — each anchored to exactly
-  that. Until 2026-10-12 they were unanchored prefixes, so `/icons/x` or
-  `/sw.jsx` rendered the app's not-found document with no policy at all
+  `/_next/static/`, the icon files by name, and `/sw.js`, which has a policy
+  of its own in `next.config.ts` — each anchored to exactly that. Until
+  2026-10-12 they were unanchored prefixes, so `/icons/x` or `/sw.jsx`
+  rendered the app's not-found document with no policy at all
   (`docs/SECURITY_REVIEW.md` §8). One exception remains, and §8 says why it is
   harmless: a request labelled `Purpose: prefetch` or `Next-Router-Prefetch`
   skips the proxy, and so carries no policy either.
+- **Next's Image Optimization endpoint is switched off**
+  (`images: { unoptimized: true }` in `next.config.ts`): `/_next/image`
+  answers 404 with the app's not-found page, which carries the policy like any
+  other. Nothing renders `next/image`, but until 2026-10-12 the endpoint was
+  live regardless — Next registers it whatever the source imports — and it
+  fetched any same-origin path for an anonymous caller through the whole
+  router, returning what sniffed as a raster image (`docs/SECURITY_REVIEW.md`
+  §8). The same switch is what makes leaving `sharp` out of the production
+  image correct.
 - Static headers set in the app itself, not only at the proxy, because a
   self-hosted app runs behind whatever proxy the operator already has:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
