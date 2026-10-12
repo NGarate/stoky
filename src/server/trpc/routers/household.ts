@@ -372,7 +372,8 @@ export const householdRouter = createTRPCRouter({
    * The other half of what §10 asked for, and the reason the admin panel
    * exists: "the kitchen tablet has walked out of the house" needs an answer
    * that is not "wait fifteen minutes and hope nobody touches it" — an active
-   * session slides forward on `updateAge` indefinitely.
+   * session slides forward on every read, for up to the thirty days of
+   * `MAX_SESSION_AGE_S` in `src/lib/auth.ts`.
    *
    * The same two guards as the rest of member management: the member must be
    * **this** household's, and only an owner may act on an owner. There is no

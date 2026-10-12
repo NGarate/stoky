@@ -464,6 +464,14 @@ it is absent. The new release's `install.sh` adds every missing setting to
 the Compose and Traefik files: against the previous release's copies it stops
 before it reaches `.env`.
 
+**Everybody signs in once after upgrading** from a release before sessions
+had a thirty-day limit. A session from the old release has no record of when
+it started, so the new one refuses it the next time it is read rather than
+guess, and each device has to sign in again; changes a phone queued offline
+are kept, as they are whenever a session ends. From then on a session ends thirty
+days after sign-in however much it is used, or after fifteen minutes unused —
+*Authentication* in [SECURITY.md](../SECURITY.md) says why.
+
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
 and URL-safe credentials. Review custom database names, passwords, networks and

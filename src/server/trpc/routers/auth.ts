@@ -403,8 +403,13 @@ export const authRouter = createTRPCRouter({
    * paragraph instead of concluding that signing out is unimplemented, which is
    * what its previous silence invited.
    *
-   * Either way a stolen token stays valid until it expires, which is what the
-   * 15-minute `maxAge` in `src/lib/auth.ts` is for.
+   * **Signing out clears this device's cookie and nothing else.** A copy of
+   * the token taken before it stays valid: it slides on every read, so it ends
+   * only after fifteen minutes unused (`maxAge` in `src/lib/auth.ts`), thirty
+   * days after the sign-in that minted it (`MAX_SESSION_AGE_S`), or when
+   * somebody ends the account's sessions — `revokeMySessions` above, or an
+   * admin from the members panel. That last one is the answer to a token that
+   * may have leaked; a plain sign-out is not.
    *
    * **`z.void()` on the three mutations that take nothing** — this,
    * `revokeMySessions` and `shopping.generateFromLowStock`. With no parser

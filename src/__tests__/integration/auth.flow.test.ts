@@ -765,7 +765,8 @@ describe("Authentication Flow Integration Tests", () => {
       // The point of changing a leaked password: whoever used it has a
       // session too, and a new password beside a live session is half a fix.
       const { user, api } = await accountWithCaller("ends-sessions");
-      const token = { sub: user.id, iat: Math.floor((Date.now() - 60_000) / 1000) };
+      const signedIn = Math.floor((Date.now() - 60_000) / 1000);
+      const token = { sub: user.id, iat: signedIn, authTime: signedIn };
 
       // The control: the same token is accepted before the change, so the
       // refusal below is the change's doing and not the token's shape.

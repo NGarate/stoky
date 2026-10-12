@@ -511,8 +511,33 @@ Verified against the files named in each row.
   their own password, and verifies for sign-in and for that change. A test
   pins the parameters and that the dummy hash for unknown addresses was made
   with the same ones.
-- Auth.js v5 with the credentials provider; sessions are JWTs with a 15-minute
-  lifetime.
+- Auth.js v5 with the credentials provider; sessions are encrypted JWTs with
+  no server-side record. **Fifteen minutes is the idle timeout, not the
+  lifetime**: every read of the session re-issues the token with a fresh
+  fifteen-minute expiry (`@auth/core` 0.41.3 `lib/actions/session.js`; the
+  `updateAge` setting is read only by database sessions), so a session in use
+  slides. **It slides for at most thirty days** (`MAX_SESSION_AGE_S`, security
+  review 2026-10-12 — until then it slid for ever): sign-in stamps an
+  `authTime` claim that re-issue copies forward unchanged, and the `jwt`
+  callback refuses a token whose `authTime` is more than thirty days old, or
+  that has none, before it reaches the revocation query. Thirty days is OWASP
+  ASVS 4.0.3 V3.3.2's Level 1 ceiling, chosen for the kitchen tablet that
+  should not ask for a password every shift; it is a constant, not a setting.
+  A token without `authTime` was issued before the claim existed, and it is
+  refused rather than given a fresh thirty days, which would extend a token
+  stolen before the upgrade — so everybody signs in once after upgrading to
+  the release that carries this. A refusal is logged as
+  `auth.session.revoked` with `reason: "absolute-lifetime"`. Nothing warns
+  before the thirty days run out: the next session read is refused and the
+  cookie cleared, the same path a revoked session takes, so the offline queue
+  keeps its unsent changes and asks for a sign-in.
+- **Signing out clears this device's cookie and nothing else.** `signOutAction`
+  records nothing on the server, so a copy of the token taken before the
+  sign-out stays valid until it is idle for fifteen minutes, its thirty days
+  run out, or somebody ends the account's sessions — **Cerrar la sesión en
+  todos los dispositivos** in Configuración (`auth.revokeMySessions`), or an
+  admin from **Personas del hogar**. That is the answer to a session that may
+  have leaked; a plain sign-out is not. See *Known gaps*.
 - Credentials are validated with a Zod schema before the database is touched,
   and `authorize` returns `null` for both an unknown email and a wrong password.
 - **A signed-in person can change their own password**, from Settings
@@ -1187,7 +1212,11 @@ Docker collects: `docker compose logs app | jq 'select(.event ==
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
 `auth.session.revoked`, `auth.password.changed`,
 `auth.password.change.refused`, `auth.password.reset`, `access.denied` and
-`request.throttled`.
+`request.throttled`. `auth.session.revoked` carries a `reason`:
+`sessions-valid-from` for a session somebody ended, `absolute-lifetime` for
+one signed in more than thirty days ago or carrying no sign-in time at all —
+which is every session left from before the limit, so expect these lines from
+every device that was signed in when that upgrade was installed.
 
 - **The release bundle rotates them; Docker alone does not.** Docker's default
   `json-file` driver has no size limit, and every throttled refusal writes a
@@ -1557,6 +1586,13 @@ own.
   and no self-service password reset: there is no email to send a link to. A
   forgotten password is set again by a household admin; an owner's by another
   owner or, for a sole owner, by the operator in the database.
+- No per-session sign-out. Signing out clears the cookie on this device and
+  ends no copy of the token taken earlier; ending a session elsewhere means
+  ending all of the account's (*Authentication* above). Ending one session
+  needs a session identifier carried in the token and a record of the ones
+  ended — the per-device design `docs/SECURITY_REVIEW.md` §6 sketches — and
+  a check on every session read that must not fail closed on a cache outage,
+  since every page render reads the session.
 - No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the
   only workflows; Trivy scans images, not the source. Secret scanning, push
   protection and CodeQL are repository settings instead (see *Supply chain*),

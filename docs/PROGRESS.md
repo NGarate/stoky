@@ -2454,3 +2454,24 @@ does not refill an attacker's budget. Accepted, not solved: a browser that has
 never signed in to the account still shares the budget, because that is what
 bounds a distributed guess; INSTALL.md gives operators the command that clears
 an account's counter.
+
+**D125 — A session ends thirty days after sign-in, however active.**
+The 2026-10-12 security review found that the fifteen-minute `maxAge` is an
+idle timeout and nothing else: with the JWT strategy Auth.js re-issues the
+token, with a fresh `iat` and expiry, on every read of the session, so a
+session in use — or a cookie copied off a device and read every few minutes —
+never ended. Sign-in now stamps an `authTime` claim, which re-issue copies
+forward untouched, and the `jwt` callback refuses a token more than thirty days
+past it, before the revocation query. Thirty days is OWASP ASVS 4.0.3 V3.3.2's
+Level 1 ceiling and the longest that fits the kitchen tablet; Level 2's twelve
+hours would ask for the password every shift on a device whose point is to be
+picked up. A constant rather than an environment variable, because nothing
+about an installation makes another number right and every setting is one more
+thing an operator must get right. A token without `authTime` predates the claim
+and is refused rather than stamped: stamping would give a token stolen before
+the upgrade a fresh thirty days, and the cost of refusing is one sign-in per
+device, once. Per-session sign-out was not built with it: ending one token
+needs an identifier in it and a denylist read on every page render, and a
+denylist in Valkey either fails closed — every household signed out by a cache
+outage — or fails open. SECURITY.md records it as a known gap, with "end all
+sessions" as today's answer to a token that may have leaked.

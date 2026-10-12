@@ -435,6 +435,15 @@ a revoked session sliding forever. And **coarse revocation is one column**,
 where per-session revocation needs a record per session — with `stoky_device`
 already supplying a stable per-browser identifier if that is the direction.
 
+**Corrected 2026-10-12: both halves of the first point are now wrong.**
+`updateAge` does not slide anything here: `@auth/core` reads it only on the
+database-session path, and under the JWT strategy the token is re-issued with
+a fresh `maxAge` on every read of the session. And a session in use no longer
+renews indefinitely: since the 2026-10-12 security review every session ends
+thirty days after sign-in however active it is (`MAX_SESSION_AGE_S` and the
+`authTime` claim in `src/lib/auth.ts`; `PROGRESS.md` D125; SECURITY.md,
+*Authentication*). The 15 minutes remains the idle timeout.
+
 ## 7. Dependency and image posture
 
 **Verified today:**

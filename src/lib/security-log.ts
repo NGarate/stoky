@@ -31,11 +31,13 @@ export type SecurityEvent =
   | "auth.signin.failed"
   | "auth.signin.throttled"
   | "auth.unavailable"
-  // A session refused because it was issued before the account's revocation
-  // line. Worth a line of its own rather than folding into `access.denied`: it
-  // is the only event here that somebody *asked for*, and an operator reading
-  // a household's log should be able to tell "they revoked their sessions"
-  // from "somebody was refused".
+  // A session refused by the `jwt` callback, with the `reason`: issued before
+  // the account's revocation line (`sessions-valid-from`), or signed in more
+  // than thirty days ago or at an unrecorded time, i.e. before the limit
+  // existed (`absolute-lifetime`). Worth a line of its own rather
+  // than folding into `access.denied`: it is the only event here that
+  // somebody *asked for*, and an operator reading a household's log should be
+  // able to tell "they revoked their sessions" from "somebody was refused".
   | "auth.session.revoked"
   // A signed-in person changed their own password, which also ended every
   // session the account had. The credential change ASVS V7 asks to be able
@@ -70,7 +72,9 @@ export interface SecurityDetails {
    * lookup that missed: another household's id and an id nobody has are
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
-   * it, which has no procedure to have thrown it.
+   * it, which has no procedure to have thrown it. On `auth.session.revoked`
+   * it is which rule refused: `"sessions-valid-from"` or
+   * `"absolute-lifetime"`.
    */
   reason?: string;
   /** The address a sign-in was attempted for. */

@@ -397,7 +397,8 @@ describe("setting a member's password", () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-admin");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
-    const token = { sub: member.id, iat: Math.floor((Date.now() - 60_000) / 1000) };
+    const signedIn = Math.floor((Date.now() - 60_000) / 1000);
+    const token = { sub: member.id, iat: signedIn, authTime: signedIn };
 
     // The control: the same token is accepted before, so the refusal after is
     // the reset's doing and not the token's shape.

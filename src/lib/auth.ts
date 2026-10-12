@@ -70,6 +70,21 @@ export class AuthUnavailableSignin extends CredentialsSignin {
  */
 assertUsableSecret();
 
+/**
+ * The longest a session lives, in seconds, however active it is: thirty days
+ * after the password was typed.
+ *
+ * The fifteen-minute `maxAge` below is an *idle* timeout, and every read of the
+ * session re-issues the token with a fresh one, so on its own a session in use
+ * never ended — a kitchen tablet, or a cookie copied off one, renewed for ever
+ * (security review 2026-10-12). Thirty days is OWASP ASVS 4.0.3 V3.3.2's
+ * Level 1 ceiling, and the longest that still suits the device it is set for:
+ * a tablet that lives in a kitchen asks for its password once a month rather
+ * than once a shift. A constant, not a setting, because nothing about an
+ * installation makes a different number the right one.
+ */
+export const MAX_SESSION_AGE_S = 30 * 24 * 60 * 60;
+
 export const authConfig: NextAuthConfig = {
   /**
    * Trust the Host header, because a reverse proxy is the only thing in front
@@ -349,17 +364,19 @@ export const authConfig: NextAuthConfig = {
      * that could cause data loss; nothing warned, and there was nothing to
      * warn about because activity did not help.
      *
-     * `updateAge` makes it slide. Auth.js re-issues the token whenever the
-     * session is read and the token is older than this, so any navigation or
-     * any call to `/api/auth/session` pushes the expiry out. Five minutes is
-     * the trade: often enough that an active person never notices, rarely
-     * enough that reading the session is not a write on every request.
+     * It slides on every read. With the JWT strategy Auth.js re-encodes the
+     * token, with a fresh `iat` and expiry, on *every* read of the session —
+     * `@auth/core` 0.41.3 `lib/actions/session.js` — so any navigation or any
+     * call to `/api/auth/session` pushes the expiry out. `updateAge` is read
+     * only on the database-session path there; it is kept for the day the
+     * strategy changes, and does not throttle anything today.
      *
-     * The ceiling stays short on purpose. Phase 5 puts this application on a
-     * kitchen tablet that lives in a kitchen, and Phase 7 §6 asks what a
+     * The idle window stays short on purpose. Phase 5 puts this application on
+     * a kitchen tablet that lives in a kitchen, and Phase 7 §6 asks what a
      * stolen device can reach — a session that expires quickly once it is put
      * down is the answer, and sliding it on real activity is what makes that
-     * bearable rather than hostile.
+     * bearable rather than hostile. What it does not bound is a session in
+     * use; `MAX_SESSION_AGE_S` above does, checked in the `jwt` callback.
      */
     maxAge: 15 * 60,
     updateAge: 5 * 60,
@@ -378,18 +395,29 @@ export const authConfig: NextAuthConfig = {
      * `householdProcedure`.** `/api/auth/session` re-issues the token through
      * Auth.js's own route, nowhere near tRPC, so a revocation enforced only at
      * the procedure tier would leave a revoked session sliding forward for
-     * ever on `updateAge`.
+     * ever, re-issued on every read.
      *
      * The ordering works because this runs *before* the re-issue.
-     * `jwt.encode` calls `.setIssuedAt()`, so `iat` moves forward every five
-     * minutes on an active session — but it moves forward only after this
+     * `jwt.encode` calls `.setIssuedAt()`, so `iat` moves forward on every
+     * read of an active session — but it moves forward only after this
      * callback has let the token through, so a revocation set at any moment
      * catches the very next read.
      *
+     * **The absolute lifetime is checked here too, and for the same reason.**
+     * `iat` cannot carry it, since it is the time of the last re-issue, not of
+     * the sign-in. So sign-in stamps `authTime`, a claim of ours that
+     * `jwt.encode` copies forward untouched, and a token whose `authTime` is
+     * more than `MAX_SESSION_AGE_S` old is refused. A token with no `authTime`
+     * was issued before the claim existed and its age is unknown; it is refused
+     * rather than stamped now, because stamping would hand a token stolen
+     * before the upgrade a fresh thirty days. Everybody signs in once after
+     * upgrading, and the offline queue keeps what it holds and asks for that
+     * sign-in (`src/lib/offline/classify.ts`, the `auth` outcome).
+     *
      * **Skipped on sign-in**, where `user` is present and `iat` does not exist
      * yet: the token is built here and stamped afterwards. Signing in again is
-     * how somebody comes back from a revocation, so refusing that would make
-     * the feature a lockout.
+     * how somebody comes back from a revocation or from the absolute lifetime,
+     * so refusing that would make either a lockout.
      *
      * The cost is one query per session read — once per page render, since the
      * root layout reads the session for the locale. That is the same order as
@@ -400,7 +428,19 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         token.householdId = user.householdId;
         token.role = user.role;
+        token.authTime = Math.floor(Date.now() / 1000);
         return token;
+      }
+
+      // Before the query: a token past its lifetime needs no database to be
+      // refused, and refusing it first keeps an old token from costing one.
+      const authTime = typeof token.authTime === "number" ? token.authTime : null;
+      if (authTime === null || Date.now() / 1000 - authTime > MAX_SESSION_AGE_S) {
+        logSecurityEvent("auth.session.revoked", {
+          userId: token.sub as string,
+          reason: "absolute-lifetime",
+        });
+        return null;
       }
 
       const issuedAt = typeof token.iat === "number" ? token.iat * 1000 : null;
@@ -417,7 +457,10 @@ export const authConfig: NextAuthConfig = {
       if (!account?.sessionsValidFrom) return token;
 
       if (issuedAt < account.sessionsValidFrom.getTime()) {
-        logSecurityEvent("auth.session.revoked", { userId: token.sub as string });
+        logSecurityEvent("auth.session.revoked", {
+          userId: token.sub as string,
+          reason: "sessions-valid-from",
+        });
         return null;
       }
 
@@ -429,7 +472,9 @@ export const authConfig: NextAuthConfig = {
         session.user.householdId = token.householdId as string | undefined;
         // A token minted before roles existed carries none. Falling back to
         // the least-privileged role rather than to MEMBER means an old
-        // session cannot outrank a new one; it expires within 15 minutes.
+        // session cannot outrank a new one. Such a token also predates the
+        // `authTime` claim, so the `jwt` callback refuses it before it gets
+        // here; the fallback stays as the floor if that ever stops being so.
         session.user.role = (token.role as HouseholdRole | undefined) ?? "KITCHEN";
       }
       return session;
