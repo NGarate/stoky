@@ -167,54 +167,78 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
 });
 
 test.describe("what a prefetch label cannot do", () => {
-  // Authenticated, because the route answers 401 before consuming a body —
-  // measured: an unauthenticated 15 MB POST gets 401, not 413, so only a
-  // signed-in request can observe the cap at all.
-  test.use({ storageState: SESSION_FILE });
+  // The proxy's matcher skips requests labelled `Purpose: prefetch` or
+  // `Next-Router-Prefetch` (its `missing` clauses — Next's own documented
+  // shape), and `proxyClientMaxBodySize` is applied only *because* the proxy
+  // runs. So one header turned the body cap off, and Bun's server accepts a
+  // body of any size: a labelled 16 MiB POST used to arrive whole. On the
+  // authenticated upload, Zod's `.max` refused it after it was buffered; on
+  // the public `auth.register`, it was buffered and JSON-parsed before the
+  // rate limiter could refuse anything (SECURITY_REVIEW §8).
+  //
+  // The API routes now bound the body themselves (src/server/http/body-limit.ts),
+  // so the label changes which layer refuses and not whether one does: 413
+  // either way, from the route. Unlabelled, the proxy truncates the body and
+  // the route still refuses on the length the request declared.
+  const SIXTEEN_MIB = 16 * 1024 * 1024;
 
-  test("an oversized POST is refused by two layers, and the prefetch label only reaches the deeper one", async ({
+  test.describe("signed in", () => {
+    test.use({ storageState: SESSION_FILE });
+
+    test("an oversized upload is refused with 413, labelled a prefetch or not", async ({
+      request,
+    }) => {
+      const oversized = JSON.stringify({
+        json: { fileBase64: "A".repeat(SIXTEEN_MIB), mimeType: "image/png" },
+      });
+
+      const control = await request.post("/api/trpc/receipt.upload", {
+        headers: { "content-type": "application/json" },
+        data: oversized,
+      });
+      expect(control.status()).toBe(413);
+
+      const labelled = await request.post("/api/trpc/receipt.upload", {
+        headers: { "content-type": "application/json", purpose: "prefetch" },
+        data: oversized,
+      });
+      expect(labelled.status()).toBe(413);
+    });
+  });
+
+  test("an oversized registration from nobody is refused before anything reads it", async ({
     request,
   }) => {
-    // The proxy's matcher skips requests labelled `Purpose: prefetch` or
-    // `Next-Router-Prefetch` (its `missing` clauses — Next's own documented
-    // shape). SECURITY_REVIEW §8 reported the skip and left one sharp
-    // question: `proxyClientMaxBodySize` is applied *because* a middleware is
-    // configured, so does labelling an upload as a prefetch skip the body
-    // cap? Measured here: it does. But the upload is refused regardless,
-    // because there are two layers.
-    //
-    //   - Unlabelled, the proxy cap truncates the 16 MB body mid-flight, and
-    //     tRPC meets an unterminated JSON string → 400 parse error. This is
-    //     finding 13's own signature, and it proves the cap fires.
-    //   - Labelled a prefetch, the whole body arrives — the proxy did not run
-    //     — and is refused one layer deeper by `fileBase64`'s Zod `.max`
-    //     (MAX_RECEIPT_BASE64_LENGTH), the second bound added for exactly the
-    //     case where the first does not apply. → 400 too_big.
-    //
-    // So the label bypasses the proxy cap but not the refusal: the body is
-    // bounded by validation on an authenticated, rate-limited endpoint. If
-    // the labelled request ever stops being refused — a 200, or the write
-    // path reached — this is the test that says so.
+    // Public, labelled, and invalid — no password — so that without the
+    // route's bound it is read whole, parsed, and answered 400 by Zod, and it
+    // can never create an account or spend the suite's registration budget.
+    // 413 is the only answer that says the body was not held.
     const oversized = JSON.stringify({
-      json: {
-        fileBase64: "A".repeat(16 * 1024 * 1024),
-        mimeType: "image/png",
-      },
+      json: { email: "nadie@example.com", name: "A".repeat(SIXTEEN_MIB) },
     });
 
-    const control = await request.post("/api/trpc/receipt.upload", {
-      headers: { "content-type": "application/json" },
-      data: oversized,
-    });
-    expect(control.status()).toBe(400);
-    expect(await control.text()).toContain("Unterminated string");
-
-    const labelled = await request.post("/api/trpc/receipt.upload", {
+    const labelled = await request.post("/api/trpc/auth.register", {
       headers: { "content-type": "application/json", purpose: "prefetch" },
       data: oversized,
     });
-    expect(labelled.status()).toBe(400);
-    expect(await labelled.text()).toContain("too_big");
+    expect(labelled.status()).toBe(413);
+  });
+
+  test("an oversized sign-in from nobody is refused before Auth.js reads it", async ({
+    request,
+  }) => {
+    // Auth.js's own route, with its own, smaller bound: every POST there is a
+    // form of a few hundred bytes. Without the bound this is read whole and
+    // answered with a redirect to a CSRF error.
+    const labelled = await request.post("/api/auth/callback/credentials", {
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        purpose: "prefetch",
+      },
+      data: `email=nadie%40example.com&password=${"A".repeat(1024 * 1024)}`,
+      maxRedirects: 0,
+    });
+    expect(labelled.status()).toBe(413);
   });
 });
 

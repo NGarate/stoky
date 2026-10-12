@@ -196,7 +196,10 @@ export const receiptRouter = createTRPCRouter({
         // Bounded here as well as after decoding, so an oversized body is
         // refused by validation rather than by allocating a second copy of it
         // as a Buffer first. The check below still stands: this bounds the
-        // encoded length, that bounds what the bytes actually came to.
+        // encoded length, that bounds what the bytes actually came to. The
+        // request as a whole is bounded before either, by the route
+        // (`src/server/http/body-limit.ts`): this field can only be refused
+        // here when it is between the two limits.
         fileBase64: z.string().max(MAX_RECEIPT_BASE64_LENGTH),
         mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
         storeId: z.string().max(MAX_ID_LENGTH).optional(),

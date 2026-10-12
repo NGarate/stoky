@@ -24,10 +24,17 @@ export const authRouter = createTRPCRouter({
    *
    * `publicProcedure`, necessarily — there is nobody to authenticate yet — which
    * makes it one of the two endpoints reachable from the internet by anyone.
-   * That is why it is rate limited before it reads anything and why the
+   * That is why it is rate limited before any work is done and why the
    * password has a maximum length: Argon2id here is 64 MB per call, so an
    * unbounded body would make this a memory amplifier (ISSUES.md CRITICAL-4,
    * DEBT-1).
+   *
+   * "Before any work", not "before it reads anything": tRPC has read and
+   * JSON-parsed the body, and Zod has validated it, before the resolver can
+   * count the attempt. What bounds that read is the route, which refuses a
+   * body over 15 MiB with 413 before tRPC sees it
+   * (`src/server/http/body-limit.ts`) — the proxy's cap alone did not, for a
+   * request labelled a prefetch (`docs/SECURITY_REVIEW.md` §8).
    *
    * The household is optional. An account can exist without one, and
    * `householdRouter` is what such an account uses to get out of that state

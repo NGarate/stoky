@@ -60,10 +60,11 @@ export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
  *   constant, and such a body was cut off first. A size limit no request can
  *   reach is not a limit.
  *
- * `next.config.ts` now sets that cap from this number rather than taking the
- * default, and `src/__tests__/unit/upload-body-limit.test.ts` asserts the two
- * still agree — because they are in different files and nothing else would
- * say so.
+ * The ceiling is now set explicitly, once, in `src/server/http/body-limit.ts`
+ * — the bound the API routes enforce themselves, and the number
+ * `next.config.ts` imports for the proxy's cap — and
+ * `src/__tests__/unit/upload-body-limit.test.ts` asserts it still clears this
+ * number, because they are in different files and nothing else would say so.
  */
 export const MAX_RECEIPT_BASE64_LENGTH = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4;
 

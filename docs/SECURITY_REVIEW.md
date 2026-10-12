@@ -317,10 +317,12 @@ this review — a store ownership check.
 
   Right about the mechanism: the image arrives base64 in a tRPC payload, so the
   cap runs after the body is read and JSON-parsed. Wrong about the consequence.
-  Allocation is *not* unbounded — Next caps a request body at
+  ~~Allocation is *not* unbounded — Next caps a request body at
   `experimental.proxyClientMaxBodySize` whenever a middleware is configured, and
-  this application's matcher covers `/api/trpc`. Measured on a running server:
-  10,000,080 bytes parsed, 10,485,840 did not.
+  this application's matcher covers `/api/trpc`.~~ Measured on a running server:
+  10,000,080 bytes parsed, 10,485,840 did not. **Corrected 2026-10-12:**
+  allocation was unbounded for any request the matcher skips — see §8, "The
+  prefetch-skip" — and the bound is now the route's own.
 
   What the measurement found instead is finding 18. The lesson worth keeping is
   that the audit reasoned from the application's code and stopped at its edge;
@@ -593,18 +595,44 @@ directive silently added or dropped. `script-src` is pinned to its full shape
 to exactly its two sources, which is what proves the dev tail (`ws:`,
 `http://localhost:*`) never ships.
 
-**The prefetch-skip is real, and bounded.** Measured: a request labelled
+~~**The prefetch-skip is real, and bounded.** Measured: a request labelled
 `Purpose: prefetch` does skip the proxy, so `proxyClientMaxBodySize` does not
 apply to it — an oversized upload's whole body arrives instead of being
 truncated. But it is still refused, one layer deeper, by `fileBase64`'s Zod
 `.max` (`MAX_RECEIPT_BASE64_LENGTH`), the second bound added for exactly the
 case where the proxy cap does not fire. So the label bypasses the cap, not the
 refusal; the body stays bounded by validation on an authenticated,
-rate-limited endpoint. Pinned by "an oversized POST is refused by two
-layers": unlabelled → the proxy truncates → tRPC's `Unterminated string`;
-labelled → the full body → Zod `too_big`. The residual — the full body is
-buffered before Zod refuses it — is a low-severity memory cost behind auth and
-the 30/hour upload meter, worth knowing rather than fixing.
+rate-limited endpoint.~~ **Corrected 2026-10-12: real, and it was not
+bounded.** The measurement held and the conclusion did not, because it was
+drawn from the one procedure measured. The label skips the cap for *every*
+POST, Bun's `node:http` server accepts a body of any size, and nothing else
+in the stack set one. `receipt.upload`'s Zod `.max` refuses only after tRPC
+has read and parsed the whole body, and behind authentication; the public
+`auth.register` has no such field, and its rate limiter runs in the resolver,
+after the parse. So an unauthenticated, prefetch-labelled POST of any size was
+buffered and JSON-parsed whole. The Auth.js route under `/api/auth` was open
+the same way.
+
+**Fixed: the API routes bound the body themselves**
+(`src/server/http/body-limit.ts`), so the proxy's cap is no longer the only
+one. `/api/trpc` refuses a body over 15 MiB with 413, before it looks up the
+session; a POST to `/api/auth` over 64 KiB likewise, before Auth.js reads it.
+A declared length over the limit is refused unread, and a body with no
+declared length is counted as it arrives. `proxyClientMaxBodySize` imports the
+same 15 MiB, so the two layers cannot disagree about what an upload weighs.
+Pinned by "what a prefetch label cannot do" in `security-headers.spec.ts`,
+through the production build: a 16 MiB upload is 413 labelled or not; a
+prefetch-labelled 16 MiB `auth.register` with no session is 413; a
+prefetch-labelled 1 MiB sign-in is 413. With the tRPC route's bound removed,
+both tRPC cases go red on a 400 — the register body read whole and refused by
+Zod — and with the Auth.js route's removed, the sign-in case gets a 302. The unit tier
+(`body-limit.test.ts`, `trpc-handler.test.ts`,
+`auth-route-body-limit.test.ts`) pins the chunked case and the boundary:
+exactly the limit passes, one byte over does not.
+
+The residual is concurrency, not size: a body may still be up to 15 MiB,
+held more than once while it is read and parsed, and nothing limits how many
+arrive at once (`SECURITY.md`, *Request bodies*).
 
 ~~Prefetch responses also carry no `Content-Security-Policy` (it is set only in
 the proxy), so a prefetched RSC payload has no nonce; harmless because such a

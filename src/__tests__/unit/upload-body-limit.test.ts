@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import nextConfig from "../../../next.config";
+import { MAX_TRPC_BODY_BYTES } from "@/server/http/body-limit";
 import {
   MAX_RECEIPT_BASE64_LENGTH,
   MAX_RECEIPT_BYTES,
@@ -59,6 +60,15 @@ describe("what a request body may weigh", () => {
     // read before any procedure runs. Raising it is a security decision, so it
     // should require changing a test rather than only a config line.
     expect(bodyLimit).toBeLessThan(MAX_RECEIPT_BASE64_LENGTH * 2);
+  });
+
+  it("is the number the tRPC route enforces itself", () => {
+    // The proxy's cap does not apply to a request labelled a prefetch, so the
+    // route bounds the body too (`src/server/http/body-limit.ts`). Two
+    // numbers would be two answers to what an upload may weigh: a route limit
+    // below the proxy's refuses an upload the proxy let through, and one
+    // above it is a ceiling only the prefetch label can reach.
+    expect(bodyLimit).toBe(MAX_TRPC_BODY_BYTES);
   });
 });
 

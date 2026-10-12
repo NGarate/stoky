@@ -281,6 +281,32 @@ Verified against the files named in each row.
   else.
 - `poweredByHeader: false`, so responses do not advertise the framework version.
 
+### Request bodies — `src/server/http/body-limit.ts`
+
+- **The API routes bound a request body themselves**: 15 MiB for `/api/trpc`
+  (a 10 MB receipt is 13.98 MB once base64'd into JSON) and 64 KiB for a POST to
+  `/api/auth`, whose forms are a few hundred bytes. A declared
+  `Content-Length` over the limit is refused with 413 without reading the body;
+  a body with no declared length is counted as it arrives and refused at the
+  first byte over. The tRPC route does this before it looks up the session, so
+  a refused body costs an anonymous caller nothing but the bytes it sent.
+- Next's `proxyClientMaxBodySize` is set to the same 15 MiB, imported from the
+  same constant, but it is **not** the bound: Next applies it only when the
+  proxy runs, and the proxy's matcher skips a request labelled
+  `Purpose: prefetch` or `Next-Router-Prefetch`. Until 2026-10-12 it was the
+  only bound, so one request header let an unauthenticated POST to
+  `auth.register` be buffered and JSON-parsed whole, at any size — Bun's server
+  sets no ceiling of its own (`docs/SECURITY_REVIEW.md` §8).
+- Server Actions are bounded separately, by Next's `serverActions.bodySizeLimit`
+  (1 MB by default), which its documentation describes as a limit on the raw
+  request body rather than a proxy setting. Not measured here with a prefetch
+  label.
+- What remains is concurrency: a body may still be up to 15 MiB, held more
+  than once while it is read and parsed — the bytes, then the text, then the
+  parsed value — and nothing limits how many arrive at once. The app
+  container's limit in `deploy/docker-compose.yml` is 1 GiB. How many
+  concurrent 15 MiB requests that takes has not been measured.
+
 ### Authentication — `src/lib/auth.ts`, `src/server/trpc/routers/auth.ts`
 
 - Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB) and

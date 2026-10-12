@@ -1,6 +1,8 @@
 import { describe, it, expect, spyOn, beforeEach, afterEach } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import type { Session } from "next-auth";
+import { z } from "zod";
+import { MAX_TRPC_BODY_BYTES } from "@/server/http/body-limit";
 import { createTrpcHandler } from "@/server/http/trpc-handler";
 import { ThrottledError } from "@/server/trpc/throttle";
 import {
@@ -39,12 +41,19 @@ const router = createTRPCRouter({
   }),
   whoami: protectedProcedure.query(({ ctx }) => ctx.session.user.id),
   forwardedFor: publicProcedure.query(({ ctx }) => ctx.headers?.get("x-forwarded-for") ?? null),
+  // Public, like `auth.register`: what an address with no account can reach.
+  echo: publicProcedure
+    .input(z.object({ name: z.string() }))
+    .mutation(({ input }) => input.name),
 });
 
-function handlerFor(session: Session | null) {
+function handlerFor(session: Session | null, onSession?: () => void) {
   return createTrpcHandler({
     router,
-    getSession: async () => session,
+    getSession: async () => {
+      onSession?.();
+      return session;
+    },
     createContext: createTRPCContext,
   });
 }
@@ -107,5 +116,70 @@ describe("the request headers", () => {
     const response = await handlerFor(null)(get("forwardedFor", { "x-forwarded-for": "203.0.113.7" }));
 
     expect(await resultOf(response)).toBe("203.0.113.7");
+  });
+});
+
+describe("the request body", () => {
+  /** A body of `total` bytes in 1 MiB chunks, with no declared length. */
+  function chunked(total: number): ReadableStream<Uint8Array> {
+    const chunk = new Uint8Array(1024 * 1024).fill(0x41);
+    let sent = 0;
+    return new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (sent >= total) {
+            controller.close();
+            return;
+          }
+          const size = Math.min(chunk.byteLength, total - sent);
+          controller.enqueue(size === chunk.byteLength ? chunk : chunk.subarray(0, size));
+          sent += size;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+  }
+
+  function post(path: string, body: BodyInit, headers?: HeadersInit): Request {
+    return new Request(`http://localhost/api/trpc/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body,
+    });
+  }
+
+  it("over the declared limit is refused with 413 before the session is looked up", async () => {
+    // The order is the point: an unauthenticated caller must not be able to
+    // make the server do anything on the strength of a body it will refuse.
+    let sessionLookups = 0;
+    const response = await handlerFor(null, () => sessionLookups++)(
+      post("echo", "{}", { "content-length": String(MAX_TRPC_BODY_BYTES + 1) }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(sessionLookups).toBe(0);
+  });
+
+  it("is refused at one byte over the limit when it declares no length", async () => {
+    // What a prefetch-labelled, chunked POST looks like once the proxy's cap
+    // is out of the way: nothing to check but the bytes themselves.
+    const response = await handlerFor(null)(post("echo", chunked(MAX_TRPC_BODY_BYTES + 1)));
+
+    expect(response.status).toBe(413);
+  });
+
+  it("at the limit reaches tRPC, which judges it as it always did", async () => {
+    // Not 413: a body of exactly the limit is allowed through, and what
+    // refuses this one is the JSON parser, as it would without the bound.
+    const response = await handlerFor(null)(post("echo", chunked(MAX_TRPC_BODY_BYTES)));
+
+    expect(response.status).toBe(400);
+  });
+
+  it("reaches the procedure intact when it is an ordinary one", async () => {
+    const response = await handlerFor(null)(post("echo", JSON.stringify({ json: { name: "Leche" } })));
+
+    expect(response.status).toBe(200);
+    expect(await resultOf(response)).toBe("Leche");
   });
 });

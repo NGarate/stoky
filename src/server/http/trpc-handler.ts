@@ -2,6 +2,7 @@ import type { AnyTRPCRouter, inferRouterContext } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Session } from "next-auth";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
+import { MAX_TRPC_BODY_BYTES, initWithBody, readBodyWithin } from "./body-limit";
 
 /**
  * The tRPC HTTP endpoint, built from its parts so it can be run without Next.
@@ -30,7 +31,19 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
   getSession,
   createContext,
 }: TrpcHandlerOptions<TRouter>): (req: Request) => Promise<Response> {
-  return async (req) => {
+  return async (incoming) => {
+    // The body first, before the session or anything else costs a thing:
+    // nothing in front of this route bounds it reliably (see body-limit.ts),
+    // and tRPC would otherwise read all of it before any procedure, the rate
+    // limiter included, could object. tRPC then reads the bytes already held
+    // rather than the stream.
+    let req = incoming;
+    if (incoming.method !== "GET" && incoming.method !== "HEAD") {
+      const read = await readBodyWithin(incoming, MAX_TRPC_BODY_BYTES);
+      if (!read.ok) return read.response;
+      req = new Request(incoming.url, initWithBody(incoming, read.body));
+    }
+
     const session = await getSession();
 
     return fetchRequestHandler({

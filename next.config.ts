@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { MAX_TRPC_BODY_BYTES } from "./src/server/http/body-limit";
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -52,14 +53,17 @@ const nextConfig: NextConfig = {
      * not be reached and the router's own size check could never fire. See
      * `src/lib/validations/receipt.ts` for the measurements.
      *
-     * 15 MiB: 13.98 MB of base64 plus the JSON envelope, with headroom. Not
-     * a number to raise casually — it is the ceiling on what an unauthenticated
-     * caller can make this server hold while it parses a body, which is why it
-     * is set to what the feature needs rather than to something comfortable.
-     * `upload-body-limit.test.ts` fails if it drops below what the feature
-     * needs.
+     * **This is not the bound on what a caller can make the server hold**,
+     * though it was described as one. Next applies it only while cloning the
+     * body for the proxy, and the proxy's matcher skips any request labelled a
+     * prefetch — one header, whatever the method. The bound that always holds
+     * is in the API routes themselves (`src/server/http/body-limit.ts`), and
+     * this is the same number, imported, so the two layers cannot disagree
+     * about what a legitimate upload weighs. Over it, the proxy truncates and
+     * the route answers 413. `upload-body-limit.test.ts` fails if the number
+     * drops below what the feature needs or the two stop being one.
      */
-    proxyClientMaxBodySize: 15 * 1024 * 1024,
+    proxyClientMaxBodySize: MAX_TRPC_BODY_BYTES,
   },
 
   /**
