@@ -2519,3 +2519,42 @@ smoked and scanned with is what `docker compose pull` fetches. The cost is that
 upstream fixes arrive only through a change in this repository: a Stoky
 release, or a Dependabot proposal once the owner lets Dependabot open branches.
 SECURITY.md, *Container and runtime*, *Release deployment* and *Supply chain*.
+
+**D131 — An anonymous tRPC request writes at most one refusal line.** The
+final review of the security branch measured one anonymous GET batch of 100
+calls writing 100 refusal lines, 13,100 bytes, to the security log; a few
+thousand such requests would rotate a guessing run's `auth.signin.failed`
+lines out of the bundle's 50 MB. The batch cap bounds the calls, not the
+lines. Anonymous requests now write only their first refusal (a `WeakSet` of
+the tRPC contexts, one per HTTP request), which still records that the request
+happened, from where and for which procedure: measured at 1 line and 131
+bytes for the same batch. A signed-in caller's refusals are each still
+written, because they name an accountable account and each can be a different
+row of somebody else's household. The cost, that an unauthenticated client can
+still rotate the log by request volume, is accepted in SECURITY.md; shipping
+logs off the host is the defence. "Write at most one refusal line per
+anonymous tRPC request", on the security branch.
+
+**D132 — The 2026-10-12 review names its commits by hash and subject.** The
+first draft of its record named commits by subject alone, because the branch
+is squash-merged and its hashes will not be on `master`. But a subject cannot
+be checked by a command and a hash can, the pull request keeps the branch's
+commits reachable after the squash, and the hashes are what the owner reads
+while reviewing. So `docs/SECURITY_REVIEW.md` gives both. The hashes would
+become dangling citations once the branch is deleted, and
+`unit/ledger-shas.test.ts` would go red on every full clone, so they sit
+between `branch-commits` markers. While the branch exists, the guard holds
+them to a stricter rule than other citations: each must be one of that
+branch's own commits. Once the branch is gone, the guard reports them as
+unchecked. Outside a marked region, a ledger cites only commits that survive a
+clone, and STATUS and this file name branch commits by subject. Per D113, the
+commit that writes the record does not name itself.
+
+**D133 — TEST-9 deferred, not fixed on the security branch.** The final review
+found that nothing pins the people screen's refusal to offer a reset on the
+caller's own row, and that `resetRefusalOf` would call the server's self-reset
+refusal "too easy". The server refuses a self-reset and the screen offers
+none, so nothing is exploitable or wrong today. Of the final review's 20
+defects it is the only one that is purely a missing test of new behaviour, and
+the branch was held for the other 19. It is filed with its two-part fix as
+`ISSUES.md` TEST-9 and listed among SECURITY.md's accepted gaps until then.

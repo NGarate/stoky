@@ -14,27 +14,82 @@ say what measured it.
 
 **2026-10-12 the security branch, finished:** `fix/security-hardening-2026-10-12`
 carries the 2026-10-12 review's fixes, and fixes for 19 of the 20 defects its
-final review found in them (the twentieth is filed as `ISSUES.md` TEST-9); `docs/SECURITY_REVIEW.md` (*The 2026-10-12 review*) maps every finding to
-its commit, an owner action or an accepted risk. Measured at the branch's head
-just before that record was written (`13916c9`; a branch hash, gone after the
-squash merge), with the shared `stoky` services and `TEST_DB_NAME=stoky_test_sec_int`:
-`bun run verify:ci` exit 0 in 154 seconds — lint 0 warnings over 493 files,
-typecheck clean, react-doctor no issues, 118 links against 35 routes, 96
-contrast checks, audit clean over 563 packages, 1,481 unit tests in 118 files,
-931 component tests in 77, 676 integration tests in 42, build with 8 Partial
-Prerender routes — on the host's Bun 1.4.2, one patch behind the pin; and
-`bun run test:e2e` **194 passed in 3.0 minutes** in
-`stoky-e2e:pw1.62.1-bun1.4.3`. **Owner actions still pending**, measured with
-`bun scripts/github-settings.ts check` (GET requests only) that day: 11 of 12
-settings drift — private vulnerability reporting, immutable releases, secret
-scanning and push protection, Dependabot security updates, CodeQL default
-setup, the Actions allow-list with SHA pinning, approval for every external
-contributor, squash-only merges, the two release-tag rulesets, and the
-ruleset exclusion Dependabot needs; Dependabot alerts are on. The rest of the
-review's owner actions (commit signing, an identity for agents, deleting two
-merged branches, the alpha.2 notes, the LICENSE holder, the development
-database's audit rows, and the first `rescan.yml` run) have no check and are
-listed in `docs/SECURITY_REVIEW.md`.
+final review found in them (the twentieth is filed as `ISSUES.md` TEST-9);
+`docs/SECURITY_REVIEW.md` (*The 2026-10-12 review*) maps every one of the 116
+reports to its commit, an owner action or an accepted risk. The final
+verification ran on its 98 commits after `e9d62eb`, ending at the first
+commit of that record (the hashes are the review table's; the squash merge
+replaces them), with the shared `stoky` services and
+`TEST_DB_NAME=stoky_test_sec_int`, every heavy command one at a time under a
+lock. What it measured:
+
+- **Every commit on its own.** In one detached worktree, at each of the 98:
+  `bun run typecheck`, `bun run lint`, `bun run test:unit` and
+  `bun run test:components`, all exit 0 at every commit, with no type error, no
+  lint error and no failing test (reinstalling and regenerating the Prisma
+  client wherever the manifest, lockfile or schema changed). Unit tests rise
+  from 897 in 98 files at the first commit to 1,481 in 118 at the last;
+  component tests from 879 to 931, in 77 files throughout. The first eleven
+  commits carry one lint warning (an unused `outsiderId` in
+  `integration/security-log.test.ts`) inherited from `master`; the twelfth,
+  "record household-scoped misses in the security log", removes it. Run with CI's placeholder `NEXTAUTH_SECRET` and a `.env`-less
+  tree; those suites touch no database.
+- **The head, whole.** `bun run verify:ci` exit 0 in 93 seconds: lint 0
+  warnings and 0 errors over 493 files and 101 rules; typecheck clean;
+  react-doctor no issues over 493 files; 118 links against 35 routes; 96
+  contrast checks, all AAA; audit clean over 563 packages; 1,481 unit tests in
+  118 files, 931 component tests in 77, 676 integration tests in 42; the build
+  (Next.js 16.4.0, Turbopack) generates 36 of 36 static pages and lists 8
+  Partial Prerender routes. `bun run test:e2e` **194 passed in 3.0 minutes**
+  on four workers, none retried (chromium 172, Mobile Safari 12, firefox 4,
+  webkit 4, seed 1, setup 1). `bash scripts/check-ci.sh` "CI lint: OK"
+  (actionlint, shellcheck; zizmor 1.16.3 "No findings to report", with
+  ten findings below its `regular` persona suppressed). `bun audit` at
+  every level: no vulnerabilities in 563 packages. All of this on the host's
+  Bun 1.4.2, one patch behind the 1.4.3 pin; the e2e and production images
+  carry 1.4.3.
+- **The production image** (`git archive HEAD | docker build --target
+  production`): 563 MB, runs as `bun` (uid 1000) under `dumb-init`,
+  `bun --version` 1.4.3, no `prisma/seed.ts` anywhere in it, the Prisma engine
+  and `spa.traineddata` checksums verified. Trivy 0.69.3 as CI runs it
+  (CRITICAL and HIGH, `--ignore-unfixed`): 0 vulnerabilities in Alpine 3.24.2's
+  20 packages and in all 73 Node package targets. Seen in passing and not
+  examined: inside it, `node --version` printed `error: Missing script to
+  execute` rather than a version; nothing in the application runs `node`.
+- **The release bundle, smoked** from `deploy/` with that image on a throwaway
+  Compose project (published on loopback only, removed afterwards): all four
+  services healthy. HTTP redirects to HTTPS and an unknown host gets 404. The
+  headers are as documented, HSTS without `preload` and a fresh CSP nonce on
+  every script. TLS 1.0 and 1.1, the 1.2 CBC suites and static-RSA are
+  refused, while 1.2 ECDHE-GCM and 1.3 (`X25519MLKEM768`) are accepted. The
+  first registration succeeds and the second gets 403. A signed-in session
+  uses a `__Secure-`, `HttpOnly`, `SameSite=Lax` cookie and gets `no-store`
+  answers. Cross-site and same-site POSTs get 403, logged as `access.denied`.
+  Multipart, text and octet-stream bodies get 415. A batch of 100 calls
+  answers, a batch of 101 gets 400, and none of 101 batched creates ran. Log
+  rotation, process and memory limits, `cap_drop: ALL`, `no-new-privileges`,
+  and read-only root filesystems for the app and Traefik are in place; only
+  Traefik publishes ports. Valkey is capped at 160 MiB with `allkeys-lru`. Two
+  limits on what this proves: ACME cannot issue for a test domain, so Traefik
+  served its default certificate; and the image carries no revision label, so
+  that it was built from that head is known from the build step, not from
+  the image.
+
+**Owner actions still pending.** `bun scripts/github-settings.ts check` (GET
+requests only), re-run 2026-10-12 after the verification above: 11 of its 12
+settings drift. They are private vulnerability reporting, immutable releases,
+secret scanning and push protection, Dependabot security updates, CodeQL
+default setup, the Actions allow-list with SHA pinning, approval for every
+external contributor, squash-only merges, the two release-tag rulesets, and the
+ruleset exclusion Dependabot needs. Dependabot alerts are on. The review's
+other owner actions have no check and are listed in `docs/SECURITY_REVIEW.md`
+(*Owner actions*): commit signing, an identity for agents, deleting two merged
+branches, the alpha.2 notes, the LICENSE holder, and the first `rescan.yml`
+run. Among them is **the audit's test account in the local development
+database**. An audit verifier registered `a@b.co` there, and it was still
+there on 2026-10-12, created 2026-10-11 23:14 (one read-only `SELECT`).
+Agents may not write to that database, so deleting it, with whatever it
+created, is the owner's.
 
 **2026-10-12 recovering from a refused migration:** a migration that fails
 leaves a failed row in `_prisma_migrations`, and every later start stops at
@@ -318,8 +373,8 @@ binary you happen to be holding.
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 118 links against 35 routes, none broken (2026-10-12, security branch head) |
-| Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-06) |
-| Unit tests | `bun run test:unit` | ✅ 1,481 pass / 118 files (2026-10-12, security branch head, host Bun 1.4.2) |
+| Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-12, security branch head) |
+| Unit tests | `bun run test:unit` | ✅ 1,483 pass / 118 files (2026-10-12, security branch head, host Bun 1.4.2: the final verification's 1,481 plus the two `ledger-shas` tests the review's record added) |
 | Component tests | `bun run test:components` | ✅ 931 pass / 77 files (2026-10-12, security branch head, host Bun 1.4.2) |
 | Integration tests | `bun run test:integration` | ✅ 676 pass / 42 files (2026-10-12, security branch head, host Bun 1.4.2) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |

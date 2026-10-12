@@ -29,6 +29,15 @@ import { join } from "node:path";
  * guard people learn to ignore. This one earns its keep locally, in
  * `verify:local`, which is before the push rather than after it, and that is
  * where a bad sha is written in the first place.
+ *
+ * **Branch commits, marked as such.** A review buffer branch is squash-merged
+ * (CLAUDE.md), so its commits never reach `master`; after the merge they
+ * resolve only from the pull request. A record that names them on purpose
+ * wraps them in `<!-- branch-commits <branch> since <base> -->` …
+ * `<!-- /branch-commits -->`. Inside, while the branch exists, the check is
+ * stricter than the one outside: every sha must be one of `<base>..<branch>`,
+ * not merely somewhere in the repository. Once the branch is gone they are
+ * left out and the run says so, as the shallow clone is.
  */
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
@@ -51,13 +60,56 @@ const ALLOWED: Record<string, string> = {
 };
 
 /** Every seven-hex-digit token in backticks, which is how this repo writes a sha. */
-function citedIn(file: string): string[] {
+function shasIn(text: string): string[] {
+  return [...text.matchAll(/`([0-9a-f]{7})`/g)].map((match) => match[1] as string);
+}
+
+const REGION =
+  /<!-- branch-commits (\S+) since ([0-9a-f]{7,40}) -->([\s\S]*?)<!-- \/branch-commits -->/g;
+
+interface BranchRegion {
+  file: string;
+  branch: string;
+  base: string;
+  shas: string[];
+}
+
+/** A ledger split into its marked branch-commit regions and everything else. */
+function parse(file: string): { outside: string[]; regions: BranchRegion[] } {
   const source = readFileSync(join(ROOT, file), "utf8");
-  return [...source.matchAll(/`([0-9a-f]{7})`/g)].map((match) => match[1] as string);
+  const regions = [...source.matchAll(REGION)].map((match) => ({
+    file,
+    branch: match[1] as string,
+    base: match[2] as string,
+    shas: shasIn(match[3] as string),
+  }));
+  return { outside: shasIn(source.replace(REGION, "")), regions };
+}
+
+function git(args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  });
+}
+
+/** The branch's ref, local or remote-tracking, or null once it is gone. */
+function refOf(branch: string): string | null {
+  const refs = git(["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"])
+    .split("\n")
+    .filter(Boolean);
+  return (
+    refs.find((ref) => ref === `refs/heads/${branch}`) ??
+    refs.find((ref) => ref.endsWith(`/${branch}`) && ref.startsWith("refs/remotes/")) ??
+    null
+  );
 }
 
 describe("the shas the documents cite", () => {
-  const cited = [...new Set(LEDGERS.flatMap(citedIn))].sort();
+  const parsed = LEDGERS.map(parse);
+  const cited = [...new Set(parsed.flatMap((ledger) => ledger.outside))].sort();
+  const regions = parsed.flatMap((ledger) => ledger.regions);
 
   it("finds plenty, so the check below is not vacuous", () => {
     // A regex that quietly matches nothing passes every assertion after it and
@@ -86,20 +138,46 @@ describe("the shas the documents cite", () => {
 
     // `--all` rather than `HEAD`: a sha on any branch or tag survives a clone,
     // and one that is only in this machine's reflog does not.
-    const reachable = new Set(
-      execFileSync("git", ["log", "--format=%h", "--all"], {
-        cwd: ROOT,
-        encoding: "utf8",
-        maxBuffer: 32 * 1024 * 1024,
-      })
-        .split("\n")
-        .filter(Boolean),
-    );
+    const reachable = new Set(git(["log", "--format=%h", "--all"]).split("\n").filter(Boolean));
 
     const dangling = cited.filter(
       (sha) => !reachable.has(sha) && !ALLOWED[sha],
     );
 
     expect(dangling).toEqual([]);
+  });
+
+  it("finds the branch-commit regions, each with shas in it", () => {
+    // The 2026-10-12 review's record is one. If the marker stopped matching,
+    // its shas would fall back to the looser check above and nothing would say.
+    expect(regions.length).toBeGreaterThan(0);
+    for (const region of regions) expect(region.shas.length).toBeGreaterThan(0);
+  });
+
+  it("cites, inside a branch-commit region, only that branch's own commits", () => {
+    const shallow = git(["rev-parse", "--is-shallow-repository"]).trim() === "true";
+    if (shallow) {
+      console.warn("ledger-shas: shallow clone, branch-commit regions not checked");
+      expect(shallow).toBe(true);
+      return;
+    }
+
+    const misplaced: string[] = [];
+    for (const region of regions) {
+      const ref = refOf(region.branch);
+      if (ref === null) {
+        // After the squash merge: these resolve from the pull request only.
+        console.warn(
+          `ledger-shas: ${region.branch} is gone, its ${region.shas.length} citations in ${region.file} not checked`,
+        );
+        continue;
+      }
+      const own = git(["log", "--format=%H", `${region.base}..${ref}`]).split("\n").filter(Boolean);
+      for (const sha of region.shas) {
+        if (!own.some((full) => full.startsWith(sha))) misplaced.push(`${region.file}: ${sha}`);
+      }
+    }
+
+    expect(misplaced).toEqual([]);
   });
 });

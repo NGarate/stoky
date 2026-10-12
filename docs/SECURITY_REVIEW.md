@@ -1049,75 +1049,211 @@ release bundle and image, CI and the supply chain. They reported 116 findings.
 Each went to two independent verifiers, who tried to refute it from the source
 and by running things: 110 were confirmed (26 medium, 60 low, 24
 informational), one was rejected, one stayed plausible, and four were disputed.
-Merged, the confirmed ones are about fifty distinct issues. Each was then
-decided: fixed in a commit of its own, with a test shown to fail without the
-fix; an action only the repository's owner can take; or a risk accepted, with
+Merged by cause, the 116 are 75 distinct issues. Each was then decided:
+fixed in a commit of its own (a code fix with a test shown to fail without
+it); an action only the repository's owner can take; or a risk accepted, with
 the reason written down. A final review of the finished branch, from the
 angles of bypass, upgrade, pipeline, documentation and code quality, found 20
 more defects in the remediation itself, most of them in its documents. The
-branch fixed 19 and filed the twentieth as TEST-9 in `ISSUES.md`. As with Phase 7, this reads code and runs
-suites and probes; it is not a penetration test of a deployed instance.
+branch fixed 19 and filed the twentieth as TEST-9 in `ISSUES.md`. As with
+Phase 7, this reads code and runs suites and probes; it is not a penetration
+test of a deployed instance.
 
-Commits are named by subject, not hash: the branch is squash-merged, so its
-hashes will not exist on `master`. Its pull request lists every commit.
+Commits are named by their hash on the branch and by their subject. The squash
+merge gives `master` one commit in their place; the pull request keeps every
+branch commit, so `git fetch origin pull/<number>/head` makes these hashes
+resolve again, and the subject finds the commit in the pull request's list.
+Hashes, and not subjects alone, because a hash is the one name a command can
+check (D132): `unit/ledger-shas.test.ts` checks that every hash between the
+`branch-commits` markers below is a commit of this branch, for as long as the
+branch exists.
+
+<!-- branch-commits fix/security-hardening-2026-10-12 since e9d62eb -->
 
 ### What it found, and what became of it
 
-| Area | Found | Outcome |
-|---|---|---|
-| Registration | Open to anyone who could reach an instance, with no switch (medium) | Fixed: "close registration after the first account unless the operator opens it", "show that registration is closed instead of a form that cannot succeed" — `STOKY_REGISTRATION`, `first-user` by default in production (D123) |
-| Sign-in lockout | Anyone who knew an address could keep its owner out on every device (medium) | Fixed for known browsers: "give known devices their own sign-in budget" (D124). Accepted for a browser that has never signed in (below) |
-| Session lifetime | A session in use never ended (medium) | Fixed: "end every session thirty days after sign-in" (D125) |
-| Passwords | Identity rule documented but not applied; no way to change one's own password or reset a member's; minimum not stated on screen | Fixed: "refuse a password built from the person's own email or name", "let a person change their own password", "let an admin reset a member's password", "hash and verify passwords through one helper", "state the twelve-character password minimum" |
-| Secret | Sessions signed by whatever Auth.js found, not the secret the startup guard checked | Fixed: "sign sessions with the secret the startup guard checked" |
-| Rate limits | `addMember` hashed unmetered; IPv6 clients could rotate inside their /64 | Fixed: "meter adding members, which hashes a password", "rate-limit IPv6 clients by their /64 prefix" |
-| HTTP edge | Unbounded bodies behind a proxy the prefetch path skips; unbounded tRPC batches; forms and cross-site requests reaching mutations; responses cacheable; matcher exclusions unanchored; image optimizer on | Fixed: from "build the tRPC route handler in one testable function" to "turn off the unused image optimizer", in branch order |
-| Headers | HSTS asked for preloading; no COOP/CORP; Permissions-Policy and Referrer-Policy too loose; Open Food Facts in `connect-src` | Fixed: "stop inviting HSTS preloading of the operator's domain", "isolate Stoky's pages and resources from other origins", "deny the browser features Stoky does not use", "keep the instance's origin out of the Referer sent to other origins", "drop Open Food Facts from connect-src" |
-| Data layer | Unbounded strings; fractional history limit; receipt over-fetch; row locks taken outside the household; location cycles; non-atomic household claim; household misses invisible; Prisma argument dumps in logs; replay records swept in a week | Fixed: from "bound every free-text input" to "keep replay records for ninety days". A double-replay window remains: OFFLINE-1 |
-| Uploads and OCR | Full-resolution photos; output size unbounded; ICC and APPn segments kept; recognition with no timeout; receipts left processing after a restart | Fixed: from "downscale receipt photos to a 4000-pixel long edge" to "fail receipts a restart left processing". No storage quota: UPLOAD-1 |
-| Open Food Facts | No timeout; misses re-asked; lookups unmetered; dead search code; anonymous User-Agent | Fixed: from "time out Open Food Facts lookups" to "identify Stoky to Open Food Facts by version and project URL" |
-| Logs | Emails of tried sign-ins in the log; a stack per failed sign-in; unbounded container logs; 100 lines per anonymous batch | Fixed: "log an account tag instead of the email a sign-in tried", "log failed sign-ins without a stack trace each", "rotate the bundle's container logs", "write at most one refusal line per anonymous tRPC request". Flushing by volume is accepted (below) |
-| Offline | The previous account's saved reads survived a change of account | Fixed: "forget the previous account's saved reads when its session ends" |
-| Public URL | A missing or plain-HTTP `NEXTAUTH_URL` went unnoticed | Fixed: "warn at startup when the public URL is missing or plain HTTP" (it warns rather than refuses: plain-HTTP LAN installs stay supported, D84) |
-| Release bundle | Valkey unbounded; no process limits; TLS defaults; idle connections held; Traefik phoning home and behind; service images by tag; install downloads followed any redirect | Fixed: from "rotate the bundle's container logs" to "refuse non-HTTPS redirects in the install downloads" |
-| Image | Demo seed shipped and able to run in production; nested env files and agent state in the build context; Prisma engines unverified; Bun behind a security release and pinned by tag; output depended on the host's umask | Fixed: from "leave the demo seed out of the production image" to "pin the Bun base image by digest", and "build the same image whatever the host's umask" |
-| CI | A cancel could leave a published image unattested; a dispatch could publish any branch; two actions pinned to tags; releases built from caches; scan before push, not of the pushed digest; packaged Compose by tag; release assets unattested; workflows unlinted | Fixed: from "never cancel a started run that can publish an image" to "attest the release installation files", and "lint the workflows with zizmor" |
-| Re-scanning (#17) | A published image was never re-scanned | Fixed: "re-scan the published release images every week" |
-| Supply chain | No update proposals; packages installed the day they were published; install scripts allowed for all; dev-only packages listed as dependencies; no licence text; vulnerability reports routed to a public tracker; repository settings undocumented | Fixed: from "let Dependabot propose dependency, action and image updates" to "codify the repository's security settings with a drift check". The settings themselves are owner actions (below) |
-| Documentation | Repository described as private; procedure and image counts; prefetch analysis; branch rule; personal data, outbound connections and secrets uninventoried; migration recovery and account erasure undocumented; Server Action bound values unguarded | Fixed: from "describe the repository as public, with attested images" to "align the workflow summaries with the branch rule for agent work", and from "inventory personal data, outbound connections and secret handling" to "refuse Server Actions that would carry bound values" |
-| Deferred defects | `generateFromLowStock` race; no `CHECK` constraints; no storage quota | Filed: SHOP-2, DB-1, UPLOAD-1 ("file the defects the security review deferred") |
+The 116 reports, merged by cause, are 75 distinct issues; the remediation plan
+counted about fifty, because it folded related headers, Traefik settings and
+repository settings into one item each. Every report is in exactly one row
+below. *Reports* is how many of the 116 described that issue, with the highest
+severity the verifiers gave it; *accepted* points to SECURITY.md,
+[*What the 2026-10-12 review accepted*](../SECURITY.md#what-the-2026-10-12-review-accepted),
+and *owner* to [Owner actions](#owner-actions).
 
-The four disputed findings, and why nothing changed for them: the iOS sibling
-client consumes nothing in this repository, and the cross-site rule keeps
-clients without Fetch Metadata working; the `generateFromLowStock` race is an
-integrity defect with no security gain (filed as SHOP-2); prefetch-labelled
-document requests skip the proxy, but documents are `no-store` (§8 corrected,
-pinned in e2e); `.dockerignore`'s root-only patterns are not exploitable from
-CI's clean checkout, and were fixed as hygiene. Remedies considered and
-rejected, with their reasons, are recorded beside the change each concerned
-(`SECURITY.md` and `docs/PROGRESS.md`): for example `sniStrict`, Valkey
-`noeviction`, counting only failed sign-ins, comparing `Origin` with
+#### Accounts and sign-in
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 1 | Registration open to anyone who reaches the instance, with no switch; the advice to restrict it at the proxy had no supported way to do so | 3, medium | `e6d263e` close registration after the first account unless the operator opens it; `6974fb6` show that registration is closed instead of a form that cannot succeed (D123). The first-user claim window: accepted |
+| 2 | No way to change one's own password or to reset a member's, so a leaked or admin-chosen password was permanent | 2, medium | `9c57340` hash and verify passwords through one helper; `f8f8205` let a person change their own password; `42fc6e9` let an admin reset a member's password |
+| 3 | Anyone who knows an address can keep its owner out of sign-in | 2, medium | `f95f282` give known devices their own sign-in budget (D124). A browser that has never signed in: accepted |
+| 4 | The identity password rule was documented and never applied; the screens stated a minimum of 8 | 1, low | `3d1c6a6` state the twelve-character password minimum; `65ad102` refuse a password built from the person's own email or name |
+| 5 | `register` and `addMember` reveal whether an address has an account | 2, low | Accepted; `first-user` closes the first after the first account |
+| 6 | `AUTH_SECRET` overrides the `NEXTAUTH_SECRET` the startup guard checks | 1, low | `1db505d` sign sessions with the secret the startup guard checked |
+| 7 | No absolute session lifetime; signing out does not invalidate a copied token | 1, low | `eed8b82` end every session thirty days after sign-in (D125). Per-session sign-out: accepted |
+| 8 | Cross-site requests rest on `SameSite=Lax` alone: tRPC takes multipart bodies, and input-less mutations take any input | 3, low | `5ebbd85` refuse cross-site and non-JSON requests to tRPC; `9068524` declare void inputs on the mutations that took none. A `__Host-` cookie prefix: rejected (Auth.js already sends `__Secure-` without `Domain`) |
+| 9 | `addMember` runs a 64 MiB Argon2id hash per call, unmetered | 1, medium | `cb4db92` meter adding members, which hashes a password; `8d04349` say a too-common password is the problem on the add-member form (final review) |
+| 10 | IPv6 clients share the bridge gateway's address; once IPv6 is on, one client rotates through its /64 | 1, medium | `a653ab1` rate-limit IPv6 clients by their /64 prefix. The shared default: accepted |
+| 11 | The security log holds every tried email in plaintext | 1, low | `511c193` log an account tag instead of the email a sign-in tried |
+| 12 | A missing or plain-HTTP `NEXTAUTH_URL` goes unnoticed | 1, low | `6acd907` warn at startup when the public URL is missing or plain HTTP. Plain-HTTP LAN installs: accepted (D84) |
+| 13 | Saved offline reads outlive a session that ends without the sign-out button | 1, low | `0f92a3a` forget the previous account's saved reads when its session ends. Up to 24 hours on a device left offline: accepted |
+| 14 | The native iOS client's sign-in is undocumented | 1, disputed | No change: nothing here consumes it, and #8 keeps clients without Fetch Metadata working |
+
+#### Authorisation and data
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 15 | Cross-household attempts were no longer security-logged | 1, low | `2f0d330` record household-scoped misses in the security log |
+| 16 | The isolation tripwire ignores `id`, `userId` and `parentId` | 1, low | `1088e94` cover the cross-household cases the tripwire cannot see |
+| 17 | Four write paths lock a product row before checking its household | 1, info | `46ce862` take row locks only inside the caller's household |
+| 18 | Receipt reads return the OCR dump, image path and uploader to every member | 1, low | `e51c722` return only the receipt fields the screens use |
+| 19 | An error log line can print Prisma's argument tree, hash included | 1, info | `96edf58` keep Prisma's argument dump out of error logs |
+| 20 | Concurrent location moves can form a cycle, and a later move loops forever | 1, medium | `b03754b` keep location moves from forming a cycle |
+| 21 | `register` and `household.create` can leave households with no members | 1, info | `2901d98` claim the account atomically when creating a household; `e6d263e` registers in one transaction |
+| 22 | An offline change resent after seven days is applied twice | 1, low | `366b303` keep replay records for ninety days. The client-side age gate: `ISSUES.md` OFFLINE-1 |
+| 23 | No `CHECK` constraints in the database | 1, info | Accepted; filed as `ISSUES.md` DB-1 by `cb972d4` file the defects the security review deferred |
+| 24 | `generateFromLowStock` races itself | 1, disputed | An integrity defect, not a security one: filed as `ISSUES.md` SHOP-2 by `cb972d4` |
+| 25 | Free-text inputs have no maximum length, including the unauthenticated ones | 2, medium | `bbf5c00` bound every free-text input; `b9a4221` accept only whole numbers for the history limit |
+| 26 | No inventory of personal data, an export that cannot answer an access request, and no erasure | 3, low | `67f9126` inventory personal data, outbound connections and secret handling; `77d6db1` document deleting a person's account by hand. In-app erasure: accepted |
+
+#### HTTP edge and headers
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 27 | A `Purpose: prefetch` header skips the proxy's body cap, and an unauthenticated POST is read whole | 2, medium | `2e9b15f` build the tRPC route handler in one testable function; `bbbdf54` bound request bodies in the API routes, not only in the proxy |
+| 28 | One tRPC batch runs hundreds of calls and writes a log line for each | 2, medium | `881c578` cap the number of calls in one tRPC batch; `46564ae` write at most one refusal line per anonymous tRPC request (final review, D131) |
+| 29 | tRPC responses carry no `Cache-Control` | 1, low | `3ff5fa8` mark every tRPC response no-store |
+| 30 | The proxy matcher's exclusions are unanchored prefixes | 1, low | `5c580a6` anchor the proxy matcher's exclusions |
+| 31 | `/_next/image` is live although nothing uses it | 1, low | `59b7e59` turn off the unused image optimizer |
+| 32 | HSTS asks for preloading of the operator's domain | 2, low | `5ebd8ed` stop inviting HSTS preloading of the operator's domain (D126) |
+| 33 | No Cross-Origin-Opener-Policy or Cross-Origin-Resource-Policy | 1, low | `ca43add` isolate Stoky's pages and resources from other origins |
+| 34 | Permissions-Policy names four features and claims to deny all | 1, info | `7df7574` deny the browser features Stoky does not use |
+| 35 | Product pages send the instance's origin to Open Food Facts; `connect-src` allows it needlessly | 2, low | `d9a2e37` keep the instance's origin out of the Referer sent to other origins (D127); `a18df04` drop Open Food Facts from connect-src |
+| 36 | Prefetch-labelled document requests skip the proxy | 1, disputed | Documents are `no-store`, so nothing caches them: `d83d80e` corrects §8 and pins `no-store` in e2e |
+| 37 | An absolute-form request line becomes an open redirect | 1, rejected | No change: a browser never sends an absolute-form request line to an origin server, so only the client that wrote one is redirected |
+
+#### Logs
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 38 | Container logs grow without bound, and every failed sign-in printed a stack | 2, medium | `f860b9f` rotate the bundle's container logs; `32a324b` log failed sign-ins without a stack trace each. An anonymous client rotating the log out: accepted |
+
+#### Uploads, OCR and outbound calls
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 39 | One receipt can exhaust the container's memory: OCR at full resolution with no timeout | 1, medium | `faf6ce8` downscale receipt photos to a 4000-pixel long edge; `8b86b42` time out recognition and replace a stuck worker; `a713491` fail receipts a restart left processing |
+| 40 | Re-encoding can turn 7 MB into 47 MB, with no quota and nothing deleted | 1, medium | `c910183` refuse a re-encoded receipt larger than the upload limit. The quota: accepted, `ISSUES.md` UPLOAD-1; Phase 7 #16 stays open |
+| 41 | ICC profiles and application segments survive the re-encode | 1, low | `88f1560` strip colour profiles and application segments from stored receipts |
+| 42 | Open Food Facts lookups have no deadline, are unmetered, and ask again for every miss | 2, low | `dbc2756` time out Open Food Facts lookups; `dc2d9bd` remember barcodes Open Food Facts does not know; `addb78e` meter Open Food Facts lookups that miss the cache; `c7f243c` remove the unused Open Food Facts search; `e4a7fad` identify Stoky to Open Food Facts by version and project URL |
+| 43 | The scanners cannot see the Bun runtime and its image decoders, and nothing re-scans a published image | 3, medium | `77356c8` re-scan the published release images every week (closes Phase 7 #17; its first run is an owner action). Bun's absence from Trivy's inventory: accepted |
+
+#### Release bundle and image
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 44 | Valkey has no memory bound, no service has a process limit, Traefik runs as root | 2, low | `d3f44ee` bound Valkey's memory with least-recently-used eviction (D129); `47f700c` limit how many processes each service may start. Traefik as root: accepted. Fixed CPU limits: rejected |
+| 45 | Traefik accepts CBC-SHA1 suites | 1, low | `ab7601c` require TLS 1.2 or later with forward-secret AEAD suites (D128) |
+| 46 | Traefik holds idle connections, with no per-address cap | 1, low | `881f41e` close idle client connections sooner at Traefik. A per-address cap: accepted |
+| 47 | Traefik checks for new versions | 1, info | `ca63982` stop Traefik checking for new versions |
+| 48 | The bundle's service images and the Bun base are named by mutable tags | 5, medium | `526ca29` update Traefik to v3.7.14; `3574344` pin the bundle's service images by digest (D130); `069734b` pin the Bun base image by digest |
+| 49 | Bun 1.4.0, three patches behind TLS and HTTP fixes | 1, low | `56be452` update Bun to 1.4.3 for its TLS and HTTP fixes |
+| 50 | The install downloads follow any redirect | 1, info | `315efe0` refuse non-HTTPS redirects in the install downloads |
+| 51 | The application is PostgreSQL's superuser, and Valkey has no password | 1, low | Accepted |
+| 52 | Secrets reach the containers as environment variables, and backups hold them in plaintext | 1, info | Documented by `67f9126`; `_FILE` secrets: accepted |
+| 53 | The production image ships the demo seed, runnable, with a published password | 1, info | `89edbb5` leave the demo seed out of the production image; `fe985f9` make the demo seed refuse production and apply atomically |
+| 54 | `.dockerignore` matches only the context root | 1, disputed | Not exploitable from CI's clean checkout; fixed as hygiene by `8a6b485` exclude nested env files and local agent state from the build context |
+| 55 | The Prisma engines enter the image unverified | 1, low | `7b5bbeb` verify the Prisma engines against pinned checksums |
+| 56 | Next's preview id and Server Action key are in the public image | 1, info | `4660375` refuse Server Actions that would carry bound values. The keys themselves: accepted |
+| 57 | A refused migration leaves the app in a restart loop, and the release notes' remedy fails | 1, low | `8a3a994` explain recovery from the failed email normalisation migration |
+
+#### CI and release integrity
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 58 | Cancelling a run mid-publish can leave an image unattested | 1, plausible | `6165fa0` never cancel a started run that can publish an image |
+| 59 | A `workflow_dispatch` from any branch publishes an image | 2, low | `b3fe22c` publish images only from pushes |
+| 60 | Two actions pinned to tag objects, not commits | 1, info | `5bc8fc6` pin the attestation and SARIF actions by commit |
+| 61 | Releases are rebuilt from shared caches, and the pushed digest is never scanned | 2, medium | `648f6c8` build and package releases without restoring caches; `7891107` scan the pushed release digest before promoting it. `master`'s `latest` from the cache: accepted |
+| 62 | The bundle names the application image by a mutable tag | 1, medium | `09ecfb6` name the release image by digest in the packaged Compose file |
+| 63 | Release assets are unsigned and releases mutable | 3, medium | `47692a9` attest the release installation files. Immutable releases: owner. alpha.1 and alpha.2 unattested, and the `candidate-` label: accepted |
+| 64 | Unattended agents push as the owner, past the documented branch rule | 1, medium | `d6a999f` align the workflow summaries with the branch rule for agent work. An identity for agents and the signing decision: owner |
+
+#### Supply chain and repository
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 65 | Nothing proposes dependency, action or image updates | 2, low | `d1d1723` let Dependabot propose dependency, action and image updates. Security updates and the ruleset exclusion it needs: owner |
+| 66 | Packages are installed the day they are published | 1, low | `4c4e9f4` hold newly published packages for three days before installing them |
+| 67 | Install scripts allowed for packages that do not need them | 1, low | `3f4f556` allow install scripts only for the packages that need them |
+| 68 | Type packages and TypeScript listed as runtime dependencies | 1, info | `64c7d6d` list only what the application runs as dependencies |
+| 69 | No licence text; empty OCI licence labels | 2, info | `c229051` add the ISC licence text the manifest declares. Confirming the holder: owner |
+| 70 | The private reporting channel SECURITY.md names is switched off | 2, low | `fc63185` route vulnerability reports to the private advisory form. Switching it on: owner |
+| 71 | Secret scanning, push protection and CodeQL off; any action allowed; fork runs approved only for first-timers | 4, low | `ec35c67` codify the repository's security settings with a drift check; `d141544` lint the workflows with zizmor. The settings: owner |
+| 72 | Release tags can be moved; the signature rule is bypassed by its only pusher | 2, low | `ec35c67` (the tag rulesets). Applying them, and deciding on signing: owner |
+| 73 | Merge and rebase merges allowed; merged branches kept | 1, info | `ec35c67` (squash-only merges). Applying them and deleting two branches: owner |
+
+#### Documentation
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 74 | The repository described as private and its attestations as absent | 6, low | `c36087b` describe the repository as public, with attested images |
+| 75 | Procedure and exemption counts, the header and sign-out posture, and the pre-Bun production Compose file misstated | 3, info | `e465b2b` correct the procedure counts and image description in the security review |
+
+#### Commits no audit report named
+
+Two enabled others (`2e9b15f`, `9c57340`, above). `990c606` build the same
+image whatever the host's umask fixed an image that would not start when built
+from a checkout made under umask 077, found while building it. The final
+review's own findings were fixed in the commits they concerned before this
+record was written, or in commits of their own: `46564ae` and `8d04349`
+(above), `7c31e41` point the rate-limit defaults at the code, and the
+re-encoder at Bun.Image, `b633684` give SECURITY.md log commands that parse
+Compose's output, `f31572c` count seven persisted offline queries in STATUS,
+`f1c2921` title SECURITY.md's rate-limit section by what it limits, and
+`13916c9` point the document map at the root ISSUES.md and SECURITY.md. The
+twentieth, a test gap in the member reset, is `ISSUES.md` TEST-9 and is
+accepted until fixed. `b61b451` and the commit after it record the review.
+
+The four disputed findings (#14, #24, #36, #54) and the rejected one (#37) are
+in the tables with the reason nothing, or only hygiene, changed. Remedies
+considered and rejected, with their reasons, are recorded beside the change
+each concerned (`SECURITY.md` and `docs/PROGRESS.md`): for example `sniStrict`,
+Valkey `noeviction`, counting only failed sign-ins, comparing `Origin` with
 `NEXTAUTH_URL`, `Referrer-Policy: no-referrer`, and `enable_ipv6` by default.
+
+<!-- /branch-commits -->
 
 ### Accepted
 
 `SECURITY.md`, [*Known gaps*](../SECURITY.md#what-the-2026-10-12-review-accepted),
-lists each accepted risk with its reasoning and what would change it. They are
-nineteen, and none lets one household read or change another's data.
+lists each accepted risk with its reasoning and what would change it: the
+nineteen the remediation plan accepted, and two the final review added (an
+anonymous client can still rotate the log out, and TEST-9's untested guard).
+None lets one household read or change another's data.
 
 ### Owner actions
 
-The branch cannot change repository settings. These are the owner's, with
-their commands in the review plan, and `docs/STATUS.md` tracks which are done:
-private vulnerability reporting, immutable releases, secret scanning with push
-protection, CodeQL default setup, Dependabot security updates and the ruleset
-exclusion that lets Dependabot open branches, an Actions allow-list with SHA
-pinning, approval for every external contributor's workflow runs, squash-only
-merges, release-tag rulesets, a decision on commit signing, an identity for
-unattended agents, deleting two merged branches, refreshing the alpha.2 notes,
-confirming the LICENSE holder, cleaning the audit's test rows from the
-development database, and — after the squash merge — running
-`bun scripts/github-settings.ts check` and the first `rescan.yml`.
+The branch cannot change repository settings. Seventeen actions are the
+owner's; `docs/STATUS.md` records which are still pending, as measured.
+
+- **Ten settings `scripts/github-settings.ts` codifies** (`check` reads them
+  with GET requests only; `apply` writes those that drift): private
+  vulnerability reporting, immutable releases, secret scanning with push
+  protection, CodeQL default setup with the extended suite, Dependabot
+  security updates, an Actions allow-list with SHA pinning (once the
+  re-pinned actions are on `master`), approval for every external
+  contributor's workflow runs, squash-only merges that delete their branch,
+  the two release-tag rulesets, and the ruleset exclusion that lets
+  Dependabot open branches. Dependabot alerts, the script's twelfth check, are
+  already on.
+- **Seven with no script:** a decision on commit signing; an identity for
+  unattended agents without the ruleset bypass; deleting two merged branches;
+  refreshing the alpha.2 release notes; confirming the LICENSE holder;
+  deleting the audit verifiers' test data from the development database and
+  Valkey (a verifier registered `a@b.co` there, and agents may not write to
+  it); and, after the squash merge, running `bun scripts/github-settings.ts
+  check` and the new workflows once, the first `rescan.yml` among them.
 
 ---
 

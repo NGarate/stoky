@@ -1909,6 +1909,13 @@ full in the section named.
   reads `candidate-v…`. Attestations and immutable releases are not
   retroactive; the label is cosmetic, and the promoted digest is the one that
   was smoked, scanned and attested.
+- **Nothing tests that the caller's own row has no reset button, and a
+  self-reset would be reported as "too easy"** (`ISSUES.md` TEST-9). Deferred
+  by the final review of the branch that added the reset: the server refuses a
+  self-reset and the people screen offers none today, so this is a missing
+  test and a wrong message waiting for a regression, not a way in. A test that
+  goes red without the screen's `me.data.id !== member.id` check, and
+  `resetRefusalOf` giving the self-reset refusal its own answer, close it.
 
 ---
 
