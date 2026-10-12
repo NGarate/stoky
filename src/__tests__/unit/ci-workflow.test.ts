@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -56,9 +56,9 @@ type Context = Record<string, string | boolean>;
 /**
  * Just enough of GitHub's expression language for the conditions below:
  * context properties, single-quoted strings, integers, booleans, `==`, `!=`,
- * `!`, `&&`, `||` and parentheses. String comparison is case-insensitive, as
- * GitHub's is. Anything else throws, so the test fails loudly instead of
- * guessing.
+ * `!`, `&&`, `||`, parentheses and `always()`. String comparison is
+ * case-insensitive, as GitHub's is. Anything else throws, so the test fails
+ * loudly instead of guessing.
  */
 function evaluate(expression: string, context: Context): unknown {
   const tokens =
@@ -83,6 +83,15 @@ function evaluate(expression: string, context: Context): unknown {
       return value;
     }
     if (token === "!") return !primary();
+    // `always()`, the one status function a condition below uses: true
+    // whatever the earlier steps did.
+    if (token === "always" && peek() === "(") {
+      take();
+      if (take() !== ")") {
+        throw new Error(`always takes no argument: ${expression}`);
+      }
+      return true;
+    }
     if (token.startsWith("'")) return token.slice(1, -1).replaceAll("''", "'");
     if (/^\d+$/.test(token)) return Number(token);
     if (token === "true") return true;
@@ -533,28 +542,28 @@ describe("the CI workflow's release attests its installation files", () => {
   });
 });
 
-// Every action is pinned by commit SHA with its exact version beside it. Two
-// pins were once the SHAs of annotated tag objects (`# v2`, `# v3`): the runner
-// resolves those, but the commits API answers 422 for them, so Dependabot and
-// SHA-pinning enforcement cannot reliably check or bump them, and a major-only
-// comment does not say which release the SHA is. Whether a SHA is a commit can
-// only be asked of GitHub, so the known tag objects are named here and the rest
-// is checked by `gh api repos/<owner>/<repo>/commits/<sha>` when a pin changes.
-describe("the CI workflow's action pins", () => {
-  const source = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
-  const lines = source
-    .split("\n")
-    .filter((line) => /^\s*(-\s+)?uses:/.test(line));
+// Every action is pinned by commit SHA with its exact version beside it, in
+// every workflow. Two pins were once the SHAs of annotated tag objects (`# v2`,
+// `# v3`): the runner resolves those, but the commits API answers 422 for them,
+// so Dependabot and SHA-pinning enforcement cannot reliably check or bump them,
+// and a major-only comment does not say which release the SHA is. Whether a SHA
+// is a commit can only be asked of GitHub, so the known tag objects are named
+// here and the rest is checked by `gh api repos/<owner>/<repo>/commits/<sha>`
+// when a pin changes.
+describe("the workflows' action pins", () => {
+  const directory = join(root, ".github/workflows");
+  const files = readdirSync(directory).filter((file) => /\.ya?ml$/.test(file));
+  const sources = files.map((file) => ({
+    file,
+    source: readFileSync(join(directory, file), "utf8"),
+  }));
+  const usesLines = (source: string) =>
+    source.split("\n").filter((line) => /^\s*(-\s+)?uses:/.test(line));
+  const lines = sources.flatMap(({ file, source }) =>
+    usesLines(source).map((line) => ({ file, line })),
+  );
   const pin =
     /^\s*(?:-\s+)?uses: ([\w.-]+\/[\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40}) # (v?\d+\.\d+\.\d+)$/;
-
-  // The parsed workflow, so a pin written in a form the line scan misses (a
-  // quoted value, a flow mapping) is counted and fails the comparison below.
-  const parsedUses = Object.values(workflow.jobs ?? {}).flatMap((job) =>
-    ((job as { steps?: Array<{ uses?: unknown }> }).steps ?? [])
-      .map((step) => step.uses)
-      .filter((uses) => uses !== undefined),
-  );
 
   const tagObjects = [
     // actions/attest-build-provenance tag object `v2` -> commit e8998f9 (v2.4.0)
@@ -563,26 +572,47 @@ describe("the CI workflow's action pins", () => {
     "c3400c2f38909e0dcf3c3a41f2030a8217be5d3e",
   ];
 
-  it("scans every step that uses an action", () => {
-    expect(lines.length).toBeGreaterThan(0);
-    expect(lines.length).toBe(parsedUses.length);
+  it("reads both workflows", () => {
+    expect(files).toContain("ci.yml");
+    expect(files).toContain("rescan.yml");
   });
 
-  it.each(lines.map((line) => [line.trim()]))(
+  // The parsed workflow, so a pin written in a form the line scan misses (a
+  // quoted value, a flow mapping) is counted and fails the comparison.
+  it.each(sources.map(({ file, source }) => [file, source]))(
+    "scans every step that uses an action: %s",
+    (_, source) => {
+      const parsed = Bun.YAML.parse(source) as {
+        jobs?: Record<string, { steps?: Array<{ uses?: unknown }> }>;
+      };
+      const parsedUses = Object.values(parsed.jobs ?? {}).flatMap((job) =>
+        (job.steps ?? [])
+          .map((step) => step.uses)
+          .filter((uses) => uses !== undefined),
+      );
+      expect(usesLines(source).length).toBeGreaterThan(0);
+      expect(usesLines(source).length).toBe(parsedUses.length);
+    },
+  );
+
+  it.each(lines.map(({ file, line }) => [`${file}: ${line.trim()}`, line]))(
     "pins by a 40-hex SHA with the exact version: %s",
-    (line) => {
+    (_, line) => {
       expect(line).toMatch(pin);
     },
   );
 
   it("pins no annotated tag object", () => {
-    for (const sha of tagObjects) expect(source).not.toContain(sha);
+    for (const { source } of sources) {
+      for (const sha of tagObjects) expect(source).not.toContain(sha);
+    }
   });
 
+  // Across workflows too, so the weekly rescan cannot drift from ci.yml's pin.
   it("names one version for each SHA of an action, and one SHA per version", () => {
     const versions = new Map<string, string>();
     const shas = new Map<string, string>();
-    for (const line of lines) {
+    for (const { line } of lines) {
       const match = line.match(pin);
       if (!match) continue; // reported by the test above
       const [, repo, sha, version] = match;
@@ -592,5 +622,208 @@ describe("the CI workflow's action pins", () => {
       versions.set(`${repo}@${sha}`, plain);
       shas.set(`${repo}@${plain}`, sha);
     }
+  });
+});
+
+// A release is scanned once, before its version tag exists; ci.yml runs only
+// on a push, a pull request or a dispatch, so on a quiet trunk an advisory
+// published later reached nobody (SECURITY_REVIEW #17). rescan.yml scans the
+// newest published release's images every week with the release gate's
+// scanner. These hold its shape: a schedule, no trigger that runs other code,
+// least privilege, no cache, every image of the release, and a gate that fails.
+describe("the weekly rescan of the published release", () => {
+  type Step = {
+    id?: string;
+    if?: unknown;
+    uses?: unknown;
+    run?: unknown;
+    env?: Record<string, unknown>;
+    with?: Record<string, unknown>;
+  };
+  type Job = {
+    needs?: unknown;
+    if?: unknown;
+    "continue-on-error"?: unknown;
+    env?: Record<string, unknown>;
+    permissions?: Record<string, unknown>;
+    strategy?: { "fail-fast"?: unknown; matrix?: Record<string, unknown> };
+    outputs?: Record<string, unknown>;
+    steps?: Step[];
+  };
+  const rescan = Bun.YAML.parse(
+    readFileSync(join(root, ".github/workflows/rescan.yml"), "utf8"),
+  ) as {
+    on?: Record<string, unknown>;
+    env?: Record<string, unknown>;
+    permissions?: Record<string, unknown>;
+    jobs?: Record<string, Job>;
+  };
+  const jobs = rescan.jobs ?? {};
+  const steps = Object.values(jobs).flatMap((job) => job.steps ?? []);
+  const trivySteps = steps.filter(
+    (step) =>
+      typeof step.uses === "string" &&
+      step.uses.startsWith("aquasecurity/trivy-action@"),
+  );
+
+  /** The scan job: the one whose matrix supplies the image. */
+  const scanJob = () => {
+    const found = Object.entries(jobs).find(([, job]) =>
+      job.steps?.some((s) => String(s.with?.["image-ref"]).includes("matrix.")),
+    );
+    if (!found) throw new Error("rescan.yml has no job scanning a matrix image");
+    return found;
+  };
+
+  /** The minimal cron form: five fields, each a literal or `*`. */
+  const cron = () => {
+    const schedule = rescan.on?.schedule as Array<{ cron?: unknown }> | undefined;
+    expect(schedule).toHaveLength(1);
+    return String(schedule?.[0]?.cron).trim().split(/\s+/);
+  };
+
+  it("runs on a weekly schedule and by hand, never on pushed or proposed code", () => {
+    expect(Object.keys(rescan.on ?? {}).toSorted()).toEqual([
+      "schedule",
+      "workflow_dispatch",
+    ]);
+    const [minute, hour, dayOfMonth, month, dayOfWeek] = cron();
+    expect(minute).toMatch(/^\d{1,2}$/);
+    expect(hour).toMatch(/^\d{1,2}$/);
+    expect(dayOfMonth).toBe("*");
+    expect(month).toBe("*");
+    expect(dayOfWeek).toMatch(/^[0-6]$/);
+  });
+
+  it("starts off the hour, when GitHub delays schedules most", () => {
+    expect(cron()[0]).not.toBe("0");
+  });
+
+  it("grants only contents: read by default", () => {
+    expect(rescan.permissions).toEqual({ contents: "read" });
+  });
+
+  it("grants write only to the scan job, and only for its SARIF upload", () => {
+    const [name, scan] = scanJob();
+    expect(scan.permissions).toEqual({
+      contents: "read",
+      "security-events": "write",
+      actions: "read",
+    });
+    for (const [other, job] of Object.entries(jobs)) {
+      if (other === name) continue;
+      for (const level of Object.values(job.permissions ?? {})) {
+        expect(level).not.toBe("write");
+      }
+    }
+  });
+
+  it("scans the newest published release, prereleases included", () => {
+    const release = steps.find(
+      (s) => typeof s.run === "string" && s.run.includes("gh release list"),
+    );
+    if (typeof release?.run !== "string") {
+      throw new Error("rescan.yml does not resolve a release");
+    }
+    // Every release so far is an alpha; `releases/latest` answers 404 for them.
+    expect(release.run).toContain("--exclude-drafts");
+    expect(release.run).not.toContain("--exclude-pre-releases");
+    expect(release.run).not.toContain("releases/latest");
+  });
+
+  it("scans every image the release's own Compose file resolves", () => {
+    const images = steps.find(
+      (s) => typeof s.run === "string" && s.run.includes("config --format json"),
+    );
+    if (typeof images?.run !== "string" || !images.id) {
+      throw new Error("rescan.yml does not read the release's Compose file");
+    }
+    expect(images.run).toMatch(/gh release download "\$RELEASE_TAG" --pattern docker-compose\.yml/);
+    expect(images.env?.STOKY_VERSION).toBe(images.env?.RELEASE_TAG);
+
+    // The image list reaches the matrix unchanged: step -> job output -> include.
+    const [producer, producerJob] = Object.entries(jobs).find(([, job]) =>
+      job.steps?.includes(images),
+    ) ?? ["", {} as Job];
+    const output = Object.entries(producerJob.outputs ?? {}).find(([, value]) =>
+      new RegExp(`steps\\.${images.id}\\.outputs\\.images\\b`).test(String(value)),
+    )?.[0];
+    expect(output).toBeDefined();
+    const [, scan] = scanJob();
+    expect(String(scan.strategy?.matrix?.include).replace(/\s+/g, "")).toBe(
+      `\${{fromJSON(needs.${producer}.outputs.${output})}}`,
+    );
+    expect(scan.needs).toEqual([producer]);
+  });
+
+  it("keeps scanning the other images when one is red", () => {
+    expect(scanJob()[1].strategy?.["fail-fast"]).toBe(false);
+  });
+
+  it("runs Trivy pinned, from the registry, with no Actions cache", () => {
+    expect(trivySteps).toHaveLength(2);
+    for (const step of trivySteps) {
+      expect(String(step.with?.cache)).toBe("false");
+      expect(step.with?.version).toBe("v0.69.3");
+      expect(step.env?.TRIVY_IMAGE_SRC).toBe("remote");
+      expect(step.with?.["image-ref"]).toBe("${{ matrix.image }}");
+    }
+  });
+
+  it("uses the scanner version the release gate uses", () => {
+    const releaseScan = workflow.jobs?.["release-draft"]?.steps?.find(
+      (s) =>
+        typeof s.uses === "string" &&
+        s.uses.startsWith("aquasecurity/trivy-action@"),
+    );
+    for (const step of trivySteps) {
+      expect(step.uses).toBe(releaseScan?.uses);
+      expect(step.with?.version).toBe(releaseScan?.with?.version);
+    }
+  });
+
+  it("fails the run on a fixable critical or high finding, skipping only gosu", () => {
+    const gates = trivySteps.filter((s) => String(s.with?.["exit-code"]) === "1");
+    expect(gates).toHaveLength(1);
+    const [gate] = gates;
+    expect(gate.with?.severity).toBe("CRITICAL,HIGH");
+    expect(String(gate.with?.["ignore-unfixed"])).toBe("true");
+    expect(gate.if).toBeUndefined();
+    expect((gate as { "continue-on-error"?: unknown })["continue-on-error"]).toBeUndefined();
+    // One file, measured unreachable; anything broader is a new decision.
+    expect(gate.with?.["skip-files"]).toBe("usr/local/bin/gosu");
+    expect(gate.with?.["skip-dirs"]).toBeUndefined();
+    expect(gate.with?.trivyignores).toBeUndefined();
+    // The report keeps what the gate skips.
+    const report = trivySteps.find((s) => s !== gate);
+    expect(report?.with?.format).toBe("sarif");
+    expect(report?.with?.["skip-files"]).toBeUndefined();
+    // Nor can the gate be quieted from around it: a job that may fail, a job
+    // that never runs, or a TRIVY_* variable (TRIVY_SKIP_DIRS, TRIVY_IGNOREFILE,
+    // TRIVY_EXIT_CODE) set on the workflow, the job or a step.
+    const [, scan] = scanJob();
+    expect(scan.if).toBeUndefined();
+    expect(scan["continue-on-error"]).toBeUndefined();
+    const trivyEnv = [rescan.env, scan.env, ...trivySteps.map((s) => s.env)]
+      .flatMap((env) => Object.keys(env ?? {}))
+      .filter((name) => name.startsWith("TRIVY_") && name !== "TRIVY_IMAGE_SRC");
+    expect(trivyEnv).toEqual([]);
+  });
+
+  it("uploads a report per image, apart from master's, wherever GitHub accepts it", () => {
+    const upload = steps.find(
+      (s) =>
+        typeof s.uses === "string" &&
+        s.uses.startsWith("github/codeql-action/upload-sarif@"),
+    );
+    if (!upload) throw new Error("rescan.yml uploads no SARIF");
+    const category = String(upload.with?.category);
+    expect(category).toContain("${{ matrix.service }}");
+    expect(category).not.toBe("trivy");
+    const visibility = String(upload.if).match(/needs\.([\w-]+)\.outputs\.([\w-]+)/);
+    if (!visibility) throw new Error("the upload does not read the visibility");
+    const key = `needs.${visibility[1]}.outputs.${visibility[2]}`;
+    expect(condition(upload.if, { [key]: "false" })).toBe(true);
+    expect(condition(upload.if, { [key]: "true" })).toBe(false);
   });
 });

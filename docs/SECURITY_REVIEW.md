@@ -55,7 +55,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
 | 15 | No test ever performs a *successful* upload | Medium | ✅ Verified, refined, closed `5d49d99` `76f5c80` | — |
 | 16 | Uploaded images are never deleted | Medium | Reported | owner |
-| 17 | A published image is never re-scanned | Medium | Reported | operator |
+| 17 | A published image is never re-scanned | Medium | ✅ Closed 2026-10-12: weekly `rescan.yml`; first GitHub run pending | owner |
 | 18 | The request-body ceiling sat below the documented upload limit | Medium | ✅ Fixed `74788ab`, verified | — |
 
 Finding 18 was not on the list this review set out with. It came out of
@@ -501,8 +501,55 @@ open* items, the placeholder-secret guard has been closed since 2026-10-06:
 `src/instrumentation.ts` runs the check at start-up and the process exits with
 status 1, and `/api/health` answers 503 on the same check, so the container
 neither serves nor reports healthy (SECURITY.md, *The session signing key
-cannot be the example one*). The re-scanning item is not re-examined by this
-correction.
+cannot be the example one*). The re-scanning item is closed by the paragraph
+below.
+
+**Closed 2026-10-12: the published release is re-scanned every week (#17).**
+`.github/workflows/rescan.yml` runs on Mondays and by hand. It takes the newest
+non-draft release, prereleases included (`gh api
+repos/NGarate/stoky/releases/latest` answered 404 that day, every release being
+an alpha), downloads its `docker-compose.yml`, and scans each image
+`docker compose config` resolves from it with `release-draft`'s scanner: Trivy
+0.69.3 pinned, from the registry, no Actions cache, failing on a fixable
+CRITICAL or HIGH finding. One job per image uploads its report under
+`trivy-release-<service>`, apart from master's `trivy`. Only the scan job holds
+more than `contents: read`: `security-events: write` and `actions: read`.
+`unit/ci-workflow.test.ts` holds the schedule, the triggers, the permissions,
+the pins (now in every workflow), the cache, the gate and the upload condition,
+and goes red for each when it is undone. The first scheduled run on GitHub had
+not happened when this was written; the owner dispatches one after the merge.
+
+Run by hand the same day with the same scanner and flags, against
+`v0.1.0-alpha.3`'s images:
+
+| Image | Fixable CRITICAL/HIGH |
+|---|---|
+| `ghcr.io/ngarate/stoky:v0.1.0-alpha.3` | 0 |
+| `valkey/valkey:8-alpine` | 0 |
+| `postgres:16-alpine` | 25 in `/usr/local/bin/gosu` (Go 1.24.6 stdlib), 0 elsewhere |
+| `traefik:v3.7.13` | 4 HIGH: Go 1.26.8 stdlib and `golang.org/x/net` 0.58.0 |
+
+Two decisions came out of that table:
+
+- **gosu is left out of the gate, not the report.** The 25 advisories are in
+  `net`, `net/http`, `crypto/tls`, `crypto/x509`, `net/url`, `net/mail`, `mime`,
+  `encoding/*`, `html/template`, `x/net` and `os.Root`. The gosu binary copied
+  out of `postgres:16-alpine` (`sha256:721873c3…`) names no function from any
+  of them (`strings` finds none), and the entrypoint runs it once, as root, to
+  re-run itself as the postgres user (`exec gosu postgres "$BASH_SOURCE"`). Gating on it would keep the
+  run red every week with nothing to act on. The test refuses any other skip.
+- **Traefik stays gated, and the first run will be red because of it.** The
+  four are denial-of-service advisories in HTTP/2, Range-header and TLS
+  handling, published 2026-10-08, in the one component that faces the
+  internet. `traefik:v3.7.14` carries the same four, so updating to it does not
+  clear them; a Traefik release built with Go 1.26.9 and `x/net` 0.60.0, then a
+  Stoky release naming it, does. That red run is the finding reaching the
+  owner, which is what #17 asked for.
+
+What the re-scan does not cover is what the release scan does not: the
+packages Next compiles into `.next/server/chunks` (next-auth, `@auth/core`,
+`jose`, tRPC, zod among them) have no `package.json` in the image, and the Bun
+binary is in no package database. Re-scanning the image cannot see either.
 
 ## 8. Headers in production
 

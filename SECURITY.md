@@ -292,7 +292,7 @@ Verified against the files named in each row.
   that procedure's case fail ("blocked" after the 5-second ceiling) and left
   the other three passing.
 
-### Supply chain — `.github/workflows/ci.yml`
+### Supply chain — `.github/workflows/`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
   can be moved and a SHA cannot. The comment beside each pin names the exact
@@ -375,6 +375,22 @@ Verified against the files named in each row.
   setting. `v0.1.0-alpha.3` was assembled from that cache: in run
   `38178388250` every Dockerfile step of its publish build but the last was
   `CACHED`, and `release-draft` logged a cache hit for Bun.
+- **The newest published release is re-scanned every week**
+  (`.github/workflows/rescan.yml`, Mondays and by hand). It downloads that
+  release's `docker-compose.yml` and scans every image Compose resolves from it
+  — the application at its digest, PostgreSQL, Valkey and Traefik — with
+  `release-draft`'s scanner and gate (Trivy 0.69.3, from the registry, no Actions
+  cache, fixable CRITICAL/HIGH), uploading one SARIF report per image and failing
+  the run so the failure reaches the maintainer. The workflow holds
+  `contents: read`; only its scan job adds `security-events: write` and
+  `actions: read` for the upload. The gate leaves out postgres's
+  `/usr/local/bin/gosu`, whose 25 findings on 2026-10-12 were all in Go
+  packages the binary does not link; the report keeps them. Before this, a
+  release was scanned once and an advisory published later reached nobody until
+  the next push. Neither scan sees dependencies compiled into the `.next` bundle
+  or the Bun binary itself. [Releasing](docs/RELEASING.md#after-publication-weekly-re-scans)
+  says what a red run asks for. `ci-workflow.test.ts` holds the schedule, the
+  permissions, the pins and the gate.
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.
@@ -760,8 +776,8 @@ was still not produced by a tool.
   to trusted testers; there is no invitation-only switch.
 - No account lockout, no password reset flow, no email verification, no
   two-factor authentication.
-- No secret scanning or SAST in CI. `ci.yml` is the only workflow; Trivy scans
-  the image, not the source.
+- No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the
+  only workflows; Trivy scans images, not the source.
 
 ---
 
@@ -794,9 +810,12 @@ does not replace running containers; `docker compose up -d --wait` does.
 Do not automatically follow `latest` for an alpha installation.
 
 Trivy checks images before publication for fixable CRITICAL/HIGH findings,
-and a release's exact digest again before its version tag exists.
-Published images are not continuously rescanned; a clean publication scan is not
-an assurance about vulnerabilities disclosed later. Updates require a newly built
+and a release's exact digest again before its version tag exists. The newest
+published release's images — the application and its three services — are
+re-scanned weekly with the same gate, and a finding there is fixed by a new
+release, never in place. That covers only the newest release, only what
+Trivy can see, and only what was known that week: a clean scan is not an
+assurance about vulnerabilities disclosed since. Updates require a newly built
 image, not an in-place package upgrade inside a running container.
 
 ### Back up your data

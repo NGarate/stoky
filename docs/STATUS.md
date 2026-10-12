@@ -100,6 +100,12 @@ tag has run it yet): packaged locally with the alpha.3 digest, `docker compose
 config --images` of it prints `ghcr.io/ngarate/stoky:v0.1.0-alpha.3@sha256:81ebf432…`
 and `pull app` succeeds; with `STOKY_VERSION=v0.1.0-alpha.1` it pulls the same
 digest, and with one hex digit of the digest changed it fails with `not found`.
+The newest published release's images are re-scanned every Monday by
+`rescan.yml` with the same scanner and gate (since 2026-10-12; it has not run on
+GitHub yet). Run by hand that day against `v0.1.0-alpha.3`'s images, the gate
+was clean for the application, Valkey and PostgreSQL (gosu left out, measured
+unreachable) and red for `traefik:v3.7.13` with four HIGH Go advisories that
+`v3.7.14` also carries ([Releasing](RELEASING.md#after-publication-weekly-re-scans)).
 
 `bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-08).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only

@@ -114,6 +114,58 @@ does not select prereleases. Docker `latest` remains the development channel fro
 `master`; a prerelease tag push does not move it. Never document `latest` as an
 alpha upgrade policy.
 
+## After publication: weekly re-scans
+
+`.github/workflows/rescan.yml` scans, every Monday at 05:17 UTC, what an
+installation of the newest published release runs. It takes the newest
+non-draft release (prereleases included: GitHub's `releases/latest` route
+answers 404 while every release is an alpha), downloads that release's
+`docker-compose.yml`, and scans each image `docker compose config` resolves from
+it — the application at the digest the file names (by tag for bundles up to
+`v0.1.0-alpha.3`), and PostgreSQL, Valkey and Traefik as named. The scanner is
+`release-draft`'s: Trivy 0.69.3 pinned, from the registry, no Actions cache. One
+job per image uploads the full report to code scanning under
+`trivy-release-<service>` and then fails on a fixable CRITICAL or HIGH finding.
+The gate leaves out one file, postgres's `/usr/local/bin/gosu`; the report keeps
+it. Measured on 2026-10-12, its 25 findings were all Go standard-library
+advisories in packages the binary does not link, so gating on it would keep the
+run red with nothing to act on.
+
+Run it by hand after changing it, or to check a release on demand:
+
+```bash
+gh workflow run rescan.yml --repo NGarate/stoky --ref master
+```
+
+A red run means an installation of the current release carries a fixable
+CRITICAL or HIGH finding. GitHub sends a scheduled run's failure to whoever last
+changed its cron line. A published release cannot be repaired in place: its
+Compose file pins the application digest, and published releases are not
+reused. So:
+
+- **The application image.** An Alpine fix needs a new build and a dependency
+  fix a new version; either way, a new tag. Re-running an old tag's
+  `release-draft` rescans the same digest and changes nothing.
+- **A service image.** Point its `image:` line in `deploy/docker-compose.yml`
+  at a fixed upstream release and cut a new version. Until upstream ships a fix, the run
+  stays red every week; that is the signal, not noise to silence. On
+  2026-10-12 the run would have been red for this reason: `traefik:v3.7.13`
+  carries four HIGH advisories in Go 1.26.8 and `golang.org/x/net`, published
+  2026-10-08, and `traefik:v3.7.14` carries the same four.
+- **Never** widen `skip-files` or add an ignore file to turn a run green. The
+  gosu exclusion is a measured decision; another one needs the same evidence,
+  and `src/__tests__/unit/ci-workflow.test.ts` refuses any other skip.
+
+In a public repository GitHub disables a schedule after 60 days without
+repository activity, which on a quiet trunk is exactly when it is needed.
+`gh workflow list --all --repo NGarate/stoky` shows its state, which must be
+`active`; `gh workflow enable rescan.yml --repo NGarate/stoky` restores it.
+
+What the re-scan cannot see is the same as the release scan's: dependencies
+compiled into the application's `.next` bundle have no `package.json` for
+Trivy to read, and the Bun runtime is a single binary no package database
+lists. Neither is covered by re-scanning the image.
+
 ## Verification boundaries
 
 The release smoke (`scripts/smoke-proxy.sh`) runs the shipped bundle on the CI
