@@ -437,6 +437,15 @@ Verified against the files named in each row.
   list of paths before it reads an input or runs a procedure: a longer batch is
   a 400, with no procedure run and nothing logged. Measured in-process against
   the real router, 850 anonymous calls now get one 400 and no log line.
+- **A request with nobody signed in writes at most one refusal line**, however
+  many of its calls are refused. The cap alone still let one 1.8 KB GET of 100
+  `household.current` calls write 100 `access.denied` lines, 13,100 bytes
+  (final review, 2026-10-12). The middleware now records the first refusal of
+  an anonymous request and drops the rest; measured the same way, that GET
+  writes 1 line of 131 bytes. A signed-in caller's refusals are each still
+  written: they name an account, and each can be a different row reached for.
+  [*Refusals are recorded*](#refusals-are-recorded) says what this does not
+  bound.
 - The browser client passes the same constant as the link's `maxItems`, so it
   splits a longer batch into several requests rather than tripping the refusal.
   The offline queue's replays do not batch at all (`src/lib/offline/sender.ts`).
@@ -1309,9 +1318,17 @@ every device that was signed in when that upgrade was installed.
   what bounds how long the addresses and identifiers in the security log
   survive, and under a flood that is not long: the oldest file goes when a new
   one opens, and measured, 80 MiB of 71-byte lines left 23,412,327 bytes
-  readable through `docker logs` (the JSON wrapping counts toward the cap). An
-  operator who needs a longer record ships the logs elsewhere
-  ([Install](docs/INSTALL.md#logs)). The driver is named next to its options
+  readable through `docker logs` (the JSON wrapping counts toward the cap).
+  **An unauthenticated client can make that flood**, and nothing throttles
+  it: an anonymous tRPC request writes at most one refusal line (about
+  130 bytes; [*Batched calls*](#batched-calls--srclibtrpcbatchts)), and a
+  session cookie that does not decrypt makes Auth.js write about 1 KB per
+  request (the Auth.js bullet below). At about 1 KB a request, some fifty
+  thousand requests replace the 50 MB — arithmetic, not a measurement — and
+  with it the `auth.signin.failed` lines of a guessing run made just before.
+  The cap protects the disk, not the record. An operator who needs the record
+  to survive ships the logs off the host ([Install](docs/INSTALL.md#logs)),
+  which is the only defence against having it flushed. The driver is named next to its options
   because under a daemon-wide driver such as `journald` a bare `max-size` stops
   the container from starting.
   `src/__tests__/unit/deployment.test.ts` asserts the block on every service.
@@ -1320,7 +1337,9 @@ every device that was signed in when that upgrade was installed.
   resolvers**, so a new router cannot forget to be audited. Every procedure
   logs UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS, which come from three
   middlewares and two resolver checks (`assertMayActOnOwner` and the replay
-  envelope's composer check). A cross-site request is refused before tRPC sees
+  envelope's composer check) — every one for a signed-in caller, and the
+  first one per HTTP request for a caller with no session, whose other
+  refusals in a batch said the same thing again. A cross-site request is refused before tRPC sees
   it, so no middleware runs for it; the route handler writes its
   `access.denied` line itself, with `reason: "cross-site"`.
 - **A household lookup that misses is logged too**, as `access.denied` with

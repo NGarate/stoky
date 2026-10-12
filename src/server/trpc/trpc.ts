@@ -115,6 +115,36 @@ const domainErrors = t.middleware(async ({ next }) => {
 });
 
 /**
+ * The requests with nobody signed in that have already written a refusal.
+ *
+ * Keyed on the context, which tRPC builds once per HTTP request and hands to
+ * every call in a batch; a `WeakSet`, so a finished request's entry goes with
+ * it.
+ */
+const anonymousRefusalRecorded = new WeakSet<object>();
+
+/**
+ * Whether this refusal is written to the security log: always for a signed-in
+ * caller, and **once per request for a caller with nobody signed in**.
+ *
+ * Without the bound, one anonymous GET of `MAX_TRPC_BATCH_SIZE` protected
+ * calls — 1.8 KB of URL — wrote a hundred `access.denied` lines, 13 KB, and
+ * the bundle keeps 50 MB of app log, so a few thousand requests rotated a
+ * brute-force run's `auth.signin.failed` lines out of reach (final review of
+ * the 2026-10-12 security work). The first refusal says that the request
+ * happened, from where and for what; the other ninety-nine said the same
+ * thing again. A signed-in caller's refusals are each kept: they name an
+ * account, which is accountable, and each one can be a different row of
+ * somebody else's household.
+ */
+function mayRecordRefusal(ctx: { session: Session | null }): boolean {
+  if (ctx.session?.user?.id) return true;
+  if (anonymousRefusalRecorded.has(ctx)) return false;
+  anonymousRefusalRecorded.add(ctx);
+  return true;
+}
+
+/**
  * Write a line whenever a request is refused for a security reason — ASVS
  * V7.1.3.
  *
@@ -136,17 +166,18 @@ const securityEvents = t.middleware(async ({ ctx, next, path }) => {
 
   if (!result.ok) {
     const code = result.error.code;
+    const event =
+      code === "UNAUTHORIZED" || code === "FORBIDDEN"
+        ? "access.denied"
+        : code === "TOO_MANY_REQUESTS"
+          ? "request.throttled"
+          : null;
 
-    if (code === "UNAUTHORIZED" || code === "FORBIDDEN") {
-      logSecurityEvent("access.denied", {
+    if (event && mayRecordRefusal(ctx)) {
+      logSecurityEvent(event, {
         path,
-        code,
-        userId: ctx.session?.user?.id,
-        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
-      });
-    } else if (code === "TOO_MANY_REQUESTS") {
-      logSecurityEvent("request.throttled", {
-        path,
+        // A throttled call's code is the event itself; a denial's says which.
+        code: event === "access.denied" ? code : undefined,
         userId: ctx.session?.user?.id,
         address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });

@@ -241,6 +241,35 @@ describe("a batch", () => {
     expect(results.every((r) => r.result.data.json === "user-1")).toBe(true);
   });
 
+  it("writes one refusal line for an anonymous caller, however many calls it held", async () => {
+    // 1.8 KB of URL used to write a hundred access.denied lines; a few thousand
+    // such requests rotated the bundle's 50 MB of app log, sign-in failures
+    // and all. One line still says it happened, from where, and for what.
+    const response = await handlerFor(null)(batchOf("whoami", MAX_TRPC_BATCH_SIZE));
+
+    expect(response.status).toBe(401);
+    const lines = consoleWarn.mock.calls.map((call: unknown[]) => JSON.parse(String(call[0])));
+    expect(lines).toEqual([
+      expect.objectContaining({ event: "access.denied", code: "UNAUTHORIZED", path: "whoami" }),
+    ]);
+  });
+
+  it("bounds the line per request, not for ever", async () => {
+    // A second request is a second event and keeps its line.
+    await handlerFor(null)(batchOf("whoami", 3));
+    await handlerFor(null)(batchOf("whoami", 3));
+
+    expect(consoleWarn).toHaveBeenCalledTimes(2);
+  });
+
+  it("still writes every refusal of a signed-in caller", async () => {
+    // Throttled calls under an account name it, and each can be a different
+    // thing it reached for; they are not collapsed.
+    await handlerFor(SIGNED_IN)(batchOf("throttled", 3));
+
+    expect(consoleWarn).toHaveBeenCalledTimes(3);
+  });
+
   it("is split by the browser client at the same number", () => {
     // Without `maxItems` the link batches every call in a tick into one
     // request, and a screen that mounted more than the limit would lose all of
