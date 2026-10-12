@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -825,5 +825,133 @@ describe("the weekly rescan of the published release", () => {
     const key = `needs.${visibility[1]}.outputs.${visibility[2]}`;
     expect(condition(upload.if, { [key]: "false" })).toBe(true);
     expect(condition(upload.if, { [key]: "true" })).toBe(false);
+  });
+});
+
+// Nothing proposed updates: every bump was a reaction to an advisory, and the
+// SHA-pinned actions and the bundle's images aged silently. Dependabot now
+// proposes them as pull requests the owner reviews. These hold what makes
+// those pull requests safe to read: every surface covered, a week's wait after
+// a release, majors kept apart, and no major of a service an installation
+// keeps data in or exposes.
+describe("Dependabot's update configuration", () => {
+  type Update = {
+    "package-ecosystem"?: unknown;
+    directory?: unknown;
+    schedule?: { interval?: unknown };
+    cooldown?: Record<string, unknown>;
+    groups?: Record<string, { "update-types"?: unknown }>;
+    ignore?: Array<{ "dependency-name"?: unknown; "update-types"?: unknown }>;
+    "commit-message"?: { prefix?: unknown; include?: unknown };
+  };
+  const config = Bun.YAML.parse(
+    readFileSync(join(root, ".github/dependabot.yml"), "utf8"),
+  ) as { version?: unknown; updates?: Update[] };
+  const updates = config.updates ?? [];
+  const entry = (ecosystem: string) => {
+    const found = updates.filter((u) => u["package-ecosystem"] === ecosystem);
+    if (found.length !== 1) {
+      throw new Error(`expected one ${ecosystem} entry, found ${found.length}`);
+    }
+    return found[0];
+  };
+
+  it("is a version 2 configuration", () => {
+    expect(config.version).toBe(2);
+  });
+
+  // The manifest each entry reads, so a moved file fails here rather than in a
+  // Dependabot log nobody opens.
+  it("covers the lockfile, the actions, the Dockerfile and the release bundle", () => {
+    expect(
+      updates.map((u) => `${String(u["package-ecosystem"])} ${String(u.directory)}`).toSorted(),
+    ).toEqual([
+      "bun /",
+      "docker /",
+      "docker-compose /deploy",
+      "github-actions /",
+    ]);
+    for (const manifest of ["bun.lock", "Dockerfile", "deploy/docker-compose.yml"]) {
+      expect(existsSync(join(root, manifest))).toBe(true);
+    }
+  });
+
+  it.each(updates.map((u) => [String(u["package-ecosystem"]), u]))(
+    "checks weekly and waits at least a week after a release: %s",
+    (_, update) => {
+      expect(update.schedule?.interval).toBe("weekly");
+      expect(Number(update.cooldown?.["default-days"])).toBeGreaterThanOrEqual(7);
+      // Exemptions would let a dependency skip the wait.
+      expect(update.cooldown?.exclude).toBeUndefined();
+    },
+  );
+
+  // A group with no update-types takes every type, majors included.
+  it.each(updates.map((u) => [String(u["package-ecosystem"]), u]))(
+    "groups minor and patch updates and never a major: %s",
+    (_, update) => {
+      const groups = Object.values(update.groups ?? {});
+      expect(groups).toHaveLength(1);
+      expect(
+        (groups[0]["update-types"] as string[] | undefined)?.toSorted(),
+      ).toEqual(["minor", "patch"]);
+    },
+  );
+
+  // Read from the bundle, so a service added to it without the rule fails.
+  it("never proposes a major of an image the release bundle runs", () => {
+    const bundle = Bun.YAML.parse(
+      readFileSync(join(root, "deploy/docker-compose.yml"), "utf8"),
+    ) as { services?: Record<string, { image?: unknown }> };
+    const images = Object.values(bundle.services ?? {})
+      .map((service) => String(service.image))
+      .filter((image) => !image.includes("${"))
+      // postgres:16-alpine@sha256:… -> postgres
+      .map((image) => image.split("@")[0].replace(/:[^:/]+$/, ""));
+    expect(images.toSorted()).toEqual(["postgres", "traefik", "valkey/valkey"]);
+    const ignored = (entry("docker-compose").ignore ?? [])
+      .filter((rule) =>
+        (rule["update-types"] as string[] | undefined)?.includes(
+          "version-update:semver-major",
+        ),
+      )
+      .map((rule) => rule["dependency-name"]);
+    for (const image of images) expect(ignored).toContain(image);
+  });
+
+  // An ignore with no update-types silences every version of a dependency,
+  // patches included.
+  it("ignores majors only, never a dependency's patches", () => {
+    for (const update of updates) {
+      for (const rule of update.ignore ?? []) {
+        expect(rule["update-types"]).toEqual(["version-update:semver-major"]);
+      }
+    }
+  });
+
+  // CLAUDE.md's Commit Convention, read from CLAUDE.md. Dependabot appends the
+  // colon, and `include: scope` adds `(deps)` or `(deps-dev)`: the scope the
+  // hand-made dependency bumps in this history already carry.
+  it("titles its commits with a type and a scope CLAUDE.md names", () => {
+    const convention = readFileSync(join(root, "CLAUDE.md"), "utf8");
+    const listed = (label: string) =>
+      [
+        ...(convention.match(new RegExp(`${label}:([^.]*)\\.`))?.[1] ?? "").matchAll(
+          /`([\w-]+)`/g,
+        ),
+      ].map((m) => m[1]);
+    const types = listed("Types");
+    const scopes = [...listed("Scopes"), "deps", "deps-dev"];
+    expect(types).toContain("build");
+    expect(scopes).toContain("docker");
+    for (const update of updates) {
+      const message = update["commit-message"];
+      const prefix = String(message?.prefix);
+      const title = message?.include === "scope" ? `${prefix}(deps)` : prefix;
+      const match = title.match(/^(\w+)(?:\(([\w-]+)\))?$/);
+      if (!match) throw new Error(`not a Conventional Commits prefix: ${title}`);
+      expect(types).toContain(match[1]);
+      if (match[2]) expect(scopes).toContain(match[2]);
+    }
   });
 });

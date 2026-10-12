@@ -913,6 +913,17 @@ answers 204) and on 2026-10-12 none was open: all 58 it ever raised are
 `fixed`. It counts one alert per advisory-path pair, so its totals do not compare
 with `bun audit`'s.
 
+Until 2026-10-12 nothing proposed an update: of the six commits that have
+touched `bun.lock`, the first being the move from pnpm, four answered an
+advisory. Dependabot version updates are now configured
+(`.github/dependabot.yml`) for `bun.lock`, the workflows' action pins, the
+Dockerfile's base and the release bundle's service images: weekly, seven days
+after a release, minor and patch grouped, no PostgreSQL, Valkey or Traefik
+major. **Not yet in effect:** the branch ruleset does not let Dependabot create
+its branches, which no version update can open without; Dependabot security
+updates are separately off. Both are owner settings. No Dependabot pull request
+has run yet. `docs/RELEASING.md` (Dependency updates) says how one is reviewed.
+
 ---
 
 ## Versions

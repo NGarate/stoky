@@ -166,6 +166,59 @@ compiled into the application's `.next` bundle have no `package.json` for
 Trivy to read, and the Bun runtime is a single binary no package database
 lists. Neither is covered by re-scanning the image.
 
+## Dependency updates
+
+`.github/dependabot.yml` has Dependabot propose version updates every Monday
+for four things: `bun.lock` (`bun`), the workflows' `uses:` pins
+(`github-actions`), the Dockerfile's `oven/bun` base (`docker`) and the release
+bundle's service images in `deploy/docker-compose.yml` (`docker-compose`). It
+proposes a release only once it is seven days old. Minor and patch updates
+share one pull request per ecosystem; each major arrives alone. Majors of
+PostgreSQL, Valkey and Traefik are never proposed: a PostgreSQL major cannot
+open the previous major's data directory, so each of those is a release with
+upgrade notes, written by hand. `src/__tests__/unit/ci-workflow.test.ts` holds
+that shape.
+
+It opens nothing until an owner action lands: the branch ruleset restricts
+creating and updating every branch to the owner, so Dependabot cannot push its
+`dependabot/*` branches until they are excluded from it. Dependabot security
+updates are a second owner action, a repository setting rather than this file;
+they bypass the cooldown, and GitHub offers none for the `bun` ecosystem, so
+`bun audit` in CI remains the gate for the lockfile. Not yet measured: no
+Dependabot pull request has run here, so how its own Bun rewrites `bun.lock` is
+unknown until the first one does. Read from dependabot-core's `main` on
+2026-10-12, not observed: its `bun/Dockerfile` installs Bun 1.4.2, not the
+1.4.0 in `.bun-version`, and its parser accepts `lockfileVersion` up to 3
+(this lockfile is 2).
+
+A Dependabot pull request is reviewed like an agent's (`CLAUDE.md`, Git
+Workflow): it runs the full pull-request pipeline, which never publishes, and
+is squash-merged into `master` once the owner approves it. Titles are already
+Conventional Commits: `build(deps):` and `build(deps-dev):` for the lockfile,
+`ci:` for actions, `build(docker):` for images. What to check:
+
+- **`bun.lock`.** The diff should touch only the packages named.
+  `package-overrides.test.ts` must still resolve every security override; a
+  lockfile rewritten wholesale means Dependabot's Bun disagrees with
+  `.bun-version`, and the bump is better made by hand with `bun update`. A bump
+  of `@playwright/test` turns `e2e` red until its container image and
+  `PLAYWRIGHT_IMAGE_VERSION` in `ci.yml` follow; finish it on the branch.
+- **`oven/bun`.** Arrives red: `bun-version.test.ts` requires the Dockerfile
+  tag to equal `.bun-version`, which Dependabot does not edit. Move
+  `.bun-version` and the `bun` row of `STATUS.md` on the same branch, or close
+  it and make the bump as one commit by hand. Do not weaken the test.
+- **An action major.** Read its release notes for changed inputs and defaults,
+  and run `bash scripts/check-ci.sh`; the pin keeps the commit SHA and the
+  exact version in its comment.
+- **A bundle image.** It changes nothing for installations until a release
+  ships it: `install.sh` verifies the Compose file against `SHA256SUMS`. Move
+  the root `docker-compose.yml`, `docker-compose.dev.yml` and `ci.yml`'s
+  service containers to the same version by hand, so CI tests what the bundle
+  runs. No ecosystem covers those, nor the Playwright and actionlint images.
+
+A major the project is not taking yet is closed with
+`@dependabot ignore this major version`, which Dependabot remembers.
+
 ## Verification boundaries
 
 The release smoke (`scripts/smoke-proxy.sh`) runs the shipped bundle on the CI

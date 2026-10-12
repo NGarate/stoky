@@ -3,8 +3,9 @@ name: CI
 # Trunk-based: every push to master is a release candidate, and this pipeline
 # is the gate, so it has to be trustworthy enough that a red run means
 # something. Pull requests into master come from unattended agent work
-# (CLAUDE.md, Git Workflow) and run the same gates; they never publish. Nor
-# does a manual dispatch, on any ref: only a push publishes (image-publish).
+# (CLAUDE.md, Git Workflow) and from Dependabot (.github/dependabot.yml) and run
+# the same gates; they never publish. Nor does a manual dispatch, on any ref:
+# only a push publishes (image-publish).
 on:
   push:
     branches: [master]
@@ -372,9 +373,10 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      # Dependabot's automatic pull requests are off, because they open branches
-      # and this repository is trunk-only. Its alerts stay on for visibility, and
-      # this job is what actually blocks a vulnerable dependency tree.
+      # This job is what blocks a vulnerable dependency tree. Dependabot
+      # (.github/dependabot.yml) proposes version updates as reviewed pull
+      # requests and raises alerts, but GitHub offers no Dependabot security
+      # updates for the bun ecosystem, and an alert blocks nothing.
       #
       # No install, and no Node: `bun audit` answers from `bun.lock` alone.
       # Measured on this tree under the pinned 1.4.0 — 586 packages checked in

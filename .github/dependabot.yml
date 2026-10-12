@@ -1,0 +1,97 @@
+# Dependabot proposes updates; it never merges them. Each one arrives as a pull
+# request on a dependabot/* branch, runs the full pull-request pipeline, and is
+# squash-merged into master after the owner reviews it (docs/RELEASING.md,
+# "Dependency updates"). It is the same review buffer CLAUDE.md gives
+# unattended agent work, and a bot update is the textbook unattended change.
+#
+# Version updates only. Security updates are a repository setting, not this
+# file, and for the bun ecosystem GitHub does not offer them at all: `bun audit`
+# in ci.yml stays the gate that blocks a vulnerable lockfile.
+#
+# Every entry waits seven days after a release before proposing it, so a
+# compromised release that is pulled within its first week never reaches a
+# pull request. Security updates bypass the cooldown. Minor and patch updates
+# share one pull request per ecosystem; a major arrives alone, because it is a
+# decision rather than a refresh.
+#
+# src/__tests__/unit/ci-workflow.test.ts holds the shape of this file.
+version: 2
+updates:
+  # bun.lock. Dependabot regenerates it with its own Bun, which the repository
+  # does not choose, so package-overrides.test.ts and bun-version.test.ts are
+  # what tell a drifted lockfile from a clean one.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    # build(deps): / build(deps-dev):, as the hand-made bumps were written.
+    commit-message:
+      prefix: build
+      include: scope
+
+  # Every `uses:` in .github/workflows. The pins are commit SHAs with the exact
+  # version in a comment; Dependabot moves both.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: ci
+
+  # The Dockerfile's oven/bun base. Its tag must equal .bun-version, which
+  # Dependabot does not edit, so its pull request arrives red from
+  # bun-version.test.ts and is finished by hand. That is intended: the test is
+  # what keeps CI's Bun and the image's Bun the same binary.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build(docker)
+
+  # The release bundle's service images: what an installation runs. Their
+  # majors are never proposed. A PostgreSQL major cannot open the previous
+  # major's data directory without pg_upgrade or a dump and restore, and a
+  # Valkey or Traefik major can change what the configuration the bundle ships
+  # means. Each is a release with upgrade notes, not a bump. The application
+  # line names ${STOKY_VERSION}, which Dependabot cannot resolve and leaves
+  # alone.
+  # The root and dev Compose files and the CI service containers are not
+  # covered by any ecosystem and follow this file by hand.
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      - dependency-name: valkey/valkey
+        update-types: ["version-update:semver-major"]
+      - dependency-name: traefik
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: build(docker)
