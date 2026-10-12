@@ -28,7 +28,7 @@ telling people something untrue.
 | # | The promise | Why it is false | Fix |
 |---|---|---|---|
 | P1 ✔ | "podrás cambiarle el nombre más adelante" (`household.noHouseholdBody`) | `household.ts` has no rename procedure | Add `household.rename` (OWNER/ADMIN), or drop the clause |
-| P2 ✔ | "La persona podrá cambiarla más adelante" (`household.addPasswordHint`) | No change-password procedure or page exists, and no admin reset either | Add change-own-password in Settings. Until then, reword |
+| P2 ✔ | "La persona podrá cambiarla más adelante" (`household.addPasswordHint`) | No change-password procedure or page exists, and no admin reset either | Add change-own-password in Settings. Until then, reword. *Done 2026-10-12: `auth.changePassword`, on `/settings`; no admin reset yet* |
 | P3 | `products.detail.deleteBlockedHistory` says the product is "archivado" | Nothing in the UI shows an archived state | Reword, or build the state |
 | P4 | `/settings` carries strings for notifications, household and profile | `settings/page.tsx:36-41` says itself that no procedure backs them | Remove until built |
 

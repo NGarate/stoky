@@ -147,6 +147,21 @@ export function isPasswordIdentityRefusal(message: string | undefined): boolean 
 }
 
 /**
+ * What `auth.changePassword` says when the current password is wrong.
+ *
+ * Carried on a BAD_REQUEST and never on UNAUTHORIZED: the offline write queue
+ * and the screens read UNAUTHORIZED as "this session has ended", and a person
+ * who mistyped their current password is still signed in. One constant on
+ * both sides, for the same reason as the identity message above.
+ */
+export const WRONG_CURRENT_PASSWORD_MESSAGE = "The current password is not correct";
+
+/** Whether a refusal's message is the wrong-current-password one. */
+export function isWrongCurrentPasswordRefusal(message: string | undefined): boolean {
+  return Boolean(message?.includes(WRONG_CURRENT_PASSWORD_MESSAGE));
+}
+
+/**
  * The identity rule, applied to a whole form rather than to the field.
  *
  * `newPasswordSchema` cannot apply it: a field schema never sees its siblings,
@@ -162,10 +177,11 @@ export function isPasswordIdentityRefusal(message: string | undefined): boolean 
  * name reports both at once; it is skipped only when a field is missing or
  * the wrong type, and then there is no name to compare against anyway.
  *
- * A procedure whose input carries no identity — changing your own password,
- * resetting somebody else's — loads the person and calls `passwordProblems`
- * with them instead, refusing with `PASSWORD_CONTAINS_IDENTITY_MESSAGE` so the
- * screens recognise it the same way.
+ * A procedure whose input carries no identity — changing your own password
+ * (`auth.changePassword`), resetting somebody else's — loads the person and
+ * calls `passwordProblems` with them instead, refusing with
+ * `PASSWORD_CONTAINS_IDENTITY_MESSAGE` so the screens recognise it the same
+ * way.
  */
 export function withIdentityRule<
   T extends z.ZodType<

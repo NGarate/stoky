@@ -39,6 +39,20 @@ export const registerSchema = withIdentityRule(
   }),
 );
 
+/**
+ * A signed-in person replacing their own password.
+ *
+ * The current one is bounded rather than policed, like sign-in's: an account
+ * whose password predates the policy must still be able to change it, and
+ * that is the account with most reason to. The new one meets the policy —
+ * except the identity rule, which needs the account's name and address and
+ * neither is in the input; `auth.changePassword` loads them and applies it.
+ */
+export const changePasswordSchema = z.object({
+  currentPassword: existingPasswordSchema,
+  newPassword: newPasswordSchema,
+});
+
 export const createHouseholdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
 });
@@ -50,5 +64,6 @@ export const inviteMemberSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type CreateHouseholdInput = z.infer<typeof createHouseholdSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

@@ -506,13 +506,25 @@ Verified against the files named in each row.
 
 - Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB),
   `timeCost: 3` and `parallelism: 4`, in one place:
-  `src/lib/auth/password-hash.ts` hashes for registration and for an admin
-  adding a member, and verifies for sign-in. A test pins the parameters and
-  that the dummy hash for unknown addresses was made with the same ones.
+  `src/lib/auth/password-hash.ts` hashes for registration, for an admin
+  adding a member and for a person changing their own password, and verifies
+  for sign-in and for that change. A test pins the parameters and that the
+  dummy hash for unknown addresses was made with the same ones.
 - Auth.js v5 with the credentials provider; sessions are JWTs with a 15-minute
   lifetime.
 - Credentials are validated with a Zod schema before the database is touched,
   and `authorize` returns `null` for both an unknown email and a wrong password.
+- **A signed-in person can change their own password**, from Settings
+  (`auth.changePassword`, security review 2026-10-12 — until then nothing
+  changed a password once it was set, so a leaked one could not be rotated and
+  one an admin chose stayed known to that admin). It asks for the current
+  password through the same `verifyPassword` as sign-in, metered (below); a
+  wrong one is `BAD_REQUEST`, never `UNAUTHORIZED`, because the offline queue
+  reads that as a session that has ended. The new password meets the policy,
+  identity rule included, and one update writes the hash and
+  `sessionsValidFrom`, so every session the account had ends — the one that
+  asked included, and the form says so before it is submitted. Both outcomes
+  are logged (`auth.password.changed`, `auth.password.change.refused`).
 - Self-registration is the operator's to open: `STOKY_REGISTRATION` is
   `first-user` unless set, so the first account claims the instance and later
   people are added by a household admin. See
@@ -971,6 +983,14 @@ What is still open, and worth knowing before publishing an instance:
   channel there is nothing else to tell an admin who typed an address already
   in use — and it is visible only to an account that admins a household, at
   twenty questions an hour.
+- **Changing a password is limited too**, at 5 per account per 15 minutes,
+  counted before the current password is checked (security review,
+  2026-10-12). The procedure answers "is this the password?", so unmetered it
+  would let whoever holds a stolen session — an unlocked phone, a kitchen
+  tablet — guess the password behind it with none of sign-in's limits. Five
+  is sign-in's per-address number; a refusal carries `Retry-After` like the
+  others. Per account, because the caller is already signed in and the
+  account is what the guesses are against.
 - **Every other tRPC procedure is unlimited**, so an authenticated account can
   still make as many ordinary calls as it likes. That is a smaller problem — it
   needs credentials first, and those calls read and write rows rather than
@@ -1070,12 +1090,14 @@ What is still open, and worth knowing before publishing an instance:
   `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
   `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
-  `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`
-  and `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`. Raising them raises the
-  exposure; the browser suite raises them because it registers dozens of
-  accounts per run and every worker signs in and scans as one demo account,
-  and a unit test asserts the shipped defaults with the environment unset so
-  that override cannot become the product's behaviour.
+  `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
+  `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`,
+  `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS` and
+  `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`. Raising them raises the
+  exposure; the browser suite raises the sign-in, registration, add-member and
+  product-lookup attempts (`playwright.config.ts` says why for each), and a
+  unit test asserts the shipped defaults with the environment unset so that
+  override cannot become the product's behaviour.
 
 ### Refusals are recorded
 
@@ -1090,7 +1112,8 @@ had no answer anywhere.
 Docker collects: `docker compose logs app | jq 'select(.event ==
 "access.denied")'` works with nothing installed. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
-`access.denied` and `request.throttled`.
+`auth.session.revoked`, `auth.password.changed`,
+`auth.password.change.refused`, `access.denied` and `request.throttled`.
 
 - **The release bundle rotates them; Docker alone does not.** Docker's default
   `json-file` driver has no size limit, and every throttled refusal writes a
@@ -1271,10 +1294,11 @@ What is still open:
 ### The password policy prefers length, and it is not a breach check
 
 `src/lib/validations/password.ts` is the policy, and it is applied wherever a
-password is *set*: registration, and the accounts an admin creates for a
-household. Twelve characters minimum, a maximum of 128, a refusal of the
-handful of passwords that appear at the top of every leak, and a refusal to
-accept the account's own name or address as its password.
+password is *set*: registration, the accounts an admin creates for a
+household, and a person changing their own. Twelve characters minimum, a
+maximum of 128, a refusal of the handful of passwords that appear at the top
+of every leak, and a refusal to accept the account's own name or address as
+its password.
 
 **The identity refusal was documented here before it was applied** (security
 review, 2026-10-12). `newPasswordSchema` is a field schema and cannot see the
@@ -1283,9 +1307,9 @@ name and address beside it, so it checked with no identity at all, and both
 `noelgarate@example.com`. `withIdentityRule` in the same file now wraps both
 forms with an object-level check that attaches the refusal to `password`; the
 register page and the add-a-member form name it in words rather than as a
-generic failure. A procedure whose input carries no name or address — a
-password change, an admin reset — has to load the person and check against
-them itself.
+generic failure. A procedure whose input carries no name or address has to
+load the person and check against them itself: `auth.changePassword` does,
+and an admin reset will have to.
 
 **No composition rules**, which is the opposite of what `ISSUES.md` DEBT-1
 proposed. That entry asked for the familiar four regexes — an uppercase, a
@@ -1383,7 +1407,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 `src/types/next-auth.d.ts` declares `role` on the session non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 63 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 64 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the JWT, so a
@@ -1448,7 +1472,8 @@ own.
   Full backups remain the operator's job; [the guide](docs/INSTALL.md) covers them.
 - Refusals are audit-logged, but there is no complete history of who changed what.
 - No invitations: with registration closed, an admin sets a new person's first
-  password and hands it over.
+  password and hands it over. The person can change it from Settings once
+  signed in; nothing makes them.
 - No account lockout, no password reset flow, no email verification, no
   two-factor authentication.
 - No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the

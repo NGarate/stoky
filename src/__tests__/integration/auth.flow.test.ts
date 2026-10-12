@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  afterAll,
+  spyOn,
+} from "bun:test";
 import { prisma } from "@/lib/prisma";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
@@ -14,7 +23,12 @@ import {
 import * as argon2 from "argon2";
 import { signInWith } from "../utils/authorize";
 import { TRPCError } from "@trpc/server";
-import { isPasswordIdentityRefusal } from "@/lib/validations/password";
+import {
+  isPasswordIdentityRefusal,
+  isWrongCurrentPasswordRefusal,
+} from "@/lib/validations/password";
+import { authConfig } from "@/lib/auth";
+import { retryAfterSeconds } from "@/server/trpc/throttle";
 
 /**
  * Everything this file creates carries this run's own marker, and cleanup
@@ -622,6 +636,265 @@ describe("Authentication Flow Integration Tests", () => {
 
       expect(dbUser).toBeDefined();
       expect(dbUser?.role).toBe("MEMBER");
+    });
+  });
+  /**
+   * A signed-in person replacing their own password — security review,
+   * 2026-10-12. Until `auth.changePassword` existed nothing changed a password
+   * once it was set, so a leaked one could not be rotated and one an admin
+   * chose stayed the admin's.
+   *
+   * Through the router, with real Argon2id and a real Valkey, and the old
+   * session checked through the `jwt` callback that actually refuses it — the
+   * same way `session.revocation.test.ts` does, because a timestamp written is
+   * not a session ended.
+   */
+  describe("Changing your own password", () => {
+    const OLD = "cocina despensa nevera";
+    const NEW = "tarro de garbanzos azul";
+
+    async function accountWithCaller(label: string, password = OLD) {
+      const user = await createTestUser({
+        email: runEmail(label),
+        name: generateTestName(`Change ${label}`),
+        password,
+      });
+      const ctx = await createTRPCContext({ session: createMockSession(user) });
+      return { user, api: appRouter.createCaller(ctx) };
+    }
+
+    const stored = (id: string) =>
+      prisma.user.findUniqueOrThrow({
+        where: { id },
+        select: { passwordHash: true, sessionsValidFrom: true },
+      });
+
+    async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
+      try {
+        await call;
+      } catch (error) {
+        if (error instanceof TRPCError) return error;
+        throw error;
+      }
+      throw new Error("expected a refusal, and the call succeeded");
+    }
+
+    /** The configured `jwt` callback, which is where a session is refused. */
+    function jwtCallback() {
+      const callback = authConfig.callbacks?.jwt;
+      if (typeof callback !== "function") {
+        throw new Error("authConfig exposes no jwt callback");
+      }
+      return callback;
+    }
+
+    /** The security events written while `run` ran, parsed. */
+    async function eventsDuring(run: () => Promise<unknown>) {
+      const warn = spyOn(console, "warn").mockImplementation(() => {});
+      let lines: string[];
+      try {
+        await run();
+      } finally {
+        lines = warn.mock.calls.map((call) => String(call[0]));
+        warn.mockRestore();
+      }
+      return lines.flatMap((line) => {
+        try {
+          return [JSON.parse(line) as Record<string, string>];
+        } catch {
+          return [];
+        }
+      });
+    }
+
+    it("refuses a wrong current password with BAD_REQUEST, and changes nothing", async () => {
+      // BAD_REQUEST and not UNAUTHORIZED: the offline queue and the screens
+      // read UNAUTHORIZED as a session that has ended, and this person is
+      // still signed in with a typo.
+      const { user, api } = await accountWithCaller("wrong-current");
+      const before = await stored(user.id);
+
+      let refusal: TRPCError | undefined;
+      const events = await eventsDuring(async () => {
+        refusal = await refusalOf(
+          api.auth.changePassword({
+            currentPassword: "not the password at all",
+            newPassword: NEW,
+          }),
+        );
+      });
+
+      expect(refusal?.code).toBe("BAD_REQUEST");
+      expect(isWrongCurrentPasswordRefusal(refusal?.message)).toBe(true);
+      expect(await stored(user.id)).toEqual(before);
+      expect(before.sessionsValidFrom).toBeNull();
+      expect(await signInWith({ email: user.email, password: OLD })).not.toBeNull();
+
+      // Recorded, because the refusal middleware does not see a BAD_REQUEST,
+      // and this is the line that says a session is guessing at a password.
+      const refused = events.filter((e) => e.event === "auth.password.change.refused");
+      expect(refused).toHaveLength(1);
+      expect(refused[0]?.userId).toBe(user.id);
+      expect(JSON.stringify(events)).not.toContain("not the password at all");
+    });
+
+    it("replaces the password, so the new one signs in and the old one does not", async () => {
+      const { user, api } = await accountWithCaller("replaces");
+
+      const events = await eventsDuring(() =>
+        api.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+      );
+
+      const after = await stored(user.id);
+      expect(after.passwordHash).toStartWith("$argon2id$");
+      expect(await argon2.verify(after.passwordHash, NEW)).toBe(true);
+      expect(await argon2.verify(after.passwordHash, OLD)).toBe(false);
+
+      expect(await signInWith({ email: user.email, password: NEW })).not.toBeNull();
+      expect(await signInWith({ email: user.email, password: OLD })).toBeNull();
+
+      const changed = events.filter((e) => e.event === "auth.password.changed");
+      expect(changed).toHaveLength(1);
+      expect(changed[0]?.userId).toBe(user.id);
+      const written = JSON.stringify(events);
+      expect(written).not.toContain(NEW);
+      expect(written).not.toContain(OLD);
+    });
+
+    it("ends every session issued before the change, this one included", async () => {
+      // The point of changing a leaked password: whoever used it has a
+      // session too, and a new password beside a live session is half a fix.
+      const { user, api } = await accountWithCaller("ends-sessions");
+      const token = { sub: user.id, iat: Math.floor((Date.now() - 60_000) / 1000) };
+
+      // The control: the same token is accepted before the change, so the
+      // refusal below is the change's doing and not the token's shape.
+      expect(await jwtCallback()({ token: { ...token } } as never)).not.toBeNull();
+
+      await api.auth.changePassword({ currentPassword: OLD, newPassword: NEW });
+
+      expect((await stored(user.id)).sessionsValidFrom).not.toBeNull();
+      expect(await jwtCallback()({ token: { ...token } } as never)).toBeNull();
+    });
+
+    it("refuses a new password built from the person's own address, and changes nothing", async () => {
+      // The input carries no address, so the schema cannot apply the identity
+      // rule; the procedure loads the account and applies it itself.
+      const { user, api } = await accountWithCaller("identity-change");
+      const before = await stored(user.id);
+      const localPart = user.email.split("@")[0] ?? "";
+
+      const refusal = await refusalOf(
+        api.auth.changePassword({ currentPassword: OLD, newPassword: `${localPart}!` }),
+      );
+
+      expect(refusal.code).toBe("BAD_REQUEST");
+      expect(isPasswordIdentityRefusal(refusal.message)).toBe(true);
+      expect(await stored(user.id)).toEqual(before);
+    });
+
+    it("refuses a new password the policy refuses, and changes nothing", async () => {
+      const { user, api } = await accountWithCaller("policy-change");
+      const before = await stored(user.id);
+
+      for (const newPassword of ["corta", "password1234"]) {
+        const refusal = await refusalOf(
+          api.auth.changePassword({ currentPassword: OLD, newPassword }),
+        );
+        expect(refusal.code).toBe("BAD_REQUEST");
+      }
+      expect(await stored(user.id)).toEqual(before);
+    });
+
+    it("accepts a current password set before the policy existed", async () => {
+      // The account whose password predates the twelve-character rule is the
+      // one with most reason to change it. Policing the current password
+      // would lock exactly that account into keeping it.
+      const legacy = "corta1";
+      const { user, api } = await accountWithCaller("legacy-current", legacy);
+
+      await api.auth.changePassword({ currentPassword: legacy, newPassword: NEW });
+
+      expect(await argon2.verify((await stored(user.id)).passwordHash, NEW)).toBe(true);
+    });
+
+    it("refuses a caller who is not signed in", async () => {
+      const refusal = await refusalOf(
+        caller.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+      );
+      expect(refusal.code).toBe("UNAUTHORIZED");
+    });
+
+    describe("how many attempts an account gets", () => {
+      // Lowered so the test spends three calls rather than six. Each account
+      // is new, so its counter is too.
+      const ATTEMPTS = 2;
+      const original = process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
+
+      beforeAll(() => {
+        process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = String(ATTEMPTS);
+      });
+
+      afterAll(() => {
+        if (original === undefined) delete process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
+        else process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = original;
+      });
+
+      it("refuses once the budget is spent, before checking anything, even the right password", async () => {
+        // A stolen session guessing the password behind it is the attack.
+        // The refusal has to come before Argon2id runs, or the limit is a
+        // count of guesses already answered.
+        const { user, api } = await accountWithCaller("metered");
+        const before = await stored(user.id);
+
+        for (let i = 0; i < ATTEMPTS; i++) {
+          const wrong = await refusalOf(
+            api.auth.changePassword({ currentPassword: `guess number ${i}`, newPassword: NEW }),
+          );
+          expect(wrong.code).toBe("BAD_REQUEST");
+        }
+
+        const verify = spyOn(argon2, "verify");
+        let verified: number;
+        let refusal: TRPCError;
+        try {
+          refusal = await refusalOf(
+            api.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+          );
+        } finally {
+          verified = verify.mock.calls.length;
+          verify.mockRestore();
+        }
+
+        expect(refusal.code).toBe("TOO_MANY_REQUESTS");
+        expect(verified).toBe(0);
+        // The same function the HTTP layer reads `Retry-After` with.
+        const retryAfter = retryAfterSeconds([refusal]);
+        expect(retryAfter).toBeGreaterThan(0);
+        expect(retryAfter).toBeLessThanOrEqual(900);
+        expect(await stored(user.id)).toEqual(before);
+      });
+
+      it("leaves another account's budget alone", async () => {
+        const spender = await accountWithCaller("spender");
+        const other = await accountWithCaller("unspent");
+
+        for (let i = 0; i < ATTEMPTS; i++) {
+          await refusalOf(
+            spender.api.auth.changePassword({ currentPassword: `guess ${i}`, newPassword: NEW }),
+          );
+        }
+        expect(
+          (
+            await refusalOf(
+              spender.api.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+            )
+          ).code,
+        ).toBe("TOO_MANY_REQUESTS");
+
+        await other.api.auth.changePassword({ currentPassword: OLD, newPassword: NEW });
+        expect(await argon2.verify((await stored(other.user.id)).passwordHash, NEW)).toBe(true);
+      });
     });
   });
 });

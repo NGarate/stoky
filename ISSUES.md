@@ -2297,7 +2297,10 @@ the change-it-later promise is gone. `unit/messages.test.ts` refuses a hint
 without the parameter, a call site that does not pass `MIN_PASSWORD_LENGTH` to
 it, and any `.tsx` that writes `minLength` or a `password.length` comparison
 with a literal number. `components/auth-pages.test.tsx` checks the rendered
-register field and hint.
+register field and hint. The promise came back the same day, true this time:
+`auth.changePassword` lets a signed-in person change their own password from
+Settings, the hint says so and names the screen, and `unit/messages.test.ts`
+now requires the procedure for as long as the hint makes the promise.
 
 **Nor did the identity refusal** (same review). `passwordProblems` could detect
 a password built from the account's name or address, but the only schema

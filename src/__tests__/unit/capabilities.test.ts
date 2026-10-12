@@ -37,6 +37,11 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // them would put the control out of reach of the account that has least
     // else. `protectedProcedure` for the same reason as the row above.
     revokeMySessions: "protectedProcedure",
+    // A person's own password, which an account with no household still has.
+    // The same tier as the row above, and for the same reason; what keeps a
+    // stolen session from using it is the current password and the limit
+    // inside the resolver, which a tier cannot express.
+    changePassword: "protectedProcedure",
   },
   // Reachable by an account with no household, which is the whole reason it
   // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the

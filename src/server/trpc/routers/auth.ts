@@ -2,10 +2,20 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { registerSchema } from "@/lib/validations/auth";
+import { changePasswordSchema, registerSchema } from "@/lib/validations/auth";
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
-import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
-import { hashPassword } from "@/lib/auth/password-hash";
+import {
+  PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+  WRONG_CURRENT_PASSWORD_MESSAGE,
+  passwordProblems,
+} from "@/lib/validations/password";
+import {
+  passwordChangeRateLimit,
+  rateLimitIdentifier,
+  registerRateLimit,
+} from "@/lib/rate-limit";
+import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import { logSecurityEvent } from "@/lib/security-log";
 import {
   REGISTRATION_CLOSED_MESSAGE,
   REGISTRATION_LOCK_KEY,
@@ -35,7 +45,8 @@ function registrationClosed(): TRPCError {
  * was removed; `src/__tests__/utils/authorize.ts` drives the real path instead.
  *
  * So what is left is the parts Auth.js has no opinion about: creating an
- * account, reading the current one, and a `logout` that exists for shape.
+ * account, reading the current one, changing its password, ending its
+ * sessions, and a `logout` that exists for shape.
  */
 export const authRouter = createTRPCRouter({
   /**
@@ -283,6 +294,100 @@ export const authRouter = createTRPCRouter({
 
     return { success: true };
   }),
+
+  /**
+   * A signed-in person replaces their own password, and every session the
+   * account has ends — this one included.
+   *
+   * Until this existed nothing changed a password once it was set (security
+   * review, 2026-10-12): a password an admin chose in `household.addMember`
+   * stayed known to that admin for good, and a leaked one could not be
+   * rotated — `revokeMySessions` ended the sessions and whoever held the
+   * password signed straight back in.
+   *
+   * `protectedProcedure`, not `householdProcedure`, for the reason
+   * `revokeMySessions` gives: an account with no household still has a
+   * password. The order of the steps is the point of them:
+   *
+   * 1. **The limit, first.** The next step answers "is this the password?",
+   *    and a stolen session asking it in a loop is the attack; counted before
+   *    Argon2id runs, like sign-in.
+   * 2. **The current password**, through the same `verifyPassword` sign-in
+   *    uses. Wrong is BAD_REQUEST, never UNAUTHORIZED: the offline queue and
+   *    the screens read UNAUTHORIZED as a session that has ended, and this
+   *    person is still signed in. It is logged here because the refusal
+   *    middleware records only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS.
+   * 3. **The identity rule**, against the account's own address and name,
+   *    which the input does not carry — so the schema cannot apply it
+   *    (`withIdentityRule`). After the check above, so it answers nobody who
+   *    has not proved they know the password.
+   * 4. **One update** sets the hash and `sessionsValidFrom`. Two writes could
+   *    leave a new password beside sessions that were meant to end; one
+   *    cannot. The `jwt` callback in `src/lib/auth.ts` then refuses every
+   *    token issued before now, the caller's own among them, and the screen
+   *    signs out and asks for the new password.
+   *
+   * **Ending this session too is deliberate.** Re-issuing it would have to
+   * happen in Auth.js's own route, and the person who suspects their password
+   * leaked is the one who most needs every device asked again. The form says
+   * so before it is submitted.
+   */
+  changePassword: protectedProcedure
+    .input(changePasswordSchema)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const address = ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined;
+
+      await enforceRateLimit(
+        passwordChangeRateLimit(),
+        userId,
+        "Too many password changes. Try again in a little while.",
+      );
+
+      const account = await ctx.db.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true, passwordHash: true },
+      });
+
+      // A session whose account is gone has nothing to change; UNAUTHORIZED is
+      // the truth here, as it is in `householdProcedure`.
+      if (!account) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "This account no longer exists",
+        });
+      }
+
+      if (!(await verifyPassword(account.passwordHash, input.currentPassword))) {
+        logSecurityEvent("auth.password.change.refused", { userId, address });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: WRONG_CURRENT_PASSWORD_MESSAGE,
+        });
+      }
+
+      const problems = passwordProblems(input.newPassword, {
+        email: account.email,
+        name: account.name,
+      });
+      if (problems.includes("containsIdentity")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+        });
+      }
+
+      const passwordHash = await hashPassword(input.newPassword);
+
+      await ctx.db.user.update({
+        where: { id: userId },
+        data: { passwordHash, sessionsValidFrom: new Date() },
+      });
+
+      logSecurityEvent("auth.password.changed", { userId, address });
+
+      return { success: true };
+    }),
 
   /**
    * Does nothing, on purpose, and is not how anybody signs out.

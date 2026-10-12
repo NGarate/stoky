@@ -310,7 +310,8 @@ describe("a number in a sentence agrees with it", () => {
  * `minLength={8}`. Somebody who followed the screen typed nine characters,
  * passed the browser's check and got back a generic refusal that did not say
  * why. The add-a-member hint also promised "La persona podrá cambiarla más
- * adelante" when nothing in the application changes a password once it is set.
+ * adelante" when nothing in the application changed a password once it was
+ * set; the promise came back with `auth.changePassword`, true this time.
  *
  * The number therefore reaches the screen as an ICU parameter fed from
  * `MIN_PASSWORD_LENGTH`, never as a literal in a translation or in a
@@ -320,6 +321,8 @@ describe("a password hint states the minimum the server enforces", () => {
   const HINTS = [
     ["auth", "passwordHintRegister"],
     ["household", "addPasswordHint"],
+    ["password", "newPasswordHint"],
+    ["password", "newPasswordTooShort"],
   ] as const;
 
   for (const [locale, messages] of [
@@ -346,11 +349,27 @@ describe("a password hint states the minimum the server enforces", () => {
     }
   }
 
-  test("no promise that a password can be changed later", () => {
-    // Nothing in the application changes a password once it is set. The day a
-    // change-password form ships, this test is the one to update.
-    expect(value(es as Catalogue, "household.addPasswordHint")).not.toMatch(/cambiar/i);
-    expect(value(en as Catalogue, "household.addPasswordHint")).not.toMatch(/change/i);
+  test("promises a password can be changed only while something changes it", () => {
+    // The add-a-member hint promised this once when nothing could, and the
+    // promise was removed (security review, 2026-10-12). It is back because
+    // `auth.changePassword` exists, and it says where — the screen's own name
+    // in each catalogue, so renaming Settings cannot leave it pointing at a
+    // place that is not there. Deleting the procedure turns this red, which
+    // is the moment the sentence would become untrue again.
+    const router = readFileSync(
+      join(import.meta.dir, "../../server/trpc/routers/auth.ts"),
+      "utf8",
+    );
+    expect(router).toMatch(/^ {2}changePassword: protectedProcedure\b/m);
+
+    expect(value(es as Catalogue, "household.addPasswordHint")).toMatch(/cambiar/i);
+    expect(value(es as Catalogue, "household.addPasswordHint")).toContain(
+      value(es as Catalogue, "navigation.settings") as string,
+    );
+    expect(value(en as Catalogue, "household.addPasswordHint")).toMatch(/change/i);
+    expect(value(en as Catalogue, "household.addPasswordHint")).toContain(
+      value(en as Catalogue, "navigation.settings") as string,
+    );
   });
 
   const componentSources = (): string[] => {
@@ -374,7 +393,8 @@ describe("a password hint states the minimum the server enforces", () => {
     // next-intl raises no error and the screen reads "Al menos {min}
     // caracteres." with the braces in it, and only the register page is
     // rendered by a component test.
-    const CALL = /\bt\(\s*"(passwordHintRegister|addPasswordHint)"([^)]*)\)/g;
+    const CALL =
+      /\bt\(\s*"(passwordHintRegister|addPasswordHint|newPasswordHint|newPasswordTooShort)"([^)]*)\)/g;
     const ARGUMENT = /^\s*,\s*\{\s*min:\s*MIN_PASSWORD_LENGTH\s*\}\s*$/;
     const found = new Set<string>();
     const bare: string[] = [];
@@ -385,8 +405,13 @@ describe("a password hint states the minimum the server enforces", () => {
       }
     }
 
-    // Both hints are in use, so an empty scan cannot pass for a clean one.
-    expect([...found].sort()).toEqual(["addPasswordHint", "passwordHintRegister"]);
+    // Every hint is in use, so an empty scan cannot pass for a clean one.
+    expect([...found].sort()).toEqual([
+      "addPasswordHint",
+      "newPasswordHint",
+      "newPasswordTooShort",
+      "passwordHintRegister",
+    ]);
     expect(bare).toEqual([]);
   });
 

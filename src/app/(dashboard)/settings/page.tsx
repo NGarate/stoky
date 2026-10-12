@@ -2,13 +2,14 @@
 
 import { ItemRow } from "@/components/ui/item-row";
 import { useTranslations } from "next-intl";
-import { sectionHeading } from "@/components/ui/section";
+import { Section, sectionHeading } from "@/components/ui/section";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
 import { SignOutButton } from "@/components/session/SignOutButton";
 import { RevokeSessionsButton } from "@/components/session/RevokeSessionsButton";
+import { ChangePasswordForm } from "@/components/session/ChangePasswordForm";
 import type { JSX } from "react";
 
 /**
@@ -45,6 +46,7 @@ export default function SettingsPage(): JSX.Element {
   const tHousehold = useTranslations("household");
   const tOffline = useTranslations("offline");
   const tStart = useTranslations("start");
+  const tPassword = useTranslations("password");
 
   return (
     <PageShell width="form">
@@ -105,6 +107,18 @@ export default function SettingsPage(): JSX.Element {
       <section className="mt-4 rounded border border-border bg-card p-4">
         <RevokeSessionsButton />
       </section>
+
+      {/* Beside the session controls because it is one: changing the password
+          ends every session the account has, this one included, and the
+          person who suspects a leak needs both in the same place. A form
+          rather than a link to a screen of its own, because it is three
+          fields and a button. */}
+      <Section
+        className="mt-4 rounded border border-border bg-card p-4"
+        title={tPassword("title")}
+      >
+        <ChangePasswordForm />
+      </Section>
 
       {/* The only place in the application these are offered. They used to be
           in the top bar and in the "Más" sheet as well, which put settings

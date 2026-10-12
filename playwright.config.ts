@@ -52,6 +52,9 @@ const CHROMIUM_ONLY = [
   // answer, and this one costs two browser contexts and two registrations to
   // ask. Running it five times would buy nothing.
   "**/session-revocation.spec.ts",
+  // The same question about a password: whether the server accepts it after a
+  // change has one engine's answer, and each run registers an account.
+  "**/password-change.spec.ts",
 ];
 
 /**

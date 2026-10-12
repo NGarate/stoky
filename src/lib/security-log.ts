@@ -37,6 +37,15 @@ export type SecurityEvent =
   // a household's log should be able to tell "they revoked their sessions"
   // from "somebody was refused".
   | "auth.session.revoked"
+  // A signed-in person changed their own password, which also ended every
+  // session the account had. The credential change ASVS V7 asks to be able
+  // to reconstruct — "who changed it, and when" — with no password in it.
+  | "auth.password.changed"
+  // The current password offered for a change was wrong. From a signed-in
+  // session, so it is either a typo or somebody holding a session that is not
+  // theirs guessing at the password behind it. Refused with BAD_REQUEST, which
+  // the refusal middleware in `trpc.ts` does not record, so it is written here.
+  | "auth.password.change.refused"
   | "access.denied"
   | "request.throttled";
 
