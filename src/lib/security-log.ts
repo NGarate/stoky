@@ -4,8 +4,8 @@
  * V7.1.3 asks that an application log its security-relevant events: failed
  * authentication, access-control failures, and the rest. This one logged
  * almost none of them. A refused sign-in returned `null` and said nothing; a
- * request for another household's receipt threw `FORBIDDEN` at the caller and
- * left no trace on the server at all. On a self-hosted box, that means the one
+ * request for another household's receipt was refused at the caller and left
+ * no trace on the server at all. On a self-hosted box, that means the one
  * question an owner will actually ask — "has anybody been trying to get into
  * my instance?" — had no answer anywhere, and the first evidence of a break-in
  * would have been the data changing.
@@ -49,6 +49,12 @@ export interface SecurityDetails {
   path?: string;
   /** The error code refused with. */
   code?: string;
+  /**
+   * Why, when the code alone does not say. `"not-found"` marks a household
+   * lookup that missed: another household's id and an id nobody has are
+   * refused alike, so the line cannot say which (`householdProcedure`).
+   */
+  reason?: string;
   /** The address a sign-in was attempted for. */
   email?: string;
 }

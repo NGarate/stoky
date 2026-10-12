@@ -195,4 +195,9 @@ with all of them in place (2026-08-30: verify:ci clean, browser suite 150/150).
     by the owner:** uniform refusals beat probe telemetry for a self-hosted
     household deployment, so invisibility is the decision, not a gap. The
     reversal path stands as written — middleware-level logging of scoped-lookup
-    misses, never a re-split of the refusal codes.
+    misses, never a re-split of the refusal codes. **Reversed 2026-10-12** by
+    the security hardening review (ASVS V7.2.2): `householdProcedure` now logs
+    every household-scoped NOT_FOUND as `access.denied` with `reason:
+    "not-found"`, taking exactly that path — the refusal codes stay uniform,
+    and the line cannot tell a foreign id from a missing one. `SECURITY.md`
+    "Refusals are recorded" has the details.

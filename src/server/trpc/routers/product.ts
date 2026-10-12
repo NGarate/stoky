@@ -6,6 +6,7 @@ import {
   adminProcedure,
   createTRPCRouter,
   householdProcedure,
+  NotHouseholdData,
   writeProcedure,
 } from "../trpc";
 import type { Prisma } from "@prisma/client";
@@ -543,9 +544,12 @@ export const productRouter = createTRPCRouter({
       if (!offProduct) {
         // Thrown before withReplay claims the key, so a retry after OFF
         // recovers is not refused as a reused key.
+        // Marked, so the security log does not record an unknown barcode as
+        // a household lookup refused (`householdProcedure`).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Barcode not found",
+          cause: new NotHouseholdData(),
         });
       }
 

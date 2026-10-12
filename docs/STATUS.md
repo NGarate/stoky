@@ -936,7 +936,9 @@ recalled.
   **Closed.** One JSON object per event on stderr, written by a tRPC middleware
   rather than by the resolvers, so a new router cannot forget to be audited.
   Only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS — logging everything would
-  bury the refusals in NOT_FOUNDs.
+  bury the refusals in NOT_FOUNDs. Since 2026-10-12 a NOT_FOUND from a
+  household procedure is recorded as well, because another household's id is
+  refused with it (SECURITY.md "Refusals are recorded").
 - ~~Roles are enforced on the server per procedure, but no interface creates a
   KITCHEN account.~~ **Closed in Phase 5.** `/settings/people` lists the
   household and creates an account with a role, which is what makes `KITCHEN`

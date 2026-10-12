@@ -112,14 +112,17 @@ const domainErrors = t.middleware(async ({ next }) => {
  * V7.1.3.
  *
  * **On every procedure, for the same reason `domainErrors` is.** An
- * access-control failure is thrown from three middlewares and from a dozen
- * resolvers checking `householdId`, and the one that gets forgotten is the one
- * that matters: a resolver reaching another household's row is exactly the
- * event an owner would want to have been recorded. Catching the refusal
- * centrally means a new router cannot forget to be audited.
+ * access-control failure is thrown from three middlewares and from two
+ * resolver checks (`assertMayActOnOwner`, the replay envelope's composer
+ * check), and the one that gets forgotten is the one that matters. Catching
+ * the refusal centrally means a new router cannot forget to be audited.
  *
- * Only the three codes that mean *refused*. Logging every error would bury
- * them in NOT_FOUNDs and turn the log into something nobody greps.
+ * Only the three codes that mean *refused*. A resolver reaching for another
+ * household's row is refused with NOT_FOUND, not FORBIDDEN, so the answer does
+ * not confirm the id exists; that miss is recorded by `householdProcedure`
+ * below, which is the only place that knows the request was household-scoped.
+ * Logging every NOT_FOUND here would add the public and account-only
+ * procedures' misses, which say nothing about anybody's household.
  */
 const securityEvents = t.middleware(async ({ ctx, next, path }) => {
   const result = await next();
@@ -149,6 +152,39 @@ const securityEvents = t.middleware(async ({ ctx, next, path }) => {
 // Outside `domainErrors`, so what gets logged is the code the caller actually
 // received rather than the one the resolver happened to throw first.
 export const publicProcedure = t.procedure.use(securityEvents).use(domainErrors);
+
+/**
+ * The cause a resolver attaches to a NOT_FOUND that is not a household row
+ * being looked up — `product.resolveScan`'s "nobody knows this barcode", which
+ * is a fact about Open Food Facts. Without it the household miss log below
+ * would record every unknown barcode a kitchen scans offline as a refusal.
+ */
+export class NotHouseholdData extends Error {
+  constructor(message = "Not household data") {
+    super(message);
+    this.name = "NotHouseholdData";
+  }
+}
+
+/**
+ * Whether the caller is about to receive a NOT_FOUND about household data.
+ *
+ * Judged on the code the caller will *receive*, not the one thrown. A scoped
+ * write — `store.update`, `shopping.removeItem`, anything with `householdId`
+ * in an `update`/`delete` where — refuses another household's id as Prisma's
+ * `P2025`, and `domainErrors`, which runs outside this middleware, has not
+ * translated it yet. Reading only the resolver's own `TRPCError` would leave
+ * those procedures a way to probe that writes nothing. The cost is that a row
+ * deleted between a check and a write is recorded too; it is a miss like any
+ * other, and the line already cannot tell a miss from a probe.
+ */
+function isHouseholdMiss(error: TRPCError): boolean {
+  if (error.cause instanceof NotHouseholdData) return false;
+  const cause = underlying(error);
+  const received =
+    translatePrismaError(cause) ?? translateServiceError(cause) ?? error;
+  return received.code === "NOT_FOUND";
+}
 
 /**
  * The capability matrix of `docs/REDESIGN_PLAN.md` §5.2, as roles.
@@ -209,6 +245,25 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
  * The cost is one primary-key lookup per call, and in four of the eight
  * routers it is not even that — those procedures were already making exactly
  * this query, one copy per procedure, to find the household id.
+ *
+ * **A NOT_FOUND from inside a household is written to the security log**, as
+ * `access.denied` with `reason: "not-found"` (ASVS V7.2.2). A resolver's
+ * lookups are scoped to `householdId`, and the refusal of another household's
+ * id is deliberately the same NOT_FOUND as an id nobody has, so the browser
+ * learns nothing. The cost of that uniformity is that the server cannot tell
+ * the two apart either without a second, unscoped read at each of the
+ * forty-odd places a router throws it — so it records both, here, where no
+ * router can forget to. A row deleted on another device shows up too; a
+ * burst of them from one account is what an operator is looking for.
+ *
+ * The line names the account, its household and the procedure, **never the id
+ * that was asked for**: the id is the prober's input, and a log that quotes
+ * input is a second copy of whatever the input was.
+ *
+ * That includes the NOT_FOUND `domainErrors` makes of a Prisma `P2025` on the
+ * way out, because a write scoped by `householdId` refuses a foreign id that
+ * way (`isHouseholdMiss`). The one NOT_FOUND left out is a resolver's answer
+ * about the world rather than about a row, which it marks `NotHouseholdData`.
  */
 export const householdProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   const membership = await ctx.db.user.findUnique({
@@ -240,6 +295,21 @@ export const householdProcedure = protectedProcedure.use(async ({ ctx, next }) =
       role: membership.role,
     },
   });
+}).use(async ({ ctx, next, path }) => {
+  const result = await next();
+
+  if (!result.ok && isHouseholdMiss(result.error)) {
+    logSecurityEvent("access.denied", {
+      path,
+      code: "NOT_FOUND",
+      reason: "not-found",
+      userId: ctx.session.user.id,
+      householdId: ctx.householdId,
+      address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
+    });
+  }
+
+  return result;
 });
 
 /**

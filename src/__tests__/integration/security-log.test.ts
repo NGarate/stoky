@@ -1,11 +1,22 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  spyOn,
+} from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
+import { openFoodFacts } from "@/server/services/openFoodFacts";
 import {
   createTestUser,
   createTestHousehold,
+  createTestProduct,
   createMockSession,
+  envelope,
   generateTestEmail,
 } from "../utils/test-helpers";
 
@@ -14,10 +25,11 @@ import {
  *
  * `src/__tests__/unit/security-log.test.ts` proves the line is right. What it
  * cannot prove is that anything writes one, and that is the half that breaks:
- * an access-control failure is thrown from three middlewares and from a dozen
- * resolvers checking `householdId`, so the guarantee worth testing is that a
- * *resolver's* refusal is audited without the resolver knowing anything about
- * it. A new router must not be able to forget.
+ * an access-control failure is thrown from three middlewares, from a resolver
+ * or two, and — as NOT_FOUND — from every lookup scoped to `householdId`, so
+ * the guarantee worth testing is that a *resolver's* refusal is audited
+ * without the resolver knowing anything about it. A new router must not be
+ * able to forget.
  */
 
 const HOUSEHOLD = "Security Log Household";
@@ -26,10 +38,15 @@ const OTHER_HOUSEHOLD = "Security Log Other Household";
 type Caller = ReturnType<typeof appRouter.createCaller>;
 
 let outsider: Caller;
+let otherHouseholdId: string;
 let kitchen: Caller;
 let anonymous: Caller;
 let admin: Caller;
 let receiptId: string;
+let storeId: string;
+let productId: string;
+let listId: string;
+let shoppingItemId: string;
 let outsiderId: string;
 let ownerId: string;
 let adminId: string;
@@ -80,6 +97,7 @@ beforeAll(async () => {
   });
 
   outsiderId = stranger.id;
+  otherHouseholdId = other.id;
   ownerId = owner.id;
   adminId = adminUser.id;
   outsider = appRouter.createCaller(
@@ -101,11 +119,35 @@ beforeAll(async () => {
     },
   });
   receiptId = receipt.id;
+
+  // Rows the outsider reaches for through a scoped *write*, whose miss is a
+  // Prisma P2025 rather than a resolver's own NOT_FOUND.
+  const store = await prisma.store.create({
+    data: { name: "Security Log Store", householdId: household.id },
+  });
+  storeId = store.id;
+  const product = await createTestProduct({
+    name: "Security Log Product",
+    householdId: household.id,
+  });
+  productId = product.id;
+  const list = await prisma.shoppingList.create({
+    data: { name: "Security Log List", householdId: household.id },
+  });
+  listId = list.id;
+  const item = await prisma.shoppingItem.create({
+    data: { shoppingListId: list.id, productId: product.id },
+  });
+  shoppingItemId = item.id;
 });
 
 afterAll(async () => {
   console.warn = realWarn;
   await prisma.receipt.deleteMany({ where: { id: receiptId } });
+  await prisma.shoppingItem.deleteMany({ where: { id: shoppingItemId } });
+  await prisma.shoppingList.deleteMany({ where: { id: listId } });
+  await prisma.product.deleteMany({ where: { id: productId } });
+  await prisma.store.deleteMany({ where: { id: storeId } });
   await prisma.user.deleteMany({ where: { email: { contains: "seclog-" } } });
   await prisma.household.deleteMany({
     where: { name: { in: [HOUSEHOLD, OTHER_HOUSEHOLD] } },
@@ -116,10 +158,10 @@ beforeEach(capture);
 
 describe("a refusal a resolver made", () => {
   // Moved off receipt.getReceiptWithItems: the receipt router now answers a
-  // cross-household id with NOT_FOUND (see "what is not an incident" below),
-  // which securityEvents deliberately does not log, so it no longer has a
-  // resolver-thrown FORBIDDEN to serve as this example. household.ts's
-  // assertMayActOnOwner still throws one directly from a resolver body.
+  // cross-household id with NOT_FOUND (see "a household lookup that missed"
+  // below), so it no longer has a resolver-thrown FORBIDDEN to serve as this
+  // example. household.ts's assertMayActOnOwner still throws one directly
+  // from a resolver body.
   it("is recorded, though the resolver knows nothing about logging", async () => {
     // An admin reaching for an owner's sessions: assertMayActOnOwner refuses
     // it in the resolver body, with no middleware involved.
@@ -165,6 +207,101 @@ describe("a refusal a middleware made", () => {
   });
 });
 
+describe("a household lookup that missed", () => {
+  // Another household's id is refused with the same NOT_FOUND as an id nobody
+  // has, so the browser cannot tell which ids exist. householdProcedure
+  // records the miss — ASVS V7.2.2, every failed access-control decision —
+  // without the receipt router knowing anything about logging.
+  it("is recorded when one household asks for another's row", async () => {
+    await expect(
+      outsider.receipt.getReceiptWithItems({ receiptId }),
+    ).rejects.toThrow("Receipt not found");
+
+    const denials = lines.filter((line) => line.event === "access.denied");
+    expect(denials).toHaveLength(1);
+    expect(denials[0]).toMatchObject({
+      path: "receipt.getReceiptWithItems",
+      code: "NOT_FOUND",
+      reason: "not-found",
+      userId: outsiderId,
+      householdId: otherHouseholdId,
+    });
+  });
+
+  it("never names the id that was asked for", async () => {
+    // The id is the prober's input. Quoting it would hand whoever reads the
+    // log the other household's ids the response refused to confirm.
+    await expect(
+      outsider.receipt.getReceiptWithItems({ receiptId }),
+    ).rejects.toThrow();
+
+    expect(lines).toHaveLength(1);
+    expect(JSON.stringify(lines)).not.toContain(receiptId);
+  });
+
+  it("is recorded alike for an id nobody has", async () => {
+    // The price of the uniform refusal: the server does not run a second,
+    // unscoped read to tell the two apart, so the line cannot either.
+    // SECURITY.md says so, so nobody reads a not-found line as proof.
+    await expect(
+      outsider.receipt.getReceiptWithItems({
+        receiptId: "00000000-0000-0000-0000-000000000000",
+      }),
+    ).rejects.toThrow();
+    const missing = lines.map(({ ts: _ts, ...rest }) => rest);
+
+    capture();
+    await expect(
+      outsider.receipt.getReceiptWithItems({ receiptId }),
+    ).rejects.toThrow();
+    const foreign = lines.map(({ ts: _ts, ...rest }) => rest);
+
+    expect(missing).toHaveLength(1);
+    expect(missing).toEqual(foreign);
+  });
+
+  it("is recorded when the scoped write itself is what missed", async () => {
+    // Not every router reads before it writes: store.update and
+    // shopping.removeItem put householdId in the write's own where, so a
+    // foreign id surfaces as Prisma's P2025, translated to NOT_FOUND only by
+    // domainErrors. The line has to follow the code the caller received, or
+    // these procedures are a way to probe that leaves no trace.
+    await expect(
+      outsider.store.update({ id: storeId, name: "Mine now" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      outsider.shopping.removeItem({
+        ...envelope(outsiderId),
+        id: shoppingItemId,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const denials = lines.filter((line) => line.event === "access.denied");
+    expect(denials.map((line) => line.path)).toEqual([
+      "store.update",
+      "shopping.removeItem",
+    ]);
+    for (const denial of denials) {
+      expect(denial).toMatchObject({
+        code: "NOT_FOUND",
+        reason: "not-found",
+        userId: outsiderId,
+        householdId: otherHouseholdId,
+      });
+    }
+    expect(JSON.stringify(lines)).not.toContain(storeId);
+    expect(JSON.stringify(lines)).not.toContain(shoppingItemId);
+
+    // And the refusal was only a refusal.
+    expect(
+      await prisma.shoppingItem.count({ where: { id: shoppingItemId } }),
+    ).toBe(1);
+    expect(
+      (await prisma.store.findUnique({ where: { id: storeId } }))?.name,
+    ).toBe("Security Log Store");
+  });
+});
+
 describe("what is not an incident", () => {
   it("says nothing about a request that succeeded", async () => {
     await outsider.product.list({});
@@ -172,15 +309,23 @@ describe("what is not an incident", () => {
     expect(lines).toEqual([]);
   });
 
-  it("says nothing about a row that is merely missing", async () => {
-    // Logging every error would bury the refusals in NOT_FOUNDs and turn the
-    // log into something nobody greps.
-    await expect(
-      outsider.receipt.getReceiptWithItems({
-        receiptId: "00000000-0000-0000-0000-000000000000",
-      }),
-    ).rejects.toThrow();
+  it("says nothing about a barcode nobody knows", async () => {
+    // A NOT_FOUND about Open Food Facts, not about a row: a kitchen scanning
+    // unknown products offline is not probing anybody's household.
+    const miss = spyOn(openFoodFacts, "getProductByBarcode").mockResolvedValue(
+      null,
+    );
+    try {
+      await expect(
+        outsider.product.resolveScan({
+          ...envelope(outsiderId),
+          barcode: "8410000777777",
+        }),
+      ).rejects.toThrow("Barcode not found");
+    } finally {
+      miss.mockRestore();
+    }
 
-    expect(lines.some((line) => line.event === "access.denied")).toBe(false);
+    expect(lines).toEqual([]);
   });
 });

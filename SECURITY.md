@@ -377,12 +377,32 @@ Docker already collects and rotates: `docker compose logs app | jq 'select(.even
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
 `access.denied` and `request.throttled`.
 
-- **The access-control events come from a tRPC middleware, not from the
-  resolvers.** A refusal is thrown from three middlewares and from a dozen
-  resolvers comparing `householdId`; catching it centrally is what stops a new
-  router from forgetting to be audited. Only UNAUTHORIZED, FORBIDDEN and
-  TOO_MANY_REQUESTS — logging every error would bury the refusals in
-  NOT_FOUNDs and produce a log nobody greps.
+- **The access-control events come from tRPC middleware, not from the
+  resolvers**, so a new router cannot forget to be audited. Every procedure
+  logs UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS, which come from three
+  middlewares and two resolver checks (`assertMayActOnOwner` and the replay
+  envelope's composer check).
+- **A household lookup that misses is logged too**, as `access.denied` with
+  `"code": "NOT_FOUND"` and `"reason": "not-found"` (ASVS V7.2.2). A resolver
+  asked for another household's row answers NOT_FOUND exactly as it does for
+  an id nobody has, so the browser learns nothing about which ids exist; the
+  server does not run a second, unscoped read to tell the two apart, so it
+  records both alike. **A not-found line is therefore not proof of a probe**
+  — a row deleted on another device, or a stale link, writes one as well.
+  What an operator looks for is a run of them from one account: `jq -r
+  'select(.reason == "not-found") | .userId' | sort | uniq -c` over the app's
+  log counts them per account. The line names the account, its household and
+  the procedure, **never the id that was asked for**. It follows the code the
+  caller received, so a write scoped by `householdId` (`store.update`,
+  `shopping.removeItem`), which refuses a foreign id as Prisma's `P2025`, is
+  recorded like a read; a row deleted between a check and a write is
+  therefore recorded too. The one NOT_FOUND left out is a barcode nobody
+  knows, which is about Open Food Facts rather than anybody's household. Only
+  household procedures are covered; logging every error everywhere would bury
+  the refusals and produce a log nobody greps. This reverses the 2026-08-31
+  decision to leave these probes invisible (`docs/DEFERRED.md` item 22),
+  along the path that entry left open: logged at the middleware, with the
+  refusal codes still uniform.
 - **A failed sign-in logs the same line whether or not the account exists.**
   Recording which of the two it was would put back, in a file, exactly the
   distinction the flattened error message refuses to tell the browser. **And it
