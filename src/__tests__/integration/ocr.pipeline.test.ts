@@ -8,6 +8,7 @@ import {
 } from "@/server/services/ocr";
 import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
 import { matchReceiptItems } from "@/server/services/productMatcher";
+import { failInterruptedReceipts } from "@/server/services/receipt-recovery";
 import { ReceiptStatus, MatchStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
@@ -690,6 +691,57 @@ Leche 1,25
       await saveParsedItems(receipt.id, parsed);
 
       expect(parsed.storeName).toBeDefined();
+    });
+  });
+
+  describe("Restart recovery", () => {
+    // Dated well before anything else in the test database, so the sweep —
+    // which is not scoped to a household, because a restart is not — cannot
+    // reach another test's receipts, and the count below is this test's own.
+    const startedAt = new Date("2001-01-01T00:00:00Z");
+    const before = new Date("2000-06-01T00:00:00Z");
+    const after = new Date("2001-01-01T00:00:01Z");
+
+    async function receiptIn(status: ReceiptStatus, createdAt: Date) {
+      return prisma.receipt.create({
+        data: {
+          imagePath: join(testDir, `${randomUUID()}.jpg`),
+          status,
+          createdAt,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+    }
+
+    it("fails the receipts a previous process left in flight, and nothing else", async () => {
+      const stranded = await Promise.all([
+        receiptIn(ReceiptStatus.UPLOADING, before),
+        receiptIn(ReceiptStatus.PROCESSING, before),
+        receiptIn(ReceiptStatus.PARSED, before),
+      ]);
+      const settled = await Promise.all(
+        [
+          ReceiptStatus.NEEDS_REVIEW,
+          ReceiptStatus.CONFIRMED,
+          ReceiptStatus.APPLIED,
+        ].map((status) => receiptIn(status, before)),
+      );
+      // This process's own: created after it started, still being read.
+      const current = await receiptIn(ReceiptStatus.PROCESSING, after);
+
+      const failed = await failInterruptedReceipts(startedAt);
+
+      expect(failed).toBe(3);
+      const statusOf = async (id: string) =>
+        (await prisma.receipt.findUniqueOrThrow({ where: { id } })).status;
+      for (const receipt of stranded) {
+        expect(await statusOf(receipt.id)).toBe(ReceiptStatus.FAILED);
+      }
+      for (const receipt of settled) {
+        expect(await statusOf(receipt.id)).toBe(receipt.status);
+      }
+      expect(await statusOf(current.id)).toBe(ReceiptStatus.PROCESSING);
     });
   });
 });

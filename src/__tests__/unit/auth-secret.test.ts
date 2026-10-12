@@ -5,6 +5,7 @@ import {
   assertUsableSecret,
   secretProblem,
 } from "@/lib/auth/secret";
+import * as receiptRecovery from "@/server/services/receipt-recovery";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -115,6 +116,9 @@ describe("when it refuses", () => {
       throw new Error(`exit ${code}`);
     }) as typeof process.exit);
     const logged = spyOn(console, "error").mockImplementation(() => {});
+    // `register` goes on to sweep interrupted receipts once the secret passes;
+    // replaced, so this suite never touches whatever database `.env` names.
+    const sweep = spyOn(receiptRecovery, "recoverInterruptedReceipts").mockResolvedValue();
 
     try {
       await asProductionServer(PLACEHOLDER_SECRET, async () => {
@@ -134,6 +138,7 @@ describe("when it refuses", () => {
     } finally {
       exit.mockRestore();
       logged.mockRestore();
+      sweep.mockRestore();
     }
   });
 });

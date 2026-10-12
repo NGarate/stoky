@@ -114,6 +114,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | LOC-2 | No screen or call can move a nested location back to the top level | 🟡 Open — found fixing LOC-1 |
 | HOUSE-2 | Two concurrent `household.create` calls from one account left a household with no member | ✅ Resolved 2026-10-12 |
 | OFFLINE-1 | A queued change resent after its replay record was swept is applied a second time | 🟡 Open — window widened from 7 to 90 days 2026-10-12; the client-side age gate is the fix |
+| OCR-3 | A restart left a receipt that was being read spinning on the upload screen for ever | ✅ Resolved 2026-10-12 |
 
 ---
 
@@ -1108,6 +1109,54 @@ receipt has *not* been scanned inside the image — what stays unproven is that
 tesseract.js's bundled copy honours these options the same way the source does."
 It does not. The model being present and correctly pointed at, which is all
 OCR-1 verified, is necessary and not sufficient.
+
+---
+
+### ✅ OCR-3: A restart left a receipt that was being read spinning for ever
+
+**Files:** `src/server/services/receipt-recovery.ts`, `src/instrumentation.ts`
+**Severity:** MEDIUM — part of the 2026-10-12 security review's OCR
+denial-of-service finding, whose upload could get the app container
+OOM-killed: every receipt being read at that moment stayed where it was
+**Status:** RESOLVED 2026-10-12
+
+What happens to a receipt after its upload happens inside the process that
+took it. `receipt.upload` writes it as UPLOADING and starts
+`processReceiptAsync` without waiting for it, which moves it through
+PROCESSING (OCR) and PARSED (lines saved, matching under way) to
+NEEDS_REVIEW, CONFIRMED or FAILED. FAILED was reached only from that
+function's `catch`, so a process that stopped in between — a deploy, a
+restart, or the OOM kill the review's measurements point to (OCR on one
+upload passed 1.2 GB RSS against the app's 1 GiB limit) — left the receipt
+in its state with nothing to move it on. Nothing re-processes a stored receipt, and the
+upload screen polls all three states once a second, so it spun there and
+never offered the retry it shows for FAILED.
+
+**Resolution.** When the server starts (`register` in `src/instrumentation.ts`,
+Node runtime only; `next build` does not call it), every receipt in UPLOADING,
+PROCESSING or PARSED that was **created before that moment** becomes FAILED.
+The cutoff, not the timing, is what keeps the new process's own receipts out
+of it, so the sweep is not awaited: a database that is slow to come up gets
+an error in the log and the receipts wait for the next start, instead of the
+server waiting for the database. A receipt has no column for why it failed;
+the log line says how many were "interrupted by a restart".
+
+PARSED is beyond what the review named. It is as transient as the other two
+— `saveParsedItems` sets it and `matchReceiptItems` replaces it in the same
+call chain — and a restart between them strands it the same way.
+
+What it leaves: the person re-uploads, as for any FAILED receipt, and the
+failed row and its stored photograph stay (nothing deletes a receipt). A
+receipt already stuck on an existing installation becomes FAILED on the
+first start of a version with this. It assumes one application process per
+database, which is what the release bundle runs: a second process started
+against the same database would fail the first one's receipts in flight.
+
+Tested in `integration/ocr.pipeline.test.ts` ("Restart recovery") against
+receipts back-dated before a cutoff — the three in-flight states fail, the
+settled states and a receipt created after the cutoff do not — and in
+`unit/receipt-recovery.test.ts`: `register` calls the sweep with a cutoff
+taken before it returns, and an unreachable database is logged, not thrown.
 
 ---
 

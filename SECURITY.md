@@ -220,6 +220,14 @@ Verified against the files named in each row.
   shorten the queue: each image that runs out the limit costs everyone behind
   it 120 s, and the 30 uploads an account may make in an hour can fill an hour
   of OCR.
+- **A restart does not strand a receipt** (`src/server/services/receipt-recovery.ts`,
+  called from `src/instrumentation.ts`). A receipt is read inside the process
+  that took its upload, so one that process was still reading when it stopped
+  — a deploy, a restart, an OOM kill — used to stay in UPLOADING, PROCESSING
+  or PARSED for good, with the upload screen polling it. At start the server
+  now marks FAILED every receipt in those states created before it started;
+  the person re-uploads (ISSUES.md OCR-3). This assumes one application
+  process per database, which is what the release bundle runs.
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.
@@ -605,8 +613,8 @@ that is also a line of the message, since a raw query's input can carry its
 own "    at "; an initialisation error keeps its
 message, the "database is down" line, which names host and port but not the
 credentials. Anything that is not a Prisma error is logged as before. The
-tRPC `errorFormatter` and the receipt pipeline's background processing both
-log through it; `src/__tests__/unit/log-error.test.ts` checks each kind.
+tRPC `errorFormatter`, the receipt pipeline's background processing and the
+start-up sweep of receipts a restart interrupted all log through it; `src/__tests__/unit/log-error.test.ts` checks each kind.
 
 ### ~~Household roles are decorative~~ — this section was false
 
