@@ -1625,6 +1625,63 @@ The real limit is one level down and is recorded in `docs/SECURITY_REVIEW.md`
 row*, and the second was not uniform. Four instances of that were found and
 fixed; a test now fails on the shape of them.
 
+### A device keeps the last account's data while it stays offline
+
+Opening without a signal is a requirement, so a copy of household data lives
+on every device that has used the app: the cached shell (the service worker's
+copy of six pages, which carry no household data), the write queue
+(`stoky.queue.v1.<account>`), and the **saved reads** — the seven allowlisted
+queries in `PERSISTED_QUERIES` (`src/lib/offline/persist.ts`: the shopping
+lists, the stock overview, expiring and expired items, the product list),
+stored in `localStorage` under `stoky.reads.v1.<account>`.
+
+What removes them:
+
+- **Signing out** — **Cerrar sesión**, ending every session from this device,
+  or changing the password, all through `useEndSession` — clears the memory
+  cache, the queue, the saved reads and the shell before it leaves.
+- **Reaching `/login` with the network up** — where an expired or ended
+  session is sent — clears the previous account's saved reads, its shell and
+  the memory cache (`ShellCacheGuard`). So does a different account signing
+  in on the device. The queue is kept, because an expired session is asked to
+  sign in again and its unsent changes are what it signs in to send. Until the
+  security review of 2026-10-12, `/login` left the saved reads in place, and
+  an account that never signed in on that device again left them there
+  indefinitely: TanStack removes an expired copy only when the same account
+  restores it. A device updated from before then may hold such a copy under
+  a key nobody recorded as the last account's, so the guard also sweeps every
+  saved-reads key but the signed-in account's — all of them on `/login` — on
+  each run (`forgetPersistedReadsExcept`). A browser holds one session at a
+  time, so no other account's copy could be restored without that account
+  signing in, online.
+
+What does not:
+
+- **Ending a session ends the token, not the device's copy.** Expiry, the
+  thirty-day ceiling, **Cerrar la sesión en todos los dispositivos** and an
+  admin in **Personas del hogar** all work on the server. A device that is not
+  online never hears of it: opened offline, or when a navigation takes longer
+  than the service worker's 2.5 seconds, the cached shell renders and the
+  saved reads appear without anybody signing in. That is the offline
+  requirement working, not a defect in it — and it cannot be gated on the
+  session's expiry, which on an offline device is nearly always in the past
+  (the token lapses after fifteen idle minutes).
+- **The 24-hour `maxAge` is not a bound on how old the copy can be.** TanStack
+  stamps the time on every save and every open saves — the invalidation after
+  a restore is enough — so a device opened offline at least once a day keeps
+  its copy for as long as that continues. Measured: a copy stamped 23 hours
+  earlier, restored with nothing able to reach a server, was saved back
+  stamped with the current time.
+- **Blocked storage** means the guard cannot tell who was here, and forgets
+  nothing (the in-memory cache is still emptied on `/login`).
+
+So for a lost or shared device: end its sessions, and expect it to keep what
+it last saw until it next reaches the network. The device's own lock screen is
+what protects that copy; on a shared tablet, sign out rather than walk away.
+What would change this is encrypting the saved reads under a key the server
+releases only to a live session — which is the same as not reading them
+offline.
+
 ### The accessibility audit is automated; the human half is not done
 
 This section previously said no axe run and no screen-reader pass had ever been
