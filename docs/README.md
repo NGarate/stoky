@@ -116,7 +116,7 @@ two §3/§5.1 promises found unbuilt when the journeys were re-audited on
 - **Write** when a phase closes — with what it actually did, including where the
   plan turned out to be wrong. Phase 1 said four dead routes; there were six.
 
-**[`ISSUES.md`](ISSUES.md)**
+**[`ISSUES.md`](../ISSUES.md)**
 Every known defect, with a file reference, evidence, and a severity. Resolved
 entries are kept with their resolution rather than deleted, because the same
 defect recurs and the note about why it happened is worth more than the fix.
@@ -172,7 +172,7 @@ rule mirrors §10's: an item leaves by being done, promoted to `ISSUES.md`, or
 dropped in writing — never by being forgotten. Two of its items are owner
 decisions, not code.
 
-**[`SECURITY.md`](SECURITY.md)**
+**[`SECURITY.md`](../SECURITY.md)**
 The threat model for a self-hosted deployment, what is already hardened
 (container, network, CSP, image supply chain), what is *not* — read that part
 first — and operator guidance.
