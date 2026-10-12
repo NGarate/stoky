@@ -218,6 +218,109 @@ test.describe("what a prefetch label cannot do", () => {
   });
 });
 
+/**
+ * What a document labelled a prefetch is served with, by which label.
+ *
+ * Three headers say "prefetch", and the proxy's matcher skips two of them
+ * (SECURITY_REVIEW §8). `next-router-prefetch` is the router's RSC prefetch,
+ * data merged into a page that already has its nonce. `Purpose: prefetch` is
+ * the legacy spelling, and it can label a *document* request: that page is
+ * rendered with no nonce, no `Content-Security-Policy` and no device cookie.
+ * `Sec-Purpose` is the spelling browsers send today — measured in the pinned
+ * Chromium, Firefox and WebKit, none sends `Purpose` — and the matcher's
+ * `key: "purpose"` is the header's exact name, so it does not skip it.
+ *
+ * Each skipped document is harmless for a reason this block pins:
+ *
+ *   - `Purpose`: every page is a request-bound render (the root layout reads
+ *     the nonce, `instant = false`) and Next sends it `no-store`. A
+ *     `<link rel=prefetch>` result reaches the next navigation only through
+ *     the HTTP cache, which keeps nothing `no-store` — measured: the click
+ *     that followed was a fresh, unlabelled request in all three engines. If
+ *     a page ever becomes cacheable — a prerenderable root shell, a
+ *     `cache-control` set by hand — this goes red.
+ *   - `Sec-Purpose`: the `no-store` argument does *not* cover it. Chromium's
+ *     speculation-rules prefetch and prerender are navigational, and it
+ *     showed a `no-store` page from either without asking again. They are
+ *     safe only because they go through the proxy, which is what the second
+ *     pair asserts: widen the matcher to `sec-purpose` and a prerendered page
+ *     is shown to the person with no policy at all.
+ */
+function expectUnprotectedButNotStored(response: APIResponse) {
+  expect(response.status()).toBe(200);
+
+  // The skip, as measured: the proxy did not run, so nothing it adds is here.
+  // If these ever start to arrive, the matcher changed and §8 is out of date.
+  expect(headerOf(response, "content-security-policy")).toBe("");
+  expect(headerOf(response, "set-cookie")).not.toContain("stoky_device=");
+
+  // Why the skip is harmless.
+  expect(headerOf(response, "cache-control")).toContain("no-store");
+}
+
+function expectThroughTheProxy(response: APIResponse) {
+  expect(response.status()).toBe(200);
+  expect(headerOf(response, "content-security-policy")).toMatch(
+    /script-src 'self' 'nonce-[a-f0-9]{32}' 'strict-dynamic'/,
+  );
+}
+
+test.describe("a document labelled a prefetch", () => {
+  test("a public page labelled `Purpose` skips the proxy and is not stored", async ({
+    request,
+  }) => {
+    const response = await request.get("/login", {
+      headers: { purpose: "prefetch" },
+      maxRedirects: 0,
+    });
+
+    expectUnprotectedButNotStored(response);
+  });
+
+  test("a public page labelled `Sec-Purpose` goes through the proxy", async ({
+    request,
+  }) => {
+    for (const label of ["prefetch", "prefetch;prerender"]) {
+      expectThroughTheProxy(
+        await request.get("/login", {
+          headers: { "sec-purpose": label },
+          maxRedirects: 0,
+        }),
+      );
+    }
+  });
+
+  test.describe("signed in", () => {
+    test.use({ storageState: SESSION_FILE });
+
+    // A signed-in route as well as a public one: the dashboard routes are
+    // where a future performance change would be tempted to start caching.
+    test("a dashboard page labelled `Purpose` skips the proxy and is not stored", async ({
+      request,
+    }) => {
+      const response = await request.get("/inventory", {
+        headers: { purpose: "prefetch" },
+        maxRedirects: 0,
+      });
+
+      expectUnprotectedButNotStored(response);
+    });
+
+    test("a dashboard page labelled `Sec-Purpose` goes through the proxy", async ({
+      request,
+    }) => {
+      for (const label of ["prefetch", "prefetch;prerender"]) {
+        expectThroughTheProxy(
+          await request.get("/inventory", {
+            headers: { "sec-purpose": label },
+            maxRedirects: 0,
+          }),
+        );
+      }
+    });
+  });
+});
+
 test.describe("the service worker's own policy", () => {
   test("is its own, and is not cached", async ({ request }) => {
     // A nonce'd page policy applied to the worker becomes the *worker's*

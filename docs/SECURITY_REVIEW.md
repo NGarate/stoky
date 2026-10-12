@@ -526,10 +526,68 @@ labelled → the full body → Zod `too_big`. The residual — the full body is
 buffered before Zod refuses it — is a low-severity memory cost behind auth and
 the 30/hour upload meter, worth knowing rather than fixing.
 
-Prefetch responses also carry no `Content-Security-Policy` (it is set only in
+~~Prefetch responses also carry no `Content-Security-Policy` (it is set only in
 the proxy), so a prefetched RSC payload has no nonce; harmless because such a
 payload is data merged into a document that already has a fresh nonce and
-`'strict-dynamic'`, never itself a top-level document.
+`'strict-dynamic'`, never itself a top-level document.~~ **Corrected
+2026-10-12: that reason covers one of the two labels the matcher skips.**
+`next-router-prefetch` is the router's RSC prefetch, and for it the paragraph
+holds. `Purpose: prefetch` is different: it can label a *document* request.
+Measured against the standalone build: `GET /inventory`, signed in, with
+`Purpose: prefetch` answers 200 with no `Content-Security-Policy` and no
+`stoky_device` cookie. So a document labelled that way is rendered without a
+nonce and without the policy.
+
+Which browsers send it was measured too, not assumed. The 2026-10-12 finding
+called it browser-set; the three browsers this repository pins (Playwright
+1.62.1's Chromium 151, Firefox 153, WebKit 26.5), loading a probe page with a
+`<link rel=prefetch>`, a speculation-rules prefetch and a speculation-rules
+prerender, never sent it. Chromium and Firefox labelled
+`<link rel=prefetch>` `Sec-Purpose: prefetch`; Chromium labelled its
+speculation-rules prefetch `Sec-Purpose: prefetch` and its prerender
+`Sec-Purpose: prefetch;prerender`; Firefox and WebKit did not act on
+speculation rules, and WebKit did not prefetch the link. `Purpose` is the
+legacy spelling, sent by whatever client still uses it — or by anyone who
+types it. The matcher's `key: "purpose"` is the header's exact name, so
+`Sec-Purpose` does *not* skip the proxy: measured, `GET /login` and
+`GET /inventory` with `Sec-Purpose: prefetch` or `prefetch;prerender` carry
+the nonce'd policy.
+
+Each case is harmless for its own reason, and the two reasons are not
+interchangeable:
+
+- **`Purpose` — nothing keeps it.** Every page is a request-bound render (the
+  root layout reads the nonce from `headers()` and sets `instant = false`),
+  and Next sends such a render as `private, no-cache, no-store, max-age=0,
+  must-revalidate` — measured on the labelled `/inventory` response, which also
+  carries `x-nextjs-postponed: 1`. A `<link rel=prefetch>` result reaches the
+  next navigation only through the HTTP cache, which keeps nothing `no-store`:
+  on the probe, with the same `cache-control`, clicking the prefetched link
+  sent a fresh, unlabelled request in all three engines. So the policy-less
+  page goes only to whoever sent the label.
+- **`Sec-Purpose` — it goes through the proxy.** `no-store` does not protect
+  this one. Speculation-rules prefetch and prerender are navigational: on the
+  probe, Chromium showed a `no-store` page from either without asking the
+  server again. They are safe because the proxy runs on them, so the page the
+  person is shown has its nonce and policy. Widening the matcher to skip
+  `sec-purpose` — the natural "modernisation" of Next's documented shape —
+  would hand a prerendered page to the person with no policy at all.
+
+The residual, stated rather than measured: a browser that sent the legacy
+`Purpose` on a prefetch it then *shows* as the navigation would show a
+policy-less page. None of the three measured does. The matcher stays as it
+is, the shape Next's own CSP guide documents.
+
+Both reasons are pinned rather than recalled. "a document labelled a
+prefetch" in `security-headers.spec.ts` asserts, for `/login` signed out and
+`/inventory` signed in, that a `Purpose`-labelled response skips the proxy
+(no policy, no device cookie) and is `no-store`, and that a
+`Sec-Purpose`-labelled one (`prefetch` and `prefetch;prerender`) carries the
+nonce'd `script-src`. If a page ever becomes cacheable, a policy-less prefetch
+could become the document a person is shown, and the first pair goes red —
+pointed at `/icons/icon-192.png`, which is served `public, max-age=0`, it
+does. Swap the matcher's `purpose` clause for `sec-purpose` and all four go
+red.
 
 ---
 
