@@ -210,7 +210,7 @@ describe("OpenFoodFacts Service", () => {
       server.stop(true);
     });
 
-    /** A cache that also counts what was written to it. */
+    /** A cache that also counts what was written to it, hit or miss. */
     function countingCache(): { cache: ProductCache; writes: () => number } {
       const inner = memoryProductCache();
       let writes = 0;
@@ -220,6 +220,10 @@ describe("OpenFoodFacts Service", () => {
           set: async (key, value) => {
             writes += 1;
             await inner.set(key, value);
+          },
+          setMissing: async (key) => {
+            writes += 1;
+            await inner.setMissing(key);
           },
         },
         writes: () => writes,

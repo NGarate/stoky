@@ -153,6 +153,9 @@ export class OpenFoodFactsClient {
       await this.cache.delete(barcode);
     }
 
+    // Asked within the last day and Open Food Facts had no record of it.
+    if (await this.cache.isMissing(barcode)) return null;
+
     try {
       const response = await fetch(
         `${OFF_API_BASE}/product/${encodeURIComponent(barcode)}.json?fields=code,product_name,brands,categories,image_url,image_front_url,quantity,serving_quantity,nutriments,ingredients_text,allergens,nutriscore_grade,nova_group,additives_n,additives_tags,nutrient_levels,labels_tags`,
@@ -169,12 +172,27 @@ export class OpenFoodFactsClient {
         }
       );
 
-      if (!response.ok) {
+      // A 404 is how the v2 API says "no such product" — HTTP 404 with a
+      // `status: 0` body, measured against the live API on 2026-10-12 — so it
+      // is read, not thrown. Any other non-2xx is OFF being unavailable.
+      if (!response.ok && response.status !== 404) {
         throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
       }
 
       const rawData = await response.json();
+      // A 404 that is not OFF's JSON — a proxy's error page — fails this parse
+      // and lands in the catch: unavailable, not unknown, and not remembered.
       const parsed = offResponseSchema.parse(rawData);
+
+      // The definitive "unknown": remembered for a day (`PRODUCT_MISS_TTL_SECONDS`),
+      // so rescanning a code OFF does not have stops costing a request each
+      // time. Only this answer — a timeout or an error status never reaches
+      // here, and must stay asked again: `resolveScan` relies on a retry after
+      // an outage being free to succeed.
+      if (parsed.status === 0) {
+        await this.cache.setMissing(barcode);
+        return null;
+      }
 
       // `status: 1` is not "OFF knows this product". An app that scans an
       // unknown code can make OFF create an empty stub (`"empty": 1`, no name,
@@ -182,7 +200,9 @@ export class OpenFoodFactsClient {
       // nothing in it. Taking that as a hit created a nameless "Product <code>"
       // instead of sending the person to the form to name it. A record with
       // neither a name nor a brand identifies nothing, so it counts as unknown
-      // and is not cached: the next lookup sees it once someone fills it in.
+      // — but is not remembered, even as a miss: a stub is a record somebody
+      // has started, the likeliest to be named soon, and the next lookup sees
+      // it once someone fills it in.
       if (parsed.status !== 1 || !parsed.product || !identifiesAProduct(parsed.product)) {
         return null;
       }
