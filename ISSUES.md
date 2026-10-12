@@ -112,6 +112,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | SEC-2 | `consumeStock` guards `?? ` but writes `\|\|`, so an empty `consumeFromLocationId` writes an unchecked `locationId` | ✅ Resolved 2026-08-31 |
 | LOC-1 | Two concurrent location moves could leave two locations inside each other, and a move into the loop never finished | ✅ Resolved 2026-10-12 |
 | LOC-2 | No screen or call can move a nested location back to the top level | 🟡 Open — found fixing LOC-1 |
+| HOUSE-2 | Two concurrent `household.create` calls from one account left a household with no member | ✅ Resolved 2026-10-12 |
 
 ---
 
@@ -709,6 +710,52 @@ to the top level arrives as a rename that leaves the parent where it was, and
 the screen reports success. The fix needs `parentId` nullable in the update
 schema, `update` writing `null` as "top level", and the form sending `null`
 rather than `undefined` when editing.
+
+---
+
+### ✅ HOUSE-2: Two concurrent `household.create` calls from one account left a household with no member
+
+**Files:** `src/server/trpc/routers/household.ts` (`create`)
+**Severity:** INFO — data integrity, not a security weakness: only the
+caller's own account is involved, and open registration already lets anyone
+create a household with a name of their choosing
+**Status:** RESOLVED 2026-10-12 — found by the 2026-10-12 security review,
+confirmed by both verifiers, who lowered it from low to info
+
+`household.create` read the caller's `householdId` before its transaction and
+refused if it was set. The transaction then created the household and claimed
+the account with `user.update({ where: { id } })` — keyed on the id alone. Two
+creates sent together (a double tap, two tabs, one batched request) both
+passed the read; the second update waited on the first one's row lock and then
+overwrote `householdId`, so the first household lost its only member. The
+procedure's own comment says what that leaves: a row "unreachable by anyone",
+that no screen shows and no procedure deletes.
+
+**Resolution.** The claim is the conditional update, inside the same
+transaction as the insert:
+`updateMany({ where: { id, householdId: null }, data: { householdId, role: "OWNER" } })`.
+Under READ COMMITTED the second of two claims waits for the first to commit,
+re-evaluates its `WHERE` against the committed row, and matches nothing; a
+count of 0 throws `CONFLICT` ("This account already belongs to a household",
+the same answer as the early read), which rolls back that call's household. The
+early read stays, for the `UNAUTHORIZED` answer to a deleted account and so a
+sequential second create is refused without an insert.
+
+**Pinned by** "lets only one of two concurrent creates claim the account" in
+`src/__tests__/integration/household.test.ts` (real PostgreSQL; ten rounds of
+two concurrent creates, each round asserting one success, one `CONFLICT`, one
+household left with one member). Seen to fail: with the original
+`update({ where: { id } })` restored, both calls of the first round succeeded;
+with the conditional update kept but the zero-count refusal removed, likewise.
+
+**Not covered here.** `auth.register` has the same shape: it creates the
+household and then the user as two statements outside a transaction, so two
+concurrent registrations for one email leave the loser's household behind when
+its `user.create` hits the unique email index. The `addMember` docblock already
+calls this "the bug `auth.register` has". It is a separate path with its own
+change and is not touched by this one. Households already left without a member
+are not deleted: there is no erasure path yet, and a sweep would have to be
+checked against everything that cascades from a household first.
 
 ---
 

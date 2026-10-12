@@ -200,12 +200,27 @@ export const householdRouter = createTRPCRouter({
       // One transaction: a household with no members is invisible in the
       // interface and unreachable by anyone, so a half-applied create would
       // leave a row nothing can ever clean up.
+      //
+      // The read above is only the early answer; the claim is the conditional
+      // update below. Two creates sent together from one account (a double
+      // tap, two tabs, one batched request) both pass that read, and an
+      // update keyed on `id` alone let the second overwrite the first and
+      // strand its household with no member. With `householdId: null` in the
+      // WHERE, the second waits on the first one's row lock, re-reads the row
+      // once it commits (READ COMMITTED), matches nothing, and throws — which
+      // rolls its own household back.
       const household = await ctx.db.$transaction(async (tx) => {
         const created = await tx.household.create({ data: { name: input.name } });
-        await tx.user.update({
-          where: { id: userId },
+        const claimed = await tx.user.updateMany({
+          where: { id: userId, householdId: null },
           data: { householdId: created.id, role: "OWNER" },
         });
+        if (claimed.count === 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This account already belongs to a household",
+          });
+        }
         return created;
       });
 

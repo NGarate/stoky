@@ -22,6 +22,9 @@ import {
 
 const HOUSEHOLD_PREFIX = "House Test";
 
+/** Rounds of the concurrent-create race; one pair may run in sequence by chance. */
+const ROUNDS = 10;
+
 type Caller = ReturnType<typeof appRouter.createCaller>;
 
 async function callerForNewUser(householdId?: string): Promise<{
@@ -119,6 +122,42 @@ describe("household.create", () => {
     expect(
       await prisma.household.count({ where: { name: `${HOUSEHOLD_PREFIX} Second` } }),
     ).toBe(0);
+  });
+
+  it("lets only one of two concurrent creates claim the account, and leaves no empty household", async () => {
+    // A double tap, two tabs or one batched request: both calls pass the
+    // early read before either commits. The claim used to be an update keyed
+    // on the id alone, so the second overwrote the first and stranded its
+    // household with no member. Several rounds, because one pair can happen
+    // to run in sequence and prove nothing.
+    for (let round = 0; round < ROUNDS; round++) {
+      const { caller, userId } = await callerForNewUser();
+      const names = [`${HOUSEHOLD_PREFIX} Race ${round} A`, `${HOUSEHOLD_PREFIX} Race ${round} B`];
+
+      const outcomes = await Promise.allSettled(
+        names.map((name) => caller.household.create({ name })),
+      );
+
+      const created = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value.id] : []));
+      const refused = outcomes.flatMap((o) => (o.status === "rejected" ? [o.reason] : []));
+      expect(created).toHaveLength(1);
+      expect(refused).toHaveLength(1);
+      expect(refused[0]).toBeInstanceOf(TRPCError);
+      expect((refused[0] as TRPCError).code).toBe("CONFLICT");
+
+      // The loser's household rolled back with it, so the account's one
+      // household is the only row either call left.
+      const left = await prisma.household.findMany({
+        where: { name: { in: names } },
+        select: { id: true, _count: { select: { members: true } } },
+      });
+      expect(left.map((h) => h.id)).toEqual(created);
+      expect(left[0]._count.members).toBe(1);
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      expect(user?.householdId).toBe(created[0]);
+      expect(user?.role).toBe("OWNER");
+    }
   });
 
   it("rejects an empty name", async () => {
