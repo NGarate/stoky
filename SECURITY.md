@@ -1763,6 +1763,8 @@ own.
 - No hosted error tracking or monitoring. `/api/health` checks the database/cache.
 - Settings exports household JSON, without receipt files or a restore importer.
   Full backups remain the operator's job; [the guide](docs/INSTALL.md) covers them.
+  Only an admin can export, and the file is not a copy of everything held
+  about one person ([*What the JSON export does not include*](#what-the-json-export-does-not-include)).
 - Refusals are audit-logged, but there is no complete history of who changed what.
 - No invitations: with registration closed, an admin sets a new person's first
   password and hands it over. The person can change it from Settings once
@@ -1795,6 +1797,148 @@ own.
   also wants a comment beside the granted permissions in four jobs and a
   concurrency group in `rescan.yml`: ten findings on 2026-10-12, every one of
   them suppressed by the gate's `regular` persona.
+
+---
+
+## Personal data, outbound connections and secrets
+
+Whoever runs an instance holds its members' data and answers for it, so this
+section lists what the instance keeps, what it contacts and how its secrets
+are handled (security review, 2026-10-12). Update it when a change alters what
+is stored, logged or sent.
+
+### What an instance holds, and for how long
+
+| Data | Where | How long |
+|---|---|---|
+| Accounts: email address, name, Argon2id password hash, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database. The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
+| Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16) |
+| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely, even after the account is deleted (`prisma/schema.prisma`) |
+| Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
+| The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
+| An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
+| Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
+| Known devices: for each account (keyed by the same unkeyed hash), SHA-256 fingerprints of up to 20 `stoky_device` ids | Valkey | A year after the last successful sign-in from that device |
+| The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
+| Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |
+| On each device: the saved reads, the write queue and the `stoky_device` cookie | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The cookie lasts a year |
+| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env`, and the Compose and Traefik files | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
+
+Two hashes in that table are weaker than they look. The security log's
+account tag is keyed with `NEXTAUTH_SECRET`, so a pasted log line cannot be
+checked against a list of likely addresses. The Valkey account hash is not
+keyed. Anyone who can read the Valkey data can confirm whether a guessed
+address has tried to sign in during the window, or has a known device.
+
+No request body or receipt text reaches a log. Traefik has no access log: the
+release bundle does not pass `--accesslog`, so the proxy does not record
+requests.
+
+### What the JSON export does not include
+
+**Configuración → Descargar tus datos** is `data.exportHousehold`
+(`src/server/trpc/routers/data.ts`). Only an OWNER or ADMIN can use it, and it
+covers the whole household: the household itself; its current members (id,
+email address, name, role, language and creation date); its locations and
+stores; its products, each with its stock movements and price records; its
+receipts, each with the photograph's path and each line's text; and its
+shopping lists. It leaves out:
+
+- password hashes, always;
+- receipt photographs, which it gives only as paths, and each receipt's
+  whole-ticket OCR text (`rawOcrText`). The file says so in its `notes`;
+- who uploaded a receipt and who made a stock movement;
+- each product's Open Food Facts data and image address;
+- members' display preference and the time their sessions were last ended;
+- people who have been removed from the household;
+- the landing-screen choices and the replay records;
+- everything in Valkey, the logs and the certificate store.
+
+It is therefore not a complete copy of what the instance holds about one
+person, and a member who is not an admin cannot export at all. There is no
+per-person export or account deletion. If a person asks the operator for their
+data, or asks to be erased, the operator answers from the database and the
+uploads volume, and also has to account for the backups.
+
+### Outbound connections
+
+What an instance contacts on its own, as released:
+
+- **The server calls the Open Food Facts API**, `world.openfoodfacts.org`,
+  over HTTPS, for a scanned barcode that neither the household's own products
+  nor the shared cache can answer (`src/server/services/openFoodFacts.ts`).
+  A call sends the barcode, the instance's IP address and the User-Agent
+  `Stoky/<version> (+https://github.com/NGarate/stoky)`. It sends nothing
+  about the account or the household. Calls are metered at 60 an hour per
+  account and give up after 5 seconds. This is the only outbound `fetch` in
+  `src/`.
+- **The browser loads product photographs from `images.openfoodfacts.org`**,
+  on the product page. Open Food Facts sees the viewer's IP address and
+  browser, but no `Referer`: the image carries `referrerPolicy="no-referrer"`,
+  and the page sends `Referrer-Policy: same-origin`. It is the only other
+  origin the CSP allows, and only in `img-src`. `connect-src` is `'self'`. The
+  product page's links to `world.openfoodfacts.org` are navigations, made only
+  when somebody follows one.
+- **Traefik contacts Let's Encrypt** over ACME to obtain and renew the
+  certificate, and registers `ACME_EMAIL` there. Its version check and its
+  anonymous usage statistics are both off ([*Release deployment*](#release-deployment--deploydocker-composeyml)).
+- **Nothing else, and no telemetry.** Stoky reports nothing to the project or
+  to anybody else: there is no analytics, no error tracking and no update
+  check. The OCR model is part of the image (`TESSDATA_PATH`). Fonts come from
+  the instance itself (`font-src 'self'`). The image sets
+  `NEXT_TELEMETRY_DISABLED=1`. PostgreSQL and Valkey sit only on the
+  `internal: true` network, which has no route out.
+
+**One exception, which the release bundle prevents only by accident.** The
+image's start command runs `prisma migrate deploy`. Unless
+`CHECKPOINT_DISABLE` is set, Prisma's CLI starts a background check against
+`checkpoint.prisma.io` that sends, among other things, Prisma's and the
+runtime's versions, the OS and architecture, the schema's database provider,
+hashes of the project and CLI paths, and the command line. The image does not
+set the variable. Under the release bundle, and the source overlay that
+inherits it, the application's root filesystem is read-only. The CLI fails to
+create its cache directory (`EROFS` on `/home/bun/.cache`) before it would
+send, so nothing leaves. Measured on 2026-10-12 against an image built from
+this tree, with `checkpoint.prisma.io` resolved to a listener on an internal
+network:
+
+| How the container ran | Result |
+|---|---|
+| Read-only, as in the bundle | No connection |
+| Writable, for example a plain `docker run` | A TLS ClientHello for `checkpoint.prisma.io` at start |
+| Writable, with `CHECKPOINT_DISABLE=1` | No connection |
+
+An operator who runs the image any other way should set
+`CHECKPOINT_DISABLE=1`. Setting it in the image itself is still to do.
+
+### Secrets
+
+`.env` holds `POSTGRES_PASSWORD` and `NEXTAUTH_SECRET`. `NEXTAUTH_SECRET`
+signs sessions and keys the security log's account tags. Both reach the
+containers as environment variables:
+
+- the database password in `db`'s environment and inside the app's
+  `DATABASE_URL`;
+- `NEXTAUTH_SECRET` in the app's environment.
+
+Measured, `docker inspect` of a container prints its environment. Plain
+`docker compose config` printed both secrets of a filled-in `.env`, while
+`docker compose config --quiet` printed nothing. Reading either takes access
+to the Docker daemon, which is root on the host. The application starts no
+helper processes that would inherit the environment: OCR runs in-process.
+
+They are not mounted as files, because files would help less than it seems.
+Prisma reads `DATABASE_URL` from the environment, so `POSTGRES_PASSWORD_FILE`
+on `db` alone would leave the same password in the app's environment. Moving
+it properly needs an entrypoint that builds the URL from a mounted file, plus
+`_FILE` support for `NEXTAUTH_SECRET`. Anyone who can read a container's
+environment, as root or as code running inside it, can also read a file
+mounted into it. What remains is accidental disclosure: pasting `inspect` or
+`config` output into an issue. [Troubleshooting](docs/INSTALL.md#troubleshooting)
+warns against that. Backups copy `.env` in plaintext beside the database dump,
+and the backup instructions say to
+[encrypt them](docs/INSTALL.md#backup-and-restore).
 
 ---
 
@@ -1862,6 +2006,12 @@ together. The [backup and restore commands](docs/INSTALL.md#backup-and-restore)
 stop app writes during the copy and restore into an empty installation. Keep
 backups off the host and verify restoration before relying on them. JSON export
 is not a substitute for a database-and-images backup.
+
+A backup holds `.env`, every account's password hash and every receipt, in
+plaintext unless you encrypt it: encrypt it before it leaves the host (the
+guide shows `age` and GnuPG), and keep it on a rotation you choose. What it
+contains, and what a backup keeps after the instance has deleted it, is in
+[*What an instance holds*](#what-an-instance-holds-and-for-how-long).
 
 ## Verifying an image's provenance
 

@@ -289,9 +289,18 @@ services:
   traefik: { logging: *logging }
 ```
 
-Check it with `docker compose config`, keep it with your backups, and apply it
-with `docker compose up -d --wait`. Upgrades replace the Compose and Traefik
-files, not the override, so it stays in place.
+Check it with `docker compose config --quiet`, keep it with your backups, and
+apply it with `docker compose up -d --wait`;
+`docker inspect --format '{{.HostConfig.LogConfig.Type}}' stoky-release-app-1`
+then names the driver in use. Plain `docker compose config` would show the
+override too, but it prints your database password and `NEXTAUTH_SECRET` with
+it. Upgrades replace the Compose and Traefik files, not the override, so it
+stays in place.
+
+The app's log records client addresses and account ids, and the database's log
+records an email address that was added twice (SECURITY.md,
+[*What an instance holds*](../SECURITY.md#what-an-instance-holds-and-for-how-long)).
+Remove them before you share log lines with anybody.
 
 ## A forgotten password
 
@@ -443,8 +452,34 @@ cp .env docker-compose.yml traefik.yml "$STOKY_BACKUP/"
 docker compose up -d --wait app
 ```
 
-Store the directory securely off the server. It includes credentials and private
-household data. Certificate storage is separate; on a new host Traefik obtains
+The directory holds `.env` (the database password and `NEXTAUTH_SECRET`), every
+account's password hash and every receipt, all in plaintext. **Encrypt it before
+it leaves the server.** With [age](https://age-encryption.org), installed on
+both machines, create a key pair once on the machine that keeps the backups,
+not on the server: `age-keygen -o stoky-backup.key` prints its public key,
+`age1…`. The server needs only that public key:
+
+```bash
+STOKY_AGE_RECIPIENT='age1…'    # the public key age-keygen printed
+tar -czf "$STOKY_BACKUP.tar.gz" "$STOKY_BACKUP" \
+  && age -r "$STOKY_AGE_RECIPIENT" -o "$STOKY_BACKUP.tar.gz.age" "$STOKY_BACKUP.tar.gz" \
+  && rm -r "$STOKY_BACKUP" "$STOKY_BACKUP.tar.gz"
+```
+
+Keep the `&&`: the plaintext copy is deleted only once the encrypted one has
+been written, so a missing `age` or a full disk leaves the backup where it was
+instead of an empty file in its place. Copy the `.age` file off the server. To
+restore, decrypt it on a machine that has the key, with
+`age -d -i stoky-backup.key backup-….tar.gz.age | tar -xzf -`, which recreates
+the `backup-…` directory. With GnuPG, import the public key of a key pair kept
+off the server, then replace the `age` line with
+`&& gpg --encrypt --recipient you@example.com --output "$STOKY_BACKUP.tar.gz.gpg" "$STOKY_BACKUP.tar.gz" \`
+and decrypt with `gpg --decrypt`. Whoever has the private key can read
+everything in the backup, so keep it apart from the backups.
+
+Backups are not rotated for you. Delete old ones on a schedule you choose. Each
+one keeps accounts and receipts that were deleted from the instance after it was
+taken. Certificate storage is separate; on a new host Traefik obtains
 certificates again, subject to your DNS and ACME rate limits.
 
 **Test restoration on an empty installation on another host**, using the same
@@ -561,6 +596,12 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 Report the release tag, image digest, command and redacted error through
 [GitHub issues](https://github.com/NGarate/stoky/issues). Do not attach `.env`,
 database dumps, session cookies or unredacted receipt photos.
+
+**Never share the output of `docker inspect` or of `docker compose config`
+without `--quiet`.** The secrets reach the containers as environment variables,
+and both commands print them: the database password, which is also in
+`DATABASE_URL`, and `NEXTAUTH_SECRET`, which signs every session. Remove client
+addresses and email addresses from log lines before you share them as well.
 
 A security problem is not an issue: report it through the private form in
 [Reporting a vulnerability](../SECURITY.md#reporting-a-vulnerability), which
