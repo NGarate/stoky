@@ -197,6 +197,29 @@ Verified against the files named in each row.
   what could have been sent; storage still grows without bound over time,
   because nothing is deleted and there is no per-household quota
   (`docs/SECURITY_REVIEW.md` finding 16).
+- **Recognition is bounded in time** (`src/server/services/ocr.ts`): one image
+  may hold the Tesseract worker for `OCR_TIMEOUT_MS`, 120 seconds unless the
+  variable is set to a positive whole number of milliseconds no larger than a
+  timer can hold, 2 147 483 647 (the release bundle does not pass it). Past
+  that the worker is terminated, the receipt becomes FAILED, and the next one
+  loads a fresh worker. tesseract.js cannot cancel a recognition, so
+  termination is the only way to get the worker back; images are handed to it
+  one at a time, because its `terminate()` leaves jobs queued on that worker
+  unanswered for good. Before this, the worker was shared and had no limit, so
+  one image Tesseract could not finish stalled every receipt behind it.
+  Measured with the bundled model (Bun 1.4.2), on the audit's 7000 × 7000
+  noise image as the re-encode scales it (4000 × 4000, 11.7 MB — over the
+  stored-size cap above, so a harder case than one that can be uploaded):
+  still being read at 120 s, refused at 120.2 s, and a synthetic 48-megapixel
+  receipt photograph queued behind it was read 2.7 s later on the new worker
+  (3.0 s on its own). Termination under Bun is not instant on a thread busy in
+  Tesseract's WebAssembly. Terminated 2 to 40 s into that image, the thread
+  stopped within 2 s in five runs and 10 to 13 s later in the two terminated
+  about 6 s in, so a terminated worker can briefly hold its memory (about
+  300 MB on that image) beside the new one. What the bound does not do is
+  shorten the queue: each image that runs out the limit costs everyone behind
+  it 120 s, and the 30 uploads an account may make in an hour can fill an hour
+  of OCR.
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.

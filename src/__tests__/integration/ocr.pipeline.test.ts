@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from "bun:test";
 import { prisma } from "@/lib/prisma";
-import { processReceiptOcr, terminateWorker } from "@/server/services/ocr";
+import {
+  processReceiptOcr,
+  sharedWorker,
+  terminateWorker,
+  timedRecogniser,
+} from "@/server/services/ocr";
 import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
 import { matchReceiptItems } from "@/server/services/productMatcher";
 import { ReceiptStatus, MatchStatus } from "@prisma/client";
@@ -388,6 +393,45 @@ Producto completamente diferente xyz123 5,00
       });
       expect(updated?.status).toBe(ReceiptStatus.PARSED);
       expect(updated?.rawOcrText).toBe("LECHE 1,25\n");
+    });
+
+    it("moves to FAILED when recognition runs out of time", async () => {
+      const receiptDir = join(testDir, randomUUID());
+      await mkdir(receiptDir, { recursive: true });
+      cleanupDirs.push(receiptDir);
+
+      const imagePath = join(receiptDir, "receipt.png");
+      await writeFile(imagePath, pngOf(60, 40));
+
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath,
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+
+      // The image tesseract cannot finish: a worker that never answers.
+      let terminations = 0;
+      const stuck = sharedWorker(async () => ({
+        recognize: () => new Promise<{ data: { text: string } }>(() => {}),
+        async terminate() {
+          terminations += 1;
+        },
+      }));
+      const ocr = processReceiptOcr(receipt.id, timedRecogniser(stuck, () => 50)).then(
+        () => "PARSED",
+        (error: unknown) => (error as Error).message,
+      );
+      const guard = new Promise((resolve) => setTimeout(() => resolve("still waiting"), 3000));
+
+      expect(await Promise.race([ocr, guard])).toBe("OCR did not finish within 50 ms");
+      expect(terminations).toBe(1);
+      const updated = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+      });
+      expect(updated?.status).toBe(ReceiptStatus.FAILED);
     });
 
     it("should mark receipt as FAILED on OCR error", async () => {
