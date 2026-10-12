@@ -371,7 +371,10 @@ beside the tests, and it holds neither `packages: write` nor a push step — a
 run whose tests fail can waste a build but cannot ship one. `image-publish`
 waits for all four test jobs plus the build and rebuilds the same commit from
 the layer cache the first job wrote, which is why it costs 44 seconds rather
-than a second build.
+than a second build. On a tag it no longer does: since 2026-10-12 a
+release's publish build reads no cache (RELEASING.md, *Verification
+boundaries*), so it pays a cold build — 428s for the build-and-scan job above;
+not yet measured on a tag's publish — and its limit is 30 minutes, not 10.
 
 `changes` decides whether the push could have altered the image at all — **5
 seconds**, an explicit diff against `github.event.before` rather than

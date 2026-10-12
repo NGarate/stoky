@@ -319,6 +319,18 @@ Verified against the files named in each row.
   is what a private fork or copy would be. Released images are attested from
   `v0.1.0-alpha.3` on; `v0.1.0-alpha.1` and `v0.1.0-alpha.2` were built while the
   repository was private and have none.
+- **A release is built and packaged from nothing in the Actions cache.** The
+  cache of a master or tag run can be written by any job of a master run, and
+  `e2e` runs test-only code in a container that holds the runner's docker socket.
+  So a tag's publish build uses no layer cache (no `cache-from`, `no-cache`), and
+  the jobs that check, scan and package a release download Bun, Trivy and its
+  database rather than restore them — `release-draft` holds `contents: write` and
+  `packages: write` and runs `bun` beside its registry login. `latest` and `sha-`
+  images still rebuild from the layer cache: they are the development channel,
+  and an installation runs an exact version tag. `ci-workflow.test.ts` holds each
+  setting. `v0.1.0-alpha.3` was assembled from that cache: in run
+  `38178388250` every Dockerfile step of its publish build but the last was
+  `CACHED`, and `release-draft` logged a cache hit for Bun.
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.

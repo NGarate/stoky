@@ -95,10 +95,21 @@ certificate, which a smoke host cannot obtain. For that, run
 `bash scripts/smoke-proxy.sh --live DOMAIN` against the installation, from an
 address nobody signs in from: the check spends that address's sign-in window.
 
-The current image pipeline scans one build and publishes a rebuild from its cache;
-it does not compare the two image digests. Docker base and
-support-service tags can change across rebuilds; application/CLI dependencies use
-the frozen Bun lockfile.
+The image pipeline scans one build and publishes a second; it does not compare
+the two image digests. On `master` the second is rebuilt from the Actions layer
+cache the first wrote. On a tag it is built from nothing — no `cache-from`,
+`no-cache: true` — and the jobs that check, scan and package the release
+download Bun and Trivy (with its database) instead of restoring them. The cache
+of a master or tag run can be written by any job of a master run, and `e2e` runs
+the whole dev-dependency tree in a container holding the runner's docker socket,
+so a release assembled from that cache would carry whatever a compromised
+test-only package planted after the scan. The scanned build still reads the
+cache on a tag; it is never pushed. `latest` and `sha-` images are still
+cache-derived; they are the development channel, not what an installation is
+told to run. A clean build takes minutes rather than the cached publish's one,
+so a tag's `image-publish` has 30 minutes to master's 10.
+Docker base and support-service tags can change across rebuilds;
+application/CLI dependencies use the frozen Bun lockfile.
 Release tags identify the source/version, not a reproducible byte-for-byte build.
 Record the published digest when auditing an installation. SBOM, build provenance
 and a signed GitHub attestation are enabled for published images; releases

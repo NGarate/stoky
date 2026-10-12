@@ -87,10 +87,14 @@ jobs:
       - name: Lint the pipeline itself
         run: bash scripts/check-ci.sh
 
+      # `no-cache`: this checks a release's assets, so it downloads Bun rather
+      # than restore a binary any master-run job could have written to the
+      # cache. The reasoning is at release-draft, which needs it most.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: github.ref_type == 'tag'
         with:
           bun-version-file: .bun-version
+          no-cache: true
 
       # A tag must name the version actually packaged. Check this before the
       # publish gate so a typo cannot create an image with the wrong version.
@@ -488,8 +492,9 @@ jobs:
 
       # Built and loaded locally first so it is scanned before anyone can pull
       # it. Publishing an image and scanning it afterwards is the wrong order.
-      # cache-to here is what makes image-publish cheap: it rebuilds this same
-      # commit from these layers.
+      # cache-to here is what makes image-publish cheap on master: it rebuilds
+      # this same commit from these layers. A tag's image-publish does not read
+      # them — see there.
       - name: Build for scanning
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -510,7 +515,7 @@ jobs:
       # enabled" — which kept this job red for days, while this repository
       # was private, even though the build, the scan gate and the push all
       # succeeded. A private copy that gains Advanced Security should drop
-      # the condition.
+      # the condition. `cache` is explained at the gate below.
       - name: Scan image
         if: github.event.repository.private == false
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
@@ -520,6 +525,7 @@ jobs:
           output: trivy.sarif
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          cache: ${{ github.ref_type != 'tag' }}
 
       - name: Upload scan results
         uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
@@ -530,6 +536,12 @@ jobs:
 
       # A separate gate so the SARIF above is always uploaded, even when this
       # fails. An image people self-host should not ship known criticals.
+      #
+      # `cache` restores both the Trivy binary (setup-trivy) and its
+      # vulnerability database from the Actions cache, which every master-run
+      # job can write. On a tag this is the release's gate, so it fetches both
+      # instead: a planted binary or database would pass anything. Branch runs
+      # keep the cache, which spares the database registry a download per run.
       - name: Fail on critical or high findings
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
@@ -538,17 +550,28 @@ jobs:
           exit-code: "1"
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          cache: ${{ github.ref_type != 'tag' }}
 
   # ---------------------------------------------------------- image-publish --
   # The only job that waits for everything, and the only one that can ship.
   # It rebuilds the commit image-build just scanned — same context, same
-  # Dockerfile — from the layer cache that build wrote moments ago, so this is
-  # minutes of cache hits plus the push, not a second build. The same
-  # two-build pattern the old single job already used.
+  # Dockerfile. On master it does so from the layer cache that build wrote
+  # moments ago, so this is minutes of cache hits plus the push, not a second
+  # build. The same two-build pattern the old single job already used.
+  #
+  # A tag builds from nothing. The Actions cache of a master or tag run can be
+  # written by any job in a master run, and e2e runs the whole dev-dependency
+  # tree in a container with the runner's docker socket — host root, and with
+  # it the cache token. A compromised test-only package could plant a
+  # production layer that this job restored after image-build's scan had
+  # passed, and push it as a release with valid provenance. A clean build is
+  # minutes longer, hence the longer limit; `latest` and `sha-` keep the
+  # cache, because no installation is told to run them (RELEASING.md).
+  # ci-workflow.test.ts holds both settings.
   image-publish:
     name: Publish image
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: ${{ github.ref_type == 'tag' && 30 || 10 }}
     needs: [quality, test, e2e, audit, image-build]
     # Only a push publishes, and `on.push` admits only master and `v*` tags. A
     # pull request or a manual dispatch is verified, scanned included, but
@@ -625,7 +648,7 @@ jobs:
 
       # cache-from only: image-build already exported these layers, and
       # re-exporting identical ones here would spend upload time saying
-      # nothing new.
+      # nothing new. Neither on a tag: see the comment above this job.
       - name: Push
         id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
@@ -637,7 +660,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: mode=max
-          cache-from: type=gha
+          cache-from: ${{ github.ref_type != 'tag' && 'type=gha' || '' }}
+          no-cache: ${{ github.ref_type == 'tag' }}
 
       # Lets an operator verify the image they are about to self-host really
       # was built from this repository, by this workflow, from this commit.
@@ -682,9 +706,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      # Downloaded, never restored from the Actions cache. setup-bun's cache key
+      # is the same in every job, e2e included, and e2e's container holds the
+      # runner's docker socket, so test-only code could plant a binary under it.
+      # This job holds contents: write and packages: write, logs in to GHCR
+      # next, and runs `bun` beside that credential. setup-bun checks a
+      # restored binary only by asking it for its revision.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+          no-cache: true
       - name: Log in for the published image smoke
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:

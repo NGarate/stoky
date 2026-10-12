@@ -29,22 +29,34 @@ const workflow = Bun.YAML.parse(
   concurrency?: { group?: unknown; "cancel-in-progress"?: unknown };
   jobs?: Record<
     string,
-    { if?: unknown; steps?: Array<{ id?: string; run?: unknown }> }
+    {
+      if?: unknown;
+      "timeout-minutes"?: unknown;
+      steps?: Array<{
+        id?: string;
+        if?: unknown;
+        uses?: unknown;
+        run?: unknown;
+        with?: Record<string, unknown>;
+      }>;
+    }
   >;
 };
 
 type Context = Record<string, string>;
 
 /**
- * Just enough of GitHub's expression language for a concurrency condition:
- * context properties, single-quoted strings, booleans, `==`, `!=`, `!`, `&&`,
- * `||` and parentheses. String comparison is case-insensitive, as GitHub's is.
- * Anything else throws, so the test fails loudly instead of guessing.
+ * Just enough of GitHub's expression language for the conditions below:
+ * context properties, single-quoted strings, integers, booleans, `==`, `!=`,
+ * `!`, `&&`, `||` and parentheses. String comparison is case-insensitive, as
+ * GitHub's is. Anything else throws, so the test fails loudly instead of
+ * guessing.
  */
 function evaluate(expression: string, context: Context): unknown {
   const tokens =
-    expression.match(/'(?:[^']|'')*'|==|!=|&&|\|\||[!()]|[A-Za-z_][\w.-]*|\S/g) ??
-    [];
+    expression.match(
+      /'(?:[^']|'')*'|==|!=|&&|\|\||[!()]|\d+|[A-Za-z_][\w.-]*|\S/g,
+    ) ?? [];
   let at = 0;
   const peek = () => tokens[at];
   const take = () => tokens[at++];
@@ -64,6 +76,7 @@ function evaluate(expression: string, context: Context): unknown {
     }
     if (token === "!") return !primary();
     if (token.startsWith("'")) return token.slice(1, -1).replaceAll("''", "'");
+    if (/^\d+$/.test(token)) return Number(token);
     if (token === "true") return true;
     if (token === "false") return false;
     if (token in context) return context[token];
@@ -260,6 +273,87 @@ describe("the CI workflow's image-skip base", () => {
     expect(query).toMatch(/--branch[ =]master\b/);
     expect(query).toMatch(/(--event[ =]|-e )push\b/);
     expect(query).toMatch(/--status[ =]success\b/);
+  });
+});
+
+// A release is built and packaged from nothing the Actions cache holds. The
+// cache of a master or tag run can be written by any job in a master run, e2e
+// included, whose container holds the runner's docker socket; a compromised
+// test-only package could otherwise plant a Bun binary for release-draft
+// (contents: write, packages: write, logged in to GHCR) or a production layer
+// for the tag's image build, after image-build's scan had passed. `latest` and
+// `sha-` keep the layer cache: no installation is told to run them.
+describe("the CI workflow's release path restores no cache", () => {
+  const tag = run("push", "refs/tags/v0.1.0-alpha.3", "tag");
+  const master = run("push", "refs/heads/master", "branch");
+
+  const job = (name: string) => {
+    const found = workflow.jobs?.[name];
+    if (!found) throw new Error(`ci.yml has no ${name} job`);
+    return found;
+  };
+
+  /** Every step of `jobName` (or of every job) that uses `action`. */
+  const using = (action: string, jobName?: string) => {
+    const jobs = jobName ? [job(jobName)] : Object.values(workflow.jobs ?? {});
+    const steps = jobs.flatMap((j) => j.steps ?? []).filter(
+      (step) => typeof step.uses === "string" && step.uses.startsWith(`${action}@`),
+    );
+    if (steps.length === 0) throw new Error(`no step uses ${action}`);
+    return steps;
+  };
+
+  /**
+   * An action input as the action reads it: a string. A literal is stringified,
+   * a `${{ }}` value is evaluated for `context` first; an omitted one is "".
+   */
+  const input = (
+    step: { with?: Record<string, unknown> },
+    name: string,
+    context: Context,
+  ) => {
+    const value = step.with?.[name];
+    if (value === undefined) return "";
+    if (typeof value === "string" && !value.includes("${{")) return value;
+    return String(resolve(value, context));
+  };
+
+  const push = () => {
+    const step = job("image-publish").steps?.find((s) => s.id === "push");
+    if (!step) throw new Error("image-publish has no `push` step");
+    return step;
+  };
+
+  it.each(["quality", "release-draft"])(
+    "downloads Bun on a tag rather than restore it from the cache: %s",
+    (name) => {
+      for (const step of using("oven-sh/setup-bun", name)) {
+        expect(input(step, "no-cache", tag)).toBe("true");
+      }
+    },
+  );
+
+  it("builds a tag's image without reading or using the layer cache", () => {
+    expect(input(push(), "cache-from", tag)).toBe("");
+    expect(input(push(), "no-cache", tag)).toBe("true");
+    expect(input(push(), "cache-to", tag)).toBe("");
+  });
+
+  it("keeps the layer cache for master's image", () => {
+    expect(input(push(), "cache-from", master)).toBe("type=gha");
+    expect(input(push(), "no-cache", master)).not.toBe("true");
+  });
+
+  it("gives a tag's clean build a longer limit than master's cached one", () => {
+    const limit = job("image-publish")["timeout-minutes"];
+    expect(resolve(limit, tag)).toBe(30);
+    expect(resolve(limit, master)).toBe(10);
+  });
+
+  it("fetches Trivy and its database on a tag, in every scan", () => {
+    for (const step of using("aquasecurity/trivy-action")) {
+      expect(input(step, "cache", tag)).toBe("false");
+    }
   });
 });
 
