@@ -1766,6 +1766,12 @@ own.
   Only an admin can export, and the file is not a copy of everything held
   about one person ([*What the JSON export does not include*](#what-the-json-export-does-not-include)).
 - Refusals are audit-logged, but there is no complete history of who changed what.
+- No account or household deletion in the application. Removing somebody from
+  a household keeps their account. The operator deletes an account in the
+  database ([Install](docs/INSTALL.md#deleting-somebodys-account)), which
+  leaves its id on the stock movements and receipts it recorded, and its
+  receipt photographs until they are removed by the command given there.
+  Nothing deletes a household (ASVS 4.0.3 V8.3.2, security review 2026-10-12).
 - No invitations: with registration closed, an admin sets a new person's first
   password and hands it over. The person can change it from Settings once
   signed in; nothing makes them.
@@ -1811,10 +1817,10 @@ is stored, logged or sent.
 
 | Data | Where | How long |
 |---|---|---|
-| Accounts: email address, name, Argon2id password hash, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database. The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| Accounts: email address, name, Argon2id password hash, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
-| Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16) |
-| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely, even after the account is deleted (`prisma/schema.prisma`) |
+| Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
+| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
 | Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
 | The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
 | An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
@@ -1858,8 +1864,10 @@ shopping lists. It leaves out:
 It is therefore not a complete copy of what the instance holds about one
 person, and a member who is not an admin cannot export at all. There is no
 per-person export or account deletion. If a person asks the operator for their
-data, or asks to be erased, the operator answers from the database and the
-uploads volume, and also has to account for the backups.
+data, the operator answers from the database and the uploads volume. If they
+ask to be erased, [Install](docs/INSTALL.md#deleting-somebodys-account) deletes
+the account in the database and lists what stays. Either way the operator also
+has to account for the backups.
 
 ### Outbound connections
 

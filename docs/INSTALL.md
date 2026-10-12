@@ -433,6 +433,140 @@ IPv6 clients are sharing. An address with colons that is not a gateway is the
 device's own. A dotted address that is not a gateway means the device used
 IPv4; try another one.
 
+## Deleting somebody's account
+
+Stoky cannot delete an account. Removing a person from **Personas del hogar**
+takes them out of the household and keeps their account: name, address,
+password hash and language. When somebody asks to be erased, delete the account
+in the database. Run these in the installation directory, replacing the address
+with the person's:
+
+1. Look at the account:
+
+   ```bash
+   docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+     -v email='person@example.com' <<'SQL'
+   SELECT u.id, u.name, u.role, u."householdId",
+     (SELECT count(*) FROM "User" m
+       WHERE m."householdId" = u."householdId" AND m.id <> u.id) AS other_members,
+     (SELECT count(*) FROM "User" o
+       WHERE o."householdId" = u."householdId" AND o.id <> u.id
+         AND o.role = 'OWNER') AS other_owners,
+     (SELECT count(*) FROM "Receipt" r WHERE r."uploadedBy" = u.id) AS receipts
+   FROM "User" u
+   WHERE u.email = lower(:'email');
+   SQL
+   ```
+
+   `(0 rows)` means no account has that address. Write down the `id`; step 3
+   needs it. If the role is `OWNER`, `other_members` is not 0 and
+   `other_owners` is 0, deleting the account would leave the household without
+   an owner, so step 2 refuses: first make another member an owner from
+   **Personas del hogar**. If `other_members` is 0, the person is the
+   household's only member. The account goes, but the household and everything
+   in it stay, and nobody can sign in to them any more. Neither the application
+   nor this guide deletes a household.
+2. Delete the account:
+
+   ```bash
+   docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+     -v email='person@example.com' <<'SQL'
+   WITH gone AS (
+     DELETE FROM "User" u
+     WHERE u.email = lower(:'email')
+       AND NOT (u.role = 'OWNER'
+         AND EXISTS (SELECT 1 FROM "User" m
+           WHERE m."householdId" = u."householdId" AND m.id <> u.id)
+         AND NOT EXISTS (SELECT 1 FROM "User" o
+           WHERE o."householdId" = u."householdId" AND o.id <> u.id
+             AND o.role = 'OWNER'))
+     RETURNING u.id
+   ), choices AS (
+     DELETE FROM "ScreenChoice" WHERE "userId" IN (SELECT id FROM gone)
+     RETURNING 1
+   ), replays AS (
+     DELETE FROM "MutationReplay" WHERE "userId" IN (SELECT id FROM gone)
+     RETURNING 1
+   )
+   SELECT id AS deleted_account,
+     (SELECT count(*) FROM choices) AS screen_choices,
+     (SELECT count(*) FROM replays) AS replay_records
+   FROM gone;
+   SQL
+   ```
+
+   `psql` must print one row with the account's `id`. `(0 rows)` means nothing
+   was deleted: no account has that address, or it is the last owner of a
+   household that still has other members. It is one statement, so it is one
+   transaction: the account, the start screen it chose on each device and its
+   offline replay records go together or not at all. A browser still signed in
+   to the account keeps its cookie, but every request it makes for household
+   data is refused. It can still record a start screen; see what stays, below.
+3. The receipts the person uploaded belong to the household and stay, with
+   their photographs on the `uploads` volume. To remove those photographs too,
+   put the `id` from step 1 in place of `the-id`:
+
+   ```bash
+   docker compose exec -T db psql -U stoky -d stoky -At -v ON_ERROR_STOP=1 \
+     -v id='the-id' > stoky-photos.txt <<'SQL'
+   SELECT "imagePath" FROM "Receipt" WHERE "uploadedBy" = :'id';
+   SQL
+   grep -E '^uploads/receipts/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+\.[a-z]+$' stoky-photos.txt \
+     | docker compose exec -T app xargs -r rm -v --
+   rm stoky-photos.txt
+   ```
+
+   `rm` prints one `removed` line per photograph. The `grep` passes on only
+   paths of the shape the application writes, so a damaged row cannot point
+   `rm` anywhere else. Nothing reads a photograph again once its receipt has
+   been read, so the receipts still show their lines, store, date and total.
+4. Clear the sign-in counters kept under the address. They expire on their own,
+   the known devices only after a year:
+
+   ```bash
+   STOKY_ACCOUNT=$(printf '%s' 'person@example.com' | tr '[:upper:]' '[:lower:]' | sha256sum | cut -c1-32)
+   docker compose exec cache valkey-cli DEL "rl:login:acct:$STOKY_ACCOUNT" "rl:known:$STOKY_ACCOUNT"
+   ```
+
+   It prints how many of the two it found. The other counters, keyed on the
+   account's `id` or on the address and one browser together, expire within
+   the hour.
+
+What stays after these steps:
+
+- **The account's `id`.** Each stock movement records who made it
+  (`StockEntry.createdBy`) and each receipt who uploaded it
+  (`Receipt.uploadedBy`). Neither is a foreign key, so the rows keep the `id`
+  of an account that no longer exists. Nothing in the application shows it and
+  the JSON export leaves it out; it no longer leads to a name or an address.
+- **The receipts' text.** The whole-ticket OCR text can include a masked card
+  number, a loyalty number or the cashier's name. It is the household's
+  purchase history and stays with each receipt.
+- **A start screen chosen afterwards.** A browser still signed in when the
+  account was deleted stays signed in until it goes fifteen minutes unused, or
+  for at most thirty days after it signed in (from the release after
+  v0.1.0-alpha.3; on v0.1.0-alpha.3, for as long as it keeps being used). Choosing a start screen there
+  records one under the old `id`, because that does not ask the database
+  whether the account still exists. If the person may have done that, remove
+  it with the `id` from step 1 in place of `the-id`:
+
+  ```bash
+  docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+    -v id='the-id' <<'SQL'
+  DELETE FROM "ScreenChoice" WHERE "userId" = :'id';
+  SQL
+  ```
+
+  It prints `DELETE` and how many it removed.
+- **Backups and logs.** Backups taken before the deletion still hold the
+  account and the photographs until you delete them. The app's log keeps the
+  account's `id` and the addresses it signed in from until rotation removes
+  them ([Logs](#logs)).
+
+The address is free again afterwards. An admin can add it to a household, or
+the person can register where registration is open, as a new account with
+nothing of the old one.
+
 ## Backup and restore
 
 The JSON export in Settings is useful for inspection, but is not a full restore
@@ -660,6 +794,7 @@ migration again.
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
+| Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |
 | `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |
