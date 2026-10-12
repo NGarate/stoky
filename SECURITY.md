@@ -439,6 +439,24 @@ Verified against the files named in each row.
   `bun pm untrusted`, and SWC, the watcher, sharp, argon2 hash/verify and the
   Prisma engines all load in it; the production image builds.
   `package-overrides.test.ts` holds the exact list.
+- **`dependencies` lists what the application runs**, so an advisory is
+  triaged against the right exposure. GitHub's dependency graph and the scope
+  Dependabot gives an alert are read from `package.json`, and until 2026-10-12
+  they called TypeScript, `@types/node`, `@types/react`, `@types/react-dom`,
+  Tailwind, `@tailwindcss/postcss` and PostCSS runtime packages; all seven are
+  build tooling and are now devDependencies. PostCSS stays in the runtime graph
+  all the same, because `next` declares its own pinned copy (8.5.23) as a
+  dependency: an advisory against PostCSS is still scoped "runtime" through
+  `next`, as Dependabot alerts 31, 53, 54 and 56 were (all "transitive"), and
+  neither copy is in the image. `server-only`, imported nowhere, was removed.
+  The image did not change: its builder installs both sections and ships only
+  the traced standalone output and the staged OCR and Prisma trees, and
+  production images built before and after the move held the same
+  5,708 files under `/app/node_modules` and `/opt/prisma`, byte for byte. The
+  release SBOM is made from the image, so it was never affected.
+  `dependency-scope.test.ts` requires every entry in `dependencies` to be
+  imported by shipped code or named with the reason it runs without one
+  (`prisma` for migrations, `react-dom` for Next).
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.
