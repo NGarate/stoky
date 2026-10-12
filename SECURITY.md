@@ -272,6 +272,15 @@ Verified against the files named in each row.
   its own requests.
   One honest caveat: `style-src` still includes `'unsafe-inline'`, because Next
   inlines critical CSS that cannot carry a nonce.
+- **The policy is on every page the app renders, including its not-found
+  page.** The proxy's matcher excludes only what is served from disk —
+  `/_next/static/`, the image optimiser, the icon files by name, and `/sw.js`,
+  which has a policy of its own in `next.config.ts` — each anchored to exactly
+  that. Until 2026-10-12 they were unanchored prefixes, so `/icons/x` or
+  `/sw.jsx` rendered the app's not-found document with no policy at all
+  (`docs/SECURITY_REVIEW.md` §8). One exception remains, and §8 says why it is
+  harmless: a request labelled `Purpose: prefetch` or `Next-Router-Prefetch`
+  skips the proxy, and so carries no policy either.
 - Static headers set in the app itself, not only at the proxy, because a
   self-hosted app runs behind whatever proxy the operator already has:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,

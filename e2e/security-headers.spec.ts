@@ -383,6 +383,30 @@ test.describe("a document labelled a prefetch", () => {
   });
 });
 
+test.describe("a page that is not there", () => {
+  test("is the app's own document, so it carries the policy too", async ({
+    request,
+  }) => {
+    // Only a file that exists is served from disk. Any other path renders the
+    // app's not-found document — a full HTML page on this origin — and until
+    // 2026-10-12 the matcher's exclusions were unanchored prefixes, so a link
+    // to /icons/<anything> or /sw.js<anything> was that document with the
+    // proxy skipped and no policy at all (SECURITY_REVIEW §8). A missing name
+    // that merely looks like an icon is the same document, which is why the
+    // icons are excluded by name. `proxy-matcher.test.ts` pins the path list;
+    // this is what reaches the wire for three of them.
+    for (const path of ["/icons/does-not-exist", "/icons/does-not-exist.png", "/sw.jsx"]) {
+      const response = await request.get(path);
+
+      expect(response.status(), path).toBe(404);
+      expect(headerOf(response, "content-type"), path).toContain("text/html");
+      expect(headerOf(response, "content-security-policy"), path).toMatch(
+        /script-src 'self' 'nonce-[a-f0-9]{32}' 'strict-dynamic'/,
+      );
+    }
+  });
+});
+
 test.describe("the service worker's own policy", () => {
   test("is its own, and is not cached", async ({ request }) => {
     // A nonce'd page policy applied to the worker becomes the *worker's*

@@ -697,6 +697,50 @@ pointed at `/icons/icon-192.png`, which is served `public, max-age=0`, it
 does. Swap the matcher's `purpose` clause for `sec-purpose` and all four go
 red.
 
+**Found 2026-10-12: the path exclusions skipped more than files.** The
+matcher excluded `_next/static`, `_next/image`, `favicon.ico`, `icons/` and
+`sw\.js` as unanchored prefixes, with the dot in `favicon.ico` unescaped. Only
+a file that exists is served from disk; any other path except a
+`/_next/static/` miss, which Next answers with plain text, falls through to
+the App Router's not-found render — the root layout, a full HTML document on
+this origin. So a link to `/icons/x`, `/sw.jsx` or `/faviconXico` opened a
+page with the proxy skipped: no nonce and no `Content-Security-Policy`,
+`next.config.ts` deliberately setting none for a page and Traefik setting
+none at all. Unlike `Purpose: prefetch`, this needs no header, only a link,
+and the result is a top-level document, so neither reason above covers it.
+Defence in depth rather than an exploit: the not-found page reflects nothing
+from the request, and `X-Frame-Options: DENY` still applies. The finding's
+claim that the browser's automatic `/favicon.ico` request was one of these
+renders did not hold — that fetch is `Sec-Fetch-Dest: image`, which Next
+answers with a plain-text 404.
+
+**Fixed: each exclusion is anchored to what it is for** — `_next/static/` (a
+prefix, as before), `_next/image$`, the six files in `public/icons/` by name,
+and `sw\.js$`. The icons are named rather than matched as
+`icons/[\w.-]+\.(?:png|svg)$`, the anchoring the finding proposed: that
+pattern also skips the proxy for a name that is not there, and
+`GET /icons/does-not-exist.png` measured exactly the old result — 404
+`text/html`, empty policy. `favicon.ico` is no longer excluded, because there
+is none. `src/__tests__/unit/proxy-matcher.test.ts` compiles `config.matcher`
+with Next's own `getMiddlewareMatchers` and asks `getMiddlewareRouteMatcher`
+the way `resolve-routes.js` does, raw and decoded: the worker, every file in
+`public/icons/`, `/_next/static/*` and `/_next/image` are skipped;
+`/icons/does-not-exist`, `/icons/does-not-exist.png`, `/icons/a/b`, `/sw.jsx`,
+`/favicon.ico` and the rest are covered; and the two prefetch labels are still
+skipped while `sec-purpose` is not. With the old source restored, the twelve
+"covered" cases go red; with the `[\w.-]+` pattern, the three icon-shaped
+misses; with a file left out of the list, that file. The `csp.test.ts` checks
+it replaces read the source for substrings and passed on both versions.
+`pwa-manifest.test.ts` now asks the same compiled matcher that every icon the
+layout and the manifest reference is skipped: an icon left out of the list
+would otherwise start going through the proxy unnoticed. "a page that is not
+there" in `security-headers.spec.ts` asserts, against the production build,
+that `GET /icons/does-not-exist`, `GET /icons/does-not-exist.png` and
+`GET /sw.jsx` are 404 `text/html` carrying the nonce'd `script-src`; with the
+old source restored it fails on the first of them with an empty policy, after
+the status and the content type have passed — the finding, measured — and with
+the `[\w.-]+` pattern it fails the same way on the second.
+
 ---
 
 ## The `SECURITY.md` corrections

@@ -88,17 +88,10 @@ describe("the middleware's matcher", () => {
     "utf8",
   );
 
-  it("leaves /sw.js alone", () => {
-    // This is the half that makes the other half do anything. A nonce'd page
-    // policy applied to the worker script becomes the *worker's* own policy,
-    // and the worker has no page to inherit from.
-    expect(source).toContain("sw\\\\.js");
-  });
-
-  it("still covers ordinary routes", () => {
-    expect(source).toContain("_next/static");
-    expect(source).toContain("_next/image");
-  });
+  // Which paths it runs on — `/sw.js` left alone, which is the half that makes
+  // the worker's own policy do anything — is `proxy-matcher.test.ts`, which
+  // compiles the matcher the way Next does. The substring checks that used to
+  // stand here passed on the unanchored prefixes and on the fix alike.
 
   it("takes its directives from the shared module", () => {
     // Two copies of a policy is how one of them silently stops matching.
