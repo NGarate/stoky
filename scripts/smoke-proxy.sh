@@ -70,6 +70,44 @@ for header in strict-transport-security x-content-type-options x-frame-options; 
   fi
 done
 
+# TLS 1.2 or later and, at 1.2, only forward-secret AEAD suites: the
+# `tls.options.default` block of deploy/traefik.yml. Without it Traefik takes
+# Go's defaults, which still accept the CBC/SHA-1 suites at TLS 1.2.
+#
+# A refusal only counts when the server sent it. A client whose own TLS library
+# will not offer what is being probed also fails, with no alert, and that would
+# prove nothing; Ubuntu's OpenSSL does not offer TLS 1.1 at its default security
+# level, hence @SECLEVEL=0 below. HTTP/1.1, because HTTP/2 refuses these suites
+# after the handshake has already accepted them, and the request would fail for
+# a reason that is not the one being tested. -k whatever the mode: what is being
+# proven is the handshake, not the certificate.
+refused_handshake() {
+  local what="$1" output
+  shift
+  if output="$("${CURL[@]}" --insecure --http1.1 "$@" --output /dev/null "https://$DOMAIN/api/health" 2>&1)"; then
+    echo "Error: https://$DOMAIN/ accepted $what; deploy/traefik.yml's TLS options should refuse it." >&2
+    exit 1
+  fi
+  case "$output" in
+    *alert*) ;;
+    *)
+      echo "Error: $what failed without an alert from the server, so this curl could not test it: $output" >&2
+      exit 1
+      ;;
+  esac
+}
+refused_handshake "TLS 1.1" --tlsv1.1 --tls-max 1.1 --ciphers 'DEFAULT:@SECLEVEL=0'
+refused_handshake "a CBC/SHA-1 suite at TLS 1.2" --tlsv1.2 --tls-max 1.2 \
+  --ciphers 'ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA'
+# And TLS 1.2 itself still works, with the suites a TLS 1.2 client is offered.
+STATUS="$("${CURL[@]}" --insecure --tlsv1.2 --tls-max 1.2 \
+  --ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256' \
+  --output /dev/null --write-out '%{http_code}' "https://$DOMAIN/api/health")"
+if [ "$STATUS" != 200 ]; then
+  echo "Error: https://$DOMAIN/api/health answered $STATUS over TLS 1.2 with an AEAD suite, expected 200." >&2
+  exit 1
+fi
+
 # Any other host must not reach the application: the router is Host-scoped.
 # Traefik's own refusal is a 404 (or a 421, when it notices the TLS name and
 # the Host disagree). Anything else — a 401, a redirect to /login — is a

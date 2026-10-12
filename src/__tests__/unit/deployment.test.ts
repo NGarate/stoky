@@ -186,4 +186,27 @@ describe("the downloadable installation", () => {
       { url: "http://app:3000" },
     ]);
   });
+
+  it("accepts TLS 1.2 or later, and only forward-secret AEAD suites at 1.2", () => {
+    const dynamic = Bun.YAML.parse(
+      readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+    ) as { tls?: { options?: Record<string, unknown> } };
+    // The whole object, so neither sniStrict (a handshake failure for every
+    // client until ACME issues) nor curvePreferences (drops Go's post-quantum
+    // X25519MLKEM768) can arrive unnoticed. Go's defaults, which an absent block
+    // leaves in force, accept ECDHE-RSA-AES128-SHA at TLS 1.2.
+    expect(dynamic.tls?.options).toEqual({
+      default: {
+        minVersion: "VersionTLS12",
+        cipherSuites: [
+          "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+          "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+          "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+          "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+          "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+          "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+        ],
+      },
+    });
+  });
 });

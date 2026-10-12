@@ -288,13 +288,15 @@ get an identity without the owner's bypass.
 
 The release smoke (`scripts/smoke-proxy.sh`) runs the shipped bundle on the CI
 runner. It proves the routing — HTTP redirects, only the configured host reaches
-the application, by TLS name and by `Host` header — and that Traefik discards a
-client's forged `X-Forwarded-For`/`X-Real-IP`, so the per-address sign-in limit
-cannot be sidestepped through the front door. It cannot prove that the network in
-front of a real installation behaves the same, and it does not verify the
-certificate, which a smoke host cannot obtain. For that, run
-`bash scripts/smoke-proxy.sh --live DOMAIN` against the installation, from an
-address nobody signs in from: the check spends that address's sign-in window.
+the application, by TLS name and by `Host` header — that TLS 1.1 and the
+CBC/SHA-1 suites at TLS 1.2 are refused while TLS 1.2 with an AEAD suite is
+not, and that Traefik discards a client's forged `X-Forwarded-For`/`X-Real-IP`,
+so the per-address sign-in limit cannot be sidestepped through the front door.
+It cannot prove that the network in front of a real installation behaves the
+same, and it does not verify the certificate, which a smoke host cannot obtain.
+For that, run `bash scripts/smoke-proxy.sh --live DOMAIN` against the
+installation, from an address nobody signs in from: the check spends that
+address's sign-in window.
 
 The image pipeline scans one build and publishes a second; it does not compare
 the two image digests. On a tag, `release-draft` therefore scans the pushed

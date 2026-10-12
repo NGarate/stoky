@@ -152,6 +152,24 @@ Verified against the files named in each row.
 - Traefik uses a read-only file provider, with no Docker socket access.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
   HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
+- **TLS 1.2 or later, and at 1.2 only forward-secret AEAD suites** — ECDHE
+  with AES-GCM or ChaCha20-Poly1305, Mozilla's "intermediate" profile, in the
+  `tls.options.default` block of `deploy/traefik.yml`. Without it Traefik takes
+  Go's defaults, and measured against v3.7.13 those still accepted
+  `ECDHE-RSA-AES128-SHA` and `ECDHE-RSA-AES256-SHA` (CBC with SHA-1) at TLS
+  1.2. TLS 1.3 suites are not configurable in Go and are all AEAD. Clients that
+  cannot do TLS 1.2 with one of those suites cannot connect; none is supported.
+  Two settings are left out on purpose. `sniStrict` would refuse the handshake
+  for the configured name itself while ACME has not yet issued (alert 112,
+  measured in the 2026-10-12 audit), turning a pending certificate into an
+  opaque failure and failing the release smoke, which has no certificate to
+  issue; the cost is that a client without SNI still gets Traefik's default
+  certificate, which names the software. `curvePreferences` would replace Go's
+  list, which negotiates the post-quantum hybrid `X25519MLKEM768`;
+  `[X25519, CurveP256]` measurably fell back to plain X25519. The release smoke
+  (`scripts/smoke-proxy.sh`) requires a TLS 1.1 handshake and a CBC/SHA-1 suite
+  at TLS 1.2 to be refused by the server, and a TLS 1.2 AEAD handshake to
+  succeed; `src/__tests__/unit/deployment.test.ts` pins the block.
 
 ### Application headers — `next.config.ts` and `src/proxy.ts`
 

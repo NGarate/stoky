@@ -717,6 +717,14 @@ Named rather than omitted.
 - **Nothing was run against a deployment.** No TLS configuration, no proxy
   behaviour, no real Traefik. The per-IP finding in §3 in particular depends
   entirely on how an operator has deployed.
+
+  The TLS configuration has since been measured against the shipped bundle on
+  an isolated network (2026-10-12): Go's defaults accepted CBC/SHA-1 suites at
+  TLS 1.2, `deploy/traefik.yml` now refuses them, and the release smoke checks
+  it (`SECURITY.md`, Release deployment). That is the shipped Traefik, not a
+  deployment: a real installation's certificate and the network in front of it
+  are still `scripts/smoke-proxy.sh --live`'s to prove, or an external TLS
+  scan's.
 - ~~**The read path of household isolation.** The tripwire covers writes. Ten
   queries were flagged as unconfirmed on the read side and have not been swept.~~
   **Swept 2026-08-31** — §2.
