@@ -12,6 +12,34 @@ say what measured it.
 
 ## Gate status
 
+**2026-10-12 Bun 1.4.3:** `.bun-version` and the Dockerfile's base move
+together from 1.4.0 to 1.4.3 (`oven/bun:1.4.3-alpine`, index digest
+`sha256:629e1741…`, built 2026-10-10), for the security section of its release
+notes: TLS host-name matching (CVE-2026-48618), certificate checks on reused TLS
+sessions and pooled `fetch()` connections, and stricter HTTP/1.1 parsing in
+`Bun.serve`. Taken two days after release, deliberately. In the 1.4.3
+development image `bun install --frozen-lockfile` installs 452 packages, and a
+plain `bun install` reports "no changes" and leaves `bun.lock` byte-identical at
+lockfileVersion 2. In that image the quality gates pass (lint 0 errors and the
+existing warning, typecheck, react-doctor, 96 contrast checks, 115 links) and so
+do 922 unit, 879 component and 598 integration tests. On the host with the 1.4.3
+binary, `bun run verify:ci` passes in 178 seconds (audit clean across 564
+packages, the same three counts, the build with 8 Partial Prerender routes), and
+`bun run test:e2e` passes **181/181 in 2.9 minutes**. The production image, built
+from `git archive` of the tree, reports `bun --version` 1.4.3 with `node`
+resolving to `/usr/local/bin/bun` and no npm; run read-only against a test
+database it finds no pending migrations and answers `/api/health`
+`{"status":"ok"}` and `/login`, `/register` and `/` with 200, `bun server.js`
+under `dumb-init`. Both versions keep `x_forwarded_for`, `x.forwarded.for` and
+`x-real_ip` as distinct header names and answer 400 to a request carrying both
+`Transfer-Encoding` and `Content-Length`. TEST-5's reproduction failed 0 of 80
+on each of 1.4.0 and 1.4.3, interleaved under load — the reproduction no longer
+separates them — and RUNTIME-1's `curl` reproduction gives 0 on both; split at
+the Next.js move it gives 10 of 10 on 16.3.8 under either Bun and 0 on 16.4.0,
+so the framework upgrade is where it stops (why has not been read). `ISSUES.md`
+has both measurements. A host Bun older than the pin now fails
+`scripts/dev-local.sh`'s version check, as designed: this machine's 1.4.2 does.
+
 **2026-10-12 image provenance:** the repository is public (`gh api
 repos/NGarate/stoky` answers `"private":false`) and already was for the
 `v0.1.0-alpha.3` tag run, whose `private == false` steps in `ci.yml` ran: its
@@ -229,24 +257,25 @@ binary you happen to be holding.
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
 | Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-06) |
-| Unit tests | `bun run test:unit` | ✅ 814 pass / 91 files (2026-10-06) |
-| Component tests | `bun run test:components` | ✅ 782 pass / 70 files (2026-10-06) |
-| Integration tests | `bun run test:integration` | ✅ 549 pass / 37 files (2026-09-25) |
+| Unit tests | `bun run test:unit` | ✅ 922 pass / 99 files (2026-10-12, Bun 1.4.3, host and development image) |
+| Component tests | `bun run test:components` | ✅ 879 pass / 77 files (2026-10-12, Bun 1.4.3, host and development image) |
+| Integration tests | `bun run test:integration` | ✅ 598 pass / 39 files (2026-10-12, Bun 1.4.3, host and development image) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 176 pass / 0 fail in 2.9 minutes (2026-10-09), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.0 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. The same day a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 564 packages (2026-10-08) |
+| E2E | `bun run test:e2e` | ✅ 181 pass / 0 fail in 2.9 minutes (2026-10-12), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 564 packages (2026-10-12, Bun 1.4.3) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
 single check is `scripts/dev-local.sh` comparing `bun --version` against
 `.bun-version` before it installs. It earns its place because bun is quiet in
-the direction that matters: `bun.lock` is lockfileVersion 2, written by 1.4.0,
-and an older bun prints "Unknown lockfile version", then "Ignoring lockfile",
-and resolves an unpinned tree nobody reviewed. Only `--frozen-lockfile` turns
-that into an error. Local development therefore wants bun at or above the
-pinned version, or the development image.
+the direction that matters: `bun.lock` is lockfileVersion 2, written by 1.4.0
+and left byte-identical by a plain `bun install` under 1.4.3, and an older bun
+prints "Unknown lockfile version", then "Ignoring lockfile", and resolves an
+unpinned tree nobody reviewed. Only `--frozen-lockfile` turns that into an
+error. Local development therefore wants bun at or above the pinned version, or
+the development image.
 
 `bun run verify:local` runs the first seven — **56s** of a **600s budget**
 (2026-08-28, on a Bun-installed tree; it was 33s under pnpm with roughly 200
@@ -469,8 +498,8 @@ repository's red runs actually were. Verified able to fail in both halves —
 an injected `SC2168` and an `env` context in `runs-on:` were each caught, then
 reverted.
 
-**Bun is pinned** in `.bun-version` (**1.4.0** since 2026-08-26; 1.3.14
-before), read by CI through `bun-version-file` where `setup-bun` still runs.
+**Bun is pinned** in `.bun-version` (**1.4.3** since 2026-10-12; 1.4.0 from
+2026-08-26, 1.3.14 before), read by CI through `bun-version-file` where `setup-bun` still runs.
 Unpinned, `setup-bun` resolved to whatever had shipped most recently, so a Bun
 release could turn the trunk red with nothing to revert; the pin made the
 version reviewable.
@@ -942,7 +971,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
-| bun | 1.4.0 — `.bun-version` and the Dockerfile pin; all application image stages use Bun |
+| bun | 1.4.3 — `.bun-version` and the Dockerfile pin; all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
 | traefik | v3.7.14 — `deploy/docker-compose.yml`, the release bundle's proxy; the newest v3 release on 2026-10-12 (`gh api repos/traefik/traefik/releases`) |
@@ -1124,7 +1153,9 @@ Two things that sequence surfaced, both operational rather than defects:
   again on run `32792826678` (`e13c540`) on 2026-08-25. A pin forward was the
   documented workaround, and **it has been measured and does not work**: bun
   1.4.0 shipped on 2026-08-20 and still reproduces the defect, at a rate this
-  many runs cannot tell apart from 1.3.14's. `ISSUES.md` TEST-5 carries the
+  many runs cannot tell apart from 1.3.14's. On 2026-10-12, moving to 1.4.3,
+  the same recipe failed 0 in 80 on *both* 1.4.0 and 1.4.3, so it no longer
+  measures the defect at all, and nothing says 1.4.3 fixed it. `ISSUES.md` TEST-5 carries the
   numbers, and the interleaving the comparison turns out to need. Narrowing the
   exit code without also hiding genuine unhandled rejections across the other
   442 tests is a judgement call that has not been made.

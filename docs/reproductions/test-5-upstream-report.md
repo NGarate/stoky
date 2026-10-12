@@ -6,6 +6,10 @@ noting it reproduces on 1.3.14 too. The self-contained reproduction is
 
 Ready to paste; trim the internal cross-references the maintainer cannot follow.
 
+**Hold, 2026-10-12:** under the load recipe this reproduction failed 0 in 80 on
+both 1.4.0 and 1.4.3 (`ISSUES.md` TEST-5, *Re-measured for 1.4.3*). Do not file
+it as written until a recipe reproduces on today's tree.
+
 ---
 
 ## Title

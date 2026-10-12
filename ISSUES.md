@@ -18,7 +18,10 @@ two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
-and does not fix it. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
+and does not fix it. On 2026-10-12, when the pin moved to 1.4.3, the
+reproduction failed **0 times in 80 on each of 1.4.0 and 1.4.3** under the
+documented load, so it no longer separates the two and neither can be said to
+fix it; the entry has the runs. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
 failed four, all four on locators rather than on anything the product does, and
 they pass 8 of 8 now. RUNTIME-1 is the unhandled
 rejections Bun raises and Node does not, which cost the logs this project uses
@@ -28,7 +31,9 @@ entry's conclusion that it was not ours to fix), and the `AbortError` family —
 the larger number — is reproduced and localised but not fixed: one per completed
 router prefetch under Bun, none under Node on the identical artefact, and a
 one-line `curl -sL` reproduces it. `partialPrefetching` is what exposes it and
-stays on by the owner's decision.
+stays on by the owner's decision. That line stopped reproducing with Next 16.4.0
+(`d258c6e`), on Bun 1.4.0 and 1.4.3 alike — measured 2026-10-12, recorded in
+the entry, which stays open until what 16.4.0 changed is understood.
 
 **BUILD-1 closed on 2026-08-26** (`e2a6a8e`), in the direction its own entry
 advised against: `.bun-version` went forward to 1.4.0 on the owner's
@@ -88,7 +93,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-8 | `resolveScan` key-reuse test fails about one full run in four | ✅ Resolved `395570d` — an unawaited refusal in `withReplay` was an unhandled rejection |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | BUILD-2 | Development image cannot run Bash fixtures or inspect its mounted checkout | ✅ Resolved 2026-09-25 — Bash installed and Git trusts only `/app` |
-| RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
+| RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open, though its reproduction gives 0 since Next 16.4.0 (2026-10-12) |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -1294,8 +1299,10 @@ recognise the signature, re-run, do not investigate.
 
 Nothing in this repository — `withReplay` is correct and its tests are correct.
 It wants an upstream report, and the reproduction plus the load recipe above are
-enough to write one. File it against **1.4.0**, the current release, and say it
-reproduces on 1.3.14 too. **A ready-to-file draft is
+enough to write one. ~~File it against **1.4.0**, the current release, and say it
+reproduces on 1.3.14 too.~~ 1.4.3 is the pin since 2026-10-12, and on that date
+the reproduction no longer failed under either version — see *Re-measured for
+1.4.3* below, which is what any report has to explain first. **A ready-to-file draft is
 `docs/reproductions/test-5-upstream-report.md`** (2026-08-31), alongside the
 self-contained `test-5.test.ts` — paste it, trim the internal references, and
 attach the file. Not yet filed: the issue URL goes here once it is.
@@ -1310,11 +1317,37 @@ origin. A fix would be 0.
 Everything *else* is unchanged under 1.4.0 — 569 unit, 602 component, 443
 integration, 0 fail, plus `check:links`, `check:contrast` and the seed's native
 argon2 — so the upgrade is available whenever it is wanted for its own reasons.
-It is simply not a remedy for this, which is why the trunk stays on 1.3.14 and
-the retry stays where it is.
+It is simply not a remedy for this, which is why ~~the trunk stays on 1.3.14
+and~~ the retry stays where it is. *The trunk did not stay on 1.3.14:
+`.bun-version` went to 1.4.0 on 2026-08-26 on the owner's instruction (BUILD-1),
+and to 1.4.3 on 2026-10-12 for its security fixes.*
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
+
+## Re-measured for 1.4.3, 2026-10-12
+
+The pin moved to 1.4.3 for its TLS and HTTP fixes, not for this, and D106 says a
+runner change is measured before it is adopted, interleaved. So it was: the
+self-contained `docs/reproductions/test-5.test.ts`, the glibc binaries copied out
+of `oven/bun:1.4.0-slim` and `oven/bun:1.4.3-slim`, alternated run by run (the
+order flipping every pair) against a migrated scratch test database, while
+`bun test src/__tests__/integration` looped against the same database.
+
+| Batch | Load | 1.4.0 | 1.4.3 |
+|---|---|---|---|
+| 1 | one integration loop | 0 / 40 | 0 / 40 |
+| 2 | two integration loops, each run logged (562–579 of 598 passing; two suites sharing one database collide) | 0 / 40 | 0 / 40 |
+
+Every run printed `COMPLETED: ["refuses a key reused"]` and 13 `expect()` calls,
+the passing signature. **This is not evidence that 1.4.3 fixes TEST-5**: 1.4.0,
+which failed 14 in 40 under this recipe on 2026-08-25, failed none either, so
+what changed is the tree or the machine, not the binary. Under the same recipe the
+rate that used to separate a fix from noise is now 0 on both sides, and this
+reproduction can no longer make the comparison it was written for. The entry
+stays open: a race that the documented load no longer brings out is not a race
+that is gone, and the same day's suites (`verify:ci`, and the three suites in
+the 1.4.3 development image) each passed once, which says nothing either way.
 
 ---
 
@@ -3155,6 +3188,43 @@ rather than on curl's exit code, it confirms the process it started is the one
 answering, and it supplies a secret long enough for the server to render.
 Filed rather than fixed in passing (D6).
 
+### Re-measured for Bun 1.4.3, 2026-10-12: Next 16.4.0 is the variable, not Bun
+
+Measured because the pin moved to 1.4.3, whose notes include a stricter
+`Bun.serve` — a change at exactly this layer could have moved the count either
+way. It did not; the framework had already moved it.
+
+`docs/reproductions/runtime-1-abort.sh` on this tree, alternating the glibc
+binaries from `oven/bun:1.4.0-slim` and `oven/bun:1.4.3-slim` (1.4.0, 1.4.3,
+1.4.0, 1.4.3), each server answering 200 and printing its ready line first:
+**bun 0, node 0, every time**, and the script exits 1 — "NOT the shape RUNTIME-1
+describes". The prefetches were not failing to render: by hand, the same
+`curl -sL` with `Next-Router-Prefetch: 3` answers 200 with a 4 KB RSC body.
+
+So the split was taken at the Next.js move, `d258c6e` (16.3.8 → 16.4.0), with
+both sides built by `git archive <sha> | docker build --target builder` and
+served from the image's own `.next/standalone` with `bun server.js` — the image's
+1.4.0, then a 1.4.3 musl binary mounted over it. Ten kind-3 prefetches to
+`/inventory`, all answering 200:
+
+| Build | Next | Bun 1.4.0 | Bun 1.4.3 |
+|---|---|---|---|
+| `7365252` (the parent) | 16.3.8 | **10** AbortErrors | **10** AbortErrors |
+| `d258c6e` | 16.4.0 | 0 | 0 |
+
+The 16.3.8 / 1.4.0 cell was run twice, 10 both times. **1.4.3 neither fixes nor
+causes it; 16.4.0 is where the one-line reproduction stops.** The browser suite
+agrees as far as one run can: `bun run test:e2e` under 1.4.3 passed 181/181 and
+its captured server output — stdout and stderr both, since the security log's
+`console.warn` lines are in it — holds no `AbortError` and no
+`unhandledRejection`, where the entry above counted ~1500 per run.
+
+Not closed by this. What 16.4.0 changed in the prefetch path has not been read,
+so "fixed upstream" is an inference from two builds, not a cause; and
+`runtime-1-abort.sh` and `runtime-1-upstream-report.md` still describe 16.3,
+where the shape holds. Closing the entry, and retiring or re-pointing the
+draft report, is its own change.
+
 ### ✅ AUTH-1: An inert adapter picks a session strategy the schema cannot serve
 
 **Files:** `src/lib/auth.ts:71` (the adapter), `:210` (`strategy: "jwt"`), `prisma/schema.prisma`
@@ -3671,7 +3741,9 @@ which is short:
 
 - **TEST-5** — upstream (bun). Wants an issue filed against **bun 1.4.0** with
   the reproduction in `docs/reproductions/`, not more work here. Upgrading is
-  not the fix: 1.4.0 was measured on 2026-08-25 and still reproduces. Its
+  not the fix: 1.4.0 was measured on 2026-08-25 and still reproduces. On
+  2026-10-12 the reproduction failed 0 in 80 on 1.4.0 *and* 1.4.3 under load,
+  so before filing, it needs a recipe that reproduces on today's tree. Its
   honest cost: roughly one `verify:ci` or CI `test` job in seven goes red
   spuriously; re-run before investigating.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and

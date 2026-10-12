@@ -1,7 +1,7 @@
 # Stoky uses Bun for dependency installation, builds, migrations and serving.
 # The pinned upstream image includes a node-named symlink to Bun for third-party
 # shebangs; no separate Node.js, npm or npx runtime is installed in any stage.
-FROM oven/bun:1.4.0-alpine AS bun
+FROM oven/bun:1.4.3-alpine AS bun
 
 FROM bun AS deps
 USER root

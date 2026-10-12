@@ -240,7 +240,7 @@ they bypass the cooldown, and GitHub offers none for the `bun` ecosystem, so
 Dependabot pull request has run here, so how its own Bun rewrites `bun.lock` is
 unknown until the first one does. Read from dependabot-core's `main` on
 2026-10-12, not observed: its `bun/Dockerfile` installs Bun 1.4.2, not the
-1.4.0 in `.bun-version`, and its parser accepts `lockfileVersion` up to 3
+1.4.3 in `.bun-version`, and its parser accepts `lockfileVersion` up to 3
 (this lockfile is 2).
 
 A Dependabot pull request is reviewed like an agent's (`CLAUDE.md`, Git

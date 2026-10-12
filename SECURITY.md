@@ -553,7 +553,7 @@ Verified against the files named in each row.
   does not touch a frozen install: CI, the Dockerfile and `scripts/dev-local.sh`
   install exactly what `bun.lock` names (a copy of the lockfile installed with
   a ten-year gate exited 0 and left it byte-identical, Bun 1.4.2). Measured on
-  Bun 1.4.0, the pinned image, and 1.4.2: `bun add` of a TypeScript nightly 20
+  Bun 1.4.0, then the pinned image, and 1.4.2: `bun add` of a TypeScript nightly 20
   hours old fails with `blocked by minimum-release-age: 259200 seconds`.
   **A security fix younger than three days** goes in through `bun audit fix`,
   which Bun documents as installing the safe version anyway and marking the row

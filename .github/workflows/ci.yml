@@ -379,7 +379,7 @@ jobs:
       # updates for the bun ecosystem, and an alert blocks nothing.
       #
       # No install, and no Node: `bun audit` answers from `bun.lock` alone.
-      # Measured on this tree under the pinned 1.4.0 — 586 packages checked in
+      # Measured on this tree under 1.4.0, then the pinned Bun — 586 packages checked in
       # 393ms — where `pnpm audit` needed a populated store first. That deletes
       # a whole dependency install from the pipeline rather than porting it.
       - name: bun audit
