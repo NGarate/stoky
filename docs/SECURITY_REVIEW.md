@@ -809,6 +809,58 @@ fails the first and third, restoring `preload` in the app the second and
 third, and dropping `includeSubDomains` from the app alone the second and
 third. `security-headers.spec.ts` pins the new value on the production build.
 
+**Found 2026-10-12: no Cross-Origin-Opener-Policy or
+Cross-Origin-Resource-Policy.** The app's static set had neither, and neither
+did Traefik's middleware. Without COOP, a page on another origin that opens
+Stoky with `window.open` keeps a live handle to the window: it can navigate it
+to a look-alike sign-in page — inbound tabnabbing against a credentials-only
+app — or time its navigations. Without CORP, another origin can request any
+Stoky response as a no-cors subresource. Low, and defence in depth rather than
+an exploit: `X-Frame-Options: DENY` and `frame-ancestors 'none'` already
+refuse framing, the app has no frames for an opener to count, and browsers'
+opaque-response blocking, with `nosniff`, already withholds most JSON and HTML
+from another origin's no-cors request. Nothing in the app needs either
+absence: there is no OAuth popup, the only new windows Stoky opens are the
+Open Food Facts links (`rel=noreferrer`, which COOP on Stoky does not affect),
+and every subresource its pages load is same-origin.
+
+**Fixed: both, as `same-origin`, in `next.config.ts`; no embedder policy.**
+`same-origin` rather than `same-origin-allow-popups`, because no popup Stoky
+opens needs a way back. `Cross-Origin-Embedder-Policy`, the header usually set
+with these two, is left out on purpose and the config says so. All it would add
+is cross-origin isolation, which Stoky does not use, and `require-corp` would
+refuse the product photographs: the product page loads them as a plain `<img>`,
+and `images.openfoodfacts.org` sends no CORP. It does send
+`Access-Control-Allow-Origin: *` (measured with `curl -I` on a product image,
+2026-10-12), so `crossorigin` or `credentialless` would let them through — but
+only while a host that is not ours keeps answering that way, for a capability
+nothing here needs.
+Traefik is not changed; the app's headers pass through it.
+`security-headers.spec.ts` adds both to the headers every page must carry and
+asserts the whole set on `/api/health` and on an anonymous tRPC 401 as well.
+"isolated from other origins" opens Stoky from a page `page.route` serves at
+`http://localhost:3999` and asserts the opener's handle reads `closed` while
+the window is open on `/login`; loads `/icons/icon-192.png` as an image from
+the same page and asserts it fails with
+`net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`; and renders a product page with
+a stand-in Open Food Facts photograph and asserts it loads, with no embedder
+policy and `crossOriginIsolated` false. With both headers removed, the two
+header tests and the two browser tests go red (the handle reads open, the icon
+loads). With `require-corp` added, the photograph test fails on the header,
+and with that assertion set aside on `crossOriginIsolated`; the photograph
+itself still rendered — a response `page.route` fulfils is evidently not held
+to the check — which is why the decision is pinned on the header and the
+isolation state. With the Open Food Facts host dropped from `img-src`, the
+photograph does not load and the test fails on that.
+
+Loaded from `http://elsewhere.test`, as the subresource test first did, the
+icon fails before CORP is consulted: Chromium's Local Network Access refuses a
+request from an insecure page to a loopback address (`InsecureLocalNetwork`,
+measured on the icon and on `/api/health`), so a test that only expected the
+failure could not tell the header from its absence. The other page is
+`localhost`, granted `local-network-access`, and the error the test expects is
+CORP's own.
+
 ---
 
 ## The `SECURITY.md` corrections

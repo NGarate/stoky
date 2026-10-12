@@ -34,6 +34,25 @@ const securityHeaders = [
     value: "max-age=63072000; includeSubDomains",
   },
   { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+  // A page on another origin that opens Stoky in a window keeps no handle to
+  // it: it cannot navigate Stoky's window to a look-alike sign-in page, or
+  // time its navigations. `same-origin` rather than `same-origin-allow-popups`
+  // because Stoky opens no popup that needs a way back — its only new windows
+  // are the Open Food Facts links, `rel=noreferrer`. Browsers apply it only on
+  // a secure context: HTTPS, or the loopback address.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // No other origin may load a Stoky response as an image, script or other
+  // subresource. Every subresource Stoky's own pages load is same-origin.
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+  // **No Cross-Origin-Embedder-Policy, deliberately.** It is the third header
+  // usually set with these two, and all it adds is cross-origin isolation —
+  // SharedArrayBuffer and precise timers, which Stoky does not use. Its cost
+  // is the product photographs: the product page loads them from
+  // images.openfoodfacts.org as a plain `<img>`, which `require-corp` refuses
+  // because that host sends no CORP. It does answer CORS, so `crossorigin` or
+  // `credentialless` would let them through, but only for as long as a host
+  // that is not ours keeps doing so, for a capability nothing here needs.
+  // `e2e/security-headers.spec.ts` goes red if this is added.
 ];
 
 const nextConfig: NextConfig = {

@@ -309,6 +309,33 @@ Verified against the files named in each row.
   sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
   `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
   denies everything else.
+- **`Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Resource-Policy: same-origin`**, on every route, since
+  2026-10-12 (`docs/SECURITY_REVIEW.md` §8). A page on another origin that
+  opens Stoky in a window keeps no handle to it, so cannot navigate it to a
+  look-alike sign-in page or time its navigations; and no other origin can
+  load a Stoky response as an image, script or other subresource. Defence in
+  depth: framing was already refused, and browsers' opaque-response blocking
+  already withholds most JSON and HTML from another origin's no-cors request.
+  The HTML standard applies COOP only on a secure context, so a plain-http LAN
+  install gets the CORP half — read from the standard, not measured here.
+  A page the service worker serves from its cache carries the headers it was
+  cached with, so after upgrading an existing install a shell route cached
+  before the upgrade lacks both until the next online visit replaces it, and
+  `/offline`, cached once when the worker installs, until `public/sw.js` next
+  changes — read from the worker, not measured.
+  **There is deliberately no `Cross-Origin-Embedder-Policy`**. All it would
+  add is cross-origin isolation (`SharedArrayBuffer`, precise timers), which
+  Stoky does not use, and `require-corp` would refuse the product photographs:
+  the product page loads them as a plain `<img>`, and
+  `images.openfoodfacts.org` sends no CORP. That host does answer
+  `Access-Control-Allow-Origin: *` (measured 2026-10-12), so `crossorigin` on
+  the image or `credentialless` would let them through — for as long as a host
+  that is not ours keeps answering that way. `e2e/security-headers.spec.ts`
+  checks that the opener's handle reads closed, that another origin's image
+  load of a Stoky icon fails with Chromium's CORP error, and that a product
+  page shows its photograph with no embedder policy and is not cross-origin
+  isolated.
 - `poweredByHeader: false`, so responses do not advertise the framework version.
 - **Every response from `/api/trpc` carries `Cache-Control: no-store`** —
   data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at

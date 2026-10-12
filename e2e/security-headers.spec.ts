@@ -9,7 +9,7 @@ import { SESSION_FILE } from "./session";
  * exercises `buildCsp()` in isolation and never touches a response;
  * `proxy-device.test.ts` asserts the header on the proxy's return
  * value, which is the function's output rather than what a browser receives.
- * Nothing anywhere named `X-Frame-Options`, HSTS or the other four. A header
+ * Nothing anywhere named `X-Frame-Options`, HSTS or the others. A header
  * that is configured and not delivered looks exactly like a header that is
  * delivered, right up until somebody checks.
  *
@@ -33,6 +33,8 @@ const STATIC_HEADERS: Record<string, string> = {
     "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
   "strict-transport-security": "max-age=63072000; includeSubDomains",
   "x-permitted-cross-domain-policies": "none",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
 };
 
 function headerOf(response: APIResponse, name: string): string {
@@ -52,15 +54,27 @@ test.describe("the headers a response actually carries", () => {
     }
   });
 
-  test("they reach the tRPC route too, not only pages", async ({ request }) => {
+  test("they reach the API routes too, tRPC included", async ({ request }) => {
     // The config's source is `/:path*`, which is every route including the API.
     // Worth pinning: an API response is the one most likely to be fetched from
-    // somewhere else, and `X-Content-Type-Options` is what stops a JSON reply
-    // being sniffed as something executable.
-    const response = await request.get("/api/health");
+    // somewhere else — `X-Content-Type-Options` is what stops a JSON reply
+    // being sniffed as something executable, and `Cross-Origin-Resource-Policy`
+    // is what stops another origin's page pulling it in as a subresource.
+    // The tRPC answer is an anonymous refusal: an error the handler builds is
+    // as much a response as data, and needs no session to ask for.
+    const responses = {
+      "/api/health": await request.get("/api/health"),
+      "/api/trpc": await request.get(
+        `/api/trpc/location.list?batch=1&input=${encodeURIComponent("{}")}`,
+      ),
+    };
+    expect(responses["/api/trpc"].status()).toBe(401);
 
-    expect(headerOf(response, "x-content-type-options")).toBe("nosniff");
-    expect(headerOf(response, "x-frame-options")).toBe("DENY");
+    for (const [route, response] of Object.entries(responses)) {
+      for (const [name, value] of Object.entries(STATIC_HEADERS)) {
+        expect(headerOf(response, name), `${name} on ${route}`).toBe(value);
+      }
+    }
   });
 
   test("does not announce what it is built with", async ({ request }) => {
@@ -69,6 +83,168 @@ test.describe("the headers a response actually carries", () => {
     const response = await request.get("/login");
 
     expect(headerOf(response, "x-powered-by")).toBe("");
+  });
+});
+
+/**
+ * What the two cross-origin headers do in a browser, and what they must not.
+ *
+ * A header pinned by name above is a header delivered; these are what it is
+ * delivered for. The other origin is the test's own: a page `page.route`
+ * serves on a port nothing listens on, because the suite has one origin of its
+ * own and isolation is only visible from a second.
+ *
+ * `localhost`, not a made-up public name, and granted `local-network-access`:
+ * Chromium's Local Network Access refuses a request from a public or insecure
+ * page to a loopback address, whatever the address would have answered.
+ * Measured from `http://elsewhere.test`: the image below failed, and so did
+ * `/api/health`, with `InsecureLocalNetwork` as the reason — a test written
+ * that way cannot tell the header from its absence. Granted, the request is sent and
+ * only the header is left to refuse it, which the error names.
+ */
+const ELSEWHERE = "http://localhost:3999";
+
+/** A 1x1 PNG, standing in for an image from somewhere else. */
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test.describe("isolated from other origins", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route(`${ELSEWHERE}/**`, (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<!doctype html><title>elsewhere</title>",
+      }),
+    );
+    await page.context().grantPermissions(["local-network-access"], { origin: ELSEWHERE });
+  });
+
+  test("a page on another origin that opens Stoky keeps no handle to it", async ({
+    page,
+    baseURL,
+  }) => {
+    // `Cross-Origin-Opener-Policy: same-origin`. Without it the opener holds a
+    // live reference to Stoky's window, and can navigate it to a look-alike
+    // sign-in page or time what it does. With it the window is moved to a
+    // browsing context group of its own, and the handle reports it closed
+    // while it is in fact open.
+    await page.goto(`${ELSEWHERE}/`);
+
+    const opened = page.context().waitForEvent("page");
+    await page.evaluate((url) => {
+      Reflect.set(window, "stoky", window.open(url));
+    }, `${baseURL}/login`);
+
+    // The window really is open, on Stoky's sign-in page — so `closed` below
+    // is the severed handle, not a popup that failed.
+    const popup = await opened;
+    await popup.waitForLoadState("load");
+    expect(new URL(popup.url()).pathname).toBe("/login");
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => (Reflect.get(window, "stoky") as Window | null)?.closed),
+      )
+      .toBe(true);
+  });
+
+  test("a page on another origin cannot load a Stoky response as a subresource", async ({
+    page,
+    baseURL,
+  }) => {
+    // `Cross-Origin-Resource-Policy: same-origin`. An icon, because an image
+    // is the subresource that would otherwise load: the server answers it in
+    // full, and the browser does not hand it to the page.
+    await page.goto(`${ELSEWHERE}/`);
+
+    const icon = `${baseURL}/icons/icon-192.png`;
+    const failed = page.waitForEvent("requestfailed", (request) => request.url() === icon);
+    const loaded = await page.evaluate(
+      (src) =>
+        new Promise<boolean>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = src;
+        }),
+      icon,
+    );
+
+    expect(loaded).toBe(false);
+    // Refused for the header and nothing else: Chromium's name for a response
+    // its Cross-Origin-Resource-Policy check refused. Local Network Access's
+    // refusals, measured, read `net::ERR_FAILED`.
+    expect((await failed).failure()?.errorText).toBe(
+      "net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin",
+    );
+  });
+
+  test.describe("signed in", () => {
+    test.use({ storageState: SESSION_FILE });
+
+    test("a product photograph from Open Food Facts still renders", async ({
+      page,
+    }) => {
+      // The one image Stoky shows from another origin, under the headers
+      // above and the page's `img-src`. Its stand-in answers as a server that
+      // knows nothing of Stoky does — no CORS, no CORP — and keeps the test
+      // off the internet.
+      const photo = "https://images.openfoodfacts.org/images/products/e2e/front.png";
+      await page.route("https://images.openfoodfacts.org/**", (route) =>
+        route.fulfill({ contentType: "image/png", body: PIXEL }),
+      );
+
+      // Only an Open Food Facts scan sets `imageUrl`, and the seed scans
+      // nothing, so the product's own answer is given a photograph on its way
+      // to the page.
+      await page.route("**/api/trpc/**", async (route) => {
+        if (!route.request().url().includes("product.getById")) {
+          await route.fallback();
+          return;
+        }
+        const response = await route.fetch();
+        const body = (await response.text()).replaceAll(
+          '"imageUrl":null',
+          `"imageUrl":${JSON.stringify(photo)}`,
+        );
+        await route.fulfill({ response, body });
+      });
+
+      // Any seeded product: its detail page, as `dynamic-routes` finds it.
+      await page.goto("/products");
+      const detail = await page
+        .waitForFunction(
+          () =>
+            [...document.querySelectorAll("a[href]")]
+              .map((a) => a.getAttribute("href") ?? "")
+              .find((href) => /^\/products\/(?!new$|scan$)[^/]+$/.test(href)) ?? null,
+        )
+        .then((handle) => handle.jsonValue());
+      // waitForFunction resolves only on a truthy value, so never null here.
+      const landed = await page.goto(detail as string);
+
+      const img = page.locator(`img[src="${photo}"]`);
+      await expect(img).toBeVisible();
+      await expect
+        .poll(() => img.evaluate((el: HTMLImageElement) => (el.complete ? el.naturalWidth : 0)))
+        .toBeGreaterThan(0);
+
+      // Why there is no `Cross-Origin-Embedder-Policy`: Stoky needs none of
+      // the cross-origin isolation it buys, and with `require-corp` this plain
+      // `<img>` would load only if Open Food Facts' image host sent a CORP that
+      // admits it, which it does not and is not ours to configure.
+      // The render above cannot show that refusal — measured: with
+      // `require-corp` added to `next.config.ts` the stand-in still rendered;
+      // a response `page.route` fulfils is evidently not held to the check —
+      // so the decision is pinned where it is visible. With COOP
+      // already `same-origin`, any embedder policy makes the page
+      // cross-origin isolated.
+      expect(landed?.status()).toBe(200);
+      expect(landed?.headers()["cross-origin-embedder-policy"]).toBeUndefined();
+      expect(await page.evaluate(() => self.crossOriginIsolated)).toBe(false);
+    });
   });
 });
 
