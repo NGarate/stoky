@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
 import { resolve } from "../setup/tailwind";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -158,6 +159,24 @@ describe("the register page", () => {
 
     expect(container.textContent).toContain("Your first household");
   });
+
+  // The hint said eight while the server asked for twelve, and the field let
+  // eleven through to a refusal that did not say why. The page has to hand the
+  // catalogue the number and the browser the same one.
+  for (const [locale, label] of [
+    ["es", "Contraseña"],
+    ["en", "Password"],
+  ] as const) {
+    it(`asks for the minimum the server enforces, in ${locale}`, () => {
+      renderWithIntl(<RegisterPage />, { locale });
+
+      const field = screen.getByLabelText(label) as HTMLInputElement;
+      expect(field.minLength).toBe(MIN_PASSWORD_LENGTH);
+      expect(document.getElementById("password-hint")?.textContent).toContain(
+        `${MIN_PASSWORD_LENGTH} `,
+      );
+    });
+  }
 });
 
 /**

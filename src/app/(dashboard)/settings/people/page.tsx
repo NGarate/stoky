@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { RouteState } from "@/components/household/RouteState";
 import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
@@ -169,7 +170,7 @@ export default function PeoplePage(): JSX.Element {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    if (!name.trim() || !email.trim() || password.length < 8) return;
+    if (!name.trim() || !email.trim() || password.length < MIN_PASSWORD_LENGTH) return;
     addMember.mutate({ name: name.trim(), email: email.trim(), password, role });
   }
 
@@ -436,7 +437,7 @@ export default function PeoplePage(): JSX.Element {
               autoComplete="new-password"
               className="mt-1"
               id={`${fieldId}-password`}
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               onChange={(event) => setPassword(event.target.value)}
               required
               type="password"
@@ -446,7 +447,7 @@ export default function PeoplePage(): JSX.Element {
               className="mt-1 text-sm text-muted-foreground"
               id={`${fieldId}-password-hint`}
             >
-              {t("addPasswordHint")}
+              {t("addPasswordHint", { min: MIN_PASSWORD_LENGTH })}
             </p>
           </div>
 

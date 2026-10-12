@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { api } from "@/components/providers/TRPCProvider";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import type { FormEvent, JSX } from "react";
 import type { AuthErrorKey } from "@/lib/auth/error-messages";
 
@@ -184,12 +185,13 @@ export default function RegisterPage(): JSX.Element {
                     aria-describedby="password-hint"
                     autoComplete="new-password"
                     id="password"
+                    minLength={MIN_PASSWORD_LENGTH}
                     name="password"
                     required
                     type="password"
                   />
                   <p className="text-sm text-muted-foreground" id="password-hint">
-                    {t("passwordHintRegister")}
+                    {t("passwordHintRegister", { min: MIN_PASSWORD_LENGTH })}
                   </p>
                 </div>
 

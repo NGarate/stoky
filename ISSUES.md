@@ -2282,6 +2282,19 @@ people out of their own household; sign-in keeps only the maximum. Two existing
 tests asserted the old behaviour and now assert the new one, including that a
 short legacy password still signs in.
 
+**The screens did not follow at the time** (security review, 2026-10-12). The
+registration hint still said "Ocho caracteres o más", the add-a-member hint said
+8 and promised the person could change it later (nothing changes a password once
+it is set), and that field carried `minLength={8}` with a matching `< 8` guard. A
+password of nine to eleven characters passed the browser and came back as a
+generic refusal. Both hints now take the number as an ICU `{min}` parameter fed
+from `MIN_PASSWORD_LENGTH`, both fields use the same constant as `minLength`, and
+the change-it-later promise is gone. `unit/messages.test.ts` refuses a hint
+without the parameter, a call site that does not pass `MIN_PASSWORD_LENGTH` to
+it, and any `.tsx` that writes `minLength` or a `password.length` comparison
+with a literal number. `components/auth-pages.test.tsx` checks the rendered
+register field and hint.
+
 ---
 
 ### ✅ DEBT-2: Barcode scanner component has unused torch state
