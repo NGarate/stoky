@@ -1302,6 +1302,34 @@ every device that was signed in when that upgrade was installed.
   the server-fault lines below: a Prisma error is written through
   `describeError` (`src/server/log-error.ts`), because Prisma's own message
   is the failed call with its arguments.
+- **A sign-in line names the account by a tag, never by the address it
+  tried.** `auth.signin.failed` and `auth.signin.throttled` used to carry
+  `email` in plain text, for every well-formed address anybody submitted —
+  a member's typo, a neighbour, a credential-stuffing list — people the
+  database never holds, kept for as long as the container's output and in
+  every paste of `docker compose logs` (security review, 2026-10-12). They
+  now carry `account`: the first 16 hex characters of an HMAC-SHA256, keyed
+  with `NEXTAUTH_SECRET`, over `stoky-log-account:` and the address trimmed
+  and lowercased (`src/lib/account-tag.ts`). Keyed rather than a plain hash
+  because an address is guessable: without the secret, a pasted log cannot be
+  checked against a list of likely addresses. `email` is one of the keys the
+  writer drops, so no caller can put the address back, and every value is cut
+  to 200 characters, because some of them are chosen by whoever sent a
+  request that was refused. To find one person's lines, compute their tag in
+  the installation directory and grep for it:
+
+  ```bash
+  printf 'stoky-log-account:%s' 'ana@example.org' \
+    | openssl dgst -sha256 -hmac "$(sed -n 's/^NEXTAUTH_SECRET=//p' .env)" \
+    | cut -d' ' -f2 | cut -c1-16
+  ```
+
+  Type the address in lowercase. The command reads the secret as `install.sh`
+  writes it, without quotes; a value quoted by hand in `.env` gives a tag that
+  matches nothing. **Rotating `NEXTAUTH_SECRET` changes every
+  tag**, so lines from before a rotation do not match lines from after it.
+  Lines written before this change keep the address they were written with
+  until the log holding them is removed.
 
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still

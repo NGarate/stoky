@@ -6,6 +6,7 @@ import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import { logSecurityEvent } from "@/lib/security-log";
+import { accountTag } from "@/lib/account-tag";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { verifyPassword } from "@/lib/auth/password-hash";
 import {
@@ -271,7 +272,7 @@ export const authConfig: NextAuthConfig = {
           if (!allowed) {
             logSecurityEvent("auth.signin.throttled", {
               address,
-              email: parsed.data.email,
+              account: accountTag(parsed.data.email),
               code: `${charged.kind} retry-after=${retryAfterSeconds}`,
             });
             throw new AccountRateLimitedSignin();
@@ -315,7 +316,7 @@ export const authConfig: NextAuthConfig = {
         if (!user || !isValid) {
           logSecurityEvent("auth.signin.failed", {
             address,
-            email: parsed.data.email,
+            account: accountTag(parsed.data.email),
           });
           return null;
         }

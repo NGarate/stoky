@@ -11,6 +11,14 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
+import { accountTag } from "@/lib/account-tag";
+import {
+  accountIdentifier,
+  loginAccountRateLimit,
+  resetRateLimit,
+} from "@/lib/rate-limit";
+import { RateLimitedSignin } from "@/lib/auth";
+import { signInWith } from "../utils/authorize";
 import {
   createTestUser,
   createTestHousehold,
@@ -50,6 +58,7 @@ let shoppingItemId: string;
 let outsiderId: string;
 let ownerId: string;
 let adminId: string;
+let ownerEmail: string;
 
 /** Every line the code under test wrote, parsed. */
 let lines: Record<string, string>[] = [];
@@ -71,8 +80,9 @@ beforeAll(async () => {
   const household = await createTestHousehold({ name: HOUSEHOLD });
   const other = await createTestHousehold({ name: OTHER_HOUSEHOLD });
 
+  ownerEmail = generateTestEmail("seclog-owner");
   const owner = await createTestUser({
-    email: generateTestEmail("seclog-owner"),
+    email: ownerEmail,
     name: "Security Log Owner",
     householdId: household.id,
     role: "OWNER",
@@ -327,5 +337,71 @@ describe("what is not an incident", () => {
     }
 
     expect(lines).toEqual([]);
+  });
+});
+
+/**
+ * The address a sign-in tried, through `authorize` rather than the writer
+ * (security review, 2026-10-12).
+ *
+ * The unit suite proves `securityLine` drops an `email` key; it cannot prove
+ * that the sign-in path stopped handing it one and hands a tag instead. A line
+ * with neither would pass there and lose the correlation the tag exists for.
+ */
+describe("a refused sign-in", () => {
+  const WRONG = "no es la contraseña";
+
+  /** Each line as written, so a match anywhere in it counts. */
+  function written(): string {
+    return lines.map((line) => JSON.stringify(line)).join("\n");
+  }
+
+  it("names the account by its tag, not by the address", async () => {
+    expect(await signInWith({ email: ownerEmail, password: WRONG })).toBeNull();
+
+    const failed = lines.find((line) => line.event === "auth.signin.failed");
+    expect(failed).toBeDefined();
+    expect(failed?.account).toBe(accountTag(ownerEmail));
+    expect(failed).not.toHaveProperty("email");
+    expect(written()).not.toContain(ownerEmail.split("@")[0]);
+
+    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
+  });
+
+  it("does the same for an address nobody registered", async () => {
+    // The case the finding was about: a typo or a stuffing list, a person the
+    // database has never held, written into the log in full.
+    const stranger = generateTestEmail("seclog-nobody");
+
+    expect(await signInWith({ email: stranger, password: WRONG })).toBeNull();
+
+    const failed = lines.find((line) => line.event === "auth.signin.failed");
+    expect(failed?.account).toBe(accountTag(stranger));
+    expect(written()).not.toContain(stranger.split("@")[0]);
+
+    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(stranger));
+  });
+
+  it("names the account by its tag when the account's limit refuses it", async () => {
+    const original = process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = "1";
+    const stranger = generateTestEmail("seclog-throttled");
+
+    try {
+      expect(await signInWith({ email: stranger, password: WRONG })).toBeNull();
+      await expect(
+        signInWith({ email: stranger, password: WRONG }),
+      ).rejects.toBeInstanceOf(RateLimitedSignin);
+    } finally {
+      if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+      else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
+      await resetRateLimit(loginAccountRateLimit(), accountIdentifier(stranger));
+    }
+
+    const throttled = lines.find((line) => line.event === "auth.signin.throttled");
+    expect(throttled).toBeDefined();
+    expect(throttled?.account).toBe(accountTag(stranger));
+    expect(throttled).not.toHaveProperty("email");
+    expect(written()).not.toContain(stranger.split("@")[0]);
   });
 });

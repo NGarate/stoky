@@ -10,20 +10,29 @@
  * my instance?" — had no answer anywhere, and the first evidence of a break-in
  * would have been the data changing.
  *
- * **One line of JSON per event, on stderr.** Not a file, not a table: the
- * deployment is Docker, so stderr is already collected and reachable with
- * `docker compose logs` — and rotated only because the release bundle sets a
- * size cap on every service (Docker's default keeps everything; SECURITY.md,
- * "Refusals are recorded") — and JSON means `| jq 'select(.event ==
- * "access.denied")'` works without anybody installing anything. A log table in
+ * **One line of JSON per event, on stderr** (`console.warn`, below). Not a
+ * file, not a table: the deployment is Docker, so stderr is already collected
+ * and reachable with `docker compose logs` — and rotated only because the
+ * release bundle sets a size cap on every service (Docker's default keeps
+ * everything; SECURITY.md, "Refusals are recorded") — and JSON means `| jq
+ * 'select(.event == "access.denied")'` works without anybody installing
+ * anything. A log table in
  * Postgres would need migrations, retention and a way to read it when the
  * database is the thing that is wrong.
  *
  * **What is deliberately not in a line.** No password, no hash, no token, no
  * session cookie, and no request body — an audit log that quotes the input is
- * a second copy of the credential. Addresses and identifiers are in, because
- * they are what makes a line actionable and the operator already owns the
- * database they came from.
+ * a second copy of the credential. No email address either: a sign-in is
+ * logged under `account`, a keyed tag of the address it tried
+ * (`@/lib/account-tag`), because most addresses a refused sign-in names are
+ * not in the database at all — typos, neighbours, a stuffing list — and the
+ * operator owns none of them. Client addresses and account ids are in, because
+ * they are what makes a line actionable.
+ *
+ * **Every value is cut to `MAX_VALUE_LENGTH`.** Lines are written for
+ * refused requests, from people nobody let in, and some values are theirs to
+ * choose; without a bound, one refused request could put megabytes into the
+ * log.
  */
 
 /** The events worth a line. Kept as a closed union so greps stay reliable. */
@@ -77,10 +86,13 @@ export interface SecurityDetails {
    * `"absolute-lifetime"`.
    */
   reason?: string;
-  /** The address a sign-in was attempted for. */
-  email?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */
   fetchSite?: string;
+  /**
+   * The account a sign-in was attempted for, as `accountTag(email)` — never
+   * the address itself, which `FORBIDDEN_KEYS` drops.
+   */
+  account?: string;
   /** The account an action was done *to*, when that is not `userId`. */
   targetUserId?: string;
 }
@@ -103,9 +115,19 @@ const FORBIDDEN_KEYS = new Set([
   "session",
   "authorization",
   "credentials",
+  // Not a credential, but personal data about people who are mostly not
+  // users here. `account` carries the tag instead; see `@/lib/account-tag`.
+  "email",
 ]);
 
-/** Builds the line. Exported so a test can assert its shape without stdout. */
+/**
+ * The longest a value may be. Comfortably above anything legitimate — a tRPC
+ * path, a UUID, an IPv6 address, a 16-character tag — and short enough that a
+ * line stays a line.
+ */
+export const MAX_VALUE_LENGTH = 200;
+
+/** Builds the line. Exported so a test can assert its shape without stderr. */
 export function securityLine(
   event: SecurityEvent,
   details: SecurityDetails,
@@ -116,7 +138,7 @@ export function securityLine(
   for (const [key, value] of Object.entries(details)) {
     if (value === undefined || value === null || value === "") continue;
     if (FORBIDDEN_KEYS.has(key.toLowerCase())) continue;
-    safe[key] = String(value);
+    safe[key] = String(value).slice(0, MAX_VALUE_LENGTH);
   }
 
   return JSON.stringify({ ts: now.toISOString(), event, ...safe });

@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach, mock } from "bun:test";
 import {
   logSecurityEvent,
+  MAX_VALUE_LENGTH,
   securityLine,
   type SecurityDetails,
 } from "@/lib/security-log";
+import { accountTag } from "@/lib/account-tag";
 
 /**
  * OWASP ASVS V7.1.3 — the events, and what must never be in one.
@@ -86,6 +88,109 @@ describe("what never reaches a line", () => {
     const smuggled = { PassWord: "secreto" } as unknown as SecurityDetails;
 
     expect(securityLine("access.denied", smuggled, AT)).not.toContain("secreto");
+  });
+});
+
+describe("the address a sign-in tried", () => {
+  // Security review, 2026-10-12: `auth.signin.failed` and
+  // `auth.signin.throttled` carried the submitted address in plain text —
+  // for every well-formed address, registered or not. The line names a keyed
+  // tag instead, and the writer refuses the address outright.
+  const SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const ADDRESS = "vecina.del.quinto@example.org";
+
+  it("is dropped, however a caller hands it in", () => {
+    const smuggled = {
+      address: "203.0.113.7",
+      email: ADDRESS,
+      Email: ADDRESS,
+    } as unknown as SecurityDetails;
+
+    const line = securityLine("auth.signin.failed", smuggled, AT);
+
+    expect(line).not.toContain("vecina");
+    expect(JSON.parse(line)).toEqual({
+      ts: "2026-08-11T14:30:00.000Z",
+      event: "auth.signin.failed",
+      address: "203.0.113.7",
+    });
+  });
+
+  it("is logged as a tag that does not contain it", () => {
+    const line = securityLine(
+      "auth.signin.failed",
+      { account: accountTag(ADDRESS, SECRET) },
+      AT,
+    );
+
+    expect(line).not.toContain("vecina");
+    expect(line).not.toContain("example.org");
+    expect(JSON.parse(line).account).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("is the value SECURITY.md's lookup command computes", () => {
+    // Pinned to the output of the documented command, so the operator's way
+    // of finding a person's lines cannot drift from what the code writes:
+    //   printf 'stoky-log-account:%s' vecina.del.quinto@example.org \
+    //     | openssl dgst -sha256 -hmac "$SECRET" | cut -d' ' -f2 | cut -c1-16
+    expect(accountTag(ADDRESS, SECRET)).toBe("2829b95a295aaf0a");
+  });
+
+  it("is the same however the address was typed", () => {
+    // `loginSchema` trims and lowercases before the tag is taken; the tag does
+    // too, so a caller that forgets cannot split one person into two.
+    expect(accountTag(`  ${ADDRESS.toUpperCase()} `, SECRET)).toBe(
+      accountTag(ADDRESS, SECRET),
+    );
+  });
+
+  it("tells two addresses apart", () => {
+    expect(accountTag("ana@example.org", SECRET)).not.toBe(
+      accountTag("luis@example.org", SECRET),
+    );
+  });
+
+  it("cannot be computed without the instance's secret", () => {
+    // An unkeyed hash of a guessable address is reversed by guessing. Under
+    // another key the same address is another tag.
+    const other = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+    expect(accountTag(ADDRESS, other)).not.toBe(accountTag(ADDRESS, SECRET));
+  });
+
+  it("is keyed with NEXTAUTH_SECRET when no secret is passed", () => {
+    const original = process.env.NEXTAUTH_SECRET;
+    process.env.NEXTAUTH_SECRET = SECRET;
+    try {
+      expect(accountTag(ADDRESS)).toBe(accountTag(ADDRESS, SECRET));
+    } finally {
+      if (original === undefined) delete process.env.NEXTAUTH_SECRET;
+      else process.env.NEXTAUTH_SECRET = original;
+    }
+  });
+});
+
+describe("how long a value can be", () => {
+  it("is bounded, so one request cannot write megabytes", () => {
+    // A line is written for requests that were refused, from callers nobody
+    // let in, and some values are theirs to choose.
+    const long = "x".repeat(10 * 1024 * 1024);
+
+    const parsed = JSON.parse(
+      securityLine("access.denied", { path: long, code: "FORBIDDEN" }, AT),
+    );
+
+    expect(parsed.path).toBe("x".repeat(MAX_VALUE_LENGTH));
+    expect(parsed.path).toHaveLength(200);
+    expect(parsed.code).toBe("FORBIDDEN");
+  });
+
+  it("leaves a value at the bound whole", () => {
+    const exact = "y".repeat(MAX_VALUE_LENGTH);
+
+    expect(JSON.parse(securityLine("access.denied", { path: exact }, AT)).path).toBe(
+      exact,
+    );
   });
 });
 
