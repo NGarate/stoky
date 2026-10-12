@@ -55,10 +55,14 @@ export interface SecurityDetails {
    * Why, when the code alone does not say. `"not-found"` marks a household
    * lookup that missed: another household's id and an id nobody has are
    * refused alike, so the line cannot say which (`householdProcedure`).
+   * `"cross-site"` marks a request the route handler refused before tRPC saw
+   * it, which has no procedure to have thrown it.
    */
   reason?: string;
   /** The address a sign-in was attempted for. */
   email?: string;
+  /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */
+  fetchSite?: string;
 }
 
 /**

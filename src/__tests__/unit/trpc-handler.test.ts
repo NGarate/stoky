@@ -2,6 +2,7 @@ import { describe, it, expect, spyOn, beforeEach, afterEach } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Session } from "next-auth";
 import { z } from "zod";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
@@ -30,6 +31,9 @@ const SIGNED_IN: Session = {
   expires: "2099-01-01T00:00:00.000Z",
 };
 
+/** How many times `touch` has run in the current test. */
+let touches = 0;
+
 const router = createTRPCRouter({
   throttled: publicProcedure.query(() => {
     // The shape `enforceRateLimit` throws.
@@ -48,6 +52,11 @@ const router = createTRPCRouter({
   echo: publicProcedure
     .input(z.object({ name: z.string() }))
     .mutation(({ input }) => input.name),
+  // No input, like `auth.revokeMySessions`: nothing for a form's body to fail.
+  touch: publicProcedure.mutation(() => {
+    touches++;
+    return "touched";
+  }),
 });
 
 function handlerFor(session: Session | null, onSession?: () => void) {
@@ -73,6 +82,7 @@ async function resultOf(response: Response): Promise<unknown> {
 let consoleWarn: ReturnType<typeof spyOn>;
 
 beforeEach(() => {
+  touches = 0;
   // The security-event log line for every 401 and 429 below.
   consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -240,4 +250,112 @@ describe("a batch", () => {
     expect(client).toContain('from "@/lib/trpc/batch"');
     expect(client).toMatch(/httpBatchStreamLink\(\{[^]*?maxItems: MAX_TRPC_BATCH_SIZE,[^]*?\}\)/);
   });
+});
+
+describe("who sent the request, and in what form", () => {
+  /** A POST to the input-less `touch`, as a page would send it. */
+  function touch(headers: Record<string, string>, body: BodyInit = "{}"): Request {
+    return new Request("http://localhost/api/trpc/touch", { method: "POST", headers, body });
+  }
+
+  /** What an HTML form on a sibling subdomain sends. */
+  function formPost(headers: Record<string, string> = {}): Request {
+    const form = new FormData();
+    form.set("anything", "1");
+    // The Request sets the multipart content type and boundary from the body.
+    return new Request("http://localhost/api/trpc/touch", { method: "POST", headers, body: form });
+  }
+
+  /** The security-log lines written so far, parsed. */
+  function loggedEvents(): Record<string, string>[] {
+    return consoleWarn.mock.calls.map((call: unknown[]) => JSON.parse(String(call[0])));
+  }
+
+  it("is the case: tRPC on its own runs a mutation that arrives as a form", async () => {
+    // The control. Without it, the refusal below is equally explained by a
+    // form never having reached a procedure in the first place.
+    const response = await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: formPost(),
+      router,
+      createContext: () => createTRPCContext({ session: null, headers: new Headers() }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(touches).toBe(1);
+  });
+
+  it("refuses a form with 415, and nothing runs or is looked up", async () => {
+    let sessionLookups = 0;
+    const response = await handlerFor(SIGNED_IN, () => sessionLookups++)(formPost());
+
+    expect(response.status).toBe(415);
+    expect(touches).toBe(0);
+    expect(sessionLookups).toBe(0);
+  });
+
+  it("refuses the other type tRPC would accept, a raw byte stream", async () => {
+    // Not text/plain: tRPC refuses that with 415 by itself, so a test of it
+    // would pass with this guard deleted.
+    const response = await handlerFor(SIGNED_IN)(touch({ "content-type": "application/octet-stream" }));
+
+    expect(response.status).toBe(415);
+    expect(touches).toBe(0);
+  });
+
+  it("accepts JSON with a charset, which is still JSON", async () => {
+    const response = await handlerFor(SIGNED_IN)(
+      touch({ "content-type": "application/json; charset=utf-8" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(touches).toBe(1);
+  });
+
+  for (const site of ["same-site", "cross-site"]) {
+    it(`refuses JSON a browser says came from a ${site} page with 403, and logs it`, async () => {
+      // same-site is the case SameSite=Lax lets through with the cookie: a
+      // sibling subdomain under the operator's own domain.
+      let sessionLookups = 0;
+      const response = await handlerFor(SIGNED_IN, () => sessionLookups++)(
+        touch({ "content-type": "application/json", "sec-fetch-site": site }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(touches).toBe(0);
+      expect(sessionLookups).toBe(0);
+      expect(loggedEvents()).toEqual([
+        expect.objectContaining({
+          event: "access.denied",
+          reason: "cross-site",
+          code: "FORBIDDEN",
+          fetchSite: site,
+          path: "touch",
+        }),
+      ]);
+    });
+  }
+
+  it("refuses a cross-site query too, not only a mutation", async () => {
+    const response = await handlerFor(SIGNED_IN)(get("whoami", { "sec-fetch-site": "cross-site" }));
+
+    expect(response.status).toBe(403);
+  });
+
+  for (const [label, headers] of [
+    ["same-origin", { "sec-fetch-site": "same-origin" }],
+    ["none, a request the person started", { "sec-fetch-site": "none" }],
+    ["absent, as from curl or a native client", {}],
+  ] as const) {
+    it(`runs the procedure when Sec-Fetch-Site is ${label}`, async () => {
+      const response = await handlerFor(SIGNED_IN)(
+        touch({ "content-type": "application/json", ...headers }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await resultOf(response)).toBe("touched");
+      expect(touches).toBe(1);
+      expect(consoleWarn).not.toHaveBeenCalled();
+    });
+  }
 });

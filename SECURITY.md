@@ -332,6 +332,54 @@ Verified against the files named in each row.
   procedure is unlimited" below). `src/__tests__/unit/trpc-handler.test.ts`
   sends 101 calls and 100 through the real handler.
 
+### Cross-site requests — `src/server/http/trpc-handler.ts`
+
+- **The session cookie is `SameSite=Lax`** (Auth.js's default, not
+  overridden), so a POST from another *site* carries no session. A sibling
+  subdomain under the operator's own domain — a photo gallery at
+  `photos.home.example` beside Stoky at `stoky.home.example` — is the same
+  site, and Lax sends the cookie with its requests. Until 2026-10-12 that was
+  the whole defence of `/api/trpc`, and tRPC accepts `multipart/form-data`,
+  which a plain HTML form sends with no CORS preflight: a compromised sibling
+  could post a form to `auth.revokeMySessions`, which takes no input, and sign
+  the household out of every device. Procedures with an input refuse a form
+  body at validation; the three that took none did not.
+- **A POST whose content type is not `application/json` is refused with 415**
+  before its body is read. Both of the application's links send JSON, and a
+  receipt photograph travels base64'd inside it; nothing sends multipart or
+  `application/octet-stream`, the two other types tRPC accepts. JSON is not a
+  type a form can send, so a page on another origin cannot send it without a
+  preflight, which this application never grants: nothing in it, its proxy or
+  Traefik's configuration sets an `Access-Control-Allow-Origin`.
+- **A request whose `Sec-Fetch-Site` is anything but `same-origin` or `none`
+  is refused with 403** and an `access.denied` line with `reason:
+  "cross-site"` and the header's value: `same-site` in that line means a
+  sibling under the operator's domain sent it. This covers queries as well as
+  mutations.
+- **A request with no `Sec-Fetch-Site` passes** to the two defences above.
+  Browsers send it to an HTTPS origin or to localhost; curl, Playwright's
+  `request` fixture, a native client and older browsers do not, and none of
+  those is a page that can make another person's browser send a request.
+- **On a plain-HTTP LAN install the 403 rule does nothing.** Fetch Metadata
+  goes only to potentially trustworthy origins: on 2026-10-12 Playwright
+  1.62.1's Chromium, Firefox and WebKit sent no `Sec-Fetch-Site` to a
+  plain-HTTP LAN address — not with a same-origin `fetch` on
+  `http://192.168.8.132`, nor with a multipart form that page posted to
+  `http://172.17.0.1` — and all three sent `same-origin` to the same `fetch`
+  on `http://localhost`. There the JSON-only rule, with Lax, is the whole
+  defence — and it is the one that refuses the form.
+- **`Origin` is deliberately not compared with `NEXTAUTH_URL`**: a plain-HTTP
+  LAN install is reached at an address that URL does not name, and a strict
+  comparison would lock it out.
+- **The consequence:** a browser front-end on another origin cannot call this
+  API. None exists. Server Actions are outside this route and carry Next's
+  own `Origin` check; Auth.js's routes carry its own CSRF token.
+- `src/__tests__/unit/trpc-handler.test.ts` shows tRPC alone running a
+  mutation sent as a form, then the handler refusing it; `e2e/request-guards.spec.ts`
+  sends a cross-site and a form-encoded `auth.revokeMySessions` with a real
+  session against the production build, shows the session alive afterwards,
+  and then sends the same request as `same-origin` to show it does revoke.
+
 ### Authentication — `src/lib/auth.ts`, `src/server/trpc/routers/auth.ts`
 
 - Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB) and
@@ -905,7 +953,9 @@ Docker collects: `docker compose logs app | jq 'select(.event ==
   resolvers**, so a new router cannot forget to be audited. Every procedure
   logs UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS, which come from three
   middlewares and two resolver checks (`assertMayActOnOwner` and the replay
-  envelope's composer check).
+  envelope's composer check). A cross-site request is refused before tRPC sees
+  it, so no middleware runs for it; the route handler writes its
+  `access.denied` line itself, with `reason: "cross-site"`.
 - **A household lookup that misses is logged too**, as `access.denied` with
   `"code": "NOT_FOUND"` and `"reason": "not-found"` (ASVS V7.2.2). A resolver
   asked for another household's row answers NOT_FOUND exactly as it does for
