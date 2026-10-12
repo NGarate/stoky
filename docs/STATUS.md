@@ -406,17 +406,41 @@ provenance. Run `38159258844` was cancelled four seconds into `Push`. GHCR
 answers 404 for its `sha-` tag, so that run pushed nothing, and no unattested
 image has been found. The window is the last seconds of `Push` plus the 6–7s of
 attestation. `cancel-in-progress` is now `github.event_name == 'pull_request'`,
-the negation of `image-publish`'s own `if`, so a superseded pull-request run is
-still cancelled and nothing that reaches `image-publish` is: a master or tag
-push, and a `workflow_dispatch` on any ref, which pushes `sha-<commit>` even
-from a feature branch. The cost is that a newer run on the same ref waits for
-the running one instead of replacing it. GitHub keeps one pending run per group
-and replaces it with the newest, so a burst of pushes still collapses to two
-runs, but trunk feedback can lag by one run. The other proposed fix, a
-job-level group on `image-publish`, would not work: the workflow-level cancel
-takes every job in the run. `src/__tests__/unit/ci-workflow.test.ts` evaluates
-both conditions for every trigger the workflow declares. Not yet exercised on
-GitHub.
+so a superseded pull-request run is still cancelled and no run in a group that
+`image-publish` uses is: a master or tag push, and a `workflow_dispatch` on any
+ref, because it is the arriving run's condition that cancels the running one.
+The cost is that a newer run on the same ref waits for the running one instead
+of replacing it. GitHub keeps one pending run per group and replaces it with
+the newest, so a burst of pushes still collapses to two runs, but trunk feedback
+can lag by one run. The other proposed fix, a job-level group on
+`image-publish`, would not work: the workflow-level cancel takes every job in
+the run. `src/__tests__/unit/ci-workflow.test.ts` evaluates both conditions and
+the group for every trigger the workflow declares. Not yet exercised on GitHub.
+
+**2026-10-12: only a push publishes.** `image-publish` ran for every event but a
+pull request, and a `workflow_dispatch` selects any ref, so dispatching a
+feature branch "to see if it builds" would have pushed its unreviewed commit to
+the public registry as `sha-<commit>`, with an attestation that `--repo` alone
+accepts. No branch dispatch has run: the API lists one dispatch ever, on master
+on 2026-08-12, and it failed. The job is now `if: github.event_name == 'push'`,
+and `on.push` admits only `master` and `v*` tags; a dispatch, on any ref,
+verifies and publishes nothing, and a failed publish is retried by re-running
+the push's run. This stops an accident, not a writer: a dispatch runs the
+workflow file of the ref it selects, so a branch can edit the condition away. A
+deployment-branch policy on a GitHub environment is the control a branch cannot
+edit; none exists, and creating one is the owner's call. The same test file
+evaluates the condition for every trigger. A dispatch on master now succeeds
+without publishing, so `changes` takes its base from successful *push* runs only
+(`gh run list --event push`); otherwise that dispatch's commit would become the
+base, and a docs-only push after it, or a re-run of the failed push, would skip
+the image. The filter also drops a fork's pull request from its own `master`,
+which the API lists under that branch name (pull-request runs report their head
+branch, as this repository's `build/scoped-checks-2026-10-11` run does). A
+dispatch also has a concurrency group of its own (`CI-dispatch-<ref>`): the
+newest run to arrive in a group replaces the pending one whatever
+`cancel-in-progress` says, so a dispatch on master sharing the pushes' group
+would cancel a pending push and leave its commit unpublished. Not yet
+exercised on GitHub.
 
 **The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
 over the workflow and shellcheck over `scripts/*.sh`, and runs as the first step

@@ -37,6 +37,14 @@ Commit each independent change only after its gates pass. Stage explicit paths,
 push `master`, and wait for **all** CI jobs, including image publication, to pass.
 Never bypass a failed test or scan to make a release.
 
+Only a push publishes an image. A manual `workflow_dispatch` runs every gate on
+the ref it selects, the image build and scan included, and publishes nothing on
+any ref, master and tags included. To retry a failed publish, re-run the push's
+own run, which keeps its event; dispatching a new one will not publish. Re-run
+only the newest push to `master`: an older run re-tags `latest` to its own
+commit, and once a newer push has published, its image already carries the
+older commit's changes.
+
 ## Tag, inspect, publish
 
 ```bash

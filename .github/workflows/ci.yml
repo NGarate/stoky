@@ -3,7 +3,8 @@ name: CI
 # Trunk-based: every push to master is a release candidate, and this pipeline
 # is the gate, so it has to be trustworthy enough that a red run means
 # something. Pull requests into master come from unattended agent work
-# (CLAUDE.md, Git Workflow) and run the same gates; they never publish.
+# (CLAUDE.md, Git Workflow) and run the same gates; they never publish. Nor
+# does a manual dispatch, on any ref: only a push publishes (image-publish).
 on:
   push:
     branches: [master]
@@ -13,18 +14,26 @@ on:
   workflow_dispatch:
 
 # A superseded pull-request run is wasted work, so it is cancelled. Every other
-# run is not: push (master or a release tag) and workflow_dispatch (on any ref)
-# all reach image-publish, and a cancel between the push that moves `latest` or
-# `sha-<commit>` and the step that attests it leaves a published image with no
-# provenance. The condition is the negation of image-publish's own `if`, so a
-# run that can publish is never cancelled. A job-level group on image-publish
-# cannot protect it, because this cancel takes the whole run. A newer run on
-# the same ref therefore waits instead; GitHub keeps one pending run per group
-# and replaces it with the newest, so a burst of pushes still collapses to the
-# running run plus the latest one, published in commit order.
-# src/__tests__/unit/ci-workflow.test.ts holds this.
+# run is not. A push (master or a release tag) reaches image-publish, and a
+# cancel between the push that moves `latest` or `sha-<commit>` and the step
+# that attests it leaves a published image with no provenance. A job-level
+# group on image-publish cannot protect it, because this cancel takes the whole
+# run. A newer run on the same ref therefore waits instead; GitHub keeps one
+# pending run per group and replaces it with the newest, so a burst of pushes
+# still collapses to the running run plus the latest one, published in commit
+# order.
+#
+# A dispatch publishes nothing, so it has a group of its own ("dispatch-"
+# before the ref). In the pushes' group it would be the newest arrival, and the
+# newest arrival replaces the *pending* run whatever `cancel-in-progress` says:
+# push A running, push B pending, a dispatch on master would cancel B and run
+# in its place, and B's commit would never be published. Pull-request refs
+# (refs/pull/N/merge) are never a push's ref either. So no run that cannot
+# publish shares a group with one that can, and none of them cancels a
+# publishing run, pending or running. src/__tests__/unit/ci-workflow.test.ts
+# holds this.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'dispatch-' || '' }}${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default. Jobs that need more ask for it explicitly.
@@ -399,8 +408,13 @@ jobs:
       # previous push. Diffing against `github.event.before` lost images: push
       # A (code) then B (docs) cancels A's run, B's diff is docs-only, and A's
       # code never got an image. Same when A failed and B only fixed a doc.
-      # Every successful run either published or was docs-only against its own
-      # base, so the last success's commit is the newest one with an image.
+      # Every successful *push* run either published or was docs-only against
+      # its own base, so the last one's commit is the newest with an image.
+      # Only push runs: a dispatch on master succeeds without publishing, and
+      # a pull request from a fork's `master` lists under that branch name, so
+      # either would otherwise become a base whose commit has no image, and a
+      # docs-only push after it (or a re-run of the failed push) would skip
+      # the build. ci-workflow.test.ts holds the filter.
       - name: Diff against the last successful run
         id: diff
         # Through the environment, never interpolated into the script: an
@@ -420,7 +434,7 @@ jobs:
           # No earlier success, an API failure, or a base that is not an
           # ancestor of this commit (history rewritten under it) all mean
           # "cannot know", and "cannot know" means build.
-          BASE="$(gh run list --workflow ci.yml --branch master --status success \
+          BASE="$(gh run list --workflow ci.yml --branch master --event push --status success \
             --limit 1 --json headSha --jq '.[0].headSha // empty' || true)"
           if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" HEAD 2>/dev/null; then
             echo "image=true" >> "$GITHUB_OUTPUT"
@@ -532,11 +546,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [quality, test, e2e, audit, image-build]
-    # A pull request is verified, scanned included, but publishes nothing: no
-    # `sha-` tag for a commit that is not on master, and no `latest`. The
-    # workflow's `cancel-in-progress` is this condition negated, so a run that
-    # reaches this job is never cancelled; ci-workflow.test.ts holds the pair.
-    if: github.event_name != 'pull_request'
+    # Only a push publishes, and `on.push` admits only master and `v*` tags. A
+    # pull request or a manual dispatch is verified, scanned included, but
+    # publishes nothing: no `sha-` tag for a commit that is not on master, and
+    # no `latest`. A dispatch selects any ref, so publishing from one put an
+    # unreviewed branch on the public registry as `sha-<commit>`, attested.
+    # To retry a failed publish, re-run the newest push's run, which keeps its
+    # event (an older one would move `latest` back to its commit).
+    # This stops an accidental dispatch, not a writer: a dispatch runs the
+    # workflow file of the ref it selects. ci-workflow.test.ts holds this and
+    # the concurrency rule above it.
+    if: github.event_name == 'push'
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     permissions:

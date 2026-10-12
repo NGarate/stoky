@@ -775,7 +775,9 @@ do not run the image**: report it as a [vulnerability](#reporting-a-vulnerabilit
 and carry no attestation, so for them the command fails with `HTTP 404` from the
 attestations API; upgrade off them rather than treat that as normal.
 
-Images from `master` are tagged `sha-<full-commit-sha>`. A release tag's build is
+Images from `master` are tagged `sha-<full-commit-sha>`, and only a push to
+`master` or of a `v*` tag publishes: a pull request or a manual dispatch, on any
+branch, is verified and publishes nothing. A release tag's build is
 pushed as `candidate-<version>` and gains the exact version tag only after the
 install smoke passes on that digest; it never rewrites the `sha-` tag. The
 attestation is bound to the digest, not the tag, so the version tag verifies with
