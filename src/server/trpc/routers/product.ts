@@ -15,6 +15,8 @@ import {
   type OpenFoodFactsProduct,
 } from "@/server/services/openFoodFacts";
 import { withReplay } from "@/server/trpc/replay";
+import { enforceRateLimit } from "@/server/trpc/throttle";
+import { productLookupRateLimit } from "@/lib/rate-limit";
 import {
   productSchema,
   updateProductSchema,
@@ -69,6 +71,31 @@ function productFromOff(
     openFoodFactsData: offProduct,
     household: { connect: { id: householdId } },
   };
+}
+
+/**
+ * The meter on a lookup that is about to leave for Open Food Facts — handed to
+ * `getProductByBarcode`, which asks it only after the shared cache has missed.
+ * The household's own products never get that far either, so rescanning what a
+ * household already has, or what anyone on the instance has already looked
+ * up, costs nothing.
+ *
+ * Over budget it throws TOO_MANY_REQUESTS with the wait, which the scan page
+ * turns into the manual form and the write queue into the review question
+ * that opens the same form (`classify.ts`). With
+ * Valkey unreachable the request is **not sent** and the lookup answers null,
+ * like an Open Food Facts outage: closed for what the limit protects, because
+ * no uncounted request leaves; not a refusal, because the person lands on the
+ * form an unknown code would have given them anyway.
+ */
+function meterLookup(userId: string): () => Promise<boolean> {
+  return () =>
+    enforceRateLimit(
+      productLookupRateLimit(),
+      userId,
+      "Too many new barcodes looked up. Enter this product by hand, or try again in a little while.",
+      { whenUnavailable: "skip" },
+    );
 }
 
 /**
@@ -431,8 +458,10 @@ export const productRouter = createTRPCRouter({
    * also makes it `writeProcedure`, so a KITCHEN account cannot scan, which
    * matches the capability matrix — a kitchen tablet looks and uses up.
    *
-   * The Open Food Facts call is cached in Valkey for thirty days and fails
-   * open, so a cache outage makes this slower rather than broken (DEBT-3).
+   * The Open Food Facts call is cached in Valkey for thirty days, and a
+   * barcode it does not know for a day. A lookup that misses both is metered
+   * per account (`meterLookup`); with the cache down none can be counted, so
+   * none is sent and the person gets the manual form (DEBT-3).
    */
   scanBarcode: writeProcedure
     .input(productByBarcodeSchema)
@@ -470,7 +499,10 @@ export const productRouter = createTRPCRouter({
       }
 
       // Fetch from Open Food Facts
-      const offProduct = await openFoodFacts.getProductByBarcode(input.barcode);
+      const offProduct = await openFoodFacts.getProductByBarcode(
+        input.barcode,
+        meterLookup(ctx.session.user.id),
+      );
 
       if (!offProduct) {
         return {
@@ -512,7 +544,11 @@ export const productRouter = createTRPCRouter({
    * - **nobody knows it**: `NOT_FOUND`, thrown *before* any key is claimed, so
    *   a retry of the same key can still succeed once OFF recovers — and the
    *   client turns that into the review question (a form prefilled with the
-   *   barcode) rather than a dead end.
+   *   barcode) rather than a dead end;
+   * - **the account has spent its lookup budget** (`meterLookup`):
+   *   `TOO_MANY_REQUESTS`, also before any key is claimed, which the queue
+   *   turns into the same review question: the budget lasts an hour, longer
+   *   than the queue would retry.
    *
    * `scanBarcode` stays NOT_REPLAYABLE on purpose: it fetches OFF *inside* the
    * resolver with no envelope. This one fetches OFF *before* the transaction,
@@ -538,8 +574,12 @@ export const productRouter = createTRPCRouter({
       // Before the transaction, so the envelope never wraps a network call.
       // The service fails open — an outage and an unknown barcode both return
       // null — which is exactly the connected behaviour: both land the person
-      // on the create form.
-      const offProduct = await openFoodFacts.getProductByBarcode(input.barcode);
+      // on the create form. The meter's TOO_MANY_REQUESTS is thrown before any
+      // key is claimed too, so naming the product later is not a reused key.
+      const offProduct = await openFoodFacts.getProductByBarcode(
+        input.barcode,
+        meterLookup(ctx.session.user.id),
+      );
 
       if (!offProduct) {
         // Thrown before withReplay claims the key, so a retry after OFF

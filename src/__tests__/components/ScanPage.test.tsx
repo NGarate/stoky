@@ -230,9 +230,9 @@ describe("scanning with no signal", () => {
 });
 
 /** A refusal the server sent, with a status — not a dropped connection. */
-function serverError(): TRPCClientError<never> {
+function serverError(httpStatus = 502): TRPCClientError<never> {
   const error = new TRPCClientError<never>("lookup failed");
-  Object.defineProperty(error, "data", { value: { httpStatus: 502 } });
+  Object.defineProperty(error, "data", { value: { httpStatus } });
   return error;
 }
 
@@ -262,6 +262,28 @@ describe("a lookup that fails", () => {
       expect(field).toHaveValue("8410000777777");
       expect(field).toHaveFocus();
     });
+  });
+});
+
+describe("a lookup refused for being one too many", () => {
+  // `productLookupRateLimit`: past its budget of new codes for the hour, an
+  // account's lookups are refused with 429. Scanning or typing the code again
+  // would be refused again, so the field this page offers for a failure is a
+  // dead end — the form is where the product can still be created.
+  it("hands over to the form with the code, and says why it is empty", async () => {
+    scanError = serverError(429);
+    render();
+    await typeBarcode("8410000888888");
+
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith("/products/new?barcode=8410000888888"),
+    );
+    expect(
+      await screen.findByText(
+        "Has buscado muchos códigos nuevos en poco tiempo. Rellena el producto 8410000888888 a mano; la búsqueda volverá a funcionar en un rato.",
+      ),
+    ).toBeInTheDocument();
+    expect(enqueue).not.toHaveBeenCalled();
   });
 });
 

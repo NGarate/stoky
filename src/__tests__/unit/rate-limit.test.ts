@@ -3,8 +3,10 @@ import {
   accountIdentifier,
   loginAccountRateLimit,
   loginRateLimit,
+  productLookupRateLimit,
   rateLimitIdentifier,
   registerRateLimit,
+  uploadRateLimit,
 } from "@/lib/rate-limit";
 
 /**
@@ -212,5 +214,30 @@ describe("the configured limits", () => {
     // the account's budget too, and the two limits would stop being two.
     expect(loginAccountRateLimit().prefix).not.toBe(loginRateLimit().prefix);
     expect(loginAccountRateLimit().prefix).not.toBe(registerRateLimit().prefix);
+  });
+
+  it("meters sixty Open Food Facts lookups an hour per account", () => {
+    // The browser suite raises this in playwright.config.ts; this is why that
+    // cannot become what an operator gets.
+    delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS;
+    delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS;
+
+    expect(productLookupRateLimit()).toEqual({
+      prefix: "rl:off-lookup",
+      attempts: 60,
+      windowSeconds: 3600,
+    });
+  });
+
+  it("counts lookups apart from every other limit", () => {
+    const lookup = productLookupRateLimit().prefix;
+    for (const other of [
+      loginRateLimit(),
+      loginAccountRateLimit(),
+      registerRateLimit(),
+      uploadRateLimit(),
+    ]) {
+      expect(other.prefix).not.toBe(lookup);
+    }
   });
 });

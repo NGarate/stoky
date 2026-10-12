@@ -130,9 +130,26 @@ export default function ScanPage() {
       // connection — `onlineManager` said online but nothing got through. Queue
       // it rather than lose the scan; a real server error (a status) is a
       // genuine failure and falls through to scanning again.
-      if (scannedBarcode && httpStatusOf(error) === null) {
+      const status = httpStatusOf(error);
+      if (scannedBarcode && status === null) {
         queueScan(scannedBarcode);
         setScannedBarcode(null);
+      } else if (status === 429) {
+        // This account has looked up its budget of new codes for the hour
+        // (`productLookupRateLimit`). Scanning or typing it again would be
+        // refused again, so the field below is a dead end: hand over to the
+        // form, as for a code nobody knows, and say why it is empty.
+        snackbar.show({
+          kind: "confirm",
+          message: {
+            key: "products.scan.lookupThrottled",
+            values: { barcode: variables.barcode },
+          },
+        });
+        router.push(
+          `/products/new?barcode=${encodeURIComponent(variables.barcode)}`,
+        );
+        return;
       } else {
         // A refusal used to restart the camera and say nothing, so the code
         // seemed simply not to have been read — and scanning it again failed

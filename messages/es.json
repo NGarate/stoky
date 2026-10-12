@@ -236,6 +236,7 @@
       "backToShopping": "Volver a la compra",
       "processing": "Buscando el código…",
       "lookupFailed": "No se ha podido buscar el código {barcode}. Vuelve a escanearlo o escríbelo abajo.",
+      "lookupThrottled": "Has buscado muchos códigos nuevos en poco tiempo. Rellena el producto {barcode} a mano; la búsqueda volverá a funcionar en un rato.",
       "scanAgain": "Escanear otro código",
       "manualTitle": "Código manual",
       "manualLabel": "Código de barras",

@@ -5,6 +5,7 @@ import {
   beforeAll,
   afterAll,
   afterEach,
+  beforeEach,
   spyOn,
 } from "bun:test";
 import { appRouter } from "@/server/trpc/router";
@@ -15,6 +16,10 @@ import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 import { TRPCError } from "@trpc/server";
 import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
+import { closeValkey } from "@/lib/valkey";
+import { valkeyProductCache } from "@/server/services/product-cache";
+import { ThrottledError } from "@/server/trpc/throttle";
+import { createMockSession, createTestUser, generateTestEmail } from "../utils/test-helpers";
 
 /**
  * `product.resolveScan` — the replayable scan T7 adds.
@@ -251,4 +256,179 @@ describe("product.resolveScan", () => {
     });
     expect(saved.minStock).toBe(2);
   });
+});
+
+/**
+ * The meter on lookups that leave for Open Food Facts (security audit, low:
+ * "scanBarcode and resolveScan let any member trigger unlimited outbound
+ * lookups"). Open Food Facts throttles API clients per address, so one
+ * account scanning random codes could get the whole instance throttled.
+ *
+ * Against the real service, real Valkey and a counted `fetch`, with the limit
+ * set to two: what is under test is *which* lookups are counted, and only the
+ * real cache can say whether a lookup missed it.
+ */
+describe("Open Food Facts lookups, metered", () => {
+  const ATTEMPTS = 2;
+  const original = process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS;
+  const users: string[] = [];
+  const barcodes: string[] = [];
+  let requests: string[] = [];
+  let fetchSpy: ReturnType<typeof spyOn>;
+  let quiet: ReturnType<typeof spyOn>;
+
+  /** A fresh account, so no test spends another's budget. */
+  async function meteredCaller() {
+    const user = await createTestUser({
+      email: generateTestEmail("lookup-meter"),
+      name: "Lookup meter",
+      householdId: OWNER.householdId,
+      role: "MEMBER",
+    });
+    users.push(user.id);
+    return appRouter.createCaller(
+      await createTRPCContext({ session: createMockSession(user) }),
+    );
+  }
+
+  /**
+   * A code no earlier run can have left in the shared cache: a remembered
+   * miss lasts a day, and a stale one would make a lookup free.
+   */
+  function freshBarcode(): string {
+    const code = `99${String(Math.floor(Math.random() * 1e11)).padStart(11, "0")}`;
+    barcodes.push(code);
+    return code;
+  }
+
+  beforeAll(() => {
+    process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS = String(ATTEMPTS);
+  });
+
+  beforeEach(() => {
+    requests = [];
+    // Open Food Facts' own answer for a code it has no record of: HTTP 404
+    // with a status-0 body (measured against the live API, 2026-10-12).
+    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+      url: string | URL,
+    ) => {
+      requests.push(String(url));
+      const code = /product\/(\d+)\.json/.exec(String(url))?.[1] ?? "";
+      return new Response(
+        JSON.stringify({ code, status: 0, status_verbose: "product not found" }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch);
+    quiet = spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    quiet.mockRestore();
+  });
+
+  afterAll(async () => {
+    if (original === undefined) delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS;
+    else process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS = original;
+    for (const code of barcodes) await valkeyProductCache.delete(code);
+    await prisma.product.deleteMany({ where: { householdId: OWNER.householdId } });
+    await prisma.user.deleteMany({ where: { id: { in: users } } });
+    await closeValkey();
+  });
+
+  it("refuses the lookup past the budget before it leaves, on either procedure", async () => {
+    const api = await meteredCaller();
+
+    expect((await api.product.scanBarcode({ barcode: freshBarcode() })).source).toBe(
+      "not_found",
+    );
+    const unknown = await refusal(() =>
+      api.product.resolveScan({ ...envelope(), barcode: freshBarcode() }),
+    );
+    expect(unknown.code).toBe("NOT_FOUND");
+    expect(requests).toHaveLength(ATTEMPTS);
+
+    // One budget across both procedures: the connected scan and the queued
+    // one are the same request to Open Food Facts.
+    const queued = await refusal(() =>
+      api.product.resolveScan({ ...envelope(), barcode: freshBarcode() }),
+    );
+    expect(queued.code).toBe("TOO_MANY_REQUESTS");
+    // 429, which `classify.ts` makes a review question for this procedure,
+    // carrying the wait for `Retry-After`.
+    expect(queued.cause).toBeInstanceOf(ThrottledError);
+    expect((queued.cause as ThrottledError).retryAfterSeconds).toBeGreaterThan(0);
+
+    const connected = await refusal(() =>
+      api.product.scanBarcode({ barcode: freshBarcode() }),
+    );
+    expect(connected.code).toBe("TOO_MANY_REQUESTS");
+
+    // The refused lookups never reached Open Food Facts.
+    expect(requests).toHaveLength(ATTEMPTS);
+  });
+
+  it("never counts a lookup the household or the cache already answers", async () => {
+    const api = await meteredCaller();
+
+    // More of each than the whole budget.
+    const local = freshBarcode();
+    await prisma.product.create({
+      data: { name: "Ya conocido", barcode: local, defaultUnit: "unit", householdId: OWNER.householdId },
+    });
+    const knownUnknown = freshBarcode();
+    await valkeyProductCache.setMissing(knownUnknown);
+    const cachedHits = [freshBarcode(), freshBarcode(), freshBarcode()];
+    for (const code of cachedHits) {
+      await valkeyProductCache.set(
+        code,
+        JSON.stringify({ code, product_name: `Producto ${code}` }),
+      );
+    }
+
+    for (let i = 0; i <= ATTEMPTS; i++) {
+      expect((await api.product.scanBarcode({ barcode: local })).source).toBe("local");
+      expect((await api.product.scanBarcode({ barcode: knownUnknown })).source).toBe(
+        "not_found",
+      );
+    }
+    for (const code of cachedHits) {
+      expect((await api.product.scanBarcode({ barcode: code })).source).toBe(
+        "open_food_facts",
+      );
+    }
+    expect(requests).toHaveLength(0);
+
+    // The whole budget is still there, and still enforced.
+    for (let i = 0; i < ATTEMPTS; i++) {
+      expect((await api.product.scanBarcode({ barcode: freshBarcode() })).source).toBe(
+        "not_found",
+      );
+    }
+    const past = await refusal(() => api.product.scanBarcode({ barcode: freshBarcode() }));
+    expect(past.code).toBe("TOO_MANY_REQUESTS");
+    expect(requests).toHaveLength(ATTEMPTS);
+  });
+
+  it("sends nothing it cannot count, and lands the person on the form", async () => {
+    // Valkey unreachable: the meter cannot count, so the request is not sent.
+    // Not SERVICE_UNAVAILABLE: an unknown code ends on the manual form either
+    // way, and refusing would leave the scan page with nowhere to go.
+    const api = await meteredCaller();
+    const before = process.env.VALKEY_URL;
+    await closeValkey();
+    // Port 1 is reserved and nothing listens on it.
+    process.env.VALKEY_URL = "redis://127.0.0.1:1";
+
+    try {
+      expect((await api.product.scanBarcode({ barcode: freshBarcode() })).source).toBe(
+        "not_found",
+      );
+      expect(requests).toHaveLength(0);
+    } finally {
+      await closeValkey();
+      if (before === undefined) delete process.env.VALKEY_URL;
+      else process.env.VALKEY_URL = before;
+    }
+  }, 30_000);
 });

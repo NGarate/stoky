@@ -14,8 +14,13 @@ import { valkey } from "@/lib/valkey";
  * `rate-limit.ts` refuses what it cannot count, because an uncounted attempt is
  * an unlimited one. Here the fallback for a cache that cannot be reached is to
  * ask Open Food Facts, which is exactly what a cache miss already means — so a
- * Valkey outage makes barcode lookups slower and nothing else. Refusing them
- * would break scanning to protect a performance optimisation.
+ * Valkey outage costs this cache nothing but speed. Refusing a lookup because
+ * the cache is down would break scanning to protect a performance optimisation.
+ *
+ * What a Valkey outage does to the *lookup* is decided elsewhere: the router
+ * meters each request that reaches Open Food Facts, and a request it cannot
+ * count is not sent (`meterLookup` in `routers/product.ts`), so with Valkey
+ * down an uncached barcode lands on the manual form, as in an OFF outage.
  *
  * **A seam, not an import.** `getProductByBarcode` is exercised in the unit
  * tier, which `CLAUDE.md` defines as needing no database; a Valkey call

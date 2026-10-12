@@ -315,6 +315,12 @@ export default defineConfig({
       // shares one account counter however many addresses they come from —
       // which is precisely what that limit is for.
       RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS: "10000",
+      // And the Open Food Facts lookup meter, for the same shared-account
+      // reason: every worker scans as the demo user, so the whole matrix
+      // spends one per-account budget of 60 new codes an hour, and repeated
+      // runs within the hour spend it again. The meter itself is proven in
+      // `src/__tests__/integration/resolveScan.test.ts`.
+      RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS: "10000",
     },
     // A cold `next build` on a slow machine, plus server start. A wedged build
     // never answers at all; five minutes tells the two apart.

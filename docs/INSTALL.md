@@ -250,6 +250,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
 | Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |
+| A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |
 | Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |
 
 Report the release tag, image digest, command and redacted error through

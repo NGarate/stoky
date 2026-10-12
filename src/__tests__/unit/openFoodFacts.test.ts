@@ -168,6 +168,110 @@ describe("OpenFoodFacts Service", () => {
     });
   });
 
+  /**
+   * `beforeFetch` — where the router's per-account meter
+   * (`productLookupRateLimit`) is asked. It must be asked exactly when a
+   * request is about to leave, and its refusal must reach the caller as a
+   * refusal: everything inside the lookup's try turns into null, and a null is
+   * "nobody knows this code".
+   */
+  describe("the meter before a request leaves", () => {
+    const barcode = "8480000123456";
+
+    function stubFetch() {
+      const calls: string[] = [];
+      const originalFetch = global.fetch;
+      global.fetch = (async (url: string | URL) => {
+        calls.push(String(url));
+        return new Response(
+          JSON.stringify({
+            code: barcode,
+            status: 1,
+            status_verbose: "product found",
+            product: { code: barcode, product_name: "Leche entera" },
+          }),
+          { status: 200 },
+        );
+      }) as typeof fetch;
+      return { calls, restore: () => (global.fetch = originalFetch) };
+    }
+
+    function meter(answer: boolean | Error) {
+      let asked = 0;
+      return {
+        beforeFetch: async () => {
+          asked += 1;
+          if (answer instanceof Error) throw answer;
+          return answer;
+        },
+        asked: () => asked,
+      };
+    }
+
+    it("is asked for a lookup that reaches Open Food Facts, and not for one the cache answers", async () => {
+      const { calls, restore } = stubFetch();
+      const { beforeFetch, asked } = meter(true);
+      try {
+        await client.getProductByBarcode(barcode, beforeFetch);
+        const again = await client.getProductByBarcode(barcode, beforeFetch);
+
+        expect(again?.product_name).toBe("Leche entera");
+        expect(calls).toHaveLength(1);
+        expect(asked()).toBe(1);
+      } finally {
+        restore();
+      }
+    });
+
+    it("is not asked for a barcode already known to be unknown", async () => {
+      const cache = memoryProductCache();
+      await cache.setMissing(barcode);
+      const { calls, restore } = stubFetch();
+      const { beforeFetch, asked } = meter(true);
+      try {
+        expect(
+          await new OpenFoodFactsClient(cache).getProductByBarcode(barcode, beforeFetch),
+        ).toBeNull();
+        expect(asked()).toBe(0);
+        expect(calls).toHaveLength(0);
+      } finally {
+        restore();
+      }
+    });
+
+    it("leaves the request unsent when it says no", async () => {
+      const { calls, restore } = stubFetch();
+      try {
+        expect(
+          await client.getProductByBarcode(barcode, meter(false).beforeFetch),
+        ).toBeNull();
+        expect(calls).toHaveLength(0);
+      } finally {
+        restore();
+      }
+    });
+
+    it("hands its refusal to the caller rather than answering 'unknown'", async () => {
+      // Swallowed into null, a throttled scan would send the person to name a
+      // product Open Food Facts may well know, and a queued one would become a
+      // review question instead of waiting.
+      const { calls, restore } = stubFetch();
+      const refusal = new Error("over budget");
+      try {
+        let thrown: unknown;
+        try {
+          await client.getProductByBarcode(barcode, meter(refusal).beforeFetch);
+        } catch (error) {
+          thrown = error;
+        }
+        expect(thrown).toBe(refusal);
+        expect(calls).toHaveLength(0);
+      } finally {
+        restore();
+      }
+    });
+  });
+
   describe("deadline", () => {
     // A real fetch against a loopback server rather than a stubbed one: a stub
     // ignores whatever `signal` it is handed, so it could not tell a lookup

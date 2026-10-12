@@ -377,10 +377,28 @@ What is still open, and worth knowing before publishing an instance:
   budget for work each member does separately. A refused upload still counts —
   otherwise sending rubbish and being rejected would be the cheapest way to
   spend the server's CPU, and it would be outside the limit.
+- **Barcode lookups that reach Open Food Facts are limited**, at 60 per
+  account per hour (`productLookupRateLimit`). They are the one thing an
+  account can make this instance ask of somebody else: every `scanBarcode` or
+  `resolveScan` of a code the household does not have went out to
+  `world.openfoodfacts.org` from the instance's one address, and Open Food
+  Facts throttles API clients per address. A member scanning random codes in a
+  loop — under open registration, anyone — could get the instance throttled
+  and barcode enrichment stopped for every household on it. Only a request
+  that actually leaves is counted, after the household's own products and the
+  shared cache (hits, and codes known to be unknown) have missed, so rescanning
+  a cupboard never spends it. Past the budget the lookup is refused with a 429
+  before it is sent; the scan page hands the person the creation form with the
+  code filled in, and a scan queued offline becomes the same question the
+  sync indicator asks of a code nobody knows ("needs a name") rather than a
+  429 the queue would retry for two minutes and then give up on. It is per
+  account, not for the instance: N accounts are N budgets, so this bounds
+  what one account can do, not the instance's total.
 - **Every other tRPC procedure is unlimited**, so an authenticated account can
   still make as many ordinary calls as it likes. That is a smaller problem — it
-  needs credentials first, and none of those calls starts OCR — but it is not
-  nothing on a shared household instance. It is not only reads, either:
+  needs credentials first, and those calls read and write rows rather than
+  start OCR or reach a third party — but it is not nothing on a shared
+  household instance. It is not only reads, either:
   `product.create`, `store.create` and the other writes are unlimited too.
   Until 2026-10-12 each of them could store as much text as the 15 MiB request
   body carried, so open registration plus a loop of writes could fill the
@@ -430,12 +448,19 @@ What is still open, and worth knowing before publishing an instance:
   can take the cache down — but it makes Valkey a hard dependency of signing
   in, which it was not before. The server log names Valkey and `VALKEY_URL`
   when it happens, and the browser is told the service is unavailable rather
-  than that the password was wrong.
+  than that the password was wrong. Receipt upload refuses the same way. The
+  one exception is the Open Food Facts lookup: a request it cannot count is not
+  sent, and the scan ends on the creation form as it would in an Open Food
+  Facts outage — still closed for what the limit protects, since no uncounted
+  request leaves, without refusing a person a form they can fill in anyway.
 - **The limits are configurable** through `RATE_LIMIT_LOGIN_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS`,
-  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS` and
-  `RATE_LIMIT_REGISTER_WINDOW_SECONDS`. Raising them raises the exposure; the
-  browser suite raises them because it registers dozens of accounts per run,
+  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
+  `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
+  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS` and
+  `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`. Raising them raises the
+  exposure; the browser suite raises them because it registers dozens of
+  accounts per run and every worker signs in and scans as one demo account,
   and a unit test asserts the shipped defaults with the environment unset so
   that override cannot become the product's behaviour.
 

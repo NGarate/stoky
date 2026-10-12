@@ -18,7 +18,9 @@ import { closeValkey, valkey } from "@/lib/valkey";
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
  * receipt upload, which is authenticated but expensive enough that an account
- * looping on it is its own denial of service. The counting machinery is the
+ * looping on it is its own denial of service, and `productLookupRateLimit`
+ * meters the requests an account makes this instance send to Open Food
+ * Facts. The counting machinery is the
  * same; what differs per limit is the number, the window, and what the counter
  * is keyed on.
  */
@@ -129,6 +131,36 @@ export function uploadRateLimit(): RateLimit {
     "RATE_LIMIT_UPLOAD_ATTEMPTS",
     "RATE_LIMIT_UPLOAD_WINDOW_SECONDS",
     30,
+    60 * 60,
+  );
+}
+
+/**
+ * Barcode lookups that leave for Open Food Facts, per account.
+ *
+ * Not the work this instance does — the work it asks of somebody else, from
+ * its one address. Open Food Facts throttles API clients per IP (its published
+ * read limit is about a hundred products a minute), so an account scanning
+ * random codes in a loop could get the instance throttled or blocked, and
+ * barcode enrichment would stop for everyone on it. Any write-role member could
+ * do it, and with registration open that was anyone.
+ *
+ * Counted only on a lookup that reaches Open Food Facts: a product the
+ * household already has, or one the shared cache already answers — known or
+ * known-unknown — costs nothing, so restocking a cupboard never spends it.
+ * Sixty an hour is a big shop of products nobody here has scanned before;
+ * past it the person fills in the form by hand, which is what an unknown code
+ * asks of them anyway.
+ *
+ * Per account rather than for the whole instance, like `uploadRateLimit`. It
+ * bounds one account, not the sum of them: N accounts are N budgets.
+ */
+export function productLookupRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:off-lookup",
+    "RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS",
+    "RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS",
+    60,
     60 * 60,
   );
 }

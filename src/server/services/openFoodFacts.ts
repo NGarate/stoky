@@ -137,10 +137,20 @@ export class OpenFoodFactsClient {
   ) {}
 
   /**
-   * Fetch product by barcode from Open Food Facts API
+   * Fetch product by barcode from Open Food Facts API.
+   *
+   * `beforeFetch` is asked once a lookup has missed both caches and is about
+   * to leave for Open Food Facts, and at no other point — it is how the router
+   * meters the requests an account makes this instance send
+   * (`productLookupRateLimit`) without charging for answers already held.
+   * `false` leaves the request unsent and answers null, like an outage. A
+   * throw is the caller's refusal and reaches the caller as thrown: it runs
+   * outside the catch below, which turns every failure into null, so a
+   * throttled lookup is never mistaken for an unknown barcode.
    */
   async getProductByBarcode(
-    barcode: string
+    barcode: string,
+    beforeFetch?: () => Promise<boolean>,
   ): Promise<OpenFoodFactsProduct | null> {
     const cached = await this.cache.get(barcode);
     if (cached !== null) {
@@ -155,6 +165,8 @@ export class OpenFoodFactsClient {
 
     // Asked within the last day and Open Food Facts had no record of it.
     if (await this.cache.isMissing(barcode)) return null;
+
+    if (beforeFetch && !(await beforeFetch())) return null;
 
     try {
       const response = await fetch(

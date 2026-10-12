@@ -2354,7 +2354,11 @@ Three decisions worth keeping:
 
 - **It fails open**, unlike the rate limiter beside it. The fallback for a cache
   it cannot reach is to ask Open Food Facts, which is what a miss already means;
-  refusing would break scanning to protect an optimisation.
+  refusing would break scanning to protect an optimisation. *Since 2026-10-12
+  the lookup itself is metered per account (SECURITY.md, rate limiting), and a
+  lookup the meter cannot count is not sent: with Valkey down, a code the
+  household does not have now lands on the creation form, as in an Open Food
+  Facts outage. The cache still fails open; the request behind it does not.*
 - **`SCAN` on the prefix, not `KEYS *`.** It shares Valkey with the limiter, and
   clearing the product cache must not drop a sign-in counter.
 - **Entries are parsed on the way out.** The cache outlives a deploy, so one

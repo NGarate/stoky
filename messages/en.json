@@ -236,6 +236,7 @@
       "backToShopping": "Back to shopping",
       "processing": "Looking up the code…",
       "lookupFailed": "The code {barcode} could not be looked up. Scan it again or type it below.",
+      "lookupThrottled": "You have looked up a lot of new codes in a short time. Fill in product {barcode} by hand; looking codes up will work again shortly.",
       "scanAgain": "Scan another code",
       "manualTitle": "Type the code",
       "manualLabel": "Barcode",
