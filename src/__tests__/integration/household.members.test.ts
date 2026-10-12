@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, spyOn } from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +7,7 @@ import * as argon2 from "argon2";
 import type { HouseholdRole } from "@prisma/client";
 import type { Session } from "next-auth";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
+import { retryAfterSeconds } from "@/server/trpc/throttle";
 
 /**
  * Making the KITCHEN role reachable.
@@ -163,6 +164,108 @@ describe("creating a kitchen account", () => {
     // The database's own unique constraint, translated. Checking first and
     // then inserting would race with itself.
     expect(await codeOf(api.household.addMember(account))).toBe("CONFLICT");
+  });
+});
+
+/**
+ * How many accounts an admin may create — security review, 2026-10-12.
+ *
+ * Every call hashes a password with Argon2id at 64 MiB before the database is
+ * asked anything, and until this was metered nothing bounded how many: any
+ * account that admins a household could ask for hashes in a loop. Through the
+ * router, with the limit lowered so the test spends two calls rather than
+ * twenty, and with accounts of their own so the tests above neither spend nor
+ * are spent by this budget.
+ */
+describe("how many accounts an admin may create", () => {
+  const ATTEMPTS = 2;
+  const original = process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
+
+  beforeAll(() => {
+    process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = String(ATTEMPTS);
+  });
+
+  afterAll(() => {
+    if (original === undefined) delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
+    else process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = original;
+  });
+
+  async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
+    try {
+      await call;
+    } catch (error) {
+      if (error instanceof TRPCError) return error;
+      throw error;
+    }
+    throw new Error("expected a refusal, and the call succeeded");
+  }
+
+  it("refuses once the budget is spent, says when to come back, and creates nothing", async () => {
+    const owner = await makeUser(HOUSEHOLD.id, "OWNER", "metered");
+    const api = await callerFor(owner.id, HOUSEHOLD.id);
+
+    for (let i = 0; i < ATTEMPTS; i++) {
+      await api.household.addMember(newAccount("KITCHEN"));
+    }
+
+    // Watched from here on: a refusal is worth something only if it comes
+    // before the 64 MiB hash. Counted before restoring, which clears the calls.
+    const hash = spyOn(argon2, "hash");
+    const account = newAccount("KITCHEN");
+    let hashed: number;
+    let refusal: TRPCError;
+    try {
+      refusal = await refusalOf(api.household.addMember(account));
+    } finally {
+      hashed = hash.mock.calls.length;
+      hash.mockRestore();
+    }
+    expect(hashed).toBe(0);
+
+    // 429, so the write queue waits rather than discards
+    // (`src/lib/offline/classify.ts`), and the HTTP layer reads `Retry-After`
+    // off the refusal with the same function asserted here.
+    expect(refusal.code).toBe("TOO_MANY_REQUESTS");
+    const retryAfter = retryAfterSeconds([refusal]);
+    expect(retryAfter).toBeGreaterThan(0);
+    expect(retryAfter).toBeLessThanOrEqual(3600);
+    expect(await prisma.user.count({ where: { email: account.email } })).toBe(0);
+  });
+
+  it("counts an address that is already taken, which costs the same hash", async () => {
+    // The unique index answers only after Argon2id has run. A limit that
+    // spared a CONFLICT would leave the cheapest loop — the same address,
+    // over and over — outside it, and that loop is also the one that asks
+    // whether an address has an account anywhere on the instance.
+    const owner = await makeUser(HOUSEHOLD.id, "OWNER", "dupes");
+    const api = await callerFor(owner.id, HOUSEHOLD.id);
+    const taken = newAccount("MEMBER");
+
+    await api.household.addMember(taken);
+    expect(await codeOf(api.household.addMember(taken))).toBe("CONFLICT");
+
+    expect(await codeOf(api.household.addMember(newAccount("MEMBER")))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("leaves another admin's budget alone", async () => {
+    // Keyed on the account, so one admin who has spent theirs does not stop
+    // the household's other admin.
+    const spender = await makeUser(HOUSEHOLD.id, "OWNER", "spender");
+    const other = await makeUser(HOUSEHOLD.id, "ADMIN", "other");
+    const spending = await callerFor(spender.id, HOUSEHOLD.id);
+    const api = await callerFor(other.id, HOUSEHOLD.id);
+
+    for (let i = 0; i < ATTEMPTS; i++) {
+      await spending.household.addMember(newAccount("KITCHEN"));
+    }
+    expect(await codeOf(spending.household.addMember(newAccount("KITCHEN")))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+
+    const created = await api.household.addMember(newAccount("KITCHEN"));
+    expect(created.role).toBe("KITCHEN");
   });
 });
 

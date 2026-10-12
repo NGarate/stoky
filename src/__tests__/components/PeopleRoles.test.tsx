@@ -7,6 +7,8 @@ import { ItemRow } from "@/components/ui/item-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { TRPCClientError } from "@trpc/client";
+import { addRefusalOf } from "@/components/household/add-member-refusal";
 import type { JSX } from "react";
 import { useState } from "react";
 
@@ -163,6 +165,34 @@ describe("changing a member's role", () => {
     );
 
     expect(screen.getByLabelText("Rol de Ana")).toBeInTheDocument();
+  });
+});
+
+describe("creating an account", () => {
+  /** A refusal as the client receives it: the code is what the form reads. */
+  function refused(code: string, message = "refused"): TRPCClientError<never> {
+    const error = new TRPCClientError<never>(message);
+    Object.defineProperty(error, "data", { value: { code } });
+    return error;
+  }
+
+  it("tells an admin who has run out of the hourly meter to wait, not to retry", () => {
+    // The per-admin meter refuses for up to an hour; "Inténtalo otra vez"
+    // would send the admin straight back into the same refusal.
+    expect(addRefusalOf(refused("TOO_MANY_REQUESTS", "Too many accounts created"))).toBe(
+      "tooMany",
+    );
+  });
+
+  it("reads each other refusal the procedure can give", () => {
+    expect(addRefusalOf(refused("CONFLICT"))).toBe("taken");
+    expect(
+      addRefusalOf(
+        refused("BAD_REQUEST", "That password contains the person's own name or email address"),
+      ),
+    ).toBe("identity");
+    expect(addRefusalOf(refused("INTERNAL_SERVER_ERROR"))).toBe("other");
+    expect(addRefusalOf(new Error("offline"))).toBe("other");
   });
 });
 

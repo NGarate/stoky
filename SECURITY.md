@@ -939,11 +939,40 @@ What is still open, and worth knowing before publishing an instance:
   429 the queue would retry for two minutes and then give up on. It is per
   account, not for the instance: N accounts are N budgets, so this bounds
   what one account can do, not the instance's total.
+- **Adding a member is limited too**, at 20 per admin account per hour,
+  counted before the password is hashed (security review, 2026-10-12).
+  `household.addMember` runs Argon2id at 64 MiB on every call before the
+  database is asked anything, and a duplicate address pays that hash as well,
+  because the unique index only answers once the row is written. Unmetered,
+  any account that admins a household — on an instance with open registration,
+  anyone who registers one — could ask for those hashes in a loop, or hundreds
+  at once in one batched request. An address that is already taken is
+  counted like any other call — it has already paid the hash. What is refused
+  before the count, by the role check or the input schema, never reaches the
+  hash either. Twenty is a household setting up every device and person it has
+  in one sitting with room for mistakes; past it, the admin waits for the
+  window to end.
+
+  What it bounds is one account, not one person. An owner can promote the
+  accounts it creates to admin (`household.updateRole`), and each of those
+  starts with a budget of its own. Nor is this the cheapest way left to make
+  the server run Argon2id: signing in runs `argon2.verify` at the same cost,
+  and a sign-in that succeeds is refunded and clears the account's counter
+  (above), so anyone with a password can repeat it without being counted. What
+  this limit removes is the unmetered, batchable, account-creating form of the
+  cost — not every way an authenticated caller can ask for a hash.
+
+  The same limit bounds the one thing this procedure tells an admin about
+  other households: `CONFLICT` means the address has an account somewhere on
+  the instance, not only in this household. That is accepted — with no email
+  channel there is nothing else to tell an admin who typed an address already
+  in use — and it is visible only to an account that admins a household, at
+  twenty questions an hour.
 - **Every other tRPC procedure is unlimited**, so an authenticated account can
   still make as many ordinary calls as it likes. That is a smaller problem — it
   needs credentials first, and those calls read and write rows rather than
-  start OCR or reach a third party — but it is not nothing on a shared
-  household instance. It is not only reads, either:
+  start OCR, hash a password or reach a third party — but it is not nothing
+  on a shared household instance. It is not only reads, either:
   `product.create`, `store.create` and the other writes are unlimited too.
   Until 2026-10-12 each of them could store as much text as the 15 MiB request
   body carried, so open registration plus a loop of writes could fill the
@@ -1037,8 +1066,9 @@ What is still open, and worth knowing before publishing an instance:
   `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
-  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS` and
-  `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`. Raising them raises the
+  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
+  `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`
+  and `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`. Raising them raises the
   exposure; the browser suite raises them because it registers dozens of
   accounts per run and every worker signs in and scans as one demo account,
   and a unit test asserts the shipped defaults with the environment unset so

@@ -321,6 +321,11 @@ export default defineConfig({
       // runs within the hour spend it again. The meter itself is proven in
       // `src/__tests__/integration/resolveScan.test.ts`.
       RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS: "10000",
+      // Adding a member is counted per admin account, and the suite signs in
+      // as one seeded account, so every worker would share one counter. No
+      // spec adds people today; one that does should not find the budget
+      // spent by the specs that ran before it.
+      RATE_LIMIT_ADD_MEMBER_ATTEMPTS: "10000",
       // Production leaves registration `first-user` when this is unset
       // (`src/lib/auth/registration.ts`), and the seeded demo household is
       // already an account — so every spec that registers would be refused.

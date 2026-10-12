@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
+import { enforceRateLimit } from "../throttle";
+import { addMemberRateLimit } from "@/lib/rate-limit";
 import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
@@ -263,10 +265,22 @@ export const householdRouter = createTRPCRouter({
    *
    * This is also the way in once registration is closed: `STOKY_REGISTRATION`
    * governs `auth.register` only, never this.
+   *
+   * **Metered per admin**, before the hash — see `addMemberRateLimit`. Argon2id
+   * at 64 MiB is the cost of every call, a duplicate address included, so a
+   * limit counted after it would be a way to ask for it. The same limit is
+   * what bounds the one thing this still answers about other households:
+   * `CONFLICT` says an address has an account somewhere on the instance.
    */
   addMember: adminProcedure
     .input(addMemberSchema)
     .mutation(async ({ ctx, input }) => {
+      await enforceRateLimit(
+        addMemberRateLimit(),
+        ctx.session.user.id,
+        "Too many accounts created. Try again in a little while.",
+      );
+
       const passwordHash = await argon2.hash(input.password, {
         type: argon2.argon2id,
         memoryCost: 65536,

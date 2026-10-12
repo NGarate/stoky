@@ -824,6 +824,7 @@
     "addDone": "Account created for “{name}”. They can sign in with that address now.",
     "addEmailTaken": "That address already has an account. Use another.",
     "addFailed": "The account could not be created. Try again.",
+    "addTooMany": "You have created too many accounts in the last hour. Wait a while and try again.",
     "addPasswordIdentity": "The password contains that person's name or email address. Choose one that does not include them.",
     "roleFor": "{name}'s role",
     "roleSave": "Save the role",

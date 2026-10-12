@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import {
   accountIdentifier,
+  addMemberRateLimit,
   loginAccountRateLimit,
   loginRateLimit,
   productLookupRateLimit,
@@ -209,11 +210,38 @@ describe("the configured limits", () => {
     });
   });
 
+  it("meters adding a member at twenty per admin per hour", () => {
+    // Every call is a 64 MiB Argon2id hash before the database is asked
+    // anything (security review, 2026-10-12). The default is the product's
+    // number; the browser suite raises it, and this is why that cannot leak.
+    delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
+    delete process.env.RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS;
+
+    expect(addMemberRateLimit()).toEqual({
+      prefix: "rl:addmember",
+      attempts: 20,
+      windowSeconds: 3600,
+    });
+  });
+
+  it("reads the add-member override, and refuses one that would disable it", () => {
+    process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS = "60";
+    expect(addMemberRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+
+    process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = "0";
+    expect(addMemberRateLimit().attempts).toBe(20);
+  });
+
   it("counts the account separately from the address", () => {
     // Sharing a prefix would make five wrong passwords from one address spend
     // the account's budget too, and the two limits would stop being two.
     expect(loginAccountRateLimit().prefix).not.toBe(loginRateLimit().prefix);
     expect(loginAccountRateLimit().prefix).not.toBe(registerRateLimit().prefix);
+    // And adding a member shares a counter with nothing: an admin who signed
+    // in a few times has not spent any of it.
+    const others = [loginRateLimit(), loginAccountRateLimit(), registerRateLimit(), uploadRateLimit()];
+    expect(others.map((limit) => limit.prefix)).not.toContain(addMemberRateLimit().prefix);
   });
 
   it("meters sixty Open Food Facts lookups an hour per account", () => {

@@ -18,9 +18,10 @@ import { closeValkey, valkey } from "@/lib/valkey";
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
  * receipt upload, which is authenticated but expensive enough that an account
- * looping on it is its own denial of service, and `productLookupRateLimit`
- * meters the requests an account makes this instance send to Open Food
- * Facts. The counting machinery is the
+ * looping on it is its own denial of service, `addMemberRateLimit` the
+ * Argon2id hash behind adding a member, and `productLookupRateLimit` meters
+ * the requests an account makes this instance send to Open Food Facts. The
+ * counting machinery is the
  * same; what differs per limit is the number, the window, and what the counter
  * is keyed on.
  */
@@ -161,6 +162,36 @@ export function productLookupRateLimit(): RateLimit {
     "RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS",
     "RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS",
     60,
+    60 * 60,
+  );
+}
+
+/**
+ * Accounts an admin creates through `household.addMember`, per admin account.
+ *
+ * Not expensive the way an upload is, but expensive on purpose: every call
+ * runs Argon2id at 64 MiB and three passes *before* the database is asked
+ * anything, because hashing is what the procedure is for. A duplicate address
+ * pays the full hash too — the unique index only answers once the row is
+ * written. Unmetered, any account that admins a household — and on an
+ * instance with open registration, that is anyone who registers one — could
+ * ask for those hashes in a loop, or hundreds at a time in one batched
+ * request. The reasoning that leaves ordinary procedures unmetered ("they read
+ * rows") does not hold for this one (security review, 2026-10-12).
+ *
+ * Twenty an hour is a household setting up every phone, tablet and person it
+ * has in one sitting, with room for typing mistakes, and at the ~250 ms the
+ * hash is tuned to it is about five seconds of Argon2id per admin per hour
+ * instead of an unbounded amount. Counted per account, like upload, because
+ * only an admin can reach it and an admin is the thing that can be held
+ * responsible.
+ */
+export function addMemberRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:addmember",
+    "RATE_LIMIT_ADD_MEMBER_ATTEMPTS",
+    "RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS",
+    20,
     60 * 60,
   );
 }

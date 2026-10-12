@@ -824,6 +824,7 @@
     "addDone": "Cuenta creada para «{name}». Ya puede entrar con ese correo.",
     "addEmailTaken": "Ese correo ya tiene una cuenta. Usa otro.",
     "addFailed": "No se ha podido crear la cuenta. Inténtalo otra vez.",
+    "addTooMany": "Has creado demasiadas cuentas en la última hora. Espera un rato e inténtalo otra vez.",
     "addPasswordIdentity": "La contraseña contiene el nombre o el correo de esa persona. Elige otra que no los incluya.",
     "roleFor": "Rol de {name}",
     "roleSave": "Guardar el rol",
