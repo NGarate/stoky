@@ -53,7 +53,8 @@ Stoky yourself in step 3. Running it again is safe.
 ```bash
 STOKY_RELEASE=v0.1.0-alpha.3
 for asset in install.sh SHA256SUMS; do
-  curl --fail --location --output "$asset" \
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
+    --output "$asset" \
     "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
 grep -E '  install\.sh$' SHA256SUMS | sha256sum -c
@@ -61,10 +62,17 @@ less install.sh      # read what you are about to run; q to quit
 bash install.sh
 ```
 
-`sha256sum -c` must print `install.sh: OK` before you run it. If you have the
-GitHub CLI, [check who published the files](#optional-check-who-published-the-files)
-between `sha256sum -c` and `bash install.sh`. The script installs the release
-it came with. Continue with step 2: only `DOMAIN` and `ACME_EMAIL` are left.
+`sha256sum -c` must print `install.sh: OK` before you run it. It catches a
+damaged download, not a replaced one: `SHA256SUMS` comes from the same place as
+the file. If you have the GitHub CLI, [check who published the
+files](#optional-check-who-published-the-files) between `sha256sum -c` and
+`bash install.sh`; from the release after v0.1.0-alpha.3 that catches a
+replaced one too. The `--proto` and
+`--tlsv1.2` flags keep every hop on HTTPS with TLS 1.2 or later, GitHub's
+redirect included. From the release after v0.1.0-alpha.3, `install.sh` passes
+`--proto-redir '=https' --tlsv1.2` to its own downloads. The script installs
+the release it came with. Continue with step 2: only `DOMAIN` and `ACME_EMAIL`
+are left.
 
 ### By hand
 
@@ -74,7 +82,8 @@ GitHub's `releases/latest/download` URL.
 ```bash
 STOKY_RELEASE=v0.1.0-alpha.3
 for asset in docker-compose.yml example.env traefik.yml SHA256SUMS; do
-  curl --fail --location --output "$asset" \
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
+    --output "$asset" \
     "https://github.com/NGarate/stoky/releases/download/${STOKY_RELEASE}/${asset}"
 done
 grep -E '  (docker-compose\.yml|example\.env|traefik\.yml)$' SHA256SUMS | sha256sum -c
