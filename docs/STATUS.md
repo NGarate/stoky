@@ -945,6 +945,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | bun | 1.4.0 — `.bun-version` and the Dockerfile pin; all application image stages use Bun |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
+| traefik | v3.7.14 — `deploy/docker-compose.yml`, the release bundle's proxy; the newest v3 release on 2026-10-12 (`gh api repos/traefik/traefik/releases`) |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next
 dev` and `next start` run under `bun --bun` (`b81102d`), the production image
@@ -979,8 +980,8 @@ prevent, and it survived because nobody re-read the source it was describing.
 no version numbers at all since 2026-08-27 — four of the nine claims it had
 gone stale on were versions, and a file loaded into every context is the worst
 place to keep a number that changes. This table is the only owner, and it is
-read out of `package.json`, `.bun-version` and the `Dockerfile` rather than
-recalled.
+read out of `package.json`, `.bun-version`, the `Dockerfile` and
+`deploy/docker-compose.yml` rather than recalled.
 
 ---
 
