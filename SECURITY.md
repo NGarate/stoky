@@ -1948,6 +1948,66 @@ warns against that. Backups copy `.env` in plaintext beside the database dump,
 and the backup instructions say to
 [encrypt them](docs/INSTALL.md#backup-and-restore).
 
+### Keys `next build` writes into the image
+
+`next build` generates keys of its own and writes them into the standalone
+output, which the Dockerfile copies into the image
+(`COPY --from=builder /app/.next/standalone ./`). The image is public, so every
+installation of a release shares these values and anybody who pulls it can read
+them. Measured on a standalone build of 2026-10-12:
+`.next/server/server-reference-manifest.json` holds a 44-character base64
+`encryptionKey` (32 bytes), and `.next/prerender-manifest.json` holds
+`previewModeId`, `previewModeSigningKey` and `previewModeEncryptionKey`. None of
+them protects anything in this application. The reasons are below, so that the
+change that would make one matter is recognised when it is proposed (security
+review 2026-10-12, CWE-321):
+
+- **The Server Action key encrypts the variables an inline function closes
+  over:** an inline `"use server"` function, whose closed-over values go to the
+  browser as ciphertext and are trusted when they come back, and an inline
+  `"use cache"` function, whose closed-over values are encrypted with the same
+  key (`decryptActionBoundArgs` in
+  `node_modules/next/dist/server/use-cache/use-cache-wrapper.js`). With a public
+  key that ciphertext is neither secret nor tamper-proof. Arguments attached
+  with `.bind()` are not encrypted at all: React serialises them into the page
+  as they are (`$$bound`), so a bound value is readable and replaceable by
+  whoever submits the form, whatever the key. Neither exists. The three
+  actions (`src/lib/auth/actions.ts`, `src/lib/i18n/cookies.ts`,
+  `src/lib/landing/choose.ts`) are modules whose first statement is
+  `"use server"`, called with ordinary arguments that each action checks like
+  any other request, and nothing in `src/` uses `use cache`.
+  `src/__tests__/unit/server-actions.test.ts` parses everything under `src/`
+  that ships and goes red on a `"use server"` anywhere but a module's first
+  statement, and on `.bind(` applied to an action imported directly from a
+  `"use server"` module (a re-export or an alias is not followed). Before
+  allowing a closure, set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` per
+  installation: Next reads it before the manifest's key
+  (`node_modules/next/dist/server/app-render/encryption-utils.js`), and it must
+  be base64 of 16, 24 or 32 bytes (`openssl rand -base64 32`). Set it at
+  runtime only. A value set in the Dockerfile would be baked into the public
+  image again. Before allowing `.bind()`, have the action re-check the bound
+  value as untrusted input; no key helps there. Next's own guide also advises
+  against relying on that encryption to keep a value from the client
+  (`node_modules/next/dist/docs/01-app/02-guides/data-security.md`).
+- **The preview keys sign and encrypt draft mode's cookies.** Nothing in
+  `src/` calls `draftMode()`, so a forged draft-mode cookie switches nothing on.
+- **`previewModeId` is also the on-demand revalidation secret.** A request
+  carrying `x-prerender-revalidate: <previewModeId>` is treated as a request to
+  regenerate a prerendered route (`checkIsOnDemandRevalidate`,
+  `node_modules/next/dist/server/api-utils/index.js`). The build prerenders 27
+  routes. Under `cacheComponents` 26 of them are partially static shells and
+  one is the static web manifest, none with a revalidation interval, and
+  nothing in `src/` uses `use cache`, `unstable_cache` or a `revalidate`
+  export. (The one `revalidatePath`, in `choose.ts`, is the action refreshing
+  its own page.) A forced regeneration therefore produces the same shell
+  again. This was read in Next's code and the build manifest, not exercised
+  against a running server. Unlike the action key, this one cannot be replaced
+  at runtime: the Node server reads it only from
+  `.next/server/preview-props.json` (the same three values, also in the
+  image), and `__NEXT_PREVIEW_MODE_ID` is read only by the edge runtime.
+  Accepted while that holds. Adopting `use cache`, ISR or draft mode makes forced
+  regeneration a real cost and reopens this.
+
 ---
 
 ## Guidance for operators
