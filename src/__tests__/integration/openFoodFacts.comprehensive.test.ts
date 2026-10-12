@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { OpenFoodFactsClient } from "@/server/services/openFoodFacts";
 
@@ -262,10 +264,16 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
 
       // The header itself, not merely that fetch was called: Open Food Facts
       // asks every client to identify itself, and this assertion passed with
-      // the header deleted.
+      // the header deleted. The version is read here from the manifest, apart
+      // from the service, so a hand-written version (it was `1.0` while the
+      // release was 0.1.0-alpha.3) fails it, as does a contact the project
+      // does not own (it was `contact@stoky.app`).
+      const { version } = JSON.parse(
+        readFileSync(join(import.meta.dir, "../../../package.json"), "utf8"),
+      ) as { version: string };
       const init = fetchSpy.mock.calls[0]?.[1];
       const userAgent = new Headers(init?.headers).get("user-agent");
-      expect(userAgent).toMatch(/^Stoky\/\S+ \(.+@.+\)$/);
+      expect(userAgent).toBe(`Stoky/${version} (+https://github.com/NGarate/stoky)`);
     });
   });
 

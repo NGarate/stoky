@@ -1,9 +1,22 @@
 import { z } from "zod";
 import { UpstreamError } from "./errors";
 import { valkeyProductCache, type ProductCache } from "./product-cache";
+import packageJson from "../../../package.json";
 
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
-const OFF_USER_AGENT = "Stoky/1.0 (contact@stoky.app)";
+
+/**
+ * How this server introduces itself to Open Food Facts, which asks every API
+ * client for `AppName/Version (contact)` so it can reach whoever is behind the
+ * traffic before throttling or banning an address.
+ *
+ * The version is the release's own, read from the manifest the release is cut
+ * from, so it cannot drift the way the hand-written `1.0` did. The contact is
+ * the project's public repository, `+URL` being the User-Agent convention for
+ * "about this client": it was `contact@stoky.app`, an address referenced
+ * nowhere else and not one the project is known to receive mail at.
+ */
+const OFF_USER_AGENT = `Stoky/${packageJson.version} (+https://github.com/NGarate/stoky)`;
 
 /**
  * How long a barcode lookup may take, from the request to the last byte of
