@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-09-25
+**Last Updated:** 2026-10-12
 
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5 and RUNTIME-1.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1 and LOC-2.** TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -110,6 +110,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PRICE-1 | No UI path can create a price record | ✅ Resolved (`4bbb82d`) |
 | REV-1 | 2026-08-29 review: receipt pipeline discordances (apply untransacted, review edge-less, CREATE injection, append-on-reparse) | ✅ Resolved (this plan's commits) |
 | SEC-2 | `consumeStock` guards `?? ` but writes `\|\|`, so an empty `consumeFromLocationId` writes an unchecked `locationId` | ✅ Resolved 2026-08-31 |
+| LOC-1 | Two concurrent location moves could leave two locations inside each other, and a move into the loop never finished | ✅ Resolved 2026-10-12 |
+| LOC-2 | No screen or call can move a nested location back to the top level | 🟡 Open — found fixing LOC-1 |
 
 ---
 
@@ -607,6 +609,106 @@ reverted.
 
 **Blocks:** Journey 7 in `docs/SMOKE_JOURNEYS.md` cannot be honestly proven
 until the number means what the screen says it means.
+
+---
+
+### ✅ LOC-1: Two concurrent location moves could leave two locations inside each other
+
+**Files:** `src/server/trpc/routers/location.ts` (`update`, `getTree`),
+`src/components/inventory/LocationPicker.tsx`
+**Severity:** MEDIUM — availability of the shared server, and a household's
+own locations made invisible
+**Status:** RESOLVED 2026-10-12 — found by the 2026-10-12 security review,
+confirmed by both verifiers against the real router with a stubbed client
+
+`location.update` refused a move into the moved location's own subtree by
+walking up from the new parent with plain reads, and wrote `parentId`
+afterwards in a separate statement: no transaction, no lock, no constraint.
+Two moves sent together — A into B and B into A — each checked the tree as it
+was before either wrote, both passed, and left A and B each other's parent. A
+tRPC batch runs its calls concurrently, so one request was enough, and any
+self-registered account owns a household and so holds `adminProcedure`.
+
+What a loop then did:
+
+- **A move into it never finished.** The walk (`checkIsDescendant`) recursed on
+  `parentId` with no visited set and no depth limit, so moving any other
+  location under A went A → B → A → … one query per step for as long as the
+  process lived. The review's reproduction counted about 2 600 queries in three
+  seconds, still going. In the review's scenario, fifty such moves in one
+  batch are fifty endless query streams on the pool every household shares,
+  and the loop survives a restart because it is in the data.
+- **The loop disappeared.** `getTree` and `LocationPicker` attached every row
+  whose parent was present and treated only a parentless row as a root. In a
+  loop every member has a parent present, so neither member — nor anything
+  stored under them — appeared on any screen, and `location.delete` refuses a
+  location with sub-locations. The comment above `getTree` said an orphan
+  "cannot happen through this router"; a loop could.
+
+**Resolution.**
+
+- `update` runs its reads and its write in one transaction that starts with
+  `SELECT id FROM "Household" WHERE id = ${householdId} FOR NO KEY UPDATE`. A
+  second move in the same household waits for the first to commit and then
+  reads the tree the first one left, so it is refused rather than raced. `FOR
+  NO KEY UPDATE` rather than `FOR UPDATE` because the latter also blocks the
+  `FOR KEY SHARE` lock every foreign-key check on the household takes, so
+  creating a product or a location would have queued behind a rename
+  (measured: an insert into `StorageLocation` hit a 1 s `lock_timeout` under
+  `FOR UPDATE` and went straight through under `FOR NO KEY UPDATE`).
+  The final `update` is scoped to the household as well.
+- The walk is iterative and bounded twice: a visited set refuses at the first
+  repeated row ("The destination is inside a loop of locations"), and a cap of
+  64 reads refuses anything longer. The cap counts reads, not distinct rows, so
+  it ends a loop by itself if the set is ever lost.
+- Both trees attach by reachability (`src/lib/inventory/location-tree.ts`,
+  shared by the server and the picker): a row keeps its parent only if its
+  chain of parents reaches the top level, and an orphan or a loop member is
+  drawn at the top level. What hangs below a loop keeps its parent. The result
+  is always a forest, so the recursive walks downstream of it still terminate.
+  The picker also stops dropping orphans, which `getTree` already surfaced.
+
+**Pinned by** `src/__tests__/integration/location.cycles.test.ts` (real
+PostgreSQL), `src/__tests__/unit/location-tree.test.ts` and a `LOC-1` case in
+`src/__tests__/components/LocationPicker.test.tsx`. Each was seen to fail:
+
+- lock removed: 19 of 20 concurrent rounds left a loop;
+- visited set and cap both removed — the old walk: the move into a loop was
+  still running at the 5 s ceiling;
+- visited set alone removed: refused by the cap instead, and the test, which
+  asserts the loop refusal, went red; cap alone removed: a 71-deep chain was
+  accepted;
+- `getTree` attaching by `parentId` again: the loop's members missing from the
+  roots; the picker likewise lost three of its six options; the helper keeping
+  a loop member's parent: three of five unit tests red.
+
+**Data written before the fix is not rewritten.** No migration nulls a loop's
+links: a loop is now visible at the top level and can be broken by moving one
+of its members under a location outside it. Not by choosing "No está dentro de
+ninguna": the settings form sends that as an absent `parentId`, which `update`
+reads as "leave it where it is", so no screen can move a nested location back
+to the top level. That is a separate defect, found while fixing this one, and
+filed as LOC-2.
+
+---
+
+### 🟡 LOC-2: No screen or call can move a nested location back to the top level
+
+**Files:** `src/lib/validations/inventory.ts` (`updateStorageLocationSchema`),
+`src/app/(dashboard)/settings/locations/page.tsx` (`handleSubmit`)
+**Severity:** LOW — a location put inside another cannot be taken out again,
+only moved under a different one
+**Status:** OPEN — found 2026-10-12 while fixing LOC-1
+
+`updateStorageLocationSchema` takes `parentId` as an optional string, not a
+nullable one, so `null` is refused at validation (checked against the schema:
+`safeParse({ id, parentId: null })` fails). The settings form turns "No está
+dentro de ninguna" into `parentId: undefined`, which is dropped from the
+input, and `location.update` writes only the fields it is given — so the move
+to the top level arrives as a rename that leaves the parent where it was, and
+the screen reports success. The fix needs `parentId` nullable in the update
+schema, `update` writing `null` as "top level", and the form sending `null`
+rather than `undefined` when editing.
 
 ---
 

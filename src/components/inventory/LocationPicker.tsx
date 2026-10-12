@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/lib/trpc/client";
+import { drawnParents } from "@/lib/inventory/location-tree";
 import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -67,16 +68,20 @@ function buildLocationTree(
     });
   }
 
-  // Second pass: build hierarchy
+  // Second pass: build hierarchy. By reachability, as `location.getTree`
+  // does: an orphan or a loop of locations inside each other (ISSUES.md
+  // LOC-1) is offered at the top level. Attaching by "has a parent" dropped
+  // both, so a location that existed could not be chosen — and the result is
+  // now a forest, which is what lets `flattenTree` recurse without a guard.
+  const drawn = drawnParents(locations);
   for (const loc of locations) {
     const node = map.get(loc.id);
     if (!node) continue;
 
-    if (loc.parentId) {
-      const parent = map.get(loc.parentId);
-      if (parent) {
-        parent.children.push(node);
-      }
+    const parentId = drawn.get(loc.id) ?? null;
+    const parent = parentId ? map.get(parentId) : undefined;
+    if (parent) {
+      parent.children.push(node);
     } else {
       roots.push(node);
     }

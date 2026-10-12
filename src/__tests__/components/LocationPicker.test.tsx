@@ -188,6 +188,41 @@ describe("LocationPicker", () => {
     expect(screen.getByText("Seleccionar ubicación")).toBeInTheDocument();
   });
 
+  // --------------------------------------------------------------- LOC-1 ---
+
+  it("offers a loop of locations, and an orphan, at the top level instead of dropping them", async () => {
+    // What two concurrent moves could leave behind before `location.update`
+    // took a lock: two shelves each inside the other. Every row here has a
+    // parent in the list except the kitchen, so the old builder offered the
+    // kitchen alone and none of the four locations below could be chosen.
+    queryResult = {
+      data: [
+        { id: "kitchen", name: "Cocina", parentId: null },
+        { id: "a", name: "Estante A", parentId: "b" },
+        { id: "b", name: "Estante B", parentId: "a" },
+        { id: "orphan", name: "Huérfano", parentId: "gone" },
+        { id: "jar", name: "Tarro", parentId: "a" },
+      ],
+      isLoading: false,
+    };
+    renderWithIntl(<LocationPicker onChange={() => {}} />);
+
+    await userEvent.click(trigger());
+
+    const names = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent?.replace(/\s+/g, " ").trim());
+
+    expect(names).toEqual([
+      "Sin ubicación específica",
+      "Cocina",
+      "Estante A",
+      "Estante A → Tarro",
+      "Estante B",
+      "Huérfano",
+    ]);
+  });
+
   // ---------------------------------------------------------------- UI-4 ---
 
   it("pairs a combobox trigger with a listbox of options", async () => {
