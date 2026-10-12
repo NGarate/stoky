@@ -14,6 +14,7 @@ import {
   resetRefusalOf,
 } from "@/components/household/ResetMemberPasswordDialog";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
+import { addMemberSchema } from "@/lib/validations/household";
 import type { JSX } from "react";
 import { useState } from "react";
 
@@ -189,6 +190,20 @@ describe("creating an account", () => {
     );
   });
 
+  it("tells an admin who chose a common password to choose another, not to retry", () => {
+    // Built from the procedure's own schema, as tRPC carries a ZodError's
+    // message, so rewording the refusal cannot leave this passing against words
+    // the server no longer sends.
+    const refusal = addMemberSchema.safeParse({
+      name: "Ana",
+      email: "ana@example.com",
+      password: "password1234",
+      role: "MEMBER",
+    });
+    expect(refusal.success).toBe(false);
+    expect(addRefusalOf(refused("BAD_REQUEST", refusal.error?.message))).toBe("tooEasy");
+  });
+
   it("reads each other refusal the procedure can give", () => {
     expect(addRefusalOf(refused("CONFLICT"))).toBe("taken");
     expect(
@@ -197,6 +212,8 @@ describe("creating an account", () => {
       ),
     ).toBe("identity");
     expect(addRefusalOf(refused("INTERNAL_SERVER_ERROR"))).toBe("other");
+    // Another field's BAD_REQUEST is not the password's fault.
+    expect(addRefusalOf(refused("BAD_REQUEST", "Invalid email address"))).toBe("other");
     expect(addRefusalOf(new Error("offline"))).toBe("other");
   });
 });

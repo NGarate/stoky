@@ -111,6 +111,20 @@ export function passwordProblems(
 }
 
 /**
+ * What the policy's refusal of a common password says, on the wire.
+ *
+ * Shared for the identity message's reason below: a form whose input has more
+ * fields than the password (`household.addMember`) cannot read every
+ * BAD_REQUEST as "too easy", and recognises this one by its words.
+ */
+export const PASSWORD_TOO_EASY_MESSAGE = "That password is too easy to guess";
+
+/** Whether a refusal's message is the policy's "too easy to guess". */
+export function isPasswordTooEasyRefusal(message: string | undefined): boolean {
+  return Boolean(message?.includes(PASSWORD_TOO_EASY_MESSAGE));
+}
+
+/**
  * The schema, for a password being *set*.
  *
  * Deliberately not applied to sign-in beyond the length bounds: an account
@@ -127,7 +141,7 @@ export const newPasswordSchema = z
   .min(MIN_PASSWORD_LENGTH)
   .max(MAX_PASSWORD_LENGTH)
   .refine((value) => passwordProblems(value).length === 0, {
-    message: "That password is too easy to guess",
+    message: PASSWORD_TOO_EASY_MESSAGE,
   });
 
 /**

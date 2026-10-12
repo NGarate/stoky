@@ -59,6 +59,7 @@ export default function PeoplePage(): JSX.Element {
   const failureMessage = {
     taken: t("addEmailTaken"),
     identity: t("addPasswordIdentity"),
+    tooEasy: t("addPasswordTooEasy"),
     tooMany: t("addTooMany"),
     other: t("addFailed"),
   } as const satisfies Record<AddMemberRefusal, string>;

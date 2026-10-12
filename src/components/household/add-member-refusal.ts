@@ -1,8 +1,11 @@
 import { TRPCClientError } from "@trpc/client";
-import { isPasswordIdentityRefusal } from "@/lib/validations/password";
+import {
+  isPasswordIdentityRefusal,
+  isPasswordTooEasyRefusal,
+} from "@/lib/validations/password";
 
 /** Every reason creating an account can be refused, each with its own sentence. */
-export type AddMemberRefusal = "taken" | "identity" | "tooMany" | "other";
+export type AddMemberRefusal = "taken" | "identity" | "tooEasy" | "tooMany" | "other";
 
 /**
  * `household.addMember`'s refusal, in words the admin can act on.
@@ -13,6 +16,10 @@ export type AddMemberRefusal = "taken" | "identity" | "tooMany" | "other";
  *   first and then inserting would race with itself.
  * - The identity rule's `BAD_REQUEST`: the browser cannot see that rule coming,
  *   and the same password would be refused again.
+ * - The policy's "too easy to guess" `BAD_REQUEST` (a password from the top of
+ *   every leak): the same password is refused again. Matched on its message,
+ *   not on the code, because this input has other fields a `BAD_REQUEST` could
+ *   be about.
  * - `TOO_MANY_REQUESTS` is the per-admin meter (`addMemberRateLimit`), which
  *   refuses for up to an hour; the admin is told to wait, not to retry.
  *
@@ -27,5 +34,6 @@ export function addRefusalOf(error: unknown): AddMemberRefusal {
   if (code === "CONFLICT") return "taken";
   if (code === "TOO_MANY_REQUESTS") return "tooMany";
   if (isPasswordIdentityRefusal(message)) return "identity";
+  if (isPasswordTooEasyRefusal(message)) return "tooEasy";
   return "other";
 }

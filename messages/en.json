@@ -827,6 +827,7 @@
     "addFailed": "The account could not be created. Try again.",
     "addTooMany": "You have created accounts or set passwords too many times in the last hour. Wait a while and try again.",
     "addPasswordIdentity": "The password contains that person's name or email address. Choose one that does not include them.",
+    "addPasswordTooEasy": "That password is too easy to guess. Choose a longer or less common one.",
     "roleFor": "{name}'s role",
     "roleSave": "Save the role",
     "roleSaving": "Saving…",

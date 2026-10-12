@@ -827,6 +827,7 @@
     "addFailed": "No se ha podido crear la cuenta. Inténtalo otra vez.",
     "addTooMany": "Has creado cuentas o cambiado contraseñas demasiadas veces en la última hora. Espera un rato e inténtalo otra vez.",
     "addPasswordIdentity": "La contraseña contiene el nombre o el correo de esa persona. Elige otra que no los incluya.",
+    "addPasswordTooEasy": "Esa contraseña es demasiado fácil de adivinar. Elige otra más larga o menos común.",
     "roleFor": "Rol de {name}",
     "roleSave": "Guardar el rol",
     "roleSaving": "Guardando…",
