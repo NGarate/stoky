@@ -1002,7 +1002,7 @@ seeing, since its whole premise is that every claim is checkable.
 Read this section before deciding where to run Stoky. It is not a wish list; it
 is what is wrong today.
 
-### Rate limiting covers authentication only
+### Rate limiting covers authentication and the expensive calls, not the rest
 
 `ISSUES.md` CRITICAL-4 is closed as of Phase 3: `src/lib/rate-limit.ts` counts
 sign-ins and registrations per IP in Valkey, at the defaults in that file — 5
@@ -1083,7 +1083,8 @@ addresses alike. An operator can clear an account's shared counter by hand —
 [docs/INSTALL.md](docs/INSTALL.md#somebody-keeps-being-told-to-wait) has the
 command.
 
-What is still open, and worth knowing before publishing an instance:
+Beyond sign-in, what is limited, what is not, and what is worth knowing before
+publishing an instance:
 
 - **Receipt upload is limited too**, at 30 per account per hour, counted
   before the file is decoded. OWASP ASVS **V11.1.4** asks for anti-automation
