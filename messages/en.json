@@ -30,6 +30,7 @@
     "authUnavailable": "The sign-in service is unavailable right now. Try again in a few minutes.",
     "loginError": "Signing in did not work. Try again in a moment.",
     "registerError": "The account could not be created. Check the details and try again.",
+    "passwordContainsIdentity": "The password contains your name or your email address. Choose one that does not include them.",
     "invalidCredentials": "The email or the password is not right. Check both; the password is case-sensitive.",
     "emailExists": "There is already an account with this email. Sign in with it, or use another one."
   },
@@ -819,6 +820,7 @@
     "addDone": "Account created for “{name}”. They can sign in with that address now.",
     "addEmailTaken": "That address already has an account. Use another.",
     "addFailed": "The account could not be created. Try again.",
+    "addPasswordIdentity": "The password contains that person's name or email address. Choose one that does not include them.",
     "roleFor": "{name}'s role",
     "roleSave": "Save the role",
     "roleSaving": "Saving…",

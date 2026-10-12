@@ -1181,6 +1181,17 @@ household. Twelve characters minimum, a maximum of 128, a refusal of the
 handful of passwords that appear at the top of every leak, and a refusal to
 accept the account's own name or address as its password.
 
+**The identity refusal was documented here before it was applied** (security
+review, 2026-10-12). `newPasswordSchema` is a field schema and cannot see the
+name and address beside it, so it checked with no identity at all, and both
+`registerSchema` and `addMemberSchema` accepted `noelgarate2026` for
+`noelgarate@example.com`. `withIdentityRule` in the same file now wraps both
+forms with an object-level check that attaches the refusal to `password`; the
+register page and the add-a-member form name it in words rather than as a
+generic failure. A procedure whose input carries no name or address — a
+password change, an admin reset — has to load the person and check against
+them itself.
+
 **No composition rules**, which is the opposite of what `ISSUES.md` DEBT-1
 proposed. That entry asked for the familiar four regexes — an uppercase, a
 lowercase, a digit, a symbol. NIST SP 800-63B §5.1.1.2 advises against exactly
@@ -1198,6 +1209,13 @@ What is still open:
   call to a service — neither of which belongs in an install expected to work
   air-gapped. What ships is a short list of the passwords a guessing attempt
   starts with, which is a floor rather than the control.
+- **The identity check is a substring match, not a guess at variations.** It
+  refuses a password containing the address's local part or the whole name,
+  case-insensitively, and ignores either when it is shorter than three
+  characters. For `ng@example.com` named "Noel Garate", `noel garate cocina` is
+  refused and `noel en la cocina` is accepted: a first name alone is not the
+  name. Growing it into token or fuzzy matching would start refusing ordinary
+  words that happen to be somebody's name.
 - **The policy is not applied to an existing password at sign-in**, beyond the
   maximum. A verifier that refused a stored password because the rule changed
   would lock people out of their own household.

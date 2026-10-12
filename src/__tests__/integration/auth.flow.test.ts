@@ -13,6 +13,8 @@ import {
 } from "../utils/test-helpers";
 import * as argon2 from "argon2";
 import { signInWith } from "../utils/authorize";
+import { TRPCError } from "@trpc/server";
+import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 
 /**
  * Everything this file creates carries this run's own marker, and cleanup
@@ -213,6 +215,31 @@ describe("Authentication Flow Integration Tests", () => {
       }
 
       expect(error).toBeDefined();
+    });
+
+    it("refuses a password built from the address it is for, and creates nothing", async () => {
+      // Through the router rather than the schema alone: the claim in
+      // SECURITY.md is about what registration accepts, and the procedure's
+      // `.input()` is where that is decided. The local part carries the run
+      // marker, so it is unique, and the password is built from it.
+      const email = runEmail("identity");
+      const localPart = email.split("@")[0] ?? "";
+
+      let refusal: unknown;
+      try {
+        await caller.auth.register({
+          email,
+          name: generateTestName("Identity User"),
+          password: `${localPart}!`,
+        });
+      } catch (e) {
+        refusal = e;
+      }
+
+      expect(refusal).toBeInstanceOf(TRPCError);
+      expect((refusal as TRPCError).code).toBe("BAD_REQUEST");
+      expect(isPasswordIdentityRefusal((refusal as TRPCError).message)).toBe(true);
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
 
     it("should fail to register with empty name", async () => {

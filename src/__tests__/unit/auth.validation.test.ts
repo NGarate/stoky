@@ -169,6 +169,21 @@ describe("Authentication Validation Schemas", () => {
       expect(signingIn.email).toBe(registered.email);
     });
 
+    it("refuses a password built from the person's own address or name", () => {
+      // SECURITY.md said this was refused; until the schema applied it, it
+      // was not. The full set of cases lives in password.test.ts.
+      for (const password of ["johndoe en casa", "john doe en casa"]) {
+        const result = registerSchema.safeParse({
+          email: "johndoe@example.com",
+          name: "John Doe",
+          password,
+        });
+
+        expect(result.success, password).toBe(false);
+        expect(result.error?.issues[0]?.path, password).toEqual(["password"]);
+      }
+    });
+
     it("refuses a password that is only long enough for the old rule", () => {
       const result = registerSchema.safeParse({
         email: "a@b.co",

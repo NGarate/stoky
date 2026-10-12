@@ -2295,6 +2295,15 @@ it, and any `.tsx` that writes `minLength` or a `password.length` comparison
 with a literal number. `components/auth-pages.test.tsx` checks the rendered
 register field and hint.
 
+**Nor did the identity refusal** (same review). `passwordProblems` could detect
+a password built from the account's name or address, but the only schema
+calling it was the field schema, which cannot see either, so it never did:
+`registerSchema` and `addMemberSchema` both accepted `noelgarate2026` for
+`noelgarate@example.com`, while the paragraph above and `SECURITY.md` said it
+was refused. `withIdentityRule` now applies it to both forms, and
+`unit/password.test.ts` drives it through the schemas rather than the helper,
+which is the level the earlier tests never reached.
+
 ---
 
 ### ✅ DEBT-2: Barcode scanner component has unused torch state

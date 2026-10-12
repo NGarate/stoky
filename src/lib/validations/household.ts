@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { emailSchema } from "./auth";
 import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
-import { newPasswordSchema } from "./password";
+import { newPasswordSchema, withIdentityRule } from "./password";
 
 export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
@@ -29,15 +29,18 @@ export const householdMemberSchema = z.object({
  * sets the first password. That is the honest shape for a self-hosted
  * household: the kitchen tablet is set up by the person holding it.
  */
-export const addMemberSchema = z.object({
-  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
-  // The same address sign-in looks up, so the same trim, case and bound.
-  email: emailSchema,
-  // The same policy as registration: an account an admin creates is an account
-  // somebody signs in with, and a weaker rule here would be the way round it.
-  password: newPasswordSchema,
-  role: z.enum(["MEMBER", "KITCHEN"]),
-});
+export const addMemberSchema = withIdentityRule(
+  z.object({
+    name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
+    // The same address sign-in looks up, so the same trim, case and bound.
+    email: emailSchema,
+    // The same policy as registration, identity rule included: an account an
+    // admin creates is an account somebody signs in with, and a weaker rule
+    // here would be the way round it.
+    password: newPasswordSchema,
+    role: z.enum(["MEMBER", "KITCHEN"]),
+  }),
+);
 
 /**
  * Changing an existing member's role — the "own procedure and own thought"

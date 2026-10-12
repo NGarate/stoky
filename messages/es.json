@@ -30,6 +30,7 @@
     "authUnavailable": "El servicio de acceso no está disponible ahora mismo. Inténtalo de nuevo en unos minutos.",
     "loginError": "No se ha podido iniciar sesión. Vuelve a intentarlo en un momento.",
     "registerError": "No se ha podido crear la cuenta. Revisa los datos y vuelve a intentarlo.",
+    "passwordContainsIdentity": "La contraseña contiene tu nombre o tu correo. Elige una que no los incluya.",
     "invalidCredentials": "El correo o la contraseña no son correctos. Revisa los dos; la contraseña distingue mayúsculas.",
     "emailExists": "Ya hay una cuenta con este correo. Inicia sesión con él o usa otro."
   },
@@ -819,6 +820,7 @@
     "addDone": "Cuenta creada para «{name}». Ya puede entrar con ese correo.",
     "addEmailTaken": "Ese correo ya tiene una cuenta. Usa otro.",
     "addFailed": "No se ha podido crear la cuenta. Inténtalo otra vez.",
+    "addPasswordIdentity": "La contraseña contiene el nombre o el correo de esa persona. Elige otra que no los incluya.",
     "roleFor": "Rol de {name}",
     "roleSave": "Guardar el rol",
     "roleSaving": "Guardando…",

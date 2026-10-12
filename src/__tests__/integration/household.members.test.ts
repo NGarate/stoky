@@ -6,6 +6,7 @@ import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
 import type { HouseholdRole } from "@prisma/client";
 import type { Session } from "next-auth";
+import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 
 /**
  * Making the KITCHEN role reachable.
@@ -132,6 +133,26 @@ describe("creating a kitchen account", () => {
 
     expect(JSON.stringify(created)).not.toContain("argon2");
     expect(created).not.toHaveProperty("passwordHash");
+  });
+
+  it("refuses a password built from the person's own name, and creates nothing", async () => {
+    // The identity rule was documented and unapplied until the schema carried
+    // it (security review, 2026-10-12). Through the router, so the procedure's
+    // `.input()` is what is proved to use it, not only the schema in isolation.
+    const api = await callerFor(HOUSEHOLD.ownerId, HOUSEHOLD.id);
+    const account = { ...newAccount("MEMBER"), name: "Rosalía", password: "rosalía despensa 2026" };
+
+    let refusal: unknown;
+    try {
+      await api.household.addMember(account);
+    } catch (error) {
+      refusal = error;
+    }
+
+    expect(refusal).toBeInstanceOf(TRPCError);
+    expect((refusal as TRPCError).code).toBe("BAD_REQUEST");
+    expect(isPasswordIdentityRefusal((refusal as TRPCError).message)).toBe(true);
+    expect(await prisma.user.count({ where: { email: account.email } })).toBe(0);
   });
 
   it("refuses an address that already has an account", async () => {

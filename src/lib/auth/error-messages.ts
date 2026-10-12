@@ -1,3 +1,5 @@
+import { isPasswordIdentityRefusal } from "@/lib/validations/password";
+
 export type AuthAction = "login" | "register";
 
 export type AuthErrorKey =
@@ -6,7 +8,8 @@ export type AuthErrorKey =
   | "tooManyAttempts"
   | "authUnavailable"
   | "loginError"
-  | "registerError";
+  | "registerError"
+  | "passwordContainsIdentity";
 
 /**
  * Auth.js flattens every sign-in failure to "CredentialsSignin" so a login
@@ -44,6 +47,12 @@ export function getAuthErrorKey(
 ): AuthErrorKey {
   const fromCode = code ? CODE_KEYS[code.trim().toLowerCase()] : undefined;
   if (fromCode) return fromCode;
+
+  // Before the lowercasing below: the marker is the schema's own message,
+  // shared as a constant, and tRPC carries it verbatim inside the ZodError's
+  // JSON. Checked before the generic fallback so a person refused for using
+  // their own name is told that, not "check the details".
+  if (isPasswordIdentityRefusal(message)) return "passwordContainsIdentity";
 
   const normalizedMessage = message?.trim().toLowerCase() ?? "";
 

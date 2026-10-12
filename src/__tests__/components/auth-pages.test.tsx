@@ -7,6 +7,7 @@ import type { ReactElement } from "react";
 import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
 import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
+import { registerSchema } from "@/lib/validations/auth";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -35,6 +36,9 @@ mock.module("next-auth/react", () => ({
   signIn: async () => signInResult,
 }));
 
+/** What the next registration throws, or `null` for success. Reset by each test that sets it. */
+let registerFailure: Error | null = null;
+
 /** Every path a page asked the router to replace the current entry with. */
 const replaced: string[] = [];
 
@@ -60,7 +64,13 @@ mock.module("@/components/providers/TRPCProvider", () => ({
   api: {
     auth: {
       register: {
-        useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }),
+        useMutation: () => ({
+          mutateAsync: async () => {
+            if (registerFailure) throw registerFailure;
+            return {};
+          },
+          isPending: false,
+        }),
       },
     },
   },
@@ -330,4 +340,44 @@ describe("what a refused sign-in says", () => {
       signInResult = { ok: true, error: null };
     }
   });
+});
+
+describe("what a refused registration says", () => {
+  // The identity rule's refusal arrives as tRPC's BAD_REQUEST, whose message is
+  // the ZodError's own JSON. Built here from the real schema rather than
+  // written out, so a reworded server message cannot leave this test passing
+  // against a string the server no longer sends.
+  const identity = { email: "noel@example.com", name: "Noel" };
+  const password = "noel despensa 2026";
+
+  for (const [locale, words, labels] of [
+    [
+      "es",
+      "La contraseña contiene tu nombre o tu correo. Elige una que no los incluya.",
+      { name: "Nombre", email: "Correo electrónico", password: "Contraseña", submit: "Registrarse" },
+    ],
+    [
+      "en",
+      "The password contains your name or your email address. Choose one that does not include them.",
+      { name: "Name", email: "Email", password: "Password", submit: "Sign up" },
+    ],
+  ] as const) {
+    it(`says the password contains the person's own name, in ${locale}`, async () => {
+      const refusal = registerSchema.safeParse({ ...identity, password });
+      expect(refusal.success).toBe(false);
+      registerFailure = new Error(refusal.error?.message);
+      try {
+        renderWithIntl(<RegisterPage />, { locale });
+
+        await userEvent.type(screen.getByLabelText(labels.name), identity.name);
+        await userEvent.type(screen.getByLabelText(labels.email), identity.email);
+        await userEvent.type(screen.getByLabelText(labels.password), password);
+        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+
+        expect(await screen.findByText(words)).toBeInTheDocument();
+      } finally {
+        registerFailure = null;
+      }
+    });
+  }
 });

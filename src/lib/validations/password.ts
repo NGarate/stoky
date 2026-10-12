@@ -117,6 +117,10 @@ export function passwordProblems(
  * created before this rule existed must still be able to get in, and a
  * verifier that refuses a stored password because it is now too short locks
  * people out of their own household for a policy change.
+ *
+ * **Not the whole policy on its own.** A field cannot see the name and
+ * address beside it; a form that sets a password also goes through
+ * `withIdentityRule` below.
  */
 export const newPasswordSchema = z
   .string()
@@ -125,6 +129,65 @@ export const newPasswordSchema = z
   .refine((value) => passwordProblems(value).length === 0, {
     message: "That password is too easy to guess",
   });
+
+/**
+ * What the identity refusal says, on the wire.
+ *
+ * English and not a translation key, like every other schema message: the
+ * screens recognise it and show their own words (`getAuthErrorKey`,
+ * `isPasswordIdentityRefusal`). One constant on both sides, so the server
+ * cannot reword it out from under the client.
+ */
+export const PASSWORD_CONTAINS_IDENTITY_MESSAGE =
+  "That password contains the person's own name or email address";
+
+/** Whether a refusal's message is the identity rule's. */
+export function isPasswordIdentityRefusal(message: string | undefined): boolean {
+  return Boolean(message?.includes(PASSWORD_CONTAINS_IDENTITY_MESSAGE));
+}
+
+/**
+ * The identity rule, applied to a whole form rather than to the field.
+ *
+ * `newPasswordSchema` cannot apply it: a field schema never sees its siblings,
+ * so it calls `passwordProblems(value)` with no identity and the
+ * `containsIdentity` branch can never fire from it. Until this existed it
+ * never did — both schemas that set a password accepted `noelgarate2026` for
+ * `noelgarate@example.com` while this file and SECURITY.md said otherwise
+ * (security review, 2026-10-12).
+ *
+ * Object-level, and the issue is attached to `password` so a form reads it as
+ * that field's. Zod 3 still runs an object refinement when a field was only
+ * *dirty* (too short, too easy), so a short password that also contains the
+ * name reports both at once; it is skipped only when a field is missing or
+ * the wrong type, and then there is no name to compare against anyway.
+ *
+ * A procedure whose input carries no identity — changing your own password,
+ * resetting somebody else's — loads the person and calls `passwordProblems`
+ * with them instead, refusing with `PASSWORD_CONTAINS_IDENTITY_MESSAGE` so the
+ * screens recognise it the same way.
+ */
+export function withIdentityRule<
+  T extends z.ZodType<
+    { email: string; name: string; password: string },
+    z.ZodTypeDef,
+    unknown
+  >,
+>(schema: T): z.ZodEffects<T> {
+  return schema.superRefine((value, ctx) => {
+    const problems = passwordProblems(value.password, {
+      email: value.email,
+      name: value.name,
+    });
+    if (problems.includes("containsIdentity")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+      });
+    }
+  });
+}
 
 /**
  * The bounds a password is *checked* against at sign-in.

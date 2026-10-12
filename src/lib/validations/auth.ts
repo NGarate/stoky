@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from "./bounds";
-import { existingPasswordSchema, newPasswordSchema } from "./password";
+import {
+  existingPasswordSchema,
+  newPasswordSchema,
+  withIdentityRule,
+} from "./password";
 
 /**
  * An address as this application stores and looks it up: trimmed, lowercased.
@@ -26,12 +30,14 @@ export const loginSchema = z.object({
   password: existingPasswordSchema,
 });
 
-export const registerSchema = z.object({
-  email: emailSchema,
-  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
-  password: newPasswordSchema,
-  householdName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
-});
+export const registerSchema = withIdentityRule(
+  z.object({
+    email: emailSchema,
+    name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
+    password: newPasswordSchema,
+    householdName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+  }),
+);
 
 export const createHouseholdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),

@@ -12,7 +12,10 @@ import { Input } from "@/components/ui/input";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
-import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
+import {
+  MIN_PASSWORD_LENGTH,
+  isPasswordIdentityRefusal,
+} from "@/lib/validations/password";
 import { RouteState } from "@/components/household/RouteState";
 import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
@@ -44,7 +47,15 @@ export default function PeoplePage(): JSX.Element {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"MEMBER" | "KITCHEN">("KITCHEN");
-  const [failure, setFailure] = useState<"taken" | "other" | null>(null);
+  const [failure, setFailure] = useState<"taken" | "identity" | "other" | null>(
+    null,
+  );
+
+  const failureMessage = {
+    taken: t("addEmailTaken"),
+    identity: t("addPasswordIdentity"),
+    other: t("addFailed"),
+  } as const;
 
   const addMember = api.household.addMember.useMutation({
     onSuccess: (member) => {
@@ -63,7 +74,10 @@ export default function PeoplePage(): JSX.Element {
       // then inserting would race with itself.
       const conflict =
         error instanceof TRPCClientError && error.data?.code === "CONFLICT";
-      setFailure(conflict ? "taken" : "other");
+      // Named rather than "try again": the browser cannot see this rule
+      // coming, and retrying the same password would fail the same way.
+      const identity = !conflict && isPasswordIdentityRefusal(error.message);
+      setFailure(conflict ? "taken" : identity ? "identity" : "other");
     },
   });
 
@@ -514,7 +528,7 @@ export default function PeoplePage(): JSX.Element {
             }
             role="status"
           >
-            {failure ? (failure === "taken" ? t("addEmailTaken") : t("addFailed")) : ""}
+            {failure ? failureMessage[failure] : ""}
           </p>
 
           <Button disabled={addMember.isPending} type="submit">
