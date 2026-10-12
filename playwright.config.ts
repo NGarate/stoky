@@ -55,6 +55,8 @@ const CHROMIUM_ONLY = [
   // The same question about a password: whether the server accepts it after a
   // change has one engine's answer, and each run registers an account.
   "**/password-change.spec.ts",
+  // And the same about a password an admin set for somebody else.
+  "**/member-password-reset.spec.ts",
 ];
 
 /**

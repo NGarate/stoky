@@ -1,13 +1,20 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { enforceRateLimit } from "../throttle";
-import { addMemberRateLimit } from "@/lib/rate-limit";
+import { addMemberRateLimit, rateLimitIdentifier } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
+import { logSecurityEvent } from "@/lib/security-log";
+import {
+  PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+  passwordProblems,
+} from "@/lib/validations/password";
 import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
   householdSchema,
+  RESET_OWN_PASSWORD_MESSAGE,
   removeMemberSchema,
+  resetMemberPasswordSchema,
   updateMemberRoleSchema,
 } from "@/lib/validations/household";
 
@@ -39,10 +46,10 @@ async function memberOfHousehold(
   db: PrismaClient | Prisma.TransactionClient,
   userId: string,
   householdId: string,
-): Promise<{ id: string; role: HouseholdRole }> {
+): Promise<{ id: string; role: HouseholdRole; name: string; email: string }> {
   const member = await db.user.findFirst({
     where: { id: userId, householdId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, name: true, email: true },
   });
 
   if (!member) {
@@ -387,6 +394,101 @@ export const householdRouter = createTRPCRouter({
       await ctx.db.user.update({
         where: { id: member.id },
         data: { sessionsValidFrom: new Date() },
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Set a new password for somebody in the household, and end every session
+   * they have.
+   *
+   * **The way back from a forgotten password.** There is no email in this
+   * application, so there is no link to send; until this existed a member who
+   * forgot theirs was locked out for good, and the only remedy was the
+   * operator writing a hash into the database (security review, 2026-10-12).
+   * The admin sets a password, gives it to the person, and the person changes
+   * it from Settings (`auth.changePassword`). It is the same trust the
+   * household already places in an admin, who set that person's first
+   * password in `addMember`.
+   *
+   * The order of the steps is the point of them:
+   *
+   * 1. **Not yourself.** Your own password changes through
+   *    `auth.changePassword`, which asks for the current one; an admin
+   *    session that could skip that question would be a way round it for
+   *    whoever holds the session.
+   * 2. **The limit**, `addMemberRateLimit`, shared with adding a member and
+   *    for the same reason: each call runs Argon2id at 64 MiB. Before any
+   *    query, so a refusal below is counted too.
+   * 3. **The member is this household's**, through `memberOfHousehold`:
+   *    `NOT_FOUND` for anyone else's, which does not confirm the id exists.
+   * 4. **Only an owner may act on an owner** (`assertMayActOnOwner`). An
+   *    admin who could set an owner's password could sign in as that owner,
+   *    which is the escalation the guard exists to refuse.
+   * 5. **The identity rule**, against the member's own name and address,
+   *    which the input does not carry.
+   * 6. **One write** sets the hash and `sessionsValidFrom`, so the new
+   *    password and the end of the old sessions land together. A password
+   *    reset because somebody else may know the old one is half a fix if a
+   *    session opened with it survives.
+   *
+   * **The write repeats the guards in its `where`.** Argon2id takes about a
+   * quarter of a second between the checks above and the write, and in that
+   * time the member can leave the household or be made an owner. A write
+   * conditioned on the same household and the same role cannot land on a
+   * member who has stopped being the one that was checked; it writes nothing,
+   * and the caller is told to try again.
+   */
+  resetMemberPassword: adminProcedure
+    .input(resetMemberPasswordSchema)
+    .mutation(async ({ ctx, input }) => {
+      const callerId = ctx.session.user.id;
+
+      if (input.userId === callerId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: RESET_OWN_PASSWORD_MESSAGE });
+      }
+
+      await enforceRateLimit(
+        addMemberRateLimit(),
+        callerId,
+        "Too many accounts created or passwords set. Try again in a little while.",
+      );
+
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+
+      const problems = passwordProblems(input.newPassword, {
+        email: member.email,
+        name: member.name,
+      });
+      if (problems.includes("containsIdentity")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+        });
+      }
+
+      const passwordHash = await hashPassword(input.newPassword);
+
+      const { count } = await ctx.db.user.updateMany({
+        where: { id: member.id, householdId: ctx.householdId, role: member.role },
+        data: { passwordHash, sessionsValidFrom: new Date() },
+      });
+
+      if (count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This member changed while the password was being set. Try again.",
+        });
+      }
+
+      logSecurityEvent("auth.password.reset", {
+        userId: callerId,
+        householdId: ctx.householdId,
+        targetUserId: member.id,
+        address: ctx.headers ? rateLimitIdentifier(ctx.headers) : undefined,
       });
 
       return { success: true };

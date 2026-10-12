@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { TRPCClientError } from "@trpc/client";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
   addRefusalOf,
   type AddMemberRefusal,
 } from "@/components/household/add-member-refusal";
+import { ResetMemberPasswordDialog } from "@/components/household/ResetMemberPasswordDialog";
 import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
 
@@ -34,7 +35,9 @@ import type { FormEvent, JSX } from "react";
  * There is no email in this application, so the admin sets the first password
  * and hands the device over. That is the honest shape for a self-hosted
  * household rather than a placeholder for an invitation flow that does not
- * exist.
+ * exist. For the same reason the admin is also the way back from a forgotten
+ * password: "Cambiar su contraseña" sets a new one and ends every session the
+ * person had (`household.resetMemberPassword`).
  */
 export default function PeoplePage(): JSX.Element {
   const t = useTranslations("household");
@@ -43,6 +46,9 @@ export default function PeoplePage(): JSX.Element {
   const utils = api.useUtils();
 
   const members = api.household.members.useQuery();
+  // Only to know which row is the caller's own, which gets no reset: your own
+  // password changes from Settings, with your current one.
+  const me = api.auth.me.useQuery(undefined, { retry: false });
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -85,6 +91,10 @@ export default function PeoplePage(): JSX.Element {
   const [rowFailure, setRowFailure] = useState<{ id: string; message: string } | null>(
     null,
   );
+  const [resetting, setResetting] = useState<{ id: string; name: string } | null>(null);
+  // The button that opened the dialog, where focus goes back to. One ref for
+  // every row, set on the click: only one dialog is open at a time.
+  const resetOpener = useRef<HTMLButtonElement | null>(null);
 
   /**
    * The server's refusal, in words this household can act on.
@@ -151,6 +161,27 @@ export default function PeoplePage(): JSX.Element {
         id: variables.userId,
         message: code === "FORBIDDEN" ? t("revokeFailedNotOwner") : t("revokeFailed"),
       });
+    },
+  });
+
+  const resetPassword = api.household.resetMemberPassword.useMutation({
+    // `always`, for `RevokeSessionsButton`'s reason: offline, an `online`
+    // mutation pauses, its promise never settles, and the dialog would sit on
+    // "Cambiando…" with nothing saying why.
+    networkMode: "always",
+    onSuccess: (_result, variables) => {
+      const target = members.data?.find((candidate) => candidate.id === variables.userId);
+      // What to do next, not only what happened: the person cannot sign in
+      // until they are given the password, and should not keep one somebody
+      // else chose.
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "household.resetDone",
+          values: { name: target?.name ?? "" },
+        },
+      });
+      setResetting(null);
     },
   });
 
@@ -343,6 +374,24 @@ export default function PeoplePage(): JSX.Element {
                     </Button>
                   </form>
 
+                  {/* Not on the caller's own row: the server refuses it, and
+                      the way to change your own is Settings, which asks for
+                      the current one. Hidden until `me` says whose row is
+                      whose, rather than offered and then refused. */}
+                  {me.data && me.data.id !== member.id ? (
+                    <Button
+                      onClick={(event) => {
+                        resetOpener.current = event.currentTarget;
+                        setResetting({ id: member.id, name: member.name });
+                        setRowFailure(null);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("resetButton")}
+                    </Button>
+                  ) : null}
+
                   {/* Two different problems, two different acts. "They left"
                       is a removal; "their phone was stolen" is this, and
                       offering only the first would make a household delete
@@ -390,6 +439,17 @@ export default function PeoplePage(): JSX.Element {
           />
         ))}
       </ul>
+
+      <ResetMemberPasswordDialog
+        member={resetting}
+        onClose={() => setResetting(null)}
+        onSubmit={(newPassword) =>
+          resetting
+            ? resetPassword.mutateAsync({ userId: resetting.id, newPassword })
+            : Promise.resolve()
+        }
+        returnFocus={resetOpener}
+      />
 
       <section className="mt-8 rounded-lg border border-border bg-card p-4">
         <h2 className="text-lg font-semibold text-heading">{t("addTitle")}</h2>

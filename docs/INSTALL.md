@@ -293,6 +293,46 @@ Check it with `docker compose config`, keep it with your backups, and apply it
 with `docker compose up -d --wait`. Upgrades replace the Compose and Traefik
 files, not the override, so it stays in place.
 
+## A forgotten password
+
+There is no email, so there is no reset link. From the release after
+v0.1.0-alpha.3, a household admin sets a new password for anyone else in the
+household from **Configuración → Personas del hogar → Cambiar su contraseña**;
+every session that person had ends, and they change the password from
+**Configuración** once signed in. Only an owner can do this for an owner.
+v0.1.0-alpha.3 has neither screen, so there every forgotten password is set in
+the database as below.
+
+If you are the only owner and have forgotten your own password, set it in the
+database. Run these in the installation directory, replacing the address with
+your account's:
+
+```bash
+IFS= read -rs STOKY_NEW_PASSWORD    # type the new password; nothing is shown
+STOKY_HASH=$(printf '%s' "$STOKY_NEW_PASSWORD" | docker compose run --rm --no-deps -T \
+  --entrypoint bun app -e 'const a = require("argon2"); const p = await Bun.stdin.text();
+  console.log(await a.hash(p, { type: a.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 4 }))')
+unset STOKY_NEW_PASSWORD
+docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+  -v hash="$STOKY_HASH" -v email='you@example.com' <<'SQL'
+UPDATE "User"
+SET "passwordHash" = :'hash',
+    "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
+    "updatedAt" = now() AT TIME ZONE 'UTC'
+WHERE email = lower(:'email');
+SQL
+unset STOKY_HASH
+```
+
+`psql` must answer `UPDATE 1`; `UPDATE 0` means no account has that address.
+The password is read without echo and passed on standard input, so it stays out
+of your shell history and the process list; `IFS=` keeps any leading or
+trailing space in it, which a plain `read` would drop and sign-in would not. The hash is made by the
+application's own Argon2id library with its own parameters, and setting
+`sessionsValidFrom` ends every session the account had, as a reset from the
+application does. This path skips the application's password rules: choose at
+least 12 characters that do not contain your name or address.
+
 ## Backup and restore
 
 The JSON export in Settings is useful for inspection, but is not a full restore
@@ -410,6 +450,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
+| Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
 | `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |

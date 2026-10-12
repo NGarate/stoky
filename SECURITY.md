@@ -507,9 +507,10 @@ Verified against the files named in each row.
 - Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB),
   `timeCost: 3` and `parallelism: 4`, in one place:
   `src/lib/auth/password-hash.ts` hashes for registration, for an admin
-  adding a member and for a person changing their own password, and verifies
-  for sign-in and for that change. A test pins the parameters and that the
-  dummy hash for unknown addresses was made with the same ones.
+  adding a member or setting a member's password, and for a person changing
+  their own password, and verifies for sign-in and for that change. A test
+  pins the parameters and that the dummy hash for unknown addresses was made
+  with the same ones.
 - Auth.js v5 with the credentials provider; sessions are JWTs with a 15-minute
   lifetime.
 - Credentials are validated with a Zod schema before the database is touched,
@@ -525,6 +526,24 @@ Verified against the files named in each row.
   `sessionsValidFrom`, so every session the account had ends — the one that
   asked included, and the form says so before it is submitted. Both outcomes
   are logged (`auth.password.changed`, `auth.password.change.refused`).
+- **A household admin can set a member's password**, from **Personas del
+  hogar** (`household.resetMemberPassword`, security review 2026-10-12). There
+  is no email, so this is the way back from a forgotten password; until it
+  existed a member who forgot theirs was locked out for good. The member must
+  be the caller's household's (`NOT_FOUND` otherwise), only an owner may act on
+  an owner — an admin who could set an owner's password could sign in as that
+  owner — and nobody may use it on themselves, because their own password
+  changes through the current one. The new password meets the policy, the
+  identity rule checked against the member, and one write sets the hash and
+  `sessionsValidFrom`, so whoever used the old password is signed out too. The
+  write repeats the household and role in its `where`, so a member who leaves
+  or is made an owner during the quarter-second hash is not written to. It
+  shares `addMember`'s limit (below) and is logged as `auth.password.reset`,
+  naming the admin and the member. The admin knows the password they set, as
+  they know the first one; the confirmation tells them to hand it over and ask
+  the person to change it, and nothing makes the person do so. The owner of a
+  single-owner household has nobody above them: their way back is the
+  operator, through [the installation guide](docs/INSTALL.md#a-forgotten-password).
 - Self-registration is the operator's to open: `STOKY_REGISTRATION` is
   `first-user` unless set, so the first account claims the instance and later
   people are added by a household admin. See
@@ -956,6 +975,8 @@ What is still open, and worth knowing before publishing an instance:
   what one account can do, not the instance's total.
 - **Adding a member is limited too**, at 20 per admin account per hour,
   counted before the password is hashed (security review, 2026-10-12).
+  Setting a member's password (`household.resetMemberPassword`) spends the
+  same budget, for the same hash: twenty a member added or a password set.
   `household.addMember` runs Argon2id at 64 MiB on every call before the
   database is asked anything, and a duplicate address pays that hash as well,
   because the unique index only answers once the row is written. Unmetered,
@@ -1113,7 +1134,8 @@ Docker collects: `docker compose logs app | jq 'select(.event ==
 "access.denied")'` works with nothing installed. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
 `auth.session.revoked`, `auth.password.changed`,
-`auth.password.change.refused`, `access.denied` and `request.throttled`.
+`auth.password.change.refused`, `auth.password.reset`, `access.denied` and
+`request.throttled`.
 
 - **The release bundle rotates them; Docker alone does not.** Docker's default
   `json-file` driver has no size limit, and every throttled refusal writes a
@@ -1295,7 +1317,8 @@ What is still open:
 
 `src/lib/validations/password.ts` is the policy, and it is applied wherever a
 password is *set*: registration, the accounts an admin creates for a
-household, and a person changing their own. Twelve characters minimum, a
+household, an admin setting a member's password
+(`household.resetMemberPassword`), and a person changing their own. Twelve characters minimum, a
 maximum of 128, a refusal of the handful of passwords that appear at the top
 of every leak, and a refusal to accept the account's own name or address as
 its password.
@@ -1308,8 +1331,8 @@ name and address beside it, so it checked with no identity at all, and both
 forms with an object-level check that attaches the refusal to `password`; the
 register page and the add-a-member form name it in words rather than as a
 generic failure. A procedure whose input carries no name or address has to
-load the person and check against them itself: `auth.changePassword` does,
-and an admin reset will have to.
+load the person and check against them itself: `auth.changePassword` and
+`household.resetMemberPassword` do.
 
 **No composition rules**, which is the opposite of what `ISSUES.md` DEBT-1
 proposed. That entry asked for the familiar four regexes — an uppercase, a
@@ -1407,7 +1430,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 `src/types/next-auth.d.ts` declares `role` on the session non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 64 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 65 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the JWT, so a
@@ -1474,8 +1497,10 @@ own.
 - No invitations: with registration closed, an admin sets a new person's first
   password and hands it over. The person can change it from Settings once
   signed in; nothing makes them.
-- No account lockout, no password reset flow, no email verification, no
-  two-factor authentication.
+- No account lockout, no email verification, no two-factor authentication,
+  and no self-service password reset: there is no email to send a link to. A
+  forgotten password is set again by a household admin; an owner's by another
+  owner or, for a sole owner, by the operator in the database.
 - No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the
   only workflows; Trivy scans images, not the source. Secret scanning, push
   protection and CodeQL are repository settings instead (see *Supply chain*),

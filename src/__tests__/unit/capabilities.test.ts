@@ -64,6 +64,12 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // Ending somebody else's sessions is the same authority as removing them,
     // and a strictly smaller act — it changes nothing about the household.
     revokeMemberSessions: "adminProcedure",
+    // Setting somebody else's password is the same authority that set their
+    // first one in `addMember`. Not the whole guard: the member must be this
+    // household's, only an owner may act on an owner, and nobody may use it
+    // on themselves — all inside the resolver, because a tier cannot see whom
+    // the call is about. `integration/household.members.test.ts` holds them.
+    resetMemberPassword: "adminProcedure",
   },
   "inventory.ts": {
     getStockOverview: "householdProcedure",

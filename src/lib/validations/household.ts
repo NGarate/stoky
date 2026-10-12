@@ -76,9 +76,38 @@ export const removeMemberSchema = z.object({
   userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
 });
 
+/**
+ * An admin setting a new password for somebody in the household.
+ *
+ * The way back for a member who has forgotten theirs: there is no email in
+ * this application, so there is no link to send, and until this existed a
+ * forgotten password was an account lost for good (security review,
+ * 2026-10-12).
+ *
+ * `newPassword` is the policy every password that is *set* meets. The
+ * identity rule is not applied here and cannot be: the input names the member
+ * by id and carries neither their name nor their address, so
+ * `household.resetMemberPassword` loads the member and applies it itself, the
+ * way `auth.changePassword` does for the caller.
+ */
+export const resetMemberPasswordSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+  newPassword: newPasswordSchema,
+});
+
+/**
+ * What `household.resetMemberPassword` says when the member named is the
+ * caller. English and shared, like the password messages: the screen never
+ * offers it, and a client that sends it anyway gets a sentence that says
+ * where to go instead.
+ */
+export const RESET_OWN_PASSWORD_MESSAGE =
+  "Change your own password from Settings, with your current one";
+
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
+export type ResetMemberPasswordInput = z.infer<typeof resetMemberPasswordSchema>;
 export type HouseholdInput = z.infer<typeof householdSchema>;
 export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;
 export type HouseholdMemberInput = z.infer<typeof householdMemberSchema>;

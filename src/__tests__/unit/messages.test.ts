@@ -321,6 +321,8 @@ describe("a password hint states the minimum the server enforces", () => {
   const HINTS = [
     ["auth", "passwordHintRegister"],
     ["household", "addPasswordHint"],
+    ["household", "resetPasswordHint"],
+    ["household", "resetTooShort"],
     ["password", "newPasswordHint"],
     ["password", "newPasswordTooShort"],
   ] as const;
@@ -394,7 +396,7 @@ describe("a password hint states the minimum the server enforces", () => {
     // caracteres." with the braces in it, and only the register page is
     // rendered by a component test.
     const CALL =
-      /\bt\(\s*"(passwordHintRegister|addPasswordHint|newPasswordHint|newPasswordTooShort)"([^)]*)\)/g;
+      /\bt\(\s*"(passwordHintRegister|addPasswordHint|resetPasswordHint|resetTooShort|newPasswordHint|newPasswordTooShort)"([^)]*)\)/g;
     const ARGUMENT = /^\s*,\s*\{\s*min:\s*MIN_PASSWORD_LENGTH\s*\}\s*$/;
     const found = new Set<string>();
     const bare: string[] = [];
@@ -411,6 +413,8 @@ describe("a password hint states the minimum the server enforces", () => {
       "newPasswordHint",
       "newPasswordTooShort",
       "passwordHintRegister",
+      "resetPasswordHint",
+      "resetTooShort",
     ]);
     expect(bare).toEqual([]);
   });

@@ -46,6 +46,11 @@ export type SecurityEvent =
   // theirs guessing at the password behind it. Refused with BAD_REQUEST, which
   // the refusal middleware in `trpc.ts` does not record, so it is written here.
   | "auth.password.change.refused"
+  // An admin set a new password for somebody else in the household, which
+  // also ended every session that person had. `userId` is the admin who did
+  // it and `targetUserId` the account it was done to: the line that answers
+  // "who set my password?" when the answer is not "you".
+  | "auth.password.reset"
   | "access.denied"
   | "request.throttled";
 
@@ -72,6 +77,8 @@ export interface SecurityDetails {
   email?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */
   fetchSite?: string;
+  /** The account an action was done *to*, when that is not `userId`. */
+  targetUserId?: string;
 }
 
 /**

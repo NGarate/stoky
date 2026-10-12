@@ -771,12 +771,13 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **64 procedures** — a count
-that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64: it reached 64
+`shopping`) merged in `src/server/trpc/router.ts`, **65 procedures** — a count
+that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
-2026-08-31 while this file went on saying 62 until 2026-10-12, and 64 with
-`auth.changePassword` on 2026-10-12) as phases closed
+2026-08-31 while this file went on saying 62 until 2026-10-12, 64 with
+`auth.changePassword` on 2026-10-12, and 65 with
+`household.resetMemberPassword` the same day) as phases closed
 and the export router arrived. Asserting the count structurally did not stop
 the drift, because nothing compared it with this sentence; since 2026-10-12
 `capabilities.test.ts` does, and fails when the two disagree. 10 Zod
@@ -836,7 +837,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 64 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 65 procedures assigned. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request rather than whenever the 15-minute
 token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment

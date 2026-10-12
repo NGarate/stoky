@@ -28,7 +28,7 @@ telling people something untrue.
 | # | The promise | Why it is false | Fix |
 |---|---|---|---|
 | P1 ✔ | "podrás cambiarle el nombre más adelante" (`household.noHouseholdBody`) | `household.ts` has no rename procedure | Add `household.rename` (OWNER/ADMIN), or drop the clause |
-| P2 ✔ | "La persona podrá cambiarla más adelante" (`household.addPasswordHint`) | No change-password procedure or page exists, and no admin reset either | Add change-own-password in Settings. Until then, reword. *Done 2026-10-12: `auth.changePassword`, on `/settings`; no admin reset yet* |
+| P2 ✔ | "La persona podrá cambiarla más adelante" (`household.addPasswordHint`) | No change-password procedure or page exists, and no admin reset either | Add change-own-password in Settings. Until then, reword. *Done 2026-10-12: `auth.changePassword`, on `/settings`, and the admin reset, `household.resetMemberPassword`, on `/settings/people`* |
 | P3 | `products.detail.deleteBlockedHistory` says the product is "archivado" | Nothing in the UI shows an archived state | Reword, or build the state |
 | P4 | `/settings` carries strings for notifications, household and profile | `settings/page.tsx:36-41` says itself that no procedure backs them | Remove until built |
 
@@ -62,7 +62,7 @@ High household value first. Items in §1 are not repeated here.
 | Feature | State | Value | Effort |
 |---|---|---|---|
 | **Expiry digest** (in-app badge or email; push stays deferred) | Expiry is shown, never pushed. `EXPIRING_SOON_DAYS = 3` is hard-coded | High | M |
-| **Password reset** without an admin | No mailer and no reset flow. On a self-hosted box, an admin reset (P2) is the realistic first step | High | S–M |
+| **Password reset** without an admin | No mailer and no reset flow. On a self-hosted box, an admin reset (P2) is the realistic first step. *The admin reset exists since 2026-10-12; a sole owner's way back is the operator (`docs/INSTALL.md`)* | High | S–M |
 | **Recipes / meal plan with stock check** | Absent (no model) | High, and the main reason people pick Grocy or Mealie | L |
 | **Mass/volume unit conversion** (g↔kg, ml↔L) | `lib/inventory/units.ts` converts counts only | Medium | M |
 | **Opened date** ("abierto hace 3 días") and frozen state | No field on `StockEntry` | Medium | M |
