@@ -72,6 +72,44 @@ test.describe("the headers a response actually carries", () => {
   });
 });
 
+/**
+ * `Cache-Control: no-store` on the tRPC route, as the server sends it.
+ *
+ * A query is a GET whose answer is one household's data, under a URL that is
+ * often the same for every account, and nothing but the handler marks it: tRPC
+ * sets no cache directive, Next sends a route handler's response as it is,
+ * and neither `headers()` nor Traefik adds one. A shared cache in front of
+ * the instance could otherwise store one person's answer and serve it to the
+ * next. `trpc-handler.test.ts` covers every kind of answer; this proves the
+ * header survives Next and reaches the wire. Not `/api/health`, which marks
+ * itself and would pass whatever the tRPC route did.
+ */
+test.describe("the tRPC route is never stored", () => {
+  const QUERY = `/api/trpc/location.list?batch=1&input=${encodeURIComponent("{}")}`;
+
+  test.describe("signed in", () => {
+    test.use({ storageState: SESSION_FILE });
+
+    test("a household's data is marked no-store, streamed as the browser asks", async ({
+      request,
+    }) => {
+      const response = await request.get(QUERY, {
+        headers: { "trpc-accept": "application/jsonl" },
+      });
+
+      expect(response.status()).toBe(200);
+      expect(headerOf(response, "cache-control")).toBe("no-store");
+    });
+  });
+
+  test("so is the refusal an anonymous caller gets", async ({ request }) => {
+    const response = await request.get(QUERY);
+
+    expect(response.status()).toBe(401);
+    expect(headerOf(response, "cache-control")).toBe("no-store");
+  });
+});
+
 test.describe("the Content-Security-Policy, as production serves it", () => {
   test("is present, and its nonce is different on every request", async ({
     request,

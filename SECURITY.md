@@ -280,6 +280,19 @@ Verified against the files named in each row.
   that allows `camera=(self)` for the barcode scanner and denies everything
   else.
 - `poweredByHeader: false`, so responses do not advertise the framework version.
+- **Every response from `/api/trpc` carries `Cache-Control: no-store`** —
+  data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at
+  the handler's exit in `src/server/http/trpc-handler.ts`. Until 2026-10-12
+  nothing set one: tRPC adds no cache directive, Next sends a route handler's
+  response as it is, and neither `next.config.ts` nor Traefik adds one. A
+  query is a GET carrying one household's data, often under a URL that is the
+  same for every account, with a `Vary` that does not name the cookie, so a
+  shared cache in front of the instance could have served one person's
+  answer to the next. Offline reads are unaffected: TanStack Query persists
+  them in client storage, and the service worker never caches `/api/`.
+  `src/__tests__/unit/trpc-handler.test.ts` checks each kind of answer;
+  `e2e/security-headers.spec.ts` checks a signed-in streamed query and an
+  anonymous 401 against the production build.
 
 ### Request bodies — `src/server/http/body-limit.ts`
 
@@ -1243,6 +1256,10 @@ TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
 An instance open to the internet needs a per-address connection cap in front
 of Traefik, which the bundle cannot provide: see "One address can hold
 Traefik's connections open" above.
+If a CDN sits in front of it, give it no rule that caches everything or
+overrides the origin's `Cache-Control`: `/api/trpc` marks every answer
+`no-store`, and a cache told to ignore that would serve one household's data
+to another.
 
 ### Keep it updated
 

@@ -360,3 +360,97 @@ describe("who sent the request, and in what form", () => {
     });
   }
 });
+
+describe("every response", () => {
+  /**
+   * One of each kind of answer the endpoint gives, from tRPC and from the
+   * guards in front of it. A shared cache that stored any of them would hand
+   * it to whoever asked for the same URL next: a household's data, or a
+   * refusal meant for somebody else.
+   */
+  const answers: [label: string, send: () => Promise<Response>, status: number][] = [
+    ["a query's data", () => handlerFor(SIGNED_IN)(get("whoami")), 200],
+    [
+      // What the browser's link asks for: the response is a stream, and its
+      // headers are fixed before the first line of it is written.
+      "a streamed batch",
+      () => handlerFor(SIGNED_IN)(get("whoami,whoami?batch=1", { "trpc-accept": "application/jsonl" })),
+      200,
+    ],
+    [
+      "a mutation's result",
+      () =>
+        handlerFor(SIGNED_IN)(
+          new Request("http://localhost/api/trpc/touch", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+          }),
+        ),
+      200,
+    ],
+    ["an error from a procedure", () => handlerFor(SIGNED_IN)(get("missing")), 404],
+    ["a refusal for want of a session", () => handlerFor(null)(get("whoami")), 401],
+    ["a throttled call", () => handlerFor(SIGNED_IN)(get("throttled")), 429],
+    [
+      "a batch over the limit",
+      () =>
+        handlerFor(null)(
+          get(`${Array.from({ length: MAX_TRPC_BATCH_SIZE + 1 }, () => "whoami").join(",")}?batch=1`),
+        ),
+      400,
+    ],
+    [
+      "a cross-site refusal",
+      () => handlerFor(SIGNED_IN)(get("whoami", { "sec-fetch-site": "cross-site" })),
+      403,
+    ],
+    [
+      "a refusal of a body that is not JSON",
+      () =>
+        handlerFor(SIGNED_IN)(
+          new Request("http://localhost/api/trpc/touch", {
+            method: "POST",
+            headers: { "content-type": "application/octet-stream" },
+            body: "{}",
+          }),
+        ),
+      415,
+    ],
+    [
+      "a refusal of a body over the limit",
+      () =>
+        handlerFor(null)(
+          new Request("http://localhost/api/trpc/echo", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "content-length": String(MAX_TRPC_BODY_BYTES + 1),
+            },
+            body: "{}",
+          }),
+        ),
+      413,
+    ],
+  ];
+
+  for (const [label, send, status] of answers) {
+    it(`is marked no-store: ${label}`, async () => {
+      const response = await send();
+
+      // The status first, so a case that stopped being the answer it names
+      // cannot pass on the header alone.
+      expect(response.status).toBe(status);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    });
+  }
+
+  it("keeps Retry-After beside it on a throttled call", async () => {
+    // The header is set on the response tRPC built, not on a new one, so
+    // nothing responseMeta put there is lost.
+    const response = await handlerFor(SIGNED_IN)(get("throttled"));
+
+    expect(response.headers.get("retry-after")).toBe("42");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+});

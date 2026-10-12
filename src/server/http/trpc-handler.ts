@@ -34,7 +34,7 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
   getSession,
   createContext,
 }: TrpcHandlerOptions<TRouter>): (req: Request) => Promise<Response> {
-  return async (incoming) => {
+  const answer = async (incoming: Request): Promise<Response> => {
     // Who sent it and in what form, before anything else: both are headers,
     // so refusing on them costs nothing, and a request that should not be here
     // has its body neither read nor held.
@@ -78,6 +78,36 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
       },
     });
   };
+
+  return async (incoming) => withNoStore(await answer(incoming));
+}
+
+/**
+ * `Cache-Control: no-store` on every response this endpoint gives — RFC 9111
+ * §5.2.2.5.
+ *
+ * **Nothing else marks them.** tRPC sets no cache directive on its JSON, Next
+ * sends a route handler's response as it is, and neither the config's
+ * `headers()` nor Traefik adds one. A query is a GET carrying one household's
+ * stock, prices, receipts and members, under a URL that is often the same for
+ * every account (`input={}`) and a `Vary` that does not name the cookie. A
+ * shared cache in front of the instance — a CDN rule that caches everything,
+ * a caching reverse proxy — could store one person's answer and give it to the
+ * next person who asks for that URL, signed in or not.
+ *
+ * **Here, at the one exit, rather than in `responseMeta`.** `responseMeta`
+ * reaches only the responses tRPC builds; the 403, 415 and 413 above are built
+ * before tRPC is called, and a refusal added later would have to remember the
+ * header for itself. A cached refusal is wrong too: a 429 would be served to
+ * people who were never throttled.
+ *
+ * **Offline reads do not depend on the HTTP cache**, so this costs them
+ * nothing: TanStack Query persists them in client storage
+ * (`src/lib/offline/`), and the service worker passes `/api/` straight through.
+ */
+function withNoStore(response: Response): Response {
+  response.headers.set("cache-control", "no-store");
+  return response;
 }
 
 /**
