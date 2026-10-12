@@ -28,8 +28,21 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 /** Keys that describe the delivery of a mutation, not the mutation. */
 const ENVELOPE_KEYS = ["idempotencyKey", "composedByUserId"] as const;
 
-/** How long a claim is remembered. */
-export const REPLAY_RETENTION_DAYS = 7;
+/**
+ * How long a claim is remembered — and so how late a replay is still a replay.
+ *
+ * The client queue keeps a change until it is answered, at any age: a tab
+ * closed mid-flight after the server committed resends the same key whenever
+ * it is next opened. Past this window the claim may have been swept (by any
+ * other replayable call from the same account), the resend claims afresh, and
+ * the change applies a second time. Seven days was shorter than a holiday or a
+ * kitchen tablet left in a drawer. Ninety makes the window hard to reach; it
+ * does not close it — only a client that stops sending a possibly-applied
+ * change older than this can (ISSUES OFFLINE-1). Rows are a few ids each and
+ * swept per account, so the longer window costs little. It is stamped on each
+ * claim as `expiresAt` when written, so changing it moves no existing row.
+ */
+export const REPLAY_RETENTION_DAYS = 90;
 
 /** Bounds for the transaction, rather than Prisma's 2s/5s defaults. */
 const TRANSACTION_BOUNDS = { maxWait: 5_000, timeout: 10_000 } as const;

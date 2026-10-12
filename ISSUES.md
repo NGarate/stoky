@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1 and LOC-2.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2 and OFFLINE-1.** TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -113,6 +113,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | LOC-1 | Two concurrent location moves could leave two locations inside each other, and a move into the loop never finished | ✅ Resolved 2026-10-12 |
 | LOC-2 | No screen or call can move a nested location back to the top level | 🟡 Open — found fixing LOC-1 |
 | HOUSE-2 | Two concurrent `household.create` calls from one account left a household with no member | ✅ Resolved 2026-10-12 |
+| OFFLINE-1 | A queued change resent after its replay record was swept is applied a second time | 🟡 Open — window widened from 7 to 90 days 2026-10-12; the client-side age gate is the fix |
 
 ---
 
@@ -756,6 +757,64 @@ calls this "the bug `auth.register` has". It is a separate path with its own
 change and is not touched by this one. Households already left without a member
 are not deleted: there is no erasure path yet, and a sweep would have to be
 checked against everything that cascades from a household first.
+
+---
+
+### 🟡 OFFLINE-1: A queued change resent after its replay record was swept is applied a second time
+
+**Files:** `src/server/trpc/replay.ts` (`REPLAY_RETENTION_DAYS`,
+`sweepExpired`), `src/lib/offline/queue.ts` (`drain`, `retry`)
+**Severity:** LOW — data integrity in the caller's own household: a stock
+consumption, a stock entry, a shopping item or a scan counted twice. No other
+household is reachable and nothing is bypassed.
+**Status:** OPEN — mitigated 2026-10-12 by a longer window, not fixed. Found by
+the 2026-10-12 security review, confirmed by both verifiers by reading the code
+
+`withReplay` remembers a claim for `REPLAY_RETENTION_DAYS` and every
+replayable call deletes the caller's expired claims on its way out. The
+client queue has no age limit: `createdAt` is read only for the undo hold, a
+request that never reached a server is not a strike, a 401 keeps the whole
+queue, and the `failed` list persists until a person discards it. So a change
+the server applied but whose reply was lost — most simply, the tab closed
+mid-flight — stays queued and is resent with the same key whenever the app is
+next opened online. If by then the claim has been swept, the resend claims
+afresh and applies again.
+
+Narrower than "any resend after the window": on one device the stale change
+is the head of the queue and drains first, and an expired claim nobody has
+swept yet still answers it (`answerFromRecord` does not read `expiresAt`). A
+double apply needs a replayable call from the **same account** after the
+window and before the resend — a second device signed in to it, or `retry`
+putting a failed change behind newer ones. `retry`'s comment, "a change the
+server did in fact apply is recognised rather than applied twice", holds only
+inside the window.
+
+**Mitigated:** `REPLAY_RETENTION_DAYS` went from 7 to 90. Seven days was
+shorter than a holiday, and the redesign's own kitchen tablet is "possibly
+untouched for days" (`docs/REDESIGN_PLAN.md` §4). Rows hold a few ids each and
+are swept per account, so the longer window is a slightly larger table and
+nothing else. Pinned by "still recognises a change applied thirty days ago" in
+`src/__tests__/integration/replay.test.ts` (real PostgreSQL): it ages a claim
+by thirty days, lets another call sweep, resends, and asserts one row and the
+first call's id. With the retention set back to 7 it goes red — the resend
+returned a new id. The window is stamped on a claim when it is written
+(`expiresAt`), and the sweep reads that, so on an upgraded install the claims
+written before the upgrade keep their seven days; the ninety are in force for
+every claim seven days after the upgrade.
+
+**Why that is not the fix.** Any finite retention leaves the same hole at its
+edge, and an infinite one is an unbounded table. The fix is on the client,
+which alone knows whether a change *may* have been applied: persist the time
+of an op's first attempt before sending it, in line with the queue's "persist,
+then attempt" rule; at drain time, move an op whose first attempt is older
+than the retention less a margin into `failed` with a reason of its own that
+asks the person to confirm, rather than sending it; and have `retry` say the
+same for such an op. A change that was never attempted cannot have a claim,
+so it keeps sending at any age and an offline shop is never lost. A
+server-side guard on a client-sent composition time was considered and is the
+weaker option: it trusts the device clock, needs an optional envelope field
+for queues already persisted in browsers, and would refuse never-sent changes
+that are safe to apply.
 
 ---
 
