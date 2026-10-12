@@ -398,6 +398,26 @@ appearing to work. It clones the full history instead now, so the diff is local
 and needs no credential. A gate whose failure mode is "does nothing quietly" has
 to be watched being exercised, which is what the docs-only push is for.
 
+**2026-10-12: a run that can publish is no longer cancelled.** The concurrency
+group used to cancel every superseded run. On master, a cancel can land inside
+`image-publish` after `Push` has moved `latest` and `sha-<commit>` but before
+`Attest provenance` runs, which leaves a published image with no signed
+provenance. Run `38159258844` was cancelled four seconds into `Push`. GHCR
+answers 404 for its `sha-` tag, so that run pushed nothing, and no unattested
+image has been found. The window is the last seconds of `Push` plus the 6–7s of
+attestation. `cancel-in-progress` is now `github.event_name == 'pull_request'`,
+the negation of `image-publish`'s own `if`, so a superseded pull-request run is
+still cancelled and nothing that reaches `image-publish` is: a master or tag
+push, and a `workflow_dispatch` on any ref, which pushes `sha-<commit>` even
+from a feature branch. The cost is that a newer run on the same ref waits for
+the running one instead of replacing it. GitHub keeps one pending run per group
+and replaces it with the newest, so a burst of pushes still collapses to two
+runs, but trunk feedback can lag by one run. The other proposed fix, a
+job-level group on `image-publish`, would not work: the workflow-level cancel
+takes every job in the run. `src/__tests__/unit/ci-workflow.test.ts` evaluates
+both conditions for every trigger the workflow declares. Not yet exercised on
+GitHub.
+
 **The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
 over the workflow and shellcheck over `scripts/*.sh`, and runs as the first step
 of the `quality` job. Both come from `rhysd/actionlint:1.7.12` pinned by its

@@ -12,10 +12,20 @@ on:
     branches: [master]
   workflow_dispatch:
 
-# Superseded runs are wasted work on a trunk. Cancel them.
+# A superseded pull-request run is wasted work, so it is cancelled. Every other
+# run is not: push (master or a release tag) and workflow_dispatch (on any ref)
+# all reach image-publish, and a cancel between the push that moves `latest` or
+# `sha-<commit>` and the step that attests it leaves a published image with no
+# provenance. The condition is the negation of image-publish's own `if`, so a
+# run that can publish is never cancelled. A job-level group on image-publish
+# cannot protect it, because this cancel takes the whole run. A newer run on
+# the same ref therefore waits instead; GitHub keeps one pending run per group
+# and replaces it with the newest, so a burst of pushes still collapses to the
+# running run plus the latest one, published in commit order.
+# src/__tests__/unit/ci-workflow.test.ts holds this.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default. Jobs that need more ask for it explicitly.
 permissions:
@@ -523,7 +533,9 @@ jobs:
     timeout-minutes: 10
     needs: [quality, test, e2e, audit, image-build]
     # A pull request is verified, scanned included, but publishes nothing: no
-    # `sha-` tag for a commit that is not on master, and no `latest`.
+    # `sha-` tag for a commit that is not on master, and no `latest`. The
+    # workflow's `cancel-in-progress` is this condition negated, so a run that
+    # reaches this job is never cancelled; ci-workflow.test.ts holds the pair.
     if: github.event_name != 'pull_request'
     outputs:
       digest: ${{ steps.push.outputs.digest }}
