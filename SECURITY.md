@@ -222,7 +222,18 @@ Verified against the files named in each row.
   all. `src/__tests__/unit/deployment.test.ts` pins both flags. Traefik still
   contacts Let's Encrypt, which it must to issue and renew the certificate.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
-  HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
+  HSTS (two years, `includeSubDomains`), `nosniff` and `frameDeny`.
+- **HSTS does not send `preload`**, from Traefik or from the app. The token is
+  the domain owner's consent to the browsers' built-in HSTS lists:
+  hstspreload.org checks the header, not who submits, and leaving the list is
+  slow. Until 2026-10-12 both layers sent it on whatever `DOMAIN` an operator
+  chose, so anyone could have submitted an apex install's domain, every
+  subdomain with it; hstspreload.org asks software that ships HTTPS defaults
+  not to send it (`docs/SECURITY_REVIEW.md` §8). An operator who wants
+  preloading adds it at their own proxy. `includeSubDomains` stays, as ASVS 5
+  V3.4.1 asks; on an apex `DOMAIN` it makes every host under that domain
+  HTTPS-only for two years in each browser that opens Stoky, which
+  `docs/INSTALL.md` warns about.
 - **TLS 1.2 or later, and at 1.2 only forward-secret AEAD suites** — ECDHE
   with AES-GCM or ChaCha20-Poly1305, Mozilla's "intermediate" profile, in the
   `tls.options.default` block of `deploy/traefik.yml`. Without it Traefik takes
@@ -294,9 +305,10 @@ Verified against the files named in each row.
   self-hosted app runs behind whatever proxy the operator already has:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: strict-origin-when-cross-origin`,
-  `X-Permitted-Cross-Domain-Policies: none`, HSTS, and a `Permissions-Policy`
-  that allows `camera=(self)` for the barcode scanner and denies everything
-  else.
+  `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
+  sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
+  `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
+  denies everything else.
 - `poweredByHeader: false`, so responses do not advertise the framework version.
 - **Every response from `/api/trpc` carries `Cache-Control: no-store`** —
   data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at

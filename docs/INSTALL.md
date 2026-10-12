@@ -17,7 +17,9 @@ and Traefik. You do not need Git, Node.js, Bun or a local build.
 - A starting allocation of **2 CPU cores and 4 GiB RAM**, plus disk space for
   images, PostgreSQL, uploaded receipts and backups. This is a planning allowance,
   not a measured minimum. OCR performance depends on the host and photographs.
-- A hostname you control, with DNS pointing to the server. The included TLS-ALPN
+- A hostname you control, with DNS pointing to the server — preferably a
+  dedicated subdomain such as `stoky.example.com`, for the reason given under
+  `DOMAIN` in step 2. The included TLS-ALPN
   challenge requires Let's Encrypt to reach **TCP 443**; clients use TCP 80/443.
   Both ports must be free. An existing proxy or a LAN-only/VPN-only installation
   needs its own trusted TLS configuration; the supplied ACME setup does not work
@@ -161,6 +163,15 @@ Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating `NEXTAUTH_SECRET` invalidates existing sessions. The bundle derives
 `DATABASE_URL`, `VALKEY_URL` and `NEXTAUTH_URL` itself, so you do not edit them.
 Keep `.env` private and out of version control.
+
+**Prefer a dedicated subdomain for `DOMAIN`.** Stoky sends HSTS for two years
+with `includeSubDomains`, from the app and from Traefik. On `stoky.example.com`
+that covers only the hosts beneath it. On an apex such as `example.com`, every
+browser that opens Stoky then refuses plain `http://` for **every** host under
+that domain — a router, a NAS, another service — for two years, and changing
+`DOMAIN` afterwards does not release it. Neither layer sends `preload`: listing
+a domain in the browsers' built-in HSTS lists is close to permanent and covers
+the whole domain, so it is left to the domain's owner, at their own proxy.
 
 PostgreSQL uses its password setting **only when creating a new data volume**.
 Editing `POSTGRES_PASSWORD` later does not rotate the database password; it
@@ -310,6 +321,9 @@ docker compose config --quiet
 docker compose pull
 docker compose up -d --wait --wait-timeout 180
 ```
+
+The Traefik file sets the proxy's security headers as well as its routing, so
+an upgrade that replaces only the image keeps the previous release's headers.
 
 Confirm health, sign-in and your data. Automatic alpha updates are not supported.
 Migrations run automatically and are not automatically reversible: a rollback may

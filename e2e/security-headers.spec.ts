@@ -31,7 +31,7 @@ const STATIC_HEADERS: Record<string, string> = {
   "referrer-policy": "strict-origin-when-cross-origin",
   "permissions-policy":
     "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
-  "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+  "strict-transport-security": "max-age=63072000; includeSubDomains",
   "x-permitted-cross-domain-policies": "none",
 };
 

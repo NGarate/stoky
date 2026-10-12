@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import nextConfig from "../../../next.config";
 
 const root = join(import.meta.dir, "../../..");
 
@@ -255,5 +256,64 @@ describe("the downloadable installation", () => {
         ],
       },
     });
+  });
+});
+
+interface StsHeaders {
+  stsSeconds?: number;
+  stsIncludeSubdomains?: boolean;
+  stsPreload?: boolean;
+}
+
+/**
+ * HSTS without `preload`, from both layers, and the same value from each.
+ *
+ * `preload` is the domain owner's consent to the browsers' built-in lists:
+ * hstspreload.org checks the header, not who submits, and leaving the list is
+ * slow. Until 2026-10-12 both Traefik and the app sent it on whatever DOMAIN an
+ * operator chose, so an apex install could be listed by anyone, every
+ * subdomain with it. hstspreload.org asks software that ships HTTPS defaults
+ * not to send it (docs/SECURITY_REVIEW.md §8).
+ *
+ * Both layers are asserted because each reaches someone the other does not:
+ * Traefik's headers middleware replaces the app's value behind the bundle, and
+ * the app's is the only one behind an operator's own proxy.
+ * `e2e/security-headers.spec.ts` pins the exact value the production build
+ * sends; this pins Traefik's, which nothing serves in a test.
+ */
+describe("HSTS", () => {
+  const dynamic = Bun.YAML.parse(
+    readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+  ) as { http: { middlewares: Record<string, { headers?: StsHeaders }> } };
+  const traefik = dynamic.http.middlewares["stoky-security"].headers!;
+
+  /** The value Traefik's headers middleware builds from its options. */
+  function traefikValue(options: StsHeaders): string {
+    let value = `max-age=${options.stsSeconds}`;
+    if (options.stsIncludeSubdomains) value += "; includeSubDomains";
+    if (options.stsPreload) value += "; preload";
+    return value;
+  }
+
+  async function appValue(): Promise<string | undefined> {
+    const rules = (await nextConfig.headers?.()) ?? [];
+    const all = rules.find((rule) => rule.source === "/:path*");
+    return all?.headers.find((header) => header.key === "Strict-Transport-Security")?.value;
+  }
+
+  it("does not ask for preloading at the bundled proxy", () => {
+    expect(traefik.stsPreload).not.toBe(true);
+    // Two years and subdomains stay: ASVS 5 V3.4.1. docs/INSTALL.md warns what
+    // includeSubDomains does when DOMAIN is an apex.
+    expect(traefik.stsSeconds).toBe(63072000);
+    expect(traefik.stsIncludeSubdomains).toBe(true);
+  });
+
+  it("does not ask for preloading from the app", async () => {
+    expect(await appValue()).toBe("max-age=63072000; includeSubDomains");
+  });
+
+  it("sends the same policy from the app as from Traefik", async () => {
+    expect(await appValue()).toBe(traefikValue(traefik));
   });
 });

@@ -21,7 +21,10 @@ http:
       headers:
         stsSeconds: 63072000
         stsIncludeSubdomains: true
-        stsPreload: true
+        # Sin preload: inscribir el dominio en las listas de los navegadores
+        # es decisión del dueño del dominio. / No preload: listing the domain
+        # in browsers' built-in lists is the domain owner's decision.
+        stsPreload: false
         contentTypeNosniff: true
         frameDeny: true
 # TLS 1.2 or later; at 1.2, only forward-secret AEAD suites (Mozilla

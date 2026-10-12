@@ -782,6 +782,33 @@ it fails on the status — 200, the PNG — and with the exclusion restored on t
 policy, an empty string; the unit tests fail on the same two mutations, and
 the loader assertion on `loader: "custom"`.
 
+**Found 2026-10-12: HSTS invited preloading of the operator's domain.**
+`next.config.ts` and Traefik's `stoky-security` middleware both sent
+`max-age=63072000; includeSubDomains; preload` on whatever `DOMAIN` the
+operator chose, and nothing in `example.env` changed it. `preload` is the
+domain owner's consent to the browsers' built-in HSTS lists, and
+hstspreload.org checks the header, not who submits: on an apex install the
+bundle met every criterion it controls (the header and the same-host HTTPS
+redirect; HTTPS on `www` depends on the operator's DNS), so anyone could have
+listed the domain and every host under it, and removal is slow. hstspreload.org asks software that ships
+HTTPS defaults not to send it. Low, and harm to the operator rather than an
+attack: the documented example is a subdomain, which the list does not accept.
+
+**Fixed: no `preload` in either layer, the rest kept.** The app sends
+`max-age=63072000; includeSubDomains` and Traefik has `stsPreload: false`.
+`includeSubDomains` stays because ASVS 5 V3.4.1 asks for it; its cost on an
+apex — every plain-http host under the domain unreachable for two years in a
+browser that has opened Stoky — is now a warning beside `DOMAIN` in
+`docs/INSTALL.md` instead of a surprise. Both layers change together because
+each reaches someone the other does not: Traefik's middleware replaces the
+app's value behind the bundle, and the app's is the only one behind an
+operator's own proxy. "HSTS" in `deployment.test.ts` asserts Traefik's options
+(no preload, two years, subdomains), the app's exact value, and that the app's
+equals the string Traefik builds from its options; restoring `stsPreload: true`
+fails the first and third, restoring `preload` in the app the second and
+third, and dropping `includeSubDomains` from the app alone the second and
+third. `security-headers.spec.ts` pins the new value on the production build.
+
 ---
 
 ## The `SECURITY.md` corrections

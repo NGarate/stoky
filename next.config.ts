@@ -24,9 +24,14 @@ const securityHeaders = [
     value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
   },
   // Two years, matching the Traefik middleware. Only applies over HTTPS.
+  // No `preload`: that token is the domain owner's consent to the browsers'
+  // built-in lists, which anyone may then submit the domain to, and
+  // hstspreload.org asks software shipping HTTPS defaults not to send it. It is
+  // the operator's decision, made at their own proxy. `includeSubDomains`
+  // stays (ASVS 5 V3.4.1); docs/INSTALL.md warns what it does on an apex.
   {
     key: "Strict-Transport-Security",
-    value: "max-age=63072000; includeSubDomains; preload",
+    value: "max-age=63072000; includeSubDomains",
   },
   { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
 ];
