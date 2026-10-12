@@ -164,10 +164,23 @@ Verified against the files named in each row.
   what Tesseract is later handed. Before it, a 6.1 MB noise PNG at 7000 × 7000
   was stored as a 47 MB JPEG at full size; it is now 11.7 MB at 4000 × 4000
   (measured, `Bun.Image` at quality 90) — smaller, but still more than the
-  10 MB the upload accepts. A 12-megapixel phone photograph (4000 × 3000) is
-  untouched. Photographs stored before the bound are not rewritten and keep
-  their size on disk; OCR runs once, at upload, and nothing re-processes a
-  stored receipt, so none of them is handed to Tesseract again.
+  10 MB the upload accepts, which the next point refuses. A 12-megapixel
+  phone photograph (4000 × 3000) is untouched. Photographs stored before the
+  bound are not rewritten and keep their size on disk; OCR runs once, at
+  upload, and nothing re-processes a stored receipt, so none of them is
+  handed to Tesseract again.
+- **The re-encoded file is held to the same 10 MB as the upload**, and one
+  over it is refused with `BAD_REQUEST` before a directory, a file or a row
+  is written. The two caps are not the same thing: one bit per pixel of
+  black-and-white noise does not deflate and costs a JPEG about a byte, so a
+  2.0 MB palette PNG at 4000 × 4000 re-encoded to 15.4 MB (measured, 7.7×).
+  Without the check that was seven times the bytes sent, and half as much
+  again as the largest upload accepted, written to a volume that in the
+  release bundle is a plain named volume beside PostgreSQL's — on the same
+  disk unless the operator moves it. With it nothing stored is larger than
+  what could have been sent; storage still grows without bound over time,
+  because nothing is deleted and there is no per-household quota
+  (`docs/SECURITY_REVIEW.md` finding 16).
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.

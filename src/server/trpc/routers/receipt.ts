@@ -178,7 +178,8 @@ export const receiptRouter = createTRPCRouter({
    * type, size, magic bytes, then a re-encode through `Bun.Image`
    * (`src/server/services/image.ts`) that strips EXIF and normalises the
    * format — so what lands on disk is an image this server produced rather
-   * than a file a caller supplied. The name is a UUID, in a per-household
+   * than a file a caller supplied — and the same size cap again on what the
+   * re-encode produced. The name is a UUID, in a per-household
    * directory, served only through an authenticated query.
    *
    * Metered at 30 per account per hour, counted *before* the base64 is decoded
@@ -258,6 +259,20 @@ export const receiptRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Failed to process image",
+        });
+      }
+
+      // The 10 MB cap above bounds what was *sent*; this bounds what is
+      // *kept*, and the two differ: a 2 MB one-bit noise PNG at
+      // 4000 × 4000 re-encodes to a 15 MB JPEG, measured, and nothing is ever
+      // deleted (SECURITY_REVIEW #16), so the gap was a way to fill the disk
+      // the database shares at seven times the bytes sent. The bound is the
+      // upload's own, so nothing stored is larger than what could have been
+      // sent. Refused before the directory, the file or the row exists.
+      if (processedBuffer.length > MAX_RECEIPT_BYTES) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Processed image exceeds 10MB limit",
         });
       }
 

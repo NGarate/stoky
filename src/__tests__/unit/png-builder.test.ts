@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { pngClaiming, pngOf } from "../utils/png";
+import { pngClaiming, pngNoise, pngOf } from "../utils/png";
 import { MAX_PIXELS, readImageMetadata, reencodeAsJpeg } from "@/server/services/image";
 
 /**
@@ -100,5 +100,32 @@ describe("a PNG that is what it says", () => {
     expect(twelveMegapixels.length).toBeLessThan(64 * 1024);
     expect(4000 * 3000).toBeLessThan(MAX_PIXELS);
     expect((await readImageMetadata(twelveMegapixels)).width).toBe(4000);
+  });
+});
+
+describe("a PNG of one-bit noise", () => {
+  // The fixture for the storage amplification `receipt.upload` refuses. It is
+  // only that fixture if it really is one bit a pixel and really is noise: a
+  // builder that quietly wrote flat colour would make the refusal test fail
+  // for the wrong reason, and one that wrote 8-bit would never be under the cap.
+
+  it("decodes at the size it declares", async () => {
+    const metadata = await readImageMetadata(pngNoise(4000, 4000));
+
+    expect(metadata.width).toBe(4000);
+    expect(metadata.height).toBe(4000);
+  });
+
+  it("weighs about an eighth of a byte a pixel, because noise does not deflate", () => {
+    // 4000 × 4000 / 8 = 2,000,000 bytes of pixels, plus a filter byte a row.
+    const noise = pngNoise(4000, 4000);
+
+    expect(noise.length).toBeGreaterThan(2_000_000);
+    expect(noise.length).toBeLessThan(2_100_000);
+  });
+
+  it("is the same bytes every time, so a size threshold is not luck", () => {
+    expect(pngNoise(200, 200).equals(pngNoise(200, 200))).toBe(true);
+    expect(pngNoise(200, 200).equals(pngNoise(200, 200, 7))).toBe(false);
   });
 });

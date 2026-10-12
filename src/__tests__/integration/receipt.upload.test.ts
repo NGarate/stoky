@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { readFile, rm } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import { exifPayload, hasExif, isJpeg } from "../utils/jpeg";
 import { withExif } from "../utils/exif";
-import { pngOf } from "../utils/png";
+import { pngNoise, pngOf } from "../utils/png";
 import { reencodeAsJpeg } from "@/server/services/image";
+import { MAX_RECEIPT_BYTES } from "@/lib/validations/receipt";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
@@ -208,5 +209,61 @@ describe("the row that points at it", () => {
     expect(first.imagePath).not.toBe(second.imagePath);
     await expect(readFile(first.imagePath)).resolves.toBeDefined();
     await expect(readFile(second.imagePath)).resolves.toBeDefined();
+  });
+});
+
+describe("a photograph that grows when it is re-encoded", () => {
+  // The 10 MB cap was on what was sent, and nothing bounded what was kept. A
+  // one-bit noise PNG is the image that tells the two apart: an eighth of a
+  // byte a pixel to send, about a byte a pixel as a JPEG. RGB noise would not
+  // do — it shrinks on re-encode — and a test built on it could not fail.
+
+  /** What this household's upload directory holds, or nothing if it is not there. */
+  async function filesOnDisk(): Promise<string[]> {
+    try {
+      return await readdir(`uploads/receipts/${householdId}`);
+    } catch {
+      return [];
+    }
+  }
+
+  async function uploadPng(png: Buffer) {
+    return caller.receipt.upload({
+      fileBase64: png.toString("base64"),
+      mimeType: "image/png",
+    });
+  }
+
+  it("is refused when what would be stored is over the cap, and leaves nothing behind", async () => {
+    const noise = pngNoise(4000, 4000);
+
+    // The premise, both halves: the upload itself is under the cap, so the
+    // input check cannot be what refuses it, and the JPEG it becomes is over.
+    expect(noise.length).toBeLessThan(MAX_RECEIPT_BYTES);
+    expect((await reencodeAsJpeg(noise)).length).toBeGreaterThan(MAX_RECEIPT_BYTES);
+
+    const filesBefore = await filesOnDisk();
+    const rowsBefore = await prisma.receipt.count({ where: { householdId } });
+
+    await expect(uploadPng(noise)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    // Refused before the write, not after it: no file, no row pointing at one.
+    expect(await filesOnDisk()).toEqual(filesBefore);
+    expect(await prisma.receipt.count({ where: { householdId } })).toBe(rowsBefore);
+  });
+
+  it("is accepted when what would be stored is under it, from the same builder", async () => {
+    // The control. Same kind of image, smaller canvas: refused above means
+    // refused for the size of the result, not for being noise or a palette.
+    // Small on purpose — an accepted upload goes on to the real Tesseract, and
+    // a full-size page of noise is a slow, hungry thing to hand it in a test.
+    const noise = pngNoise(800, 800);
+    expect((await reencodeAsJpeg(noise)).length).toBeLessThan(MAX_RECEIPT_BYTES);
+
+    const receipt = await uploadPng(noise);
+    written.push(receipt.imagePath);
+
+    const onDisk = await readFile(receipt.imagePath);
+    expect(onDisk.length).toBeLessThanOrEqual(MAX_RECEIPT_BYTES);
   });
 });

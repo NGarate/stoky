@@ -52,12 +52,27 @@ function chunk(type: string, data: Buffer): Buffer {
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-function assemble(width: number, height: number, idat: Buffer): Buffer {
+/** Truecolour at 8 bits unless a caller says otherwise; only the noise asks. */
+interface Header {
+  bitDepth: number;
+  colourType: number;
+  /** Chunks between `IHDR` and `IDAT` — a palette, for colour type 3. */
+  before?: Buffer[];
+}
+
+const TRUECOLOUR: Header = { bitDepth: 8, colourType: 2 };
+
+function assemble(
+  width: number,
+  height: number,
+  idat: Buffer,
+  header: Header = TRUECOLOUR,
+): Buffer {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // colour type: truecolour
+  ihdr[8] = header.bitDepth;
+  ihdr[9] = header.colourType;
   ihdr[10] = 0; // compression: deflate
   ihdr[11] = 0; // filter
   ihdr[12] = 0; // interlace: none
@@ -65,6 +80,7 @@ function assemble(width: number, height: number, idat: Buffer): Buffer {
   return Buffer.concat([
     SIGNATURE,
     chunk("IHDR", ihdr),
+    ...(header.before ?? []),
     chunk("IDAT", idat),
     chunk("IEND", Buffer.alloc(0)),
   ]);
@@ -97,4 +113,46 @@ export function pngClaiming(width: number, height: number): Buffer {
 export function pngOf(width: number, height: number): Buffer {
   const scanlines = Buffer.alloc(height * (1 + width * 3));
   return assemble(width, height, deflateSync(scanlines));
+}
+
+/**
+ * Black-and-white noise at one bit per pixel: cheap to send, dear to store.
+ *
+ * The storage amplification the security audit found. A palette PNG spends
+ * one *bit* on a pixel and random bits do not deflate, so the file is about
+ * `width × height / 8` bytes. A JPEG of the same pixels spends about a *byte*
+ * on each — every one is an edge, and quality 90 keeps edges — so the stored
+ * file is several times what was uploaded. Noise in RGB does not reproduce
+ * it: three random bytes a pixel are already dearer to send than the JPEG is
+ * to keep, and the re-encode makes them smaller.
+ *
+ * Seeded rather than `randomBytes`, so the bytes and therefore the JPEG's size
+ * are the same on every run: a size threshold tested against a different
+ * image each time is a test that can pass or fail by luck.
+ */
+export function pngNoise(width: number, height: number, seed = 0x5eed): Buffer {
+  const rowBytes = Math.ceil(width / 8);
+  const scanlines = Buffer.alloc(height * (1 + rowBytes));
+
+  // xorshift32: enough to defeat deflate, and two lines rather than a dependency.
+  let state = seed >>> 0 || 1;
+  for (let row = 0; row < height; row++) {
+    const start = row * (1 + rowBytes);
+    scanlines[start] = 0; // filter: none
+    for (let i = 1; i <= rowBytes; i++) {
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      scanlines[start + i] = state & 0xff;
+    }
+  }
+
+  // Index 0 black, index 1 white: the widest contrast two entries can carry.
+  const palette = chunk("PLTE", Buffer.from([0, 0, 0, 0xff, 0xff, 0xff]));
+
+  return assemble(width, height, deflateSync(scanlines), {
+    bitDepth: 1,
+    colourType: 3,
+    before: [palette],
+  });
 }
