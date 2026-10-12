@@ -52,7 +52,8 @@ const router = createTRPCRouter({
   echo: publicProcedure
     .input(z.object({ name: z.string() }))
     .mutation(({ input }) => input.name),
-  // No input, like `auth.revokeMySessions`: nothing for a form's body to fail.
+  // No input, as `auth.revokeMySessions` had before it declared `z.void()`:
+  // nothing for a form's body to fail, so only the handler can refuse it.
   touch: publicProcedure.mutation(() => {
     touches++;
     return "touched";

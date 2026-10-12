@@ -437,8 +437,11 @@ export const shoppingRouter = createTRPCRouter({
    * A mutation, so it is deliberate rather than something a page does on every
    * render: it writes rows a person will then tick off, and regenerating under
    * somebody mid-shop would be rude.
+   *
+   * `z.void()` for the reason given on `auth.logout`: it takes nothing, so it
+   * accepts nothing.
    */
-  generateFromLowStock: writeProcedure.mutation(async ({ ctx }) => {
+  generateFromLowStock: writeProcedure.input(z.void()).mutation(async ({ ctx }) => {
     // Get or create auto-generated list
     let autoList = await ctx.db.shoppingList.findFirst({
       where: {

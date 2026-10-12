@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import * as argon2 from "argon2";
@@ -205,8 +206,11 @@ export const authRouter = createTRPCRouter({
    * `protectedProcedure`, not `householdProcedure`: an account with no
    * household still has sessions, and needing a household to end them would
    * put the control out of reach of exactly the account that has least else.
+   *
+   * `z.void()`, because it takes nothing and should accept nothing — see
+   * `logout` below.
    */
-  revokeMySessions: protectedProcedure.mutation(async ({ ctx }) => {
+  revokeMySessions: protectedProcedure.input(z.void()).mutation(async ({ ctx }) => {
     // `updateMany`, so a session whose account has since been deleted records
     // nothing rather than throwing P2025 — the same reasoning as
     // `setSnackbarDuration` above.
@@ -234,8 +238,18 @@ export const authRouter = createTRPCRouter({
    *
    * Either way a stolen token stays valid until it expires, which is what the
    * 15-minute `maxAge` in `src/lib/auth.ts` is for.
+   *
+   * **`z.void()` on the three mutations that take nothing** — this,
+   * `revokeMySessions` and `shopping.generateFromLowStock`. With no parser
+   * tRPC hands the resolver whatever body arrived, a multipart form included,
+   * so the one check every other procedure has on what reaches it was absent
+   * from the three a cross-site form could most easily trigger. `z.void()`
+   * refuses anything but `undefined`, which is what the client sends;
+   * `z.object({})` would not, because a `FormData` is an object and passes.
+   * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
    */
   logout: protectedProcedure
+    .input(z.void())
     .mutation(async () => {
       return { success: true };
     }),

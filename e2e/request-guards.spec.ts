@@ -6,9 +6,10 @@ import { test, expect } from "@playwright/test";
  *
  * The unit test drives the handler with a stand-in router. This drives the
  * production build with a real session at the one procedure the guard exists
- * for: `auth.revokeMySessions` takes no input, so before the guard a form on a
+ * for: `auth.revokeMySessions` took no input, so before the guard a form on a
  * sibling subdomain could sign a household out of every device by posting to
- * it.
+ * it. (It now declares `z.void()` as well, which a form fails; the 415 below
+ * is the handler's, before the body is read.)
  *
  * **The last request is the control.** The refused requests are the same
  * request with one header changed, so the test finishes by sending it with

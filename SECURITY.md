@@ -341,9 +341,25 @@ Verified against the files named in each row.
   site, and Lax sends the cookie with its requests. Until 2026-10-12 that was
   the whole defence of `/api/trpc`, and tRPC accepts `multipart/form-data`,
   which a plain HTML form sends with no CORS preflight: a compromised sibling
-  could post a form to `auth.revokeMySessions`, which takes no input, and sign
+  could post a form to `auth.revokeMySessions`, which took no input, and sign
   the household out of every device. Procedures with an input refuse a form
   body at validation; the three that took none did not.
+- **Every mutation declares an input**, and the three that take nothing —
+  `auth.revokeMySessions`, `auth.logout`, `shopping.generateFromLowStock` —
+  declare `z.void()`, so a form body that got past the rule below would now
+  fail validation there too, with 400 and nothing written. `z.void()` and not
+  `z.object({})`, which a `FormData` satisfies. It does not refuse every JSON
+  body: superjson reads only a body's `json` field, so `{}` or any object
+  without one arrives as no input — the same-origin control in
+  `e2e/request-guards.spec.ts` posts `{}` and revokes. The application's own
+  call sends `{"json":null,"meta":{"values":["undefined"]}}`, which superjson
+  reads back as `undefined`; a bare `{"json":null}` is `null`, and `z.void()`
+  now refuses it with 400.
+  `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
+  names any mutation without an input parser; `integration/routers.test.ts`
+  shows `revokeMySessions` refusing an object and a `FormData` before its
+  write. The nine queries that take no input do not declare one: they write
+  nothing.
 - **A POST whose content type is not `application/json` is refused with 415**
   before its body is read. Both of the application's links send JSON, and a
   receipt photograph travels base64'd inside it; nothing sends multipart or
