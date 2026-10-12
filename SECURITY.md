@@ -150,6 +150,19 @@ Verified against the files named in each row.
   `src/__tests__/unit/deployment.test.ts` pins each process limit and the
   absence of a `cpus` limit.
 - Traefik uses a read-only file provider, with no Docker socket access.
+- **Traefik does not contact Traefik Labs.** Its version check is on by
+  default (`--global.checknewversion`, default `true` in `traefik:v3.7.13
+  --help`) and asks Traefik Labs' update service for releases, which tells them
+  a Traefik runs at the instance's address. The bundle sets it to `false`:
+  Traefik reaches an operator through a Stoky release, which pins its version,
+  so the notice was one they could not act on. Anonymous usage statistics are
+  off by default and set to `false` anyway, so a changed default cannot turn
+  them on. Measured by starting `traefik:v3.7.13` with no network and the
+  bundle's command list for 11 minutes: before this change it logged "Version
+  check is enabled" and, ten minutes in, a failed lookup of
+  `update.traefik.io`; after it, "Version check is disabled" and no lookup at
+  all. `src/__tests__/unit/deployment.test.ts` pins both flags. Traefik still
+  contacts Let's Encrypt, which it must to issue and renew the certificate.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
   HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
 - **TLS 1.2 or later, and at 1.2 only forward-secret AEAD suites** — ECDHE

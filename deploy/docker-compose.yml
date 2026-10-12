@@ -147,6 +147,12 @@ services:
       DOMAIN: "${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
     command:
       - --api.dashboard=false
+      # No calls to Traefik Labs. The version check is on by default and tells
+      # them an instance runs at this address; Traefik is updated by a Stoky
+      # release, which pins it, so its notice is one the operator cannot act on.
+      # Usage statistics are already off; stated so a new default cannot change it.
+      - --global.checkNewVersion=false
+      - --global.sendAnonymousUsage=false
       - --providers.file.filename=/etc/traefik/dynamic.yml
       - --providers.file.watch=false
       - --entrypoints.web.address=:80

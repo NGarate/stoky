@@ -204,6 +204,20 @@ describe("the downloadable installation", () => {
     );
   });
 
+  it("does not let Traefik contact Traefik Labs", () => {
+    // checkNewVersion defaults to true and reveals the instance's address to the
+    // vendor; sendAnonymousUsage defaults to false and is pinned so a new
+    // default cannot turn it on. Exact list, so a second, contradicting flag
+    // fails too; lowercased because Traefik's flag names are case-insensitive.
+    const global = (compose.services.traefik.command ?? [])
+      .map((flag) => flag.toLowerCase())
+      .filter((flag) => flag.startsWith("--global."));
+    expect(global).toEqual([
+      "--global.checknewversion=false",
+      "--global.sendanonymoususage=false",
+    ]);
+  });
+
   it("accepts TLS 1.2 or later, and only forward-secret AEAD suites at 1.2", () => {
     const dynamic = Bun.YAML.parse(
       readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
