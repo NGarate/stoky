@@ -2512,11 +2512,11 @@ does not work here, because producing a receipt with parsed lines means an
 upload and an OCR pass — minutes, and a language download (OCR-1). So the
 fixture is restored instead: `e2e/seed.setup.ts` is a project that the sign-in
 setup depends on, and it re-seeds before anything reads. The seed deletes the
-rows of the household named *Hogar Demo*; in the suite's own database that is
-the demo household and nothing else, so it resets what the suite owns. (In a
-database where a real household carries that name, it would delete that one —
-which is why the seed is a development fixture and is left out of the
-production image.)
+rows of the household the `demo@stoky.local` account belongs to, so it resets
+what the suite owns and nothing else. (Until 2026-10-12 it found that household
+by the name *Hogar Demo*, which would have deleted any real household carrying
+it; it now goes through the account, in one transaction, and refuses
+`NODE_ENV=production`. The production image does not contain it at all.)
 
 Proven by running the journey three times with no manual seeding between, which
 is the sequence that used to fail on the third.

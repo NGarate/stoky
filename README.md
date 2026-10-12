@@ -108,11 +108,13 @@ unseeded database fails the whole matrix at its first step.
 
 Log in as **`demo@stoky.local`** / **`Demo1234!`**.
 
-Re-running the seed resets the demo data: it first deletes a household named
-*Hogar Demo* — any household with that name, not only the one it created — with
-its receipts, stock and member accounts. It is a development fixture with a
-published password, so run it only against a development or test database. The
-production image does not contain it.
+Re-running the seed resets the demo data: it first deletes the household the
+`demo@stoky.local` account belongs to, with its receipts, stock and member
+accounts. It finds that household through the account, not through the name
+*Hogar Demo*, so another household that happens to share the name is left
+alone, and the removal and re-creation are one transaction. It is a development
+fixture with a published password: it refuses to run under
+`NODE_ENV=production`, and the production image does not contain it.
 
 ---
 

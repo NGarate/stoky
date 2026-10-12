@@ -112,7 +112,11 @@ Verified against the files named in each row.
   (`prisma/seed.ts`), which creates an `OWNER` with the password the README
   publishes, is not in the image: the build fails if `/app/prisma/seed.ts`
   exists, and `src/__tests__/unit/image-posture.test.ts` fails on a broader
-  `COPY` of `prisma/`.
+  `COPY` of `prisma/`. The seed itself refuses to run under
+  `NODE_ENV=production` (`prisma/seed-guard.ts`, tested by
+  `src/__tests__/unit/seed-guard.test.ts`), and its reset finds the demo
+  household through the `demo@stoky.local` account rather than the free-text
+  name *Hogar Demo*, in one transaction.
 - A `HEALTHCHECK` reports database/cache reachability through `/api/health`.
   Docker does not restart a running container solely because it is unhealthy.
 - The Bun base image uses the version pinned in `.bun-version`. Production

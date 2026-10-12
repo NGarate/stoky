@@ -279,6 +279,17 @@ icons are generated from `public/icons/*.svg` by `bun scripts/generate-icons.ts`
 bash scripts/dev-local.sh --seed
 ```
 
+Or `bun run db:seed` on its own, any number of times. It loads the demo
+household with an account to sign in as, `demo@stoky.local` / `Demo1234!`; a
+re-run deletes that account's household and writes it again, in one
+transaction. The household is found through the account, not through the name
+*Hogar Demo*, so a household you registered under the same name survives.
+
+The seed refuses to run when `NODE_ENV=production` and exits 1 before it opens a
+connection, because that password is published. There is no override: the
+check lives in `prisma/seed-guard.ts`, and a demo instance is a development
+database, not a production one.
+
 ## Minimum success checks
 
 Bootstrap is only considered complete when all of the following are true:
