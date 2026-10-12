@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-11
+Updated: 2026-10-12
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,28 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-10-12 image provenance:** the repository is public (`gh api
+repos/NGarate/stoky` answers `"private":false`) and already was for the
+`v0.1.0-alpha.3` tag run, whose `private == false` steps in `ci.yml` ran: its
+Trivy SARIF reached code scanning (`gh api
+repos/NGarate/stoky/code-scanning/analyses`, category `trivy`,
+`refs/tags/v0.1.0-alpha.3`) and its image is attested. With gh 2.102.0 the
+command `SECURITY.md` documents, `gh attestation verify
+oci://ghcr.io/ngarate/stoky:<tag> --repo NGarate/stoky --signer-workflow
+NGarate/stoky/.github/workflows/ci.yml --source-ref refs/tags/<tag>`, exits 0
+for `v0.1.0-alpha.3` (digest `sha256:81ebf432…`, the same digest as
+`candidate-v0.1.0-alpha.3`; signer `ci.yml@refs/tags/v0.1.0-alpha.3`, run
+38178388250). It exits 1 for `v0.1.0-alpha.2` and `v0.1.0-alpha.1`, both with
+`HTTP 404: Not Found` from `repos/NGarate/stoky/attestations/sha256:8474120a…`
+and `…/sha256:54f375ae…`: they were built while the repository was private. The
+alpha.3 image with `--source-ref refs/heads/master` exits 1 (`expected
+SourceRepositoryRef to be refs/heads/master, got refs/tags/v0.1.0-alpha.3`), and
+with `--signer-workflow` naming another workflow file it exits 1 as well, so both
+pins are checks that can fail; `latest` with `refs/heads/master` exits 0.
+Without a signed-in GitHub CLI the command exits 4 at `gh auth login` before
+checking anything, which is why `SECURITY.md` keeps it optional and the
+account-free install path relies on `SHA256SUMS`.
 
 **2026-10-11 third-alpha preparation:** `v0.1.0-alpha.3` changes installation,
 not the application: `git diff v0.1.0-alpha.2` touches no file under `src/`
@@ -58,7 +80,8 @@ operator settings. The fixed project name `stoky-release` avoids the development
 project's volumes. Traefik uses a read-only file provider, no Docker socket, and
 is the only service publishing ports. Inline Compose config was rejected after a
 real start failed on read-only Traefik; the third downloadable file fixes it.
-The installation guide includes private-repository/package authentication,
+The installation guide then included private-repository/package authentication
+(gone since alpha.3, when the repository and package became public),
 backup/restore, upgrades and rollback limitations.
 
 `bun run verify:ci` passes in 65 seconds: 713 unit, 658 component and 549
@@ -824,8 +847,10 @@ fixed release exists), was removed by moving react-doctor from 0.9.11 to
 16.3.8 for GHSA-vcvr-r3jv-pc5j (critical, `next/og`). `bun audit`: no
 vulnerabilities across 564 packages.
 
-GitHub's Dependabot count is higher than `bun audit`'s because it counts one
-alert per advisory-path pair.
+Dependabot alerts are enabled (`gh api repos/NGarate/stoky/vulnerability-alerts`
+answers 204) and on 2026-10-12 none was open: all 58 it ever raised are
+`fixed`. It counts one alert per advisory-path pair, so its totals do not compare
+with `bun audit`'s.
 
 ---
 

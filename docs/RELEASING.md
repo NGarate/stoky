@@ -2,7 +2,9 @@
 
 Releases come from `master`; do not create release branches or pull requests.
 The first release is `v0.1.0-alpha.1`. Alpha releases are GitHub **prereleases**,
-not stable releases. Repository/package visibility is a separate owner decision.
+not stable releases. The repository and the GHCR package are public; the
+attestation and anonymous-pull steps below depend on that (see
+[Security](../SECURITY.md#verifying-an-images-provenance)).
 
 ## Prepare a reviewable version
 
@@ -50,9 +52,13 @@ published releases must not be reused for a different build. Fixes get a new tag
 
 Download and review the draft assets with `gh release download`, run
 `sha256sum -c SHA256SUMS`, and compare them with the tagged source. Confirm that
-the versioned image exists and the tag points to the intended commit. Private GHCR
-packages need `read:packages`; GitHub repository access alone may not provide it.
-Test the published image before treating it as an installation result.
+the versioned image exists and the tag points to the intended commit. The GHCR
+package is public, so the image pulls with no saved credentials, as an operator's
+does. Verify its provenance with the `gh attestation verify` command in
+[Security](../SECURITY.md#verifying-an-images-provenance), pinned to this tag's
+`--source-ref`: a failure there means the version tag does not point to an image
+this tag's run attested, and the release must not be published. Test the
+published image before treating it as an installation result.
 
 Publish an alpha only after these checks:
 
@@ -83,6 +89,7 @@ it does not compare the two image digests. Docker base and
 support-service tags can change across rebuilds; application/CLI dependencies use
 the frozen Bun lockfile.
 Release tags identify the source/version, not a reproducible byte-for-byte build.
-Record the published digest when auditing an installation. SBOM and build provenance
-are enabled; separate signed GitHub attestations are skipped while the repository
-is private. See [Security](../SECURITY.md).
+Record the published digest when auditing an installation. SBOM, build provenance
+and a signed GitHub attestation are enabled for published images; releases
+before `v0.1.0-alpha.3` were built while the repository was private and have no
+attestation. See [Security](../SECURITY.md#verifying-an-images-provenance).

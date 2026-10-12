@@ -152,9 +152,15 @@ Verified against the files named in each row.
   uploaded as SARIF, and a separate step fails the job on CRITICAL or HIGH
   findings (`ignore-unfixed: true`).
 - The published image carries an **SBOM** (`sbom: true`) and **build provenance**
-  (`provenance: mode=max`), and, for public repositories, a signed provenance attestation pushed to the
-  registry via `actions/attest-build-provenance`. The separate signed attestation
-  is skipped for this private repository; the image SBOM/provenance remain enabled.
+  (`provenance: mode=max`), and a **signed provenance attestation** pushed to the
+  registry via `actions/attest-build-provenance`, which an operator can check
+  without trusting the registry ([Verifying an image's
+  provenance](#verifying-an-images-provenance)). The repository is public, so
+  the step runs; it stays gated on `github.event.repository.private == false`
+  because GitHub refuses attestations for a user-owned private repository, which
+  is what a private fork or copy would be. Released images are attested from
+  `v0.1.0-alpha.3` on; `v0.1.0-alpha.1` and `v0.1.0-alpha.2` were built while the
+  repository was private and have none.
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.
@@ -506,33 +512,51 @@ is not a substitute for a database-and-images backup.
 
 ## Verifying an image's provenance
 
-On a public repository, CI publishes signed build provenance to GHCR, so you can check that the image
-you are about to run really was built by this workflow, from this repository, at
-a specific commit. With the [GitHub CLI](https://cli.github.com/):
+CI publishes signed build provenance to GHCR, so you can check that the image you
+are about to run really was built by this repository's `ci.yml`, from the release
+tag you chose. Verify the exact version you set as `STOKY_VERSION`, never
+`latest`, and pin the workflow and the source ref as well as the repository:
 
 ```bash
 gh attestation verify \
-  oci://ghcr.io/ngarate/stoky:latest \
-  --repo NGarate/stoky
+  oci://ghcr.io/ngarate/stoky:v0.1.0-alpha.3 \
+  --repo NGarate/stoky \
+  --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
+  --source-ref refs/tags/v0.1.0-alpha.3
 ```
+
+`--repo` alone accepts an attestation from any workflow run on any branch of the
+repository; `--source-ref` is what ties the image to the release tag. For a
+`sha-` image from `master`, use `--source-ref refs/heads/master`.
+
+This step is optional. It needs the [GitHub CLI](https://cli.github.com/) signed
+in to a GitHub account (`gh auth login`): without one it stops with
+`gh auth login` and exit code 4 before checking anything. The installation path
+needs no account and relies on `SHA256SUMS` for the release files and on the
+exact version tag for the image; the attestation is the check that the image
+behind that tag was built here.
+
+From `v0.1.0-alpha.3` on, **a missing attestation or a failed verification means
+do not run the image**: report it as a [vulnerability](#reporting-a-vulnerability).
+`v0.1.0-alpha.1` and `v0.1.0-alpha.2` were built while the repository was private
+and carry no attestation, so for them the command fails with `HTTP 404` from the
+attestations API; upgrade off them rather than treat that as normal.
 
 Images from `master` are tagged `sha-<full-commit-sha>`. A release tag's build is
 pushed as `candidate-<version>` and gains the exact version tag only after the
-install smoke passes on that digest; it never rewrites the `sha-` tag. `latest` is the development channel from `master`. Pinning to a digest or
-to a `sha-` tag rather than `latest` is the safer choice for a deployment you
-want to be reproducible.
+install smoke passes on that digest; it never rewrites the `sha-` tag. The
+attestation is bound to the digest, not the tag, so the version tag verifies with
+the provenance of the tag run that built it. `latest` is the development channel
+from `master`. Pinning to a digest or to an exact version tag rather than `latest`
+is the safer choice for a deployment you want to be reproducible.
 
 The image also carries an SBOM, which lists the packages it contains:
 
 ```bash
 docker buildx imagetools inspect \
-  ghcr.io/ngarate/stoky:latest \
+  ghcr.io/ngarate/stoky:v0.1.0-alpha.3 \
   --format '{{ json .SBOM }}'
 ```
-
-For this private repository the signed-attestation step is disabled, so its
-absence is expected. Where attestation is enabled, investigate a failed verification
-before running the image.
 
 ---
 

@@ -475,13 +475,14 @@ jobs:
       # The SARIF pair below is reporting, not enforcement — the gate that
       # fails the build on findings is the separate Trivy step underneath, and
       # it runs unconditionally. These two run only where GitHub will accept
-      # the upload: code scanning on a **private** repository needs Advanced
+      # the upload. This repository is public, so they run and the results
+      # reach the Security tab. The condition stays for private forks and
+      # copies: code scanning on a **private** repository needs Advanced
       # Security, and without it the API answers 403 "Code scanning is not
-      # enabled" — which kept this job red for days while the build, the scan
-      # gate and the push all succeeded. If this repository goes public, the
-      # condition becomes true and the Security tab lights up on its own; a
-      # private repository that gains Advanced Security should drop the
-      # condition instead.
+      # enabled" — which kept this job red for days, while this repository
+      # was private, even though the build, the scan gate and the push all
+      # succeeded. A private copy that gains Advanced Security should drop
+      # the condition.
       - name: Scan image
         if: github.event.repository.private == false
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
@@ -605,12 +606,14 @@ jobs:
       # Lets an operator verify the image they are about to self-host really
       # was built from this repository, by this workflow, from this commit.
       #
-      # Public repositories only, like the SARIF upload in image-build and for
-      # the same shape of reason: GitHub answers "Feature not available for
-      # user-owned private repositories" after everything else has succeeded.
-      # If this repository goes public, provenance starts attesting on its
-      # own — which is also when it starts mattering, since it exists for
-      # people who did not build the image themselves.
+      # This repository is public, so every image this job pushes is attested
+      # (from v0.1.0-alpha.3 on; alpha.1 and alpha.2 were built while it was
+      # private and have none). SECURITY.md tells operators how to verify it,
+      # and that a missing attestation means do not run the image. The
+      # condition stays, like the SARIF upload's in image-build and for the
+      # same shape of reason: on a user-owned private fork or copy GitHub
+      # answers "Feature not available for user-owned private repositories"
+      # after the image has already been pushed.
       # OCI repository names are lowercase; `github.repository` is NGarate/stoky.
       # metadata-action lowercases its input, the attestation action does not,
       # so it would push to `ghcr.io/NGarate/stoky` and fail after the image
