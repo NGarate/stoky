@@ -175,8 +175,9 @@ src/
   app/
     (auth)/                   login, register
     (dashboard)/              inventory, products, receipts, shopping, prices, settings
-    api/trpc/[trpc]/          tRPC HTTP handler
+    api/trpc/[trpc]/          tRPC route: wires the router and Auth.js into server/http
   server/
+    http/                     the tRPC HTTP handler itself, testable without Next
     trpc/routers/             one router per domain
     services/                 ocr, receiptParser, productMatcher, openFoodFacts
   lib/
