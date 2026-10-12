@@ -27,6 +27,38 @@ import {
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
 
 /**
+ * The receipt header the screens draw: what it is, where it is in the
+ * pipeline, and the shop, date and total printed on it.
+ *
+ * The reads below name their columns instead of `include`-ing the row, because
+ * the row carries three things no screen shows and every reader received:
+ * `rawOcrText`, the whole ticket as Tesseract read it — the header and footer
+ * the parser drops, which is where a masked card number, a loyalty number and
+ * the cashier's name are printed; `imagePath`, where the photograph sits on the
+ * server's disk; and `uploadedBy`, which member scanned it. These are
+ * `householdProcedure` reads, so the kitchen tablet got all three, and the
+ * receipts list sent fifty rows of OCR text on every visit (SECURITY.md,
+ * "Data minimisation"). A column added to `Receipt` now reaches a client only
+ * when somebody adds it here, which is the direction a mistake should fail in.
+ *
+ * The store is its id and name for the same reason: the name is all a screen
+ * shows, and the address is nobody's business on a receipt list.
+ */
+const STORE_LABEL = {
+  select: { id: true, name: true },
+} as const satisfies Prisma.StoreDefaultArgs;
+
+const RECEIPT_HEADER = {
+  id: true,
+  status: true,
+  storeId: true,
+  store: STORE_LABEL,
+  purchaseDate: true,
+  totalAmount: true,
+  createdAt: true,
+} as const satisfies Prisma.ReceiptSelect;
+
+/**
  * Receipt scanning: a photograph in, stock and prices out.
  *
  * **A state machine, and the order is enforced rather than assumed.**
@@ -267,15 +299,14 @@ export const receiptRouter = createTRPCRouter({
   getStatus: householdProcedure
     .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
+      // The status and the progress count are all the polling screen reads,
+      // so the lines are fetched for the count and not sent.
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
-          items: {
-            select: {
-              id: true,
-              matchStatus: true,
-            },
-          },
+        select: {
+          id: true,
+          status: true,
+          items: { select: { matchStatus: true } },
         },
       });
 
@@ -300,7 +331,8 @@ export const receiptRouter = createTRPCRouter({
       ).length;
 
       return {
-        ...receipt,
+        id: receipt.id,
+        status: receipt.status,
         progress: {
           total: totalItems,
           processed: processedItems,
@@ -319,13 +351,13 @@ export const receiptRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
+        select: {
+          ...RECEIPT_HEADER,
           items: {
             include: {
               matchedProduct: true,
             },
           },
-          store: true,
         },
       });
 
@@ -759,10 +791,12 @@ export const receiptRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
+        select: {
           // The confirmation page names the shop the stock came from, and the
-          // store is the only field on the receipt it cannot derive.
-          store: true,
+          // store is the only field on the receipt it cannot derive. The header
+          // also carries the store id, which is how the page knows to say that
+          // no prices were recorded for want of one.
+          ...RECEIPT_HEADER,
           items: {
             // The same condition `applyReceipt` applies stock under, rather than
             // a list of match statuses. It used to filter on
@@ -854,8 +888,8 @@ export const receiptRouter = createTRPCRouter({
           skip: 1,
         }),
         orderBy: { createdAt: "desc" },
-        include: {
-          store: true,
+        select: {
+          ...RECEIPT_HEADER,
           _count: {
             select: { items: true },
           },

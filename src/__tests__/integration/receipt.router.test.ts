@@ -102,6 +102,20 @@ function clientThatCannotWritePrices(): PrismaClient {
   }) as unknown as PrismaClient;
 }
 
+/**
+ * A whole ticket as OCR reads it. The header and footer are the part no
+ * screen needs and the part that identifies people: a masked card, a loyalty
+ * number, the cashier.
+ */
+const RAW_OCR_TEXT = [
+  "SUPERMERCADO EJEMPLO",
+  "LECHE ENTERA 1L 2,50",
+  "PAN RUSTICO 1,20",
+  "VISA ************4242",
+  "SOCIO CLUB 0099887766",
+  "LE ATENDIO: MARIA",
+].join("\n");
+
 /** A receipt with two parsed lines, at whatever status the test needs. */
 async function seedReceipt(options: {
   status?: ReceiptStatus;
@@ -119,6 +133,9 @@ async function seedReceipt(options: {
       storeId: options.withStore === false ? null : storeId,
       purchaseDate: new Date("2026-08-01T10:00:00.000Z"),
       totalAmount: 7.5,
+      // What `processReceiptAsync` stores: the whole ticket, including the
+      // lines the parser drops — which is where the personal ones are.
+      rawOcrText: RAW_OCR_TEXT,
     },
   });
 
@@ -1280,13 +1297,15 @@ describe("a receipt line belongs to its receipt, and its receipt to a household"
 
 describe("receipt.list", () => {
   it("returns only this household's receipts", async () => {
-    await seedReceipt({});
+    // By id: the row no longer carries its household, and the id is what
+    // tells the two seeded receipts apart.
+    const { receipt } = await seedReceipt({});
     await seedReceipt({ household: otherHouseholdId });
 
     const mine = await caller.receipt.list({ limit: 20 });
 
     expect(mine.items).toHaveLength(1);
-    expect(mine.items[0]?.householdId).toBe(householdId);
+    expect(mine.items[0]?.id).toBe(receipt.id);
   });
 
   it("filters by status", async () => {
@@ -1329,3 +1348,77 @@ describe("receipt.list", () => {
   });
 });
 
+describe("what a receipt read sends", () => {
+  /**
+   * The reads used to `include` the receipt row, so every column of it went
+   * to every member — the kitchen tablet included — and to nobody's use:
+   * `rawOcrText` (the whole ticket, card and loyalty numbers and all),
+   * `imagePath` and `uploadedBy`. No screen reads any of them. The key sets
+   * are pinned exactly rather than checked for three absences, because the
+   * failure being guarded against is a column added to `Receipt` next year
+   * reaching the client without anyone deciding it should.
+   */
+  const HEADER = [
+    "createdAt",
+    "id",
+    "purchaseDate",
+    "status",
+    "store",
+    "storeId",
+    "totalAmount",
+  ];
+
+  /** Neither a key nor a value the client has no use for, anywhere in it. */
+  function expectNothingPrivate(response: unknown): void {
+    const sent = JSON.stringify(response);
+
+    for (const key of ["rawOcrText", "imagePath", "uploadedBy", "passwordHash"]) {
+      expect(sent).not.toContain(`"${key}"`);
+    }
+    // The values too, so a rename cannot carry them out under another key.
+    expect(sent).not.toContain("SOCIO CLUB");
+    expect(sent).not.toContain("uploads/receipts/");
+  }
+
+  it("getStatus sends the status and the progress, and not the receipt", async () => {
+    const { receipt } = await seedReceipt({});
+
+    const status = await kitchen.receipt.getStatus({ receiptId: receipt.id });
+
+    expect(Object.keys(status).sort()).toEqual(["id", "progress", "status"]);
+    expectNothingPrivate(status);
+  });
+
+  it("getReceiptWithItems sends the header and the lines", async () => {
+    const { receipt } = await seedReceipt({});
+
+    const review = await kitchen.receipt.getReceiptWithItems({ receiptId: receipt.id });
+
+    expect(Object.keys(review).sort()).toEqual([...HEADER, "items"].sort());
+    expect(Object.keys(review.store ?? {}).sort()).toEqual(["id", "name"]);
+    expectNothingPrivate(review);
+  });
+
+  it("list sends the header and the line count of each receipt", async () => {
+    await seedReceipt({});
+
+    const { items } = await kitchen.receipt.list({ limit: 20 });
+
+    expect(items).toHaveLength(1);
+    expect(Object.keys(items[0] ?? {}).sort()).toEqual([...HEADER, "_count"].sort());
+    expect(Object.keys(items[0]?.store ?? {}).sort()).toEqual(["id", "name"]);
+    expectNothingPrivate(items);
+  });
+
+  it("getAppliedSummary sends the header with what was applied", async () => {
+    const { receipt } = await seedReceipt({ status: ReceiptStatus.CONFIRMED });
+    await caller.receipt.applyReceipt({ receiptId: receipt.id });
+
+    const summary = await kitchen.receipt.getAppliedSummary({ receiptId: receipt.id });
+
+    expect(Object.keys(summary.receipt).sort()).toEqual(
+      [...HEADER, "_count", "items"].sort(),
+    );
+    expectNothingPrivate(summary);
+  });
+});

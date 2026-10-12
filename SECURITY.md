@@ -163,6 +163,36 @@ Verified against the files named in each row.
 - No HTTP route serves the uploads directory. Nothing in `src/app` reads it, and
   it is not inside `public/`.
 
+### Data minimisation — receipt reads
+
+- The four receipt reads — `getStatus`, `getReceiptWithItems`, `list` and
+  `getAppliedSummary` — name the columns they return instead of `include`-ing
+  the row. They are household reads, so the KITCHEN role on a shared tablet
+  receives whatever they return. Until 2026-10-12 that was every column of
+  `Receipt`, three of which no screen reads:
+  - `rawOcrText`, the whole ticket as OCR read it. This includes the header
+    and footer the parser drops, which is where a masked card number, a
+    loyalty number and the cashier's name are printed.
+  - `imagePath`, the photograph's location on the server's disk.
+  - `uploadedBy`, the member who scanned it.
+
+  The receipts list sent the OCR text of up to fifty receipts on every visit.
+- The header the reads return is `id`, `status`, `storeId`, `purchaseDate`,
+  `totalAmount`, `createdAt` and the store's `id` and `name`. `getStatus`
+  returns only the id, the status and the progress count.
+- `src/__tests__/integration/receipt.router.test.ts` ("what a receipt read
+  sends") pins each read's key set exactly and checks that no excluded key or
+  value appears in the serialised response, so a column added to `Receipt`
+  reaches a client only when a read is changed to send it. Two mutations made
+  the test fail: restoring `include` failed all four cases, and returning the
+  OCR text under an allowed key failed on its value.
+- Not covered: `upload` still returns the row it created, `imagePath`
+  included, to the member who uploaded it. `rawOcrText` is also still stored
+  for as long as the receipt exists. Clearing it would not remove the data,
+  because the photograph it was read from is kept just as long
+  (`docs/SECURITY_REVIEW.md` finding 16, no `receipt.delete`). Retention is a
+  decision for that finding to make.
+
 ### Supply chain — `.github/workflows/ci.yml`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
