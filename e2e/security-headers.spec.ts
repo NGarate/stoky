@@ -29,8 +29,15 @@ const STATIC_HEADERS: Record<string, string> = {
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
   "referrer-policy": "strict-origin-when-cross-origin",
+  // Written out rather than imported from the config, so a token dropped from
+  // or added to the deny list there is a difference here.
   "permissions-policy":
-    "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
+    "camera=(self), microphone=(), geolocation=(), browsing-topics=(), " +
+    "payment=(), usb=(), serial=(), hid=(), midi=(), " +
+    "display-capture=(), screen-wake-lock=(), xr-spatial-tracking=(), " +
+    "accelerometer=(), gyroscope=(), magnetometer=(), " +
+    "publickey-credentials-create=(), otp-credentials=(), idle-detection=(), " +
+    "local-fonts=(), compute-pressure=()",
   "strict-transport-security": "max-age=63072000; includeSubDomains",
   "x-permitted-cross-domain-policies": "none",
   "cross-origin-opener-policy": "same-origin",
@@ -75,6 +82,30 @@ test.describe("the headers a response actually carries", () => {
         expect(headerOf(response, name), `${name} on ${route}`).toBe(value);
       }
     }
+  });
+
+  test("the browser understands every feature the Permissions-Policy names", async ({
+    page,
+  }) => {
+    // The exact value above says what is sent, not whether it means anything.
+    // A token Chromium does not know is ignored, and the only sign is an
+    // "Error with Permissions-Policy header: Unrecognized feature" on the
+    // console of every page — measured: `bluetooth`, in the first draft of
+    // the deny list, is one, and this is what said so. The suite's Chromium
+    // is the pinned one, so this is a claim about the engine the suite runs,
+    // and a newer one that drops a token turns it red when the pin moves.
+    const complaints: string[] = [];
+    page.on("console", (message) => {
+      if (message.text().includes("Permissions-Policy")) complaints.push(message.text());
+    });
+
+    const response = await page.goto("/login", { waitUntil: "load" });
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()["permissions-policy"]).toBe(
+      STATIC_HEADERS["permissions-policy"],
+    );
+
+    expect(complaints).toEqual([]);
   });
 
   test("does not announce what it is built with", async ({ request }) => {

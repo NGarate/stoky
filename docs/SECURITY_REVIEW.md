@@ -861,6 +861,41 @@ failure could not tell the header from its absence. The other page is
 `localhost`, granted `local-network-access`, and the error the test expects is
 CORP's own.
 
+**Found 2026-10-12: the Permissions-Policy denied three features and was
+described as denying all of them.** `next.config.ts` sent `camera=(self),
+microphone=(), geolocation=(), interest-cohort=()` under the comment
+"Everything off", and `SECURITY.md` said it "denies everything else". The
+header has no default-deny: every feature it does not name keeps the browser's
+default allowlist, `'self'` for most of the powerful ones — payment, USB,
+serial, HID, screen capture, wake lock and the rest. `interest-cohort` is
+FLoC's token, an API Chrome retired, and its successor `browsing-topics` was
+not denied. Info, and a document claiming more than the header did rather
+than an exposure: with `frame-ancestors 'none'`, `X-Frame-Options: DENY` and
+`default-src 'self'` there is no third-party frame to delegate a feature to,
+and any script that could call these APIs is already same-origin.
+
+**Fixed: an explicit deny list, of tokens the browser recognises.**
+`camera=(self)` stays — the scanner's `getUserMedia` and its torch need it —
+and nineteen features are `()`: microphone, geolocation, browsing-topics,
+payment, usb, serial, hid, midi, display-capture, screen-wake-lock,
+xr-spatial-tracking, the three motion sensors, publickey-credentials-create,
+otp-credentials, idle-detection, local-fonts and compute-pressure.
+`publickey-credentials-get` is left unset for passkey sign-in, and
+`fullscreen` and `picture-in-picture` are left alone. Each token was kept
+only if the browser recognises it, because an unknown one is ignored, with an
+"Unrecognized feature" error on every page, and a deny list copied from a
+generic recommendation can carry tokens of features that were renamed or
+never shipped. A test now asks for that: "the browser
+understands every feature the Permissions-Policy names" loads `/login` in the
+suite's Chromium (151, Playwright 1.62.1) and fails on any console message
+about the header. It caught `bluetooth`, which the plan for this fix listed
+and that Chromium does not recognise; it was dropped. Measured the other way,
+`interest-cohort` does not complain in Chromium 151, so the finding's "reported
+as unrecognised" did not reproduce — it was replaced because the API it
+guarded is gone, not because it was rejected. A made-up token in both the
+config and the pinned value fails that test alone; dropping `usb=()` from the
+config alone fails it and both header pins.
+
 ---
 
 ## The `SECURITY.md` corrections

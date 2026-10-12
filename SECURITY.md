@@ -308,7 +308,19 @@ Verified against the files named in each row.
   `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
   sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
   `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
-  denies everything else.
+  denies, by name, nineteen powerful features Stoky does not use —
+  microphone, geolocation, payment, USB, serial, HID, MIDI, screen capture,
+  wake lock, the motion sensors and the rest (the list is in
+  `next.config.ts`). It is a deny list, not a default: the header has no
+  "everything else", so a feature it does not name keeps the browser's
+  default, usually `'self'`. Until 2026-10-12 it named three, plus
+  `interest-cohort`, the token of the retired FLoC, while its successor
+  `browsing-topics` went undenied — and this line claimed the rest were
+  denied (`docs/SECURITY_REVIEW.md` §8).
+  `publickey-credentials-get` is left unset because passkey sign-in would
+  need it, and `bluetooth` because the suite's Chromium (151) does not
+  recognise the token. `e2e/security-headers.spec.ts` pins the value and
+  fails on any token that Chromium does not recognise.
 - **`Cross-Origin-Opener-Policy: same-origin` and
   `Cross-Origin-Resource-Policy: same-origin`**, on every route, since
   2026-10-12 (`docs/SECURITY_REVIEW.md` §8). A page on another origin that

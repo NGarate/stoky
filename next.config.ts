@@ -18,10 +18,55 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // The barcode scanner is the only feature needing a device. Everything off.
+  // **A deny list, not "everything off".** The header has no default-deny: a
+  // feature it does not name keeps its own default, which for most of the
+  // powerful ones is 'self'. So it names every one Stoky has no use for.
+  //
+  // `camera=(self)` is the one grant, and must stay: the barcode scanner's
+  // getUserMedia and its torch (`applyConstraints` on the same track) both
+  // need it. Taken away, the scanner fails with a NotAllowedError that
+  // Scanner.tsx reports as the person having refused the camera — which is
+  // how it would be misdiagnosed.
+  //
+  // `browsing-topics` replaced `interest-cohort`, the token of FLoC, which
+  // Chrome retired in favour of Topics — so the old denial guarded an API
+  // that is gone and left its successor at the default.
+  //
+  // Only tokens Chromium recognises: an unknown one is ignored, with an
+  // "Unrecognized feature" error on the console of every page, and
+  // `e2e/security-headers.spec.ts` goes red on that. It is why `bluetooth`
+  // is absent: Chromium 151 does not recognise it (measured), and Web
+  // Bluetooth asks the person per device anyway.
+  //
+  // Left unset on purpose: `publickey-credentials-get`, which passkey sign-in
+  // would need, and `fullscreen` / `picture-in-picture`, which nothing uses
+  // and nothing gains by denying. A feature that comes to
+  // need one of the denied ones — a wake lock for /kitchen, say — takes it
+  // off this list in the same change.
   {
     key: "Permissions-Policy",
-    value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
+    value: [
+      "camera=(self)",
+      "microphone=()",
+      "geolocation=()",
+      "browsing-topics=()",
+      "payment=()",
+      "usb=()",
+      "serial=()",
+      "hid=()",
+      "midi=()",
+      "display-capture=()",
+      "screen-wake-lock=()",
+      "xr-spatial-tracking=()",
+      "accelerometer=()",
+      "gyroscope=()",
+      "magnetometer=()",
+      "publickey-credentials-create=()",
+      "otp-credentials=()",
+      "idle-detection=()",
+      "local-fonts=()",
+      "compute-pressure=()",
+    ].join(", "),
   },
   // Two years, matching the Traefik middleware. Only applies over HTTPS.
   // No `preload`: that token is the domain owner's consent to the browsers'
