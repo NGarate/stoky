@@ -1,5 +1,9 @@
 import { describe, it, expect } from "bun:test";
-import { MAX_PIXELS, readImageMetadata, reencodeAsJpeg } from "@/server/services/image";
+import {
+  MAX_LONG_EDGE,
+  MAX_PIXELS,
+  reencodeAsJpeg,
+} from "@/server/services/image";
 import { withExif } from "../utils/exif";
 import { pngClaiming, pngOf } from "../utils/png";
 import {
@@ -209,10 +213,53 @@ describe("the pixel bound", () => {
   it("still accepts a photograph a phone would actually take", async () => {
     // The half that stops the bound from being set by lowering it to nothing.
     // 4000 × 3000 is 12 megapixels, which is an ordinary camera.
+    //
+    // Both sides now, read from the frame header, where this used to check
+    // the width alone through a decoder: since the long-edge bound below, 4000
+    // is also exactly where resizing starts, so this is the photograph that
+    // must come through *whole* — accepted, and at its own size.
     const twelveMegapixels = pngOf(4000, 3000);
 
     const output = await reencodeAsJpeg(twelveMegapixels);
 
-    expect((await readImageMetadata(output)).width).toBe(4000);
+    expect(jpegDimensions(output)).toEqual({ width: 4000, height: 3000 });
+  });
+});
+
+describe("the long edge", () => {
+  // `MAX_PIXELS` bounds what is decoded. This bounds what is kept: what goes to
+  // disk, and what the OCR worker is later handed whole. Without it a 50 MP
+  // photograph — or a noise image built to be expensive — is stored and
+  // recognised at full size.
+
+  it("is where the module says it is", () => {
+    // 4000 is the long edge of a 12 MP phone photograph. Lowering it starts
+    // resizing ordinary photographs, which is a decision rather than a tidy-up.
+    expect(MAX_LONG_EDGE).toBe(4000);
+  });
+
+  it("brings a wider image down to it, keeping the proportions", async () => {
+    // 6000 × 1000 → 4000 × 666.7, rounded. A box that stretched to fit
+    // (`fit: "fill"`) would come out 4000 × 4000; one that ignored the bound
+    // would come out as it went in.
+    const output = await reencodeAsJpeg(pngOf(6000, 1000));
+
+    expect(jpegDimensions(output)).toEqual({ width: 4000, height: 667 });
+  });
+
+  it("brings a taller one down by its height, which is the long receipt", async () => {
+    // A receipt photographed end to end is the shape this is most likely to
+    // meet, and the edge that is long is the height.
+    const output = await reencodeAsJpeg(pngOf(1000, 6000));
+
+    expect(jpegDimensions(output)).toEqual({ width: 667, height: 4000 });
+  });
+
+  it("leaves an image already inside it at its own size", async () => {
+    // `withoutEnlargement`. Without it a box is a target, and this comes out
+    // 4000 × 3000 — larger on disk and in OCR than what was sent.
+    const output = await reencodeAsJpeg(pngOf(1200, 900));
+
+    expect(jpegDimensions(output)).toEqual({ width: 1200, height: 900 });
   });
 });

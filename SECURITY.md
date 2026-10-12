@@ -157,6 +157,17 @@ Verified against the files named in each row.
   the decoded buffer.
 - Every accepted image is re-encoded through `src/server/services/image.ts` (`Bun.Image`) to JPEG, which strips EXIF —
   including any GPS coordinates in a photo of a receipt.
+- Decoding refuses anything over 50 megapixels before allocating for it, and
+  the re-encode keeps at most **4000 pixels on the long edge**: larger
+  photographs are scaled down in proportion, smaller ones are left at their
+  own size. The first bounds the decode; the second bounds what is stored and
+  what Tesseract is later handed. Before it, a 6.1 MB noise PNG at 7000 × 7000
+  was stored as a 47 MB JPEG at full size; it is now 11.7 MB at 4000 × 4000
+  (measured, `Bun.Image` at quality 90) — smaller, but still more than the
+  10 MB the upload accepts. A 12-megapixel phone photograph (4000 × 3000) is
+  untouched. Photographs stored before the bound are not rewritten and keep
+  their size on disk; OCR runs once, at upload, and nothing re-processes a
+  stored receipt, so none of them is handed to Tesseract again.
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.
@@ -294,7 +305,8 @@ What is still open, and worth knowing before publishing an instance:
 - **Receipt upload is limited too**, at 30 per account per hour, counted
   before the file is decoded. OWASP ASVS **V11.1.4** asks for anti-automation
   on expensive operations, and this is the expensive one: up to 10 MB decoded,
-  re-encoded through `src/server/services/image.ts` (`Bun.Image`), written to a volume, then handed to Tesseract. It
+  re-encoded through `src/server/services/image.ts` (`Bun.Image`) at no more
+  than 4000 pixels on the long edge, written to a volume, then handed to Tesseract. It
   is counted per *account* rather than per address, because the caller is
   already authenticated and a household behind one NAT would otherwise share a
   budget for work each member does separately. A refused upload still counts —
