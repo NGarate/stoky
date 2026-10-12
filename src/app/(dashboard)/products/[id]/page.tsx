@@ -288,11 +288,14 @@ export function ProductDetailView({ id }: { id: string }): JSX.Element {
       {/* Decorative: the name it illustrates is directly above it, so an alt
           text would only repeat the heading. Open Food Facts is the only thing
           that ever sets `imageUrl`, and its host is the one remote origin the
-          CSP allows in `img-src`. */}
+          CSP allows in `img-src`. `no-referrer` because the request tells that
+          host nothing it needs: `Referrer-Policy: same-origin` already says so
+          for the whole page, and this holds behind a proxy that rewrites it. */}
       {product.imageUrl ? (
         <img
           src={product.imageUrl}
           alt=""
+          referrerPolicy="no-referrer"
           className="mt-4 h-40 w-40 rounded border border-border bg-card object-contain"
         />
       ) : null}

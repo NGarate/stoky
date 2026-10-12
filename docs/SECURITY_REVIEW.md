@@ -896,6 +896,33 @@ guarded is gone, not because it was rejected. A made-up token in both the
 config and the pinned value fails that test alone; dropping `usb=()` from the
 config alone fails it and both header pins.
 
+**Found 2026-10-12: the product photograph told Open Food Facts where it was
+shown.** `Referrer-Policy: strict-origin-when-cross-origin` still sends the
+origin to another origin, and the product page's `<img>`, the one remote image
+Stoky renders, had no attribute of its own, so every product view sent
+`images.openfoodfacts.org` the instance's origin — its hostname, however
+private — alongside the viewer's address and the barcode in the image path.
+Low, a privacy disclosure rather than a compromise: it lets a third party
+enumerate instances and tie a household to a hostname. The Open Food Facts
+links were already `rel=noreferrer`; the image was the inconsistency.
+
+**Fixed: `Referrer-Policy: same-origin`, and `referrerpolicy="no-referrer"` on
+the image.** Measured in the suite's Chromium with both reverted, the
+photograph's request carried `Referer: http://127.0.0.1:3100/`; with either
+layer alone, none. The header covers any cross-origin request a later change
+adds, and the attribute holds behind a proxy that rewrites the header.
+`no-referrer` was the obvious stronger choice and is wrong here: it makes the
+browser send `Origin: null` on every POST, same-origin ones included, and Next
+aborts a Server Action whose Origin does not match the host. Measured, with it
+the no-JS screen choice in `e2e/screen-choice.spec.ts` fails and the server
+logs "does not match `origin` header with value `null` … Aborting the action".
+`same-origin` nulls the Origin only on a cross-origin POST, which Stoky's pages
+do not make. `e2e/security-headers.spec.ts` pins the header and, on the product
+page, checks that the photograph's request carries no `Referer` and that the
+element carries the attribute. What still reaches Open Food Facts is the image
+request itself, with the viewer's address; only a server-side image proxy
+would remove that, and it is not part of this fix.
+
 ---
 
 ## The `SECURITY.md` corrections

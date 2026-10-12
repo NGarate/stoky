@@ -304,7 +304,7 @@ Verified against the files named in each row.
 - Static headers set in the app itself, not only at the proxy, because a
   self-hosted app runs behind whatever proxy the operator already has:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Referrer-Policy: same-origin` (below),
   `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
   sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
   `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
@@ -348,6 +348,24 @@ Verified against the files named in each row.
   load of a Stoky icon fails with Chromium's CORP error, and that a product
   page shows its photograph with no embedder policy and is not cross-origin
   isolated.
+- **`Referrer-Policy: same-origin`**, since 2026-10-12, and the product
+  photograph's `<img>` carries `referrerpolicy="no-referrer"` of its own, for
+  an operator whose proxy rewrites the header. A request to another origin
+  carries no `Referer`. Until then the policy was
+  `strict-origin-when-cross-origin`, and every product page sent the
+  instance's origin — its hostname, however private — to
+  `images.openfoodfacts.org` with the photograph (`docs/SECURITY_REVIEW.md`
+  §8). The image request itself still goes there, with the viewer's address
+  and the barcode in its path; only the instance's name has stopped
+  travelling with it. Not `no-referrer`: under it the Fetch standard sends
+  `Origin: null` on every POST, same-origin ones included, and Next aborts a
+  Server Action whose Origin does not match the host — measured, the no-JS
+  screen choice in `e2e/screen-choice.spec.ts` fails under it, and sign-out
+  and the language switch are Server Actions too. `same-origin` nulls the
+  Origin only on a cross-origin POST, which Stoky's pages never make.
+  `e2e/security-headers.spec.ts` pins the header and checks that the
+  photograph's request carries no `Referer` and that the element carries its
+  attribute.
 - `poweredByHeader: false`, so responses do not advertise the framework version.
 - **Every response from `/api/trpc` carries `Cache-Control: no-store`** —
   data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at

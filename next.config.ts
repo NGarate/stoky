@@ -17,7 +17,25 @@ const withNextIntl = createNextIntlPlugin();
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // `same-origin`: a request to another origin carries no Referer at all. The
+  // former `strict-origin-when-cross-origin` still sent the instance's origin
+  // — its private hostname — to Open Food Facts with every product photograph.
+  // (Its outbound links were already `rel=noreferrer`.) No other origin Stoky
+  // touches needs to know where the request came from, so the page-wide
+  // policy, not one attribute per element, is what keeps the next
+  // cross-origin request quiet too.
+  //
+  // **Not `no-referrer`**, which looks stricter and breaks the Server
+  // Actions: under it the Fetch standard sends `Origin: null` on *every* POST,
+  // same-origin ones included, and Next aborts an action whose Origin does not
+  // match the host. Measured: with it, the no-JS screen choice
+  // (`e2e/screen-choice.spec.ts`) fails with "does not match `origin` header
+  // with value `null` … Aborting the action". `same-origin` nulls the Origin
+  // only on a cross-origin POST, which Stoky's pages never make.
+  //
+  // The product `<img>` carries its own `no-referrer` as well, for an
+  // operator whose proxy rewrites this header.
+  { key: "Referrer-Policy", value: "same-origin" },
   // **A deny list, not "everything off".** The header has no default-deny: a
   // feature it does not name keeps its own default, which for most of the
   // powerful ones is 'self'. So it names every one Stoky has no use for.

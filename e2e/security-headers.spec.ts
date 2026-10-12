@@ -28,7 +28,7 @@ import { SESSION_FILE } from "./session";
 const STATIC_HEADERS: Record<string, string> = {
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
-  "referrer-policy": "strict-origin-when-cross-origin",
+  "referrer-policy": "same-origin",
   // Written out rather than imported from the config, so a token dropped from
   // or added to the deny list there is a difference here.
   "permissions-policy":
@@ -215,7 +215,7 @@ test.describe("isolated from other origins", () => {
   test.describe("signed in", () => {
     test.use({ storageState: SESSION_FILE });
 
-    test("a product photograph from Open Food Facts still renders", async ({
+    test("a product photograph from Open Food Facts renders, and is not told where", async ({
       page,
     }) => {
       // The one image Stoky shows from another origin, under the headers
@@ -223,9 +223,11 @@ test.describe("isolated from other origins", () => {
       // knows nothing of Stoky does — no CORS, no CORP — and keeps the test
       // off the internet.
       const photo = "https://images.openfoodfacts.org/images/products/e2e/front.png";
-      await page.route("https://images.openfoodfacts.org/**", (route) =>
-        route.fulfill({ contentType: "image/png", body: PIXEL }),
-      );
+      const referers: (string | undefined)[] = [];
+      await page.route("https://images.openfoodfacts.org/**", async (route) => {
+        referers.push((await route.request().allHeaders())["referer"]);
+        await route.fulfill({ contentType: "image/png", body: PIXEL });
+      });
 
       // Only an Open Food Facts scan sets `imageUrl`, and the seed scans
       // nothing, so the product's own answer is given a photograph on its way
@@ -261,6 +263,18 @@ test.describe("isolated from other origins", () => {
       await expect
         .poll(() => img.evaluate((el: HTMLImageElement) => (el.complete ? el.naturalWidth : 0)))
         .toBeGreaterThan(0);
+
+      // And it told Open Food Facts nothing about where it was shown. Under
+      // the former `strict-origin-when-cross-origin` every one of these
+      // requests carried `Referer: <the instance's origin>` — its hostname, to
+      // a third party, with the barcode in the path. Two layers say no: the
+      // page's `Referrer-Policy: same-origin`, pinned above, and the image's
+      // own attribute, which holds behind a proxy that rewrites the header.
+      // The request is the claim; the attribute is asserted by itself because
+      // the header alone would keep the request clean without it.
+      expect(referers.length).toBeGreaterThan(0);
+      expect(referers.filter((referer) => referer !== undefined)).toEqual([]);
+      await expect(img).toHaveAttribute("referrerpolicy", "no-referrer");
 
       // Why there is no `Cross-Origin-Embedder-Policy`: Stoky needs none of
       // the cross-origin isolation it buys, and with `require-corp` this plain
