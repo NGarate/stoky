@@ -341,14 +341,14 @@ describe("the CI workflow's release path restores no cache", () => {
     return step;
   };
 
-  it.each(["quality", "release-draft"])(
-    "downloads Bun on a tag rather than restore it from the cache: %s",
-    (name) => {
-      for (const step of using("oven-sh/setup-bun", name)) {
-        expect(input(step, "no-cache", tag)).toBe("true");
-      }
-    },
-  );
+  // Every job, not a list of the ones that matter: e2e and audit run on a tag
+  // and gate image-publish, and a list is what let them restore Bun from the
+  // cache until zizmor's cache-poisoning audit named them.
+  it("downloads Bun on a tag rather than restore it from the cache, in every job", () => {
+    for (const step of using("oven-sh/setup-bun")) {
+      expect(input(step, "no-cache", tag)).toBe("true");
+    }
+  });
 
   it("builds a tag's image without reading or using the layer cache", () => {
     expect(input(push(), "cache-from", tag)).toBe("");

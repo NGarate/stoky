@@ -511,6 +511,20 @@ repository's red runs actually were. Verified able to fail in both halves —
 an injected `SC2168` and an `env` context in `runs-on:` were each caught, then
 reverted.
 
+**…and audits it for security** (2026-10-12). The same script runs zizmor
+1.16.3 over `.github/` — both workflows and `dependabot.yml` — from
+`ghcr.io/zizmorcore/zizmor` pinned by index digest, `--offline` and with no
+network, the `regular` persona, failing on any finding at any severity; the
+binary fallback checks the release asset against GitHub's recorded SHA-256.
+Its first run found two `cache-poisoning` findings: `e2e` and `audit` restored
+Bun from setup-bun's cache on a tag. Both now download it, so no step of
+`ci.yml` uses that cache. Verified able to fail on scratch copies: a
+`${{ github.event.pull_request.title }}` in a `run:` step (template injection,
+exit 14), the pre-fix `ci.yml` (exit 14), a Dependabot entry without its
+cooldown (four medium findings, exit 13) and an unparseable workflow (exit 1,
+which without `--strict-collection` was a skipped file and exit 0). The
+`auditor` persona is not the gate; what it adds is in SECURITY.md, Known gaps.
+
 **Bun is pinned** in `.bun-version` (**1.4.3** since 2026-10-12; 1.4.0 from
 2026-08-26, 1.3.14 before), read by CI through `bun-version-file` where `setup-bun` still runs.
 The Dockerfile names the same version by tag and by index digest (since

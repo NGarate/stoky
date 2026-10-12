@@ -31,7 +31,7 @@ function repo() {
   mkdirSync(join(fixture, "scripts"));
   mkdirSync(join(fixture, "bin"));
   copyFileSync(join(root, "scripts/check-scope.sh"), join(fixture, "scripts/check-scope.sh"));
-  // check-ci.sh stands in for actionlint and shellcheck: what check-scope.sh
+  // check-ci.sh stands in for actionlint, shellcheck and zizmor: what check-scope.sh
   // owes them is the right file list, and that is what it receives.
   writeFileSync(join(fixture, "scripts/check-ci.sh"), `#!/bin/bash\n${logger("check-ci")}\n`);
   writeFileSync(
@@ -87,6 +87,8 @@ function stageMixedChange(fixture: ReturnType<typeof repo>) {
   fixture.write("src/new file.tsx");
   fixture.write("src/old.ts", "y\n");
   fixture.write(".github/workflows/ci.yml");
+  fixture.write(".github/dependabot.yml");
+  fixture.write(".github/selected-actions.json");
   fixture.write("scripts/release.sh");
   fixture.write("deploy/install.sh");
   fixture.write("deploy/examples/old.sh");
@@ -105,6 +107,7 @@ describe("check-scope.sh", () => {
       "bun [run] [check:react] [--scope] [full]",
       "check-ci [actionlint]",
       "check-ci [shellcheck]",
+      "check-ci [zizmor]",
       "bun [run] [check:audit]",
       "bun [run] [typecheck]",
     ]);
@@ -120,6 +123,7 @@ describe("check-scope.sh", () => {
       "bun [run] [check:react] [--staged]",
       "check-ci [actionlint] [.github/workflows/ci.yml]",
       "check-ci [shellcheck] [deploy/install.sh] [scripts/release.sh]",
+      "check-ci [zizmor] [.github/dependabot.yml] [.github/workflows/ci.yml]",
       "bun [run] [typecheck]",
     ]);
   });
@@ -159,6 +163,7 @@ describe("check-scope.sh", () => {
       `bun [run] [check:react] [--scope] [changed] [--base] [${base}]`,
       "check-ci [actionlint] [.github/workflows/ci.yml]",
       "check-ci [shellcheck] [deploy/install.sh] [scripts/release.sh] [scripts/stable.sh] [scripts/uncommitted.sh]",
+      "check-ci [zizmor] [.github/dependabot.yml] [.github/workflows/ci.yml]",
       "bun [run] [typecheck]",
     ]);
   });
@@ -203,7 +208,7 @@ describe("check-scope.sh", () => {
     const result = repo().run(["staged"]);
     expect(result.exitCode).toBe(0);
     expect(result.calls).toEqual(["bun [run] [typecheck]"]);
-    for (const check of ["oxlint", "React Doctor", "actionlint", "shellcheck"]) {
+    for (const check of ["oxlint", "React Doctor", "actionlint", "shellcheck", "zizmor"]) {
       expect(result.stdout).toContain(`skipped  ${check}: no staged`);
       expect(result.stdout).not.toContain(`ok       ${check}`);
     }
@@ -216,7 +221,7 @@ describe("check-scope.sh", () => {
     stageMixedChange(fixture);
     const result = fixture.run(["staged"], "check:react");
     expect(result.exitCode).toBe(1);
-    expect(result.calls).toHaveLength(5);
+    expect(result.calls).toHaveLength(6);
     expect(result.stdout).toContain("FAILED   React Doctor (exit 3)");
     expect(result.stdout).toContain("ok       typecheck");
   });
@@ -246,7 +251,7 @@ describe("check-scope.sh", () => {
     expect(result.stdout).toContain("skipped  dependency audit: offline");
   });
 
-  it("leaves actionlint and shellcheck to check-ci.sh with --no-pipeline-lint", () => {
+  it("leaves actionlint, shellcheck and zizmor to check-ci.sh with --no-pipeline-lint", () => {
     const fixture = repo();
     stageMixedChange(fixture);
     for (const scope of ["all", "staged"]) {
@@ -255,6 +260,7 @@ describe("check-scope.sh", () => {
       expect(result.calls.filter((call) => call.startsWith("check-ci"))).toEqual([]);
       expect(result.stdout).toContain("skipped  actionlint: --no-pipeline-lint");
       expect(result.stdout).toContain("skipped  shellcheck: --no-pipeline-lint");
+      expect(result.stdout).toContain("skipped  zizmor: --no-pipeline-lint");
     }
   });
 
@@ -313,6 +319,10 @@ describe("check-audit.sh", () => {
 });
 
 describe("check-ci.sh file arguments", () => {
+  // Offline, the regular persona, and an unparseable workflow is a failure
+  // rather than a file quietly left out of the audit.
+  const zizmorFlags = "[--offline] [--persona] [regular] [--strict-collection] [--no-progress] [--color] [never]";
+
   function runCheckCi(args: string[], options: { deploy?: boolean } = {}) {
     const fixture = mkdtempSync(join(tmpdir(), "stoky-check-ci-"));
     fixtures.push(fixture);
@@ -337,6 +347,7 @@ describe("check-ci.sh file arguments", () => {
     const calls = readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean);
     return {
       exitCode: result.exitCode,
+      calls,
       tools: calls.map((call) => call.replace(/^.*\[--entrypoint\] \[([^\]]+)\] \[[^\]]+\]/, "$1")),
     };
   }
@@ -347,7 +358,14 @@ describe("check-ci.sh file arguments", () => {
     expect(result.tools).toEqual([
       "/usr/local/bin/actionlint [-no-color]",
       "shellcheck [-S] [warning] [scripts/a.sh] [scripts/b.sh] [scripts/check-ci.sh]",
+      `/usr/bin/zizmor ${zizmorFlags} [.github]`,
     ]);
+  });
+
+  it("runs zizmor from its own pinned image, offline", () => {
+    const [call] = runCheckCi(["zizmor"]).calls;
+    expect(call).toContain("[--network] [none]");
+    expect(call).toMatch(/\[ghcr\.io\/zizmorcore\/zizmor:[\d.]+@sha256:[0-9a-f]{64}\]/);
   });
 
   it("lints the operator's install script beside the project's own", () => {
@@ -361,5 +379,9 @@ describe("check-ci.sh file arguments", () => {
     expect(runCheckCi(["actionlint", ".github/workflows/x.yml"]).tools).toEqual([
       "/usr/local/bin/actionlint [-no-color] [.github/workflows/x.yml]",
     ]);
+    expect(runCheckCi(["zizmor", ".github/dependabot.yml"]).tools).toEqual([
+      `/usr/bin/zizmor ${zizmorFlags} [.github/dependabot.yml]`,
+    ]);
+    expect(runCheckCi(["zizmor"]).tools).toEqual([`/usr/bin/zizmor ${zizmorFlags} [.github]`]);
   });
 });

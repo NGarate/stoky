@@ -268,7 +268,8 @@ Conventional Commits: `build(deps):` and `build(deps-dev):` for the lockfile,
   checks it. Move
   the root `docker-compose.yml`, `docker-compose.dev.yml` and `ci.yml`'s
   service containers to the same version by hand, so CI tests what the bundle
-  runs. No ecosystem covers those, nor the Playwright and actionlint images.
+  runs. No ecosystem covers those, nor the Playwright, actionlint and zizmor
+  images (`scripts/check-ci.sh`).
 
 A major the project is not taking yet is closed with
 `@dependabot ignore this major version`, which Dependabot remembers.

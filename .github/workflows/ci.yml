@@ -308,9 +308,19 @@ jobs:
       - name: unzip, which setup-bun needs and the image does not ship
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip
 
+      # `no-cache`: Bun is downloaded, not restored. This job runs on a tag
+      # and gates image-publish, so a binary planted in the cache would run the
+      # gate a release passes through. With this and audit, no job in this
+      # workflow reads or writes setup-bun's cache, which is what lets
+      # ci-workflow.test.ts hold the whole release path cache-free rather than
+      # weigh each job. An ignore for zizmor's cache-poisoning finding was the
+      # alternative; it would have been an argument in a comment that no test
+      # can hold. The cost is the download quality and release-draft already
+      # make on a tag.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+          no-cache: true
 
       # No dependency cache, deliberately. There was one (`actions/cache` on
       # ~/.bun/install/cache), and measured it cost more than it saved: on run
@@ -369,9 +379,14 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      # `no-cache`: the job installs nothing, so the only thing setup-bun
+      # would cache is Bun itself, and restoring it is a download from the
+      # Actions cache instead of from the release. Nothing saved; one more
+      # job reading a cache any master-run job can write (see e2e).
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+          no-cache: true
 
       # This job is what blocks a vulnerable dependency tree. Dependabot
       # (.github/dependabot.yml) proposes version updates as reviewed pull
@@ -715,8 +730,10 @@ jobs:
         with:
           persist-credentials: false
       # Downloaded, never restored from the Actions cache. setup-bun's cache key
-      # is the same in every job, e2e included, and e2e's container holds the
-      # runner's docker socket, so test-only code could plant a binary under it.
+      # is the same in every job, and every job of a master run holds the token
+      # that writes the cache — e2e included, whose container holds the
+      # runner's docker socket — so test-only code could plant a binary under
+      # it even though no job here uses setup-bun's cache any more.
       # This job holds contents: write and packages: write, logs in to GHCR
       # next, and runs `bun` beside that credential. setup-bun checks a
       # restored binary only by asking it for its revision.

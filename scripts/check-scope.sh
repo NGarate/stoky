@@ -6,7 +6,7 @@
 #   bash scripts/check-scope.sh staged              # before a commit
 #   bash scripts/check-scope.sh changed [--base R]  # a PR, or a branch before pushing
 #
-# --no-pipeline-lint reports actionlint and shellcheck as skipped. It is for
+# --no-pipeline-lint reports actionlint, shellcheck and zizmor as skipped. It is for
 # the development image in CI, which has neither Docker nor shellcheck, and
 # where check-ci.sh has already linted every workflow and script on the runner.
 #
@@ -82,9 +82,11 @@ case "$SCOPE" in
 esac
 
 # The same sets `all` covers: oxlint and React Doctor walk the project's
-# sources, actionlint the workflow directory, shellcheck scripts/*.sh and deploy/*.sh.
+# sources, actionlint the workflow directory, shellcheck scripts/*.sh and deploy/*.sh,
+# zizmor the workflows and Dependabot's configuration.
 SOURCES=()
 WORKFLOWS=()
+GITHUB_CONFIG=()
 SCRIPTS=()
 DEPENDENCIES=()
 for file in "${FILES[@]}"; do
@@ -93,7 +95,11 @@ for file in "${FILES[@]}"; do
   esac
   case "$file" in
     .github/workflows/*/*) ;;
-    .github/workflows/*.yml | .github/workflows/*.yaml) WORKFLOWS+=("$file") ;;
+    .github/workflows/*.yml | .github/workflows/*.yaml)
+      WORKFLOWS+=("$file")
+      GITHUB_CONFIG+=("$file")
+      ;;
+    .github/dependabot.yml | .github/dependabot.yaml) GITHUB_CONFIG+=("$file") ;;
   esac
   case "$file" in
     scripts/*/* | deploy/*/*) ;;
@@ -148,6 +154,7 @@ case "$SCOPE" in
     if $PIPELINE_LINT; then
       run "actionlint" bash scripts/check-ci.sh actionlint
       run "shellcheck" bash scripts/check-ci.sh shellcheck
+      run "zizmor" bash scripts/check-ci.sh zizmor
     fi
     run "dependency audit" bun run check:audit
     ;;
@@ -176,6 +183,12 @@ case "$SCOPE" in
       else
         skip "shellcheck" "no $SCOPE scripts"
       fi
+
+      if [ "${#GITHUB_CONFIG[@]}" -gt 0 ]; then
+        run "zizmor ($(count GITHUB_CONFIG))" bash scripts/check-ci.sh zizmor "${GITHUB_CONFIG[@]}"
+      else
+        skip "zizmor" "no $SCOPE workflows or Dependabot configuration"
+      fi
     fi
 
     # A new dependency is when the risk arrives, so that is when to look.
@@ -190,6 +203,7 @@ esac
 if ! $PIPELINE_LINT; then
   skip "actionlint" "--no-pipeline-lint"
   skip "shellcheck" "--no-pipeline-lint"
+  skip "zizmor" "--no-pipeline-lint"
 fi
 
 # Types do not scope by file: a change to one signature breaks its callers,

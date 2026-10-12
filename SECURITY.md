@@ -777,6 +777,19 @@ Verified against the files named in each row.
   same rule: the `Dockerfile`'s Bun base and the bundle's service images are
   pinned by digest ([Container and runtime](#container-and-runtime--dockerfile),
   [Release deployment](#release-deployment--deploydocker-composeyml)).
+- **The workflows are audited for security before anything is published.**
+  `scripts/check-ci.sh`, the first step of the `quality` job (which
+  `image-publish` needs) and part of `check:all`, runs zizmor 1.16.3 over
+  `.github/` (both workflows and `dependabot.yml`): template injection, credentials persisted in the
+  checkout, caches a release path restores, dangerous triggers, Dependabot
+  without a cooldown. It comes from `ghcr.io/zizmorcore/zizmor` pinned by
+  index digest, runs with no network (`--offline`, `--network none`), and
+  fails on any finding its `regular` persona reports, at any severity; an
+  unparseable workflow fails it too (`--strict-collection`), where by default
+  zizmor skips the file and exits 0. Verified on scratch copies: a
+  `${{ github.event.pull_request.title }}` in a `run:` step exits 14, a
+  Dependabot entry without its cooldown exits 13. Its online audits, which
+  ask the GitHub API about each pinned action, are not run.
 - `bun audit --audit-level moderate` runs as its own job and fails the build. It
   answers from `bun.lock` alone, so the job installs nothing.
 - The image is built and **loaded locally, then scanned by Trivy before it is
@@ -844,7 +857,13 @@ Verified against the files named in each row.
   So a tag's publish build uses no layer cache (no `cache-from`, `no-cache`), and
   the jobs that check, scan and package a release download Bun, Trivy and its
   database rather than restore them — `release-draft` holds `contents: write` and
-  `packages: write` and runs `bun` beside its registry login. `latest` and `sha-`
+  `packages: write` and runs `bun` beside its registry login. No step of
+  `ci.yml` uses setup-bun's cache at all: `e2e` and `audit` restored Bun from
+  it, on tags too, until zizmor's `cache-poisoning` audit named them on
+  2026-10-12. `e2e` gates `image-publish`, so a binary planted there would run
+  a gate the release passes through, and an ignore annotation would have been
+  a judgement no test holds; `audit` installs nothing, so the cache saved it
+  nothing. `latest` and `sha-`
   images still rebuild from the layer cache: they are the development channel,
   and an installation runs an exact version tag. `ci-workflow.test.ts` holds each
   setting. `v0.1.0-alpha.3` was assembled from that cache: in run
@@ -1753,10 +1772,19 @@ own.
   ended — the per-device design `docs/SECURITY_REVIEW.md` §6 sketches — and
   a check on every session read that must not fail closed on a cache outage,
   since every page render reads the session.
-- No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the
-  only workflows; Trivy scans images, not the source. Secret scanning, push
-  protection and CodeQL are repository settings instead (see *Supply chain*),
-  and on 2026-10-12 all three were off.
+- No secret scanning or SAST of the source in CI. `ci.yml` and the weekly
+  `rescan.yml` are the only workflows; Trivy scans images, and zizmor the
+  workflows, not the source. Secret scanning, push protection and CodeQL are
+  repository settings instead (see *Supply chain*), and on 2026-10-12 all
+  three were off.
+- **CI's test containers are pinned by tag, not digest.** zizmor's `auditor`
+  persona, which is not the gate, reports five `unpinned-images` findings in
+  `ci.yml`: the `test` and `e2e` jobs' PostgreSQL and Valkey services and the
+  Playwright container. They run test code only and never reach an image or a
+  release, but a moved tag changes what CI tests against. The same persona
+  also wants a comment beside the granted permissions in four jobs and a
+  concurrency group in `rescan.yml`: ten findings on 2026-10-12, every one of
+  them suppressed by the gate's `regular` persona.
 
 ---
 

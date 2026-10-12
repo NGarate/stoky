@@ -92,6 +92,7 @@ bun run check:changed --base <ref>   # ...or from another base
 | React Doctor | `--scope full` | `--staged` / `--scope changed --base <merge base>` — only issues the change introduced |
 | actionlint | every workflow | listed `.github/workflows/*.yml` |
 | shellcheck | `scripts/*.sh` | listed `scripts/*.sh` |
+| zizmor | `.github/` — every workflow and `dependabot.yml` | listed workflows and `.github/dependabot.yml` |
 | dependency audit | always | only when `bun.lock` or `package.json` is listed |
 | typecheck | the project | the project — a changed signature breaks callers that are not listed |
 
@@ -114,8 +115,12 @@ How to read the output:
 - **React Doctor's `--staged` refuses while `package.json` has unstaged
   edits** ("configuration differs between the index and worktree"). Stage or
   stash the edit; it is a guard, not a finding.
-- actionlint and shellcheck come from the pinned `rhysd/actionlint` image
-  (`scripts/check-ci.sh`), so they need Docker but nothing installed.
+- actionlint and shellcheck come from the pinned `rhysd/actionlint` image, and
+  zizmor from the pinned `ghcr.io/zizmorcore/zizmor` image
+  (`scripts/check-ci.sh`), so they need Docker but nothing installed. zizmor
+  runs offline with its `regular` persona and fails on a finding of any
+  severity; an inline `# zizmor: ignore[<audit>]` needs a comment saying why,
+  and is the last resort after changing the workflow.
 
 React Doctor's flags (no telemetry, **no supply-chain upload to Socket.dev**,
 errors only) live once, in `check:react`; every scope calls it and only adds
@@ -134,7 +139,7 @@ a pre-commit hook it did not write.
 - `verify:local` does not require Docker. It does use the network, for the
   dependency audit only, and reports that step skipped when offline
 - `check:all`, `check:staged` and `check:changed` require Docker for
-  actionlint and shellcheck
+  actionlint, shellcheck and zizmor
 - `verify:ci` requires Docker (the integration harness runs its own services)
 - **The browser suite is self-contained.** `playwright.config.ts` builds the
   standalone production artefact, serves it on port 3100 (`PLAYWRIGHT_PORT`
