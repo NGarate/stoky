@@ -1005,8 +1005,8 @@ is what is wrong today.
 ### Rate limiting covers authentication only
 
 `ISSUES.md` CRITICAL-4 is closed as of Phase 3: `src/lib/rate-limit.ts` counts
-sign-ins and registrations per IP in Valkey, at the numbers `CLAUDE.md`
-specifies — 5 sign-ins per 15 minutes, 3 registrations per hour. A successful
+sign-ins and registrations per IP in Valkey, at the defaults in that file — 5
+sign-ins per 15 minutes, 3 registrations per hour. A successful
 sign-in is not charged to its address — the one attempt that succeeded is
 refunded — so a household signing in from several devices is not locked out by
 a limit meant for someone guessing. It is refunded rather than the counter
