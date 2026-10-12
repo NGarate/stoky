@@ -571,6 +571,78 @@ project name and volume identities; the new bundle assumes database/user `stoky`
 and URL-safe credentials. Review custom database names, passwords, networks and
 proxy settings before migrating. Do not point an unreviewed bundle at existing data.
 
+## A migration stops the upgrade
+
+The app applies migrations each time it starts, before it serves anything.
+When one fails, Prisma, which applies them, records the failure in the database
+and the app container restarts over and over. The first attempt logs `P3018`
+with the database's reason. Every attempt after it logs only `P3009` (`migrate
+found failed migrations in the target database`) and the migration's name,
+until the failure is cleared by hand. Fixing the data and restarting is not
+enough on its own.
+
+`20261006120000_normalise_user_email` fails this way on purpose. It changes every
+stored address to lower case and refuses to run while two accounts share one
+address in different case, such as `owner@example.com` and `Owner@Example.com`.
+Earlier releases stored addresses exactly as typed, so anyone who could register
+could create such a pair. Choosing between the two accounts is up to you, not
+the migration. It refuses before changing anything, so the database is as the
+previous release left it. Run these steps in the installation directory:
+
+1. Take a backup as in [Backup and restore](#backup-and-restore), leaving out
+   its last line, because the app cannot start yet. Its `docker compose stop app`
+   ends the restarts.
+2. List the accounts that collide:
+
+   ```bash
+   docker compose exec -T db psql -U stoky -d stoky <<'SQL'
+   SELECT u.id, u.email, u.name, u.role, h.name AS household, u."createdAt"
+   FROM "User" u LEFT JOIN "Household" h ON h.id = u."householdId"
+   WHERE lower(trim(u.email)) IN
+     (SELECT lower(trim(email)) FROM "User" GROUP BY 1 HAVING count(*) > 1)
+   ORDER BY lower(trim(u.email)), u."createdAt";
+   SQL
+   ```
+
+   Keep the account its owner uses: usually the one in the household that holds
+   the inventory, and usually the older one. For each other account, put its
+   `id` in place of `the-id` and give it an address that nobody can type:
+
+   ```bash
+   docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+     -v id='the-id' <<'SQL'
+   UPDATE "User"
+   SET email = 'duplicate-' || id || '@invalid',
+       "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
+       "updatedAt" = now() AT TIME ZONE 'UTC'
+   WHERE id = :'id';
+   SQL
+   ```
+
+   `psql` must answer `UPDATE 1`. Renaming an account keeps everything it
+   recorded and ends its sessions. Deleting it would take its data with it.
+3. Clear the recorded failure:
+
+   ```bash
+   docker compose run --rm --no-deps --entrypoint bun app \
+     /opt/prisma/node_modules/prisma/build/index.js migrate resolve \
+     --rolled-back 20261006120000_normalise_user_email \
+     --schema=/app/prisma/schema.prisma
+   ```
+
+   It answers `Migration 20261006120000_normalise_user_email marked as rolled
+   back.` This step only lets the migration run again. If an address still
+   collides, the next start fails with `P3018` again, and you repeat steps 2 and 3.
+4. Start again: `docker compose up -d --wait --wait-timeout 180`.
+
+Another migration that fails is recovered the same way when it changed nothing
+before failing: read the `P3018` reason in `docker compose logs app`, fix what it
+names, and pass that migration's name to `--rolled-back`. If it may have changed
+part of the database, roll back instead, as [Upgrade and rollback](#upgrade-and-rollback)
+describes: restore the backup taken before the upgrade into an empty installation
+of the previous release. Restoring it under the new release only runs the same
+migration again.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -582,6 +654,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | Every page is `404 page not found` | `docker compose logs traefik` shows `permission denied` for `dynamic.yml`: run `chmod 644 traefik.yml`, then `docker compose restart traefik` |
 | `P1000` / database authentication | Password differs from the one stored when the volume was initialized; changing `.env` is not rotation |
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
+| App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |

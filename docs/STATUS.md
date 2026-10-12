@@ -12,6 +12,27 @@ say what measured it.
 
 ## Gate status
 
+**2026-10-12 recovering from a refused migration:** a migration that fails
+leaves a failed row in `_prisma_migrations`, and every later start stops at
+`P3009`. So when `normalise_user_email` refuses, renaming the account and
+restarting, which is all the alpha.2 notes said, leaves the app restarting.
+`docs/INSTALL.md` *A migration stops the upgrade* now gives the whole procedure,
+and `docs/releases/v0.1.0-alpha.2.md` links to it; the published alpha.2 release
+page keeps the old text until its body is replaced with that file. The procedure
+was run as written, in a scratch Compose project from this branch's `deploy/`
+bundle on empty volumes, with Traefik's ports removed. The `v0.1.0-alpha.1`
+image registered `owner@example.com` and `Owner@Example.com` through
+`auth.register` (both 200). Switching to the local `v0.1.0-alpha.3` image, whose
+migration and Prisma path are byte-for-byte this tree's, gave one `P3018`
+naming `owner@example.com (2 accounts)`, then `P3009` on each of the next three
+restarts. `migrate resolve` run before fixing the data printed "marked as rolled
+back", and the next start failed with `P3018` again. Then, in order, the backup
+without its last line, the listing query, the rename (`UPDATE 1`), `migrate
+resolve` and `up -d --wait` brought every service up healthy: `/api/health`
+answered `{"status":"ok"}`, the migration was recorded finished,
+`User_email_lower_key` existed and the renamed account's sessions were revoked.
+The production image of this tree was not rebuilt for this.
+
 **2026-10-12 Bun base by digest:** the Dockerfile names its base
 `oven/bun:1.4.3-alpine@sha256:629e1741…`, the index digest
 `docker buildx imagetools inspect oven/bun:1.4.3-alpine` printed that day (it
@@ -91,9 +112,10 @@ the alpha.2 entry below tested, and the tag's CI smoke runs the published one.
 **2026-10-11 second-alpha preparation:** `v0.1.0-alpha.2` ships the 2026-10-05
 project review, the 2026-10-06 UI alignment, the installable PWA and the scoped
 checks. The one new migration, `normalise_user_email`, refuses to run while two
-accounts differ only by letter case; the release notes tell an upgrader how to
-clear it. The shipped bundle (`deploy/`, unmodified but for a loopback-ports
-override, because Tailscale holds TCP 443 on the test host) was started on fresh
+accounts differ only by letter case. The release notes as published said only to
+rename an account and start again, which still fails (2026-10-12, *recovering
+from a refused migration*). The shipped bundle (`deploy/`, unmodified but for a
+loopback-ports override, because Tailscale holds TCP 443 on the test host) was started on fresh
 volumes with an image built by `git archive master | docker build --target
 production` from `6007533` — the application tree of this release, since the
 later commits change only scripts, tests and documents. Migrations applied;
