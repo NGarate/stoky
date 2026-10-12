@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
 import type { PrismaClient, Prisma } from "@prisma/client";
 import {
@@ -242,7 +243,7 @@ export const locationRouter = createTRPCRouter({
    * something that does not exist.
    */
   delete: adminProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const location = await ctx.db.storageLocation.findFirst({
         where: {

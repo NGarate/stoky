@@ -12,7 +12,11 @@ import {
   envelope,
   generateTestEmail,
 } from "../utils/test-helpers";
-import { MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
+import {
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_RECEIPT_LINES,
+} from "@/lib/validations/bounds";
 
 /**
  * The bounds on inputs declared inline in a router, through the router.
@@ -106,6 +110,36 @@ describe("inputs declared beside their procedure", () => {
     }));
 
     expect(await refusedFields(() => api.receipt.confirmAll({ receiptId: "r", items }))).toEqual(["items"]);
+  });
+
+  it("refuses stored text past its bound before anything is written", async () => {
+    // The disk-filling case from the 2026-10-12 review: one call stored as much
+    // as the request body could carry. `procedure-input-bounds.test.ts` proves
+    // every field has a maximum; this proves the router enforces it.
+    expect(
+      await refusedFields(() => api.store.create({ name: "M".repeat(MAX_NAME_LENGTH + 1) })),
+    ).toEqual(["name"]);
+    expect(
+      await refusedFields(() =>
+        api.inventory.transferStock({
+          productId: "p",
+          unit: "unidad",
+          quantity: 1,
+          fromLocationId: "a",
+          toLocationId: "b",
+          note: "n".repeat(MAX_NOTE_LENGTH + 1),
+        }),
+      ),
+    ).toEqual(["note"]);
+    expect(
+      await refusedFields(() => api.price.recordPrice({
+        productId: "p",
+        storeId: "s",
+        price: 1,
+        unit: "unidad",
+        currency: "EURO",
+      })),
+    ).toEqual(["currency"]);
   });
 
   it("still takes the ordinary values", async () => {

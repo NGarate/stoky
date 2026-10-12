@@ -1,7 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { MAX_PAGE_SIZE, MAX_SEARCH_LENGTH } from "@/lib/validations/bounds";
+import {
+  MAX_ID_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_SEARCH_LENGTH,
+} from "@/lib/validations/bounds";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   priceRecordSchema,
@@ -125,7 +129,7 @@ export const priceRouter = createTRPCRouter({
 
   /** The most recent sighting per store for a product — where it is cheapest now. */
   getLatestPrices: householdProcedure
-    .input(z.object({ productId: z.string() }))
+    .input(z.object({ productId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       // Get latest price per store for the product
       const latestPrices = await ctx.db.priceRecord.findMany({

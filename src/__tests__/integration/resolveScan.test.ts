@@ -14,6 +14,7 @@ import { openFoodFacts } from "@/server/services/openFoodFacts";
 import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 import { TRPCError } from "@trpc/server";
+import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 
 /**
  * `product.resolveScan` — the replayable scan T7 adds.
@@ -210,5 +211,44 @@ describe("product.resolveScan", () => {
     expect(result.product.name).toBe("Ya conocido");
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("stores Open Food Facts text within the bound the edit form is held to", async () => {
+    // OFF is edited by anyone, and its text reaches the row without passing
+    // `productSchema`. Stored past `MAX_NAME_LENGTH`, the detail form — which
+    // sends name, brand and category back on every save — could not save the
+    // product at all. The emoji sits across the cut, so a naive slice would
+    // leave half a surrogate pair.
+    const long = `${"n".repeat(MAX_NAME_LENGTH - 1)}🥛${"x".repeat(50)}`;
+    const hit = offProduct(long);
+    const spy = spyOn(openFoodFacts, "getProductByBarcode").mockResolvedValue(
+      hit && {
+        ...hit,
+        brands: "B".repeat(MAX_NAME_LENGTH + 50),
+        categories: `${"C".repeat(MAX_NAME_LENGTH + 50)}, Leche`,
+      },
+    );
+    const api = await caller();
+
+    const { product } = await api.product.resolveScan({
+      ...envelope(),
+      barcode: "8410000777777",
+    });
+    spy.mockRestore();
+
+    expect(product.name).toBe("n".repeat(MAX_NAME_LENGTH - 1));
+    expect(product.brand).toBe("B".repeat(MAX_NAME_LENGTH));
+    expect(product.category).toBe("C".repeat(MAX_NAME_LENGTH));
+
+    // What the detail form sends when only the minimum changes.
+    const saved = await api.product.update({
+      id: product.id,
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      defaultUnit: product.defaultUnit,
+      minStock: 2,
+    });
+    expect(saved.minStock).toBe(2);
   });
 });

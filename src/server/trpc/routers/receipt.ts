@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_PAGE_SIZE, MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
+import {
+  MAX_ID_LENGTH,
+  MAX_MIME_TYPE_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_RECEIPT_LINES,
+} from "@/lib/validations/bounds";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -158,8 +163,8 @@ export const receiptRouter = createTRPCRouter({
         // as a Buffer first. The check below still stands: this bounds the
         // encoded length, that bounds what the bytes actually came to.
         fileBase64: z.string().max(MAX_RECEIPT_BASE64_LENGTH),
-        mimeType: z.string(),
-        storeId: z.string().optional(),
+        mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
+        storeId: z.string().max(MAX_ID_LENGTH).optional(),
         purchaseDate: z.date().optional(),
       }),
     )
@@ -260,7 +265,7 @@ export const receiptRouter = createTRPCRouter({
    * this is how the interface learns that PROCESSING became PARSED — or FAILED.
    */
   getStatus: householdProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
@@ -310,7 +315,7 @@ export const receiptRouter = createTRPCRouter({
    * a similarity query per unmatched line.
    */
   getReceiptWithItems: householdProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
@@ -473,7 +478,7 @@ export const receiptRouter = createTRPCRouter({
   confirmAll: writeProcedure
     .input(
       z.object({
-        receiptId: z.string(),
+        receiptId: z.string().max(MAX_ID_LENGTH),
         items: z.array(receiptItemMatchSchema).max(MAX_RECEIPT_LINES),
       }),
     )
@@ -618,7 +623,7 @@ export const receiptRouter = createTRPCRouter({
    * tells the person that in words rather than leaving them to notice.
    */
   applyReceipt: writeProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
 
@@ -750,7 +755,7 @@ export const receiptRouter = createTRPCRouter({
    * want to check.
    */
   getAppliedSummary: householdProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
@@ -834,7 +839,7 @@ export const receiptRouter = createTRPCRouter({
           "FAILED",
         ]).optional(),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
-        cursor: z.string().optional(),
+        cursor: z.string().max(MAX_ID_LENGTH).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {

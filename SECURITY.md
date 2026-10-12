@@ -129,6 +129,28 @@ Verified against the files named in each row.
 - Credentials are validated with a Zod schema before the database is touched,
   and `authorize` returns `null` for both an unknown email and a wrong password.
 
+### Input validation — `src/lib/validations/`
+
+- Every tRPC procedure parses its input with Zod, and **every string and array
+  it accepts has a maximum**. The lengths are named in
+  `src/lib/validations/bounds.ts`: an email address 254 (RFC 5321), a name
+  200, a note, reason or shop address 1000, a unit 32, a barcode 64, an id 64,
+  a declared MIME type 255. A currency is three letters after trimming and
+  upper-casing.
+- A product created from an Open Food Facts hit takes its name, brand and
+  category from text anyone can edit on OFF, not from a caller, so
+  `productFromOff` cuts each to the name bound before it is stored. Otherwise
+  the detail form, which sends all three back on every save, could not save
+  that product again.
+- `src/__tests__/unit/procedure-input-bounds.test.ts` walks the parser of every
+  procedure in `appRouter` — the inline ones as well as the shared schemas —
+  and fails naming the field when a string or array has no maximum, or when it
+  meets a Zod type it does not understand.
+- The bound is in the application, not the column: every Prisma `String` is
+  still `text`. A `VarChar(n)` migration would fail on any instance already
+  holding a longer value. A row stored before the bound still displays; saving
+  it again means shortening it first.
+
 ### Receipt uploads — `src/server/trpc/routers/receipt.ts`
 
 - MIME allowlist (JPEG, PNG, WebP), a 10 MB size cap, and a magic-byte check on
@@ -227,8 +249,16 @@ What is still open, and worth knowing before publishing an instance:
   spend the server's CPU, and it would be outside the limit.
 - **Every other tRPC procedure is unlimited**, so an authenticated account can
   still make as many ordinary calls as it likes. That is a smaller problem — it
-  needs credentials first, and those calls read rows rather than start OCR —
-  but it is not nothing on a shared household instance.
+  needs credentials first, and none of those calls starts OCR — but it is not
+  nothing on a shared household instance. It is not only reads, either:
+  `product.create`, `store.create` and the other writes are unlimited too.
+  Until 2026-10-12 each of them could store as much text as the 15 MiB request
+  body carried, so open registration plus a loop of writes could fill the
+  disk every household shares. The per-field bounds above cap what one call
+  stores — under 700 characters of text for a product, about 100,000 for the
+  largest, a 500-line receipt review that creates a product per line — but
+  not how many calls there are, so an account can still grow the database
+  row by row. Keep the database volume on a disk something watches.
 - **The identifier is an IP address**, read from the last hop of
   `X-Forwarded-For`. Everyone behind one NAT therefore shares a bucket. An
   attacker with a range of addresses gets one bucket per address, which is what
@@ -384,7 +414,11 @@ What is still open:
 The maximum is not a usability rule at all: `argon2.hash` and `argon2.verify`
 were both taking unbounded input on two endpoints reachable without an account,
 at 64 MB per call. A body of a few megabytes turned registration into a memory
-amplifier — the rate limiter bounds how often, not how much.
+amplifier — the rate limiter bounds how often, not how much. The password was not
+the only unbounded field on those endpoints: the address, the name and the
+household name were bare strings too, and a failed sign-in wrote the address
+it was given into the security log, whatever its length. All three are bounded
+now, with every other input (see *Input validation* above).
 
 ### ~~The services layer still throws bare `Error`~~ — closed
 

@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { type PrismaClient } from "@prisma/client";
 import { needsMoreOnList } from "@/lib/stock/low-stock";
 import { z } from "zod";
+import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import {
   shoppingListSchema,
@@ -119,7 +120,7 @@ export const shoppingRouter = createTRPCRouter({
 
   /** One list with its items, for the list detail screen. */
   getById: householdProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const list = await ctx.db.shoppingList.findFirst({
         where: {
@@ -222,7 +223,7 @@ export const shoppingRouter = createTRPCRouter({
    * an empty one.
    */
   delete: writeProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       // Resolved against the household first. The item delete below is keyed on
       // the list alone — `ShoppingItem` has no `householdId` of its own — so the
@@ -402,7 +403,7 @@ export const shoppingRouter = createTRPCRouter({
 
   /** Takes something off a list. Replayable, for the same reason. */
   removeItem: writeProcedure
-    .input(z.object({ id: z.string() }).merge(replayable))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }).merge(replayable))
     .mutation(async ({ ctx, input }) =>
       withReplay(ctx, {
         key: input.idempotencyKey,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ID_LENGTH } from "./bounds";
 
 /**
  * The envelope every mutation a device can compose offline carries.
@@ -22,8 +23,12 @@ export const replayable = z.object({
    * primary key, so a caller cannot use the key column as storage.
    */
   idempotencyKey: z.string().uuid(),
-  /** The account the change was composed under. Compared, never trusted. */
-  composedByUserId: z.string().cuid(),
+  /**
+   * The account the change was composed under. Compared, never trusted.
+   * `.cuid()` alone did not bound it — Zod 3's pattern is `c` and eight or
+   * more of anything — so the length is stated as well.
+   */
+  composedByUserId: z.string().max(MAX_ID_LENGTH).cuid(),
 });
 
 export type Replayable = z.infer<typeof replayable>;

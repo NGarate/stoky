@@ -1,6 +1,7 @@
 import { unitConversion, canonicalProduct } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 import {
   adminProcedure,
   createTRPCRouter,
@@ -23,6 +24,25 @@ import {
 } from "@/lib/validations/product";
 
 /**
+ * Text from Open Food Facts, cut to the length the edit form's schema takes.
+ *
+ * The bounds in `src/lib/validations/bounds.ts` hold for what a caller sends.
+ * These three columns are not sent by a caller: they are whatever the OFF
+ * entry says, and anyone can edit an OFF entry. Stored past the bound, a long
+ * brand list would make a product the detail form cannot save: the form sends
+ * the name, brand and category back on every edit, and the edit schema would
+ * refuse them.
+ *
+ * Cut in UTF-16 units, which is what `.max()` counts, without leaving half a
+ * surrogate pair behind.
+ */
+function offText(value: string): string {
+  if (value.length <= MAX_NAME_LENGTH) return value;
+  const cut = value.slice(0, MAX_NAME_LENGTH);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
+
+/**
  * The columns an Open Food Facts hit becomes on a new `Product`.
  *
  * Extracted so `scanBarcode` (connected) and `resolveScan` (drained from the
@@ -39,10 +59,10 @@ function productFromOff(
     : null;
 
   return {
-    name: offProduct.product_name || `Product ${barcode}`,
+    name: offText(offProduct.product_name || `Product ${barcode}`),
     barcode,
-    brand: offProduct.brands || null,
-    category,
+    brand: offProduct.brands ? offText(offProduct.brands) : null,
+    category: category === null ? null : offText(category),
     imageUrl: offProduct.image_url || offProduct.image_front_url || null,
     defaultUnit: openFoodFacts.extractUnit(offProduct.quantity),
     openFoodFactsData: offProduct,
@@ -128,7 +148,7 @@ export const productRouter = createTRPCRouter({
 
   /** One product with its stock entries, for the detail screen. */
   getById: householdProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const product = await ctx.db.product.findFirst({
         where: {
@@ -311,7 +331,7 @@ export const productRouter = createTRPCRouter({
    * delete with no undo is the household's decision, not any member's.
    */
   delete: adminProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const existingProduct = await ctx.db.product.findFirst({
         where: {

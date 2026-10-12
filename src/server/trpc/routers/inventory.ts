@@ -19,7 +19,14 @@ import {
   startOfToday,
 } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
-import { MAX_DAYS, MAX_PRICE, MAX_QUANTITY } from "@/lib/validations/bounds";
+import {
+  MAX_DAYS,
+  MAX_ID_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_PRICE,
+  MAX_QUANTITY,
+  MAX_UNIT_LENGTH,
+} from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
 import type {
   StockDirection,
@@ -406,7 +413,7 @@ export const inventoryRouter = createTRPCRouter({
           // write no record (PRICE-1); refused at the edge instead, where the
           // person can fix it.
           price: z.number().positive().finite().max(MAX_PRICE).optional(),
-          storeId: z.string().optional(),
+          storeId: z.string().max(MAX_ID_LENGTH).optional(),
         })
         .merge(replayable)
     )
@@ -559,7 +566,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       consumeStockSchema
         .extend({
-          consumeFromLocationId: z.string().optional(),
+          consumeFromLocationId: z.string().max(MAX_ID_LENGTH).optional(),
         })
         .merge(replayable)
     )
@@ -779,12 +786,12 @@ export const inventoryRouter = createTRPCRouter({
   transferStock: writeProcedure
     .input(
       z.object({
-        productId: z.string(),
+        productId: z.string().max(MAX_ID_LENGTH),
         quantity: z.number().positive().finite().max(MAX_QUANTITY),
-        unit: z.string(),
-        fromLocationId: z.string(),
-        toLocationId: z.string(),
-        note: z.string().optional(),
+        unit: z.string().max(MAX_UNIT_LENGTH),
+        fromLocationId: z.string().max(MAX_ID_LENGTH),
+        toLocationId: z.string().max(MAX_ID_LENGTH),
+        note: z.string().max(MAX_NOTE_LENGTH).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -943,8 +950,8 @@ export const inventoryRouter = createTRPCRouter({
   getStockHistory: householdProcedure
     .input(
       z.object({
-        productId: z.string(),
-        cursor: z.string().optional(),
+        productId: z.string().max(MAX_ID_LENGTH),
+        cursor: z.string().max(MAX_ID_LENGTH).optional(),
         limit: z.number().min(1).max(100).default(20),
       })
     )
@@ -1007,7 +1014,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       z.object({
         days: z.number().int().min(1).max(MAX_DAYS).default(7),
-        locationId: z.string().optional(),
+        locationId: z.string().max(MAX_ID_LENGTH).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -1044,7 +1051,7 @@ export const inventoryRouter = createTRPCRouter({
   getExpiredItems: householdProcedure
     .input(
       z.object({
-        locationId: z.string().optional(),
+        locationId: z.string().max(MAX_ID_LENGTH).optional(),
       })
     )
     .query(async ({ ctx, input }) => {

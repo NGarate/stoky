@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
 
 /**
  * The image types a receipt photograph may be.
@@ -86,17 +87,18 @@ export const MAX_RECEIPT_BASE64_LENGTH = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4;
  */
 export const receiptItemMatchSchema = z.discriminatedUnion("action", [
   z.object({
-    receiptItemId: z.string().min(1),
+    receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
     action: z.literal("MATCH"),
-    productId: z.string().min(1),
+    productId: z.string().min(1).max(MAX_ID_LENGTH),
   }),
   z.object({
-    receiptItemId: z.string().min(1),
+    receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
     action: z.literal("CREATE"),
-    customName: z.string().trim().min(1),
+    // A product name, and the same bound: it becomes `Product.name`.
+    customName: z.string().trim().min(1).max(MAX_NAME_LENGTH),
   }),
   z.object({
-    receiptItemId: z.string().min(1),
+    receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
     action: z.literal("SKIP"),
   }),
 ]);

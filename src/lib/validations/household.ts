@@ -1,16 +1,18 @@
 import { z } from "zod";
+import { emailSchema } from "./auth";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
 import { newPasswordSchema } from "./password";
 
 export const householdSchema = z.object({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
 });
 
 export const updateHouseholdSchema = householdSchema.partial().extend({
-  id: z.string().trim().min(1),
+  id: z.string().trim().min(1).max(MAX_ID_LENGTH),
 });
 
 export const householdMemberSchema = z.object({
-  userId: z.string().trim().min(1),
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
   role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
 });
 
@@ -28,8 +30,9 @@ export const householdMemberSchema = z.object({
  * household: the kitchen tablet is set up by the person holding it.
  */
 export const addMemberSchema = z.object({
-  name: z.string().trim().min(1),
-  email: z.string().trim().toLowerCase().email(),
+  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
+  // The same address sign-in looks up, so the same trim, case and bound.
+  email: emailSchema,
   // The same policy as registration: an account an admin creates is an account
   // somebody signs in with, and a weaker rule here would be the way round it.
   password: newPasswordSchema,
@@ -52,7 +55,7 @@ export const addMemberSchema = z.object({
  * is the change this exists for. That schema has no production caller.
  */
 export const updateMemberRoleSchema = z.object({
-  userId: z.string().trim().min(1),
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
   role: z.enum(["OWNER", "ADMIN", "MEMBER", "KITCHEN"]),
 });
 
@@ -67,7 +70,7 @@ export const updateMemberRoleSchema = z.object({
  * records who did what.
  */
 export const removeMemberSchema = z.object({
-  userId: z.string().trim().min(1),
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
 });
 
 export type AddMemberInput = z.infer<typeof addMemberSchema>;

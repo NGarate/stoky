@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from "./bounds";
 import { existingPasswordSchema, newPasswordSchema } from "./password";
 
 /**
@@ -10,8 +11,12 @@ import { existingPasswordSchema, newPasswordSchema } from "./password";
  * "noel@example.com", and the two spellings could be two accounts. The
  * migration `normalise_user_email` lowercased the rows already stored and put
  * a unique index on `lower(email)` under all of it.
+ *
+ * Bounded after the trim, so the limit applies to the spelling that is
+ * stored. Sign-in parses this without an account, and a failed one is logged:
+ * unbounded, a 10 MB address was a 10 MB line in the security log.
  */
-const emailSchema = z.string().trim().toLowerCase().email();
+export const emailSchema = z.string().trim().max(MAX_EMAIL_LENGTH).toLowerCase().email();
 
 export const loginSchema = z.object({
   email: emailSchema,
@@ -23,13 +28,13 @@ export const loginSchema = z.object({
 
 export const registerSchema = z.object({
   email: emailSchema,
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
   password: newPasswordSchema,
-  householdName: z.string().trim().min(1).optional(),
+  householdName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
 });
 
 export const createHouseholdSchema = z.object({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
 });
 
 export const inviteMemberSchema = z.object({

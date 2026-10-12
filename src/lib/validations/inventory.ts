@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { MAX_QUANTITY } from "./bounds";
+import {
+  MAX_ID_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_QUANTITY,
+  MAX_UNIT_LENGTH,
+} from "./bounds";
 
 export const stockOperationSchema = z.enum(["PURCHASE", "CONSUME", "ADJUST", "TRANSFER"]);
 
@@ -24,11 +30,11 @@ export const stockOperationSchema = z.enum(["PURCHASE", "CONSUME", "ADJUST", "TR
  * both.
  */
 const stockMovement = z.object({
-  productId: z.string(),
-  unit: z.string().trim().min(1),
+  productId: z.string().max(MAX_ID_LENGTH),
+  unit: z.string().trim().min(1).max(MAX_UNIT_LENGTH),
   expirationDate: z.date().optional(),
-  locationId: z.string().optional(),
-  note: z.string().optional(),
+  locationId: z.string().max(MAX_ID_LENGTH).optional(),
+  note: z.string().max(MAX_NOTE_LENGTH).optional(),
 });
 
 /** Bought or otherwise brought in. A magnitude: adding minus five is not a thing. */
@@ -38,7 +44,7 @@ export const addStockSchema = stockMovement.extend({
 
 /** Used up. Also a magnitude — the handler is what makes the row negative. */
 export const consumeStockSchema = stockMovement.extend({
-  batchId: z.string().min(1).optional(),
+  batchId: z.string().min(1).max(MAX_ID_LENGTH).optional(),
   quantity: z.number().positive().finite().max(MAX_QUANTITY),
 });
 
@@ -58,16 +64,16 @@ export const adjustStockSchema = stockMovement.extend({
   quantity: z.number().finite().min(-MAX_QUANTITY).max(MAX_QUANTITY).refine((value) => value !== 0, {
     message: "An adjustment of zero changes nothing",
   }),
-  reason: z.string().min(1),
+  reason: z.string().min(1).max(MAX_NOTE_LENGTH),
 });
 
 export const storageLocationSchema = z.object({
-  name: z.string().min(1),
-  parentId: z.string().optional(),
+  name: z.string().min(1).max(MAX_NAME_LENGTH),
+  parentId: z.string().max(MAX_ID_LENGTH).optional(),
 });
 
 export const updateStorageLocationSchema = storageLocationSchema.partial().extend({
-  id: z.string(),
+  id: z.string().max(MAX_ID_LENGTH),
 });
 
 export type AddStockInput = z.infer<typeof addStockSchema>;
@@ -89,8 +95,8 @@ export type UpdateStorageLocationInput = z.infer<typeof updateStorageLocationSch
  * closed literal whitelist; this is the other half of it.
  */
 export const stockOverviewSchema = z.object({
-  locationId: z.string().optional(),
-  category: z.string().optional(),
+  locationId: z.string().max(MAX_ID_LENGTH).optional(),
+  category: z.string().max(MAX_NAME_LENGTH).optional(),
   /** Part of a name. Case- and accent-insensitive; wildcards are literal. */
   search: z.string().trim().max(100).optional(),
   lowStock: z.boolean().optional(),
