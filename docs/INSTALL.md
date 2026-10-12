@@ -173,6 +173,11 @@ From the release after v0.1.0-alpha.3, `.env` also carries
 | `closed` | Nobody. People are only added by an admin |
 | `open` | Anyone who can reach the server, each with a household of their own |
 
+When registration is closed, `/register` shows no form. It says that
+registration is closed, asks the visitor to have whoever runs their household
+add them, and links back to sign-in. With `first-user` that page replaces the
+form as soon as the first account exists.
+
 An unknown value, such as `Open` or `true`, stops the app starting, with the
 reason in `docker compose logs app`; it never falls back to `open`. To change it
 later, edit `.env` and run `docker compose up -d --wait` again.
@@ -217,10 +222,10 @@ owner of this installation (on v0.1.0-alpha.3 anyone can register at any time),
 and the hostname is public from the moment its certificate is issued:
 certificates are published in Certificate Transparency logs, which people
 watch for new hosts. Visit `/register`, create your account and provide a
-household name. If the page refuses you on a new installation, somebody else
-registered first. Remove the installation with `docker compose down -v`, which
-deletes its data volumes (only on an installation with no data you want to
-keep), and start step 3 again.
+household name. If `/register` says registration is closed on a new
+installation, somebody else registered first. Remove the installation with
+`docker compose down -v`, which deletes its data volumes (only on an
+installation with no data you want to keep), and start step 3 again.
 
 Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
@@ -377,10 +382,15 @@ says so, and what to do, in its notes.
 release whose `example.env` has no `STOKY_REGISTRATION`, such as
 v0.1.0-alpha.3. When `.env` does not set it, the Compose file uses
 `first-user`, and an existing installation already has accounts, so `/register`
-refuses everyone. Add people from **Configuración → Personas del hogar**, or, if
-your installation relies on people registering themselves, set
-`STOKY_REGISTRATION=open` in `.env` before `docker compose up`. Running the new
-release's `install.sh` adds the line, as `first-user`, to an `.env` that lacks it.
+says registration is closed and shows no form. Add people from
+**Configuración → Personas del hogar**, or, if your installation relies on
+people registering themselves, set `STOKY_REGISTRATION=open` in `.env` before
+`docker compose up`. To have the line in `.env`, add
+`STOKY_REGISTRATION=first-user` yourself; the Compose file uses that value when
+it is absent. The new release's `install.sh` adds every missing setting to
+`.env`, but only when `example.env` and `SHA256SUMS` are replaced along with
+the Compose and Traefik files: against the previous release's copies it stops
+before it reaches `.env`.
 
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
@@ -400,7 +410,7 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
-| `/register` answers that registration is closed | Expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
+| `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |
 | A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |

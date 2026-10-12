@@ -122,6 +122,24 @@ export function registrationAllows(mode: RegistrationMode, userCount: number): b
 }
 
 /**
+ * Whether `/register` should offer its form, asking for the account count only
+ * when the mode depends on it.
+ *
+ * `open` and `closed` are settled by the setting alone, so the page does not
+ * query the database for them — a visitor to a closed instance costs it
+ * nothing. The answer is advice to the screen, not the guard: `auth.register`
+ * decides again, under its lock, whatever this said.
+ */
+export async function registrationOpen(
+  mode: RegistrationMode,
+  countUsers: () => Promise<number>,
+): Promise<boolean> {
+  // The count passed for open and closed is never read by the rule.
+  if (mode !== "first-user") return registrationAllows(mode, 0);
+  return registrationAllows(mode, await countUsers());
+}
+
+/**
  * Throws if the setting is not one this application knows, in production.
  *
  * Outside production an unknown value already means `closed`, which is safe

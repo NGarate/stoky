@@ -8,6 +8,7 @@ import {
   parseRegistrationMode,
   registrationAllows,
   registrationMode,
+  registrationOpen,
 } from "@/lib/auth/registration";
 
 /**
@@ -85,6 +86,50 @@ describe("whether one more account may register", () => {
 
   it("never, when closed — not even the first", () => {
     for (const count of [0, 1, 50]) expect(registrationAllows("closed", count)).toBe(false);
+  });
+});
+
+/**
+ * What `/register` asks before it chooses between the form and the page that
+ * says registration is closed. The same rule as above, plus when it is worth a
+ * query: the screen is the one place a stranger can make the server count
+ * accounts, so it should only happen when the answer depends on them.
+ */
+describe("whether the register screen offers its form", () => {
+  /** A count that records being asked. */
+  function counter(count: number): { calls: number; count: () => Promise<number> } {
+    const tally = {
+      calls: 0,
+      count: async () => {
+        tally.calls += 1;
+        return count;
+      },
+    };
+    return tally;
+  }
+
+  it("offers it when open, without counting", async () => {
+    const users = counter(50);
+    expect(await registrationOpen("open", users.count)).toBe(true);
+    expect(users.calls).toBe(0);
+  });
+
+  it("refuses when closed, without counting — not even on an empty instance", async () => {
+    const users = counter(0);
+    expect(await registrationOpen("closed", users.count)).toBe(false);
+    expect(users.calls).toBe(0);
+  });
+
+  it("offers it on a first-user instance nobody has claimed, having counted", async () => {
+    const users = counter(0);
+    expect(await registrationOpen("first-user", users.count)).toBe(true);
+    expect(users.calls).toBe(1);
+  });
+
+  it("refuses on a first-user instance with an account", async () => {
+    for (const count of [1, 50]) {
+      expect(await registrationOpen("first-user", counter(count).count)).toBe(false);
+    }
   });
 });
 

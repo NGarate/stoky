@@ -1207,6 +1207,14 @@ through `household.addMember`, which the setting does not govern.
   fresh instance at once cannot both see zero. The household is a nested write
   of the account in the same transaction; before this, a registration that
   failed after its household was written left a household nobody belonged to.
+- **`/register` says so before anyone types.** The page is a server component
+  that asks the same rule after `connection()`, so the answer is the running
+  container's and not the build's, and renders a page saying registration is
+  closed in place of the form, without needing JavaScript. It counts accounts
+  only in `first-user`, so a visitor to a `closed` instance causes no query.
+  The page decides what to show and guards nothing; `auth.register` refuses on
+  its own. The sign-in page still links to `/register`, which now explains
+  instead of refusing after submit.
 - **Tested against PostgreSQL** on a database of its own
   (`src/__tests__/integration/registration.test.ts`): `closed` refuses
   everyone without touching the database; `first-user` admits exactly one;

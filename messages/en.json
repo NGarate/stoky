@@ -32,6 +32,9 @@
     "registerError": "The account could not be created. Check the details and try again.",
     "passwordContainsIdentity": "The password contains your name or your email address. Choose one that does not include them.",
     "registrationClosed": "Registration is closed on this server. Ask whoever runs your household to add you from “People in the household”, in Settings.",
+    "registrationClosedTitle": "Registration is closed",
+    "registrationClosedBody": "On this server, new accounts are created by whoever runs the household. Ask them to add you from “People in the household”, in Settings.",
+    "backToLogin": "Back to sign in",
     "invalidCredentials": "The email or the password is not right. Check both; the password is case-sensitive.",
     "emailExists": "There is already an account with this email. Sign in with it, or use another one."
   },
