@@ -20,7 +20,7 @@ that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D99 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D130 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.
@@ -85,7 +85,7 @@ run a gate, the file says so and says why, rather than omitting it.
 
 **[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **99 numbered decisions taken
+commits, and — the part worth reading in full — **130 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -183,10 +183,12 @@ posture is worse than none.
 
 **[`SECURITY_REVIEW.md`](SECURITY_REVIEW.md)**
 Phase 7's deliverable: the review itself, finding by finding, each either closed
-with its commit or written up with an owner. `SECURITY.md` says what the posture
-*is*; this says what was looked for, what was found, and which findings are
-still open and whose they are. Four are, at the time of writing — two of them
-the operator's rather than the code's.
+with its commit or written up with an owner, and the 2026-10-12 review after it,
+with what became of each finding, what it accepted and the owner actions it
+left. `SECURITY.md` says what the posture *is*; this says what was looked for,
+what was found, and which findings are still open and whose they are. Two of
+Phase 7's are open at the time of writing: #9, the operator's and the owner's,
+and #16, the owner's.
 
 **[`VERIFICATION_SEQUENCE.md`](VERIFICATION_SEQUENCE.md)**
 The command ladder, what each gate proves, the environment each needs, and the

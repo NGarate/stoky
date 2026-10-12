@@ -1,6 +1,8 @@
 # Security review — Phase 7
 
-Reviewed: 2026-08-26, at `8bb2547`.
+Reviewed: 2026-08-26, at `8bb2547`. Reviewed again 2026-10-12, at `e9d62eb`:
+[*The 2026-10-12 review*](#the-2026-10-12-review), near the end, records that
+review, what became of each finding, and what it accepted.
 
 Phase 7's deliverable (`REDESIGN_PLAN.md` §9). Its *done when* is that each of
 the eight scope items has **either a passing test or a written finding with an
@@ -55,7 +57,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
 | 15 | No test ever performs a *successful* upload | Medium | ✅ Verified, refined, closed `5d49d99` `76f5c80` | — |
 | 16 | Uploaded images are never deleted | Medium | Reported | owner |
-| 17 | A published image is never re-scanned | Medium | ✅ Closed 2026-10-12: weekly `rescan.yml`; first GitHub run pending | owner |
+| 17 | A published image is never re-scanned | Medium | ✅ Closed 2026-10-12: weekly `rescan.yml`; its first run on GitHub is an owner action of the 2026-10-12 review | — |
 | 18 | The request-body ceiling sat below the documented upload limit | Medium | ✅ Fixed `74788ab`, verified | — |
 
 Finding 18 was not on the list this review set out with. It came out of
@@ -1035,6 +1037,87 @@ in the order they would pay off.
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~A successful upload does what it claims~~ | integration | **Built** — `integration/receipt.upload.test.ts` |
 | ~~The image posture holds~~ | build | **Built** — `unit/image-posture.test.ts` (text) + a `RUN` in the Dockerfile that fails the build if `node` is not Bun or npm/npx exist (build); ~~`USER node`/read-only on the running image stay the CI image job's~~ the release job starts the image read-only; nothing asserts the running user (corrected 2026-10-12, §7) |
+
+## The 2026-10-12 review
+
+Reviewed: 2026-10-12, at `e9d62eb` (`v0.1.0-alpha.3`), on branch
+`fix/security-hardening-2026-10-12`.
+
+**How it was done, and what it is worth.** Parallel audit lanes read the
+application, the HTTP edge, the data layer, uploads and outbound calls, the
+release bundle and image, CI and the supply chain. They reported 116 findings.
+Each went to two independent verifiers, who tried to refute it from the source
+and by running things: 110 were confirmed (26 medium, 60 low, 24
+informational), one was rejected, one stayed plausible, and four were disputed.
+Merged, the confirmed ones are about fifty distinct issues. Each was then
+decided: fixed in a commit of its own, with a test shown to fail without the
+fix; an action only the repository's owner can take; or a risk accepted, with
+the reason written down. A final review of the finished branch, from the
+angles of bypass, upgrade, pipeline, documentation and code quality, found 20
+more defects in the remediation itself, most of them in its documents. The
+branch fixed 19 and filed the twentieth as TEST-9 in `ISSUES.md`. As with Phase 7, this reads code and runs
+suites and probes; it is not a penetration test of a deployed instance.
+
+Commits are named by subject, not hash: the branch is squash-merged, so its
+hashes will not exist on `master`. Its pull request lists every commit.
+
+### What it found, and what became of it
+
+| Area | Found | Outcome |
+|---|---|---|
+| Registration | Open to anyone who could reach an instance, with no switch (medium) | Fixed: "close registration after the first account unless the operator opens it", "show that registration is closed instead of a form that cannot succeed" — `STOKY_REGISTRATION`, `first-user` by default in production (D123) |
+| Sign-in lockout | Anyone who knew an address could keep its owner out on every device (medium) | Fixed for known browsers: "give known devices their own sign-in budget" (D124). Accepted for a browser that has never signed in (below) |
+| Session lifetime | A session in use never ended (medium) | Fixed: "end every session thirty days after sign-in" (D125) |
+| Passwords | Identity rule documented but not applied; no way to change one's own password or reset a member's; minimum not stated on screen | Fixed: "refuse a password built from the person's own email or name", "let a person change their own password", "let an admin reset a member's password", "hash and verify passwords through one helper", "state the twelve-character password minimum" |
+| Secret | Sessions signed by whatever Auth.js found, not the secret the startup guard checked | Fixed: "sign sessions with the secret the startup guard checked" |
+| Rate limits | `addMember` hashed unmetered; IPv6 clients could rotate inside their /64 | Fixed: "meter adding members, which hashes a password", "rate-limit IPv6 clients by their /64 prefix" |
+| HTTP edge | Unbounded bodies behind a proxy the prefetch path skips; unbounded tRPC batches; forms and cross-site requests reaching mutations; responses cacheable; matcher exclusions unanchored; image optimizer on | Fixed: from "build the tRPC route handler in one testable function" to "turn off the unused image optimizer", in branch order |
+| Headers | HSTS asked for preloading; no COOP/CORP; Permissions-Policy and Referrer-Policy too loose; Open Food Facts in `connect-src` | Fixed: "stop inviting HSTS preloading of the operator's domain", "isolate Stoky's pages and resources from other origins", "deny the browser features Stoky does not use", "keep the instance's origin out of the Referer sent to other origins", "drop Open Food Facts from connect-src" |
+| Data layer | Unbounded strings; fractional history limit; receipt over-fetch; row locks taken outside the household; location cycles; non-atomic household claim; household misses invisible; Prisma argument dumps in logs; replay records swept in a week | Fixed: from "bound every free-text input" to "keep replay records for ninety days". A double-replay window remains: OFFLINE-1 |
+| Uploads and OCR | Full-resolution photos; output size unbounded; ICC and APPn segments kept; recognition with no timeout; receipts left processing after a restart | Fixed: from "downscale receipt photos to a 4000-pixel long edge" to "fail receipts a restart left processing". No storage quota: UPLOAD-1 |
+| Open Food Facts | No timeout; misses re-asked; lookups unmetered; dead search code; anonymous User-Agent | Fixed: from "time out Open Food Facts lookups" to "identify Stoky to Open Food Facts by version and project URL" |
+| Logs | Emails of tried sign-ins in the log; a stack per failed sign-in; unbounded container logs; 100 lines per anonymous batch | Fixed: "log an account tag instead of the email a sign-in tried", "log failed sign-ins without a stack trace each", "rotate the bundle's container logs", "write at most one refusal line per anonymous tRPC request". Flushing by volume is accepted (below) |
+| Offline | The previous account's saved reads survived a change of account | Fixed: "forget the previous account's saved reads when its session ends" |
+| Public URL | A missing or plain-HTTP `NEXTAUTH_URL` went unnoticed | Fixed: "warn at startup when the public URL is missing or plain HTTP" (it warns rather than refuses: plain-HTTP LAN installs stay supported, D84) |
+| Release bundle | Valkey unbounded; no process limits; TLS defaults; idle connections held; Traefik phoning home and behind; service images by tag; install downloads followed any redirect | Fixed: from "rotate the bundle's container logs" to "refuse non-HTTPS redirects in the install downloads" |
+| Image | Demo seed shipped and able to run in production; nested env files and agent state in the build context; Prisma engines unverified; Bun behind a security release and pinned by tag; output depended on the host's umask | Fixed: from "leave the demo seed out of the production image" to "pin the Bun base image by digest", and "build the same image whatever the host's umask" |
+| CI | A cancel could leave a published image unattested; a dispatch could publish any branch; two actions pinned to tags; releases built from caches; scan before push, not of the pushed digest; packaged Compose by tag; release assets unattested; workflows unlinted | Fixed: from "never cancel a started run that can publish an image" to "attest the release installation files", and "lint the workflows with zizmor" |
+| Re-scanning (#17) | A published image was never re-scanned | Fixed: "re-scan the published release images every week" |
+| Supply chain | No update proposals; packages installed the day they were published; install scripts allowed for all; dev-only packages listed as dependencies; no licence text; vulnerability reports routed to a public tracker; repository settings undocumented | Fixed: from "let Dependabot propose dependency, action and image updates" to "codify the repository's security settings with a drift check". The settings themselves are owner actions (below) |
+| Documentation | Repository described as private; procedure and image counts; prefetch analysis; branch rule; personal data, outbound connections and secrets uninventoried; migration recovery and account erasure undocumented; Server Action bound values unguarded | Fixed: from "describe the repository as public, with attested images" to "align the workflow summaries with the branch rule for agent work", and from "inventory personal data, outbound connections and secret handling" to "refuse Server Actions that would carry bound values" |
+| Deferred defects | `generateFromLowStock` race; no `CHECK` constraints; no storage quota | Filed: SHOP-2, DB-1, UPLOAD-1 ("file the defects the security review deferred") |
+
+The four disputed findings, and why nothing changed for them: the iOS sibling
+client consumes nothing in this repository, and the cross-site rule keeps
+clients without Fetch Metadata working; the `generateFromLowStock` race is an
+integrity defect with no security gain (filed as SHOP-2); prefetch-labelled
+document requests skip the proxy, but documents are `no-store` (§8 corrected,
+pinned in e2e); `.dockerignore`'s root-only patterns are not exploitable from
+CI's clean checkout, and were fixed as hygiene. Remedies considered and
+rejected, with their reasons, are recorded beside the change each concerned
+(`SECURITY.md` and `docs/PROGRESS.md`): for example `sniStrict`, Valkey
+`noeviction`, counting only failed sign-ins, comparing `Origin` with
+`NEXTAUTH_URL`, `Referrer-Policy: no-referrer`, and `enable_ipv6` by default.
+
+### Accepted
+
+`SECURITY.md`, [*Known gaps*](../SECURITY.md#what-the-2026-10-12-review-accepted),
+lists each accepted risk with its reasoning and what would change it. They are
+nineteen, and none lets one household read or change another's data.
+
+### Owner actions
+
+The branch cannot change repository settings. These are the owner's, with
+their commands in the review plan, and `docs/STATUS.md` tracks which are done:
+private vulnerability reporting, immutable releases, secret scanning with push
+protection, CodeQL default setup, Dependabot security updates and the ruleset
+exclusion that lets Dependabot open branches, an Actions allow-list with SHA
+pinning, approval for every external contributor's workflow runs, squash-only
+merges, release-tag rulesets, a decision on commit signing, an identity for
+unattended agents, deleting two merged branches, refreshing the alpha.2 notes,
+confirming the LICENSE holder, cleaning the audit's test rows from the
+development database, and — after the squash merge — running
+`bun scripts/github-settings.ts check` and the first `rescan.yml`.
 
 ---
 

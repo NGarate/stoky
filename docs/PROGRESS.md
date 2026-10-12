@@ -2475,3 +2475,47 @@ needs an identifier in it and a denylist read on every page render, and a
 denylist in Valkey either fails closed — every household signed out by a cache
 outage — or fails open. SECURITY.md records it as a known gap, with "end all
 sessions" as today's answer to a token that may have leaked.
+
+**D126 — HSTS keeps `includeSubDomains` and drops `preload`.** The 2026-10-12
+security review found both layers sending `preload` on whatever `DOMAIN` an
+operator chose, which is a domain owner's consent to the browsers' built-in
+lists, close to permanent, and given here by software rather than by the
+owner. It is gone from Traefik and from the app; an operator who wants it adds
+it at their own proxy. `includeSubDomains` stays, as ASVS 5 V3.4.1 asks, and
+its cost on an apex domain is warned about in INSTALL.md rather than avoided
+by weakening the header for everyone. SECURITY.md, *Release deployment*.
+
+**D127 — `Referrer-Policy: same-origin`, not `no-referrer`.** The review found
+every product page sending the instance's hostname to Open Food Facts with its
+photograph. `same-origin` sends nothing to another origin. `no-referrer`, the
+stricter answer, was rejected on a measurement: under it the Fetch standard
+sends `Origin: null` on same-origin POSTs as well, Next aborts a Server Action
+whose `Origin` does not match the host, and the no-JS screen choice failed its
+e2e test; sign-out and the language switch are Server Actions too.
+SECURITY.md, *Application headers*.
+
+**D128 — Traefik without `sniStrict` or `curvePreferences`.** The TLS floor is
+1.2 with forward-secret AEAD suites. `sniStrict` was left out because it
+refuses the handshake for the configured name itself while ACME has not yet
+issued, turning a pending certificate into an opaque failure and failing the
+release smoke; the cost is that a client without SNI sees Traefik's default
+certificate. `curvePreferences` was left out because replacing Go's list lost
+the post-quantum hybrid `X25519MLKEM768`. SECURITY.md, *Release deployment*.
+
+**D129 — Valkey evicts least-recently-used keys, never refuses.** The bundle
+bounds Valkey at 160 MiB under its 256 MiB container. `noeviction`, the
+default, refuses the limiter's `INCR` once full, and a refused count is a
+refused sign-in; `volatile-ttl` evicts the soonest-expiring keys first, which
+are the counters, so filling the cache would reset a lockout. `allkeys-lru`
+keeps live counters, which every attempt touches, and drops cold product
+cache entries; measured with 400 MB written against the bundle's own service.
+SECURITY.md, *Rate limiting*.
+
+**D130 — The bundle names every image by digest as well as tag.** PostgreSQL,
+Valkey and Traefik by exact version and index digest; the application image by
+digest in the packaged Compose file of each release; the Dockerfile's Bun base
+likewise. A tag can be re-pushed and a digest cannot, so what a release was
+smoked and scanned with is what `docker compose pull` fetches. The cost is that
+upstream fixes arrive only through a change in this repository: a Stoky
+release, or a Dependabot proposal once the owner lets Dependabot open branches.
+SECURITY.md, *Container and runtime*, *Release deployment* and *Supply chain*.

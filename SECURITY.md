@@ -993,9 +993,11 @@ Dependency status as of the last audit is recorded in `docs/STATUS.md` under
 
 ## Known gaps
 
-**Reviewed 2026-08-26.** `docs/SECURITY_REVIEW.md` is Phase 7's review: eight
-areas, what each is protected by and which test proves it, and the findings that
-remain with an owner. Two sections below were found to be false and are
+**Reviewed 2026-08-26, and again 2026-10-12.** `docs/SECURITY_REVIEW.md` is
+Phase 7's review: eight areas, what each is protected by and which test proves
+it, and the findings that remain with an owner. It also records the 2026-10-12
+review, whose accepted risks are listed at the end of this section
+([*What the 2026-10-12 review accepted*](#what-the-2026-10-12-review-accepted)). Two sections below were found to be false and are
 corrected in place rather than deleted — a wrong claim in this file is worth
 seeing, since its whole premise is that every claim is checkable.
 
@@ -1826,6 +1828,87 @@ own.
   also wants a comment beside the granted permissions in four jobs and a
   concurrency group in `rescan.yml`: ten findings on 2026-10-12, every one of
   them suppressed by the gate's `regular` persona.
+
+### What the 2026-10-12 review accepted
+
+The 2026-10-12 review ([`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md#the-2026-10-12-review))
+fixed what it could and accepted the rest. These are the risks it accepted. Each
+has the reason, and what would change the decision; most are described in
+full in the section named.
+
+- **A new browser can still be kept out by someone who knows the address.**
+  The shared per-account budget is what bounds a distributed guess, so it stays
+  shared for browsers that have never signed in; known browsers have their own
+  ([*Rate limiting*](#rate-limiting-covers-authentication-and-the-expensive-calls-not-the-rest)).
+  The operator clears it by hand. A second factor or an email channel would
+  change it.
+- **The first-user claim window.** Whoever reaches `/register` first on a fresh
+  installation owns it; register at once, and start again if somebody else did
+  ([*Registration closes after the first account*](#registration-closes-after-the-first-account)).
+  A one-time setup token would close it, and is out of proportion for an alpha.
+- **An address's existence is visible** through `register` under
+  `STOKY_REGISTRATION=open` and through `addMember` to an admin. `first-user`
+  closes the first after the first account; the second is admin-only and
+  metered, and a uniform answer would hide real errors from the household's
+  own admins.
+- **No per-session sign-out.** Signing out clears this device's cookie; a
+  copied token lasts until fifteen idle minutes or thirty days. A denylist
+  would make every request depend on Valkey ([*Other things that do not
+  exist*](#other-things-that-do-not-exist)).
+- **IPv6 clients share the bridge gateway's budget by default.** IPv6 on
+  Traefik's network is an opt-in, because enabling it breaks older Docker
+  engines, hosts without IPv6 and existing networks; /64 grouping applies once
+  it is on ([Install](docs/INSTALL.md#clients-on-ipv6)).
+- **No proxy-level cap on connections per address.** Traefik cannot put one in
+  the HTTP chain; the idle timeout is shorter and host-level limits are
+  documented ([*One address can hold Traefik's connections open*](#one-address-can-hold-traefiks-connections-open)).
+- **An unauthenticated client can rotate the app's log out.** One refusal line
+  per anonymous request and the 50 MB cap bound the disk and the
+  amplification, not the volume of requests. Shipping logs off the host is the
+  defence ([*Refusals are recorded*](#refusals-are-recorded)).
+- **The application connects to PostgreSQL as the bootstrap superuser, and
+  Valkey has no password.** Neither publishes a port; both sit on an internal
+  network, so abusing either needs code execution inside a container already.
+  Separate migrator and runtime roles, or `requirepass`, need new secrets and
+  manual steps on existing volumes; the next breaking bundle change is the
+  time for them.
+- **Traefik runs as root inside its container**, with every capability
+  dropped, `no-new-privileges` and a read-only filesystem. Running it as
+  another user means chowning the existing ACME volume on every installation.
+- **Secrets reach the containers as environment variables**, not `_FILE`
+  secrets. Reading them takes `docker inspect`, which takes the Docker daemon,
+  which is root on the host ([*Secrets*](#secrets)).
+- **Next's preview-mode id and Server Action key are baked into the public
+  image.** Nothing uses draft mode, revalidation or a closure-bound action, and
+  a test fails if one appears ([*Keys `next build` writes into the image*](#keys-next-build-writes-into-the-image)).
+- **No per-household storage quota, and uploaded photographs are never
+  deleted** (`ISSUES.md` UPLOAD-1, Phase 7 finding 16). Uploads are metered and
+  bounded per file; a quota needs a schema change, accounting and a screen.
+  Revisit before any open-registration or multi-tenant use.
+- **No `CHECK` constraints in the database** (`ISSUES.md` DB-1). Zod bounds
+  guard every write path; a constraint migration needs a data audit first.
+- **No account erasure in the application.** The operator is the data
+  controller and has the database; the runbook is in
+  [Install](docs/INSTALL.md#deleting-somebodys-account). In-app erasure needs
+  decisions about shared household records.
+- **Saved offline reads stay on a device for up to 24 hours** until the app is
+  next opened after a change of session
+  ([*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline)).
+  Encrypting `localStorage` would not resist a local attacker.
+- **Plain-HTTP LAN installations stay supported** (D84): the server warns at
+  start-up instead of refusing, and the weaker guarantees are documented under
+  *Authentication* and *Cross-site requests*.
+- **Trivy does not inventory the Bun binary**, so a Bun advisory is invisible to
+  the image scans. The version is tracked through `.bun-version` and
+  Dependabot's `docker` updates, and each update reads Bun's security notes.
+- **`master`'s `latest` image is still built with the Actions cache.** Releases
+  are built without it, scanned at the pushed digest and attested; `latest` is
+  not an installation channel.
+- **`v0.1.0-alpha.1` and `v0.1.0-alpha.2` have no attestations and their
+  releases stay mutable**, and a promoted release image's OCI version label
+  reads `candidate-v…`. Attestations and immutable releases are not
+  retroactive; the label is cosmetic, and the promoted digest is the one that
+  was smoked, scanned and attested.
 
 ---
 

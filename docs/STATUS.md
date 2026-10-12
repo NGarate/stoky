@@ -12,6 +12,30 @@ say what measured it.
 
 ## Gate status
 
+**2026-10-12 the security branch, finished:** `fix/security-hardening-2026-10-12`
+carries the 2026-10-12 review's fixes, and fixes for 19 of the 20 defects its
+final review found in them (the twentieth is filed as `ISSUES.md` TEST-9); `docs/SECURITY_REVIEW.md` (*The 2026-10-12 review*) maps every finding to
+its commit, an owner action or an accepted risk. Measured at the branch's head
+just before that record was written (`13916c9`; a branch hash, gone after the
+squash merge), with the shared `stoky` services and `TEST_DB_NAME=stoky_test_sec_int`:
+`bun run verify:ci` exit 0 in 154 seconds — lint 0 warnings over 493 files,
+typecheck clean, react-doctor no issues, 118 links against 35 routes, 96
+contrast checks, audit clean over 563 packages, 1,481 unit tests in 118 files,
+931 component tests in 77, 676 integration tests in 42, build with 8 Partial
+Prerender routes — on the host's Bun 1.4.2, one patch behind the pin; and
+`bun run test:e2e` **194 passed in 3.0 minutes** in
+`stoky-e2e:pw1.62.1-bun1.4.3`. **Owner actions still pending**, measured with
+`bun scripts/github-settings.ts check` (GET requests only) that day: 11 of 12
+settings drift — private vulnerability reporting, immutable releases, secret
+scanning and push protection, Dependabot security updates, CodeQL default
+setup, the Actions allow-list with SHA pinning, approval for every external
+contributor, squash-only merges, the two release-tag rulesets, and the
+ruleset exclusion Dependabot needs; Dependabot alerts are on. The rest of the
+review's owner actions (commit signing, an identity for agents, deleting two
+merged branches, the alpha.2 notes, the LICENSE holder, the development
+database's audit rows, and the first `rescan.yml` run) have no check and are
+listed in `docs/SECURITY_REVIEW.md`.
+
 **2026-10-12 recovering from a refused migration:** a migration that fails
 leaves a failed row in `_prisma_migrations`, and every later start stops at
 `P3009`. So when `normalise_user_email` refuses, renaming the account and
@@ -54,7 +78,10 @@ development image `bun install --frozen-lockfile` installs 452 packages, and a
 plain `bun install` reports "no changes" and leaves `bun.lock` byte-identical at
 lockfileVersion 2. In that image the quality gates pass (lint 0 errors and the
 existing warning, typecheck, react-doctor, 96 contrast checks, 115 links) and so
-do 922 unit, 879 component and 598 integration tests. On the host with the 1.4.3
+do 922 unit, 879 component and 598 integration tests. These counts, and the
+e2e run below, were measured on the lane's tree — `master` plus this change —
+not on the security branch it landed on, which by then had more tests; the
+branch's own are in the gate table. On the host with the 1.4.3
 binary, `bun run verify:ci` passes in 178 seconds (audit clean across 564
 packages, the same three counts, the build with 8 Partial Prerender routes), and
 `bun run test:e2e` passes **181/181 in 2.9 minutes**. The production image, built
@@ -287,19 +314,19 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 392 files, 101 rules (2026-09-25) |
+| Lint | `bun run lint` | ✅ 0 errors, 0 warnings — 493 files, 101 rules (2026-10-12, security branch head) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
+| Internal links | `bun run check:links` | ✅ 118 links against 35 routes, none broken (2026-10-12, security branch head) |
 | Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-06) |
-| Unit tests | `bun run test:unit` | ✅ 922 pass / 99 files (2026-10-12, Bun 1.4.3, host and development image) |
-| Component tests | `bun run test:components` | ✅ 879 pass / 77 files (2026-10-12, Bun 1.4.3, host and development image) |
-| Integration tests | `bun run test:integration` | ✅ 598 pass / 39 files (2026-10-12, Bun 1.4.3, host and development image) |
+| Unit tests | `bun run test:unit` | ✅ 1,481 pass / 118 files (2026-10-12, security branch head, host Bun 1.4.2) |
+| Component tests | `bun run test:components` | ✅ 931 pass / 77 files (2026-10-12, security branch head, host Bun 1.4.2) |
+| Integration tests | `bun run test:integration` | ✅ 676 pass / 42 files (2026-10-12, security branch head, host Bun 1.4.2) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 181 pass / 0 fail in 2.9 minutes (2026-10-12), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 564 packages (2026-10-12, Bun 1.4.3) |
+| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 563 packages (2026-10-12, security branch head) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
@@ -1330,7 +1357,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when — T7 (offline scan resolution) landed 2026-09-01 |
-| 7 — Security review | ✅ **Complete** — `docs/SECURITY_REVIEW.md` (2026-08-26). Found and closed four household-isolation defects and a shipped OpenSSL CVE |
+| 7 — Security review | ✅ **Complete** — `docs/SECURITY_REVIEW.md` (2026-08-26). Found and closed four household-isolation defects and a shipped OpenSSL CVE. Reviewed again 2026-10-12 (*The 2026-10-12 review* in the same file), with owner actions pending |
 | 8 — The owner's first pass | ✅ All six closed; the done-when — the owner repeats their pass — is the owner's to run |
 
 **What remains, in one place.** The three human
