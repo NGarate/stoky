@@ -296,3 +296,8 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 Report the release tag, image digest, command and redacted error through
 [GitHub issues](https://github.com/NGarate/stoky/issues). Do not attach `.env`,
 database dumps, session cookies or unredacted receipt photos.
+
+A security problem is not an issue: report it through the private form in
+[Reporting a vulnerability](../SECURITY.md#reporting-a-vulnerability), which
+also says what to do when the form is not offered. Every installation runs the
+same image, so a public report reaches everyone before a fix does.

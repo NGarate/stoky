@@ -18,8 +18,36 @@ Report privately through GitHub's security advisories:
 
 **<https://github.com/NGarate/stoky/security/advisories/new>**
 
-Please do not open a public issue for a security problem, and do not post
-details in a discussion or a pull request.
+It needs a GitHub account, and so does the fallback below: no email address or
+other channel is published for someone without one, which is a gap, not a
+policy. Please do not open a public issue for a security problem, and do not
+post details in a discussion or a pull request. The issue chooser carries the
+same link (`.github/ISSUE_TEMPLATE/config.yml`) for anyone who starts there.
+
+**If the form is not offered to you.** GitHub offers it to people outside the
+project only while the repository's private vulnerability reporting setting is
+on, and the Security tab then shows a **Report a vulnerability** button that
+opens it. `gh api repos/NGarate/stoky/private-vulnerability-reporting` answers
+`{"enabled":true}` when it is; on 2026-10-12 it answered `{"enabled":false}`,
+and turning it on is a repository setting only the owner can change. If there
+is no button, or the link does not open the form, open an ordinary
+[issue](https://github.com/NGarate/stoky/issues/new) that says only that you
+have a security report and asks for a private channel. Leave out every detail:
+not the affected feature, the version, or the kind of weakness. A public issue
+is read by everyone running the same image, and there is no way for us to patch
+their servers first.
+
+**What is in scope.** This project's code, the container image it publishes,
+and the release bundle (`deploy/` and the files attached to a release). Someone
+else's Stoky installation is not: a weakness that comes from how one instance
+is configured goes to whoever runs it, and a weakness in Stoky itself comes here
+whatever instance you found it on. A defect in an upstream component (Bun,
+Next.js, PostgreSQL, Valkey, Traefik) belongs to that project, unless the way
+Stoky uses or ships it is what makes it exploitable.
+
+**Which version.** Only the latest published alpha is supported (see
+[Supported versions](#supported-versions)); please check a finding against it
+before reporting. A report against `master` is welcome too.
 
 Useful things to include: the version or image digest you are running, whether
 the instance is exposed to the internet, what an attacker would gain, and the
@@ -29,8 +57,9 @@ smallest reproduction you can manage.
 no service-level agreement, no on-call rotation, and no bug bounty — no payment
 of any kind. A realistic expectation is an acknowledgement within a couple of
 weeks and a fix on a timescale that depends on severity and on how much time is
-available. If a report goes unanswered for a month, please assume it was missed
-and comment on the advisory again.
+available. These are best-effort intentions, not commitments. If a report goes
+unanswered for a month, please assume it was missed and comment on the advisory
+(or the contact issue) again.
 
 Because there is no central instance, a fix reaches operators only when they
 rebuild or re-pull the image. Advisories will be published on the repository

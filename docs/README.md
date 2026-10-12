@@ -53,7 +53,7 @@ document.
 | What must work before calling a slice done? | `SMOKE_JOURNEYS.md` |
 | What is the interface supposed to look like, and what is wrong with it? | `DESIGN_AUDIT.md` |
 | How do I run the manual screen-reader pass? | `SCREEN_READER_PASS.md` |
-| What is the threat model, and what is hardened? | `SECURITY.md` |
+| What is the threat model, what is hardened, and how do I report a vulnerability? | `SECURITY.md` |
 | What did the security review find, and what is still open? | `SECURITY_REVIEW.md` |
 | How do I install or upgrade a released version? | `INSTALL.md` |
 | How do I get a development checkout running? | `LOCAL_BOOTSTRAP.md` |
