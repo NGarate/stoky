@@ -187,6 +187,23 @@ describe("the downloadable installation", () => {
     ]);
   });
 
+  it("closes idle client connections after 60s and keeps the whole-request read at 60s", () => {
+    // Traefik's default idleTimeout holds a quiet keep-alive connection for
+    // 180s. readTimeout covers the request body too, so shortening it would cut
+    // off a 10 MiB receipt on a slow uplink. Exact list: a writeTimeout added
+    // here would cut off streamed tRPC batches, and should be a decision.
+    // Traefik's flag names are case-insensitive, so compare them lowercased.
+    const transport = (compose.services.traefik.command ?? [])
+      .map((flag) => flag.toLowerCase())
+      .filter((flag) => flag.includes(".transport."));
+    expect(transport).toEqual(
+      ["web", "websecure"].flatMap((entrypoint) => [
+        `--entrypoints.${entrypoint}.transport.respondingtimeouts.idletimeout=60s`,
+        `--entrypoints.${entrypoint}.transport.respondingtimeouts.readtimeout=60s`,
+      ]),
+    );
+  });
+
   it("accepts TLS 1.2 or later, and only forward-secret AEAD suites at 1.2", () => {
     const dynamic = Bun.YAML.parse(
       readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),

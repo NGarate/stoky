@@ -170,6 +170,21 @@ Verified against the files named in each row.
   (`scripts/smoke-proxy.sh`) requires a TLS 1.1 handshake and a CBC/SHA-1 suite
   at TLS 1.2 to be refused by the server, and a TLS 1.2 AEAD handshake to
   succeed; `src/__tests__/unit/deployment.test.ts` pins the block.
+- **A quiet keep-alive connection is closed after 60 seconds**, not Traefik's
+  default 180 (`transport.respondingTimeouts.idleTimeout=60s` on both
+  entrypoints), so sockets held open for nothing free Traefik's 256m sooner.
+  Browsers reconnect without the person noticing. `readTimeout` is stated at
+  its default of 60s so that it cannot drift: in Go it covers the whole request,
+  body included, and a 10 MiB receipt is about 14 MB of base64 on the wire, so
+  60s already needs about 1.9 Mbps of uplink. There is no `writeTimeout`, which
+  would cut off streamed tRPC batches. Measured against `traefik:v3.7.13` with
+  the bundle's flags (no network, a Bun client in its namespace): an idle
+  keep-alive connection closed 180.0s after its response before this change and
+  60.1s after, on both entrypoints; a partial request line closed at 60.1s
+  either way. `src/__tests__/unit/deployment.test.ts` pins the exact set of
+  timeout flags. This shortens how long a connection is held; it does not cap
+  how many one address holds: see "One address can hold Traefik's connections
+  open" below.
 
 ### Application headers — `next.config.ts` and `src/proxy.ts`
 
@@ -966,6 +981,34 @@ problems. The tree can be verified to contain the right information; whether the
 result *sounds* sensible cannot. Any accessibility score in an older document
 was still not produced by a tool.
 
+### One address can hold Traefik's connections open
+
+Nothing in the bundle limits how many connections one source address keeps
+open. The 2026-10-12 audit measured 4,000 TLS connections from one client, each
+holding an unfinished request line, taking the Traefik container from 17.5 MiB
+to 192.9 MiB of its 256 MiB (not re-measured since). Past that the container is
+killed and restarted, and the instance is unreachable for as long as the
+sockets are held. No account and no application request are needed.
+
+Shorter timeouts do not close this. A client that reopens what expires needs
+about 88 new connections a second to keep 5,300 open against a 60s
+`readTimeout`, and about 350 against 15s; both are easy from one host, and 15s
+would break slow receipt uploads (above). Traefik cannot cap connections per
+address on an HTTP router: `inFlightConn` exists only for TCP routers, and in
+the HTTP section of the dynamic file Traefik v3.7.13 rejects the whole file
+("field not found, node: inFlightConn", measured in the audit), so the `stoky`
+router disappears and every request gets 404. `inFlightReq` is valid there but
+runs only once the request headers have arrived, which the held connections
+never send. The memory limit stays: it is what turns the attack into a Traefik
+restart instead of memory pressure on the whole host.
+
+A per-address connection cap belongs in front of Traefik: the host firewall
+(nftables `ct count over N` per source address on TCP 443, or iptables
+`connlimit`), or a CDN or tunnel that does its own. The project ships no rule
+and has not tested one. Leave room for a household: its phones and laptops
+usually share one public address, and every browser opens connections of its
+own.
+
 ### Other things that do not exist
 
 - No hosted error tracking or monitoring. `/api/health` checks the database/cache.
@@ -1003,6 +1046,9 @@ proxy. The [security review](docs/SECURITY_REVIEW.md) has run and the password
 policy includes common-password/identity checks; neither makes this a stable
 release. The bundled automatic certificate flow needs a hostname and inbound
 TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
+An instance open to the internet needs a per-address connection cap in front
+of Traefik, which the bundle cannot provide: see "One address can hold
+Traefik's connections open" above.
 
 ### Keep it updated
 

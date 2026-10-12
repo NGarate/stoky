@@ -153,6 +153,17 @@ services:
       - --entrypoints.websecure.address=:443
       - --entrypoints.web.http.redirections.entryPoint.to=websecure
       - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      # A keep-alive connection that has gone quiet is closed after 60s instead
+      # of Traefik's 180s, so held-open sockets free the 256m sooner; browsers
+      # simply reconnect. readTimeout is its default, stated so it cannot drift:
+      # it covers the whole request body, and a 10 MiB receipt (about 14 MB of
+      # base64) needs about 1.9 Mbps of uplink to arrive within 60s. A per-address
+      # connection cap is not possible here (inFlightConn is TCP-only, and an
+      # HTTP chain refuses it); SECURITY.md sends it to the host firewall.
+      - --entrypoints.web.transport.respondingTimeouts.idleTimeout=60s
+      - --entrypoints.web.transport.respondingTimeouts.readTimeout=60s
+      - --entrypoints.websecure.transport.respondingTimeouts.idleTimeout=60s
+      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=60s
       - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Define ACME_EMAIL en .env}"
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json

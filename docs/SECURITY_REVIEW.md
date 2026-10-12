@@ -725,6 +725,12 @@ Named rather than omitted.
   deployment: a real installation's certificate and the network in front of it
   are still `scripts/smoke-proxy.sh --live`'s to prove, or an external TLS
   scan's.
+
+  So have its connection timeouts, the same way and the same day: Traefik's
+  defaults held a quiet keep-alive connection for 180s, the bundle now closes
+  it after 60s, and `unit/deployment.test.ts` pins the flags. What a shorter
+  timeout cannot do — stop one address holding enough connections to restart
+  Traefik — has no fix inside the bundle and is a known gap in `SECURITY.md`.
 - ~~**The read path of household isolation.** The tripwire covers writes. Ten
   queries were flagged as unconfirmed on the read side and have not been swept.~~
   **Swept 2026-08-31** — §2.
