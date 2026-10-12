@@ -22,6 +22,11 @@
  * a typo in a security setting is found in the first minute, not by the
  * stranger it was meant to keep out (`src/lib/auth/registration.ts`).
  *
+ * A public URL that is missing, or plain HTTP to another machine, is warned
+ * about first and does not stop it: plain-http LAN installs work on purpose
+ * (D84), but nobody running one should learn from a packet capture that
+ * passwords cross their network in cleartext (`src/lib/auth/public-url.ts`).
+ *
  * It also fails the receipts a previous process left half-read, in
  * development as well as production; see
  * `src/server/services/receipt-recovery.ts`.
@@ -32,7 +37,10 @@ export async function register(): Promise<void> {
     // takes a request, so every receipt this process creates is newer.
     const startedAt = new Date();
 
-    const { refuseToStartMisconfigured } = await import("@/lib/auth/startup");
+    const { refuseToStartMisconfigured, warnAboutRiskyConfiguration } = await import(
+      "@/lib/auth/startup"
+    );
+    warnAboutRiskyConfiguration();
     refuseToStartMisconfigured();
 
     // Receipts a previous process was still reading when it stopped — a

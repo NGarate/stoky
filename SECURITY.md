@@ -280,7 +280,10 @@ Verified against the files named in each row.
   handshake against a server with no TLS, which killed the application on
   Safari while the page still rendered. Behind TLS termination nothing
   changed. A client forging the header against an http install only breaks
-  its own requests.
+  its own requests. Keeping a plain-http install *working* (D84) is not
+  calling it safe: passwords and session cookies cross the network in
+  cleartext there, and the server says so at start-up (*Authentication*,
+  below).
   One honest caveat: `style-src` still includes `'unsafe-inline'`, because Next
   inlines critical CSS that cannot carry a nonce.
   **A page reaches one other origin, and only for images:** `img-src` allows
@@ -569,6 +572,29 @@ Verified against the files named in each row.
   the person to change it, and nothing makes the person do so. The owner of a
   single-owner household has nobody above them: their way back is the
   operator, through [the installation guide](docs/INSTALL.md#a-forgotten-password).
+- **The session cookie is `Secure` only when the public URL is https**, and
+  the server says so when it is not. Auth.js decides per request:
+  `useSecureCookies ?? url.protocol === "https:"` (`@auth/core` 0.41.3
+  `lib/init.js`), where `url` is `AUTH_URL ?? NEXTAUTH_URL` when one is set
+  and otherwise the request's own URL, built from `Host` and
+  `X-Forwarded-Proto`. The release bundle sets `NEXTAUTH_URL` to
+  `https://${DOMAIN}`, so its session cookie is `__Secure-` prefixed and
+  `Secure`. Until 2026-10-12 nothing noticed the two configurations that
+  downgrade it (security review, 2026-10-12, low): no URL behind a TLS proxy
+  that does not send `X-Forwarded-Proto` (nginx does not by default), and an
+  `http://` URL for another machine, which is where an operator ends up after
+  publishing the app port on a LAN. In production, `src/lib/auth/public-url.ts`
+  now logs one `[auth] warning:` line at start-up for either, and for a value
+  that is not an http(s) URL at all. The plain-http one names the consequences
+  — passwords and session cookies in cleartext, no barcode camera, no offline
+  support — and the way to TLS. **A warning, not a refusal**:
+  refusing would reverse D84 and stop every plain-http LAN install on upgrade,
+  and forcing `useSecureCookies` would make sign-in there impossible, because a
+  browser drops a `Secure` cookie set over http. `localhost`, `*.localhost`,
+  `127.0.0.0/8` and `[::1]` are not warned about: browsers treat them as this
+  machine, and CI and the browser suite serve there.
+  `src/__tests__/unit/public-url.test.ts` pins each case and that the hook
+  warns without exiting.
 - Self-registration is the operator's to open: `STOKY_REGISTRATION` is
   `first-user` unless set, so the first account claims the instance and later
   people are added by a household admin. See
@@ -1699,6 +1725,12 @@ proxy. The [security review](docs/SECURITY_REVIEW.md) has run and the password
 policy includes common-password/identity checks; neither makes this a stable
 release. The bundled automatic certificate flow needs a hostname and inbound
 TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
+Plain HTTP to another machine is tolerated for testing, not supported: it sends
+every password and session cookie in cleartext, and the app logs a warning at
+start-up when `NEXTAUTH_URL` is such an address or is not set. For TLS without a
+public hostname, use your own proxy — setting `NEXTAUTH_URL` to its https
+address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
+`tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).
 An instance open to the internet needs a per-address connection cap in front
 of Traefik, which the bundle cannot provide: see "One address can hold
 Traefik's connections open" above.

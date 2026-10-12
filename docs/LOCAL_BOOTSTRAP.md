@@ -270,7 +270,10 @@ These are the steps the browser suite runs (`playwright.config.ts`,
 `"next start" does not work with "output: standalone"` and serves `.next/`
 rather than the bundle the image ships, so it can hide a tracing defect.
 `NEXTAUTH_SECRET` must not be the example value, because production refuses to
-start on it.
+start on it. Served through row 2, with `NEXTAUTH_URL` set to the LAN address,
+it starts with an `[auth] warning:` line saying the URL is plain HTTP to
+another machine; that is the truth about row 2, not a fault (`SECURITY.md`,
+*Authentication*).
 
 Served through row 4, this is the one setup where a phone can **install** the
 app. On Android, Chrome's menu shows **Install app**. On iOS, use Safari's

@@ -1,5 +1,23 @@
+import { publicUrlWarning } from "@/lib/auth/public-url";
 import { assertKnownRegistrationMode } from "@/lib/auth/registration";
 import { assertUsableSecret } from "@/lib/auth/secret";
+
+/**
+ * Logs, without stopping anything, a configuration this application tolerates
+ * but should not be left in: today, a public URL that is missing or plain HTTP
+ * to another machine (`src/lib/auth/public-url.ts`, which says why it is a
+ * warning and not a refusal).
+ *
+ * Called before `refuseToStartMisconfigured`, so an operator whose instance
+ * refuses to start reads this too, in the same log.
+ */
+export function warnAboutRiskyConfiguration(
+  env: Record<string, string | undefined> = process.env,
+  warn: (message: string) => void = console.warn,
+): void {
+  const warning = publicUrlWarning(env);
+  if (warning) warn(warning);
+}
 
 /**
  * Ends the process if the configuration is one this application refuses: a
