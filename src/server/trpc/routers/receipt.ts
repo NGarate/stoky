@@ -176,11 +176,12 @@ export const receiptRouter = createTRPCRouter({
    *
    * Every check `CLAUDE.md` requires is on this path and in this order: MIME
    * type, size, magic bytes, then a re-encode through `Bun.Image`
-   * (`src/server/services/image.ts`) that strips EXIF and normalises the
-   * format — so what lands on disk is an image this server produced rather
-   * than a file a caller supplied — and the same size cap again on what the
-   * re-encode produced. The name is a UUID, in a per-household
-   * directory, served only through an authenticated query.
+   * (`src/server/services/image.ts`) that strips EXIF, normalises the
+   * format and keeps none of the source's colour profile or other
+   * application segments — so what lands on disk is an image this server
+   * produced rather than a file a caller supplied — and the same size cap
+   * again on what the re-encode produced. The name is a UUID, in a
+   * per-household directory, served only through an authenticated query.
    *
    * Metered at 30 per account per hour, counted *before* the base64 is decoded
    * (ASVS V11.1.4): one call is up to 10 MB decoded, a `Bun.Image` re-encode,
@@ -249,9 +250,10 @@ export const receiptRouter = createTRPCRouter({
       }
 
       // Normalised to a JPEG this server produced: the format stops being
-      // whatever was sent, the EXIF goes, and the orientation is applied to
-      // the pixels. Bounded in pixels as well as bytes — see the module,
-      // which the OCR path reads the same bound from.
+      // whatever was sent, the EXIF and the ICC profile go, and the
+      // orientation is applied to the pixels. Bounded in pixels as well as
+      // bytes — see the module, which the OCR path reads the same bound from.
+      // An output the metadata strip cannot parse throws, and is refused here.
       let processedBuffer: Buffer;
       try {
         processedBuffer = await reencodeAsJpeg(buffer);

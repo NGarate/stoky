@@ -157,6 +157,22 @@ Verified against the files named in each row.
   the decoded buffer.
 - Every accepted image is re-encoded through `src/server/services/image.ts` (`Bun.Image`) to JPEG, which strips EXIF —
   including any GPS coordinates in a photo of a receipt.
+- **The re-encode's output is then walked against an allowlist of JPEG
+  segments**: the JFIF header (without a thumbnail), the quantisation and
+  Huffman tables, the restart interval, the frame header, and the scan through
+  to the end. Every other application segment and every comment is dropped —
+  the ICC colour profile above all, which `Bun.Image` carries through a
+  re-encode on purpose. Without the walk a caller's bytes reached the uploads
+  volume verbatim: an `APP2` `ICC_PROFILE` segment holding a minimal header
+  and 2 KB of `<script>` text came out of the re-encode byte for byte, and a
+  JPEG, PNG or WebP tagged Display P3 kept its profile (measured, Bun 1.4.2).
+  A stream the walk cannot parse, or a marker it does not expect before the
+  scan, throws, and the upload is refused with `BAD_REQUEST`. The cost is
+  colour: a wide-gamut photograph loses the tag that says so and displays as
+  sRGB, which neither Tesseract nor anything in the application looks at. This
+  cleans what is stored; the decoder still parses whatever profile was sent
+  when the upload is decoded. Files stored before the walk keep their
+  profiles, and OCR parses them again if such a receipt is re-processed.
 - Decoding refuses anything over 50 megapixels before allocating for it, and
   the re-encode keeps at most **4000 pixels on the long edge**: larger
   photographs are scaled down in proportion, smaller ones are left at their
@@ -185,7 +201,12 @@ Verified against the files named in each row.
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.
 - No HTTP route serves the uploads directory. Nothing in `src/app` reads it, and
-  it is not inside `public/`.
+  it is not inside `public/`. Whatever one day serves a receipt image checks
+  the household first, and the response that carries the bytes declares
+  `Content-Type: image/jpeg`, `X-Content-Type-Options: nosniff`, a
+  `Content-Disposition` with a fixed filename and `Cache-Control: private,
+  no-store` — the walk above narrows what a stored file can carry, it does not
+  make serving it any less careful.
 
 ### Data minimisation — receipt reads
 
