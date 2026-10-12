@@ -5,9 +5,11 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import {
   cleanupTestHouseholds,
+  cleanupTestProducts,
   cleanupTestUsers,
   createMockSession,
   createTestHousehold,
+  createTestProduct,
   createTestUser,
   envelope,
   generateTestEmail,
@@ -33,6 +35,7 @@ import {
 const MARKER = `bounds-${process.pid}-${Date.now().toString(36)}`;
 let api: ReturnType<typeof appRouter.createCaller>;
 let userId: string;
+let productId: string;
 
 beforeAll(async () => {
   const household = await createTestHousehold({ name: `${MARKER} household` });
@@ -43,12 +46,14 @@ beforeAll(async () => {
     role: "OWNER",
   });
   userId = user.id;
+  productId = (await createTestProduct({ name: `${MARKER} leche`, householdId: household.id })).id;
   api = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession({ ...user, household }) }),
   );
 });
 
 afterAll(async () => {
+  await cleanupTestProducts(MARKER);
   await cleanupTestUsers(MARKER);
   await cleanupTestHouseholds(MARKER);
 });
@@ -72,6 +77,15 @@ describe("inputs declared beside their procedure", () => {
     expect(await refusedFields(() => api.product.searchByName({ query: "leche", limit: -1 }))).toEqual(["limit"]);
     expect(await refusedFields(() => api.receipt.list({ limit: -1 }))).toEqual(["limit"]);
     expect(await refusedFields(() => api.price.getProductPrices({ limit: 1e9 }))).toEqual(["limit"]);
+  });
+
+  it("refuses a fractional page size before it reaches take", async () => {
+    // `getStockHistory` hands `limit + 1` to Prisma's `take`, which truncates
+    // it: 2.5 answered with two rows and a cursor rather than an error. The
+    // product is real so that, unbounded, the call is accepted, not NOT_FOUND.
+    expect(
+      await refusedFields(() => api.inventory.getStockHistory({ productId, limit: 2.5 })),
+    ).toEqual(["limit"]);
   });
 
   it("refuses a day window that cannot become a date", async () => {
@@ -145,6 +159,8 @@ describe("inputs declared beside their procedure", () => {
   it("still takes the ordinary values", async () => {
     // So the bounds above are bounds and not a broken procedure.
     expect(await api.receipt.list({ limit: 20 })).toBeDefined();
+    // The history screen asks for a hundred, the most a page may hold.
+    expect((await api.inventory.getStockHistory({ productId, limit: 100 })).entries).toEqual([]);
     expect(Array.isArray(await api.inventory.getExpiringItems({ days: 30 }))).toBe(true);
     expect(Array.isArray(await api.product.searchByName({ query: "leche", limit: 10 }))).toBe(true);
   });

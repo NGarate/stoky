@@ -23,6 +23,7 @@ import {
   MAX_DAYS,
   MAX_ID_LENGTH,
   MAX_NOTE_LENGTH,
+  MAX_PAGE_SIZE,
   MAX_PRICE,
   MAX_QUANTITY,
   MAX_UNIT_LENGTH,
@@ -952,7 +953,9 @@ export const inventoryRouter = createTRPCRouter({
       z.object({
         productId: z.string().max(MAX_ID_LENGTH),
         cursor: z.string().max(MAX_ID_LENGTH).optional(),
-        limit: z.number().min(1).max(100).default(20),
+        // `.int()`: Prisma truncates a fractional `take`, so 2.5 was a page of
+        // two rows with a cursor, not an error. A page size is a count.
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
       })
     )
     .query(async ({ ctx, input }) => {
