@@ -31,6 +31,7 @@
     "loginError": "No se ha podido iniciar sesión. Vuelve a intentarlo en un momento.",
     "registerError": "No se ha podido crear la cuenta. Revisa los datos y vuelve a intentarlo.",
     "passwordContainsIdentity": "La contraseña contiene tu nombre o tu correo. Elige una que no los incluya.",
+    "registrationClosed": "El registro está cerrado en este servidor. Pide a quien administra tu hogar que te añada desde «Personas del hogar», en Configuración.",
     "invalidCredentials": "El correo o la contraseña no son correctos. Revisa los dos; la contraseña distingue mayúsculas.",
     "emailExists": "Ya hay una cuenta con este correo. Inicia sesión con él o usa otro."
   },

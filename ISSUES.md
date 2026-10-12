@@ -724,7 +724,8 @@ rather than `undefined` when editing.
 
 **Files:** `src/server/trpc/routers/household.ts` (`create`)
 **Severity:** INFO — data integrity, not a security weakness: only the
-caller's own account is involved, and open registration already lets anyone
+caller's own account is involved, and under `STOKY_REGISTRATION=open` (and on
+v0.1.0-alpha.3, which has no other mode) registration already lets anyone
 create a household with a name of their choosing
 **Status:** RESOLVED 2026-10-12 — found by the 2026-10-12 security review,
 confirmed by both verifiers, who lowered it from low to info
@@ -755,14 +756,17 @@ household left with one member). Seen to fail: with the original
 `update({ where: { id } })` restored, both calls of the first round succeeded;
 with the conditional update kept but the zero-count refusal removed, likewise.
 
-**Not covered here.** `auth.register` has the same shape: it creates the
-household and then the user as two statements outside a transaction, so two
-concurrent registrations for one email leave the loser's household behind when
-its `user.create` hits the unique email index. The `addMember` docblock already
-calls this "the bug `auth.register` has". It is a separate path with its own
-change and is not touched by this one. Households already left without a member
-are not deleted: there is no erasure path yet, and a sweep would have to be
-checked against everything that cascades from a household first.
+**Not covered here, and since closed separately.** `auth.register` had the same
+shape: it created the household and then the user as two statements outside a
+transaction, so two concurrent registrations for one email left the loser's
+household behind when its `user.create` hit the unique email index. *Closed
+2026-10-12* by "feat(auth): close registration after the first account unless
+the operator opens it": registration is one transaction under an advisory
+lock, and the household is a nested write of the account, so a refused
+registration leaves nothing behind. Households already left without a member,
+by either path on an earlier release, are still not deleted: there is no
+erasure path yet, and a sweep would have to be checked against everything that
+cascades from a household first.
 
 ---
 

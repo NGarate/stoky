@@ -6,6 +6,24 @@ import * as argon2 from "argon2";
 import { registerSchema } from "@/lib/validations/auth";
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
 import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
+import {
+  REGISTRATION_CLOSED_MESSAGE,
+  REGISTRATION_LOCK_KEY,
+  registrationAllows,
+  registrationMode,
+} from "@/lib/auth/registration";
+
+/**
+ * The refusal when `STOKY_REGISTRATION` says no.
+ *
+ * FORBIDDEN rather than anything that names a reason: the security-event
+ * middleware logs every FORBIDDEN as `access.denied` with the path, which is
+ * the line an operator greps for, and the caller learns only that the door is
+ * shut — not how many accounts exist behind it.
+ */
+function registrationClosed(): TRPCError {
+  return new TRPCError({ code: "FORBIDDEN", message: REGISTRATION_CLOSED_MESSAGE });
+}
 
 /**
  * Accounts, as far as tRPC is concerned.
@@ -40,11 +58,34 @@ export const authRouter = createTRPCRouter({
    * The household is optional. An account can exist without one, and
    * `householdRouter` is what such an account uses to get out of that state
    * (HOUSE-1).
+   *
+   * **Whether anyone may call it at all is the operator's**, through
+   * `STOKY_REGISTRATION` (`src/lib/auth/registration.ts`): `first-user` by
+   * default in production, so the person who installs the instance claims it
+   * and everybody after is added through `household.addMember`. The order of
+   * the checks below is the point of them:
+   *
+   * 1. `closed` refuses before anything — no limiter call, no query, no hash.
+   * 2. The per-address limiter, before any query.
+   * 3. `first-user` counts accounts and refuses once one exists. Before the
+   *    existence check, so a refusal says nothing about whether an address
+   *    is registered.
+   * 4. The existence check, then the hash.
+   * 5. One transaction creates the household and the account together, under
+   *    an advisory lock, re-counting in `first-user` mode — see there.
    */
   register: publicProcedure
     .input(registerSchema)
     .mutation(async ({ ctx, input }) => {
       const { email, name, password, householdName } = input;
+
+      // Read per call rather than at import, so a test can set it and so
+      // nothing here can disagree with what the startup guard checked.
+      const mode = registrationMode();
+
+      // Not inside the `if (ctx.headers)` below: a closed instance is closed
+      // to a caller with no request behind it too.
+      if (mode === "closed") throw registrationClosed();
 
       // ISSUES.md CRITICAL-4. Counted before anything is created, and before
       // the ~250ms of Argon2id below, so the endpoint cannot be used to make
@@ -65,7 +106,17 @@ export const authRouter = createTRPCRouter({
         );
       }
 
-      // Check if user already exists
+      // After the limiter, so a closed-after-first-user instance cannot be
+      // made to count its accounts on demand. A fast answer for the common
+      // refusal; the decision that counts is the one inside the transaction.
+      if (mode === "first-user" && !registrationAllows(mode, await ctx.db.user.count())) {
+        throw registrationClosed();
+      }
+
+      // A courtesy, not the guard: it answers a duplicate before spending
+      // Argon2id on it, with the message the screens match. Two registrations
+      // of one address at once both pass it, and the unique index on `email`
+      // refuses the second — as P2002, which `domainErrors` answers CONFLICT.
       const existingUser = await ctx.db.user.findUnique({
         where: { email },
       });
@@ -77,33 +128,48 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      // Hash password with Argon2id
+      // Hash password with Argon2id. Outside the transaction: a quarter of a
+      // second holding the lock below would queue every other registration
+      // behind it.
       const passwordHash = await argon2.hash(password, {
         type: argon2.argon2id,
         memoryCost: 65536,
         timeCost: 3,
       });
 
-      // Create household if provided
-      let householdId: string | undefined;
-      if (householdName) {
-        const household = await ctx.db.household.create({
+      const user = await ctx.db.$transaction(async (tx) => {
+        // `first-user` is "while there are no accounts", and a count followed
+        // by a create is a race: two people registering a fresh instance at
+        // once both count zero and both get in. A transaction-scoped advisory
+        // lock on a constant key makes the count and the create one step —
+        // the second registration waits here until the first has committed,
+        // then counts one. Released at commit or rollback; nothing to undo.
+        //
+        // Taken in every mode, not only `first-user`: registration is metered
+        // to a handful an hour, so serialising it costs nothing, and one code
+        // path is one thing to test. `$executeRaw` because the function
+        // returns `void`, which `$queryRaw` cannot deserialise. The key is a
+        // bound `bigint`, so Postgres resolves the one-argument overload.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
+
+        if (mode === "first-user" && !registrationAllows(mode, await tx.user.count())) {
+          throw registrationClosed();
+        }
+
+        // The household as a nested write of the account, so the two commit or
+        // roll back together with this transaction. They used to be two writes
+        // with no transaction: an account create that failed — the duplicate
+        // above, raced — left a household nobody belonged to and nothing could
+        // reach.
+        return tx.user.create({
           data: {
-            name: householdName,
+            email,
+            name,
+            passwordHash,
+            role: householdName ? "OWNER" : "MEMBER",
+            ...(householdName ? { household: { create: { name: householdName } } } : {}),
           },
         });
-        householdId = household.id;
-      }
-
-      // Create user
-      const user = await ctx.db.user.create({
-        data: {
-          email,
-          name,
-          passwordHash,
-          householdId,
-          role: householdId ? "OWNER" : "MEMBER",
-        },
       });
 
       return {

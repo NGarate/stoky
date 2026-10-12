@@ -31,6 +31,7 @@
     "loginError": "Signing in did not work. Try again in a moment.",
     "registerError": "The account could not be created. Check the details and try again.",
     "passwordContainsIdentity": "The password contains your name or your email address. Choose one that does not include them.",
+    "registrationClosed": "Registration is closed on this server. Ask whoever runs your household to add you from “People in the household”, in Settings.",
     "invalidCredentials": "The email or the password is not right. Check both; the password is case-sensitive.",
     "emailExists": "There is already an account with this email. Sign in with it, or use another one."
   },

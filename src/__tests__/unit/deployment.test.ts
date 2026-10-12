@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { REGISTRATION_MODES } from "@/lib/auth/registration";
 import nextConfig from "../../../next.config";
 
 const root = join(import.meta.dir, "../../..");
@@ -82,6 +83,24 @@ describe("the downloadable installation", () => {
         name,
         image: expect.stringMatching(/^[a-z0-9./-]+:v?\d+\.\d+[\w.-]*@sha256:[0-9a-f]{64}$/),
       });
+    }
+  });
+
+  it("closes registration after the first account unless the operator opens it", () => {
+    // Defaulted in Compose, unlike the credentials: an .env written for an
+    // earlier release has no such line, and for that installation — accounts
+    // already exist — first-user means closed, which is the safe answer.
+    // `:-` and not `-`, so an empty value gets the default too.
+    expect(compose.services.app.environment!.STOKY_REGISTRATION).toBe(
+      "${STOKY_REGISTRATION:-first-user}",
+    );
+    // install.sh appends every key example.env declares to an existing .env,
+    // so this line is also what an upgrade through the script writes.
+    expect(template).toMatch(/^STOKY_REGISTRATION=first-user$/m);
+    // Each value the line's comment offers is one the application accepts:
+    // anything else stops it starting.
+    for (const mode of REGISTRATION_MODES) {
+      expect(template).toMatch(new RegExp(`^#\\s+${mode}:`, "m"));
     }
   });
 

@@ -510,6 +510,10 @@ Verified against the files named in each row.
   lifetime.
 - Credentials are validated with a Zod schema before the database is touched,
   and `authorize` returns `null` for both an unknown email and a wrong password.
+- Self-registration is the operator's to open: `STOKY_REGISTRATION` is
+  `first-user` unless set, so the first account claims the instance and later
+  people are added by a household admin. See
+  [Registration closes after the first account](#registration-closes-after-the-first-account).
 
 ### Input validation — `src/lib/validations/`
 
@@ -1173,6 +1177,56 @@ reading it is looking at a container that will not start.
 
 ---
 
+### Registration closes after the first account
+
+`auth.register` is one of the two procedures anybody who can reach the instance
+may call. Until 2026-10-12 nothing let an operator close it (security review,
+2026-10-12): every stranger who registered got receipt upload and OCR, an
+upload volume nothing cleans, and every unmetered procedure, and tenant
+isolation became the only thing between them and the owner's household.
+
+`STOKY_REGISTRATION` (`src/lib/auth/registration.ts`) takes `open`,
+`first-user` or `closed`. **Unset, it is `first-user` in production** and `open`
+elsewhere, and the release bundle passes `${STOKY_REGISTRATION:-first-user}`
+explicitly. A household does not need open registration: an admin adds people
+through `household.addMember`, which the setting does not govern.
+
+- **Parsed strictly.** An unknown value is `closed` at run time, never `open`,
+  and in production the server refuses to start over it, from the same
+  instrumentation hook and in the same way as the signing-key guard above. Both
+  problems are reported before the exit.
+- **In this order**, in `auth.register`: `closed` refuses with `FORBIDDEN`
+  before the rate limiter and before any query; then the per-address limiter;
+  then, in `first-user`, a count of accounts, before the existence check, so a
+  refusal says nothing about whether an address is registered; then the
+  existence check and the Argon2id hash. Every refusal is an `access.denied`
+  line in the security log, with the path `auth.register`.
+- **The first-user count cannot race.** The account is created in a
+  transaction that holds a PostgreSQL advisory lock
+  (`pg_advisory_xact_lock`) and counts again under it, so two people claiming a
+  fresh instance at once cannot both see zero. The household is a nested write
+  of the account in the same transaction; before this, a registration that
+  failed after its household was written left a household nobody belonged to.
+- **Tested against PostgreSQL** on a database of its own
+  (`src/__tests__/integration/registration.test.ts`): `closed` refuses
+  everyone without touching the database; `first-user` admits exactly one;
+  two simultaneous claims leave one account and one household; a registration
+  waits while the lock is held and is then refused. Removing the re-count,
+  the lock, the `closed` branch, or the nested household each turns a test red.
+
+What is still open:
+
+- **The claim window.** On a fresh installation, whoever reaches `/register`
+  first owns it, and the hostname is public from the moment its certificate is
+  issued, through Certificate Transparency logs. [The installation
+  guide](docs/INSTALL.md) says to register immediately, and to start again from
+  empty volumes if someone else did. A one-time setup token printed to the logs
+  would close the window; it is not built.
+- **`open` is still what it was.** An installation that sets it accepts
+  strangers, and registration still reveals whether an address has an account.
+
+---
+
 ### The password policy prefers length, and it is not a breach check
 
 `src/lib/validations/password.ts` is the policy, and it is applied wherever a
@@ -1352,8 +1406,8 @@ own.
 - Settings exports household JSON, without receipt files or a restore importer.
   Full backups remain the operator's job; [the guide](docs/INSTALL.md) covers them.
 - Refusals are audit-logged, but there is no complete history of who changed what.
-- Registration remains open to anyone who can reach the instance. Restrict access
-  to trusted testers; there is no invitation-only switch.
+- No invitations: with registration closed, an admin sets a new person's first
+  password and hands it over.
 - No account lockout, no password reset flow, no email verification, no
   two-factor authentication.
 - No secret scanning or SAST in CI. `ci.yml` and the weekly `rescan.yml` are the

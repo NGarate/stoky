@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import { registerSchema } from "@/lib/validations/auth";
+import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
 
 describe("getAuthErrorKey", () => {
   it("maps credentials provider errors to invalid credentials", () => {
@@ -35,6 +36,14 @@ describe("getAuthErrorKey", () => {
 
     expect(getAuthErrorKey(refused.error?.message, "register")).toBe(
       "passwordContainsIdentity",
+    );
+  });
+
+  it("says registration is closed rather than asking to check the details", () => {
+    // The exact constant `auth.register` refuses with — no detail the person
+    // could change would get them in, so "check the details" would be a lie.
+    expect(getAuthErrorKey(REGISTRATION_CLOSED_MESSAGE, "register")).toBe(
+      "registrationClosed",
     );
   });
 

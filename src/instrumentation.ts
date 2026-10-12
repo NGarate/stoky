@@ -18,6 +18,10 @@
  * stays as the second line, for anything that imports it outside a Next
  * server.
  *
+ * An unknown `STOKY_REGISTRATION` stops it the same way, for the same reason:
+ * a typo in a security setting is found in the first minute, not by the
+ * stranger it was meant to keep out (`src/lib/auth/registration.ts`).
+ *
  * It also fails the receipts a previous process left half-read, in
  * development as well as production; see
  * `src/server/services/receipt-recovery.ts`.
@@ -28,8 +32,8 @@ export async function register(): Promise<void> {
     // takes a request, so every receipt this process creates is newer.
     const startedAt = new Date();
 
-    const { refuseToStartWithUnusableSecret } = await import("@/lib/auth/startup");
-    refuseToStartWithUnusableSecret();
+    const { refuseToStartMisconfigured } = await import("@/lib/auth/startup");
+    refuseToStartMisconfigured();
 
     // Receipts a previous process was still reading when it stopped — a
     // restart, a deploy, an OOM kill — have no one left to finish them, and

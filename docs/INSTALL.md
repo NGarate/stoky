@@ -27,9 +27,14 @@ and Traefik. You do not need Git, Node.js, Bun or a local build.
 - `curl`, `openssl`, `sha256sum` and a text editor. No GitHub account is needed:
   the release files and the image download anonymously.
 
-Registration creates a new account and, when named, a household. This alpha has
-no invitation-only registration switch. Restrict access to trusted testers at
-your network/proxy boundary. Read [Security](../SECURITY.md) before deployment.
+From the release after v0.1.0-alpha.3, registration is closed after the first
+account. The person who installs Stoky registers first and becomes the owner of
+the household; everyone else is added by them from **Configuración → Personas
+del hogar**. `STOKY_REGISTRATION` in `.env` changes that (step 2).
+**v0.1.0-alpha.3 itself has no such switch:** anyone who can reach it can
+register, each with a household of their own, so restrict access to people you
+trust at your network or proxy boundary. Read [Security](../SECURITY.md) before
+deployment.
 
 ## 1. Download and prepare the release files
 
@@ -159,6 +164,21 @@ Open `.env` in your editor and fill in:
 | `POSTGRES_PASSWORD` | The first generated hex value |
 | `NEXTAUTH_SECRET` | The second generated hex value |
 
+From the release after v0.1.0-alpha.3, `.env` also carries
+`STOKY_REGISTRATION`, which decides who may create an account at `/register`:
+
+| Value | Who may register |
+|---|---|
+| `first-user` (the default) | Only the first account. After that, a household admin adds people from **Configuración → Personas del hogar** |
+| `closed` | Nobody. People are only added by an admin |
+| `open` | Anyone who can reach the server, each with a household of their own |
+
+An unknown value, such as `Open` or `true`, stops the app starting, with the
+reason in `docker compose logs app`; it never falls back to `open`. To change it
+later, edit `.env` and run `docker compose up -d --wait` again.
+v0.1.0-alpha.3's files have no such setting, and adding the line to its `.env`
+changes nothing: registration there stays open to anyone (see Requirements).
+
 Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating `NEXTAUTH_SECRET` invalidates existing sessions. The bundle derives
 `DATABASE_URL`, `VALKEY_URL` and `NEXTAUTH_URL` itself, so you do not edit them.
@@ -191,10 +211,22 @@ docker compose logs --tail=100 app traefik
 The application applies the included database migrations before starting;
 there is no manual Prisma command and no demo account to seed.
 
-Visit `https://YOUR_DOMAIN/register`, create your account and provide a household
-name. Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
+**Register straight away.** From the release after v0.1.0-alpha.3, with
+`first-user`, whoever reaches `https://YOUR_DOMAIN/register` first becomes the
+owner of this installation (on v0.1.0-alpha.3 anyone can register at any time),
+and the hostname is public from the moment its certificate is issued:
+certificates are published in Certificate Transparency logs, which people
+watch for new hosts. Visit `/register`, create your account and provide a
+household name. If the page refuses you on a new installation, somebody else
+registered first. Remove the installation with `docker compose down -v`, which
+deletes its data volumes (only on an installation with no data you want to
+keep), and start step 3 again.
+
+Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
-**Configuración → Personas del hogar**. Separate registration creates a separate household.
+**Configuración → Personas del hogar**. On v0.1.0-alpha.3, and with
+`STOKY_REGISTRATION=open` after it, a separate registration creates a separate
+household.
 
 ```bash
 curl --fail --show-error https://YOUR_DOMAIN/api/health
@@ -341,6 +373,15 @@ one major version (PostgreSQL 16, Valkey 8) an update keeps the stored data
 format and needs no data migration; a release that changes a major version
 says so, and what to do, in its notes.
 
+**Registration closes on upgrade** to the release after v0.1.0-alpha.3 from a
+release whose `example.env` has no `STOKY_REGISTRATION`, such as
+v0.1.0-alpha.3. When `.env` does not set it, the Compose file uses
+`first-user`, and an existing installation already has accounts, so `/register`
+refuses everyone. Add people from **Configuración → Personas del hogar**, or, if
+your installation relies on people registering themselves, set
+`STOKY_REGISTRATION=open` in `.env` before `docker compose up`. Running the new
+release's `install.sh` adds the line, as `first-user`, to an `.env` that lacks it.
+
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
 and URL-safe credentials. Review custom database names, passwords, networks and
@@ -359,6 +400,8 @@ proxy settings before migrating. Do not point an unreviewed bundle at existing d
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
+| `/register` answers that registration is closed | Expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
+| App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |
 | A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |
 | Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |

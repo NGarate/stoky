@@ -1,3 +1,4 @@
+import { isRegistrationClosedRefusal } from "@/lib/auth/registration";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 
 export type AuthAction = "login" | "register";
@@ -9,7 +10,8 @@ export type AuthErrorKey =
   | "authUnavailable"
   | "loginError"
   | "registerError"
-  | "passwordContainsIdentity";
+  | "passwordContainsIdentity"
+  | "registrationClosed";
 
 /**
  * Auth.js flattens every sign-in failure to "CredentialsSignin" so a login
@@ -53,6 +55,12 @@ export function getAuthErrorKey(
   // JSON. Checked before the generic fallback so a person refused for using
   // their own name is told that, not "check the details".
   if (isPasswordIdentityRefusal(message)) return "passwordContainsIdentity";
+
+  // The operator has closed registration (`STOKY_REGISTRATION`). Matched on
+  // the server's own constant for the same reason, and because the generic
+  // "check the details" would send someone round the form again for a refusal
+  // no detail of theirs can change.
+  if (isRegistrationClosedRefusal(message)) return "registrationClosed";
 
   const normalizedMessage = message?.trim().toLowerCase() ?? "";
 

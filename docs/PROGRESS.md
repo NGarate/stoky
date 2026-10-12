@@ -2408,3 +2408,26 @@ published digest with empty volumes and prepare a draft; reviewed alphas are
 published as prereleases. `latest` remains the master development channel. The
 first release records unsupported ARM/HEIC and outstanding human checks instead
 of presenting alpha verification as stable-product support.
+
+**D123 — Registration closes after the first account unless the operator opens it.**
+The 2026-10-12 security review found `auth.register` open to anyone who could
+reach an instance, with no switch, and an installation guide that told operators
+to restrict access at a proxy the bundle gives them no way to configure. A
+household never needed open sign-up: admins already add people through
+`household.addMember`. `STOKY_REGISTRATION` is `open`, `first-user` or `closed`,
+and **unset it is `first-user` in production** and `open` elsewhere — the
+secure default where strangers can reach it, and no burden on the suites, which
+register dozens of accounts (the browser suite sets `open` explicitly, because
+it runs a production build). The alternative of an `open` application default
+with `first-user` only in the bundle's `example.env` was rejected: an upgrading
+operator keeps their old `.env`, so it would have protected nobody who already
+had an instance. The cost is stated in INSTALL.md: on upgrade, an installation
+that relied on strangers registering must set `open`. An unknown value is
+`closed` and stops a production server, because a typo in a security setting
+must not mean its least safe value. `first-user` counts accounts inside a
+transaction holding an advisory lock, since a count followed by a create admits
+two simultaneous claimants; the household became a nested write of the account
+in the same transaction, which also ends the orphan households a failed
+registration used to leave. The claim window on a fresh install — whoever
+registers first owns it — is accepted and documented rather than closed with a
+setup token, which would be a bootstrap flow out of proportion for an alpha.

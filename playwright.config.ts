@@ -321,6 +321,12 @@ export default defineConfig({
       // runs within the hour spend it again. The meter itself is proven in
       // `src/__tests__/integration/resolveScan.test.ts`.
       RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS: "10000",
+      // Production leaves registration `first-user` when this is unset
+      // (`src/lib/auth/registration.ts`), and the seeded demo household is
+      // already an account — so every spec that registers would be refused.
+      // `open` is a shipped mode, not a test-only bypass; `first-user` and
+      // `closed` are proven against a real database in the integration suite.
+      STOKY_REGISTRATION: "open",
     },
     // A cold `next build` on a slow machine, plus server start. A wedged build
     // never answers at all; five minutes tells the two apart.

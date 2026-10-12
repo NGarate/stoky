@@ -8,6 +8,7 @@ import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/
 import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
+import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -343,6 +344,39 @@ describe("what a refused sign-in says", () => {
 });
 
 describe("what a refused registration says", () => {
+  // `STOKY_REGISTRATION` closed, or first-user with the instance claimed: the
+  // server's FORBIDDEN carries the shared constant, and the form must say the
+  // door is shut — not "check the details", which would send someone round the
+  // form again for a refusal nothing they type can change.
+  for (const [locale, words, labels] of [
+    [
+      "es",
+      "El registro está cerrado en este servidor. Pide a quien administra tu hogar que te añada desde «Personas del hogar», en Configuración.",
+      { name: "Nombre", email: "Correo electrónico", password: "Contraseña", submit: "Registrarse" },
+    ],
+    [
+      "en",
+      "Registration is closed on this server. Ask whoever runs your household to add you from “People in the household”, in Settings.",
+      { name: "Name", email: "Email", password: "Password", submit: "Sign up" },
+    ],
+  ] as const) {
+    it(`says registration is closed, in ${locale}`, async () => {
+      registerFailure = new Error(REGISTRATION_CLOSED_MESSAGE);
+      try {
+        renderWithIntl(<RegisterPage />, { locale });
+
+        await userEvent.type(screen.getByLabelText(labels.name), "Ana");
+        await userEvent.type(screen.getByLabelText(labels.email), "ana@example.com");
+        await userEvent.type(screen.getByLabelText(labels.password), "cocina despensa nevera");
+        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+
+        expect(await screen.findByText(words)).toBeInTheDocument();
+      } finally {
+        registerFailure = null;
+      }
+    });
+  }
+
   // The identity rule's refusal arrives as tRPC's BAD_REQUEST, whose message is
   // the ZodError's own JSON. Built here from the real schema rather than
   // written out, so a reworded server message cannot leave this test passing
