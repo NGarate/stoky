@@ -385,10 +385,9 @@ test.describe("the Content-Security-Policy, as production serves it", () => {
     );
     expect(directives[4]).toBe("font-src 'self'");
     // Exact, which is what proves the dev tail (ws:, http://localhost:*)
-    // never ships.
-    expect(directives[5]).toBe(
-      "connect-src 'self' https://world.openfoodfacts.org",
-    );
+    // never ships — and that no remote origin is back: Open Food Facts is
+    // called from the server, so the page has nothing to connect to there.
+    expect(directives[5]).toBe("connect-src 'self'");
     expect(directives[6]).toBe("media-src 'self'");
     // Named explicitly rather than left to `default-src`, because the service
     // worker is the one script with no page to inherit a policy from.

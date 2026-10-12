@@ -592,8 +592,9 @@ just as happily on `frame-ancestors 'self'` as on `'none'` — and asserts the
 count is thirteen over plain http, which is the only check that catches a
 directive silently added or dropped. `script-src` is pinned to its full shape
 (`'self'`, a 32-hex nonce, `'strict-dynamic'`, nothing else), and `connect-src`
-to exactly its two sources, which is what proves the dev tail (`ws:`,
-`http://localhost:*`) never ships.
+to exactly its sources, which is what proves the dev tail (`ws:`,
+`http://localhost:*`) never ships. It had two then; it has one, `'self'`, since
+2026-10-12 (below).
 
 ~~**The prefetch-skip is real, and bounded.** Measured: a request labelled
 `Purpose: prefetch` does skip the proxy, so `proxyClientMaxBodySize` does not
@@ -922,6 +923,25 @@ page, checks that the photograph's request carries no `Referer` and that the
 element carries the attribute. What still reaches Open Food Facts is the image
 request itself, with the viewer's address; only a server-side image proxy
 would remove that, and it is not part of this fix.
+
+**Found 2026-10-12: `connect-src` allowed an origin no page contacts.** The
+policy read `connect-src 'self' https://world.openfoodfacts.org`, and had since
+the first CSP (`349680f`). Every Open Food Facts lookup is the server's
+(`src/server/services/openFoodFacts.ts`), where the policy does not apply;
+outside `src/server`, the host appears only in `ProductRating`'s links, which
+are navigations, and in the policy itself. At `349680f` the same was already
+true. Low, and least privilege rather than an open path: a script would first
+have to get past the nonce and `'strict-dynamic'`, and one that did could still
+send data out through an `img-src` query string or a navigation. But it was an
+allowance with no use, to a service that accepts writes from anyone.
+
+**Fixed: `connect-src 'self'`**, with the development websocket tail as
+before. `img-src` keeps `images.openfoodfacts.org`; the photographs are images,
+not connections. `src/__tests__/unit/csp.test.ts` now pins `connect-src` at its
+exact value in both environments, so the unit gate notices without the browser
+suite, and `security-headers.spec.ts` pins the production value; putting the
+host back fails both unit assertions on it. The unit file also checks that
+`img-src` keeps the image host, and fails when it is dropped.
 
 ---
 

@@ -283,6 +283,12 @@ Verified against the files named in each row.
   its own requests.
   One honest caveat: `style-src` still includes `'unsafe-inline'`, because Next
   inlines critical CSS that cannot carry a nonce.
+  **A page reaches one other origin, and only for images:** `img-src` allows
+  `images.openfoodfacts.org`, for the product photographs. `connect-src` is
+  `'self'` — Open Food Facts lookups are the server's, outside the policy, and
+  the links to it are navigations, which `connect-src` does not govern. Until
+  2026-10-12 it also allowed `world.openfoodfacts.org`, which no page fetched
+  (`docs/SECURITY_REVIEW.md` §8).
 - **The policy is on every page the app renders, including its not-found
   page.** The proxy's matcher excludes only what is served from disk —
   `/_next/static/`, the icon files by name, and `/sw.js`, which has a policy
