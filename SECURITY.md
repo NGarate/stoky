@@ -504,8 +504,11 @@ Verified against the files named in each row.
 
 ### Authentication — `src/lib/auth.ts`, `src/server/trpc/routers/auth.ts`
 
-- Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB) and
-  `timeCost: 3`.
+- Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB),
+  `timeCost: 3` and `parallelism: 4`, in one place:
+  `src/lib/auth/password-hash.ts` hashes for registration and for an admin
+  adding a member, and verifies for sign-in. A test pins the parameters and
+  that the dummy hash for unknown addresses was made with the same ones.
 - Auth.js v5 with the credentials provider; sessions are JWTs with a 15-minute
   lifetime.
 - Credentials are validated with a Zod schema before the database is touched,

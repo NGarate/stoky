@@ -2,10 +2,10 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import * as argon2 from "argon2";
 import { registerSchema } from "@/lib/validations/auth";
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
 import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
+import { hashPassword } from "@/lib/auth/password-hash";
 import {
   REGISTRATION_CLOSED_MESSAGE,
   REGISTRATION_LOCK_KEY,
@@ -131,11 +131,7 @@ export const authRouter = createTRPCRouter({
       // Hash password with Argon2id. Outside the transaction: a quarter of a
       // second holding the lock below would queue every other registration
       // behind it.
-      const passwordHash = await argon2.hash(password, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      });
+      const passwordHash = await hashPassword(password);
 
       const user = await ctx.db.$transaction(async (tx) => {
         // `first-user` is "while there are no accounts", and a count followed

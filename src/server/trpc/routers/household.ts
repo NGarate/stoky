@@ -1,8 +1,8 @@
 import { TRPCError } from "@trpc/server";
-import * as argon2 from "argon2";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { enforceRateLimit } from "../throttle";
 import { addMemberRateLimit } from "@/lib/rate-limit";
+import { hashPassword } from "@/lib/auth/password-hash";
 import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
@@ -281,11 +281,7 @@ export const householdRouter = createTRPCRouter({
         "Too many accounts created. Try again in a little while.",
       );
 
-      const passwordHash = await argon2.hash(input.password, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      });
+      const passwordHash = await hashPassword(input.password);
 
       const user = await ctx.db.user.create({
         data: {

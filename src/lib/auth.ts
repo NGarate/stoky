@@ -2,12 +2,12 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import { connection } from "next/server";
 import type { NextAuthConfig, Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import * as argon2 from "argon2";
 import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import { logSecurityEvent } from "@/lib/security-log";
 import { assertUsableSecret } from "@/lib/auth/secret";
+import { verifyPassword } from "@/lib/auth/password-hash";
 import {
   RateLimitUnavailableError,
   accountIdentifier,
@@ -37,20 +37,6 @@ export class RateLimitedSignin extends CredentialsSignin {
 export class AuthUnavailableSignin extends CredentialsSignin {
   code = "auth_unavailable";
 }
-
-/**
- * What a sign-in for an address with no account is verified against, so it
- * costs the same Argon2id as one with a wrong password.
- *
- * The hash of a random value nobody kept, so no password matches it. **Its
- * parameters must be the ones accounts are hashed with** (`m=65536,t=3,p=4`,
- * `auth.register` and `household.addMember`): verifying runs at the cost the
- * stored hash names, so a cheaper dummy would reopen the timing difference it
- * exists to close. A constant rather than hashed at start-up, so the first
- * unknown address is not the one request that pays for hashing it.
- */
-export const DUMMY_PASSWORD_HASH =
-  "$argon2id$v=19$m=65536,t=3,p=4$VZSmoJF5HpXm3vHhXficPw$b/zA/ilF3dqpyfmO2KWJjiyH4WLE0yQQRj8LZxrAsvg";
 
 /**
  * Checked here because this is the module every server path goes through, and
@@ -239,9 +225,11 @@ export const authConfig: NextAuthConfig = {
         // missing account answered "no such address" in a few milliseconds
         // and "wrong password" in a quarter of a second, so a stopwatch told
         // anyone which addresses are registered — the very thing the flattened
-        // message and the identical log lines below refuse to say.
-        const isValid = await argon2.verify(
-          user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+        // message and the identical log lines below refuse to say. With no
+        // account, `verifyPassword` checks against a dummy hash made with the
+        // same parameters as every stored one.
+        const isValid = await verifyPassword(
+          user?.passwordHash,
           parsed.data.password,
         );
 

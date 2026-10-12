@@ -20,7 +20,7 @@
  * published in the README.
  */
 import { PrismaClient, type Prisma, type StockOperation } from "@prisma/client";
-import * as argon2 from "argon2";
+import { hashPassword } from "../src/lib/auth/password-hash";
 import { demoSeedRefusal } from "./seed-guard";
 
 // Before the client exists and before anything is read or written.
@@ -511,11 +511,7 @@ async function main(): Promise<void> {
   // Hashed before the transaction opens: Argon2id at these parameters is a
   // deliberate fraction of a second, and a transaction has no reason to wait
   // on it.
-  const passwordHash = await argon2.hash(DEMO_PASSWORD, {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-  });
+  const passwordHash = await hashPassword(DEMO_PASSWORD);
 
   // One interactive transaction for the deletes and the creates, so a failure
   // part-way rolls back to the previous demo data instead of leaving it
