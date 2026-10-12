@@ -10,6 +10,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import { useState } from "react";
 import SuperJSON from "superjson";
 import { seedOnlineManager } from "@/lib/offline/onlineManager";
+import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import type { AppRouter } from "@/server/trpc/router";
 
 export const api = createTRPCReact<AppRouter>();
@@ -101,6 +102,9 @@ export function TRPCProvider(
         unstable_httpBatchStreamLink({
           transformer: SuperJSON,
           url: getUrl(),
+          // The server refuses a longer batch outright; this splits one into
+          // several requests first (`src/lib/trpc/batch.ts`).
+          maxItems: MAX_TRPC_BATCH_SIZE,
           headers() {
             return {
               "x-trpc-source": "react",

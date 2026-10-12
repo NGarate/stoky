@@ -1,6 +1,7 @@
 import type { AnyTRPCRouter, inferRouterContext } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Session } from "next-auth";
+import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 import { MAX_TRPC_BODY_BYTES, initWithBody, readBodyWithin } from "./body-limit";
 
@@ -51,6 +52,10 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
       req,
       router,
       createContext: () => createContext({ session, headers: req.headers }),
+      // Checked against the path list before any input is parsed or any
+      // procedure runs, so a longer batch costs a 400 and no call at all.
+      // Why this number: `src/lib/trpc/batch.ts`.
+      maxBatchSize: MAX_TRPC_BATCH_SIZE,
       /**
        * `Retry-After` on a throttled response — RFC 9110 §10.2.3.
        *

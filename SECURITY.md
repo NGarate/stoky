@@ -307,6 +307,31 @@ Verified against the files named in each row.
   container's limit in `deploy/docker-compose.yml` is 1 GiB. How many
   concurrent 15 MiB requests that takes has not been measured.
 
+### Batched calls — `src/lib/trpc/batch.ts`
+
+- **One tRPC request carries at most 100 calls.** tRPC batches by default and,
+  until 2026-10-12, set no ceiling: one GET of about 15 KB named about 850
+  `household.current` calls, run concurrently, and an anonymous caller got 850
+  `access.denied` log lines for it. Whatever a call costs — a query, a password
+  hash, a log line — one request multiplied it before any rate limit counted
+  anything. The handler now passes `maxBatchSize`, which tRPC checks against the
+  list of paths before it reads an input or runs a procedure: a longer batch is
+  a 400, with no procedure run and nothing logged. Measured in-process against
+  the real router, 850 anonymous calls now get one 400 and no log line.
+- The browser client passes the same constant as the link's `maxItems`, so it
+  splits a longer batch into several requests rather than tripping the refusal.
+  The offline queue's replays do not batch at all (`src/lib/offline/sender.ts`).
+- 100 rather than fewer because the widest batch a screen sends today is 52,
+  counted from the code rather than measured in a browser: `/prices` lists up to
+  50 products, each row with its own `price.getLatestPrices`, and a refetch of
+  everything on screen adds the list and `auth.me`. A tab still running a build
+  from before the cap has no `maxItems`, and a ceiling of 50 would refuse that
+  refetch whole.
+- What this bounds is the fan-out of one request. It is not a rate limit: a
+  caller can still send as many requests as it likes (see "Every other tRPC
+  procedure is unlimited" below). `src/__tests__/unit/trpc-handler.test.ts`
+  sends 101 calls and 100 through the real handler.
+
 ### Authentication — `src/lib/auth.ts`, `src/server/trpc/routers/auth.ts`
 
 - Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB) and
@@ -752,7 +777,10 @@ What is still open, and worth knowing before publishing an instance:
   stores — under 700 characters of text for a product, about 100,000 for the
   largest, a 500-line receipt review that creates a product per line — but
   not how many calls there are, so an account can still grow the database
-  row by row. Keep the database volume on a disk something watches.
+  row by row. Keep the database volume on a disk something watches. Since
+  2026-10-12 one request can also carry at most 100 calls ("Batched calls"
+  above), so how many arrive at once is bounded by how many requests a caller
+  sends — and nothing counts those.
 - **The identifier is an IP address**, read from the last hop of
   `X-Forwarded-For`. Everyone behind one NAT therefore shares a bucket. An
   attacker with a range of addresses gets one bucket per address, which is what

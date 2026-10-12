@@ -1,7 +1,10 @@
 import { describe, it, expect, spyOn, beforeEach, afterEach } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
 import type { Session } from "next-auth";
 import { z } from "zod";
+import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { MAX_TRPC_BODY_BYTES } from "@/server/http/body-limit";
 import { createTrpcHandler } from "@/server/http/trpc-handler";
 import { ThrottledError } from "@/server/trpc/throttle";
@@ -181,5 +184,60 @@ describe("the request body", () => {
 
     expect(response.status).toBe(200);
     expect(await resultOf(response)).toBe("Leche");
+  });
+});
+
+describe("a batch", () => {
+  /** `count` calls to `path` in one batched GET, the way the link sends them. */
+  function batchOf(path: string, count: number): Request {
+    const paths = Array.from({ length: count }, () => path).join(",");
+    return new Request(`http://localhost/api/trpc/${paths}?batch=1`);
+  }
+
+  it("one call longer than the limit is refused whole, before any procedure runs", async () => {
+    // The shape of the amplification: anonymous, every call a protected one,
+    // so each would otherwise be refused separately and logged separately.
+    const response = await handlerFor(null)(batchOf("whoami", MAX_TRPC_BATCH_SIZE + 1));
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("Batch call exceeds maximum size");
+    // No procedure ran, so no call was refused and none was logged.
+    expect(consoleWarn).not.toHaveBeenCalled();
+  });
+
+  it("is refused the same way as a POST, without its inputs being read", async () => {
+    // Mutations batch too, and a mutation is where a per-call cost can be a
+    // password hash. The body is not JSON: it is never parsed.
+    const paths = Array.from({ length: MAX_TRPC_BATCH_SIZE + 1 }, () => "echo").join(",");
+    const response = await handlerFor(null)(
+      new Request(`http://localhost/api/trpc/${paths}?batch=1`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "not json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("Batch call exceeds maximum size");
+  });
+
+  it("at the limit runs every call", async () => {
+    const response = await handlerFor(SIGNED_IN)(batchOf("whoami", MAX_TRPC_BATCH_SIZE));
+
+    expect(response.status).toBe(200);
+    const results = (await response.json()) as { result: { data: { json: unknown } } }[];
+    expect(results).toHaveLength(MAX_TRPC_BATCH_SIZE);
+    expect(results.every((r) => r.result.data.json === "user-1")).toBe(true);
+  });
+
+  it("is split by the browser client at the same number", () => {
+    // Without `maxItems` the link batches every call in a tick into one
+    // request, and a screen that mounted more than the limit would lose all of
+    // them to the 400 above. Read from source: the link's options are not
+    // observable from outside a rendered provider.
+    const client = readFileSync(join(import.meta.dir, "../../lib/trpc/client.tsx"), "utf8");
+
+    expect(client).toContain('from "@/lib/trpc/batch"');
+    expect(client).toMatch(/httpBatchStreamLink\(\{[^]*?maxItems: MAX_TRPC_BATCH_SIZE,[^]*?\}\)/);
   });
 });
