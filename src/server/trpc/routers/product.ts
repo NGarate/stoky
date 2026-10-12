@@ -266,7 +266,7 @@ export const productRouter = createTRPCRouter({
       const { id, ...data } = input;
 
       return ctx.db.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
         const existingProduct = await tx.product.findFirst({
           where: { id, householdId: ctx.householdId },
         });

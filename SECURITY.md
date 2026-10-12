@@ -193,6 +193,29 @@ Verified against the files named in each row.
   (`docs/SECURITY_REVIEW.md` finding 16, no `receipt.delete`). Retention is a
   decision for that finding to make.
 
+### Household isolation — product row locks
+
+- Stock writes and `product.update` hold the product row
+  (`SELECT … FOR UPDATE`) so that two writes to one product take turns
+  (`ISSUES.md` INV-2). The lock's own `WHERE` names the caller's household as
+  well as the id, in all five places: `addStock`, `consumeStock`,
+  `adjustStock`, `transferStock` and `product.update`.
+- Until 2026-10-12 four of them locked by id alone, before the household
+  check that refuses a foreign id. A caller holding another household's
+  product id therefore locked that household's row for the instant before
+  `NOT_FOUND`, and had to wait whenever the owner was holding it, which told
+  the caller when the owner was writing. `consumeStock` is open to KITCHEN.
+  Product ids are random, so this needed an id leaked from elsewhere. Postgres
+  filters rows before it locks them, so a foreign id now locks nothing and
+  waits on nothing. `addStock` already checked the product before its lock;
+  it carries the predicate too, so there is one rule.
+- `src/__tests__/integration/product.lock-isolation.test.ts` has household A
+  hold its product's lock in an open transaction while household B calls each
+  of the four procedures with A's id. B must be refused with `NOT_FOUND` while
+  A still holds the lock. Removing the predicate from any one procedure made
+  that procedure's case fail ("blocked" after the 5-second ceiling) and left
+  the other three passing.
+
 ### Supply chain — `.github/workflows/ci.yml`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
