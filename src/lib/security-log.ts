@@ -10,9 +10,11 @@
  * my instance?" — had no answer anywhere, and the first evidence of a break-in
  * would have been the data changing.
  *
- * **One line of JSON per event, on stdout.** Not a file, not a table: the
- * deployment is Docker, so stdout is already collected, rotated and reachable
- * with `docker compose logs`, and JSON means `| jq 'select(.event ==
+ * **One line of JSON per event, on stderr.** Not a file, not a table: the
+ * deployment is Docker, so stderr is already collected and reachable with
+ * `docker compose logs` — and rotated only because the release bundle sets a
+ * size cap on every service (Docker's default keeps everything; SECURITY.md,
+ * "Refusals are recorded") — and JSON means `| jq 'select(.event ==
  * "access.denied")'` works without anybody installing anything. A log table in
  * Postgres would need migrations, retention and a way to read it when the
  * database is the thing that is wrong.

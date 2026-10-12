@@ -5,10 +5,24 @@
 # Separate from the source checkout's default development project (stoky).
 name: stoky-release
 
+# Every service writes its logs through this one block. Docker's default
+# json-file driver never rotates (max-size is unlimited unless set), so without
+# it the security log, which an unauthenticated client can add lines to, grows
+# until the disk is full. The driver is named next to its options on purpose: a
+# daemon-wide default such as journald rejects max-size and the container would
+# refuse to start. About 50 MB per service; see docs/INSTALL.md to ship logs
+# elsewhere or keep the daemon's own driver.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -38,6 +52,7 @@ services:
   cache:
     image: valkey/valkey:8-alpine
     restart: unless-stopped
+    logging: *logging
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -61,6 +76,7 @@ services:
     # that nothing checks, and an .env without the line would silently pull it.
     image: "ghcr.io/ngarate/stoky:${STOKY_VERSION:?Define STOKY_VERSION en .env con la etiqueta exacta de esta versión}"
     restart: unless-stopped
+    logging: *logging
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -94,6 +110,7 @@ services:
   traefik:
     image: traefik:v3.7.13
     restart: unless-stopped
+    logging: *logging
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]

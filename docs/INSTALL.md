@@ -203,6 +203,39 @@ docker compose down                   # remove containers, keep data volumes
 deletes the data volumes. Docker's restart policy restarts exited containers;
 an `unhealthy` status alone does not automatically restart a running process.
 
+## Logs
+
+From the release after v0.1.0-alpha.3, every container logs through Docker's
+`json-file` driver, capped at five files of 10 MB each: at most 50 MB on disk
+per container, about 200 MB for the four. Docker's own default keeps
+everything, and anyone who can reach the instance can add lines to the app's
+security log, so the cap is what stops logs from filling the disk.
+v0.1.0-alpha.3's Compose file sets no cap, so there the Docker daemon's own
+logging settings apply, which by default keep everything. Older lines are discarded as new ones arrive, so how far back the logs
+reach depends on traffic. `docker compose logs` reads all five files; the files
+themselves are under Docker's data directory
+(`docker inspect --format '{{.LogPath}}' stoky-release-app-1`).
+
+The Compose file sets the driver on each service, so it replaces a daemon-wide
+driver configured in `/etc/docker/daemon.json`. To keep your own (for example
+`journald`, or a shipper that keeps logs longer), create
+`docker-compose.override.yml` beside the Compose file; `docker compose` reads it
+automatically:
+
+```yaml
+x-logging: &logging
+  driver: journald
+services:
+  db: { logging: *logging }
+  cache: { logging: *logging }
+  app: { logging: *logging }
+  traefik: { logging: *logging }
+```
+
+Check it with `docker compose config`, keep it with your backups, and apply it
+with `docker compose up -d --wait`. Upgrades replace the Compose and Traefik
+files, not the override, so it stays in place.
+
 ## Backup and restore
 
 The JSON export in Settings is useful for inspection, but is not a full restore
@@ -246,6 +279,11 @@ Sign in and check inventory and a receipt image. Restoring over existing data is
 not covered by these commands. Never delete the original volumes to test a backup.
 
 ## Upgrade and rollback
+
+When the new Compose file changes a service's configuration, `up -d` recreates
+that container and deletes its old log files with it; the first release that
+rotates logs changes all four. Save the logs you need before upgrading, for
+example `docker compose logs --no-color --timestamps > logs-before-upgrade.txt`.
 
 Read the target release's notes first. Back up the current installation, download
 the target release's assets **into a separate directory**, and verify their

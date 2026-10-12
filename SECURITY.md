@@ -663,10 +663,26 @@ owner will actually ask â€” "has anybody been trying to get into my instance?" â
 had no answer anywhere.
 
 `src/lib/security-log.ts` writes one JSON object per event to stderr, which
-Docker already collects and rotates: `docker compose logs app | jq 'select(.event
-== "access.denied")'` works with nothing installed. The events are
+Docker collects: `docker compose logs app | jq 'select(.event ==
+"access.denied")'` works with nothing installed. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
 `access.denied` and `request.throttled`.
+
+- **The release bundle rotates them; Docker alone does not.** Docker's default
+  `json-file` driver has no size limit, and every throttled refusal writes a
+  line, so an unauthenticated client could add to the log until the host disk
+  filled and took PostgreSQL with it. Every service in `deploy/docker-compose.yml`
+  therefore names `json-file` with `max-size: 10m` and `max-file: 5`: at most
+  50 MB on disk per container. The cap is a size, not a period, so it is also
+  what bounds how long the addresses and identifiers in the security log
+  survive, and under a flood that is not long: the oldest file goes when a new
+  one opens, and measured, 80 MiB of 71-byte lines left 23,412,327 bytes
+  readable through `docker logs` (the JSON wrapping counts toward the cap). An
+  operator who needs a longer record ships the logs elsewhere
+  ([Install](docs/INSTALL.md#logs)). The driver is named next to its options
+  because under a daemon-wide driver such as `journald` a bare `max-size` stops
+  the container from starting.
+  `src/__tests__/unit/deployment.test.ts` asserts the block on every service.
 
 - **The access-control events come from tRPC middleware, not from the
   resolvers**, so a new router cannot forget to be audited. Every procedure

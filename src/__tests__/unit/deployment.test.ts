@@ -20,6 +20,7 @@ interface Service {
   command?: string[];
   configs?: { source: string; target: string }[];
   healthcheck?: { test: string[] };
+  logging?: { driver?: string; options?: Record<string, string> };
 }
 
 interface Compose {
@@ -95,6 +96,20 @@ describe("the downloadable installation", () => {
     expect(compose.services.traefik.read_only).toBe(true);
     expect(compose.services.app.tmpfs).toEqual(["/tmp", "/app/.next/cache"]);
     expect(compose.services.app.volumes).toContain("uploads:/app/uploads");
+  });
+
+  it("rotates every service's logs instead of letting them fill the disk", () => {
+    // Docker's json-file default keeps everything, and an unauthenticated
+    // client can add security-log lines; the cap is what bounds the disk.
+    expect(Object.keys(compose.services).sort()).toEqual(["app", "cache", "db", "traefik"]);
+    for (const [name, service] of Object.entries(compose.services)) {
+      // The driver is named beside its options: under a daemon-wide default
+      // such as journald, a bare max-size stops the container from starting.
+      expect({ name, logging: service.logging }).toEqual({
+        name,
+        logging: { driver: "json-file", options: { "max-size": "10m", "max-file": "5" } },
+      });
+    }
   });
 
   it("routes HTTPS to the application without Docker discovery privileges", () => {
