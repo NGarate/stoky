@@ -1,6 +1,9 @@
 # Publishing a Stoky release
 
-Releases come from `master`; do not create release branches or pull requests.
+Releases come from `master`; do not create release branches. Work reaches
+`master` by the workflow in `CLAUDE.md` (Git Workflow), including the pull
+requests unattended or semi-attended agent work opens; a release is cut only
+from what has landed there.
 The first release is `v0.1.0-alpha.1`. Alpha releases are GitHub **prereleases**,
 not stable releases. The repository and the GHCR package are public; the
 attestation and anonymous-pull steps below depend on that (see

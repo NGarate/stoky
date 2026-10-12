@@ -28,10 +28,12 @@ That is enough to start work. Everything else is reference for a specific task.
 Then, before writing code, read `CLAUDE.md` in the repository root. It is
 deliberately short and holds only what applies to *every* task: the design
 system, the commit conventions and the git workflow — this project has unusual
-rules about the last two (trunk only, atomic commits, no branches, no pull
-requests). It carries **no versions, commands or directory listings on
-purpose**, because it is loaded into every context and that is the worst place
-to keep something that goes stale. Those live in the owners above.
+rules about the last two (atomic commits; watched work straight to `master`;
+unattended or semi-attended agent work on a dated branch with a pull request,
+squash-merged once the owner approves it). It carries **no versions, commands
+or directory listings on purpose**, because it is loaded into every context and
+that is the worst place to keep something that goes stale. Those live in the
+owners above.
 
 ---
 

@@ -230,9 +230,13 @@ restricted tester access and operator-managed backups; read [Security](SECURITY.
 
 ## Contributing
 
-Trunk-based: work directly on `master`, in small focused commits. No feature
-branches, no pull requests. Since there is no PR gate, `master` must be green
-at every commit — run the checks before committing, not after.
+Trunk-based: work done with someone reading each change as it lands goes
+directly to `master`, in small focused commits, with no feature branch and no
+pull request. Unattended and semi-attended agent work is the exception: it goes
+on a `<type>/<topic>-<YYYY-MM-DD>` branch with a pull request, squash-merged once
+the owner has reviewed it. [`CLAUDE.md`](CLAUDE.md) (Git Workflow) owns the rule.
+Either way `master` must be green at every commit — run the checks before
+committing, not after.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 
