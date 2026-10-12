@@ -1298,8 +1298,11 @@ owner will actually ask — "has anybody been trying to get into my instance?" �
 had no answer anywhere.
 
 `src/lib/security-log.ts` writes one JSON object per event to stderr, which
-Docker collects: `docker compose logs app | jq 'select(.event ==
-"access.denied")'` works with nothing installed. The events are
+Docker collects. With `jq` installed on the host, `docker compose logs
+--no-log-prefix app | jq -cR 'fromjson? | select(.event == "access.denied")'`
+lists the refusals: `--no-log-prefix` drops the `app-1  | ` Compose puts
+before every line, which jq cannot parse, and `fromjson?` skips the lines that
+are not JSON. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
 `auth.session.revoked`, `auth.password.changed`,
 `auth.password.change.refused`, `auth.password.reset`, `access.denied` and
@@ -1349,9 +1352,9 @@ every device that was signed in when that upgrade was installed.
   server does not run a second, unscoped read to tell the two apart, so it
   records both alike. **A not-found line is therefore not proof of a probe**
   — a row deleted on another device, or a stale link, writes one as well.
-  What an operator looks for is a run of them from one account: `jq -r
-  'select(.reason == "not-found") | .userId' | sort | uniq -c` over the app's
-  log counts them per account. The line names the account, its household and
+  What an operator looks for is a run of them from one account:
+  `docker compose logs --no-log-prefix app | jq -rR 'fromjson? | select(.reason
+  == "not-found") | .userId' | sort | uniq -c` counts them per account. The line names the account, its household and
   the procedure, **never the id that was asked for**. It follows the code the
   caller received, so a write scoped by `householdId` (`store.update`,
   `shopping.removeItem`), which refuses a foreign id as Prisma's `P2025`, is
