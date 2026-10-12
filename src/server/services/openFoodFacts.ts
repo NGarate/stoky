@@ -229,50 +229,6 @@ export class OpenFoodFactsClient {
   }
 
   /**
-   * Search products by name
-   */
-  async searchProducts(
-    query: string,
-    limit = 10
-  ): Promise<OpenFoodFactsProduct[]> {
-    try {
-      const response = await fetch(
-        `${OFF_API_BASE}/search?search_terms=${encodeURIComponent(
-          query
-        )}&fields=code,product_name,brands,categories,image_url,image_front_url&page_size=${limit}&sort_by=popularity`,
-        {
-          headers: {
-            "User-Agent": OFF_USER_AGENT,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
-      }
-
-      const data = await response.json();
-
-      if (!data.products || !Array.isArray(data.products)) {
-        return [];
-      }
-
-      const products: OpenFoodFactsProduct[] = [];
-      for (const product of data.products) {
-        const parsed = offProductSchema.safeParse(product);
-        if (parsed.success) {
-          products.push(parsed.data);
-        }
-      }
-
-      return products;
-    } catch (error) {
-      console.error("Error searching Open Food Facts:", error);
-      return [];
-    }
-  }
-
-  /**
    * The unit a new product counts in, from Open Food Facts' free-text
    * `quantity` ("500 g", "1,5L", "6x33cl", "12 huevos").
    *
