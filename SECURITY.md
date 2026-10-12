@@ -115,6 +115,21 @@ Verified against the files named in each row.
 
 ### Release deployment — `deploy/docker-compose.yml`
 
+- **PostgreSQL, Valkey and Traefik are pinned by exact version and digest**
+  (`postgres:16.15-alpine@sha256:…`, the digest of the multi-platform index).
+  A tag can be re-pushed and a digest cannot, so the release smoke and every
+  later `docker compose pull` of that release run the same builds, and a
+  re-pushed upstream tag cannot reach an installation without a change in this
+  repository. The cost is that their fixes reach an installation only with a
+  Stoky release: `docs/RELEASING.md` refreshes the pins for each one. Between
+  releases Dependabot (`docker-compose` ecosystem, `docs/RELEASING.md`,
+  *Dependency updates*) proposes minor and patch refreshes weekly — once its
+  branches are allowed, an owner setting not yet applied on 2026-10-12
+  (`docs/STATUS.md`, *Dependency security*); a merged one lands on `master`
+  and ships with the next release. The app image is named by `STOKY_VERSION`.
+  `src/__tests__/unit/deployment.test.ts` fails if a service image loses its
+  digest or names a floating major. Verified by running each pinned reference:
+  PostgreSQL 16.15, Valkey 8.1.10, Traefik 3.7.14.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
   they are actually needed (Postgres for its data directory, Valkey for
@@ -1069,6 +1084,11 @@ Use exact release tags and follow the target release notes and
 [upgrade/rollback procedure](docs/INSTALL.md#upgrade-and-rollback). Pulling alone
 does not replace running containers; `docker compose up -d --wait` does.
 Do not automatically follow `latest` for an alpha installation.
+
+The bundle's PostgreSQL, Valkey and Traefik are pinned by digest, so pulling
+does not update them either: a fix to one of them reaches an installation in
+the Stoky release that refreshes its pin. Take new releases for those fixes as
+well as for the app's.
 
 Trivy checks images before publication for fixable CRITICAL/HIGH findings,
 and a release's exact digest again before its version tag exists. The newest

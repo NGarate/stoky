@@ -68,6 +68,22 @@ describe("the downloadable installation", () => {
     expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|NEXTAUTH_URL)=/m);
   });
 
+  it("names every service image by exact version and digest", () => {
+    // A tag can be re-pushed; a digest cannot. Without it the release smoke and
+    // an operator's later pull can run different PostgreSQL, Valkey or Traefik
+    // builds under the same release. The tag must still be an exact version
+    // (16.15, not 16): it is what a reader and an update tool compare. The app
+    // is named by STOKY_VERSION, checked above.
+    const services = Object.entries(compose.services).filter(([name]) => name !== "app");
+    expect(services.map(([name]) => name).sort()).toEqual(["cache", "db", "traefik"]);
+    for (const [name, service] of services) {
+      expect({ name, image: service.image }).toEqual({
+        name,
+        image: expect.stringMatching(/^[a-z0-9./-]+:v?\d+\.\d+[\w.-]*@sha256:[0-9a-f]{64}$/),
+      });
+    }
+  });
+
   it("reports the database healthy only once it accepts TCP connections", () => {
     // The image's init server listens on the unix socket only; a socket probe
     // passes during init and releases the app into a refused connection.

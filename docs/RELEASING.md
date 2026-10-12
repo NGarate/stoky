@@ -23,12 +23,31 @@ attestation and anonymous-pull steps below depend on that (see
    support changes. Keep release assets self-contained: Compose, `example.env`,
    `traefik.yml` and `install.sh` must work without a checkout. `install.sh` only
    downloads, verifies and creates missing configuration; it never starts Stoky.
-4. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
+4. Refresh the service images. `deploy/docker-compose.yml` names PostgreSQL,
+   Valkey and Traefik by exact version and index digest, and between releases
+   only a merged Dependabot pull request moves them ([Dependency
+   updates](#dependency-updates)), a week behind upstream at best, so a release
+   that skips this can ship stale builds. For each, take the newest release of the same major, which is what
+   the floating tag (`postgres:16-alpine`, `valkey/valkey:8-alpine`, `traefik:v3`)
+   names that day, and the digest of its multi-platform index, not one
+   platform's manifest:
+
+   ```bash
+   docker buildx imagetools inspect postgres:16-alpine   # Digest: sha256:…
+   docker buildx imagetools inspect postgres:16.15-alpine   # must print the same Digest
+   ```
+
+   Write `image: postgres:16.15-alpine@sha256:<that digest>`, and the same for
+   `valkey/valkey` and `traefik`. A new major version is a decision with its own
+   migration and release note, not a refresh. The release smoke then runs the
+   builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if
+   a service image loses its digest or goes back to a bare major tag.
+5. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
    for a release. New tests must be shown to fail against the broken behavior.
-5. Build and test the production image with fresh, isolated volumes. Check migrations,
+6. Build and test the production image with fresh, isolated volumes. Check migrations,
    proxy routing, registration/login, health, restart persistence and backup/restore.
    Record what was actually tested in `STATUS.md`, including any TLS/host limitations.
-6. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets
+7. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets
    "sha256:$(printf '%064d' 0)"`.
    The script rejects version mismatches (package, `example.env`, `install.sh`, and any version
    named in `docs/INSTALL.md` or `README.md`) and missing notes, pins the assets'
@@ -221,7 +240,9 @@ Conventional Commits: `build(deps):` and `build(deps-dev):` for the lockfile,
   and run `bash scripts/check-ci.sh`; the pin keeps the commit SHA and the
   exact version in its comment.
 - **A bundle image.** It changes nothing for installations until a release
-  ships it: `install.sh` verifies the Compose file against `SHA256SUMS`. Move
+  ships it: `install.sh` verifies the Compose file against `SHA256SUMS`. The
+  pin must still name the version's multi-platform index digest, as step 4
+  checks it. Move
   the root `docker-compose.yml`, `docker-compose.dev.yml` and `ci.yml`'s
   service containers to the same version by hand, so CI tests what the bundle
   runs. No ecosystem covers those, nor the Playwright and actionlint images.
@@ -320,8 +341,8 @@ cache on a tag; it is never pushed. `latest` and `sha-` images are still
 cache-derived; they are the development channel, not what an installation is
 told to run. A clean build takes minutes rather than the cached publish's one,
 so a tag's `image-publish` has 30 minutes to master's 10.
-Docker base and support-service tags can change across rebuilds;
-application/CLI dependencies use the frozen Bun lockfile.
+The Docker base tag can change across rebuilds; the bundle's service images are
+pinned by digest, and application/CLI dependencies use the frozen Bun lockfile.
 Release tags identify the source/version, not a reproducible byte-for-byte build.
 Record the published digest when auditing an installation. A GHCR tag can be
 moved by anything holding `packages: write`, the tag run and any master run

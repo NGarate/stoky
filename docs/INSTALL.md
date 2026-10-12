@@ -309,6 +309,15 @@ installation with the previous image and configuration. A rollback takes the
 previous release's Compose file, not only its tag, and returning to the previous
 image is not by itself a guaranteed rollback.
 
+PostgreSQL, Valkey and Traefik change only with a Stoky release. The Compose
+file names each of them by exact version and by digest
+(`postgres:16.15-alpine@sha256:…`), so `docker compose pull` fetches the build
+the release was tested with, not whatever the tag names that day. Their
+security fixes reach you by upgrading to the release that carries them. Within
+one major version (PostgreSQL 16, Valkey 8) an update keeps the stored data
+format and needs no data migration; a release that changes a major version
+says so, and what to do, in its notes.
+
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
 and URL-safe credentials. Review custom database names, passwords, networks and
