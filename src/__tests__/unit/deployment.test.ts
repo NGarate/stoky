@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { REGISTRATION_MODES } from "@/lib/auth/registration";
+import nextConfig from "../../../next.config";
 
 const root = join(import.meta.dir, "../../..");
 
@@ -16,10 +18,11 @@ interface Service {
   cap_drop: string[];
   security_opt: string[];
   restart: string;
-  deploy: { resources: { limits: { memory: string } } };
+  deploy: { resources: { limits: { memory: string; pids?: number; cpus?: unknown } } };
   command?: string[];
   configs?: { source: string; target: string }[];
   healthcheck?: { test: string[] };
+  logging?: { driver?: string; options?: Record<string, string> };
 }
 
 interface Compose {
@@ -67,6 +70,40 @@ describe("the downloadable installation", () => {
     expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|NEXTAUTH_URL)=/m);
   });
 
+  it("names every service image by exact version and digest", () => {
+    // A tag can be re-pushed; a digest cannot. Without it the release smoke and
+    // an operator's later pull can run different PostgreSQL, Valkey or Traefik
+    // builds under the same release. The tag must still be an exact version
+    // (16.15, not 16): it is what a reader and an update tool compare. The app
+    // is named by STOKY_VERSION, checked above.
+    const services = Object.entries(compose.services).filter(([name]) => name !== "app");
+    expect(services.map(([name]) => name).sort()).toEqual(["cache", "db", "traefik"]);
+    for (const [name, service] of services) {
+      expect({ name, image: service.image }).toEqual({
+        name,
+        image: expect.stringMatching(/^[a-z0-9./-]+:v?\d+\.\d+[\w.-]*@sha256:[0-9a-f]{64}$/),
+      });
+    }
+  });
+
+  it("closes registration after the first account unless the operator opens it", () => {
+    // Defaulted in Compose, unlike the credentials: an .env written for an
+    // earlier release has no such line, and for that installation — accounts
+    // already exist — first-user means closed, which is the safe answer.
+    // `:-` and not `-`, so an empty value gets the default too.
+    expect(compose.services.app.environment!.STOKY_REGISTRATION).toBe(
+      "${STOKY_REGISTRATION:-first-user}",
+    );
+    // install.sh appends every key example.env declares to an existing .env,
+    // so this line is also what an upgrade through the script writes.
+    expect(template).toMatch(/^STOKY_REGISTRATION=first-user$/m);
+    // Each value the line's comment offers is one the application accepts:
+    // anything else stops it starting.
+    for (const mode of REGISTRATION_MODES) {
+      expect(template).toMatch(new RegExp(`^#\\s+${mode}:`, "m"));
+    }
+  });
+
   it("reports the database healthy only once it accepts TCP connections", () => {
     // The image's init server listens on the unix socket only; a socket probe
     // passes during init and releases the app into a refused connection.
@@ -97,6 +134,68 @@ describe("the downloadable installation", () => {
     expect(compose.services.app.volumes).toContain("uploads:/app/uploads");
   });
 
+  it("bounds Valkey's memory below its container limit and evicts least-recently-used keys", () => {
+    // Valkey ignores the cgroup limit; without --maxmemory the kernel kills it,
+    // and the fail-closed sign-in limiter goes down with it.
+    const cache = compose.services.cache;
+    expect(cache.command).toEqual([
+      "valkey-server",
+      "--maxmemory",
+      "160mb",
+      "--maxmemory-policy",
+      "allkeys-lru",
+    ]);
+    const mebibytes = (size: string, units: Record<string, number>) => {
+      const match = /^(\d+)([a-z]+)$/.exec(size.toLowerCase());
+      expect(match).not.toBeNull();
+      const unit = units[match![2]!];
+      expect(unit).toBeDefined();
+      return Number(match![1]) * unit!;
+    };
+    // Valkey's "mb" is 2^20 bytes and its "m" is 10^6; Compose's "m" is 2^20.
+    const bound = mebibytes(cache.command![2]!, { mb: 1, gb: 1024, m: 1e6 / 2 ** 20, g: 1e9 / 2 ** 20 });
+    const limit = mebibytes(cache.deploy.resources.limits.memory, { m: 1, g: 1024 });
+    // Headroom for the copy-on-write of a background save, which the cgroup
+    // counts and maxmemory does not.
+    expect(bound).toBeLessThanOrEqual(limit * 0.75);
+  });
+
+  it("caps how many processes each service may start, without a CPU limit small hosts would refuse", () => {
+    // A fork loop or a runaway thread pool stops at its container's ceiling
+    // instead of exhausting the host's process table. Ceilings, not sizing:
+    // five to ten times the peak measured under load.
+    const limits = Object.fromEntries(
+      Object.entries(compose.services).map(([name, service]) => [name, service.deploy.resources.limits]),
+    );
+    // Strict: toEqual ignores an undefined value, so a new service without a
+    // pids entry would pass it.
+    expect(Object.fromEntries(Object.entries(limits).map(([name, limit]) => [name, limit.pids]))).toStrictEqual({
+      db: 256,
+      cache: 128,
+      app: 512,
+      traefik: 128,
+    });
+    // Docker rejects a cpus value above the host's core count, so a fixed one
+    // stops the bundle from starting on the small hosts it is meant for.
+    for (const [name, limit] of Object.entries(limits)) {
+      expect({ name, cpus: limit.cpus }).toEqual({ name, cpus: undefined });
+    }
+  });
+
+  it("rotates every service's logs instead of letting them fill the disk", () => {
+    // Docker's json-file default keeps everything, and an unauthenticated
+    // client can add security-log lines; the cap is what bounds the disk.
+    expect(Object.keys(compose.services).sort()).toEqual(["app", "cache", "db", "traefik"]);
+    for (const [name, service] of Object.entries(compose.services)) {
+      // The driver is named beside its options: under a daemon-wide default
+      // such as journald, a bare max-size stops the container from starting.
+      expect({ name, logging: service.logging }).toEqual({
+        name,
+        logging: { driver: "json-file", options: { "max-size": "10m", "max-file": "5" } },
+      });
+    }
+  });
+
   it("routes HTTPS to the application without Docker discovery privileges", () => {
     const traefik = compose.services.traefik;
     expect(traefik.command).toContain("--providers.file.filename=/etc/traefik/dynamic.yml");
@@ -122,5 +221,118 @@ describe("the downloadable installation", () => {
     expect(dynamic.http.services[router.service].loadBalancer.servers).toEqual([
       { url: "http://app:3000" },
     ]);
+  });
+
+  it("closes idle client connections after 60s and keeps the whole-request read at 60s", () => {
+    // Traefik's default idleTimeout holds a quiet keep-alive connection for
+    // 180s. readTimeout covers the request body too, so shortening it would cut
+    // off a 10 MiB receipt on a slow uplink. Exact list: a writeTimeout added
+    // here would cut off streamed tRPC batches, and should be a decision.
+    // Traefik's flag names are case-insensitive, so compare them lowercased.
+    const transport = (compose.services.traefik.command ?? [])
+      .map((flag) => flag.toLowerCase())
+      .filter((flag) => flag.includes(".transport."));
+    expect(transport).toEqual(
+      ["web", "websecure"].flatMap((entrypoint) => [
+        `--entrypoints.${entrypoint}.transport.respondingtimeouts.idletimeout=60s`,
+        `--entrypoints.${entrypoint}.transport.respondingtimeouts.readtimeout=60s`,
+      ]),
+    );
+  });
+
+  it("does not let Traefik contact Traefik Labs", () => {
+    // checkNewVersion defaults to true and reveals the instance's address to the
+    // vendor; sendAnonymousUsage defaults to false and is pinned so a new
+    // default cannot turn it on. Exact list, so a second, contradicting flag
+    // fails too; lowercased because Traefik's flag names are case-insensitive.
+    const global = (compose.services.traefik.command ?? [])
+      .map((flag) => flag.toLowerCase())
+      .filter((flag) => flag.startsWith("--global."));
+    expect(global).toEqual([
+      "--global.checknewversion=false",
+      "--global.sendanonymoususage=false",
+    ]);
+  });
+
+  it("accepts TLS 1.2 or later, and only forward-secret AEAD suites at 1.2", () => {
+    const dynamic = Bun.YAML.parse(
+      readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+    ) as { tls?: { options?: Record<string, unknown> } };
+    // The whole object, so neither sniStrict (a handshake failure for every
+    // client until ACME issues) nor curvePreferences (drops Go's post-quantum
+    // X25519MLKEM768) can arrive unnoticed. Go's defaults, which an absent block
+    // leaves in force, accept ECDHE-RSA-AES128-SHA at TLS 1.2.
+    expect(dynamic.tls?.options).toEqual({
+      default: {
+        minVersion: "VersionTLS12",
+        cipherSuites: [
+          "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+          "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+          "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+          "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+          "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+          "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+        ],
+      },
+    });
+  });
+});
+
+interface StsHeaders {
+  stsSeconds?: number;
+  stsIncludeSubdomains?: boolean;
+  stsPreload?: boolean;
+}
+
+/**
+ * HSTS without `preload`, from both layers, and the same value from each.
+ *
+ * `preload` is the domain owner's consent to the browsers' built-in lists:
+ * hstspreload.org checks the header, not who submits, and leaving the list is
+ * slow. Until 2026-10-12 both Traefik and the app sent it on whatever DOMAIN an
+ * operator chose, so an apex install could be listed by anyone, every
+ * subdomain with it. hstspreload.org asks software that ships HTTPS defaults
+ * not to send it (docs/SECURITY_REVIEW.md §8).
+ *
+ * Both layers are asserted because each reaches someone the other does not:
+ * Traefik's headers middleware replaces the app's value behind the bundle, and
+ * the app's is the only one behind an operator's own proxy.
+ * `e2e/security-headers.spec.ts` pins the exact value the production build
+ * sends; this pins Traefik's, which nothing serves in a test.
+ */
+describe("HSTS", () => {
+  const dynamic = Bun.YAML.parse(
+    readFileSync(join(root, "deploy", compose.configs.traefik_dynamic.file), "utf8"),
+  ) as { http: { middlewares: Record<string, { headers?: StsHeaders }> } };
+  const traefik = dynamic.http.middlewares["stoky-security"].headers!;
+
+  /** The value Traefik's headers middleware builds from its options. */
+  function traefikValue(options: StsHeaders): string {
+    let value = `max-age=${options.stsSeconds}`;
+    if (options.stsIncludeSubdomains) value += "; includeSubDomains";
+    if (options.stsPreload) value += "; preload";
+    return value;
+  }
+
+  async function appValue(): Promise<string | undefined> {
+    const rules = (await nextConfig.headers?.()) ?? [];
+    const all = rules.find((rule) => rule.source === "/:path*");
+    return all?.headers.find((header) => header.key === "Strict-Transport-Security")?.value;
+  }
+
+  it("does not ask for preloading at the bundled proxy", () => {
+    expect(traefik.stsPreload).not.toBe(true);
+    // Two years and subdomains stay: ASVS 5 V3.4.1. docs/INSTALL.md warns what
+    // includeSubDomains does when DOMAIN is an apex.
+    expect(traefik.stsSeconds).toBe(63072000);
+    expect(traefik.stsIncludeSubdomains).toBe(true);
+  });
+
+  it("does not ask for preloading from the app", async () => {
+    expect(await appValue()).toBe("max-age=63072000; includeSubDomains");
+  });
+
+  it("sends the same policy from the app as from Traefik", async () => {
+    expect(await appValue()).toBe(traefikValue(traefik));
   });
 });

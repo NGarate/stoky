@@ -52,7 +52,9 @@ describe("the application images use only the Bun runtime", () => {
   it("derives all stages from the pinned Bun image", () => {
     const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
     const bases = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
-    expect(bases[0]).toMatch(/^oven\/bun:[\d.]+-alpine$/);
+    // By version tag *and* index digest: a tag can be re-pushed, so the tag
+    // alone lets the release build a different base with no change here.
+    expect(bases[0]).toMatch(/^oven\/bun:\d+\.\d+\.\d+-alpine@sha256:[0-9a-f]{64}$/);
     expect(bases.slice(1)).toEqual(["bun", "bun", "bun", "bun"]);
     const instructions = dockerfile.replace(/^#.*$/gm, "");
     expect(instructions).not.toMatch(/npm (?:install|init)\b|apk add[^\n]*nodejs/);
@@ -63,6 +65,138 @@ describe("the application images use only the Bun runtime", () => {
     expect(stage).toContain("COPY --from=builder /opt/prisma/ /opt/prisma/");
     expect(stage).toContain("bun /opt/prisma/node_modules/prisma/build/index.js migrate deploy");
     expect(stage).toContain("&& exec bun server.js");
+  });
+});
+
+/** The builder stage only, up to the next `FROM`. */
+function builderStage(): string {
+  const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
+  const start = dockerfile.search(/^FROM .* AS builder$/m);
+  expect(start).toBeGreaterThan(-1);
+  const rest = dockerfile.slice(start + 1);
+  const end = rest.search(/^FROM /m);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+describe("the Prisma engines are verified against pinned checksums", () => {
+  // Prisma's postinstall downloads the native engines from binaries.prisma.sh
+  // and checks them only against a .sha256 from the same origin; bun.lock's
+  // integrity covers the npm tarballs, not these. The schema engine runs on
+  // every start (`migrate deploy`) and the standalone query engine is loaded
+  // into the server. Measured in a fresh `--target builder` build: these four
+  // paths are every native engine under /opt/prisma and .next/standalone,
+  // which are what the production stage copies.
+  const ENGINE = "linux-musl-openssl-3.0.x";
+  const shipped = [
+    ["SCHEMA", `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-${ENGINE}`],
+    ["QUERY", `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-${ENGINE}.so.node`],
+    ["QUERY", `/opt/prisma/node_modules/prisma/libquery_engine-${ENGINE}.so.node`],
+    ["QUERY", `/app/.next/standalone/node_modules/.prisma/client/libquery_engine-${ENGINE}.so.node`],
+  ];
+
+  function checkInstruction(): string {
+    const stage = builderStage();
+    const start = stage.search(/^RUN printf '%s {2}%s\\n'/m);
+    expect(start).toBeGreaterThan(-1);
+    // A RUN continues while its lines end in a backslash.
+    const lines = stage.slice(start).split("\n");
+    const end = lines.findIndex((line) => !line.endsWith("\\"));
+    return lines.slice(0, end + 1).join("\n");
+  }
+
+  it("pins each engine's SHA-256 in an ARG", () => {
+    const stage = builderStage();
+    expect(stage).toMatch(/^ARG PRISMA_SCHEMA_ENGINE_SHA256=[0-9a-f]{64}$/m);
+    expect(stage).toMatch(/^ARG PRISMA_QUERY_ENGINE_SHA256=[0-9a-f]{64}$/m);
+  });
+
+  it("checks every shipped copy against its pin with sha256sum -c", () => {
+    const run = checkInstruction();
+    const pairs = [...run.matchAll(/"\$\{PRISMA_(\w+)_ENGINE_SHA256\}" (\S+)/g)].map(([, kind, path]) => [
+      kind,
+      path,
+    ]);
+    expect(pairs).toEqual(shipped);
+    expect(run).toContain("| sha256sum -c -");
+  });
+
+  it("fails the build on an engine copy the list does not name", () => {
+    // The text check cannot see a fifth copy (a new binaryTarget, a second
+    // generator output). The count in the same RUN can.
+    const run = checkInstruction();
+    const count = run.match(/find \/opt\/prisma \/app\/\.next\/standalone .*\| wc -l\)" = (\d+)$/m);
+    expect(count?.[1]).toBe(String(shipped.length));
+  });
+
+  it("checks after the engines are staged, so it sees what ships", () => {
+    const stage = builderStage();
+    const check = stage.indexOf(checkInstruction());
+    expect(check).toBeGreaterThan(stage.indexOf("RUN bun run build"));
+    expect(check).toBeGreaterThan(stage.indexOf("stage-runtime-deps.ts prisma /opt/prisma/node_modules"));
+  });
+});
+
+describe("the production image does not depend on the build host's umask", () => {
+  // COPY keeps the context's modes. Built from a checkout made under umask 077
+  // (measured 2026-10-12 with a `git archive` extracted that way), the image
+  // held root-owned 0600 /app/package.json and 0700 /app/public, and
+  // `bun server.js` died with EACCES as the bun user. The builder normalises
+  // what production copies; these pin that it covers all of it, last.
+  const NORMALISE = /^RUN chmod -R a\+rX,go-w ((?:\S+ \\\n\s*|\S+ )*\S+)$/m;
+
+  function normalised(): string[] {
+    const run = builderStage().match(NORMALISE);
+    expect(run).not.toBeNull();
+    return run![1].split(/\s+\\?\s*/).filter((path) => path !== "\\");
+  }
+
+  it("adds read and traverse for everyone and write for no one but root", () => {
+    // Not `u=rwX,go=rX`: BusyBox clears the bits before it tests X, so that
+    // form turned a 0700 executable into 0644 when tried in the base image.
+    expect(builderStage()).toMatch(NORMALISE);
+  });
+
+  it("covers every path production copies out of the builder", () => {
+    const paths = normalised();
+    const sources = [...productionStage().matchAll(/^COPY --from=builder (\S+) /gm)].map(
+      ([, source]) => source.replace(/\/$/, ""),
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(paths.some((path) => source === path || source.startsWith(`${path}/`))).toBe(true);
+    }
+  });
+
+  it("runs after everything else the builder writes", () => {
+    const runs = [...builderStage().matchAll(/^RUN .*/gm)].map(([line]) => line);
+    expect(runs.at(-1)).toMatch(/^RUN chmod -R a\+rX,go-w /);
+  });
+});
+
+describe("the production image ships no demo seed", () => {
+  it("copies only the schema and the migrations out of prisma/", () => {
+    // `prisma/seed.ts` creates an OWNER with the password the README
+    // publishes. A whole-directory COPY is how it got into the image, and any
+    // new file in prisma/ would follow it the same way.
+    const prismaCopy = /^COPY --from=builder \/app\/prisma(\S*) (\S+)$/gm;
+    const copies = [...productionStage().matchAll(prismaCopy)].map(([, source, target]) => [
+      source,
+      target,
+    ]);
+    expect(copies).toEqual([
+      ["/schema.prisma", "./prisma/schema.prisma"],
+      ["/migrations", "./prisma/migrations"],
+    ]);
+  });
+
+  it("fails the build if the seed is present anyway", () => {
+    // The text check above cannot see a seed that arrives some other way (a
+    // standalone trace, a broader COPY of /app). The build assertion can, and
+    // it also proves the migrations landed in prisma/migrations rather than
+    // flattened into prisma/.
+    const stage = productionStage();
+    expect(stage).toContain("test ! -e /app/prisma/seed.ts");
+    expect(stage).toContain("test -f /app/prisma/migrations/migration_lock.toml");
   });
 });
 
@@ -108,5 +242,37 @@ describe("the production compose runs read-only", () => {
     expect(override.name).not.toBe("stoky-release");
     expect(Object.keys(override.services)).toEqual(["app"]);
     expect(Object.keys(override.services.app).sort()).toEqual(["build", "pull_policy"]);
+  });
+});
+
+describe("the build context leaves out local secrets and state", () => {
+  // `COPY . .` in the builder and development stages takes whatever the
+  // context holds, and .dockerignore patterns match from the context root: a
+  // bare `.env*` misses `deploy/.env`, which the documented source build has
+  // the operator fill with the real database password and NEXTAUTH_SECRET.
+  // Measured with sentinels sent through a throwaway build: with root-only
+  // rules, deploy/.env, nested node_modules and .next, `.claude/`,
+  // `.playwright/auth/` and a stray traineddata all arrived.
+  const rules = readFileSync(join(ROOT, ".dockerignore"), "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+
+  it("excludes env files, dependencies and build output at every depth", () => {
+    expect(rules).toContain("**/.env*");
+    expect(rules).toContain("**/node_modules");
+    expect(rules).toContain("**/.next");
+  });
+
+  it("re-includes only the documented example, after the rule it relaxes", () => {
+    // Later rules win, so a negation placed before `**/.env*` would be inert,
+    // and any other negation is a hole someone has to justify.
+    expect(rules.filter((rule) => rule.startsWith("!"))).toEqual(["!.env.example"]);
+    expect(rules.indexOf("!.env.example")).toBeGreaterThan(rules.indexOf("**/.env*"));
+  });
+
+  it("excludes agent and tool state, OCR models and incremental build info", () => {
+    const local = [".claude", ".codex", ".opencode", ".playwright", "*.traineddata", "*.tsbuildinfo"];
+    for (const rule of local) expect(rules).toContain(rule);
   });
 });

@@ -41,7 +41,6 @@ This document provides comprehensive documentation for the OCR pipeline and busi
 - **Purpose**: External API integration for product lookup
 - **Key Functions**:
   - `getProductByBarcode(barcode)`: Fetches product by barcode
-  - `searchProducts(query, limit)`: Searches products by name
   - `extractUnit(quantity)`: Extracts unit from quantity string
 - **Features**:
   - 30-day in-memory caching
@@ -170,12 +169,6 @@ This document provides comprehensive documentation for the OCR pipeline and busi
 - Cache TTL compliance
 - API error handling
 - Network failure handling
-
-**Search Functionality**:
-- Valid search queries
-- Empty results handling
-- Limit parameter respect
-- Result validation
 
 **Data Transformation**:
 - Complete product data transformation

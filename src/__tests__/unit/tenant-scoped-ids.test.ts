@@ -101,10 +101,24 @@ function inputSurface(body: string): string {
  * `productId` is included even though most procedures check it, because the two
  * receipt confirm procedures did not — and that is exactly the asymmetry the
  * review turned on.
+ *
+ * `parentId` (the location tree) was added after the 2026-10-12 review found
+ * `location.create` could lose its parent check with this file still green.
+ * It catches that one; in `location.update`, which also looks up its own
+ * `id`, the existence check satisfies the same pattern, so there the field
+ * check is vacuous and `integration/cross-household.test.ts` is the guard.
+ *
+ * **Not here, deliberately: the primary `id`.** Every update, delete and
+ * getById takes one, and the only pattern that would fit them all — "the body
+ * mentions `householdId`" — is true of nearly every body for unrelated reasons
+ * (the create data, another lookup), so it would pass with the guard gone and
+ * report a pass it had not earned. Primary ids are covered behaviourally, in
+ * `integration/cross-household.test.ts` and the isolation suites beside it.
  */
 const SCOPED: Record<string, RegExp> = {
   storeId: /store\.(findFirst|findUnique)|assertOwnStore|assertStoreIsOurs/,
   locationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
+  parentId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   consumeFromLocationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   fromLocationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
   toLocationId: /storageLocation\.(findFirst|findUnique)|assertOwnLocation/,
@@ -128,11 +142,14 @@ const SCOPED: Record<string, RegExp> = {
  * with the reason. A path with no reason is indistinguishable from one nobody
  * looked at.
  *
- * Note what they have in common: every one is a **read** whose query already
- * carries the household filter, so an id that is not yours narrows to nothing
- * instead of leaking. The rule this file enforces is about ids that get
- * *written*, where no later filter can save you — which is the line all four
- * defects crossed.
+ * Note what they have in common: every one puts the household beside the id
+ * before anything depends on it, so an id that is not yours narrows to nothing
+ * instead of leaking. Not every one is a read: seven are, with the household
+ * filter in their own query, but `product.update` and `product.delete` are
+ * writes that resolve the id by id and `householdId` together before they
+ * write anything. The rule this file enforces is about ids that get *written*
+ * without that lookup, where no later filter can save you — which is the line
+ * all four defects crossed.
  */
 const ALLOWED: Record<string, string> = {
   "product.getById":

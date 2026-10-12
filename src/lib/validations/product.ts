@@ -1,13 +1,23 @@
 import { z } from "zod";
-import { MAX_PAGE_SIZE, MAX_QUANTITY, MAX_SEARCH_LENGTH } from "./bounds";
+import {
+  MAX_BARCODE_LENGTH,
+  MAX_ID_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_QUANTITY,
+  MAX_SEARCH_LENGTH,
+  MAX_UNIT_LENGTH,
+} from "./bounds";
 import { replayable } from "./idempotency";
 
 export const productSchema = z.object({
-  name: z.string().min(1),
-  barcode: z.string().optional(),
-  brand: z.string().optional(),
-  category: z.string().optional(),
-  defaultUnit: z.string().trim().min(1).default("unit"),
+  name: z.string().min(1).max(MAX_NAME_LENGTH),
+  // A length, not the GTIN pattern `productByBarcodeSchema` uses: a shop's own
+  // label or a hand-typed internal code is a barcode somebody keeps too.
+  barcode: z.string().max(MAX_BARCODE_LENGTH).optional(),
+  brand: z.string().max(MAX_NAME_LENGTH).optional(),
+  category: z.string().max(MAX_NAME_LENGTH).optional(),
+  defaultUnit: z.string().trim().min(1).max(MAX_UNIT_LENGTH).default("unit"),
   // `.min(0)` here as well as on update: a minimum of minus three was
   // accepted on create and refused on edit, so the product could be made but
   // not saved again without changing it.
@@ -24,10 +34,10 @@ export const productSchema = z.object({
  * the same reasoning the create form applies before submitting.
  */
 export const updateProductSchema = productSchema.partial().extend({
-  id: z.string(),
-  barcode: z.string().min(1).nullish(),
-  brand: z.string().min(1).nullish(),
-  category: z.string().min(1).nullish(),
+  id: z.string().max(MAX_ID_LENGTH),
+  barcode: z.string().min(1).max(MAX_BARCODE_LENGTH).nullish(),
+  brand: z.string().min(1).max(MAX_NAME_LENGTH).nullish(),
+  category: z.string().min(1).max(MAX_NAME_LENGTH).nullish(),
   minStock: z.number().finite().min(0).max(MAX_QUANTITY).nullish(),
 });
 
@@ -49,7 +59,13 @@ export const productSearchSchema = z.object({
  * entry box is typed on a phone.
  */
 export const productByBarcodeSchema = z.object({
-  barcode: z.string().trim().regex(/^\d{6,14}$/, "Not a product barcode"),
+  // The pattern already caps it at fourteen; the `.max` is there so the
+  // bound is a check every schema walk can see, not a property of a regex.
+  barcode: z
+    .string()
+    .trim()
+    .max(MAX_BARCODE_LENGTH)
+    .regex(/^\d{6,14}$/, "Not a product barcode"),
 });
 
 /**
@@ -65,13 +81,13 @@ export const productByBarcodeSchema = z.object({
 export const resolveScanSchema = productByBarcodeSchema.merge(replayable);
 
 export const productPaginationSchema = z.object({
-  cursor: z.string().optional(),
+  cursor: z.string().max(MAX_ID_LENGTH).optional(),
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
   search: z.string().max(MAX_SEARCH_LENGTH).optional(),
 });
 
 export const productListSchema = z.object({
-  cursor: z.string().optional(),
+  cursor: z.string().max(MAX_ID_LENGTH).optional(),
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
   search: z.string().max(MAX_SEARCH_LENGTH).optional(),
 });

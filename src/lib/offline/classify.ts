@@ -72,7 +72,8 @@ const RECONCILABLE = new Set(["inventory.consumeStock"]);
  *
  * Only `resolveScan` has one: a barcode Open Food Facts does not know is not a
  * failed request, it is one the person must name. Elsewhere a 404 on a queued
- * write is a genuine "gone" and stays permanent.
+ * write is a genuine "gone" and stays permanent. Its 429 — the account's lookup
+ * budget spent — asks the same question; see `classifyMutationError`.
  */
 const REVIEWABLE = new Set(["product.resolveScan"]);
 
@@ -92,6 +93,16 @@ export function classifyMutationError(
 
   if (status === 401) return "auth";
   if (status >= 500) return "transient";
+
+  // A queued scan over its account's Open Food Facts budget
+  // (`productLookupRateLimit`, an hour long) is a question, not a wait. As
+  // "transient" it held the head of the queue — every change behind it — for
+  // eight backed-off attempts, up to two minutes, then landed as "not saved":
+  // the queue does not read Retry-After and gives up long before the hour is
+  // out. Online, the same 429 opens the form with the code filled in; this is
+  // that form, reached from the sync indicator.
+  if (status === 429 && REVIEWABLE.has(path)) return "review";
+
   if (RETRYABLE_STATUSES.has(status)) return "transient";
 
   if (status === 409 && RECONCILABLE.has(path)) return "reconcile";

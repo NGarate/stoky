@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
 import {
   storeSchema,
@@ -91,7 +92,7 @@ export const storeRouter = createTRPCRouter({
    * rule every router here follows.
    */
   delete: adminProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const store = await ctx.db.store.findFirst({
         where: {

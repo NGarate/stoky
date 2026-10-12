@@ -1,10 +1,12 @@
 import { unitConversion, canonicalProduct } from "@/lib/inventory/units";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 import {
   adminProcedure,
   createTRPCRouter,
   householdProcedure,
+  NotHouseholdData,
   writeProcedure,
 } from "../trpc";
 import type { Prisma } from "@prisma/client";
@@ -13,6 +15,8 @@ import {
   type OpenFoodFactsProduct,
 } from "@/server/services/openFoodFacts";
 import { withReplay } from "@/server/trpc/replay";
+import { enforceRateLimit } from "@/server/trpc/throttle";
+import { productLookupRateLimit } from "@/lib/rate-limit";
 import {
   productSchema,
   updateProductSchema,
@@ -21,6 +25,25 @@ import {
   productPaginationSchema,
   resolveScanSchema,
 } from "@/lib/validations/product";
+
+/**
+ * Text from Open Food Facts, cut to the length the edit form's schema takes.
+ *
+ * The bounds in `src/lib/validations/bounds.ts` hold for what a caller sends.
+ * These three columns are not sent by a caller: they are whatever the OFF
+ * entry says, and anyone can edit an OFF entry. Stored past the bound, a long
+ * brand list would make a product the detail form cannot save: the form sends
+ * the name, brand and category back on every edit, and the edit schema would
+ * refuse them.
+ *
+ * Cut in UTF-16 units, which is what `.max()` counts, without leaving half a
+ * surrogate pair behind.
+ */
+function offText(value: string): string {
+  if (value.length <= MAX_NAME_LENGTH) return value;
+  const cut = value.slice(0, MAX_NAME_LENGTH);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
 
 /**
  * The columns an Open Food Facts hit becomes on a new `Product`.
@@ -39,15 +62,40 @@ function productFromOff(
     : null;
 
   return {
-    name: offProduct.product_name || `Product ${barcode}`,
+    name: offText(offProduct.product_name || `Product ${barcode}`),
     barcode,
-    brand: offProduct.brands || null,
-    category,
+    brand: offProduct.brands ? offText(offProduct.brands) : null,
+    category: category === null ? null : offText(category),
     imageUrl: offProduct.image_url || offProduct.image_front_url || null,
     defaultUnit: openFoodFacts.extractUnit(offProduct.quantity),
     openFoodFactsData: offProduct,
     household: { connect: { id: householdId } },
   };
+}
+
+/**
+ * The meter on a lookup that is about to leave for Open Food Facts — handed to
+ * `getProductByBarcode`, which asks it only after the shared cache has missed.
+ * The household's own products never get that far either, so rescanning what a
+ * household already has, or what anyone on the instance has already looked
+ * up, costs nothing.
+ *
+ * Over budget it throws TOO_MANY_REQUESTS with the wait, which the scan page
+ * turns into the manual form and the write queue into the review question
+ * that opens the same form (`classify.ts`). With
+ * Valkey unreachable the request is **not sent** and the lookup answers null,
+ * like an Open Food Facts outage: closed for what the limit protects, because
+ * no uncounted request leaves; not a refusal, because the person lands on the
+ * form an unknown code would have given them anyway.
+ */
+function meterLookup(userId: string): () => Promise<boolean> {
+  return () =>
+    enforceRateLimit(
+      productLookupRateLimit(),
+      userId,
+      "Too many new barcodes looked up. Enter this product by hand, or try again in a little while.",
+      { whenUnavailable: "skip" },
+    );
 }
 
 /**
@@ -128,7 +176,7 @@ export const productRouter = createTRPCRouter({
 
   /** One product with its stock entries, for the detail screen. */
   getById: householdProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const product = await ctx.db.product.findFirst({
         where: {
@@ -246,7 +294,7 @@ export const productRouter = createTRPCRouter({
       const { id, ...data } = input;
 
       return ctx.db.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
         const existingProduct = await tx.product.findFirst({
           where: { id, householdId: ctx.householdId },
         });
@@ -311,7 +359,7 @@ export const productRouter = createTRPCRouter({
    * delete with no undo is the household's decision, not any member's.
    */
   delete: adminProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const existingProduct = await ctx.db.product.findFirst({
         where: {
@@ -410,8 +458,10 @@ export const productRouter = createTRPCRouter({
    * also makes it `writeProcedure`, so a KITCHEN account cannot scan, which
    * matches the capability matrix — a kitchen tablet looks and uses up.
    *
-   * The Open Food Facts call is cached in Valkey for thirty days and fails
-   * open, so a cache outage makes this slower rather than broken (DEBT-3).
+   * The Open Food Facts call is cached in Valkey for thirty days, and a
+   * barcode it does not know for a day. A lookup that misses both is metered
+   * per account (`meterLookup`); with the cache down none can be counted, so
+   * none is sent and the person gets the manual form (DEBT-3).
    */
   scanBarcode: writeProcedure
     .input(productByBarcodeSchema)
@@ -449,7 +499,10 @@ export const productRouter = createTRPCRouter({
       }
 
       // Fetch from Open Food Facts
-      const offProduct = await openFoodFacts.getProductByBarcode(input.barcode);
+      const offProduct = await openFoodFacts.getProductByBarcode(
+        input.barcode,
+        meterLookup(ctx.session.user.id),
+      );
 
       if (!offProduct) {
         return {
@@ -491,7 +544,11 @@ export const productRouter = createTRPCRouter({
    * - **nobody knows it**: `NOT_FOUND`, thrown *before* any key is claimed, so
    *   a retry of the same key can still succeed once OFF recovers — and the
    *   client turns that into the review question (a form prefilled with the
-   *   barcode) rather than a dead end.
+   *   barcode) rather than a dead end;
+   * - **the account has spent its lookup budget** (`meterLookup`):
+   *   `TOO_MANY_REQUESTS`, also before any key is claimed, which the queue
+   *   turns into the same review question: the budget lasts an hour, longer
+   *   than the queue would retry.
    *
    * `scanBarcode` stays NOT_REPLAYABLE on purpose: it fetches OFF *inside* the
    * resolver with no envelope. This one fetches OFF *before* the transaction,
@@ -517,15 +574,22 @@ export const productRouter = createTRPCRouter({
       // Before the transaction, so the envelope never wraps a network call.
       // The service fails open — an outage and an unknown barcode both return
       // null — which is exactly the connected behaviour: both land the person
-      // on the create form.
-      const offProduct = await openFoodFacts.getProductByBarcode(input.barcode);
+      // on the create form. The meter's TOO_MANY_REQUESTS is thrown before any
+      // key is claimed too, so naming the product later is not a reused key.
+      const offProduct = await openFoodFacts.getProductByBarcode(
+        input.barcode,
+        meterLookup(ctx.session.user.id),
+      );
 
       if (!offProduct) {
         // Thrown before withReplay claims the key, so a retry after OFF
         // recovers is not refused as a reused key.
+        // Marked, so the security log does not record an unknown barcode as
+        // a household lookup refused (`householdProcedure`).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Barcode not found",
+          cause: new NotHouseholdData(),
         });
       }
 

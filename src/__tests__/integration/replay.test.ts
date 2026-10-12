@@ -400,6 +400,54 @@ describe("what the replay table keeps", () => {
     await expectCode(api.makeLocation(call), "NOT_FOUND");
   });
 
+  /**
+   * OFFLINE-1. A device whose reply was lost resends the same key whenever it
+   * is next opened — a month later is ordinary for a holiday or a tablet in a
+   * drawer. Meanwhile any other replayable call from the account sweeps
+   * whatever has expired. If the claim is gone by then, the resend claims
+   * afresh and the change lands twice.
+   *
+   * The record is aged by moving its dates back rather than by mocking the
+   * clock, so the retention applied at insert and the sweep's comparison both
+   * run unmodified. Set the retention back to seven days and this goes red:
+   * the sweep takes the claim and the resend writes a second row.
+   */
+  it("still recognises a change applied thirty days ago", async () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const api = await caller(A);
+    const call = {
+      idempotencyKey: freshKey(),
+      composedByUserId: A.userId,
+      name: WRITTEN_NAME,
+    };
+
+    const first = await api.makeLocation(call);
+
+    const record = await prisma.mutationReplay.findUniqueOrThrow({
+      where: { userId_key: { userId: A.userId, key: call.idempotencyKey } },
+    });
+    await prisma.mutationReplay.update({
+      where: { userId_key: { userId: A.userId, key: call.idempotencyKey } },
+      data: {
+        createdAt: new Date(record.createdAt.getTime() - 30 * DAY_MS),
+        expiresAt: new Date(record.expiresAt.getTime() - 30 * DAY_MS),
+      },
+    });
+
+    // Another device on the same account writes in the meantime, which is
+    // what runs the sweep before the stale resend arrives.
+    await api.makeLocation({
+      idempotencyKey: freshKey(),
+      composedByUserId: A.userId,
+      name: "Otro dispositivo",
+    });
+
+    const resent = await api.makeLocation(call);
+
+    expect(resent.id).toBe(first.id);
+    expect(await locationCount(A.householdId)).toBe(1);
+  });
+
   it("clears its own expired rows without a scheduler", async () => {
     const api = await caller(A);
 

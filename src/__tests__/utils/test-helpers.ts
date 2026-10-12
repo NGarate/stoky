@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import * as argon2 from "argon2";
+import { hashPassword } from "@/lib/auth/password-hash";
 import type { User, Household, HouseholdRole, Product, StockEntry, StorageLocation } from "@prisma/client";
 
 /**
@@ -48,17 +48,7 @@ export interface TestLocationData {
  * Creates a test user with optional household
  */
 export async function createTestUser(data: TestUserData): Promise<User> {
-  const passwordHash = data.password 
-    ? await argon2.hash(data.password, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      })
-    : await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      });
+  const passwordHash = await hashPassword(data.password ?? "TestPassword123!");
 
   return prisma.user.create({
     data: {

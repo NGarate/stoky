@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from "bun:test";
 import { prisma } from "@/lib/prisma";
-import { processReceiptOcr, terminateWorker } from "@/server/services/ocr";
+import {
+  processReceiptOcr,
+  sharedWorker,
+  terminateWorker,
+  timedRecogniser,
+} from "@/server/services/ocr";
 import { parseReceiptText, saveParsedItems } from "@/server/services/receiptParser";
 import { matchReceiptItems } from "@/server/services/productMatcher";
+import { failInterruptedReceipts } from "@/server/services/receipt-recovery";
 import { ReceiptStatus, MatchStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, rm } from "node:fs/promises";
@@ -390,6 +396,45 @@ Producto completamente diferente xyz123 5,00
       expect(updated?.rawOcrText).toBe("LECHE 1,25\n");
     });
 
+    it("moves to FAILED when recognition runs out of time", async () => {
+      const receiptDir = join(testDir, randomUUID());
+      await mkdir(receiptDir, { recursive: true });
+      cleanupDirs.push(receiptDir);
+
+      const imagePath = join(receiptDir, "receipt.png");
+      await writeFile(imagePath, pngOf(60, 40));
+
+      const receipt = await prisma.receipt.create({
+        data: {
+          imagePath,
+          status: ReceiptStatus.UPLOADING,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+
+      // The image tesseract cannot finish: a worker that never answers.
+      let terminations = 0;
+      const stuck = sharedWorker(async () => ({
+        recognize: () => new Promise<{ data: { text: string } }>(() => {}),
+        async terminate() {
+          terminations += 1;
+        },
+      }));
+      const ocr = processReceiptOcr(receipt.id, timedRecogniser(stuck, () => 50)).then(
+        () => "PARSED",
+        (error: unknown) => (error as Error).message,
+      );
+      const guard = new Promise((resolve) => setTimeout(() => resolve("still waiting"), 3000));
+
+      expect(await Promise.race([ocr, guard])).toBe("OCR did not finish within 50 ms");
+      expect(terminations).toBe(1);
+      const updated = await prisma.receipt.findUnique({
+        where: { id: receipt.id },
+      });
+      expect(updated?.status).toBe(ReceiptStatus.FAILED);
+    });
+
     it("should mark receipt as FAILED on OCR error", async () => {
       const receiptDir = join(testDir, randomUUID());
       await mkdir(receiptDir, { recursive: true });
@@ -646,6 +691,57 @@ Leche 1,25
       await saveParsedItems(receipt.id, parsed);
 
       expect(parsed.storeName).toBeDefined();
+    });
+  });
+
+  describe("Restart recovery", () => {
+    // Dated well before anything else in the test database, so the sweep —
+    // which is not scoped to a household, because a restart is not — cannot
+    // reach another test's receipts, and the count below is this test's own.
+    const startedAt = new Date("2001-01-01T00:00:00Z");
+    const before = new Date("2000-06-01T00:00:00Z");
+    const after = new Date("2001-01-01T00:00:01Z");
+
+    async function receiptIn(status: ReceiptStatus, createdAt: Date) {
+      return prisma.receipt.create({
+        data: {
+          imagePath: join(testDir, `${randomUUID()}.jpg`),
+          status,
+          createdAt,
+          householdId: testHouseholdId,
+          uploadedBy: testUserId,
+        },
+      });
+    }
+
+    it("fails the receipts a previous process left in flight, and nothing else", async () => {
+      const stranded = await Promise.all([
+        receiptIn(ReceiptStatus.UPLOADING, before),
+        receiptIn(ReceiptStatus.PROCESSING, before),
+        receiptIn(ReceiptStatus.PARSED, before),
+      ]);
+      const settled = await Promise.all(
+        [
+          ReceiptStatus.NEEDS_REVIEW,
+          ReceiptStatus.CONFIRMED,
+          ReceiptStatus.APPLIED,
+        ].map((status) => receiptIn(status, before)),
+      );
+      // This process's own: created after it started, still being read.
+      const current = await receiptIn(ReceiptStatus.PROCESSING, after);
+
+      const failed = await failInterruptedReceipts(startedAt);
+
+      expect(failed).toBe(3);
+      const statusOf = async (id: string) =>
+        (await prisma.receipt.findUniqueOrThrow({ where: { id } })).status;
+      for (const receipt of stranded) {
+        expect(await statusOf(receipt.id)).toBe(ReceiptStatus.FAILED);
+      }
+      for (const receipt of settled) {
+        expect(await statusOf(receipt.id)).toBe(receipt.status);
+      }
+      expect(await statusOf(current.id)).toBe(ReceiptStatus.PROCESSING);
     });
   });
 });

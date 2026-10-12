@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { MAX_TRPC_BODY_BYTES } from "./src/server/http/body-limit";
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -16,18 +17,105 @@ const withNextIntl = createNextIntlPlugin();
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // The barcode scanner is the only feature needing a device. Everything off.
+  // `same-origin`: a request to another origin carries no Referer at all. The
+  // former `strict-origin-when-cross-origin` still sent the instance's origin
+  // — its private hostname — to Open Food Facts with every product photograph.
+  // (Its outbound links were already `rel=noreferrer`.) No other origin Stoky
+  // touches needs to know where the request came from, so the page-wide
+  // policy, not one attribute per element, is what keeps the next
+  // cross-origin request quiet too.
+  //
+  // **Not `no-referrer`**, which looks stricter and breaks the Server
+  // Actions: under it the Fetch standard sends `Origin: null` on *every* POST,
+  // same-origin ones included, and Next aborts an action whose Origin does not
+  // match the host. Measured: with it, the no-JS screen choice
+  // (`e2e/screen-choice.spec.ts`) fails with "does not match `origin` header
+  // with value `null` … Aborting the action". `same-origin` nulls the Origin
+  // only on a cross-origin POST, which Stoky's pages never make.
+  //
+  // The product `<img>` carries its own `no-referrer` as well, for an
+  // operator whose proxy rewrites this header.
+  { key: "Referrer-Policy", value: "same-origin" },
+  // **A deny list, not "everything off".** The header has no default-deny: a
+  // feature it does not name keeps its own default, which for most of the
+  // powerful ones is 'self'. So it names every one Stoky has no use for.
+  //
+  // `camera=(self)` is the one grant, and must stay: the barcode scanner's
+  // getUserMedia and its torch (`applyConstraints` on the same track) both
+  // need it. Taken away, the scanner fails with a NotAllowedError that
+  // Scanner.tsx reports as the person having refused the camera — which is
+  // how it would be misdiagnosed.
+  //
+  // `browsing-topics` replaced `interest-cohort`, the token of FLoC, which
+  // Chrome retired in favour of Topics — so the old denial guarded an API
+  // that is gone and left its successor at the default.
+  //
+  // Only tokens Chromium recognises: an unknown one is ignored, with an
+  // "Unrecognized feature" error on the console of every page, and
+  // `e2e/security-headers.spec.ts` goes red on that. It is why `bluetooth`
+  // is absent: Chromium 151 does not recognise it (measured), and Web
+  // Bluetooth asks the person per device anyway.
+  //
+  // Left unset on purpose: `publickey-credentials-get`, which passkey sign-in
+  // would need, and `fullscreen` / `picture-in-picture`, which nothing uses
+  // and nothing gains by denying. A feature that comes to
+  // need one of the denied ones — a wake lock for /kitchen, say — takes it
+  // off this list in the same change.
   {
     key: "Permissions-Policy",
-    value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
+    value: [
+      "camera=(self)",
+      "microphone=()",
+      "geolocation=()",
+      "browsing-topics=()",
+      "payment=()",
+      "usb=()",
+      "serial=()",
+      "hid=()",
+      "midi=()",
+      "display-capture=()",
+      "screen-wake-lock=()",
+      "xr-spatial-tracking=()",
+      "accelerometer=()",
+      "gyroscope=()",
+      "magnetometer=()",
+      "publickey-credentials-create=()",
+      "otp-credentials=()",
+      "idle-detection=()",
+      "local-fonts=()",
+      "compute-pressure=()",
+    ].join(", "),
   },
   // Two years, matching the Traefik middleware. Only applies over HTTPS.
+  // No `preload`: that token is the domain owner's consent to the browsers'
+  // built-in lists, which anyone may then submit the domain to, and
+  // hstspreload.org asks software shipping HTTPS defaults not to send it. It is
+  // the operator's decision, made at their own proxy. `includeSubDomains`
+  // stays (ASVS 5 V3.4.1); docs/INSTALL.md warns what it does on an apex.
   {
     key: "Strict-Transport-Security",
-    value: "max-age=63072000; includeSubDomains; preload",
+    value: "max-age=63072000; includeSubDomains",
   },
   { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+  // A page on another origin that opens Stoky in a window keeps no handle to
+  // it: it cannot navigate Stoky's window to a look-alike sign-in page, or
+  // time its navigations. `same-origin` rather than `same-origin-allow-popups`
+  // because Stoky opens no popup that needs a way back — its only new windows
+  // are the Open Food Facts links, `rel=noreferrer`. Browsers apply it only on
+  // a secure context: HTTPS, or the loopback address.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // No other origin may load a Stoky response as an image, script or other
+  // subresource. Every subresource Stoky's own pages load is same-origin.
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+  // **No Cross-Origin-Embedder-Policy, deliberately.** It is the third header
+  // usually set with these two, and all it adds is cross-origin isolation —
+  // SharedArrayBuffer and precise timers, which Stoky does not use. Its cost
+  // is the product photographs: the product page loads them from
+  // images.openfoodfacts.org as a plain `<img>`, which `require-corp` refuses
+  // because that host sends no CORP. It does answer CORS, so `crossorigin` or
+  // `credentialless` would let them through, but only for as long as a host
+  // that is not ours keeps doing so, for a capability nothing here needs.
+  // `e2e/security-headers.spec.ts` goes red if this is added.
 ];
 
 const nextConfig: NextConfig = {
@@ -52,14 +140,17 @@ const nextConfig: NextConfig = {
      * not be reached and the router's own size check could never fire. See
      * `src/lib/validations/receipt.ts` for the measurements.
      *
-     * 15 MiB: 13.98 MB of base64 plus the JSON envelope, with headroom. Not
-     * a number to raise casually — it is the ceiling on what an unauthenticated
-     * caller can make this server hold while it parses a body, which is why it
-     * is set to what the feature needs rather than to something comfortable.
-     * `upload-body-limit.test.ts` fails if it drops below what the feature
-     * needs.
+     * **This is not the bound on what a caller can make the server hold**,
+     * though it was described as one. Next applies it only while cloning the
+     * body for the proxy, and the proxy's matcher skips any request labelled a
+     * prefetch — one header, whatever the method. The bound that always holds
+     * is in the API routes themselves (`src/server/http/body-limit.ts`), and
+     * this is the same number, imported, so the two layers cannot disagree
+     * about what a legitimate upload weighs. Over it, the proxy truncates and
+     * the route answers 413. `upload-body-limit.test.ts` fails if the number
+     * drops below what the feature needs or the two stop being one.
      */
-    proxyClientMaxBodySize: 15 * 1024 * 1024,
+    proxyClientMaxBodySize: MAX_TRPC_BODY_BYTES,
   },
 
   /**
@@ -85,17 +176,37 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["tesseract.js"],
 
   /**
+   * The Image Optimization endpoint is off: `/_next/image` answers 404.
+   *
+   * Nothing renders `next/image`, but that never made the endpoint
+   * unreachable, though this file and a unit test both said so until
+   * 2026-10-12. Next 16 registers `/_next/image` whatever the source imports,
+   * and with the defaults it accepted any same-origin path with no query —
+   * `/dashboard`, `/api/trpc/…` — and fetched it with an internal request
+   * through the whole router: the proxy, the root layout, `auth()` and a
+   * database lookup, for anyone, on a route no limit or test watched. When
+   * the answer sniffed as a raster image it was sent back and cached under
+   * `.next/cache/images`. Without `sharp` nothing failed: Next catches the
+   * missing module and serves the original bytes (SECURITY_REVIEW §8).
+   *
+   * `unoptimized` is Next's one documented switch for this, and the only
+   * condition besides a custom loader under which the server answers the
+   * route with a 404 before reading a parameter. `next/image` would still
+   * work with it, serving the source file as it is.
+   */
+  images: { unoptimized: true },
+
+  /**
    * `sharp` is not shipped, because nothing can reach it.
    *
    * Next traces it into the standalone output whenever it is installed — 19 MB
    * of native image library — for one reason: the built-in Image Optimization
-   * endpoint, `/_next/image`, which only exists for `next/image`. This
-   * application does not use `next/image` anywhere, has no `images` config,
-   * and since the Bun migration no longer uses `sharp` itself: the receipt
-   * pipeline is `Bun.Image`.
+   * endpoint, `/_next/image`. That endpoint is switched off above, and since
+   * the Bun migration the application no longer uses `sharp` itself: the
+   * receipt pipeline is `Bun.Image`.
    *
    * The production target is treated as the security boundary, and a native
-   * decoder sitting in it for a route that cannot be reached is surface with
+   * decoder sitting in it for a route that is switched off is surface with
    * no purpose. `sharp` stays installed for the test suite, which uses it to
    * build the decompression bomb that proves the pixel bound — a fixture
    * nobody should commit — and that is why it is a devDependency now.
@@ -109,9 +220,9 @@ const nextConfig: NextConfig = {
    * to reach it.
    *
    * The condition that makes this safe is asserted rather than remembered:
-   * `src/__tests__/unit/next-image.test.ts` fails if anything imports
-   * `next/image`, because the optimiser would then need the library this line
-   * removes.
+   * `src/__tests__/unit/next-image.test.ts` fails if `images.unoptimized` is
+   * not `true`, and `e2e/security-headers.spec.ts` asks the production build
+   * for `/_next/image` and expects the 404.
    */
   outputFileTracingExcludes: {
     "*": ["node_modules/sharp/**", "node_modules/@img/**"],

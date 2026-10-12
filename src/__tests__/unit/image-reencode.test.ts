@@ -1,5 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { MAX_PIXELS, readImageMetadata, reencodeAsJpeg } from "@/server/services/image";
+import {
+  MAX_LONG_EDGE,
+  MAX_PIXELS,
+  reencodeAsJpeg,
+  stripJpegMetadata,
+} from "@/server/services/image";
 import { withExif } from "../utils/exif";
 import { pngClaiming, pngOf } from "../utils/png";
 import {
@@ -8,6 +13,7 @@ import {
   hasExif,
   isJpeg,
   jpegDimensions,
+  jpegSegments,
 } from "../utils/jpeg";
 
 /**
@@ -209,10 +215,231 @@ describe("the pixel bound", () => {
   it("still accepts a photograph a phone would actually take", async () => {
     // The half that stops the bound from being set by lowering it to nothing.
     // 4000 × 3000 is 12 megapixels, which is an ordinary camera.
+    //
+    // Both sides now, read from the frame header, where this used to check
+    // the width alone through a decoder: since the long-edge bound below, 4000
+    // is also exactly where resizing starts, so this is the photograph that
+    // must come through *whole* — accepted, and at its own size.
     const twelveMegapixels = pngOf(4000, 3000);
 
     const output = await reencodeAsJpeg(twelveMegapixels);
 
-    expect((await readImageMetadata(output)).width).toBe(4000);
+    expect(jpegDimensions(output)).toEqual({ width: 4000, height: 3000 });
+  });
+});
+
+describe("the long edge", () => {
+  // `MAX_PIXELS` bounds what is decoded. This bounds what is kept: what goes to
+  // disk, and what the OCR worker is later handed whole. Without it a 50 MP
+  // photograph — or a noise image built to be expensive — is stored and
+  // recognised at full size.
+
+  it("is where the module says it is", () => {
+    // 4000 is the long edge of a 12 MP phone photograph. Lowering it starts
+    // resizing ordinary photographs, which is a decision rather than a tidy-up.
+    expect(MAX_LONG_EDGE).toBe(4000);
+  });
+
+  it("brings a wider image down to it, keeping the proportions", async () => {
+    // 6000 × 1000 → 4000 × 666.7, rounded. A box that stretched to fit
+    // (`fit: "fill"`) would come out 4000 × 4000; one that ignored the bound
+    // would come out as it went in.
+    const output = await reencodeAsJpeg(pngOf(6000, 1000));
+
+    expect(jpegDimensions(output)).toEqual({ width: 4000, height: 667 });
+  });
+
+  it("brings a taller one down by its height, which is the long receipt", async () => {
+    // A receipt photographed end to end is the shape this is most likely to
+    // meet, and the edge that is long is the height.
+    const output = await reencodeAsJpeg(pngOf(1000, 6000));
+
+    expect(jpegDimensions(output)).toEqual({ width: 667, height: 4000 });
+  });
+
+  it("leaves an image already inside it at its own size", async () => {
+    // `withoutEnlargement`. Without it a box is a target, and this comes out
+    // 4000 × 3000 — larger on disk and in OCR than what was sent.
+    const output = await reencodeAsJpeg(pngOf(1200, 900));
+
+    expect(jpegDimensions(output)).toEqual({ width: 1200, height: 900 });
+  });
+});
+
+/**
+ * A JPEG with one more segment spliced in straight after `SOI` — where a
+ * camera, an editor or anybody building a carrier by hand puts it.
+ */
+function withSegment(jpeg: Buffer, marker: number, payload: Buffer): Buffer {
+  const length = Buffer.alloc(2);
+  length.writeUInt16BE(payload.length + 2);
+  return Buffer.concat([
+    jpeg.subarray(0, 2),
+    Buffer.from([0xff, marker]),
+    length,
+    payload,
+    jpeg.subarray(2),
+  ]);
+}
+
+const APP0 = 0xe0;
+const APP1 = 0xe1;
+const APP2 = 0xe2;
+const COM = 0xfe;
+
+/** Text no encoder would write, so finding it in the output means it was copied. */
+const CARRIED = "<script>alert('STOKY-ICC-MARKER')</script>";
+
+/**
+ * An `APP2` `ICC_PROFILE` segment the way the audit built it: a 128-byte ICC
+ * header a parser accepts (`acsp` at offset 36), followed by a caller's text.
+ * `Bun.Image` copied it into its output byte for byte.
+ */
+function iccProfileCarrying(text: string): Buffer {
+  const header = Buffer.alloc(128);
+  const body = Buffer.from(text.repeat(50), "latin1");
+  header.writeUInt32BE(128 + body.length, 0);
+  header.write("mntr", 12, "latin1");
+  header.write("RGB ", 16, "latin1");
+  header.write("XYZ ", 20, "latin1");
+  header.write("acsp", 36, "latin1");
+  return Buffer.concat([
+    Buffer.from("ICC_PROFILE\0", "latin1"),
+    Buffer.from([1, 1]), // chunk 1 of 1
+    header,
+    body,
+  ]);
+}
+
+const markersOf = (jpeg: Buffer) => jpegSegments(jpeg).map((segment) => segment.marker);
+
+describe("what is stored besides the picture", () => {
+  // The re-encode is what makes a stored receipt "an image this server
+  // produced". `Bun.Image` keeps the source's colour profile through it on
+  // purpose, so without a walk over its output a caller's bytes reached the
+  // uploads volume verbatim inside an ICC segment.
+
+  async function carrier(): Promise<Buffer> {
+    return withSegment(await reencodeAsJpeg(pngOf(64, 48)), APP2, iccProfileCarrying(CARRIED));
+  }
+
+  it("really is there to begin with, or the test below proves nothing", async () => {
+    const source = await carrier();
+
+    expect(markersOf(source)).toContain(APP2);
+    expect(source.toString("latin1")).toContain(CARRIED);
+    // And it is still a picture the decoder accepts, profile and all.
+    expect((await new Bun.Image(source).metadata()).width).toBe(64);
+  });
+
+  it("is gone after the re-encode: no ICC profile, no application segment but JFIF", async () => {
+    const output = await reencodeAsJpeg(await carrier());
+    const markers = markersOf(output);
+
+    expect(markers).not.toContain(APP2);
+    expect(markers.filter((marker) => marker >= 0xe0 && marker <= 0xef)).toEqual([APP0]);
+    expect(markers).not.toContain(COM);
+    expect(output.toString("latin1")).not.toContain("STOKY-ICC-MARKER");
+    expect(output.toString("latin1")).not.toContain("ICC_PROFILE");
+  });
+
+  it("leaves the picture itself alone", async () => {
+    // Stripping that broke the file would pass the test above.
+    const output = await reencodeAsJpeg(await carrier());
+
+    expect(jpegDimensions(output)).toEqual({ width: 64, height: 48 });
+    expect(await new Bun.Image(output).metadata()).toMatchObject({
+      width: 64,
+      height: 48,
+      format: "jpeg",
+    });
+    expect(output.subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+  });
+});
+
+describe("stripJpegMetadata on its own", () => {
+  // `reencodeAsJpeg` only ever hands it the encoder's output. These are the
+  // cases that output never contains, which is why they are built by hand.
+
+  async function plain(): Promise<Buffer> {
+    return reencodeAsJpeg(pngOf(16, 16));
+  }
+
+  it("keeps the encoder's output byte for byte when there was nothing to drop", async () => {
+    // Straight from `Bun.Image`, not through `reencodeAsJpeg`: what the walk
+    // is handed in production. A strip that also dropped a table the decoder
+    // needs would fail here before it failed anywhere else.
+    const jpeg = Buffer.from(await new Bun.Image(pngOf(16, 16)).jpeg({ quality: 90 }).toBuffer());
+
+    expect(stripJpegMetadata(jpeg).equals(jpeg)).toBe(true);
+  });
+
+  it("drops EXIF, XMP and comments as well as colour profiles", async () => {
+    let jpeg = await plain();
+    jpeg = withSegment(jpeg, COM, Buffer.from("a comment", "latin1"));
+    jpeg = withSegment(jpeg, APP1, Buffer.from("http://ns.adobe.com/xap/1.0/\0<x/>", "latin1"));
+    jpeg = withSegment(jpeg, 0xee, Buffer.from("Adobe\0\0\0\0\0\0\0", "latin1"));
+
+    expect(markersOf(stripJpegMetadata(jpeg))).toEqual(markersOf(await plain()));
+  });
+
+  it("drops a JFIF header carrying a thumbnail, and an APP0 that is not JFIF", async () => {
+    const clean = await plain();
+    // The encoder's own APP0 is first; take it out so the spliced ones are the
+    // only candidates.
+    const [first] = jpegSegments(clean);
+    expect(first?.marker).toBe(APP0);
+    const withoutJfif = Buffer.concat([
+      clean.subarray(0, 2),
+      clean.subarray((first?.start ?? 0) + (first?.length ?? 0)),
+    ]);
+
+    const thumbnail = Buffer.concat([
+      Buffer.from("JFIF\0", "latin1"),
+      Buffer.from([1, 1, 0, 0, 1, 0, 1, 1, 1]), // a 1 × 1 thumbnail…
+      Buffer.from([255, 0, 0]), // …of one red pixel
+    ]);
+    const notJfif = Buffer.from("JFXX\0\x10", "latin1");
+
+    expect(markersOf(stripJpegMetadata(withSegment(withoutJfif, APP0, thumbnail)))).not.toContain(
+      APP0,
+    );
+    expect(markersOf(stripJpegMetadata(withSegment(withoutJfif, APP0, notJfif)))).not.toContain(
+      APP0,
+    );
+  });
+
+  it("refuses something that is not a JPEG", () => {
+    expect(() => stripJpegMetadata(pngOf(4, 4))).toThrow(/Malformed JPEG: no SOI/);
+  });
+
+  it("refuses a truncated one", async () => {
+    const jpeg = await plain();
+
+    expect(() => stripJpegMetadata(jpeg.subarray(0, jpeg.length - 1))).toThrow(/no EOI/);
+    // Cut inside the tables, then given an EOI back so only the structure is wrong.
+    const cut = Buffer.concat([jpeg.subarray(0, 30), Buffer.from([0xff, 0xd9])]);
+    expect(() => stripJpegMetadata(cut)).toThrow(/Malformed JPEG/);
+  });
+
+  it("refuses a segment whose length runs past the end", async () => {
+    const jpeg = Buffer.from(await plain());
+    // The first segment's length, pointed past the end of the file.
+    jpeg.writeUInt16BE(0xfff0, 4);
+
+    expect(() => stripJpegMetadata(jpeg)).toThrow(/runs past the end/);
+  });
+
+  it("refuses a marker it was not written to expect, rather than passing it through", async () => {
+    // DAC, the arithmetic-coding table: legal JPEG, and nothing this encoder writes.
+    const jpeg = withSegment(await plain(), 0xcc, Buffer.from([0x00, 0x10]));
+
+    expect(() => stripJpegMetadata(jpeg)).toThrow(/unexpected marker 0xcc/);
+  });
+
+  it("refuses a scan with no frame header before it", () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 0x00, 0xff, 0xd9]);
+
+    expect(() => stripJpegMetadata(jpeg)).toThrow(/scan before any frame/);
   });
 });

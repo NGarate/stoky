@@ -18,8 +18,36 @@ Report privately through GitHub's security advisories:
 
 **<https://github.com/NGarate/stoky/security/advisories/new>**
 
-Please do not open a public issue for a security problem, and do not post
-details in a discussion or a pull request.
+It needs a GitHub account, and so does the fallback below: no email address or
+other channel is published for someone without one, which is a gap, not a
+policy. Please do not open a public issue for a security problem, and do not
+post details in a discussion or a pull request. The issue chooser carries the
+same link (`.github/ISSUE_TEMPLATE/config.yml`) for anyone who starts there.
+
+**If the form is not offered to you.** GitHub offers it to people outside the
+project only while the repository's private vulnerability reporting setting is
+on, and the Security tab then shows a **Report a vulnerability** button that
+opens it. `gh api repos/NGarate/stoky/private-vulnerability-reporting` answers
+`{"enabled":true}` when it is; on 2026-10-12 it answered `{"enabled":false}`,
+and turning it on is a repository setting only the owner can change. If there
+is no button, or the link does not open the form, open an ordinary
+[issue](https://github.com/NGarate/stoky/issues/new) that says only that you
+have a security report and asks for a private channel. Leave out every detail:
+not the affected feature, the version, or the kind of weakness. A public issue
+is read by everyone running the same image, and there is no way for us to patch
+their servers first.
+
+**What is in scope.** This project's code, the container image it publishes,
+and the release bundle (`deploy/` and the files attached to a release). Someone
+else's Stoky installation is not: a weakness that comes from how one instance
+is configured goes to whoever runs it, and a weakness in Stoky itself comes here
+whatever instance you found it on. A defect in an upstream component (Bun,
+Next.js, PostgreSQL, Valkey, Traefik) belongs to that project, unless the way
+Stoky uses or ships it is what makes it exploitable.
+
+**Which version.** Only the latest published alpha is supported (see
+[Supported versions](#supported-versions)); please check a finding against it
+before reporting. A report against `master` is welcome too.
 
 Useful things to include: the version or image digest you are running, whether
 the instance is exposed to the internet, what an attacker would gain, and the
@@ -29,8 +57,9 @@ smallest reproduction you can manage.
 no service-level agreement, no on-call rotation, and no bug bounty — no payment
 of any kind. A realistic expectation is an acknowledgement within a couple of
 weeks and a fix on a timescale that depends on severity and on how much time is
-available. If a report goes unanswered for a month, please assume it was missed
-and comment on the advisory again.
+available. These are best-effort intentions, not commitments. If a report goes
+unanswered for a month, please assume it was missed and comment on the advisory
+(or the contact issue) again.
 
 Because there is no central instance, a fix reaches operators only when they
 rebuild or re-pull the image. Advisories will be published on the repository
@@ -61,27 +90,99 @@ Verified against the files named in each row.
 
 ### Container and runtime — `Dockerfile`
 
-- Multi-stage build. The compiler toolchain needed for `argon2` and `@swc/core`
-  stays in the `deps` stage and never reaches the production image.
-- All application image stages use the pinned `oven/bun` Alpine image. Bun
-  installs dependencies, builds Next, runs migrations and serves the app.
+- Multi-stage build. The compiler toolchain (`python3 make g++`) stays in the
+  `deps` stage and never reaches the production image. Nothing needs it today:
+  it is the fallback for `argon2`, whose `node-gyp-build` loads the shipped
+  musl prebuild (a clean `--target deps` build on 2026-10-12 left no
+  `node_modules/argon2/build`). Until then this line also named `@swc/core`,
+  which compiles nothing.
+- All application image stages use the `oven/bun` Alpine image, pinned by
+  version and digest. Bun installs dependencies, builds Next, runs migrations
+  and serves the app.
   The upstream `node` compatibility command resolves to the Bun executable;
   no separate Node.js runtime, npm or npx is installed.
 - The production image runs as `USER bun`, not root. Its UID/GID is 1000,
   matching the former `node` account so existing upload volumes remain writable.
+  Everything else under `/app` and `/opt` is root-owned and read-only to it.
+- The image does not depend on the build host's `umask`. `COPY` keeps the
+  context's modes, so a source build from a checkout made under `umask 077`
+  used to ship root-owned `0600` files and `0700` directories (`package.json`,
+  `public/`, `prisma/`) that `bun` could not read, and the server died with
+  `EACCES` at start. The builder's last step runs
+  `chmod -R a+rX,go-w` over every path production copies: readable and
+  traversable by all, writable by root alone, executables kept executable.
+  `src/__tests__/unit/image-posture.test.ts` fails if a production `COPY` reads
+  a builder path the step does not cover, or if the step stops being last.
 - `dumb-init` is PID 1, so signals are forwarded and zombies reaped.
 - The Prisma CLI and its dependency tree are copied into `/opt/prisma` from
   the same frozen Bun installation used to build the application. There is
   no second package resolution or npm installation. Startup runs that bundled
   CLI through Bun and does not download packages or OCR language data.
+- The native Prisma engines are the one install-time download that
+  `bun.lock` does not cover: the trusted `@prisma/engines` postinstall fetches
+  them from `binaries.prisma.sh` and checks them only against a `.sha256` from
+  the same origin. The build checks them against SHA-256 values pinned in the
+  `Dockerfile`, as it does the OCR model: the schema engine `migrate deploy`
+  runs, and the three copies of the query engine, including the one in the
+  standalone output that the server loads. It also fails if a native engine
+  appears under `/opt/prisma` or the standalone output at a path it does not
+  check. `src/__tests__/unit/image-posture.test.ts` fails if a path or a pin
+  is dropped. The values are for `linux-musl-openssl-3.0.x` on amd64, the only
+  image published, and change whenever a Prisma upgrade changes the engines
+  ([Releasing](docs/RELEASING.md#upgrading-prisma)).
+- From `prisma/`, the production image copies only `schema.prisma` and
+  `migrations/`, which is what startup's `migrate deploy` reads. The demo seed
+  (`prisma/seed.ts`), which creates an `OWNER` with the password the README
+  publishes, is not in the image: the build fails if `/app/prisma/seed.ts`
+  exists, and `src/__tests__/unit/image-posture.test.ts` fails on a broader
+  `COPY` of `prisma/`. The seed itself refuses to run under
+  `NODE_ENV=production` (`prisma/seed-guard.ts`, tested by
+  `src/__tests__/unit/seed-guard.test.ts`), and its reset finds the demo
+  household through the `demo@stoky.local` account rather than the free-text
+  name *Hogar Demo*, in one transaction.
+- The build context leaves out env files at every depth (`**/.env*`, with only
+  the root `.env.example` let back in), so the `deploy/.env` that the
+  source build in `docker-compose.prod.yml` has the operator write does not
+  enter the `builder` or `development` layers through `COPY . .`. Nested
+  `node_modules` and `.next`, local agent and tool state (`.claude`, `.codex`,
+  `.opencode`, `.playwright`, whose `auth/` holds session cookies), stray
+  `*.traineddata` and `*.tsbuildinfo` are excluded too.
+  `src/__tests__/unit/image-posture.test.ts` fails if a rule goes back to
+  root-only or a second negation appears. Published images are built from a
+  clean CI checkout and never held these files.
 - A `HEALTHCHECK` reports database/cache reachability through `/api/health`.
   Docker does not restart a running container solely because it is unhealthy.
-- The Bun base image uses the version pinned in `.bun-version`. Production
-  runs `apk upgrade --no-cache` during the build to take Alpine security fixes;
-  Trivy scans the completed image before publication.
+- The Bun base image is the version pinned in `.bun-version`, named by tag and
+  by the digest of its multi-platform index
+  (`oven/bun:1.4.3-alpine@sha256:…`). A tag can be re-pushed and a digest
+  cannot, so a re-pushed or substituted upstream tag cannot change what a
+  release builds without a change in this repository.
+  `src/__tests__/unit/image-posture.test.ts` fails if the digest is dropped
+  and `src/__tests__/unit/bun-version.test.ts` if the tag and `.bun-version`
+  disagree; neither can check offline that the tag and the digest name the
+  same image, which is checked with `docker buildx imagetools inspect` when the
+  pin moves. Production runs `apk upgrade --no-cache` during the build to take
+  Alpine security fixes, so the packages on top of the pinned base are still
+  whatever Alpine serves that day; Trivy scans the completed image before
+  publication.
 
 ### Release deployment — `deploy/docker-compose.yml`
 
+- **PostgreSQL, Valkey and Traefik are pinned by exact version and digest**
+  (`postgres:16.15-alpine@sha256:…`, the digest of the multi-platform index).
+  A tag can be re-pushed and a digest cannot, so the release smoke and every
+  later `docker compose pull` of that release run the same builds, and a
+  re-pushed upstream tag cannot reach an installation without a change in this
+  repository. The cost is that their fixes reach an installation only with a
+  Stoky release: `docs/RELEASING.md` refreshes the pins for each one. Between
+  releases Dependabot (`docker-compose` ecosystem, `docs/RELEASING.md`,
+  *Dependency updates*) proposes minor and patch refreshes weekly — once its
+  branches are allowed, an owner setting not yet applied on 2026-10-12
+  (`docs/STATUS.md`, *Dependency security*); a merged one lands on `master`
+  and ships with the next release. The app image is named by `STOKY_VERSION`.
+  `src/__tests__/unit/deployment.test.ts` fails if a service image loses its
+  digest or names a floating major. Verified by running each pinned reference:
+  PostgreSQL 16.15, Valkey 8.1.10, Traefik 3.7.14.
 - `no-new-privileges:true` on every service.
 - `cap_drop: [ALL]` on every service, with capabilities added back only where
   they are actually needed (Postgres for its data directory, Valkey for
@@ -90,11 +191,92 @@ Verified against the files named in each row.
   `uploads` volume plus tmpfs mounts for `/tmp` and `/app/.next/cache`.
 - Postgres and Valkey sit on an `internal: true` bridge network and publish **no
   ports**. Only Traefik publishes anything, and only 80 and 443.
-- Memory limits on every service, so one runaway process cannot take the host
-  down.
+- Memory limits on every service, so one service's runaway allocation stops at
+  its own limit. Valkey is also bounded inside its own limit, with
+  `--maxmemory`, because it does not read the container's: see "It fails
+  closed" below.
+- A process limit on every service (`deploy.resources.limits.pids`, which
+  counts threads as well as processes): app 512, db 256, cache 128, traefik
+  128. A fork loop or a runaway thread pool stops at its own container's
+  ceiling instead of using up the host's process table. These are ceilings, not
+  sizing. Measured on the bundle (8 cores, `v0.1.0-alpha.3`), from the cgroup's
+  `pids.peak` after a sign-up, a sign-in, six receipt uploads run through OCR
+  and 900 concurrent page and health requests through Traefik: app 50, db 25,
+  cache 14, traefik 26. Postgres runs one process per connection, and its
+  default `max_connections` of 100 keeps it under 256 however many connections
+  the app's pool asks for. Forking 300 `sleep`s inside the cache container
+  stopped at 127 of 128, with `pids.events` counting the refused forks.
+  `docker exec` into that container was refused until they exited, the host
+  was unaffected, and Valkey stayed healthy with no restart.
+- **No CPU limit, deliberately.** Docker refuses to create a container whose
+  `cpus` is above the host's core count ("range of CPUs is from 0.01 to 8.00,
+  as there are only 8 CPUs available" here), and small hosts are the common
+  install, so a fixed value would stop the bundle from starting on them. A busy
+  service can therefore still use every core. The expensive path an account
+  can trigger, OCR, runs on one shared worker (`src/server/services/ocr.ts`)
+  and receipt upload is metered per account (below).
+  `src/__tests__/unit/deployment.test.ts` pins each process limit and the
+  absence of a `cpus` limit.
 - Traefik uses a read-only file provider, with no Docker socket access.
+- **Traefik does not contact Traefik Labs.** Its version check is on by
+  default (`--global.checknewversion`, default `true` in `traefik:v3.7.13
+  --help`) and asks Traefik Labs' update service for releases, which tells them
+  a Traefik runs at the instance's address. The bundle sets it to `false`:
+  Traefik reaches an operator through a Stoky release, which pins its version,
+  so the notice was one they could not act on. Anonymous usage statistics are
+  off by default and set to `false` anyway, so a changed default cannot turn
+  them on. Measured by starting `traefik:v3.7.13` with no network and the
+  bundle's command list for 11 minutes: before this change it logged "Version
+  check is enabled" and, ten minutes in, a failed lookup of
+  `update.traefik.io`; after it, "Version check is disabled" and no lookup at
+  all. `src/__tests__/unit/deployment.test.ts` pins both flags. Traefik still
+  contacts Let's Encrypt, which it must to issue and renew the certificate.
 - Traefik terminates TLS with Let's Encrypt, redirects HTTP to HTTPS, and adds
-  HSTS (two years, `includeSubDomains`, `preload`), `nosniff` and `frameDeny`.
+  HSTS (two years, `includeSubDomains`), `nosniff` and `frameDeny`.
+- **HSTS does not send `preload`**, from Traefik or from the app. The token is
+  the domain owner's consent to the browsers' built-in HSTS lists:
+  hstspreload.org checks the header, not who submits, and leaving the list is
+  slow. Until 2026-10-12 both layers sent it on whatever `DOMAIN` an operator
+  chose, so anyone could have submitted an apex install's domain, every
+  subdomain with it; hstspreload.org asks software that ships HTTPS defaults
+  not to send it (`docs/SECURITY_REVIEW.md` §8). An operator who wants
+  preloading adds it at their own proxy. `includeSubDomains` stays, as ASVS 5
+  V3.4.1 asks; on an apex `DOMAIN` it makes every host under that domain
+  HTTPS-only for two years in each browser that opens Stoky, which
+  `docs/INSTALL.md` warns about.
+- **TLS 1.2 or later, and at 1.2 only forward-secret AEAD suites** — ECDHE
+  with AES-GCM or ChaCha20-Poly1305, Mozilla's "intermediate" profile, in the
+  `tls.options.default` block of `deploy/traefik.yml`. Without it Traefik takes
+  Go's defaults, and measured against v3.7.13 those still accepted
+  `ECDHE-RSA-AES128-SHA` and `ECDHE-RSA-AES256-SHA` (CBC with SHA-1) at TLS
+  1.2. TLS 1.3 suites are not configurable in Go and are all AEAD. Clients that
+  cannot do TLS 1.2 with one of those suites cannot connect; none is supported.
+  Two settings are left out on purpose. `sniStrict` would refuse the handshake
+  for the configured name itself while ACME has not yet issued (alert 112,
+  measured in the 2026-10-12 audit), turning a pending certificate into an
+  opaque failure and failing the release smoke, which has no certificate to
+  issue; the cost is that a client without SNI still gets Traefik's default
+  certificate, which names the software. `curvePreferences` would replace Go's
+  list, which negotiates the post-quantum hybrid `X25519MLKEM768`;
+  `[X25519, CurveP256]` measurably fell back to plain X25519. The release smoke
+  (`scripts/smoke-proxy.sh`) requires a TLS 1.1 handshake and a CBC/SHA-1 suite
+  at TLS 1.2 to be refused by the server, and a TLS 1.2 AEAD handshake to
+  succeed; `src/__tests__/unit/deployment.test.ts` pins the block.
+- **A quiet keep-alive connection is closed after 60 seconds**, not Traefik's
+  default 180 (`transport.respondingTimeouts.idleTimeout=60s` on both
+  entrypoints), so sockets held open for nothing free Traefik's 256m sooner.
+  Browsers reconnect without the person noticing. `readTimeout` is stated at
+  its default of 60s so that it cannot drift: in Go it covers the whole request,
+  body included, and a 10 MiB receipt is about 14 MB of base64 on the wire, so
+  60s already needs about 1.9 Mbps of uplink. There is no `writeTimeout`, which
+  would cut off streamed tRPC batches. Measured against `traefik:v3.7.13` with
+  the bundle's flags (no network, a Bun client in its namespace): an idle
+  keep-alive connection closed 180.0s after its response before this change and
+  60.1s after, on both entrypoints; a partial request line closed at 60.1s
+  either way. `src/__tests__/unit/deployment.test.ts` pins the exact set of
+  timeout flags. This shortens how long a connection is held; it does not cap
+  how many one address holds: see "One address can hold Traefik's connections
+  open" below.
 
 ### Application headers — `next.config.ts` and `src/proxy.ts`
 
@@ -108,26 +290,356 @@ Verified against the files named in each row.
   handshake against a server with no TLS, which killed the application on
   Safari while the page still rendered. Behind TLS termination nothing
   changed. A client forging the header against an http install only breaks
-  its own requests.
+  its own requests. Keeping a plain-http install *working* (D84) is not
+  calling it safe: passwords and session cookies cross the network in
+  cleartext there, and the server says so at start-up (*Authentication*,
+  below).
   One honest caveat: `style-src` still includes `'unsafe-inline'`, because Next
   inlines critical CSS that cannot carry a nonce.
+  **A page reaches one other origin, and only for images:** `img-src` allows
+  `images.openfoodfacts.org`, for the product photographs. `connect-src` is
+  `'self'` — Open Food Facts lookups are the server's, outside the policy, and
+  the links to it are navigations, which `connect-src` does not govern. Until
+  2026-10-12 it also allowed `world.openfoodfacts.org`, which no page fetched
+  (`docs/SECURITY_REVIEW.md` §8).
+- **The policy is on every page the app renders, including its not-found
+  page.** The proxy's matcher excludes only what is served from disk —
+  `/_next/static/`, the icon files by name, and `/sw.js`, which has a policy
+  of its own in `next.config.ts` — each anchored to exactly that. Until
+  2026-10-12 they were unanchored prefixes, so `/icons/x` or `/sw.jsx`
+  rendered the app's not-found document with no policy at all
+  (`docs/SECURITY_REVIEW.md` §8). One exception remains, and §8 says why it is
+  harmless: a request labelled `Purpose: prefetch` or `Next-Router-Prefetch`
+  skips the proxy, and so carries no policy either.
+- **Next's Image Optimization endpoint is switched off**
+  (`images: { unoptimized: true }` in `next.config.ts`): `/_next/image`
+  answers 404 with the app's not-found page, which carries the policy like any
+  other. Nothing renders `next/image`, but until 2026-10-12 the endpoint was
+  live regardless — Next registers it whatever the source imports — and it
+  fetched any same-origin path for an anonymous caller through the whole
+  router, returning what sniffed as a raster image (`docs/SECURITY_REVIEW.md`
+  §8). The same switch is what makes leaving `sharp` out of the production
+  image correct.
 - Static headers set in the app itself, not only at the proxy, because a
   self-hosted app runs behind whatever proxy the operator already has:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: strict-origin-when-cross-origin`,
-  `X-Permitted-Cross-Domain-Policies: none`, HSTS, and a `Permissions-Policy`
-  that allows `camera=(self)` for the barcode scanner and denies everything
-  else.
+  `Referrer-Policy: same-origin` (below),
+  `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
+  sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
+  `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
+  denies, by name, nineteen powerful features Stoky does not use —
+  microphone, geolocation, payment, USB, serial, HID, MIDI, screen capture,
+  wake lock, the motion sensors and the rest (the list is in
+  `next.config.ts`). It is a deny list, not a default: the header has no
+  "everything else", so a feature it does not name keeps the browser's
+  default, usually `'self'`. Until 2026-10-12 it named three, plus
+  `interest-cohort`, the token of the retired FLoC, while its successor
+  `browsing-topics` went undenied — and this line claimed the rest were
+  denied (`docs/SECURITY_REVIEW.md` §8).
+  `publickey-credentials-get` is left unset because passkey sign-in would
+  need it, and `bluetooth` because the suite's Chromium (151) does not
+  recognise the token. `e2e/security-headers.spec.ts` pins the value and
+  fails on any token that Chromium does not recognise.
+- **`Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Resource-Policy: same-origin`**, on every route, since
+  2026-10-12 (`docs/SECURITY_REVIEW.md` §8). A page on another origin that
+  opens Stoky in a window keeps no handle to it, so cannot navigate it to a
+  look-alike sign-in page or time its navigations; and no other origin can
+  load a Stoky response as an image, script or other subresource. Defence in
+  depth: framing was already refused, and browsers' opaque-response blocking
+  already withholds most JSON and HTML from another origin's no-cors request.
+  The HTML standard applies COOP only on a secure context, so a plain-http LAN
+  install gets the CORP half — read from the standard, not measured here.
+  A page the service worker serves from its cache carries the headers it was
+  cached with, so after upgrading an existing install a shell route cached
+  before the upgrade lacks both until the next online visit replaces it, and
+  `/offline`, cached once when the worker installs, until `public/sw.js` next
+  changes — read from the worker, not measured.
+  **There is deliberately no `Cross-Origin-Embedder-Policy`**. All it would
+  add is cross-origin isolation (`SharedArrayBuffer`, precise timers), which
+  Stoky does not use, and `require-corp` would refuse the product photographs:
+  the product page loads them as a plain `<img>`, and
+  `images.openfoodfacts.org` sends no CORP. That host does answer
+  `Access-Control-Allow-Origin: *` (measured 2026-10-12), so `crossorigin` on
+  the image or `credentialless` would let them through — for as long as a host
+  that is not ours keeps answering that way. `e2e/security-headers.spec.ts`
+  checks that the opener's handle reads closed, that another origin's image
+  load of a Stoky icon fails with Chromium's CORP error, and that a product
+  page shows its photograph with no embedder policy and is not cross-origin
+  isolated.
+- **`Referrer-Policy: same-origin`**, since 2026-10-12, and the product
+  photograph's `<img>` carries `referrerpolicy="no-referrer"` of its own, for
+  an operator whose proxy rewrites the header. A request to another origin
+  carries no `Referer`. Until then the policy was
+  `strict-origin-when-cross-origin`, and every product page sent the
+  instance's origin — its hostname, however private — to
+  `images.openfoodfacts.org` with the photograph (`docs/SECURITY_REVIEW.md`
+  §8). The image request itself still goes there, with the viewer's address
+  and the barcode in its path; only the instance's name has stopped
+  travelling with it. Not `no-referrer`: under it the Fetch standard sends
+  `Origin: null` on every POST, same-origin ones included, and Next aborts a
+  Server Action whose Origin does not match the host — measured, the no-JS
+  screen choice in `e2e/screen-choice.spec.ts` fails under it, and sign-out
+  and the language switch are Server Actions too. `same-origin` nulls the
+  Origin only on a cross-origin POST, which Stoky's pages never make.
+  `e2e/security-headers.spec.ts` pins the header and checks that the
+  photograph's request carries no `Referer` and that the element carries its
+  attribute.
 - `poweredByHeader: false`, so responses do not advertise the framework version.
+- **Every response from `/api/trpc` carries `Cache-Control: no-store`** —
+  data, errors, the 429 and the handler's own 403, 413 and 415 — set once, at
+  the handler's exit in `src/server/http/trpc-handler.ts`. Until 2026-10-12
+  nothing set one: tRPC adds no cache directive, Next sends a route handler's
+  response as it is, and neither `next.config.ts` nor Traefik adds one. A
+  query is a GET carrying one household's data, often under a URL that is the
+  same for every account, with a `Vary` that does not name the cookie, so a
+  shared cache in front of the instance could have served one person's
+  answer to the next. Offline reads are unaffected: TanStack Query persists
+  them in client storage, and the service worker never caches `/api/`.
+  `src/__tests__/unit/trpc-handler.test.ts` checks each kind of answer;
+  `e2e/security-headers.spec.ts` checks a signed-in streamed query and an
+  anonymous 401 against the production build.
+
+### Request bodies — `src/server/http/body-limit.ts`
+
+- **The API routes bound a request body themselves**: 15 MiB for `/api/trpc`
+  (a 10 MB receipt is 13.98 MB once base64'd into JSON) and 64 KiB for a POST to
+  `/api/auth`, whose forms are a few hundred bytes. A declared
+  `Content-Length` over the limit is refused with 413 without reading the body;
+  a body with no declared length is counted as it arrives and refused at the
+  first byte over. The tRPC route does this before it looks up the session, so
+  a refused body costs an anonymous caller nothing but the bytes it sent.
+- Next's `proxyClientMaxBodySize` is set to the same 15 MiB, imported from the
+  same constant, but it is **not** the bound: Next applies it only when the
+  proxy runs, and the proxy's matcher skips a request labelled
+  `Purpose: prefetch` or `Next-Router-Prefetch`. Until 2026-10-12 it was the
+  only bound, so one request header let an unauthenticated POST to
+  `auth.register` be buffered and JSON-parsed whole, at any size — Bun's server
+  sets no ceiling of its own (`docs/SECURITY_REVIEW.md` §8).
+- Server Actions are bounded separately, by Next's `serverActions.bodySizeLimit`
+  (1 MB by default), which its documentation describes as a limit on the raw
+  request body rather than a proxy setting. Not measured here with a prefetch
+  label.
+- What remains is concurrency: a body may still be up to 15 MiB, held more
+  than once while it is read and parsed — the bytes, then the text, then the
+  parsed value — and nothing limits how many arrive at once. The app
+  container's limit in `deploy/docker-compose.yml` is 1 GiB. How many
+  concurrent 15 MiB requests that takes has not been measured.
+
+### Batched calls — `src/lib/trpc/batch.ts`
+
+- **One tRPC request carries at most 100 calls.** tRPC batches by default and,
+  until 2026-10-12, set no ceiling: one GET of about 15 KB named about 850
+  `household.current` calls, run concurrently, and an anonymous caller got 850
+  `access.denied` log lines for it. Whatever a call costs — a query, a password
+  hash, a log line — one request multiplied it before any rate limit counted
+  anything. The handler now passes `maxBatchSize`, which tRPC checks against the
+  list of paths before it reads an input or runs a procedure: a longer batch is
+  a 400, with no procedure run and nothing logged. Measured in-process against
+  the real router, 850 anonymous calls now get one 400 and no log line.
+- **A request with nobody signed in writes at most one refusal line**, however
+  many of its calls are refused. The cap alone still let one 1.8 KB GET of 100
+  `household.current` calls write 100 `access.denied` lines, 13,100 bytes
+  (final review, 2026-10-12). The middleware now records the first refusal of
+  an anonymous request and drops the rest; measured the same way, that GET
+  writes 1 line of 131 bytes. A signed-in caller's refusals are each still
+  written: they name an account, and each can be a different row reached for.
+  [*Refusals are recorded*](#refusals-are-recorded) says what this does not
+  bound.
+- The browser client passes the same constant as the link's `maxItems`, so it
+  splits a longer batch into several requests rather than tripping the refusal.
+  The offline queue's replays do not batch at all (`src/lib/offline/sender.ts`).
+- 100 rather than fewer because the widest batch a screen sends today is 52,
+  counted from the code rather than measured in a browser: `/prices` lists up to
+  50 products, each row with its own `price.getLatestPrices`, and a refetch of
+  everything on screen adds the list and `auth.me`. A tab still running a build
+  from before the cap has no `maxItems`, and a ceiling of 50 would refuse that
+  refetch whole.
+- What this bounds is the fan-out of one request. It is not a rate limit: a
+  caller can still send as many requests as it likes (see "Every other tRPC
+  procedure is unlimited" below). `src/__tests__/unit/trpc-handler.test.ts`
+  sends 101 calls and 100 through the real handler.
+
+### Cross-site requests — `src/server/http/trpc-handler.ts`
+
+- **The session cookie is `SameSite=Lax`** (Auth.js's default, not
+  overridden), so a POST from another *site* carries no session. A sibling
+  subdomain under the operator's own domain — a photo gallery at
+  `photos.home.example` beside Stoky at `stoky.home.example` — is the same
+  site, and Lax sends the cookie with its requests. Until 2026-10-12 that was
+  the whole defence of `/api/trpc`, and tRPC accepts `multipart/form-data`,
+  which a plain HTML form sends with no CORS preflight: a compromised sibling
+  could post a form to `auth.revokeMySessions`, which took no input, and sign
+  the household out of every device. Procedures with an input refuse a form
+  body at validation; the three that took none did not.
+- **Every mutation declares an input**, and the three that take nothing —
+  `auth.revokeMySessions`, `auth.logout`, `shopping.generateFromLowStock` —
+  declare `z.void()`, so a form body that got past the rule below would now
+  fail validation there too, with 400 and nothing written. `z.void()` and not
+  `z.object({})`, which a `FormData` satisfies. It does not refuse every JSON
+  body: superjson reads only a body's `json` field, so `{}` or any object
+  without one arrives as no input — the same-origin control in
+  `e2e/request-guards.spec.ts` posts `{}` and revokes. The application's own
+  call sends `{"json":null,"meta":{"values":["undefined"]}}`, which superjson
+  reads back as `undefined`; a bare `{"json":null}` is `null`, and `z.void()`
+  now refuses it with 400.
+  `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
+  names any mutation without an input parser; `integration/routers.test.ts`
+  shows `revokeMySessions` refusing an object and a `FormData` before its
+  write. The nine queries that take no input do not declare one: they write
+  nothing.
+- **A POST whose content type is not `application/json` is refused with 415**
+  before its body is read. Both of the application's links send JSON, and a
+  receipt photograph travels base64'd inside it; nothing sends multipart or
+  `application/octet-stream`, the two other types tRPC accepts. JSON is not a
+  type a form can send, so a page on another origin cannot send it without a
+  preflight, which this application never grants: nothing in it, its proxy or
+  Traefik's configuration sets an `Access-Control-Allow-Origin`.
+- **A request whose `Sec-Fetch-Site` is anything but `same-origin` or `none`
+  is refused with 403** and an `access.denied` line with `reason:
+  "cross-site"` and the header's value: `same-site` in that line means a
+  sibling under the operator's domain sent it. This covers queries as well as
+  mutations.
+- **A request with no `Sec-Fetch-Site` passes** to the two defences above.
+  Browsers send it to an HTTPS origin or to localhost; curl, Playwright's
+  `request` fixture, a native client and older browsers do not, and none of
+  those is a page that can make another person's browser send a request.
+- **On a plain-HTTP LAN install the 403 rule does nothing.** Fetch Metadata
+  goes only to potentially trustworthy origins: on 2026-10-12 Playwright
+  1.62.1's Chromium, Firefox and WebKit sent no `Sec-Fetch-Site` to a
+  plain-HTTP LAN address — not with a same-origin `fetch` on
+  `http://192.168.8.132`, nor with a multipart form that page posted to
+  `http://172.17.0.1` — and all three sent `same-origin` to the same `fetch`
+  on `http://localhost`. There the JSON-only rule, with Lax, is the whole
+  defence — and it is the one that refuses the form.
+- **`Origin` is deliberately not compared with `NEXTAUTH_URL`**: a plain-HTTP
+  LAN install is reached at an address that URL does not name, and a strict
+  comparison would lock it out.
+- **The consequence:** a browser front-end on another origin cannot call this
+  API. None exists. Server Actions are outside this route and carry Next's
+  own `Origin` check; Auth.js's routes carry its own CSRF token.
+- `src/__tests__/unit/trpc-handler.test.ts` shows tRPC alone running a
+  mutation sent as a form, then the handler refusing it; `e2e/request-guards.spec.ts`
+  sends a cross-site and a form-encoded `auth.revokeMySessions` with a real
+  session against the production build, shows the session alive afterwards,
+  and then sends the same request as `same-origin` to show it does revoke.
 
 ### Authentication — `src/lib/auth.ts`, `src/server/trpc/routers/auth.ts`
 
-- Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB) and
-  `timeCost: 3`.
-- Auth.js v5 with the credentials provider; sessions are JWTs with a 15-minute
-  lifetime.
+- Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB),
+  `timeCost: 3` and `parallelism: 4`, in one place:
+  `src/lib/auth/password-hash.ts` hashes for registration, for an admin
+  adding a member or setting a member's password, and for a person changing
+  their own password, and verifies for sign-in and for that change. A test
+  pins the parameters and that the dummy hash for unknown addresses was made
+  with the same ones.
+- Auth.js v5 with the credentials provider; sessions are encrypted JWTs with
+  no server-side record. **Fifteen minutes is the idle timeout, not the
+  lifetime**: every read of the session re-issues the token with a fresh
+  fifteen-minute expiry (`@auth/core` 0.41.3 `lib/actions/session.js`; the
+  `updateAge` setting is read only by database sessions), so a session in use
+  slides. **It slides for at most thirty days** (`MAX_SESSION_AGE_S`, security
+  review 2026-10-12 — until then it slid for ever): sign-in stamps an
+  `authTime` claim that re-issue copies forward unchanged, and the `jwt`
+  callback refuses a token whose `authTime` is more than thirty days old, or
+  that has none, before it reaches the revocation query. Thirty days is OWASP
+  ASVS 4.0.3 V3.3.2's Level 1 ceiling, chosen for the kitchen tablet that
+  should not ask for a password every shift; it is a constant, not a setting.
+  A token without `authTime` was issued before the claim existed, and it is
+  refused rather than given a fresh thirty days, which would extend a token
+  stolen before the upgrade — so everybody signs in once after upgrading to
+  the release that carries this. A refusal is logged as
+  `auth.session.revoked` with `reason: "absolute-lifetime"`. Nothing warns
+  before the thirty days run out: the next session read is refused and the
+  cookie cleared, the same path a revoked session takes, so the offline queue
+  keeps its unsent changes and asks for a sign-in.
+- **Signing out clears this device's cookie and nothing else.** `signOutAction`
+  records nothing on the server, so a copy of the token taken before the
+  sign-out stays valid until it is idle for fifteen minutes, its thirty days
+  run out, or somebody ends the account's sessions — **Cerrar la sesión en
+  todos los dispositivos** in Configuración (`auth.revokeMySessions`), or an
+  admin from **Personas del hogar**. That is the answer to a session that may
+  have leaked; a plain sign-out is not. See *Known gaps*.
 - Credentials are validated with a Zod schema before the database is touched,
   and `authorize` returns `null` for both an unknown email and a wrong password.
+- **A signed-in person can change their own password**, from Settings
+  (`auth.changePassword`, security review 2026-10-12 — until then nothing
+  changed a password once it was set, so a leaked one could not be rotated and
+  one an admin chose stayed known to that admin). It asks for the current
+  password through the same `verifyPassword` as sign-in, metered (below); a
+  wrong one is `BAD_REQUEST`, never `UNAUTHORIZED`, because the offline queue
+  reads that as a session that has ended. The new password meets the policy,
+  identity rule included, and one update writes the hash and
+  `sessionsValidFrom`, so every session the account had ends — the one that
+  asked included, and the form says so before it is submitted. Both outcomes
+  are logged (`auth.password.changed`, `auth.password.change.refused`).
+- **A household admin can set a member's password**, from **Personas del
+  hogar** (`household.resetMemberPassword`, security review 2026-10-12). There
+  is no email, so this is the way back from a forgotten password; until it
+  existed a member who forgot theirs was locked out for good. The member must
+  be the caller's household's (`NOT_FOUND` otherwise), only an owner may act on
+  an owner — an admin who could set an owner's password could sign in as that
+  owner — and nobody may use it on themselves, because their own password
+  changes through the current one. The new password meets the policy, the
+  identity rule checked against the member, and one write sets the hash and
+  `sessionsValidFrom`, so whoever used the old password is signed out too. The
+  write repeats the household and role in its `where`, so a member who leaves
+  or is made an owner during the quarter-second hash is not written to. It
+  shares `addMember`'s limit (below) and is logged as `auth.password.reset`,
+  naming the admin and the member. The admin knows the password they set, as
+  they know the first one; the confirmation tells them to hand it over and ask
+  the person to change it, and nothing makes the person do so. The owner of a
+  single-owner household has nobody above them: their way back is the
+  operator, through [the installation guide](docs/INSTALL.md#a-forgotten-password).
+- **The session cookie is `Secure` only when the public URL is https**, and
+  the server says so when it is not. Auth.js decides per request:
+  `useSecureCookies ?? url.protocol === "https:"` (`@auth/core` 0.41.3
+  `lib/init.js`), where `url` is `AUTH_URL ?? NEXTAUTH_URL` when one is set
+  and otherwise the request's own URL, built from `Host` and
+  `X-Forwarded-Proto`. The release bundle sets `NEXTAUTH_URL` to
+  `https://${DOMAIN}`, so its session cookie is `__Secure-` prefixed and
+  `Secure`. Until 2026-10-12 nothing noticed the two configurations that
+  downgrade it (security review, 2026-10-12, low): no URL behind a TLS proxy
+  that does not send `X-Forwarded-Proto` (nginx does not by default), and an
+  `http://` URL for another machine, which is where an operator ends up after
+  publishing the app port on a LAN. In production, `src/lib/auth/public-url.ts`
+  now logs one `[auth] warning:` line at start-up for either, and for a value
+  that is not an http(s) URL at all. The plain-http one names the consequences
+  — passwords and session cookies in cleartext, no barcode camera, no offline
+  support — and the way to TLS. **A warning, not a refusal**:
+  refusing would reverse D84 and stop every plain-http LAN install on upgrade,
+  and forcing `useSecureCookies` would make sign-in there impossible, because a
+  browser drops a `Secure` cookie set over http. `localhost`, `*.localhost`,
+  `127.0.0.0/8` and `[::1]` are not warned about: browsers treat them as this
+  machine, and CI and the browser suite serve there.
+  `src/__tests__/unit/public-url.test.ts` pins each case and that the hook
+  warns without exiting.
+- Self-registration is the operator's to open: `STOKY_REGISTRATION` is
+  `first-user` unless set, so the first account claims the instance and later
+  people are added by a household admin. See
+  [Registration closes after the first account](#registration-closes-after-the-first-account).
+
+### Input validation — `src/lib/validations/`
+
+- Every tRPC procedure parses its input with Zod, and **every string and array
+  it accepts has a maximum**. The lengths are named in
+  `src/lib/validations/bounds.ts`: an email address 254 (RFC 5321), a name
+  200, a note, reason or shop address 1000, a unit 32, a barcode 64, an id 64,
+  a declared MIME type 255. A currency is three letters after trimming and
+  upper-casing.
+- A product created from an Open Food Facts hit takes its name, brand and
+  category from text anyone can edit on OFF, not from a caller, so
+  `productFromOff` cuts each to the name bound before it is stored. Otherwise
+  the detail form, which sends all three back on every save, could not save
+  that product again.
+- `src/__tests__/unit/procedure-input-bounds.test.ts` walks the parser of every
+  procedure in `appRouter` — the inline ones as well as the shared schemas —
+  and fails naming the field when a string or array has no maximum, or when it
+  meets a Zod type it does not understand.
+- The bound is in the application, not the column: every Prisma `String` is
+  still `text`. A `VarChar(n)` migration would fail on any instance already
+  holding a longer value. A row stored before the bound still displays; saving
+  it again means shortening it first.
 
 ### Receipt uploads — `src/server/trpc/routers/receipt.ts`
 
@@ -135,31 +647,344 @@ Verified against the files named in each row.
   the decoded buffer.
 - Every accepted image is re-encoded through `src/server/services/image.ts` (`Bun.Image`) to JPEG, which strips EXIF —
   including any GPS coordinates in a photo of a receipt.
+- **The re-encode's output is then walked against an allowlist of JPEG
+  segments**: the JFIF header (without a thumbnail), the quantisation and
+  Huffman tables, the restart interval, the frame header, and the scan through
+  to the end. Every other application segment and every comment is dropped —
+  the ICC colour profile above all, which `Bun.Image` carries through a
+  re-encode on purpose. Without the walk a caller's bytes reached the uploads
+  volume verbatim: an `APP2` `ICC_PROFILE` segment holding a minimal header
+  and 2 KB of `<script>` text came out of the re-encode byte for byte, and a
+  JPEG, PNG or WebP tagged Display P3 kept its profile (measured, Bun 1.4.2).
+  A stream the walk cannot parse, or a marker it does not expect before the
+  scan, throws, and the upload is refused with `BAD_REQUEST`. The cost is
+  colour: a wide-gamut photograph loses the tag that says so and displays as
+  sRGB, which neither Tesseract nor anything in the application looks at. This
+  cleans what is stored; the decoder still parses whatever profile was sent
+  when the upload is decoded. Files stored before the walk keep their
+  profiles, and OCR parses them again if such a receipt is re-processed.
+- Decoding refuses anything over 50 megapixels before allocating for it, and
+  the re-encode keeps at most **4000 pixels on the long edge**: larger
+  photographs are scaled down in proportion, smaller ones are left at their
+  own size. The first bounds the decode; the second bounds what is stored and
+  what Tesseract is later handed. Before it, a 6.1 MB noise PNG at 7000 × 7000
+  was stored as a 47 MB JPEG at full size; it is now 11.7 MB at 4000 × 4000
+  (measured, `Bun.Image` at quality 90) — smaller, but still more than the
+  10 MB the upload accepts, which the next point refuses. A 12-megapixel
+  phone photograph (4000 × 3000) is untouched. Photographs stored before the
+  bound are not rewritten and keep their size on disk; OCR runs once, at
+  upload, and nothing re-processes a stored receipt, so none of them is
+  handed to Tesseract again.
+- **The re-encoded file is held to the same 10 MB as the upload**, and one
+  over it is refused with `BAD_REQUEST` before a directory, a file or a row
+  is written. The two caps are not the same thing: one bit per pixel of
+  black-and-white noise does not deflate and costs a JPEG about a byte, so a
+  2.0 MB palette PNG at 4000 × 4000 re-encoded to 15.4 MB (measured, 7.7×).
+  Without the check that was seven times the bytes sent, and half as much
+  again as the largest upload accepted, written to a volume that in the
+  release bundle is a plain named volume beside PostgreSQL's — on the same
+  disk unless the operator moves it. With it nothing stored is larger than
+  what could have been sent; storage still grows without bound over time,
+  because nothing is deleted and there is no per-household quota
+  (`docs/SECURITY_REVIEW.md` finding 16).
+- **Recognition is bounded in time** (`src/server/services/ocr.ts`): one image
+  may hold the Tesseract worker for `OCR_TIMEOUT_MS`, 120 seconds unless the
+  variable is set to a positive whole number of milliseconds no larger than a
+  timer can hold, 2 147 483 647 (the release bundle does not pass it). Past
+  that the worker is terminated, the receipt becomes FAILED, and the next one
+  loads a fresh worker. tesseract.js cannot cancel a recognition, so
+  termination is the only way to get the worker back; images are handed to it
+  one at a time, because its `terminate()` leaves jobs queued on that worker
+  unanswered for good. Before this, the worker was shared and had no limit, so
+  one image Tesseract could not finish stalled every receipt behind it.
+  Measured with the bundled model (Bun 1.4.2), on the audit's 7000 × 7000
+  noise image as the re-encode scales it (4000 × 4000, 11.7 MB — over the
+  stored-size cap above, so a harder case than one that can be uploaded):
+  still being read at 120 s, refused at 120.2 s, and a synthetic 48-megapixel
+  receipt photograph queued behind it was read 2.7 s later on the new worker
+  (3.0 s on its own). Termination under Bun is not instant on a thread busy in
+  Tesseract's WebAssembly. Terminated 2 to 40 s into that image, the thread
+  stopped within 2 s in five runs and 10 to 13 s later in the two terminated
+  about 6 s in, so a terminated worker can briefly hold its memory (about
+  300 MB on that image) beside the new one. What the bound does not do is
+  shorten the queue: each image that runs out the limit costs everyone behind
+  it 120 s, and the 30 uploads an account may make in an hour can fill an hour
+  of OCR.
+- **A restart does not strand a receipt** (`src/server/services/receipt-recovery.ts`,
+  called from `src/instrumentation.ts`). A receipt is read inside the process
+  that took its upload, so one that process was still reading when it stopped
+  — a deploy, a restart, an OOM kill — used to stay in UPLOADING, PROCESSING
+  or PARSED for good, with the upload screen polling it. At start the server
+  now marks FAILED every receipt in those states created before it started;
+  the person re-uploads (ISSUES.md OCR-3). This assumes one application
+  process per database, which is what the release bundle runs.
 - Files are written with a `randomUUID()` filename into a per-household
   directory on the `uploads` volume, so a filename cannot be guessed and cannot
   be used for path traversal.
 - No HTTP route serves the uploads directory. Nothing in `src/app` reads it, and
-  it is not inside `public/`.
+  it is not inside `public/`. Whatever one day serves a receipt image checks
+  the household first, and the response that carries the bytes declares
+  `Content-Type: image/jpeg`, `X-Content-Type-Options: nosniff`, a
+  `Content-Disposition` with a fixed filename and `Cache-Control: private,
+  no-store` — the walk above narrows what a stored file can carry, it does not
+  make serving it any less careful.
 
-### Supply chain — `.github/workflows/ci.yml`
+### Data minimisation — receipt reads
+
+- The four receipt reads — `getStatus`, `getReceiptWithItems`, `list` and
+  `getAppliedSummary` — name the columns they return instead of `include`-ing
+  the row. They are household reads, so the KITCHEN role on a shared tablet
+  receives whatever they return. Until 2026-10-12 that was every column of
+  `Receipt`, three of which no screen reads:
+  - `rawOcrText`, the whole ticket as OCR read it. This includes the header
+    and footer the parser drops, which is where a masked card number, a
+    loyalty number and the cashier's name are printed.
+  - `imagePath`, the photograph's location on the server's disk.
+  - `uploadedBy`, the member who scanned it.
+
+  The receipts list sent the OCR text of up to fifty receipts on every visit.
+- The header the reads return is `id`, `status`, `storeId`, `purchaseDate`,
+  `totalAmount`, `createdAt` and the store's `id` and `name`. `getStatus`
+  returns only the id, the status and the progress count.
+- `src/__tests__/integration/receipt.router.test.ts` ("what a receipt read
+  sends") pins each read's key set exactly and checks that no excluded key or
+  value appears in the serialised response, so a column added to `Receipt`
+  reaches a client only when a read is changed to send it. Two mutations made
+  the test fail: restoring `include` failed all four cases, and returning the
+  OCR text under an allowed key failed on its value.
+- Not covered: `upload` still returns the row it created, `imagePath`
+  included, to the member who uploaded it. `rawOcrText` is also still stored
+  for as long as the receipt exists. Clearing it would not remove the data,
+  because the photograph it was read from is kept just as long
+  (`docs/SECURITY_REVIEW.md` finding 16, no `receipt.delete`). Retention is a
+  decision for that finding to make.
+
+### Household isolation — product row locks
+
+- Stock writes and `product.update` hold the product row
+  (`SELECT … FOR UPDATE`) so that two writes to one product take turns
+  (`ISSUES.md` INV-2). The lock's own `WHERE` names the caller's household as
+  well as the id, in all five places: `addStock`, `consumeStock`,
+  `adjustStock`, `transferStock` and `product.update`.
+- Until 2026-10-12 four of them locked by id alone, before the household
+  check that refuses a foreign id. A caller holding another household's
+  product id therefore locked that household's row for the instant before
+  `NOT_FOUND`, and had to wait whenever the owner was holding it, which told
+  the caller when the owner was writing. `consumeStock` is open to KITCHEN.
+  Product ids are random, so this needed an id leaked from elsewhere. Postgres
+  filters rows before it locks them, so a foreign id now locks nothing and
+  waits on nothing. `addStock` already checked the product before its lock;
+  it carries the predicate too, so there is one rule.
+- `src/__tests__/integration/product.lock-isolation.test.ts` has household A
+  hold its product's lock in an open transaction while household B calls each
+  of the four procedures with A's id. B must be refused with `NOT_FOUND` while
+  A still holds the lock. Removing the predicate from any one procedure made
+  that procedure's case fail ("blocked" after the 5-second ceiling) and left
+  the other three passing.
+
+### Supply chain — `.github/workflows/`, `bunfig.toml`, `package.json`
 
 - Every GitHub Action is pinned to a **commit SHA**, not a tag, because a tag
-  can be moved and a SHA cannot.
+  can be moved and a SHA cannot. The comment beside each pin names the exact
+  release (`# v5.1.0`, not `# v5`). The SHA must be the commit's, not an
+  annotated tag object's: the runner resolves both, but the commits API answers
+  422 for a tag object, so pin tooling cannot reliably check or bump it. Two
+  pins were tag objects until 2026-10-12.
+  `src/__tests__/unit/ci-workflow.test.ts` refuses a tag, a major-only comment
+  and those two SHAs; that a new SHA is a commit is checked with
+  `gh api repos/<owner>/<repo>/commits/<sha>`. Container images follow the
+  same rule: the `Dockerfile`'s Bun base and the bundle's service images are
+  pinned by digest ([Container and runtime](#container-and-runtime--dockerfile),
+  [Release deployment](#release-deployment--deploydocker-composeyml)).
+- **The workflows are audited for security before anything is published.**
+  `scripts/check-ci.sh`, the first step of the `quality` job (which
+  `image-publish` needs) and part of `check:all`, runs zizmor 1.16.3 over
+  `.github/` (both workflows and `dependabot.yml`): template injection, credentials persisted in the
+  checkout, caches a release path restores, dangerous triggers, Dependabot
+  without a cooldown. It comes from `ghcr.io/zizmorcore/zizmor` pinned by
+  index digest, runs with no network (`--offline`, `--network none`), and
+  fails on any finding its `regular` persona reports, at any severity; an
+  unparseable workflow fails it too (`--strict-collection`), where by default
+  zizmor skips the file and exits 0. Verified on scratch copies: a
+  `${{ github.event.pull_request.title }}` in a `run:` step exits 14, a
+  Dependabot entry without its cooldown exits 13. Its online audits, which
+  ask the GitHub API about each pinned action, are not run.
 - `bun audit --audit-level moderate` runs as its own job and fails the build. It
   answers from `bun.lock` alone, so the job installs nothing.
 - The image is built and **loaded locally, then scanned by Trivy before it is
   pushed** — scanning after publication would be the wrong order. Results are
   uploaded as SARIF, and a separate step fails the job on CRITICAL or HIGH
   findings (`ignore-unfixed: true`).
+- **A release's version tag names only a scanned digest.** The scanned build is
+  never pushed: the published image is a second build, and on a tag a clean
+  one, so the two digests differ. `release-draft` scans the pushed digest from
+  the registry with the same gate (Trivy 0.69.3 pinned, CRITICAL/HIGH,
+  `ignore-unfixed`, no Actions cache) before it retags it as the version.
+  `latest` and `sha-` rely on the first build's scan. This catches a known CVE
+  that only the shipped build carries; it is not a defence against a poisoned
+  build, since Trivy does not detect an implanted layer. Run by hand against
+  the published digests on 2026-10-12, the same scan passes `v0.1.0-alpha.3`
+  and fails `v0.1.0-alpha.1` (Next.js 16.3.3: one CRITICAL, one HIGH, both
+  fixed upstream).
+- **A release's Compose file names that digest.** GHCR tags can be moved by
+  anything holding `packages: write`, which includes every master run's
+  `image-publish` and a maintainer token. `release-assets.sh` writes the
+  promoted digest into the packaged application image line
+  (`…:${STOKY_VERSION}@sha256:…`) and `SHA256SUMS` covers it; `release-draft`
+  checks that Compose resolves and pulls exactly that reference before the
+  draft exists. Docker then pulls the digest and ignores the tag, so a moved
+  tag does not reach an installation. Bundles up to `v0.1.0-alpha.3` name the
+  tag only. The pin is as fixed as the release's files: immutable releases are
+  off (`gh api repos/NGarate/stoky/immutable-releases` answered
+  `"enabled":false` on 2026-10-12), so anything holding `contents: write` can
+  still replace a published release's files and their `SHA256SUMS` together.
+  The attestation in the next point is what such a replacement does not carry.
+- **A release's installation files are attested.** `release-draft` signs build
+  provenance (`actions/attest-build-provenance`, `subject-path`) for the five
+  files it attaches — `docker-compose.yml`, `example.env`, `traefik.yml`,
+  `install.sh` and `SHA256SUMS` — after the packaged Compose file has been
+  checked and before the draft exists. The attestation is stored by GitHub, not
+  in the release, and names the signing workflow and the tag, so a file swapped
+  on the release later fails `gh attestation verify` pinned to `ci.yml` and
+  that tag ([the guide's optional
+  check](docs/INSTALL.md#optional-check-who-published-the-files)). It binds a
+  file to a run of `ci.yml` on that tag, not to an unmoved tag: a writer who can
+  move the tag and push a changed workflow can have a new run attest other files
+  under the same ref, which only a tag ruleset on `v*` stops, and none existed
+  on 2026-10-12 (`.github/rulesets/` holds the two the settings check applies).
+  It also vouches only for what that run wrote: every earlier step of
+  `release-draft` (the Trivy action and its scanner, the downloaded Bun, the
+  smoke) shares the runner and, with `id-token: write` granted to the job, can
+  request the OIDC token the signing certificate is issued for, so the
+  attestation is no stronger than they are. Releases after `v0.1.0-alpha.3` carry it; for alpha.3's `SHA256SUMS` the
+  command answered `HTTP 404` and exit 1 on 2026-10-12. Gated on
+  `github.event.repository.private == false` like the image's, for the same
+  private-fork reason.
 - The published image carries an **SBOM** (`sbom: true`) and **build provenance**
-  (`provenance: mode=max`), and, for public repositories, a signed provenance attestation pushed to the
-  registry via `actions/attest-build-provenance`. The separate signed attestation
-  is skipped for this private repository; the image SBOM/provenance remain enabled.
+  (`provenance: mode=max`), and a **signed provenance attestation** pushed to the
+  registry via `actions/attest-build-provenance`, which an operator can check
+  without trusting the registry ([Verifying an image's
+  provenance](#verifying-an-images-provenance)). The repository is public, so
+  the step runs; it stays gated on `github.event.repository.private == false`
+  because GitHub refuses attestations for a user-owned private repository, which
+  is what a private fork or copy would be. Released images are attested from
+  `v0.1.0-alpha.3` on; `v0.1.0-alpha.1` and `v0.1.0-alpha.2` were built while the
+  repository was private and have none.
+- **A release is built and packaged from nothing in the Actions cache.** The
+  cache of a master or tag run can be written by any job of a master run, and
+  `e2e` runs test-only code in a container that holds the runner's docker socket.
+  So a tag's publish build uses no layer cache (no `cache-from`, `no-cache`), and
+  the jobs that check, scan and package a release download Bun, Trivy and its
+  database rather than restore them — `release-draft` holds `contents: write` and
+  `packages: write` and runs `bun` beside its registry login. No step of
+  `ci.yml` uses setup-bun's cache at all: `e2e` and `audit` restored Bun from
+  it, on tags too, until zizmor's `cache-poisoning` audit named them on
+  2026-10-12. `e2e` gates `image-publish`, so a binary planted there would run
+  a gate the release passes through, and an ignore annotation would have been
+  a judgement no test holds; `audit` installs nothing, so the cache saved it
+  nothing. `latest` and `sha-`
+  images still rebuild from the layer cache: they are the development channel,
+  and an installation runs an exact version tag. `ci-workflow.test.ts` holds each
+  setting. `v0.1.0-alpha.3` was assembled from that cache: in run
+  `38178388250` every Dockerfile step of its publish build but the last was
+  `CACHED`, and `release-draft` logged a cache hit for Bun.
+- **The newest published release is re-scanned every week**
+  (`.github/workflows/rescan.yml`, Mondays and by hand). It downloads that
+  release's `docker-compose.yml` and scans every image Compose resolves from it
+  — the application at its digest, PostgreSQL, Valkey and Traefik — with
+  `release-draft`'s scanner and gate (Trivy 0.69.3, from the registry, no Actions
+  cache, fixable CRITICAL/HIGH), uploading one SARIF report per image and failing
+  the run so the failure reaches the maintainer. The workflow holds
+  `contents: read`; only its scan job adds `security-events: write` and
+  `actions: read` for the upload. The gate leaves out postgres's
+  `/usr/local/bin/gosu`, whose 25 findings on 2026-10-12 were all in Go
+  packages the binary does not link; the report keeps them. Before this, a
+  release was scanned once and an advisory published later reached nobody until
+  the next push. Neither scan sees dependencies compiled into the `.next` bundle
+  or the Bun binary itself. [Releasing](docs/RELEASING.md#after-publication-weekly-re-scans)
+  says what a red run asks for. `ci-workflow.test.ts` holds the schedule, the
+  permissions, the pins and the gate.
+- **A package version younger than three days is not installed.** `bunfig.toml`
+  sets `[install] minimumReleaseAge = 259200`, so `bun add`, `bun update` and
+  any install that resolves something new skip versions, direct or transitive,
+  published within the last three days. A hijacked release is often found
+  and pulled within that window, and before an advisory exists `bun audit` has
+  nothing to say about it. Until 2026-10-12 nothing held one back: commit
+  `f643550` locked next-intl 4.14.0, a shipped runtime package, 27.9 hours
+  after it was published, with `@eloqnt/config` 0.0.2 at 46.6 hours. The gate
+  does not touch a frozen install: CI, the Dockerfile and `scripts/dev-local.sh`
+  install exactly what `bun.lock` names (a copy of the lockfile installed with
+  a ten-year gate exited 0 and left it byte-identical, Bun 1.4.2). Measured on
+  Bun 1.4.0, then the pinned image, and 1.4.2: `bun add` of a TypeScript nightly 20
+  hours old fails with `blocked by minimum-release-age: 259200 seconds`.
+  **A security fix younger than three days** goes in through `bun audit fix`,
+  which Bun documents as installing the safe version anyway and marking the row
+  `(newer than --minimum-release-age)`, or through `--minimum-release-age 0` on
+  that one command, which was measured to override the file. Neither lowers the
+  gate for the next update; `minimumReleaseAgeExcludes` would, so it stays
+  empty. Dependabot's seven-day cooldown is longer than the gate, so a version
+  it proposes is already old enough to clear it. `package-overrides.test.ts`
+  holds the value, the empty exclusion list and that ordering.
+- **Four packages may run install scripts**: `argon2`, `prisma`,
+  `@prisma/engines` and `@prisma/client` (`trustedDependencies` in
+  `package.json`, which replaces Bun's default allow-list rather than extending
+  it). A trusted script runs at install time with network access and, on a
+  developer machine, the repository's `.env` in its environment: Bun exports
+  it to lifecycle scripts, and neither `--no-env-file` nor bunfig `env = false`
+  stops that (a probe dependency's `postinstall` printed a value set only in
+  `.env` under both, Bun 1.4.0 and 1.4.2). CI and the image build have no
+  `.env`. Until 2026-10-12 the list also held `@swc/core`, `@parcel/watcher`,
+  `sharp` and `tesseract.js`, carried over from pnpm in `f643550`: sharp
+  0.35.5 has no install script, tesseract.js's is a donation banner,
+  `@parcel/watcher`'s builds from source only when asked to, and `@swc/core`'s
+  checks its prebuilt binding and, if that fails, runs `npm install
+  @swc/wasm` outside the lockfile. The last two are next-intl's, for its
+  message extractor, which is not enabled — but its plugin imports both
+  whenever `next.config.ts` loads, so every `next build` and `next dev` loads
+  their native bindings, from optional platform packages that have no script
+  (measured: importing `next.config.ts` under Bun loads
+  `@swc/core-linux-x64-gnu` and `@parcel/watcher-linux-x64-glibc`). After the
+  change, a clean `--target deps` build reports those three as blocked in
+  `bun pm untrusted`, and SWC, the watcher, sharp, argon2 hash/verify and the
+  Prisma engines all load in it; the production image builds.
+  `package-overrides.test.ts` holds the exact list.
+- **`dependencies` lists what the application runs**, so an advisory is
+  triaged against the right exposure. GitHub's dependency graph and the scope
+  Dependabot gives an alert are read from `package.json`, and until 2026-10-12
+  they called TypeScript, `@types/node`, `@types/react`, `@types/react-dom`,
+  Tailwind, `@tailwindcss/postcss` and PostCSS runtime packages; all seven are
+  build tooling and are now devDependencies. PostCSS stays in the runtime graph
+  all the same, because `next` declares its own pinned copy (8.5.23) as a
+  dependency: an advisory against PostCSS is still scoped "runtime" through
+  `next`, as Dependabot alerts 31, 53, 54 and 56 were (all "transitive"), and
+  neither copy is in the image. `server-only`, imported nowhere, was removed.
+  The image did not change: its builder installs both sections and ships only
+  the traced standalone output and the staged OCR and Prisma trees, and
+  production images built before and after the move held the same
+  5,708 files under `/app/node_modules` and `/opt/prisma`, byte for byte. The
+  release SBOM is made from the image, so it was never affected.
+  `dependency-scope.test.ts` requires every entry in `dependencies` to be
+  imported by shipped code or named with the reason it runs without one
+  (`prisma` for migrations, `react-dom` for Next).
 - Migrations are applied to an empty database in CI, so a migration that only
   works against an already-prepared database fails the build rather than
   somebody's first install.
 - Workflow permissions default to `contents: read`; jobs request more
   explicitly.
+- **The repository's own settings are written down and checked.** Private
+  vulnerability reporting, immutable releases, secret scanning and push
+  protection, Dependabot alerts and security updates, CodeQL's default setup,
+  the Actions allow-list (`.github/selected-actions.json`) with SHA pinning
+  enforced, approval for every external contributor's fork run, squash-only
+  merges, the two `v*` tag rulesets (`.github/rulesets/`) and Dependabot's
+  branches left outside the branch ruleset live on GitHub, where a checkout
+  cannot see them. `bun scripts/github-settings.ts check`
+  compares each with what it should be, with GET requests only, and exits 1 on
+  any difference; `apply` writes what differs. It needs an administrator's `gh`,
+  so the owner runs it; CI cannot. Its first run, on 2026-10-12, found 11 of
+  those 12 settings not as written, Dependabot alerts the exception: written
+  down is not the same as on until `check` exits 0. [Releasing](docs/RELEASING.md#repository-settings)
+  says what each is for.
 
 Dependency status as of the last audit is recorded in `docs/STATUS.md` under
 *Dependency security*.
@@ -168,20 +993,22 @@ Dependency status as of the last audit is recorded in `docs/STATUS.md` under
 
 ## Known gaps
 
-**Reviewed 2026-08-26.** `docs/SECURITY_REVIEW.md` is Phase 7's review: eight
-areas, what each is protected by and which test proves it, and the findings that
-remain with an owner. Two sections below were found to be false and are
+**Reviewed 2026-08-26, and again 2026-10-12.** `docs/SECURITY_REVIEW.md` is
+Phase 7's review: eight areas, what each is protected by and which test proves
+it, and the findings that remain with an owner. It also records the 2026-10-12
+review, whose accepted risks are listed at the end of this section
+([*What the 2026-10-12 review accepted*](#what-the-2026-10-12-review-accepted)). Two sections below were found to be false and are
 corrected in place rather than deleted — a wrong claim in this file is worth
 seeing, since its whole premise is that every claim is checkable.
 
 Read this section before deciding where to run Stoky. It is not a wish list; it
 is what is wrong today.
 
-### Rate limiting covers authentication only
+### Rate limiting covers authentication and the expensive calls, not the rest
 
 `ISSUES.md` CRITICAL-4 is closed as of Phase 3: `src/lib/rate-limit.ts` counts
-sign-ins and registrations per IP in Valkey, at the numbers `CLAUDE.md`
-specifies — 5 sign-ins per 15 minutes, 3 registrations per hour. A successful
+sign-ins and registrations per IP in Valkey, at the defaults in that file — 5
+sign-ins per 15 minutes, 3 registrations per hour. A successful
 sign-in is not charged to its address — the one attempt that succeeded is
 refunded — so a household signing in from several devices is not locked out by
 a limit meant for someone guessing. It is refunded rather than the counter
@@ -198,8 +1025,8 @@ SP 800-63B §5.2.2 asks a verifier to limit consecutive failed attempts against
 addresses gets the per-IP budget from each of them, which is five hundred
 attempts against one password. With both limits in force, a hundred addresses
 buy ten. The number is higher than the per-IP one because this counter cannot
-tell a household's phone from its tablet, and a successful sign-in clears it —
-safe here, since only that account's own password can.
+tell a household's phone from its tablet, and a successful sign-in charged to
+it clears it — safe here, since only that account's own password can.
 
 The counter is keyed on a SHA-256 of the normalised address rather than the
 address, so a `KEYS rl:login:acct:*` on Valkey — available to anything on the
@@ -208,21 +1035,141 @@ counts attempts on addresses that are not registered too, so the difference
 between "refused" and "rejected" cannot be used to discover which addresses
 exist.
 
-What is still open, and worth knowing before publishing an instance:
+**A full account counter refuses the right password too**, and anyone can fill
+it: ten wrong guesses at a member's address, from two addresses at the per-IP
+five each, at the start of every window. Until 2026-10-12 that kept the member
+from signing in on any device for as long as somebody kept doing it, and this
+section said nothing about it (security review, 2026-10-12, medium; ASVS 4.0.3
+V2.2.1 asks anti-automation to resist exactly this). So **a browser that has signed in
+to the account before is counted on its own budget instead** — 5 attempts per
+15 minutes per account and device — and a stranger's guesses never reach it.
+This is OWASP's device-cookie pattern, and NIST SP 800-63B §5.2.2's "accept
+authentication only from known devices":
+
+- The device is the existing `stoky_device` cookie: a random v4 UUID,
+  `httpOnly`, a year. Anyone can send any value, so **a cookie being present
+  buys nothing**. A device is known only if a successful sign-in *to that
+  account* recorded it, in a Valkey sorted set `rl:known:<account hash>` of
+  SHA-256 fingerprints (never the cookie value), newest twenty kept, expiring a
+  year after the last success. Any other id — none, a minted one, one recorded
+  for a different account — is counted on the shared budget exactly as before,
+  so a distributed guess is still bounded at ten per window.
+  `src/lib/auth/known-devices.ts`; the integration suite proves each case and
+  the twenty-device cap.
+- The set is deliberately not under `rl:login:`. Without a proxy the per-IP
+  counter is `rl:login:<whatever X-Forwarded-For says>`, and a forged header
+  naming the set would plant a string at its key and, failing closed, stop
+  every sign-in to that account. A test forges exactly that header.
+- A known device's own budget still runs out: a stolen device cookie is five
+  guesses a window. A success clears only the counter it was charged to, so the
+  owner signing in on their phone does not hand whoever is filling the shared
+  counter a fresh one.
+- Asking whether a device is known fails closed like the counters, and is asked
+  for registered and unregistered addresses alike.
+
+**What is left is accepted:** somebody who knows a member's address can still
+keep them from signing in **on a browser that has never signed in to that
+account** — a new phone, a private window, a cleared cookie jar — because that
+budget must stay shared to bound guessing. A browser pushed out of the newest
+twenty is a new browser again, and so, on an installation updated from a
+release before this one, is every browser until it next signs in: nothing was
+recorded before, and a session still open from then is not a record. Ending
+sessions or changing the password does not forget devices: a device only ever
+buys its own five guesses, not access. The person refused is told it is the
+account — "Demasiados intentos con esta cuenta… si se repite, avisa a quien
+administra tu hogar" — not the per-address "desde esta conexión", because
+another network cannot help them and their report is how the operator hears
+that somebody is spending the counter. Naming the account reveals nothing: the
+counter runs only after the per-address check passes, and for unregistered
+addresses alike. An operator can clear an account's shared counter by hand —
+[docs/INSTALL.md](docs/INSTALL.md#somebody-keeps-being-told-to-wait) has the
+command.
+
+Beyond sign-in, what is limited, what is not, and what is worth knowing before
+publishing an instance:
 
 - **Receipt upload is limited too**, at 30 per account per hour, counted
   before the file is decoded. OWASP ASVS **V11.1.4** asks for anti-automation
   on expensive operations, and this is the expensive one: up to 10 MB decoded,
-  re-encoded through `src/server/services/image.ts` (`Bun.Image`), written to a volume, then handed to Tesseract. It
+  re-encoded through `src/server/services/image.ts` (`Bun.Image`) at no more
+  than 4000 pixels on the long edge, written to a volume, then handed to Tesseract. It
   is counted per *account* rather than per address, because the caller is
   already authenticated and a household behind one NAT would otherwise share a
   budget for work each member does separately. A refused upload still counts —
   otherwise sending rubbish and being rejected would be the cheapest way to
   spend the server's CPU, and it would be outside the limit.
+- **Barcode lookups that reach Open Food Facts are limited**, at 60 per
+  account per hour (`productLookupRateLimit`). They are the one thing an
+  account can make this instance ask of somebody else: every `scanBarcode` or
+  `resolveScan` of a code the household does not have went out to
+  `world.openfoodfacts.org` from the instance's one address, and Open Food
+  Facts throttles API clients per address. A member scanning random codes in a
+  loop — under open registration, anyone — could get the instance throttled
+  and barcode enrichment stopped for every household on it. Only a request
+  that actually leaves is counted, after the household's own products and the
+  shared cache (hits, and codes known to be unknown) have missed, so rescanning
+  a cupboard never spends it. Past the budget the lookup is refused with a 429
+  before it is sent; the scan page hands the person the creation form with the
+  code filled in, and a scan queued offline becomes the same question the
+  sync indicator asks of a code nobody knows ("needs a name") rather than a
+  429 the queue would retry for two minutes and then give up on. It is per
+  account, not for the instance: N accounts are N budgets, so this bounds
+  what one account can do, not the instance's total.
+- **Adding a member is limited too**, at 20 per admin account per hour,
+  counted before the password is hashed (security review, 2026-10-12).
+  Setting a member's password (`household.resetMemberPassword`) spends the
+  same budget, for the same hash: twenty a member added or a password set.
+  `household.addMember` runs Argon2id at 64 MiB on every call before the
+  database is asked anything, and a duplicate address pays that hash as well,
+  because the unique index only answers once the row is written. Unmetered,
+  any account that admins a household — on an instance with open registration,
+  anyone who registers one — could ask for those hashes in a loop, or hundreds
+  at once in one batched request. An address that is already taken is
+  counted like any other call — it has already paid the hash. What is refused
+  before the count, by the role check or the input schema, never reaches the
+  hash either. Twenty is a household setting up every device and person it has
+  in one sitting with room for mistakes; past it, the admin waits for the
+  window to end.
+
+  What it bounds is one account, not one person. An owner can promote the
+  accounts it creates to admin (`household.updateRole`), and each of those
+  starts with a budget of its own. Nor is this the cheapest way left to make
+  the server run Argon2id: signing in runs `argon2.verify` at the same cost,
+  and a sign-in that succeeds is refunded and clears the counter it was charged
+  to (above), so anyone with a password can repeat it without being counted. What
+  this limit removes is the unmetered, batchable, account-creating form of the
+  cost — not every way an authenticated caller can ask for a hash.
+
+  The same limit bounds the one thing this procedure tells an admin about
+  other households: `CONFLICT` means the address has an account somewhere on
+  the instance, not only in this household. That is accepted — with no email
+  channel there is nothing else to tell an admin who typed an address already
+  in use — and it is visible only to an account that admins a household, at
+  twenty questions an hour.
+- **Changing a password is limited too**, at 5 per account per 15 minutes,
+  counted before the current password is checked (security review,
+  2026-10-12). The procedure answers "is this the password?", so unmetered it
+  would let whoever holds a stolen session — an unlocked phone, a kitchen
+  tablet — guess the password behind it with none of sign-in's limits. Five
+  is sign-in's per-address number; a refusal carries `Retry-After` like the
+  others. Per account, because the caller is already signed in and the
+  account is what the guesses are against.
 - **Every other tRPC procedure is unlimited**, so an authenticated account can
   still make as many ordinary calls as it likes. That is a smaller problem — it
-  needs credentials first, and those calls read rows rather than start OCR —
-  but it is not nothing on a shared household instance.
+  needs credentials first, and those calls read and write rows rather than
+  start OCR, hash a password or reach a third party — but it is not nothing
+  on a shared household instance. It is not only reads, either:
+  `product.create`, `store.create` and the other writes are unlimited too.
+  Until 2026-10-12 each of them could store as much text as the 15 MiB request
+  body carried, so open registration plus a loop of writes could fill the
+  disk every household shares. The per-field bounds above cap what one call
+  stores — under 700 characters of text for a product, about 100,000 for the
+  largest, a 500-line receipt review that creates a product per line — but
+  not how many calls there are, so an account can still grow the database
+  row by row. Keep the database volume on a disk something watches. Since
+  2026-10-12 one request can also carry at most 100 calls ("Batched calls"
+  above), so how many arrive at once is bounded by how many requests a caller
+  sends — and nothing counts those.
 - **The identifier is an IP address**, read from the last hop of
   `X-Forwarded-For`. Everyone behind one NAT therefore shares a bucket. An
   attacker with a range of addresses gets one bucket per address, which is what
@@ -252,6 +1199,33 @@ What is still open, and worth knowing before publishing an instance:
   `src/__tests__/unit/rate-limit.test.ts` pins the current behaviour under
   "what the identifier cannot know", so changing the trust model means changing
   those tests and this paragraph together.
+- **An IPv6 client is counted by its /64, and logged by its address.** One
+  IPv6 subscriber is at least a whole /64 — the smallest block a line is
+  given — and a host picks addresses inside it at will, so counted per address
+  it would have 2^64 budgets. `rateLimitIdentifier` normalises the address first (case,
+  leading zeros, `::`, brackets, a port, a zone), keys it by its first four
+  hextets, and counts an IPv4-mapped `::ffff:a.b.c.d` as the IPv4 client it
+  is; IPv4 is counted per address as before. The security log keeps the full
+  address (`clientAddress`): the bucket is what a limit needs, the address is
+  what an operator reading the log needs. The cost is the one a NAT already
+  has, a household's devices sharing a budget. A line delegated more than a
+  /64 — a /56 or a /48, as many home connections are — still has one budget
+  per /64 in it (256 or 65,536): that is the attacker with a range of
+  addresses above, and the per-account limit is what bounds it.
+- **Under the release bundle as shipped, IPv6 clients are not told apart at
+  all.** Traefik's network is IPv4-only, so a client connecting over IPv6
+  reaches it through Docker's userland proxy, which opens a connection of its
+  own: the application sees the network's gateway (`172.x.0.1`) in place of
+  every IPv6 client. They share one sign-in and one registration budget, so
+  anyone on IPv6 can keep every other IPv6 visitor waiting, and the security
+  log names the gateway for all of them. Established from Docker's
+  documentation and the proxy's source (security review, 2026-10-12), not
+  reproduced: that needs ports published on a dual-stack host. IPv6 is
+  not turned on in the bundle because it breaks Engines before 27, hosts with
+  IPv6 disabled, and an existing network on upgrade; it is an opt-in, and
+  [the installation guide](docs/INSTALL.md#clients-on-ipv6) says how to take
+  it, how to avoid the question with an A record only, and how to tell from
+  the log which applies. The /64 grouping above is what makes taking it safe.
 - **A refusal says how long to wait.** A 429 from tRPC carries `Retry-After`,
   read off the refusal rather than recomputed, so the header and the message
   cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
@@ -264,14 +1238,58 @@ What is still open, and worth knowing before publishing an instance:
   can take the cache down — but it makes Valkey a hard dependency of signing
   in, which it was not before. The server log names Valkey and `VALKEY_URL`
   when it happens, and the browser is told the service is unavailable rather
-  than that the password was wrong.
+  than that the password was wrong. Receipt upload refuses the same way. The
+  one exception is the Open Food Facts lookup: a request it cannot count is not
+  sent, and the scan ends on the creation form as it would in an Open Food
+  Facts outage — still closed for what the limit protects, since no uncounted
+  request leaves, without refusing a person a form they can fill in anyway.
+- **So the cache must not die of being full.** Valkey shares its memory between
+  these counters and the Open Food Facts product cache, which keeps one entry
+  per barcode for thirty days (a day for a code Open Food Facts does not know)
+  and which any account can grow by scanning barcodes. Valkey does not read the container's memory limit, so without a
+  bound of its own it would grow until the kernel killed it, and the limiter
+  would take sign-in down with it. The release bundle starts it with
+  `--maxmemory 160mb` (Valkey's `mb` is MiB) under the 256 MiB container
+  limit, leaving the rest for the copy-on-write of a background save, and
+  `--maxmemory-policy allkeys-lru`. The policy is the part that matters.
+  `noeviction`, Valkey's default, refuses the limiter's `INCR` once the cache
+  is full, and a refused count is a refused sign-in: the same outage without
+  the crash. `volatile-ttl` evicts the soonest-expiring
+  keys first, which are these counters, so filling the cache would reset
+  somebody's lockout. Under LRU a live counter is touched on every attempt and
+  the cold product entries go first. Measured against the bundle's own `cache`
+  service: 400 MB of 2 KB product-shaped keys left used memory at 160 MiB with
+  121,933 keys evicted, a counter incremented between batches survived with its
+  count and TTL intact, a background save at the bound succeeded, and the
+  container stood at 183 MiB of 256 MiB afterwards, never OOM-killed. The same
+  full cache under `noeviction` answered the limiter's script with "OOM command
+  not allowed". The cost: under memory pressure, a counter idle for longer than
+  most of the product cache can be evicted, which forgets the attempts counted
+  on it. An attacker who stopped guessing in order to have its own counter
+  evicted would first have to make most of the 160 MiB more recently used than
+  that counter, by adding or re-reading products, before the counter's window
+  (fifteen minutes for sign-in) ran out on its own; that is reasoning, not a
+  measurement. Lookups that reach Open Food Facts are metered per account,
+  which slows how fast one account can add products, but re-reading a cached
+  product is not. The development compose files set no container memory limit
+  and leave Valkey unbounded.
+  `src/__tests__/unit/deployment.test.ts` pins the flags and that the bound sits
+  at or below three quarters of the container limit.
 - **The limits are configurable** through `RATE_LIMIT_LOGIN_ATTEMPTS`,
   `RATE_LIMIT_LOGIN_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS`,
-  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS` and
-  `RATE_LIMIT_REGISTER_WINDOW_SECONDS`. Raising them raises the exposure; the
-  browser suite raises them because it registers dozens of accounts per run,
-  and a unit test asserts the shipped defaults with the environment unset so
-  that override cannot become the product's behaviour.
+  `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS`, `RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS`,
+  `RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS`, `RATE_LIMIT_REGISTER_ATTEMPTS`,
+  `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
+  `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
+  `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
+  `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`,
+  `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS` and
+  `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`. Raising them raises the
+  exposure; the browser suite raises the sign-in, known-device, registration,
+  add-member and product-lookup attempts (`playwright.config.ts` says why for
+  each), and a
+  unit test asserts the shipped defaults with the environment unset so that
+  override cannot become the product's behaviour.
 
 ### Refusals are recorded
 
@@ -283,17 +1301,74 @@ owner will actually ask — "has anybody been trying to get into my instance?" �
 had no answer anywhere.
 
 `src/lib/security-log.ts` writes one JSON object per event to stderr, which
-Docker already collects and rotates: `docker compose logs app | jq 'select(.event
-== "access.denied")'` works with nothing installed. The events are
+Docker collects. With `jq` installed on the host, `docker compose logs
+--no-log-prefix app | jq -cR 'fromjson? | select(.event == "access.denied")'`
+lists the refusals: `--no-log-prefix` drops the `app-1  | ` Compose puts
+before every line, which jq cannot parse, and `fromjson?` skips the lines that
+are not JSON. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
-`access.denied` and `request.throttled`.
+`auth.session.revoked`, `auth.password.changed`,
+`auth.password.change.refused`, `auth.password.reset`, `access.denied` and
+`request.throttled`. `auth.session.revoked` carries a `reason`:
+`sessions-valid-from` for a session somebody ended, `absolute-lifetime` for
+one signed in more than thirty days ago or carrying no sign-in time at all —
+which is every session left from before the limit, so expect these lines from
+every device that was signed in when that upgrade was installed.
 
-- **The access-control events come from a tRPC middleware, not from the
-  resolvers.** A refusal is thrown from three middlewares and from a dozen
-  resolvers comparing `householdId`; catching it centrally is what stops a new
-  router from forgetting to be audited. Only UNAUTHORIZED, FORBIDDEN and
-  TOO_MANY_REQUESTS — logging every error would bury the refusals in
-  NOT_FOUNDs and produce a log nobody greps.
+- **The release bundle rotates them; Docker alone does not.** Docker's default
+  `json-file` driver has no size limit, and every throttled refusal writes a
+  line, so an unauthenticated client could add to the log until the host disk
+  filled and took PostgreSQL with it. Every service in `deploy/docker-compose.yml`
+  therefore names `json-file` with `max-size: 10m` and `max-file: 5`: at most
+  50 MB on disk per container. The cap is a size, not a period, so it is also
+  what bounds how long the addresses and identifiers in the security log
+  survive, and under a flood that is not long: the oldest file goes when a new
+  one opens, and measured, 80 MiB of 71-byte lines left 23,412,327 bytes
+  readable through `docker logs` (the JSON wrapping counts toward the cap).
+  **An unauthenticated client can make that flood**, and nothing throttles
+  it: an anonymous tRPC request writes at most one refusal line (about
+  130 bytes; [*Batched calls*](#batched-calls--srclibtrpcbatchts)), and a
+  session cookie that does not decrypt makes Auth.js write about 1 KB per
+  request (the Auth.js bullet below). At about 1 KB a request, some fifty
+  thousand requests replace the 50 MB — arithmetic, not a measurement — and
+  with it the `auth.signin.failed` lines of a guessing run made just before.
+  The cap protects the disk, not the record. An operator who needs the record
+  to survive ships the logs off the host ([Install](docs/INSTALL.md#logs)),
+  which is the only defence against having it flushed. The driver is named next to its options
+  because under a daemon-wide driver such as `journald` a bare `max-size` stops
+  the container from starting.
+  `src/__tests__/unit/deployment.test.ts` asserts the block on every service.
+
+- **The access-control events come from tRPC middleware, not from the
+  resolvers**, so a new router cannot forget to be audited. Every procedure
+  logs UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS, which come from three
+  middlewares and two resolver checks (`assertMayActOnOwner` and the replay
+  envelope's composer check) — every one for a signed-in caller, and the
+  first one per HTTP request for a caller with no session, whose other
+  refusals in a batch said the same thing again. A cross-site request is refused before tRPC sees
+  it, so no middleware runs for it; the route handler writes its
+  `access.denied` line itself, with `reason: "cross-site"`.
+- **A household lookup that misses is logged too**, as `access.denied` with
+  `"code": "NOT_FOUND"` and `"reason": "not-found"` (ASVS V7.2.2). A resolver
+  asked for another household's row answers NOT_FOUND exactly as it does for
+  an id nobody has, so the browser learns nothing about which ids exist; the
+  server does not run a second, unscoped read to tell the two apart, so it
+  records both alike. **A not-found line is therefore not proof of a probe**
+  — a row deleted on another device, or a stale link, writes one as well.
+  What an operator looks for is a run of them from one account:
+  `docker compose logs --no-log-prefix app | jq -rR 'fromjson? | select(.reason
+  == "not-found") | .userId' | sort | uniq -c` counts them per account. The line names the account, its household and
+  the procedure, **never the id that was asked for**. It follows the code the
+  caller received, so a write scoped by `householdId` (`store.update`,
+  `shopping.removeItem`), which refuses a foreign id as Prisma's `P2025`, is
+  recorded like a read; a row deleted between a check and a write is
+  therefore recorded too. The one NOT_FOUND left out is a barcode nobody
+  knows, which is about Open Food Facts rather than anybody's household. Only
+  household procedures are covered; logging every error everywhere would bury
+  the refusals and produce a log nobody greps. This reverses the 2026-08-31
+  decision to leave these probes invisible (`docs/DEFERRED.md` item 22),
+  along the path that entry left open: logged at the middleware, with the
+  refusal codes still uniform.
 - **A failed sign-in logs the same line whether or not the account exists.**
   Recording which of the two it was would put back, in a file, exactly the
   distinction the flattened error message refuses to tell the browser. **And it
@@ -303,7 +1378,60 @@ Docker already collects and rotates: `docker compose logs app | jq 'select(.even
 - **No password, hash, token, cookie or request body ever reaches a line**, and
   the writer drops those keys defensively rather than relying on its own type
   to have no field for them. A credential in a log is a credential in every
-  copy, rotation and backup of that log.
+  copy, rotation and backup of that log. The same holds for the *other* log,
+  the server-fault lines below: a Prisma error is written through
+  `describeError` (`src/server/log-error.ts`), because Prisma's own message
+  is the failed call with its arguments.
+- **A sign-in line names the account by a tag, never by the address it
+  tried.** `auth.signin.failed` and `auth.signin.throttled` used to carry
+  `email` in plain text, for every well-formed address anybody submitted —
+  a member's typo, a neighbour, a credential-stuffing list — people the
+  database never holds, kept for as long as the container's output and in
+  every paste of `docker compose logs` (security review, 2026-10-12). They
+  now carry `account`: the first 16 hex characters of an HMAC-SHA256, keyed
+  with `NEXTAUTH_SECRET`, over `stoky-log-account:` and the address trimmed
+  and lowercased (`src/lib/account-tag.ts`). Keyed rather than a plain hash
+  because an address is guessable: without the secret, a pasted log cannot be
+  checked against a list of likely addresses. `email` is one of the keys the
+  writer drops, so no caller can put the address back, and every value is cut
+  to 200 characters, because some of them are chosen by whoever sent a
+  request that was refused. To find one person's lines, compute their tag in
+  the installation directory and grep for it:
+
+  ```bash
+  printf 'stoky-log-account:%s' 'ana@example.org' \
+    | openssl dgst -sha256 -hmac "$(sed -n 's/^NEXTAUTH_SECRET=//p' .env)" \
+    | cut -d' ' -f2 | cut -c1-16
+  ```
+
+  Type the address in lowercase. The command reads the secret as `install.sh`
+  writes it, without quotes; a value quoted by hand in `.env` gives a tag that
+  matches nothing. **Rotating `NEXTAUTH_SECRET` changes every
+  tag**, so lines from before a rotation do not match lines from after it.
+  Lines written before this change keep the address they were written with
+  until the log holding them is removed.
+- **Auth.js writes a refused sign-in as one line, not a stack.** Its built-in
+  logger followed every `CredentialsSignin` — every wrong password — with the
+  stack trace of `@auth/core`'s callback, the same frames every time, so each
+  failed attempt cost several lines of log on top of the security event that
+  already records it (security review, 2026-10-12). `authConfig.logger.error`
+  (`logAuthError` in `src/lib/auth.ts`) now writes `CredentialsSignin` and
+  `MissingCSRF` as the single `[auth][error] <type>: <message>` line and stops.
+  Measured by calling `@auth/core`'s `Auth()` under Bun with a credentials
+  provider that refuses: 4 lines and 462 bytes per refused sign-in before, 1
+  line and 99 bytes after; a POST with no CSRF token, 508 bytes to 137. The
+  production build (`bun .next/standalone/server.js`, sign-ins posted with
+  `curl`) writes the same 99 and 137 bytes. **Every other Auth.js error is
+  still written whole**, cause, stack and details as Auth.js wrote them,
+  because a `Configuration` error or a `CallbackRouteError` from something
+  `authorize` threw is an operator's only signal that sign-in is broken. This
+  shortens what one refusal writes; it does not bound how many refusals can be
+  written. **Nor is a refused sign-in the largest thing an unauthenticated
+  request can make Auth.js write.** Measured against the same production
+  build: a session cookie that does not decrypt (`JWTSessionError`) writes 10
+  lines and 988 bytes on `/api/trpc`, and twice that on a page; an unknown
+  action under `/api/auth` (`UnknownAction`) writes 1,252 bytes, and an
+  unknown provider 1,022. Those still carry their stack.
 
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still
@@ -313,12 +1441,11 @@ expires. The counting itself is proven against a real Valkey in
 
 ### The session signing key cannot be the example one
 
-`NEXTAUTH_SECRET` signs the session JWT, and Auth.js reads it from the
-environment itself without ever inspecting it — so until Phase 7's slice nothing
-in this application had looked at what it was. `.env.example` ships a
-placeholder, and that placeholder is **published in this repository**: an
-instance deployed without changing it signs sessions with a key anybody can
-read, and nothing about the running system looks wrong.
+`NEXTAUTH_SECRET` signs the session JWT, and Auth.js never inspects it — so
+until Phase 7's slice nothing in this application had looked at what it was.
+`.env.example` ships a placeholder, and that placeholder is **published in this
+repository**: an instance deployed without changing it signs sessions with a key
+anybody can read, and nothing about the running system looks wrong.
 
 `src/lib/auth/secret.ts` refuses to serve in production if the secret is
 missing, is the example value, or is shorter than 32 characters — with a message
@@ -337,6 +1464,26 @@ reading it is looking at a container that will not start.
 - **`/api/health` checks it too**, answering 503 with the same opaque body as
   any other failed dependency, so an instance that somehow got past start-up
   with an unusable key is reported unhealthy rather than healthy.
+- **The key it checks is the key that signs.** `authConfig` in
+  `src/lib/auth.ts` passes `secret: process.env.NEXTAUTH_SECRET` to Auth.js
+  explicitly. Until 2026-10-12 it passed nothing, and next-auth 5.0.0-beta.32
+  resolves an absent secret as `AUTH_SECRET ?? NEXTAUTH_SECRET`: `AUTH_SECRET`
+  — the name the Auth.js v5 docs and `npx auth secret` use — won whenever it was
+  set, while the guard and `/api/health` read only `NEXTAUTH_SECRET`. A valid
+  `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme` started, answered healthy, and
+  signed every session with `changeme`. The release bundle was never exposed —
+  `deploy/docker-compose.yml` hands the container an explicit `environment:`
+  map with no `env_file`, so an `AUTH_SECRET` added to `deploy/.env` never
+  reaches it — but a hand-edited compose file or a source deployment was.
+  `AUTH_SECRET` is now ignored, not refused: once it signs nothing, refusing to
+  start over it is only one more way not to start. Auth.js's key rotation
+  through `AUTH_SECRET_1..3` was never available here and still is not —
+  `@auth/core` reads that list only when the secret is empty, and next-auth has
+  already filled it from `NEXTAUTH_SECRET`, which production requires — so
+  rotating means changing `NEXTAUTH_SECRET`, which signs everyone out.
+  `src/__tests__/unit/auth-secret.test.ts` imports `@/lib/auth` in a fresh
+  process with both variables set and asserts the resolved key is
+  `NEXTAUTH_SECRET`; without the explicit `secret` it receives `changeme`.
 - **Production only.** Development and the suites use whatever is to hand;
   refusing there would trade a risk nobody faces for an obstacle everybody does.
 - **Not during `next build`.** The image is built without a runtime secret and
@@ -346,13 +1493,84 @@ reading it is looking at a container that will not start.
 
 ---
 
+### Registration closes after the first account
+
+`auth.register` is one of the two procedures anybody who can reach the instance
+may call. Until 2026-10-12 nothing let an operator close it (security review,
+2026-10-12): every stranger who registered got receipt upload and OCR, an
+upload volume nothing cleans, and every unmetered procedure, and tenant
+isolation became the only thing between them and the owner's household.
+
+`STOKY_REGISTRATION` (`src/lib/auth/registration.ts`) takes `open`,
+`first-user` or `closed`. **Unset, it is `first-user` in production** and `open`
+elsewhere, and the release bundle passes `${STOKY_REGISTRATION:-first-user}`
+explicitly. A household does not need open registration: an admin adds people
+through `household.addMember`, which the setting does not govern.
+
+- **Parsed strictly.** An unknown value is `closed` at run time, never `open`,
+  and in production the server refuses to start over it, from the same
+  instrumentation hook and in the same way as the signing-key guard above. Both
+  problems are reported before the exit.
+- **In this order**, in `auth.register`: `closed` refuses with `FORBIDDEN`
+  before the rate limiter and before any query; then the per-address limiter;
+  then, in `first-user`, a count of accounts, before the existence check, so a
+  refusal says nothing about whether an address is registered; then the
+  existence check and the Argon2id hash. Every refusal is an `access.denied`
+  line in the security log, with the path `auth.register`.
+- **The first-user count cannot race.** The account is created in a
+  transaction that holds a PostgreSQL advisory lock
+  (`pg_advisory_xact_lock`) and counts again under it, so two people claiming a
+  fresh instance at once cannot both see zero. The household is a nested write
+  of the account in the same transaction; before this, a registration that
+  failed after its household was written left a household nobody belonged to.
+- **`/register` says so before anyone types.** The page is a server component
+  that asks the same rule after `connection()`, so the answer is the running
+  container's and not the build's, and renders a page saying registration is
+  closed in place of the form, without needing JavaScript. It counts accounts
+  only in `first-user`, so a visitor to a `closed` instance causes no query.
+  The page decides what to show and guards nothing; `auth.register` refuses on
+  its own. The sign-in page still links to `/register`, which now explains
+  instead of refusing after submit.
+- **Tested against PostgreSQL** on a database of its own
+  (`src/__tests__/integration/registration.test.ts`): `closed` refuses
+  everyone without touching the database; `first-user` admits exactly one;
+  two simultaneous claims leave one account and one household; a registration
+  waits while the lock is held and is then refused. Removing the re-count,
+  the lock, the `closed` branch, or the nested household each turns a test red.
+
+What is still open:
+
+- **The claim window.** On a fresh installation, whoever reaches `/register`
+  first owns it, and the hostname is public from the moment its certificate is
+  issued, through Certificate Transparency logs. [The installation
+  guide](docs/INSTALL.md) says to register immediately, and to start again from
+  empty volumes if someone else did. A one-time setup token printed to the logs
+  would close the window; it is not built.
+- **`open` is still what it was.** An installation that sets it accepts
+  strangers, and registration still reveals whether an address has an account.
+
+---
+
 ### The password policy prefers length, and it is not a breach check
 
 `src/lib/validations/password.ts` is the policy, and it is applied wherever a
-password is *set*: registration, and the accounts an admin creates for a
-household. Twelve characters minimum, a maximum of 128, a refusal of the
-handful of passwords that appear at the top of every leak, and a refusal to
-accept the account's own name or address as its password.
+password is *set*: registration, the accounts an admin creates for a
+household, an admin setting a member's password
+(`household.resetMemberPassword`), and a person changing their own. Twelve characters minimum, a
+maximum of 128, a refusal of the handful of passwords that appear at the top
+of every leak, and a refusal to accept the account's own name or address as
+its password.
+
+**The identity refusal was documented here before it was applied** (security
+review, 2026-10-12). `newPasswordSchema` is a field schema and cannot see the
+name and address beside it, so it checked with no identity at all, and both
+`registerSchema` and `addMemberSchema` accepted `noelgarate2026` for
+`noelgarate@example.com`. `withIdentityRule` in the same file now wraps both
+forms with an object-level check that attaches the refusal to `password`; the
+register page and the add-a-member form name it in words rather than as a
+generic failure. A procedure whose input carries no name or address has to
+load the person and check against them itself: `auth.changePassword` and
+`household.resetMemberPassword` do.
 
 **No composition rules**, which is the opposite of what `ISSUES.md` DEBT-1
 proposed. That entry asked for the familiar four regexes — an uppercase, a
@@ -371,6 +1589,13 @@ What is still open:
   call to a service — neither of which belongs in an install expected to work
   air-gapped. What ships is a short list of the passwords a guessing attempt
   starts with, which is a floor rather than the control.
+- **The identity check is a substring match, not a guess at variations.** It
+  refuses a password containing the address's local part or the whole name,
+  case-insensitively, and ignores either when it is shorter than three
+  characters. For `ng@example.com` named "Noel Garate", `noel garate cocina` is
+  refused and `noel en la cocina` is accepted: a first name alone is not the
+  name. Growing it into token or fuzzy matching would start refusing ordinary
+  words that happen to be somebody's name.
 - **The policy is not applied to an existing password at sign-in**, beyond the
   maximum. A verifier that refused a stored password because the rule changed
   would lock people out of their own household.
@@ -378,7 +1603,11 @@ What is still open:
 The maximum is not a usability rule at all: `argon2.hash` and `argon2.verify`
 were both taking unbounded input on two endpoints reachable without an account,
 at 64 MB per call. A body of a few megabytes turned registration into a memory
-amplifier — the rate limiter bounds how often, not how much.
+amplifier — the rate limiter bounds how often, not how much. The password was not
+the only unbounded field on those endpoints: the address, the name and the
+household name were bare strings too, and a failed sign-in wrote the address
+it was given into the security log, whatever its length. All three are bounded
+now, with every other input (see *Input validation* above).
 
 ### ~~The services layer still throws bare `Error`~~ — closed
 
@@ -403,6 +1632,26 @@ logged nowhere. Every other code keeps the message its resolver or translator
 chose, because the screens read those. `src/__tests__/unit/trpc-error-shape.test.ts`
 checks both halves over HTTP.
 
+"The original" is not written verbatim when it is Prisma's. Prisma 6 renders a
+`PrismaClientValidationError` as the whole call, argument values included —
+measured on 6.19.3, with `errorFormat: "minimal"` as well, a `user.create`
+that fails validation prints the email, the name and the Argon2id hash it was
+writing — and Bun's `error.stack` and `console.error` repeat the message and
+the error's `meta`, where a raw query's Postgres error quotes the input it
+refused. No request reaches such a validation failure today (Zod leaves no
+typed field for one), so this was a latent leak a future bug would have
+opened. `describeError` (`src/server/log-error.ts`) now reduces a Prisma error
+to its class, code and client version, the call that failed and the file it
+was made from, the last line of a validation error (which names the argument
+and the expected type, and in every case measured not the value), the names of
+the `meta` keys, a raw query's SQLSTATE, and the stack frames, less any line
+that is also a line of the message, since a raw query's input can carry its
+own "    at "; an initialisation error keeps its
+message, the "database is down" line, which names host and port but not the
+credentials. Anything that is not a Prisma error is logged as before. The
+tRPC `errorFormatter`, the receipt pipeline's background processing and the
+start-up sweep of receipts a restart interrupted all log through it; `src/__tests__/unit/log-error.test.ts` checks each kind.
+
 ### ~~Household roles are decorative~~ — this section was false
 
 **Corrected 2026-08-26 by the Phase 7 review**, and it is worth leaving the
@@ -419,8 +1668,9 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 `src/types/next-auth.d.ts` declares `role` on the session non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 60 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
-pinning every one against the matrix rather than sampling. Membership and role
+and all 65 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+pinning every one against the matrix rather than sampling, and failing when the
+count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request.
 
@@ -428,6 +1678,63 @@ The real limit is one level down and is recorded in `docs/SECURITY_REVIEW.md`
 §2: the tier answers *may this role do this*, not *may this caller touch this
 row*, and the second was not uniform. Four instances of that were found and
 fixed; a test now fails on the shape of them.
+
+### A device keeps the last account's data while it stays offline
+
+Opening without a signal is a requirement, so a copy of household data lives
+on every device that has used the app: the cached shell (the service worker's
+copy of six pages, which carry no household data), the write queue
+(`stoky.queue.v1.<account>`), and the **saved reads** — the seven allowlisted
+queries in `PERSISTED_QUERIES` (`src/lib/offline/persist.ts`: the shopping
+lists, the stock overview, expiring and expired items, the product list),
+stored in `localStorage` under `stoky.reads.v1.<account>`.
+
+What removes them:
+
+- **Signing out** — **Cerrar sesión**, ending every session from this device,
+  or changing the password, all through `useEndSession` — clears the memory
+  cache, the queue, the saved reads and the shell before it leaves.
+- **Reaching `/login` with the network up** — where an expired or ended
+  session is sent — clears the previous account's saved reads, its shell and
+  the memory cache (`ShellCacheGuard`). So does a different account signing
+  in on the device. The queue is kept, because an expired session is asked to
+  sign in again and its unsent changes are what it signs in to send. Until the
+  security review of 2026-10-12, `/login` left the saved reads in place, and
+  an account that never signed in on that device again left them there
+  indefinitely: TanStack removes an expired copy only when the same account
+  restores it. A device updated from before then may hold such a copy under
+  a key nobody recorded as the last account's, so the guard also sweeps every
+  saved-reads key but the signed-in account's — all of them on `/login` — on
+  each run (`forgetPersistedReadsExcept`). A browser holds one session at a
+  time, so no other account's copy could be restored without that account
+  signing in, online.
+
+What does not:
+
+- **Ending a session ends the token, not the device's copy.** Expiry, the
+  thirty-day ceiling, **Cerrar la sesión en todos los dispositivos** and an
+  admin in **Personas del hogar** all work on the server. A device that is not
+  online never hears of it: opened offline, or when a navigation takes longer
+  than the service worker's 2.5 seconds, the cached shell renders and the
+  saved reads appear without anybody signing in. That is the offline
+  requirement working, not a defect in it — and it cannot be gated on the
+  session's expiry, which on an offline device is nearly always in the past
+  (the token lapses after fifteen idle minutes).
+- **The 24-hour `maxAge` is not a bound on how old the copy can be.** TanStack
+  stamps the time on every save and every open saves — the invalidation after
+  a restore is enough — so a device opened offline at least once a day keeps
+  its copy for as long as that continues. Measured: a copy stamped 23 hours
+  earlier, restored with nothing able to reach a server, was saved back
+  stamped with the current time.
+- **Blocked storage** means the guard cannot tell who was here, and forgets
+  nothing (the in-memory cache is still emptied on `/login`).
+
+So for a lost or shared device: end its sessions, and expect it to keep what
+it last saw until it next reaches the network. The device's own lock screen is
+what protects that copy; on a shared tablet, sign out rather than walk away.
+What would change this is encrypting the saved reads under a key the server
+releases only to a live session — which is the same as not reading them
+offline.
 
 ### The accessibility audit is automated; the human half is not done
 
@@ -448,18 +1755,371 @@ problems. The tree can be verified to contain the right information; whether the
 result *sounds* sensible cannot. Any accessibility score in an older document
 was still not produced by a tool.
 
+### One address can hold Traefik's connections open
+
+Nothing in the bundle limits how many connections one source address keeps
+open. The 2026-10-12 audit measured 4,000 TLS connections from one client, each
+holding an unfinished request line, taking the Traefik container from 17.5 MiB
+to 192.9 MiB of its 256 MiB (not re-measured since). Past that the container is
+killed and restarted, and the instance is unreachable for as long as the
+sockets are held. No account and no application request are needed.
+
+Shorter timeouts do not close this. A client that reopens what expires needs
+about 88 new connections a second to keep 5,300 open against a 60s
+`readTimeout`, and about 350 against 15s; both are easy from one host, and 15s
+would break slow receipt uploads (above). Traefik cannot cap connections per
+address on an HTTP router: `inFlightConn` exists only for TCP routers, and in
+the HTTP section of the dynamic file Traefik v3.7.13 rejects the whole file
+("field not found, node: inFlightConn", measured in the audit), so the `stoky`
+router disappears and every request gets 404. `inFlightReq` is valid there but
+runs only once the request headers have arrived, which the held connections
+never send. The memory limit stays: it is what turns the attack into a Traefik
+restart instead of memory pressure on the whole host.
+
+A per-address connection cap belongs in front of Traefik: the host firewall
+(nftables `ct count over N` per source address on TCP 443, or iptables
+`connlimit`), or a CDN or tunnel that does its own. The project ships no rule
+and has not tested one. Leave room for a household: its phones and laptops
+usually share one public address, and every browser opens connections of its
+own.
+
 ### Other things that do not exist
 
 - No hosted error tracking or monitoring. `/api/health` checks the database/cache.
 - Settings exports household JSON, without receipt files or a restore importer.
   Full backups remain the operator's job; [the guide](docs/INSTALL.md) covers them.
+  Only an admin can export, and the file is not a copy of everything held
+  about one person ([*What the JSON export does not include*](#what-the-json-export-does-not-include)).
 - Refusals are audit-logged, but there is no complete history of who changed what.
-- Registration remains open to anyone who can reach the instance. Restrict access
-  to trusted testers; there is no invitation-only switch.
-- No account lockout, no password reset flow, no email verification, no
-  two-factor authentication.
-- No secret scanning or SAST in CI. `ci.yml` is the only workflow; Trivy scans
-  the image, not the source.
+- No account or household deletion in the application. Removing somebody from
+  a household keeps their account. The operator deletes an account in the
+  database ([Install](docs/INSTALL.md#deleting-somebodys-account)), which
+  leaves its id on the stock movements and receipts it recorded, and its
+  receipt photographs until they are removed by the command given there.
+  Nothing deletes a household (ASVS 4.0.3 V8.3.2, security review 2026-10-12).
+- No invitations: with registration closed, an admin sets a new person's first
+  password and hands it over. The person can change it from Settings once
+  signed in; nothing makes them.
+- No permanent account lockout — but the per-account sign-in limit is a
+  temporary one that a stranger can renew every fifteen minutes against a
+  browser that has never signed in to the account (see *Rate limiting* above
+  for the known-device budget that keeps it off the rest).
+- No email verification, no two-factor authentication,
+  and no self-service password reset: there is no email to send a link to. A
+  forgotten password is set again by a household admin; an owner's by another
+  owner or, for a sole owner, by the operator in the database.
+- No per-session sign-out. Signing out clears the cookie on this device and
+  ends no copy of the token taken earlier; ending a session elsewhere means
+  ending all of the account's (*Authentication* above). Ending one session
+  needs a session identifier carried in the token and a record of the ones
+  ended — the per-device design `docs/SECURITY_REVIEW.md` §6 sketches — and
+  a check on every session read that must not fail closed on a cache outage,
+  since every page render reads the session.
+- No secret scanning or SAST of the source in CI. `ci.yml` and the weekly
+  `rescan.yml` are the only workflows; Trivy scans images, and zizmor the
+  workflows, not the source. Secret scanning, push protection and CodeQL are
+  repository settings instead (see *Supply chain*), and on 2026-10-12 all
+  three were off.
+- **CI's test containers are pinned by tag, not digest.** zizmor's `auditor`
+  persona, which is not the gate, reports five `unpinned-images` findings in
+  `ci.yml`: the `test` and `e2e` jobs' PostgreSQL and Valkey services and the
+  Playwright container. They run test code only and never reach an image or a
+  release, but a moved tag changes what CI tests against. The same persona
+  also wants a comment beside the granted permissions in four jobs and a
+  concurrency group in `rescan.yml`: ten findings on 2026-10-12, every one of
+  them suppressed by the gate's `regular` persona.
+
+### What the 2026-10-12 review accepted
+
+The 2026-10-12 review ([`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md#the-2026-10-12-review))
+fixed what it could and accepted the rest. These are the risks it accepted. Each
+has the reason, and what would change the decision; most are described in
+full in the section named.
+
+- **A new browser can still be kept out by someone who knows the address.**
+  The shared per-account budget is what bounds a distributed guess, so it stays
+  shared for browsers that have never signed in; known browsers have their own
+  ([*Rate limiting*](#rate-limiting-covers-authentication-and-the-expensive-calls-not-the-rest)).
+  The operator clears it by hand. A second factor or an email channel would
+  change it.
+- **The first-user claim window.** Whoever reaches `/register` first on a fresh
+  installation owns it; register at once, and start again if somebody else did
+  ([*Registration closes after the first account*](#registration-closes-after-the-first-account)).
+  A one-time setup token would close it, and is out of proportion for an alpha.
+- **An address's existence is visible** through `register` under
+  `STOKY_REGISTRATION=open` and through `addMember` to an admin. `first-user`
+  closes the first after the first account; the second is admin-only and
+  metered, and a uniform answer would hide real errors from the household's
+  own admins.
+- **No per-session sign-out.** Signing out clears this device's cookie; a
+  copied token lasts until fifteen idle minutes or thirty days. A denylist
+  would make every request depend on Valkey ([*Other things that do not
+  exist*](#other-things-that-do-not-exist)).
+- **IPv6 clients share the bridge gateway's budget by default.** IPv6 on
+  Traefik's network is an opt-in, because enabling it breaks older Docker
+  engines, hosts without IPv6 and existing networks; /64 grouping applies once
+  it is on ([Install](docs/INSTALL.md#clients-on-ipv6)).
+- **No proxy-level cap on connections per address.** Traefik cannot put one in
+  the HTTP chain; the idle timeout is shorter and host-level limits are
+  documented ([*One address can hold Traefik's connections open*](#one-address-can-hold-traefiks-connections-open)).
+- **An unauthenticated client can rotate the app's log out.** One refusal line
+  per anonymous request and the 50 MB cap bound the disk and the
+  amplification, not the volume of requests. Shipping logs off the host is the
+  defence ([*Refusals are recorded*](#refusals-are-recorded)).
+- **The application connects to PostgreSQL as the bootstrap superuser, and
+  Valkey has no password.** Neither publishes a port; both sit on an internal
+  network, so abusing either needs code execution inside a container already.
+  Separate migrator and runtime roles, or `requirepass`, need new secrets and
+  manual steps on existing volumes; the next breaking bundle change is the
+  time for them.
+- **Traefik runs as root inside its container**, with every capability
+  dropped, `no-new-privileges` and a read-only filesystem. Running it as
+  another user means chowning the existing ACME volume on every installation.
+- **Secrets reach the containers as environment variables**, not `_FILE`
+  secrets. Reading them takes `docker inspect`, which takes the Docker daemon,
+  which is root on the host ([*Secrets*](#secrets)).
+- **Next's preview-mode id and Server Action key are baked into the public
+  image.** Nothing uses draft mode, revalidation or a closure-bound action, and
+  a test fails if one appears ([*Keys `next build` writes into the image*](#keys-next-build-writes-into-the-image)).
+- **No per-household storage quota, and uploaded photographs are never
+  deleted** (`ISSUES.md` UPLOAD-1, Phase 7 finding 16). Uploads are metered and
+  bounded per file; a quota needs a schema change, accounting and a screen.
+  Revisit before any open-registration or multi-tenant use.
+- **No `CHECK` constraints in the database** (`ISSUES.md` DB-1). Zod bounds
+  guard every write path; a constraint migration needs a data audit first.
+- **No account erasure in the application.** The operator is the data
+  controller and has the database; the runbook is in
+  [Install](docs/INSTALL.md#deleting-somebodys-account). In-app erasure needs
+  decisions about shared household records.
+- **Saved offline reads stay on a device for up to 24 hours** until the app is
+  next opened after a change of session
+  ([*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline)).
+  Encrypting `localStorage` would not resist a local attacker.
+- **Plain-HTTP LAN installations stay supported** (D84): the server warns at
+  start-up instead of refusing, and the weaker guarantees are documented under
+  *Authentication* and *Cross-site requests*.
+- **Trivy does not inventory the Bun binary**, so a Bun advisory is invisible to
+  the image scans. The version is tracked through `.bun-version` and
+  Dependabot's `docker` updates, and each update reads Bun's security notes.
+- **`master`'s `latest` image is still built with the Actions cache.** Releases
+  are built without it, scanned at the pushed digest and attested; `latest` is
+  not an installation channel.
+- **`v0.1.0-alpha.1` and `v0.1.0-alpha.2` have no attestations and their
+  releases stay mutable**, and a promoted release image's OCI version label
+  reads `candidate-v…`. Attestations and immutable releases are not
+  retroactive; the label is cosmetic, and the promoted digest is the one that
+  was smoked, scanned and attested.
+- **Nothing tests that the caller's own row has no reset button, and a
+  self-reset would be reported as "too easy"** (`ISSUES.md` TEST-9). Deferred
+  by the final review of the branch that added the reset: the server refuses a
+  self-reset and the people screen offers none today, so this is a missing
+  test and a wrong message waiting for a regression, not a way in. A test that
+  goes red without the screen's `me.data.id !== member.id` check, and
+  `resetRefusalOf` giving the self-reset refusal its own answer, close it.
+
+---
+
+## Personal data, outbound connections and secrets
+
+Whoever runs an instance holds its members' data and answers for it, so this
+section lists what the instance keeps, what it contacts and how its secrets
+are handled (security review, 2026-10-12). Update it when a change alters what
+is stored, logged or sent.
+
+### What an instance holds, and for how long
+
+| Data | Where | How long |
+|---|---|---|
+| Accounts: email address, name, Argon2id password hash, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
+| Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
+| Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
+| Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
+| The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
+| An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
+| Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
+| Known devices: for each account (keyed by the same unkeyed hash), SHA-256 fingerprints of up to 20 `stoky_device` ids | Valkey | A year after the last successful sign-in from that device |
+| The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
+| Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |
+| On each device: the saved reads, the write queue and the `stoky_device` cookie | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The cookie lasts a year |
+| Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env`, and the Compose and Traefik files | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
+
+Two hashes in that table are weaker than they look. The security log's
+account tag is keyed with `NEXTAUTH_SECRET`, so a pasted log line cannot be
+checked against a list of likely addresses. The Valkey account hash is not
+keyed. Anyone who can read the Valkey data can confirm whether a guessed
+address has tried to sign in during the window, or has a known device.
+
+No request body or receipt text reaches a log. Traefik has no access log: the
+release bundle does not pass `--accesslog`, so the proxy does not record
+requests.
+
+### What the JSON export does not include
+
+**Configuración → Descargar tus datos** is `data.exportHousehold`
+(`src/server/trpc/routers/data.ts`). Only an OWNER or ADMIN can use it, and it
+covers the whole household: the household itself; its current members (id,
+email address, name, role, language and creation date); its locations and
+stores; its products, each with its stock movements and price records; its
+receipts, each with the photograph's path and each line's text; and its
+shopping lists. It leaves out:
+
+- password hashes, always;
+- receipt photographs, which it gives only as paths, and each receipt's
+  whole-ticket OCR text (`rawOcrText`). The file says so in its `notes`;
+- who uploaded a receipt and who made a stock movement;
+- each product's Open Food Facts data and image address;
+- members' display preference and the time their sessions were last ended;
+- people who have been removed from the household;
+- the landing-screen choices and the replay records;
+- everything in Valkey, the logs and the certificate store.
+
+It is therefore not a complete copy of what the instance holds about one
+person, and a member who is not an admin cannot export at all. There is no
+per-person export or account deletion. If a person asks the operator for their
+data, the operator answers from the database and the uploads volume. If they
+ask to be erased, [Install](docs/INSTALL.md#deleting-somebodys-account) deletes
+the account in the database and lists what stays. Either way the operator also
+has to account for the backups.
+
+### Outbound connections
+
+What an instance contacts on its own, as released:
+
+- **The server calls the Open Food Facts API**, `world.openfoodfacts.org`,
+  over HTTPS, for a scanned barcode that neither the household's own products
+  nor the shared cache can answer (`src/server/services/openFoodFacts.ts`).
+  A call sends the barcode, the instance's IP address and the User-Agent
+  `Stoky/<version> (+https://github.com/NGarate/stoky)`. It sends nothing
+  about the account or the household. Calls are metered at 60 an hour per
+  account and give up after 5 seconds. This is the only outbound `fetch` in
+  `src/`.
+- **The browser loads product photographs from `images.openfoodfacts.org`**,
+  on the product page. Open Food Facts sees the viewer's IP address and
+  browser, but no `Referer`: the image carries `referrerPolicy="no-referrer"`,
+  and the page sends `Referrer-Policy: same-origin`. It is the only other
+  origin the CSP allows, and only in `img-src`. `connect-src` is `'self'`. The
+  product page's links to `world.openfoodfacts.org` are navigations, made only
+  when somebody follows one.
+- **Traefik contacts Let's Encrypt** over ACME to obtain and renew the
+  certificate, and registers `ACME_EMAIL` there. Its version check and its
+  anonymous usage statistics are both off ([*Release deployment*](#release-deployment--deploydocker-composeyml)).
+- **Nothing else, and no telemetry.** Stoky reports nothing to the project or
+  to anybody else: there is no analytics, no error tracking and no update
+  check. The OCR model is part of the image (`TESSDATA_PATH`). Fonts come from
+  the instance itself (`font-src 'self'`). The image sets
+  `NEXT_TELEMETRY_DISABLED=1`. PostgreSQL and Valkey sit only on the
+  `internal: true` network, which has no route out.
+
+**One exception, which the release bundle prevents only by accident.** The
+image's start command runs `prisma migrate deploy`. Unless
+`CHECKPOINT_DISABLE` is set, Prisma's CLI starts a background check against
+`checkpoint.prisma.io` that sends, among other things, Prisma's and the
+runtime's versions, the OS and architecture, the schema's database provider,
+hashes of the project and CLI paths, and the command line. The image does not
+set the variable. Under the release bundle, and the source overlay that
+inherits it, the application's root filesystem is read-only. The CLI fails to
+create its cache directory (`EROFS` on `/home/bun/.cache`) before it would
+send, so nothing leaves. Measured on 2026-10-12 against an image built from
+this tree, with `checkpoint.prisma.io` resolved to a listener on an internal
+network:
+
+| How the container ran | Result |
+|---|---|
+| Read-only, as in the bundle | No connection |
+| Writable, for example a plain `docker run` | A TLS ClientHello for `checkpoint.prisma.io` at start |
+| Writable, with `CHECKPOINT_DISABLE=1` | No connection |
+
+An operator who runs the image any other way should set
+`CHECKPOINT_DISABLE=1`. Setting it in the image itself is still to do.
+
+### Secrets
+
+`.env` holds `POSTGRES_PASSWORD` and `NEXTAUTH_SECRET`. `NEXTAUTH_SECRET`
+signs sessions and keys the security log's account tags. Both reach the
+containers as environment variables:
+
+- the database password in `db`'s environment and inside the app's
+  `DATABASE_URL`;
+- `NEXTAUTH_SECRET` in the app's environment.
+
+Measured, `docker inspect` of a container prints its environment. Plain
+`docker compose config` printed both secrets of a filled-in `.env`, while
+`docker compose config --quiet` printed nothing. Reading either takes access
+to the Docker daemon, which is root on the host. The application starts no
+helper processes that would inherit the environment: OCR runs in-process.
+
+They are not mounted as files, because files would help less than it seems.
+Prisma reads `DATABASE_URL` from the environment, so `POSTGRES_PASSWORD_FILE`
+on `db` alone would leave the same password in the app's environment. Moving
+it properly needs an entrypoint that builds the URL from a mounted file, plus
+`_FILE` support for `NEXTAUTH_SECRET`. Anyone who can read a container's
+environment, as root or as code running inside it, can also read a file
+mounted into it. What remains is accidental disclosure: pasting `inspect` or
+`config` output into an issue. [Troubleshooting](docs/INSTALL.md#troubleshooting)
+warns against that. Backups copy `.env` in plaintext beside the database dump,
+and the backup instructions say to
+[encrypt them](docs/INSTALL.md#backup-and-restore).
+
+### Keys `next build` writes into the image
+
+`next build` generates keys of its own and writes them into the standalone
+output, which the Dockerfile copies into the image
+(`COPY --from=builder /app/.next/standalone ./`). The image is public, so every
+installation of a release shares these values and anybody who pulls it can read
+them. Measured on a standalone build of 2026-10-12:
+`.next/server/server-reference-manifest.json` holds a 44-character base64
+`encryptionKey` (32 bytes), and `.next/prerender-manifest.json` holds
+`previewModeId`, `previewModeSigningKey` and `previewModeEncryptionKey`. None of
+them protects anything in this application. The reasons are below, so that the
+change that would make one matter is recognised when it is proposed (security
+review 2026-10-12, CWE-321):
+
+- **The Server Action key encrypts the variables an inline function closes
+  over:** an inline `"use server"` function, whose closed-over values go to the
+  browser as ciphertext and are trusted when they come back, and an inline
+  `"use cache"` function, whose closed-over values are encrypted with the same
+  key (`decryptActionBoundArgs` in
+  `node_modules/next/dist/server/use-cache/use-cache-wrapper.js`). With a public
+  key that ciphertext is neither secret nor tamper-proof. Arguments attached
+  with `.bind()` are not encrypted at all: React serialises them into the page
+  as they are (`$$bound`), so a bound value is readable and replaceable by
+  whoever submits the form, whatever the key. Neither exists. The three
+  actions (`src/lib/auth/actions.ts`, `src/lib/i18n/cookies.ts`,
+  `src/lib/landing/choose.ts`) are modules whose first statement is
+  `"use server"`, called with ordinary arguments that each action checks like
+  any other request, and nothing in `src/` uses `use cache`.
+  `src/__tests__/unit/server-actions.test.ts` parses everything under `src/`
+  that ships and goes red on a `"use server"` anywhere but a module's first
+  statement, and on `.bind(` applied to an action imported directly from a
+  `"use server"` module (a re-export or an alias is not followed). Before
+  allowing a closure, set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` per
+  installation: Next reads it before the manifest's key
+  (`node_modules/next/dist/server/app-render/encryption-utils.js`), and it must
+  be base64 of 16, 24 or 32 bytes (`openssl rand -base64 32`). Set it at
+  runtime only. A value set in the Dockerfile would be baked into the public
+  image again. Before allowing `.bind()`, have the action re-check the bound
+  value as untrusted input; no key helps there. Next's own guide also advises
+  against relying on that encryption to keep a value from the client
+  (`node_modules/next/dist/docs/01-app/02-guides/data-security.md`).
+- **The preview keys sign and encrypt draft mode's cookies.** Nothing in
+  `src/` calls `draftMode()`, so a forged draft-mode cookie switches nothing on.
+- **`previewModeId` is also the on-demand revalidation secret.** A request
+  carrying `x-prerender-revalidate: <previewModeId>` is treated as a request to
+  regenerate a prerendered route (`checkIsOnDemandRevalidate`,
+  `node_modules/next/dist/server/api-utils/index.js`). The build prerenders 27
+  routes. Under `cacheComponents` 26 of them are partially static shells and
+  one is the static web manifest, none with a revalidation interval, and
+  nothing in `src/` uses `use cache`, `unstable_cache` or a `revalidate`
+  export. (The one `revalidatePath`, in `choose.ts`, is the action refreshing
+  its own page.) A forced regeneration therefore produces the same shell
+  again. This was read in Next's code and the build manifest, not exercised
+  against a running server. Unlike the action key, this one cannot be replaced
+  at runtime: the Node server reads it only from
+  `.next/server/preview-props.json` (the same three values, also in the
+  image), and `__NEXT_PREVIEW_MODE_ID` is read only by the edge runtime.
+  Accepted while that holds. Adopting `use cache`, ISR or draft mode makes forced
+  regeneration a real cost and reopens this.
 
 ---
 
@@ -475,6 +2135,8 @@ The app rejects short signing keys and the published development placeholder.
 Use the release bundle, which exposes only Traefik. Development Compose files
 publish local infrastructure and carry known passwords; they are not deployments.
 A proxy that sanitizes forwarded addresses remains mandatory for per-IP limits.
+If the hostname has an AAAA record, read
+[Clients on IPv6](docs/INSTALL.md#clients-on-ipv6) first.
 
 ### Where to run it
 
@@ -483,6 +2145,19 @@ proxy. The [security review](docs/SECURITY_REVIEW.md) has run and the password
 policy includes common-password/identity checks; neither makes this a stable
 release. The bundled automatic certificate flow needs a hostname and inbound
 TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
+Plain HTTP to another machine is tolerated for testing, not supported: it sends
+every password and session cookie in cleartext, and the app logs a warning at
+start-up when `NEXTAUTH_URL` is such an address or is not set. For TLS without a
+public hostname, use your own proxy — setting `NEXTAUTH_URL` to its https
+address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
+`tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).
+An instance open to the internet needs a per-address connection cap in front
+of Traefik, which the bundle cannot provide: see "One address can hold
+Traefik's connections open" above.
+If a CDN sits in front of it, give it no rule that caches everything or
+overrides the origin's `Cache-Control`: `/api/trpc` marks every answer
+`no-store`, and a cache told to ignore that would serve one household's data
+to another.
 
 ### Keep it updated
 
@@ -491,9 +2166,18 @@ Use exact release tags and follow the target release notes and
 does not replace running containers; `docker compose up -d --wait` does.
 Do not automatically follow `latest` for an alpha installation.
 
-Trivy checks images before publication for fixable CRITICAL/HIGH findings.
-Published images are not continuously rescanned; a clean publication scan is not
-an assurance about vulnerabilities disclosed later. Updates require a newly built
+The bundle's PostgreSQL, Valkey and Traefik are pinned by digest, so pulling
+does not update them either: a fix to one of them reaches an installation in
+the Stoky release that refreshes its pin. Take new releases for those fixes as
+well as for the app's.
+
+Trivy checks images before publication for fixable CRITICAL/HIGH findings,
+and a release's exact digest again before its version tag exists. The newest
+published release's images — the application and its three services — are
+re-scanned weekly with the same gate, and a finding there is fixed by a new
+release, never in place. That covers only the newest release, only what
+Trivy can see, and only what was known that week: a clean scan is not an
+assurance about vulnerabilities disclosed since. Updates require a newly built
 image, not an in-place package upgrade inside a running container.
 
 ### Back up your data
@@ -504,35 +2188,65 @@ stop app writes during the copy and restore into an empty installation. Keep
 backups off the host and verify restoration before relying on them. JSON export
 is not a substitute for a database-and-images backup.
 
+A backup holds `.env`, every account's password hash and every receipt, in
+plaintext unless you encrypt it: encrypt it before it leaves the host (the
+guide shows `age` and GnuPG), and keep it on a rotation you choose. What it
+contains, and what a backup keeps after the instance has deleted it, is in
+[*What an instance holds*](#what-an-instance-holds-and-for-how-long).
+
 ## Verifying an image's provenance
 
-On a public repository, CI publishes signed build provenance to GHCR, so you can check that the image
-you are about to run really was built by this workflow, from this repository, at
-a specific commit. With the [GitHub CLI](https://cli.github.com/):
+CI publishes signed build provenance to GHCR, so you can check that the image you
+are about to run really was built by this repository's `ci.yml`, from the release
+tag you chose. Verify the exact version you set as `STOKY_VERSION`, never
+`latest`, and pin the workflow and the source ref as well as the repository:
 
 ```bash
 gh attestation verify \
-  oci://ghcr.io/ngarate/stoky:latest \
-  --repo NGarate/stoky
+  oci://ghcr.io/ngarate/stoky:v0.1.0-alpha.3 \
+  --repo NGarate/stoky \
+  --signer-workflow NGarate/stoky/.github/workflows/ci.yml \
+  --source-ref refs/tags/v0.1.0-alpha.3
 ```
 
-Images from `master` are tagged `sha-<full-commit-sha>`. A release tag's build is
+`--repo` alone accepts an attestation from any workflow run on any branch of the
+repository; `--source-ref` is what ties the image to the release tag. For a
+`sha-` image from `master`, use `--source-ref refs/heads/master`.
+
+This step is optional. It needs the [GitHub CLI](https://cli.github.com/) signed
+in to a GitHub account (`gh auth login`): without one it stops with
+`gh auth login` and exit code 4 before checking anything. The installation path
+needs no account and relies on `SHA256SUMS` for the release files and, for the
+image, on the digest those files name (on the exact version tag alone up to
+`v0.1.0-alpha.3`); the attestation is the check that the image behind it was
+built here. Releases after `v0.1.0-alpha.3` attest their installation files
+too, checked the same way ([the guide's optional
+step](docs/INSTALL.md#optional-check-who-published-the-files)).
+
+From `v0.1.0-alpha.3` on, **a missing attestation or a failed verification means
+do not run the image**: report it as a [vulnerability](#reporting-a-vulnerability).
+`v0.1.0-alpha.1` and `v0.1.0-alpha.2` were built while the repository was private
+and carry no attestation, so for them the command fails with `HTTP 404` from the
+attestations API; upgrade off them rather than treat that as normal.
+
+Images from `master` are tagged `sha-<full-commit-sha>`, and only a push to
+`master` or of a `v*` tag publishes: a pull request or a manual dispatch, on any
+branch, is verified and publishes nothing. A release tag's build is
 pushed as `candidate-<version>` and gains the exact version tag only after the
-install smoke passes on that digest; it never rewrites the `sha-` tag. `latest` is the development channel from `master`. Pinning to a digest or
-to a `sha-` tag rather than `latest` is the safer choice for a deployment you
-want to be reproducible.
+install smoke passes on that digest; it never rewrites the `sha-` tag. The
+attestation is bound to the digest, not the tag, so the version tag verifies with
+the provenance of the tag run that built it. `latest` is the development channel
+from `master`. Pinning to a digest or to an exact version tag rather than `latest`
+is the safer choice for a deployment you want to be reproducible, and of the two
+only the digest cannot be moved: release bundles after `v0.1.0-alpha.3` name it.
 
 The image also carries an SBOM, which lists the packages it contains:
 
 ```bash
 docker buildx imagetools inspect \
-  ghcr.io/ngarate/stoky:latest \
+  ghcr.io/ngarate/stoky:v0.1.0-alpha.3 \
   --format '{{ json .SBOM }}'
 ```
-
-For this private repository the signed-attestation step is disabled, so its
-absence is expected. Where attestation is enabled, investigate a failed verification
-before running the image.
 
 ---
 

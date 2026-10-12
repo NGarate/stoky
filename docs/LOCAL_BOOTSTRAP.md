@@ -53,6 +53,41 @@ The helper runs `bun install --frozen-lockfile` on every setup, including when
 `--force` to replace retained pnpm symlinks and removes that marker only after
 installation succeeds. A failed install stops setup before Prisma runs.
 
+### Adding or updating a dependency refuses anything under three days old
+
+`bunfig.toml` sets `minimumReleaseAge = 259200`, so `bun add`, `bun update`
+and a plain `bun install` that resolves something new skip every version,
+direct or transitive, published in the last three days. Asking for one by
+exact version fails:
+
+```text
+error: No version matching "typescript" found for specifier "7.1.0-dev.20261011.1" (blocked by minimum-release-age: 259200 seconds)
+```
+
+That is the gate working, not a registry fault; `SECURITY.md` (Supply chain)
+says why it exists. Wait, or take an older version. A security fix that cannot
+wait goes in through `bun audit fix`, or through `--minimum-release-age 0` on
+that one command (`bun add --minimum-release-age 0 <package>@<version>`), and
+the commit says which advisory it answers. Do not lower the value or add the
+package to `minimumReleaseAgeExcludes`: either one weakens the gate for
+every later update too. `bun install --frozen-lockfile`, which is everything
+above, is unaffected.
+
+### `bun install` hands `.env` to the packages it trusts
+
+Four packages run code at install time (`trustedDependencies` in
+`package.json`: argon2 and Prisma's three), and Bun gives each of them the
+repository's `.env` in its environment — `DATABASE_URL` with its password,
+`NEXTAUTH_SECRET`. `--no-env-file` and bunfig `env = false` do not stop it;
+both were measured not to, on Bun 1.4.0 and 1.4.2. Nothing in the repository
+can, which is why that list is kept to what the install needs and
+`package-overrides.test.ts` refuses an addition. If a dependency asks to run
+its script (`bun pm untrusted` lists the ones that were blocked), adding it is
+a security decision for `SECURITY.md` (Supply chain), not a fix for a warning.
+To keep `.env` out of reach, install before creating it, as the fast path's
+first run does (`scripts/dev-local.sh` does not: it writes `.env` before it
+installs), or install in the container: its `deps` stage has no `.env`.
+
 ### Existing checkout fails with `Failed to load external module argon2-…`
 
 Stop the dev server and run `bun run dev:setup` again. The helper now repairs
@@ -115,7 +150,11 @@ Four traps, each of which cost an afternoon:
 Dockerfile, because a `FROM` cannot read a file.
 `src/__tests__/unit/bun-version.test.ts` fails if they disagree, which they did
 once: the image moved to 1.4.0 while CI stayed on 1.3.14, and a green pipeline
-was proving the suites passed on a runtime nobody deploys.
+was proving the suites passed on a runtime nobody deploys. The Dockerfile names
+the image by tag and by the digest of its multi-platform index, so moving the
+version means moving the digest with it: take the `Digest:` line of
+`docker buildx imagetools inspect oven/bun:<version>-alpine`, not one
+platform's manifest. No test can tell offline that the two name the same image.
 
 ## Running the development server
 
@@ -231,7 +270,10 @@ These are the steps the browser suite runs (`playwright.config.ts`,
 `"next start" does not work with "output: standalone"` and serves `.next/`
 rather than the bundle the image ships, so it can hide a tracing defect.
 `NEXTAUTH_SECRET` must not be the example value, because production refuses to
-start on it.
+start on it. Served through row 2, with `NEXTAUTH_URL` set to the LAN address,
+it starts with an `[auth] warning:` line saying the URL is plain HTTP to
+another machine; that is the truth about row 2, not a fault (`SECURITY.md`,
+*Authentication*).
 
 Served through row 4, this is the one setup where a phone can **install** the
 app. On Android, Chrome's menu shows **Install app**. On iOS, use Safari's
@@ -243,6 +285,17 @@ icons are generated from `public/icons/*.svg` by `bun scripts/generate-icons.ts`
 ```bash
 bash scripts/dev-local.sh --seed
 ```
+
+Or `bun run db:seed` on its own, any number of times. It loads the demo
+household with an account to sign in as, `demo@stoky.local` / `Demo1234!`; a
+re-run deletes that account's household and writes it again, in one
+transaction. The household is found through the account, not through the name
+*Hogar Demo*, so a household you registered under the same name survives.
+
+The seed refuses to run when `NODE_ENV=production` and exits 1 before it opens a
+connection, because that password is published. There is no override: the
+check lives in `prisma/seed-guard.ts`, and a demo instance is a development
+database, not a production one.
 
 ## Minimum success checks
 

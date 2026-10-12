@@ -136,6 +136,41 @@ describe("agreeing with sharp", () => {
   });
 });
 
+describe("agreeing with sharp about colour profiles", () => {
+  // `unit/image-reencode.test.ts` proves the ICC strip with a profile spliced
+  // in by hand and read back by this walker. Here a real one — sharp's Display
+  // P3 — goes through the same re-encode, and sharp, a decoder that reads ICC,
+  // is asked whether anything survived.
+  async function displayP3(): Promise<Buffer> {
+    return fixedLength(
+      await sharp({
+        create: { width: 60, height: 40, channels: 3, background: { r: 200, g: 20, b: 30 } },
+      })
+        .withIccProfile("p3")
+        .jpeg()
+        .toBuffer(),
+    );
+  }
+
+  it("sees the profile where sharp does, so the absence below means something", async () => {
+    const source = await displayP3();
+
+    expect((await sharp(source).metadata()).icc?.length ?? 0).toBeGreaterThan(0);
+    expect(jpegSegments(source).some((segment) => segment.marker === 0xe2)).toBe(true);
+  });
+
+  it("finds no profile and no application segment but JFIF after a re-encode", async () => {
+    const output = await reencodeAsJpeg(await displayP3());
+    const applicationSegments = jpegSegments(output)
+      .map((segment) => segment.marker)
+      .filter((marker) => marker >= 0xe0 && marker <= 0xef);
+
+    expect((await sharp(output).metadata()).icc).toBeUndefined();
+    expect(applicationSegments).toEqual([0xe0]);
+    expect(jpegDimensions(output)).toEqual({ width: 60, height: 40 });
+  });
+});
+
 describe("what it is for", () => {
   it("says the EXIF is gone after a re-encode", async () => {
     // The assertion `CLAUDE.md`'s upload constraint rests on, now answerable

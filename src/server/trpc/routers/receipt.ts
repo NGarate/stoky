@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_PAGE_SIZE, MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
+import {
+  MAX_ID_LENGTH,
+  MAX_MIME_TYPE_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_RECEIPT_LINES,
+} from "@/lib/validations/bounds";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, householdProcedure, writeProcedure } from "../trpc";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +17,7 @@ import { matchReceiptItems, getItemCandidates } from "@/server/services/productM
 import { uploadRateLimit } from "@/lib/rate-limit";
 import { enforceRateLimit } from "../throttle";
 import { reencodeAsJpeg } from "@/server/services/image";
+import { describeError } from "@/server/log-error";
 import {
   MAX_RECEIPT_BASE64_LENGTH,
   MAX_RECEIPT_BYTES,
@@ -20,6 +26,38 @@ import {
 } from "@/lib/validations/receipt";
 
 const VALID_MIME_TYPES: readonly string[] = RECEIPT_IMAGE_TYPES;
+
+/**
+ * The receipt header the screens draw: what it is, where it is in the
+ * pipeline, and the shop, date and total printed on it.
+ *
+ * The reads below name their columns instead of `include`-ing the row, because
+ * the row carries three things no screen shows and every reader received:
+ * `rawOcrText`, the whole ticket as Tesseract read it — the header and footer
+ * the parser drops, which is where a masked card number, a loyalty number and
+ * the cashier's name are printed; `imagePath`, where the photograph sits on the
+ * server's disk; and `uploadedBy`, which member scanned it. These are
+ * `householdProcedure` reads, so the kitchen tablet got all three, and the
+ * receipts list sent fifty rows of OCR text on every visit (SECURITY.md,
+ * "Data minimisation"). A column added to `Receipt` now reaches a client only
+ * when somebody adds it here, which is the direction a mistake should fail in.
+ *
+ * The store is its id and name for the same reason: the name is all a screen
+ * shows, and the address is nobody's business on a receipt list.
+ */
+const STORE_LABEL = {
+  select: { id: true, name: true },
+} as const satisfies Prisma.StoreDefaultArgs;
+
+const RECEIPT_HEADER = {
+  id: true,
+  status: true,
+  storeId: true,
+  store: STORE_LABEL,
+  purchaseDate: true,
+  totalAmount: true,
+  createdAt: true,
+} as const satisfies Prisma.ReceiptSelect;
 
 /**
  * Receipt scanning: a photograph in, stock and prices out.
@@ -138,10 +176,12 @@ export const receiptRouter = createTRPCRouter({
    *
    * Every check `CLAUDE.md` requires is on this path and in this order: MIME
    * type, size, magic bytes, then a re-encode through `Bun.Image`
-   * (`src/server/services/image.ts`) that strips EXIF and normalises the
-   * format — so what lands on disk is an image this server produced rather
-   * than a file a caller supplied. The name is a UUID, in a per-household
-   * directory, served only through an authenticated query.
+   * (`src/server/services/image.ts`) that strips EXIF, normalises the
+   * format and keeps none of the source's colour profile or other
+   * application segments — so what lands on disk is an image this server
+   * produced rather than a file a caller supplied — and the same size cap
+   * again on what the re-encode produced. The name is a UUID, in a
+   * per-household directory, served only through an authenticated query.
    *
    * Metered at 30 per account per hour, counted *before* the base64 is decoded
    * (ASVS V11.1.4): one call is up to 10 MB decoded, a `Bun.Image` re-encode,
@@ -156,10 +196,13 @@ export const receiptRouter = createTRPCRouter({
         // Bounded here as well as after decoding, so an oversized body is
         // refused by validation rather than by allocating a second copy of it
         // as a Buffer first. The check below still stands: this bounds the
-        // encoded length, that bounds what the bytes actually came to.
+        // encoded length, that bounds what the bytes actually came to. The
+        // request as a whole is bounded before either, by the route
+        // (`src/server/http/body-limit.ts`): this field can only be refused
+        // here when it is between the two limits.
         fileBase64: z.string().max(MAX_RECEIPT_BASE64_LENGTH),
-        mimeType: z.string(),
-        storeId: z.string().optional(),
+        mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
+        storeId: z.string().max(MAX_ID_LENGTH).optional(),
         purchaseDate: z.date().optional(),
       }),
     )
@@ -210,9 +253,10 @@ export const receiptRouter = createTRPCRouter({
       }
 
       // Normalised to a JPEG this server produced: the format stops being
-      // whatever was sent, the EXIF goes, and the orientation is applied to
-      // the pixels. Bounded in pixels as well as bytes — see the module,
-      // which the OCR path reads the same bound from.
+      // whatever was sent, the EXIF and the ICC profile go, and the
+      // orientation is applied to the pixels. Bounded in pixels as well as
+      // bytes — see the module, which the OCR path reads the same bound from.
+      // An output the metadata strip cannot parse throws, and is refused here.
       let processedBuffer: Buffer;
       try {
         processedBuffer = await reencodeAsJpeg(buffer);
@@ -220,6 +264,20 @@ export const receiptRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Failed to process image",
+        });
+      }
+
+      // The 10 MB cap above bounds what was *sent*; this bounds what is
+      // *kept*, and the two differ: a 2 MB one-bit noise PNG at
+      // 4000 × 4000 re-encodes to a 15 MB JPEG, measured, and nothing is ever
+      // deleted (SECURITY_REVIEW #16), so the gap was a way to fill the disk
+      // the database shares at seven times the bytes sent. The bound is the
+      // upload's own, so nothing stored is larger than what could have been
+      // sent. Refused before the directory, the file or the row exists.
+      if (processedBuffer.length > MAX_RECEIPT_BYTES) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Processed image exceeds 10MB limit",
         });
       }
 
@@ -248,7 +306,9 @@ export const receiptRouter = createTRPCRouter({
       });
 
       // Trigger async processing
-      processReceiptAsync(receipt.id).catch(console.error);
+      processReceiptAsync(receipt.id).catch((error: unknown) =>
+        console.error("Failed to mark receipt as failed:", describeError(error)),
+      );
 
       return receipt;
     }),
@@ -260,17 +320,16 @@ export const receiptRouter = createTRPCRouter({
    * this is how the interface learns that PROCESSING became PARSED — or FAILED.
    */
   getStatus: householdProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
+      // The status and the progress count are all the polling screen reads,
+      // so the lines are fetched for the count and not sent.
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
-          items: {
-            select: {
-              id: true,
-              matchStatus: true,
-            },
-          },
+        select: {
+          id: true,
+          status: true,
+          items: { select: { matchStatus: true } },
         },
       });
 
@@ -295,7 +354,8 @@ export const receiptRouter = createTRPCRouter({
       ).length;
 
       return {
-        ...receipt,
+        id: receipt.id,
+        status: receipt.status,
         progress: {
           total: totalItems,
           processed: processedItems,
@@ -310,17 +370,17 @@ export const receiptRouter = createTRPCRouter({
    * a similarity query per unmatched line.
    */
   getReceiptWithItems: householdProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
+        select: {
+          ...RECEIPT_HEADER,
           items: {
             include: {
               matchedProduct: true,
             },
           },
-          store: true,
         },
       });
 
@@ -473,7 +533,7 @@ export const receiptRouter = createTRPCRouter({
   confirmAll: writeProcedure
     .input(
       z.object({
-        receiptId: z.string(),
+        receiptId: z.string().max(MAX_ID_LENGTH),
         items: z.array(receiptItemMatchSchema).max(MAX_RECEIPT_LINES),
       }),
     )
@@ -618,7 +678,7 @@ export const receiptRouter = createTRPCRouter({
    * tells the person that in words rather than leaving them to notice.
    */
   applyReceipt: writeProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
 
@@ -750,14 +810,16 @@ export const receiptRouter = createTRPCRouter({
    * want to check.
    */
   getAppliedSummary: householdProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string().max(MAX_ID_LENGTH) }))
     .query(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findFirst({
         where: { id: input.receiptId, householdId: ctx.householdId },
-        include: {
+        select: {
           // The confirmation page names the shop the stock came from, and the
-          // store is the only field on the receipt it cannot derive.
-          store: true,
+          // store is the only field on the receipt it cannot derive. The header
+          // also carries the store id, which is how the page knows to say that
+          // no prices were recorded for want of one.
+          ...RECEIPT_HEADER,
           items: {
             // The same condition `applyReceipt` applies stock under, rather than
             // a list of match statuses. It used to filter on
@@ -834,7 +896,7 @@ export const receiptRouter = createTRPCRouter({
           "FAILED",
         ]).optional(),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
-        cursor: z.string().optional(),
+        cursor: z.string().max(MAX_ID_LENGTH).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -849,8 +911,8 @@ export const receiptRouter = createTRPCRouter({
           skip: 1,
         }),
         orderBy: { createdAt: "desc" },
-        include: {
-          store: true,
+        select: {
+          ...RECEIPT_HEADER,
           _count: {
             select: { items: true },
           },
@@ -913,7 +975,7 @@ async function processReceiptAsync(receiptId: string): Promise<void> {
     await saveParsedItems(receiptId, parseReceiptText(text));
     await matchReceiptItems(receiptId);
   } catch (error) {
-    console.error("Failed to process receipt:", error);
+    console.error("Failed to process receipt:", describeError(error));
     await prisma.receipt.update({
       where: { id: receiptId },
       data: { status: ReceiptStatus.FAILED },

@@ -72,9 +72,9 @@ case "$SUITE" in
     # The pull request's own changes, before the whole-project gates: a fast
     # answer about what this change did. It proves nothing on its own — a
     # change can break a file it did not touch — so `quality` still runs.
-    # --no-pipeline-lint: this image has no Docker to run actionlint and
-    # its bundled shellcheck from, and check-ci.sh has already linted every
-    # workflow and script on the runner. CHANGED_BASE expands inside the container, which
+    # --no-pipeline-lint: this image has no Docker to run actionlint, its
+    # bundled shellcheck or zizmor from, and check-ci.sh has already linted
+    # every workflow and script on the runner. CHANGED_BASE expands inside the container, which
     # receives it below.
     COMMANDS='bash scripts/check-scope.sh changed --base "$CHANGED_BASE" --no-pipeline-lint'
     ;;

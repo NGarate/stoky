@@ -52,6 +52,11 @@ const CHROMIUM_ONLY = [
   // answer, and this one costs two browser contexts and two registrations to
   // ask. Running it five times would buy nothing.
   "**/session-revocation.spec.ts",
+  // The same question about a password: whether the server accepts it after a
+  // change has one engine's answer, and each run registers an account.
+  "**/password-change.spec.ts",
+  // And the same about a password an admin set for somebody else.
+  "**/member-password-reset.spec.ts",
 ];
 
 /**
@@ -315,6 +320,27 @@ export default defineConfig({
       // shares one account counter however many addresses they come from —
       // which is precisely what that limit is for.
       RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS: "10000",
+      // And the known-device one, which takes over from it once a browser has
+      // signed in to that account: a spec that signs in twice in one context
+      // is one browser counted on its own five per window.
+      RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS: "10000",
+      // And the Open Food Facts lookup meter, for the same shared-account
+      // reason: every worker scans as the demo user, so the whole matrix
+      // spends one per-account budget of 60 new codes an hour, and repeated
+      // runs within the hour spend it again. The meter itself is proven in
+      // `src/__tests__/integration/resolveScan.test.ts`.
+      RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS: "10000",
+      // Adding a member is counted per admin account, and the suite signs in
+      // as one seeded account, so every worker would share one counter. No
+      // spec adds people today; one that does should not find the budget
+      // spent by the specs that ran before it.
+      RATE_LIMIT_ADD_MEMBER_ATTEMPTS: "10000",
+      // Production leaves registration `first-user` when this is unset
+      // (`src/lib/auth/registration.ts`), and the seeded demo household is
+      // already an account — so every spec that registers would be refused.
+      // `open` is a shipped mode, not a test-only bypass; `first-user` and
+      // `closed` are proven against a real database in the integration suite.
+      STOKY_REGISTRATION: "open",
     },
     // A cold `next build` on a slow machine, plus server start. A wedged build
     // never answers at all; five minutes tells the two apart.

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { createTranslator } from "next-intl";
 import en from "../../../messages/en.json";
 import es from "../../../messages/es.json";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 
 /**
  * The two catalogues have to hold the same keys.
@@ -294,6 +298,146 @@ describe("a number in a sentence agrees with it", () => {
     expect(
       declined.includes("{count}") && !declined.includes("plural"),
     ).toBe(false);
+  });
+});
+
+/**
+ * A password hint states the minimum the server enforces.
+ *
+ * `newPasswordSchema` has asked for twelve characters since DEBT-1 was
+ * answered, while the registration hint still said "Ocho caracteres o más",
+ * the add-a-member hint said 8 and the add-a-member field carried
+ * `minLength={8}`. Somebody who followed the screen typed nine characters,
+ * passed the browser's check and got back a generic refusal that did not say
+ * why. The add-a-member hint also promised "La persona podrá cambiarla más
+ * adelante" when nothing in the application changed a password once it was
+ * set; the promise came back with `auth.changePassword`, true this time.
+ *
+ * The number therefore reaches the screen as an ICU parameter fed from
+ * `MIN_PASSWORD_LENGTH`, never as a literal in a translation or in a
+ * component, so raising the rule cannot leave one of the three behind again.
+ */
+describe("a password hint states the minimum the server enforces", () => {
+  const HINTS = [
+    ["auth", "passwordHintRegister"],
+    ["household", "addPasswordHint"],
+    ["household", "resetPasswordHint"],
+    ["household", "resetTooShort"],
+    ["password", "newPasswordHint"],
+    ["password", "newPasswordTooShort"],
+  ] as const;
+
+  for (const [locale, messages] of [
+    ["es", es],
+    ["en", en],
+  ] as const) {
+    for (const [namespace, key] of HINTS) {
+      test(`${locale}:${namespace}.${key} takes the minimum as a parameter`, () => {
+        const raw = value(messages as Catalogue, `${namespace}.${key}`);
+        expect(typeof raw).toBe("string");
+        // The placeholder, and no number of its own: a literal "12" would pass
+        // the render below today and go stale the day the rule changes.
+        expect(raw as string).toContain("{min}");
+        expect(raw as string).not.toMatch(/\d/);
+
+        const t = createTranslator({ locale, messages, namespace }) as unknown as (
+          key: string,
+          values: Record<string, number>,
+        ) => string;
+        expect(t(key, { min: MIN_PASSWORD_LENGTH })).toContain(
+          String(MIN_PASSWORD_LENGTH),
+        );
+      });
+    }
+  }
+
+  test("promises a password can be changed only while something changes it", () => {
+    // The add-a-member hint promised this once when nothing could, and the
+    // promise was removed (security review, 2026-10-12). It is back because
+    // `auth.changePassword` exists, and it says where — the screen's own name
+    // in each catalogue, so renaming Settings cannot leave it pointing at a
+    // place that is not there. Deleting the procedure turns this red, which
+    // is the moment the sentence would become untrue again.
+    const router = readFileSync(
+      join(import.meta.dir, "../../server/trpc/routers/auth.ts"),
+      "utf8",
+    );
+    expect(router).toMatch(/^ {2}changePassword: protectedProcedure\b/m);
+
+    expect(value(es as Catalogue, "household.addPasswordHint")).toMatch(/cambiar/i);
+    expect(value(es as Catalogue, "household.addPasswordHint")).toContain(
+      value(es as Catalogue, "navigation.settings") as string,
+    );
+    expect(value(en as Catalogue, "household.addPasswordHint")).toMatch(/change/i);
+    expect(value(en as Catalogue, "household.addPasswordHint")).toContain(
+      value(en as Catalogue, "navigation.settings") as string,
+    );
+  });
+
+  const componentSources = (): string[] => {
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) {
+          if (entry !== "__tests__") walk(path);
+        } else if (path.endsWith(".tsx")) {
+          files.push(path);
+        }
+      }
+    };
+    walk(join(import.meta.dir, "../.."));
+    return files;
+  };
+
+  test("every call site hands the hint the minimum", () => {
+    // The catalogue tests above cannot see a call site. Without the argument
+    // next-intl raises no error and the screen reads "Al menos {min}
+    // caracteres." with the braces in it, and only the register page is
+    // rendered by a component test.
+    const CALL =
+      /\bt\(\s*"(passwordHintRegister|addPasswordHint|resetPasswordHint|resetTooShort|newPasswordHint|newPasswordTooShort)"([^)]*)\)/g;
+    const ARGUMENT = /^\s*,\s*\{\s*min:\s*MIN_PASSWORD_LENGTH\s*\}\s*$/;
+    const found = new Set<string>();
+    const bare: string[] = [];
+    for (const file of componentSources()) {
+      for (const match of readFileSync(file, "utf8").matchAll(CALL)) {
+        found.add(match[1]);
+        if (!ARGUMENT.test(match[2])) bare.push(`${file}: ${match[0]}`);
+      }
+    }
+
+    // Every hint is in use, so an empty scan cannot pass for a clean one.
+    expect([...found].sort()).toEqual([
+      "addPasswordHint",
+      "newPasswordHint",
+      "newPasswordTooShort",
+      "passwordHintRegister",
+      "resetPasswordHint",
+      "resetTooShort",
+    ]);
+    expect(bare).toEqual([]);
+  });
+
+  test("no component writes a password length as a literal", () => {
+    const files = componentSources();
+
+    const LITERAL = [/minLength=\{\s*\d+\s*\}/, /password\.length\s*[<>]=?\s*\d+/];
+    const offenders = files.filter((file) => {
+      const source = readFileSync(file, "utf8");
+      return LITERAL.some((pattern) => pattern.test(source));
+    });
+
+    expect(files.length).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+
+  test("would notice one", () => {
+    const LITERAL = [/minLength=\{\s*\d+\s*\}/, /password\.length\s*[<>]=?\s*\d+/];
+    expect(LITERAL[0].test("minLength={8}")).toBe(true);
+    expect(LITERAL[1].test("password.length < 8")).toBe(true);
+    expect(LITERAL.some((p) => p.test("minLength={MIN_PASSWORD_LENGTH}"))).toBe(false);
+    expect(LITERAL.some((p) => p.test("password.length < MIN_PASSWORD_LENGTH"))).toBe(false);
   });
 });
 

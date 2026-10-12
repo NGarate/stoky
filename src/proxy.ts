@@ -83,14 +83,35 @@ export function proxy(request: NextRequest): NextResponse {
 
 export const config = {
   matcher: [
-    // Everything except static assets, the image optimiser, the app icons and
-    // the service worker. The first three are served straight from disk and
-    // gain nothing from a per-request nonce. `sw.js` is excluded for a stronger reason: a
-    // nonce'd page policy applied to the worker script becomes the *worker's*
-    // own policy, and the worker has no page to inherit from. Its policy is
-    // set in next.config.ts instead.
+    // Everything except the build's static assets, the app icons and the
+    // service worker. Each exclusion is anchored to exactly what it is for,
+    // because only a file that exists is served from disk:
+    // any other path, `/icons/x`, `/icons/x.png` or `/sw.jsx`, falls through
+    // to the app's not-found render — a full HTML document on this origin,
+    // which until 2026-10-12 the old prefix exclusions sent out with no
+    // policy at all (SECURITY_REVIEW §8). So the icons are named one by one:
+    // a pattern such as `icons/*.png` would still skip the proxy for a name
+    // that is not there. `proxy-matcher.test.ts` goes red when a file in
+    // `public/icons/` is missing from this list. `_next/static/` stays a
+    // prefix because Next answers a miss there with plain text, never the
+    // app. There is no `favicon.ico`, so it is not excluded: a top-level
+    // visit to it is a render like any other, and the browser's own icon
+    // fetch is answered with plain text anyway (`Sec-Fetch-Dest: image`).
+    //
+    // `/_next/image` is not excluded any more. The optimiser is switched off
+    // (`images.unoptimized` in next.config.ts), and Next answers the route
+    // with that same not-found document, so it needs the policy like any
+    // other miss (SECURITY_REVIEW §8).
+    //
+    // The icons gain nothing from a per-request nonce. `sw.js` is excluded
+    // for a stronger reason: a nonce'd page policy applied to the worker
+    // script becomes the *worker's* own policy, and the worker has no page to
+    // inherit from. Its policy is set in next.config.ts
+    // instead. `$` is the end of the pathname: Next compiles this source into
+    // a regexp tested against the pathname alone, with no query string.
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|icons/|sw\\.js).*)",
+      source:
+        "/((?!_next/static/|icons/(?:icon\\.svg|icon-maskable\\.svg|icon-192\\.png|icon-512\\.png|icon-maskable-512\\.png|apple-touch-icon\\.png)$|sw\\.js$).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

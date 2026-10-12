@@ -77,9 +77,11 @@ export function shouldPersist(query: Query): boolean {
   return path !== null && PERSISTED_QUERIES.has(path);
 }
 
+const READS_PREFIX = "stoky.reads.v1.";
+
 /** One key per account. A shared tablet must not restore the wrong household. */
 export function persistKey(userId: string): string {
-  return `stoky.reads.v1.${userId}`;
+  return `${READS_PREFIX}${userId}`;
 }
 
 /**
@@ -161,7 +163,7 @@ export function createReadPersister(
   });
 }
 
-/** Forget one account's cached reads. Sign-out, and change of account. */
+/** Forget one account's cached reads. Sign-out, `/login`, and change of account. */
 export function forgetPersistedReads(
   userId: string,
   storage: Storage | null = defaultStorage(),
@@ -172,6 +174,42 @@ export function forgetPersistedReads(
   } catch {
     // Nothing depends on this having worked; the cache expires anyway.
   }
+}
+
+/**
+ * Forget every account's cached reads except `keep`'s — all of them for `null`.
+ *
+ * Forgetting only the account recorded as the last one here is not enough on
+ * a device that already holds others: until the security review of 2026-10-12
+ * nothing but an explicit sign-out removed a copy, so an install updated after
+ * an account's session expired, or after a change of account, still holds that
+ * account's copy under a key nobody remembers. A browser holds one session at
+ * a time, so no other account's copy can be restored without that account
+ * signing in — which is online, and refetches anyway — and the sweep costs no
+ * offline open anything.
+ *
+ * Keys are collected before any is removed: removing while walking
+ * `storage.key(i)` shifts the indices under the walk and skips every other one.
+ */
+export function forgetPersistedReadsExcept(
+  keep: string | null,
+  storage: Storage | null = defaultStorage(),
+): void {
+  if (storage === null) return;
+  const others: string[] = [];
+  try {
+    for (let index = 0; index < storage.length; index++) {
+      const key = storage.key(index);
+      if (key === null || !key.startsWith(READS_PREFIX)) continue;
+      const userId = key.slice(READS_PREFIX.length);
+      if (userId !== keep) others.push(userId);
+    }
+  } catch {
+    // A storage that refuses to be listed cannot be swept; like the single
+    // forget, this is best effort and nothing depends on it having worked.
+    return;
+  }
+  for (const userId of others) forgetPersistedReads(userId, storage);
 }
 
 /** How long a restored answer is worth showing. */

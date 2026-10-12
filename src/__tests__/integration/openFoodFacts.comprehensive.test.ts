@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { OpenFoodFactsClient } from "@/server/services/openFoodFacts";
 
@@ -262,130 +264,16 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
 
       // The header itself, not merely that fetch was called: Open Food Facts
       // asks every client to identify itself, and this assertion passed with
-      // the header deleted.
+      // the header deleted. The version is read here from the manifest, apart
+      // from the service, so a hand-written version (it was `1.0` while the
+      // release was 0.1.0-alpha.3) fails it, as does a contact the project
+      // does not own (it was `contact@stoky.app`).
+      const { version } = JSON.parse(
+        readFileSync(join(import.meta.dir, "../../../package.json"), "utf8"),
+      ) as { version: string };
       const init = fetchSpy.mock.calls[0]?.[1];
       const userAgent = new Headers(init?.headers).get("user-agent");
-      expect(userAgent).toMatch(/^Stoky\/\S+ \(.+@.+\)$/);
-    });
-  });
-
-  describe("searchProducts", () => {
-    it("should return products for valid search", async () => {
-      const mockProducts = [
-        {
-          code: "1234567890123",
-          product_name: "Product 1",
-          brands: "Brand 1",
-        },
-        {
-          code: "1234567890124",
-          product_name: "Product 2",
-          brands: "Brand 2",
-        },
-      ];
-
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: mockProducts,
-        })
-      );
-
-      const results = await client.searchProducts("test query");
-
-      expect(results.length).toBe(2);
-      expect(results[0].product_name).toBe("Product 1");
-    });
-
-    it("should handle empty search results", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: [],
-        })
-      );
-
-      const results = await client.searchProducts("nonexistent");
-
-      expect(results).toEqual([]);
-    });
-
-    it("should respect limit parameter", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: [],
-        })
-      );
-
-      await client.searchProducts("test", 5);
-
-      const callArg = fetchSpy.mock.calls[0][0] as string;
-      expect(callArg).toContain("page_size=5");
-    });
-
-    it("should handle API errors gracefully", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({}, false, 500)
-      );
-
-      const results = await client.searchProducts("test");
-
-      expect(results).toEqual([]);
-    });
-
-    it("should handle network failures", async () => {
-      fetchSpy.mockRejectedValue(new Error("Network error"));
-
-      const results = await client.searchProducts("test");
-
-      expect(results).toEqual([]);
-    });
-
-    it("should handle invalid product data in results", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: [
-            {
-              code: "1234567890123",
-              product_name: "Valid Product",
-            },
-            {
-              // Invalid product - missing required code
-              product_name: "Invalid Product",
-            },
-            {
-              code: "1234567890124",
-              product_name: "Another Valid Product",
-            },
-          ],
-        })
-      );
-
-      const results = await client.searchProducts("test");
-
-      expect(results.length).toBe(2);
-    });
-
-    it("should handle missing products field", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          count: 0,
-        })
-      );
-
-      const results = await client.searchProducts("test");
-
-      expect(results).toEqual([]);
-    });
-
-    it("should handle non-array products field", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: "not an array",
-        })
-      );
-
-      const results = await client.searchProducts("test");
-
-      expect(results).toEqual([]);
+      expect(userAgent).toBe(`Stoky/${version} (+https://github.com/NGarate/stoky)`);
     });
   });
 
@@ -700,32 +588,6 @@ describe("OpenFoodFacts Service - Comprehensive", () => {
 
       const url = fetchSpy.mock.calls[0][0] as string;
       expect(url).toContain("/product/1234567890123.json");
-    });
-
-    it("should properly encode search query in URL", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: [],
-        })
-      );
-
-      await client.searchProducts("chocolate con leche");
-
-      const url = fetchSpy.mock.calls[0][0] as string;
-      expect(url).toContain("search_terms=chocolate%20con%20leche");
-    });
-
-    it("should handle special characters in search", async () => {
-      fetchSpy.mockResolvedValue(
-        createMockResponse({
-          products: [],
-        })
-      );
-
-      await client.searchProducts("café & té");
-
-      const url = fetchSpy.mock.calls[0][0] as string;
-      expect(url).toContain("search_terms=caf%C3%A9%20%26%20t%C3%A9");
     });
   });
 });

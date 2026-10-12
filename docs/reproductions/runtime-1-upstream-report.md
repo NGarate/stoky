@@ -8,6 +8,10 @@ Ready to paste; trim the internal cross-references (`ISSUES.md`, `docs/…`) the
 maintainer cannot follow. The self-checking reproduction is
 `docs/reproductions/runtime-1-abort.sh`.
 
+**Hold, 2026-10-12:** the reproduction gives 0 on Next 16.4.0 under both Bun
+1.4.0 and 1.4.3, and 10 of 10 on 16.3.8 under either (`ISSUES.md` RUNTIME-1,
+*Re-measured for Bun 1.4.3*). Do not file it as written: it describes 16.3.
+
 ---
 
 ## Title

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isIPv4, isIPv6 } from "node:net";
 import { closeValkey, valkey } from "@/lib/valkey";
 
 /**
@@ -17,8 +18,12 @@ import { closeValkey, valkey } from "@/lib/valkey";
  * opened here, back when this was the only thing that needed one.
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
- * receipt upload, which is authenticated but expensive enough that an account
- * looping on it is its own denial of service. The counting machinery is the
+ * receipt upload, `addMemberRateLimit` the Argon2id hash behind adding a
+ * member, and `passwordChangeRateLimit` a signed-in person's own password
+ * change — all authenticated, all expensive enough that an account looping
+ * on them is its own denial of service — and `productLookupRateLimit` meters
+ * the requests an account makes this instance send to Open Food Facts. The
+ * counting machinery is the
  * same; what differs per limit is the number, the window, and what the counter
  * is keyed on.
  */
@@ -99,6 +104,29 @@ export function loginAccountRateLimit(): RateLimit {
   );
 }
 
+/**
+ * Sign-in attempts against one account **from one browser that has signed in
+ * to it before**, counted instead of the per-account limit above.
+ *
+ * The per-account limit refuses the right password once it is full, so anyone
+ * who knows an address could keep its owner out by spending those ten attempts
+ * every window. A known device (`@/lib/auth/known-devices`) is counted here
+ * instead, so a stranger's guesses never reach it. Five, because it is one
+ * browser — the per-address number — and because it is still a limit: a
+ * stolen device cookie buys five guesses a window, not an unlimited number.
+ * Keyed on the account and the device together, so one browser shared by two
+ * accounts has a budget for each.
+ */
+export function loginDeviceRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:login:dev",
+    "RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS",
+    "RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS",
+    5,
+    15 * 60,
+  );
+}
+
 export function registerRateLimit(): RateLimit {
   return limitFromEnv(
     "rl:register",
@@ -130,6 +158,90 @@ export function uploadRateLimit(): RateLimit {
     "RATE_LIMIT_UPLOAD_WINDOW_SECONDS",
     30,
     60 * 60,
+  );
+}
+
+/**
+ * Barcode lookups that leave for Open Food Facts, per account.
+ *
+ * Not the work this instance does — the work it asks of somebody else, from
+ * its one address. Open Food Facts throttles API clients per IP (its published
+ * read limit is about a hundred products a minute), so an account scanning
+ * random codes in a loop could get the instance throttled or blocked, and
+ * barcode enrichment would stop for everyone on it. Any write-role member could
+ * do it, and with registration open that was anyone.
+ *
+ * Counted only on a lookup that reaches Open Food Facts: a product the
+ * household already has, or one the shared cache already answers — known or
+ * known-unknown — costs nothing, so restocking a cupboard never spends it.
+ * Sixty an hour is a big shop of products nobody here has scanned before;
+ * past it the person fills in the form by hand, which is what an unknown code
+ * asks of them anyway.
+ *
+ * Per account rather than for the whole instance, like `uploadRateLimit`. It
+ * bounds one account, not the sum of them: N accounts are N budgets.
+ */
+export function productLookupRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:off-lookup",
+    "RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS",
+    "RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS",
+    60,
+    60 * 60,
+  );
+}
+
+/**
+ * Accounts an admin creates through `household.addMember`, per admin account.
+ *
+ * Not expensive the way an upload is, but expensive on purpose: every call
+ * runs Argon2id at 64 MiB and three passes *before* the database is asked
+ * anything, because hashing is what the procedure is for. A duplicate address
+ * pays the full hash too — the unique index only answers once the row is
+ * written. Unmetered, any account that admins a household — and on an
+ * instance with open registration, that is anyone who registers one — could
+ * ask for those hashes in a loop, or hundreds at a time in one batched
+ * request. The reasoning that leaves ordinary procedures unmetered ("they read
+ * rows") does not hold for this one (security review, 2026-10-12).
+ *
+ * Twenty an hour is a household setting up every phone, tablet and person it
+ * has in one sitting, with room for typing mistakes, and at the ~250 ms the
+ * hash is tuned to it is about five seconds of Argon2id per admin per hour
+ * instead of an unbounded amount. Counted per account, like upload, because
+ * only an admin can reach it and an admin is the thing that can be held
+ * responsible.
+ */
+export function addMemberRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:addmember",
+    "RATE_LIMIT_ADD_MEMBER_ATTEMPTS",
+    "RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS",
+    20,
+    60 * 60,
+  );
+}
+
+/**
+ * A signed-in person changing their own password, per account.
+ *
+ * Not for the hash this time but for the question it answers. The procedure
+ * checks the current password before anything else, so unmetered it would be
+ * a way for whoever holds a stolen session — a phone left unlocked, a kitchen
+ * tablet — to guess the password behind it, with none of the limits sign-in
+ * has. Five per fifteen minutes is sign-in's per-address number: a person who
+ * mistypes the current password twice and then changes it is three, and an
+ * attacker gets five guesses a quarter of an hour. Per account, like upload,
+ * because the caller is already authenticated and the account is what the
+ * guesses are against. Each one also costs two Argon2id runs at most — the
+ * verify, and the hash on success — so this bounds that too.
+ */
+export function passwordChangeRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:pwchange",
+    "RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS",
+    "RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS",
+    5,
+    15 * 60,
   );
 }
 
@@ -353,8 +465,10 @@ export async function refundRateLimit(
 }
 
 /**
- * The identifier a limit is counted against: the client's IP, from the proxy
- * headers a self-hosted deployment puts in front of the app.
+ * The client's address, from the proxy headers a self-hosted deployment puts
+ * in front of the app — in full, as the proxy wrote it. This is what the
+ * security log records; what a limit is *counted* against is
+ * `rateLimitIdentifier` below, which is coarser on purpose.
  *
  * **The last entry of `X-Forwarded-For`, not the first.** The header is a list
  * each proxy appends to, so the leftmost entry is whatever the client sent —
@@ -364,12 +478,12 @@ export async function refundRateLimit(
  * entry a client cannot forge.
  *
  * With no proxy header at all — reaching the app directly, which is how it
- * runs in development — every caller shares the `unknown` bucket. That is
- * deliberate and it is the safe direction: a shared bucket over-restricts, and
- * the alternative of treating an unidentifiable caller as unlimited is the
- * hole this module closes.
+ * runs in development — every caller is `unknown`, and so shares one bucket.
+ * That is deliberate and it is the safe direction: a shared bucket
+ * over-restricts, and the alternative of treating an unidentifiable caller as
+ * unlimited is the hole this module closes.
  */
-export function rateLimitIdentifier(headers: Headers): string {
+export function clientAddress(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
     const hops = forwarded
@@ -385,6 +499,104 @@ export function rateLimitIdentifier(headers: Headers): string {
   if (real) return real;
 
   return "unknown";
+}
+
+/**
+ * The identifier an address limit is counted against: the client's address,
+ * except that **an IPv6 client is counted by its /64**.
+ *
+ * One IPv6 subscriber is not one address. An ISP delegates at least a /64 to
+ * a line — the smallest prefix SLAAC works on (RFC 4291 §2.5.1, RFC 7421) —
+ * and a host picks addresses inside it at will; privacy extensions
+ * (RFC 8981) rotate them by design. Keyed per address, every one of the 2^64
+ * is a fresh budget, so the per-address limit would hold nothing back from
+ * anyone on IPv6. The /64 is the smallest block a line is given, so it is
+ * the finest grouping that still holds one host's rotating addresses
+ * together; the cost is the one IPv4 already has behind a NAT, a household's
+ * devices sharing a budget. A line delegated a /56 or a /48 still has one budget per
+ * /64 in it — the attacker-with-a-range case the per-account limit bounds.
+ *
+ * Normalised before it is cut, so one client cannot fall into several
+ * buckets by spelling the same address differently: brackets, a port and a
+ * zone (`%eth0`) are dropped, hextets are read as numbers so case and leading
+ * zeros stop mattering, and `::` is expanded. An IPv4-mapped address
+ * (`::ffff:192.0.2.1`, in either spelling) is the IPv4 client it maps, and is
+ * counted as that — it is what a dual-stack socket reports for an IPv4 peer.
+ *
+ * IPv4 is counted per address as before, and anything that is not an address
+ * at all — `unknown`, or whatever a caller typed into a header nothing
+ * appended to — is passed through unchanged.
+ *
+ * Under the default release bundle this grouping does not yet change anything
+ * for IPv6: Docker's userland proxy hands the app the bridge gateway in place
+ * of every IPv6 client, so they share one budget whatever this does
+ * (`docs/INSTALL.md`, *Clients on IPv6*). It is the half of that fix that
+ * lives here, so opting in to real IPv6 addresses does not open the hole
+ * above.
+ */
+export function rateLimitIdentifier(headers: Headers): string {
+  return addressBucket(clientAddress(headers));
+}
+
+/** The bucket an address is counted in; see `rateLimitIdentifier`. */
+function addressBucket(address: string): string {
+  const host = withoutPort(address.trim());
+
+  if (isIPv4(host)) return host;
+
+  const zoneless = host.split("%")[0];
+  if (!isIPv6(zoneless)) return address;
+
+  const hextets = expandIPv6(zoneless);
+
+  // ::ffff:a.b.c.d — RFC 4291 §2.5.5.2. The first 80 bits zero, then 0xffff.
+  if (hextets.slice(0, 5).every((h) => h === 0) && hextets[5] === 0xffff) {
+    return [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(".");
+  }
+
+  return `${hextets
+    .slice(0, 4)
+    .map((h) => h.toString(16))
+    .join(":")}::/64`;
+}
+
+/**
+ * `[2001:db8::1]:443` and `[2001:db8::1]` to `2001:db8::1`, and
+ * `192.0.2.1:443` to `192.0.2.1`. A bare IPv6 address has colons of its own,
+ * so it is only ever unbracketed, never split on its last one.
+ */
+function withoutPort(address: string): string {
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(address);
+  if (bracketed) return bracketed[1];
+
+  const ipv4WithPort = /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/.exec(address);
+  if (ipv4WithPort) return ipv4WithPort[1];
+
+  return address;
+}
+
+/**
+ * The eight hextets of an address `isIPv6` has already accepted, as numbers.
+ * A trailing dotted quad (`::ffff:192.0.2.1`, `64:ff9b::192.0.2.1`) is the
+ * last two hextets written another way.
+ */
+function expandIPv6(address: string): number[] {
+  let text = address;
+  const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (dotted) {
+    const [a, b, c, d] = dotted.slice(1).map(Number);
+    text = `${text.slice(0, dotted.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+
+  const [head, tail] = text.split("::");
+  const parse = (part: string | undefined) =>
+    part ? part.split(":").map((hextet) => Number.parseInt(hextet, 16)) : [];
+  const left = parse(head);
+  const right = parse(tail);
+
+  if (tail === undefined) return left;
+  const zeros = Array.from({ length: 8 - left.length - right.length }, () => 0);
+  return [...left, ...zeros, ...right];
 }
 
 /**

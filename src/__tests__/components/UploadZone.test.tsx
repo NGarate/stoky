@@ -82,9 +82,10 @@ describe("UploadZone", () => {
     // Not a size opinion of its own: `MAX_RECEIPT_BYTES` is the server's, and
     // the point of refusing here is that the server is not in a position to
     // explain. The photograph is base64'd into the request body, and a body
-    // over Next's ceiling is truncated before any procedure reads it — so
-    // letting this through produces `JSON Parse error: Unterminated string` on
-    // a screen that should be saying something about a photograph.
+    // over the route's 15 MiB ceiling is refused with a bare 413 before any
+    // procedure reads it (`src/server/http/body-limit.ts`; until that bound,
+    // Next truncated it into `JSON Parse error: Unterminated string`) — on a
+    // screen that should be saying something about a photograph.
     const onUpload = mock((_file: File) => {});
     const { container } = renderWithIntl(<UploadZone onUpload={onUpload} />);
 

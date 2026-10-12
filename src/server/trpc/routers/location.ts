@@ -1,7 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { MAX_ID_LENGTH } from "@/lib/validations/bounds";
 import { createTRPCRouter, adminProcedure, householdProcedure } from "../trpc";
-import type { PrismaClient, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { drawnParents } from "@/lib/inventory/location-tree";
 import {
   storageLocationSchema,
   updateStorageLocationSchema,
@@ -108,20 +110,22 @@ export const locationRouter = createTRPCRouter({
       });
     }
 
-    // Second pass: build hierarchy
+    // Second pass: build hierarchy. Attached by reachability rather than by
+    // "has a parent": an orphan, or a loop of locations inside each other
+    // (ISSUES.md LOC-1, which `update` could once be raced into making), is
+    // drawn at the root. Attaching every row whose parent was in the map made
+    // a loop's members vanish — nobody was a root — and with them everything
+    // stored inside, beyond the reach of `delete`, which refuses a location
+    // with sub-locations. `parentId` itself is returned unchanged, so a
+    // screen can still say which location a looped row claims to be inside.
+    const drawn = drawnParents(allLocations);
     for (const location of allLocations) {
       const node = locationMap.get(location.id);
       if (!node) continue;
 
-      const parent = location.parentId
-        ? locationMap.get(location.parentId)
-        : undefined;
+      const parentId = drawn.get(location.id) ?? null;
+      const parent = parentId ? locationMap.get(parentId) : undefined;
 
-      // A child whose parent is missing would otherwise vanish from the tree
-      // entirely. It cannot happen through this router — `parentId` is a
-      // foreign key inside the same household — but "cannot happen" is how a
-      // location becomes unreachable rather than merely misplaced, so an
-      // orphan is surfaced at the root instead of dropped.
       if (parent) {
         parent.children.push(node);
       } else {
@@ -168,69 +172,89 @@ export const locationRouter = createTRPCRouter({
       return location;
     }),
 
-  /** Renames a location or moves it under a different parent. */
+  /**
+   * Renames a location or moves it under a different parent.
+   *
+   * **One move at a time per household.** The check that a move does not put
+   * a location inside its own subtree reads the tree; the write changes it.
+   * Run apart, two moves sent together — A into B and B into A, which one
+   * batched request is enough for, since a batch runs its calls concurrently
+   * — each checked the tree as it was before either wrote, both passed, and
+   * left A and B inside each other (ISSUES.md LOC-1). So the check and the
+   * write share a transaction that starts by locking the household's own
+   * row. The second move waits for the first to commit and then reads the
+   * tree the first one left, so it is refused rather than raced.
+   *
+   * `FOR NO KEY UPDATE`, not `FOR UPDATE`: the lock only has to exclude
+   * another move, which takes the same lock. `FOR UPDATE` also conflicts with
+   * the `FOR KEY SHARE` that every foreign-key check on the household takes,
+   * so creating a product or a location anywhere in the household would queue
+   * behind a rename for as long as it ran — measured: under `FOR UPDATE` an
+   * insert into `StorageLocation` hit a 1 s `lock_timeout` on exactly that
+   * check, and under `FOR NO KEY UPDATE` it went straight through.
+   */
   update: adminProcedure
     .input(updateStorageLocationSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const householdId = ctx.householdId;
 
-      const existingLocation = await ctx.db.storageLocation.findFirst({
-        where: {
-          id,
-          householdId: ctx.householdId,
+      return ctx.db.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`
+            SELECT id FROM "Household"
+            WHERE id = ${householdId}
+            FOR NO KEY UPDATE
+          `;
+
+          // Read after the lock, so it is the tree the previous move left.
+          const existingLocation = await tx.storageLocation.findFirst({
+            where: { id, householdId },
+          });
+
+          if (!existingLocation) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Location not found",
+            });
+          }
+
+          if (data.parentId) {
+            if (data.parentId === id) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "A location cannot be its own parent",
+              });
+            }
+
+            const parent = await tx.storageLocation.findFirst({
+              where: { id: data.parentId, householdId },
+            });
+
+            if (!parent) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Parent location not found",
+              });
+            }
+
+            const refusal = await moveRefusal(tx, householdId, id, data.parentId);
+            if (refusal) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: refusal });
+            }
+          }
+
+          return tx.storageLocation.update({
+            where: { id, householdId },
+            data,
+            include: {
+              parent: true,
+              children: true,
+            },
+          });
         },
-      });
-
-      if (!existingLocation) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Location not found",
-        });
-      }
-
-      // Prevent circular reference
-      if (data.parentId) {
-        if (data.parentId === id) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "A location cannot be its own parent",
-          });
-        }
-
-        const parent = await ctx.db.storageLocation.findFirst({
-          where: {
-            id: data.parentId,
-            householdId: ctx.householdId,
-          },
-        });
-
-        if (!parent) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Parent location not found",
-          });
-        }
-
-        // Check if parent is a descendant of this location (would create cycle)
-        const isDescendant = await checkIsDescendant(ctx.db, id, data.parentId);
-        if (isDescendant) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Cannot move a location to its own descendant",
-          });
-        }
-      }
-
-      const location = await ctx.db.storageLocation.update({
-        where: { id },
-        data,
-        include: {
-          parent: true,
-          children: true,
-        },
-      });
-
-      return location;
+        { maxWait: 5_000, timeout: 10_000 },
+      );
     }),
 
   /**
@@ -242,7 +266,7 @@ export const locationRouter = createTRPCRouter({
    * something that does not exist.
    */
   delete: adminProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(MAX_ID_LENGTH) }))
     .mutation(async ({ ctx, input }) => {
       const location = await ctx.db.storageLocation.findFirst({
         where: {
@@ -286,19 +310,62 @@ export const locationRouter = createTRPCRouter({
     }),
 });
 
-async function checkIsDescendant(
-  db: PrismaClient | Prisma.TransactionClient,
-  ancestorId: string,
-  potentialDescendantId: string
-): Promise<boolean> {
-  const descendant = await db.storageLocation.findUnique({
-    where: { id: potentialDescendantId },
-    select: { parentId: true },
-  });
+/**
+ * How many ancestors a move's walk will read before it gives up and refuses.
+ *
+ * A household has a few dozen locations, nested two or three deep. The cap is
+ * not a limit on how deep a tree may be in practice — nothing reaches it — but
+ * the bound that makes the walk below finish whatever the data says. It counts
+ * reads, not distinct rows, so it ends a loop on its own too: it does not rely
+ * on the visited set to be the only thing that can.
+ */
+const MAX_ANCESTORS = 64;
 
-  if (!descendant) return false;
-  if (descendant.parentId === ancestorId) return true;
-  if (!descendant.parentId) return false;
+/**
+ * Why moving `id` under `parentId` must be refused, or null if it may go.
+ *
+ * Walks up from the new parent, one row at a time, inside the household.
+ * Reaching `id` means the new parent is inside the location being moved, and
+ * the move would close a loop. Coming back to a row already seen means the
+ * chain above the new parent is *already* a loop — data written before
+ * `update` took its lock (ISSUES.md LOC-1) — and moving anything into it would
+ * hide it along with the loop. The walk this replaced recursed with neither a
+ * visited set nor a depth limit, so a move into an existing loop issued one
+ * query per step for as long as the process lived: the review measured 2 600
+ * queries in three seconds, still going. Inside the transaction such a walk
+ * would now be cut off by its timeout, but only after holding the household's
+ * lock for ten seconds; the two bounds here end it within a few reads.
+ *
+ * The household filter changes no answer today — `parentId` is a foreign key
+ * and the router only ever writes one from the same household — but it is the
+ * rule every other read in this file follows, and it costs nothing.
+ */
+async function moveRefusal(
+  db: Prisma.TransactionClient,
+  householdId: string,
+  id: string,
+  parentId: string,
+): Promise<string | null> {
+  const seen = new Set<string>();
+  let current: string | null = parentId;
 
-  return checkIsDescendant(db, ancestorId, descendant.parentId);
+  for (let reads = 0; current !== null; reads++) {
+    if (current === id) return "Cannot move a location to its own descendant";
+    if (seen.has(current)) {
+      return "The destination is inside a loop of locations; move one of them out first";
+    }
+    if (reads >= MAX_ANCESTORS) {
+      return `Locations cannot be nested more than ${MAX_ANCESTORS} deep`;
+    }
+    seen.add(current);
+
+    const row: { parentId: string | null } | null =
+      await db.storageLocation.findFirst({
+        where: { id: current, householdId },
+        select: { parentId: true },
+      });
+    current = row?.parentId ?? null;
+  }
+
+  return null;
 }

@@ -1,0 +1,157 @@
+name: Rescan
+
+# A release is scanned once, at its exact digest, before its version tag exists
+# (ci.yml, release-draft). An advisory published after that day reached nobody:
+# ci.yml runs only on a push, a pull request or a dispatch, so on a quiet trunk
+# an installation kept running a vulnerable release with no run to go red
+# (SECURITY_REVIEW.md #17). This workflow re-scans, every week, what an
+# installation of the newest published release runs — the images its released
+# Compose file names, the application and every service — and fails on a fixable
+# CRITICAL or HIGH finding, so the failure reaches the owner.
+#
+# GitHub sends a scheduled run's failure to the user who last modified the cron
+# line, and disables the schedule of a public repository after 60 days without
+# repository activity. RELEASING.md says what to do with a red run.
+on:
+  schedule:
+    # Mondays at 05:17 UTC. Off the hour: the start of an hour is when GitHub
+    # delays scheduled runs most.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+# Least privilege by default. The scan job asks for what the SARIF upload needs.
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------ images --
+  # Reads the release, never the checkout: what an installation runs is the
+  # Compose file attached to the release, not the one on master. Bundles from
+  # the release after v0.1.0-alpha.3 name the application by digest, which is
+  # then what is scanned; earlier ones name the tag only, so the scan reads
+  # whatever the tag names today. Service tags (postgres:16-alpine) are read
+  # the same way a `docker compose pull` would read them this week.
+  images:
+    name: Resolve the published release's images
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      private: ${{ steps.release.outputs.private }}
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      # Prereleases included: every release so far is an alpha, and GitHub's
+      # `releases/latest` route answers 404 when only prereleases exist.
+      # Drafts excluded: nobody has been told to install one.
+      - name: Find the newest published release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="$(gh release list --exclude-drafts --order desc --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::No published release with a version tag; found '$TAG'."
+            exit 1
+          fi
+          echo "Scanning release $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # Code scanning on a private repository needs Advanced Security (see
+          # ci.yml's image-build). Asked here because a scheduled event's
+          # payload is not a webhook's, and this answers for every trigger.
+          echo "private=$(gh api "repos/$GH_REPO" --jq .private)" >> "$GITHUB_OUTPUT"
+      # What Compose resolves from the released file, as release-draft checks
+      # it. The values are placeholders: `config` needs every required
+      # variable, and nothing here starts.
+      - name: List the images its Compose file runs
+        id: images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          STOKY_VERSION: ${{ steps.release.outputs.tag }}
+          POSTGRES_PASSWORD: unused
+          NEXTAUTH_SECRET: unused
+          DOMAIN: rescan.invalid
+          ACME_EMAIL: rescan@example.invalid
+        run: |
+          gh release download "$RELEASE_TAG" --pattern docker-compose.yml --dir "$RUNNER_TEMP/release"
+          IMAGES="$(docker compose --project-name "stoky-rescan-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --file "$RUNNER_TEMP/release/docker-compose.yml" config --format json \
+            | jq -c '[.services | to_entries[] | {service: .key, image: .value.image}]')"
+          if ! jq -e 'length > 0 and all(.[]; (.image | type == "string" and length > 0))' <<< "$IMAGES" > /dev/null; then
+            echo "::error::The Compose file of $RELEASE_TAG names no image for some service: $IMAGES"
+            exit 1
+          fi
+          jq -r '.[] | "\(.service): \(.image)"' <<< "$IMAGES"
+          echo "images=$IMAGES" >> "$GITHUB_OUTPUT"
+
+  # -------------------------------------------------------------------- scan --
+  # One job per image, so each has its own SARIF category and its own verdict,
+  # and one red image does not hide another (fail-fast off).
+  #
+  # The scanner is the release gate's: Trivy pinned to the version
+  # release-draft uses, CRITICAL/HIGH, `ignore-unfixed`, read from the registry.
+  # `cache: false` everywhere: a weekly run saves little by restoring Trivy and
+  # its database from the Actions cache, and a planted binary or database would
+  # pass anything (ci.yml's image-build says who can write that cache).
+  scan:
+    name: Scan ${{ matrix.service }}
+    needs: [images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      # upload-sarif GETs the workflow run to annotate the upload (ci.yml).
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.images.outputs.images) }}
+    steps:
+      # The report: every fixable finding, uploaded per image under its own
+      # category. `trivy-release-` keeps it apart from ci.yml's `trivy`, which
+      # is master's image, so neither analysis replaces the other.
+      - name: Scan for the report
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        env:
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          cache: false
+          version: v0.69.3
+
+      - name: Upload the report
+        if: always() && needs.images.outputs.private == 'false'
+        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-release-${{ matrix.service }}
+
+      # The gate, which is what notifies. One file is left out of it, and stays
+      # in the report above: postgres's /usr/local/bin/gosu, a Go program the
+      # entrypoint runs once as root, to re-run itself as the postgres user.
+      # Measured 2026-10-12 on postgres:16-alpine, all 25 of its fixable
+      # CRITICAL/HIGH findings are Go standard-library advisories in packages
+      # gosu does not link (net, net/http, crypto/tls, crypto/x509, net/url,
+      # net/mail, mime, encoding/*, html/template, x/net, os.Root), so this
+      # gate would be red every week with nothing anyone could act on — and a
+      # gate that is always red tells nobody anything. Every other file of
+      # every image, the rest of postgres included, is gated.
+      - name: Fail on critical or high findings
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        env:
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ matrix.image }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          skip-files: usr/local/bin/gosu
+          cache: false
+          version: v0.69.3

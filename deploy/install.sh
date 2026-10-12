@@ -19,7 +19,9 @@ set -euo pipefail
 DEFAULT_VERSION=v0.1.0-alpha.3
 
 VERSION="${1:-$DEFAULT_VERSION}"
-# Overridable so the tests can serve a release from a directory.
+# Overridable so a release can be served from a directory (file://): the
+# tests do, and so can a maintainer checking packaged assets before a release.
+# An operator has no use for it.
 BASE_URL="${STOKY_RELEASE_BASE_URL:-https://github.com/NGarate/stoky/releases/download}"
 FILES=(docker-compose.yml example.env traefik.yml)
 # The project name fixed in docker-compose.yml, which names its volumes.
@@ -46,8 +48,15 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 echo "==> Descargando Stoky $VERSION"
+# GitHub answers each download with a redirect, and --location would follow
+# one to plain http: SHA256SUMS arrives over the same hops as the files, so a
+# downgraded hop could swap both and the check below would pass. Redirects are
+# therefore https-only, at TLS 1.2 or later. Not --proto '=https': the default
+# BASE_URL is a literal https URL, and the override above must still reach a
+# file:// release.
 for file in "${FILES[@]}" SHA256SUMS; do
-  curl --fail --silent --show-error --location --output "$WORK/$file" "$BASE_URL/$VERSION/$file" \
+  curl --fail --silent --show-error --location --proto-redir '=https' --tlsv1.2 \
+    --output "$WORK/$file" "$BASE_URL/$VERSION/$file" \
     || fail "no se pudo descargar $file de $VERSION. Revisa la versión y la conexión."
 done
 

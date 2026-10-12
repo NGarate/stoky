@@ -1,6 +1,8 @@
 # Security review — Phase 7
 
-Reviewed: 2026-08-26, at `8bb2547`.
+Reviewed: 2026-08-26, at `8bb2547`. Reviewed again 2026-10-12, at `e9d62eb`:
+[*The 2026-10-12 review*](#the-2026-10-12-review), near the end, records that
+review, what became of each finding, and what it accepted.
 
 Phase 7's deliverable (`REDESIGN_PLAN.md` §9). Its *done when* is that each of
 the eight scope items has **either a passing test or a written finding with an
@@ -55,7 +57,7 @@ one mistake, described in §2, and a test that now fails on the shape of it.
 | 14 | The size cap counts bytes; decoding cost is in pixels | High | ✅ Fixed `69c1bd5`, verified | — |
 | 15 | No test ever performs a *successful* upload | Medium | ✅ Verified, refined, closed `5d49d99` `76f5c80` | — |
 | 16 | Uploaded images are never deleted | Medium | Reported | owner |
-| 17 | A published image is never re-scanned | Medium | Reported | operator |
+| 17 | A published image is never re-scanned | Medium | ✅ Closed 2026-10-12: weekly `rescan.yml`; its first run on GitHub is an owner action of the 2026-10-12 review | — |
 | 18 | The request-body ceiling sat below the documented upload limit | Medium | ✅ Fixed `74788ab`, verified | — |
 
 Finding 18 was not on the list this review set out with. It came out of
@@ -74,7 +76,11 @@ counted twice.
 ## 1. Authorisation, per procedure
 
 **Verified, and this half is genuinely solid.** There are **60 procedures**
-across ten routers. `src/__tests__/unit/capabilities.test.ts` pins every one of
+across ten routers — at `8bb2547`; **63 since 2026-08-31** (corrected
+2026-10-12: member management and session revocation added four, the dead
+pipeline pair took two away, `product.resolveScan` added one). `SECURITY.md`
+carries the current count, which `capabilities.test.ts` now holds to the
+router. `src/__tests__/unit/capabilities.test.ts` pins every one of
 them against `REDESIGN_PLAN.md` §5.2's matrix by declaration, exhaustively with
 `toEqual` rather than by sampling, and it fails on a router file with no table
 entry. Roles are re-read from the database on every call
@@ -152,13 +158,51 @@ procedure accepts a household-scoped id and never looks it up. It is
 deliberately crude — it cannot tell a correct check from a careless one, so it
 is a tripwire on the shape of the mistake rather than a proof of isolation. It
 catches all four instances when their guards are removed, verified one at a
-time. Ten exemptions carry their reason, and every one is a *read* whose query
-already filters by household, which is the distinction the rule turns on.
+time. ~~Ten exemptions carry their reason, and every one is a *read* whose query
+already filters by household, which is the distinction the rule turns on.~~
+**Corrected 2026-10-12: eleven at `8bb2547`, nine since the sweep below removed
+two dead keys, and not all of them reads.** Each carries its reason. Seven are
+reads whose query already filters by household; `product.update` and
+`product.delete` are writes that resolve the id against the household, by id
+and `householdId` together, before they write anything. The distinction the
+rule turns on is that lookup, not read against write.
 
 Its two blind spots were found by removing real guards and watching it stay
 green — it read only inline Zod, and its schema scan truncated every schema at
 its first line. Both are recorded in the file, because a guard with a silent
 blind spot reports a pass it has not earned.
+
+**A third blind spot, found 2026-10-12: the fields it does not know.** The scan
+checks only the ids it lists — `storeId`, the four location ids, `productId`,
+`shoppingListId`, `receiptItemId`. It never looked at the primary `id` every
+update, delete and getById takes, nor at `parentId`. Removing the household
+filter from `store.update` or `location.delete`, or the parent check from
+`location.create`, left it green; and those, with `location.update`,
+`shopping.update` and `shopping.getById`, had no cross-household case in the
+integration suites either, so every gate stayed green. No guard was missing —
+each procedure was scoped when this was found — but nothing would have noticed
+one going.
+
+- `parentId` is now in the scan, which catches the deleted `location.create`
+  parent check. In `location.update` its existence lookup satisfies the same
+  pattern, so the field check there proves nothing.
+- The primary `id` is deliberately **not** in the scan. The one pattern that
+  fits every procedure — "the body mentions `householdId`" — is true of nearly
+  every body for unrelated reasons, so it would stay green with the guard
+  gone.
+- Both are guarded behaviourally instead: `integration/cross-household.test.ts`
+  now has household A call `store.update`, `location.create` (B's parent),
+  `location.update` (B's id; A's id under B's parent), `location.delete`,
+  `shopping.update` and `shopping.getById` on B's rows, and asserts NOT_FOUND
+  and that B's row is unchanged. Each case was watched to go red with its own
+  guard removed. `location.update` has two guards, the existence check and the
+  household in the write's own `where`; with either one removed it still
+  refuses, and it goes red only when both are removed.
+
+`shopping.removeItem`, `shopping.delete`, `store.delete` and member management
+already had cross-household cases (`cross-household.test.ts`,
+`shopping.delete.test.ts`, `delete-guards.test.ts`, `household.roles.test.ts`)
+and are unchanged.
 
 ~~**Reported, not verified:** the same audit lists ten queries whose household
 scoping it could not confirm by reading. The tripwire covers the *write* path;
@@ -275,10 +319,12 @@ this review — a store ownership check.
 
   Right about the mechanism: the image arrives base64 in a tRPC payload, so the
   cap runs after the body is read and JSON-parsed. Wrong about the consequence.
-  Allocation is *not* unbounded — Next caps a request body at
+  ~~Allocation is *not* unbounded — Next caps a request body at
   `experimental.proxyClientMaxBodySize` whenever a middleware is configured, and
-  this application's matcher covers `/api/trpc`. Measured on a running server:
-  10,000,080 bytes parsed, 10,485,840 did not.
+  this application's matcher covers `/api/trpc`.~~ Measured on a running server:
+  10,000,080 bytes parsed, 10,485,840 did not. **Corrected 2026-10-12:**
+  allocation was unbounded for any request the matcher skips — see §8, "The
+  prefetch-skip" — and the bound is now the route's own.
 
   What the measurement found instead is finding 18. The lesson worth keeping is
   that the audit reasoned from the application's code and stopped at its edge;
@@ -347,12 +393,18 @@ and `role` from the database and ignore what the token claims, and
 against a KITCHEN row is refused, a demotion written mid-session bites on the
 very next call, and a deleted account's token stops working immediately.
 
-But **nothing in the product can perform any of those changes.**
+~~But **nothing in the product can perform any of those changes.**
 `householdRouter` is `current`, `create`, `members`, `addMember` — there is no
 way to remove a member and no way to change a role. Every state change those
 tests make needs a direct database write. So "I have lost the tablet" has no
 answer from inside the application at all, not even a partial one, and the
-15-minute token is the whole of the bound.
+15-minute token is the whole of the bound.~~ **True at `8bb2547`; closed
+2026-08-27** (`a264c42`, `c358e96`; corrected here 2026-10-12, the table above
+having said so since). `household.updateRole` and `household.removeMember`
+change a role and remove a member, `household.revokeMemberSessions` ends a
+member's sessions and `auth.revokeMySessions` an account's own; both stamp
+`sessionsValidFrom`, which the `jwt` callback checks where the token is
+re-issued. "I have lost the tablet" is answered from `/settings/people`.
 
 **And the mitigation had no test.** Replacing that query with the token's own
 values — an obvious optimisation, one fewer database round trip per request —
@@ -360,9 +412,10 @@ leaves `integration/capabilities.test.ts` at 9 pass / 0 fail. Measured, by doing
 it. The existing suite would not have noticed the only thing this application
 can do about a session it wants to stop trusting; the new file fails all four.
 
-Still a finding with an owner, and now a sharper one: it is not only "should
+~~Still a finding with an owner, and now a sharper one: it is not only "should
 there be revocation" but "there is no member management at all", which is a
-product gap the review found by trying to write a test for the mitigation.
+product gap the review found by trying to write a test for the mitigation.~~
+Closed with the paragraph above — finding 8.
 
 **Both halves now have homes, and the open question is answered.** Two entries
 went into `REDESIGN_PLAN.md` §10's unowned table on 2026-08-27:
@@ -383,6 +436,15 @@ Auth.js's own route and a revocation enforced beside the role check would leave
 a revoked session sliding forever. And **coarse revocation is one column**,
 where per-session revocation needs a record per session — with `stoky_device`
 already supplying a stable per-browser identifier if that is the direction.
+
+**Corrected 2026-10-12: both halves of the first point are now wrong.**
+`updateAge` does not slide anything here: `@auth/core` reads it only on the
+database-session path, and under the JWT strategy the token is re-issued with
+a fresh `maxAge` on every read of the session. And a session in use no longer
+renews indefinitely: since the 2026-10-12 security review every session ends
+thirty days after sign-in however active it is (`MAX_SESSION_AGE_S` and the
+`authTime` claim in `src/lib/auth.ts`; `PROGRESS.md` D125; SECURITY.md,
+*Authentication*). The 15 minutes remains the idle timeout.
 
 ## 7. Dependency and image posture
 
@@ -417,6 +479,91 @@ published image is never re-scanned, so an advisory affecting a
 shipped image is only noticed on the next push; and the placeholder-secret guard
 does not stop the container, which reports healthy while refusing to sign
 anybody in.
+
+**Corrected 2026-10-12: this section above describes the image before Bun
+became its only runtime** (`c117052`, 2026-09-25) **and before the source build
+became an override of the release bundle** (`eb44561`, 2026-10-05). The
+2026-08-26 bullets stay as that day's record — `pnpm audit` and
+`node:24-alpine` were what ran then. What holds today, and what asserts it:
+
+- Every stage derives from the `oven/bun` Alpine image, pinned by version and
+  index digest since 2026-10-12, and the production stage runs `USER bun` and
+  never returns to root (`unit/image-posture.test.ts`). `bun` is uid and gid
+  1000, the old `node` account's, so uploads written before the change stay
+  writable; a `RUN` in the production stage fails the build if that stops being
+  true.
+- No stage installs Node.js, npm or npx, so there is nothing to delete. The
+  test refuses an `npm install` or an `apk add nodejs`, and a build-time `RUN`
+  fails unless the `node` on the path resolves to the Bun binary and neither
+  `npm` nor `npx` exists.
+- Read-only with its exceptions is asserted on `deploy/docker-compose.yml`, the
+  one production definition: `read_only: true`, `tmpfs` for `/tmp` and
+  `/app/.next/cache`, and the `uploads` volume. `docker-compose.prod.yml` is a
+  source-build override, and the test lets it add only `build` and
+  `pull_policy`, so it cannot restate the hardening and drift from it (the
+  same test).
+- The health check is the image's own `HEALTHCHECK` on `/api/health` (the
+  same test).
+
+On the running container, the release job starts the published image from
+`deploy/docker-compose.yml` and waits for it to report healthy, so a read-only
+start is exercised on every release tag. No job asserts the running user.
+
+The dependency audit is `bun audit --audit-level moderate`: CI's `audit` job
+runs it directly, and `scripts/check-audit.sh` locally. Of the two *Still
+open* items, the placeholder-secret guard has been closed since 2026-10-06:
+`src/instrumentation.ts` runs the check at start-up and the process exits with
+status 1, and `/api/health` answers 503 on the same check, so the container
+neither serves nor reports healthy (SECURITY.md, *The session signing key
+cannot be the example one*). The re-scanning item is closed by the paragraph
+below.
+
+**Closed 2026-10-12: the published release is re-scanned every week (#17).**
+`.github/workflows/rescan.yml` runs on Mondays and by hand. It takes the newest
+non-draft release, prereleases included (`gh api
+repos/NGarate/stoky/releases/latest` answered 404 that day, every release being
+an alpha), downloads its `docker-compose.yml`, and scans each image
+`docker compose config` resolves from it with `release-draft`'s scanner: Trivy
+0.69.3 pinned, from the registry, no Actions cache, failing on a fixable
+CRITICAL or HIGH finding. One job per image uploads its report under
+`trivy-release-<service>`, apart from master's `trivy`. Only the scan job holds
+more than `contents: read`: `security-events: write` and `actions: read`.
+`unit/ci-workflow.test.ts` holds the schedule, the triggers, the permissions,
+the pins (now in every workflow), the cache, the gate and the upload condition,
+and goes red for each when it is undone. The first scheduled run on GitHub had
+not happened when this was written; the owner dispatches one after the merge.
+
+Run by hand the same day with the same scanner and flags, against
+`v0.1.0-alpha.3`'s images:
+
+| Image | Fixable CRITICAL/HIGH |
+|---|---|
+| `ghcr.io/ngarate/stoky:v0.1.0-alpha.3` | 0 |
+| `valkey/valkey:8-alpine` | 0 |
+| `postgres:16-alpine` | 25 in `/usr/local/bin/gosu` (Go 1.24.6 stdlib), 0 elsewhere |
+| `traefik:v3.7.13` | 4 HIGH: Go 1.26.8 stdlib and `golang.org/x/net` 0.58.0 |
+
+Two decisions came out of that table:
+
+- **gosu is left out of the gate, not the report.** The 25 advisories are in
+  `net`, `net/http`, `crypto/tls`, `crypto/x509`, `net/url`, `net/mail`, `mime`,
+  `encoding/*`, `html/template`, `x/net` and `os.Root`. The gosu binary copied
+  out of `postgres:16-alpine` (`sha256:721873c3…`) names no function from any
+  of them (`strings` finds none), and the entrypoint runs it once, as root, to
+  re-run itself as the postgres user (`exec gosu postgres "$BASH_SOURCE"`). Gating on it would keep the
+  run red every week with nothing to act on. The test refuses any other skip.
+- **Traefik stays gated, and the first run will be red because of it.** The
+  four are denial-of-service advisories in HTTP/2, Range-header and TLS
+  handling, published 2026-10-08, in the one component that faces the
+  internet. `traefik:v3.7.14` carries the same four, so updating to it does not
+  clear them; a Traefik release built with Go 1.26.9 and `x/net` 0.60.0, then a
+  Stoky release naming it, does. That red run is the finding reaching the
+  owner, which is what #17 asked for.
+
+What the re-scan does not cover is what the release scan does not: the
+packages Next compiles into `.next/server/chunks` (next-auth, `@auth/core`,
+`jose`, tRPC, zod among them) have no `package.json` in the image, and the Bun
+binary is in no package database. Re-scanning the image cannot see either.
 
 ## 8. Headers in production
 
@@ -456,26 +603,356 @@ just as happily on `frame-ancestors 'self'` as on `'none'` — and asserts the
 count is thirteen over plain http, which is the only check that catches a
 directive silently added or dropped. `script-src` is pinned to its full shape
 (`'self'`, a 32-hex nonce, `'strict-dynamic'`, nothing else), and `connect-src`
-to exactly its two sources, which is what proves the dev tail (`ws:`,
-`http://localhost:*`) never ships.
+to exactly its sources, which is what proves the dev tail (`ws:`,
+`http://localhost:*`) never ships. It had two then; it has one, `'self'`, since
+2026-10-12 (below).
 
-**The prefetch-skip is real, and bounded.** Measured: a request labelled
+~~**The prefetch-skip is real, and bounded.** Measured: a request labelled
 `Purpose: prefetch` does skip the proxy, so `proxyClientMaxBodySize` does not
 apply to it — an oversized upload's whole body arrives instead of being
 truncated. But it is still refused, one layer deeper, by `fileBase64`'s Zod
 `.max` (`MAX_RECEIPT_BASE64_LENGTH`), the second bound added for exactly the
 case where the proxy cap does not fire. So the label bypasses the cap, not the
 refusal; the body stays bounded by validation on an authenticated,
-rate-limited endpoint. Pinned by "an oversized POST is refused by two
-layers": unlabelled → the proxy truncates → tRPC's `Unterminated string`;
-labelled → the full body → Zod `too_big`. The residual — the full body is
-buffered before Zod refuses it — is a low-severity memory cost behind auth and
-the 30/hour upload meter, worth knowing rather than fixing.
+rate-limited endpoint.~~ **Corrected 2026-10-12: real, and it was not
+bounded.** The measurement held and the conclusion did not, because it was
+drawn from the one procedure measured. The label skips the cap for *every*
+POST, Bun's `node:http` server accepts a body of any size, and nothing else
+in the stack set one. `receipt.upload`'s Zod `.max` refuses only after tRPC
+has read and parsed the whole body, and behind authentication; the public
+`auth.register` has no such field, and its rate limiter runs in the resolver,
+after the parse. So an unauthenticated, prefetch-labelled POST of any size was
+buffered and JSON-parsed whole. The Auth.js route under `/api/auth` was open
+the same way.
 
-Prefetch responses also carry no `Content-Security-Policy` (it is set only in
+**Fixed: the API routes bound the body themselves**
+(`src/server/http/body-limit.ts`), so the proxy's cap is no longer the only
+one. `/api/trpc` refuses a body over 15 MiB with 413, before it looks up the
+session; a POST to `/api/auth` over 64 KiB likewise, before Auth.js reads it.
+A declared length over the limit is refused unread, and a body with no
+declared length is counted as it arrives. `proxyClientMaxBodySize` imports the
+same 15 MiB, so the two layers cannot disagree about what an upload weighs.
+Pinned by "what a prefetch label cannot do" in `security-headers.spec.ts`,
+through the production build: a 16 MiB upload is 413 labelled or not; a
+prefetch-labelled 16 MiB `auth.register` with no session is 413; a
+prefetch-labelled 1 MiB sign-in is 413. With the tRPC route's bound removed,
+both tRPC cases go red on a 400 — the register body read whole and refused by
+Zod — and with the Auth.js route's removed, the sign-in case gets a 302. The unit tier
+(`body-limit.test.ts`, `trpc-handler.test.ts`,
+`auth-route-body-limit.test.ts`) pins the chunked case and the boundary:
+exactly the limit passes, one byte over does not.
+
+The residual is concurrency, not size: a body may still be up to 15 MiB,
+held more than once while it is read and parsed, and nothing limits how many
+arrive at once (`SECURITY.md`, *Request bodies*).
+
+~~Prefetch responses also carry no `Content-Security-Policy` (it is set only in
 the proxy), so a prefetched RSC payload has no nonce; harmless because such a
 payload is data merged into a document that already has a fresh nonce and
-`'strict-dynamic'`, never itself a top-level document.
+`'strict-dynamic'`, never itself a top-level document.~~ **Corrected
+2026-10-12: that reason covers one of the two labels the matcher skips.**
+`next-router-prefetch` is the router's RSC prefetch, and for it the paragraph
+holds. `Purpose: prefetch` is different: it can label a *document* request.
+Measured against the standalone build: `GET /inventory`, signed in, with
+`Purpose: prefetch` answers 200 with no `Content-Security-Policy` and no
+`stoky_device` cookie. So a document labelled that way is rendered without a
+nonce and without the policy.
+
+Which browsers send it was measured too, not assumed. The 2026-10-12 finding
+called it browser-set; the three browsers this repository pins (Playwright
+1.62.1's Chromium 151, Firefox 153, WebKit 26.5), loading a probe page with a
+`<link rel=prefetch>`, a speculation-rules prefetch and a speculation-rules
+prerender, never sent it. Chromium and Firefox labelled
+`<link rel=prefetch>` `Sec-Purpose: prefetch`; Chromium labelled its
+speculation-rules prefetch `Sec-Purpose: prefetch` and its prerender
+`Sec-Purpose: prefetch;prerender`; Firefox and WebKit did not act on
+speculation rules, and WebKit did not prefetch the link. `Purpose` is the
+legacy spelling, sent by whatever client still uses it — or by anyone who
+types it. The matcher's `key: "purpose"` is the header's exact name, so
+`Sec-Purpose` does *not* skip the proxy: measured, `GET /login` and
+`GET /inventory` with `Sec-Purpose: prefetch` or `prefetch;prerender` carry
+the nonce'd policy.
+
+Each case is harmless for its own reason, and the two reasons are not
+interchangeable:
+
+- **`Purpose` — nothing keeps it.** Every page is a request-bound render (the
+  root layout reads the nonce from `headers()` and sets `instant = false`),
+  and Next sends such a render as `private, no-cache, no-store, max-age=0,
+  must-revalidate` — measured on the labelled `/inventory` response, which also
+  carries `x-nextjs-postponed: 1`. A `<link rel=prefetch>` result reaches the
+  next navigation only through the HTTP cache, which keeps nothing `no-store`:
+  on the probe, with the same `cache-control`, clicking the prefetched link
+  sent a fresh, unlabelled request in all three engines. So the policy-less
+  page goes only to whoever sent the label.
+- **`Sec-Purpose` — it goes through the proxy.** `no-store` does not protect
+  this one. Speculation-rules prefetch and prerender are navigational: on the
+  probe, Chromium showed a `no-store` page from either without asking the
+  server again. They are safe because the proxy runs on them, so the page the
+  person is shown has its nonce and policy. Widening the matcher to skip
+  `sec-purpose` — the natural "modernisation" of Next's documented shape —
+  would hand a prerendered page to the person with no policy at all.
+
+The residual, stated rather than measured: a browser that sent the legacy
+`Purpose` on a prefetch it then *shows* as the navigation would show a
+policy-less page. None of the three measured does. The matcher stays as it
+is, the shape Next's own CSP guide documents.
+
+Both reasons are pinned rather than recalled. "a document labelled a
+prefetch" in `security-headers.spec.ts` asserts, for `/login` signed out and
+`/inventory` signed in, that a `Purpose`-labelled response skips the proxy
+(no policy, no device cookie) and is `no-store`, and that a
+`Sec-Purpose`-labelled one (`prefetch` and `prefetch;prerender`) carries the
+nonce'd `script-src`. If a page ever becomes cacheable, a policy-less prefetch
+could become the document a person is shown, and the first pair goes red —
+pointed at `/icons/icon-192.png`, which is served `public, max-age=0`, it
+does. Swap the matcher's `purpose` clause for `sec-purpose` and all four go
+red.
+
+**Found 2026-10-12: the path exclusions skipped more than files.** The
+matcher excluded `_next/static`, `_next/image`, `favicon.ico`, `icons/` and
+`sw\.js` as unanchored prefixes, with the dot in `favicon.ico` unescaped. Only
+a file that exists is served from disk; any other path except a
+`/_next/static/` miss, which Next answers with plain text, falls through to
+the App Router's not-found render — the root layout, a full HTML document on
+this origin. So a link to `/icons/x`, `/sw.jsx` or `/faviconXico` opened a
+page with the proxy skipped: no nonce and no `Content-Security-Policy`,
+`next.config.ts` deliberately setting none for a page and Traefik setting
+none at all. Unlike `Purpose: prefetch`, this needs no header, only a link,
+and the result is a top-level document, so neither reason above covers it.
+Defence in depth rather than an exploit: the not-found page reflects nothing
+from the request, and `X-Frame-Options: DENY` still applies. The finding's
+claim that the browser's automatic `/favicon.ico` request was one of these
+renders did not hold — that fetch is `Sec-Fetch-Dest: image`, which Next
+answers with a plain-text 404.
+
+**Fixed: each exclusion is anchored to what it is for** — `_next/static/` (a
+prefix, as before), `_next/image$`, the six files in `public/icons/` by name,
+and `sw\.js$`. The icons are named rather than matched as
+`icons/[\w.-]+\.(?:png|svg)$`, the anchoring the finding proposed: that
+pattern also skips the proxy for a name that is not there, and
+`GET /icons/does-not-exist.png` measured exactly the old result — 404
+`text/html`, empty policy. `favicon.ico` is no longer excluded, because there
+is none. `src/__tests__/unit/proxy-matcher.test.ts` compiles `config.matcher`
+with Next's own `getMiddlewareMatchers` and asks `getMiddlewareRouteMatcher`
+the way `resolve-routes.js` does, raw and decoded: the worker, every file in
+`public/icons/`, `/_next/static/*` and `/_next/image` are skipped;
+`/icons/does-not-exist`, `/icons/does-not-exist.png`, `/icons/a/b`, `/sw.jsx`,
+`/favicon.ico` and the rest are covered; and the two prefetch labels are still
+skipped while `sec-purpose` is not. With the old source restored, the twelve
+"covered" cases go red; with the `[\w.-]+` pattern, the three icon-shaped
+misses; with a file left out of the list, that file. The `csp.test.ts` checks
+it replaces read the source for substrings and passed on both versions.
+`pwa-manifest.test.ts` now asks the same compiled matcher that every icon the
+layout and the manifest reference is skipped: an icon left out of the list
+would otherwise start going through the proxy unnoticed. "a page that is not
+there" in `security-headers.spec.ts` asserts, against the production build,
+that `GET /icons/does-not-exist`, `GET /icons/does-not-exist.png` and
+`GET /sw.jsx` are 404 `text/html` carrying the nonce'd `script-src`; with the
+old source restored it fails on the first of them with an empty policy, after
+the status and the content type have passed — the finding, measured — and with
+the `[\w.-]+` pattern it fails the same way on the second.
+
+**Found 2026-10-12: the image optimiser was live.** Nothing renders
+`next/image`, and `next.config.ts` left `sharp` out of the production image on
+the grounds that `/_next/image` "cannot be reached"; `next-image.test.ts`
+guarded that premise by checking for an import, and said the route "would
+fail at runtime" without the library. Both were wrong. Next 16 registers
+`/_next/image` whatever the source imports, and with no `images` config it
+answers unless `unoptimized` is set or a custom loader is configured
+(`next-server.js`, the one branch that 404s the route). The built config had
+`unoptimized: false` and `localPatterns: [{ pathname: "**", search: "" }]`, so
+any same-origin path without a query was accepted — `/dashboard`,
+`/api/trpc/receipt.list` — and fetched with an internal request through the
+whole router, proxy, root layout, `auth()` and a database lookup, for an
+anonymous caller. An answer that sniffed as a raster image was sent back and
+cached under `.next/cache/images`; without `sharp`, Next catches the missing
+module and serves the original bytes. All of that was read from Next 16.4.0
+and the built config by the audit; measured on the production build without
+the switch, `GET /_next/image?url=%2Ficons%2Ficon-192.png&w=64&q=75` is 200
+`image/png`. Low, and unneeded surface rather than an exploit:
+`remotePatterns` is empty, the internal request carries no cookies
+(`headers: {}`), receipt images are only ever tRPC JSON, `public/` holds only
+the icons, and SVG is refused.
+
+**Fixed: `images: { unoptimized: true }`, and the matcher no longer skips the
+route.** It is Next's documented switch, and with it the route answers 404
+before reading a parameter. That 404 is the app's not-found document —
+`text/html`, a full page — and with `_next/image$` still in the matcher's
+exclusions, as the anchoring fix above left it, it arrived with no
+`Content-Security-Policy`: the defect just closed for `/icons/x`, reopened
+at a new path. Measured, before and after dropping the exclusion: 404
+`text/html` with an empty policy, then 404 `text/html` with the nonce'd
+`script-src`. `next-image.test.ts` now asserts the config Next is given has
+`images.unoptimized === true` and no custom loader; the import check is gone,
+because with the endpoint off `next/image` renders the source file as it is,
+in development and production alike. `proxy-matcher.test.ts` asks that the
+proxy run for `/_next/image`. "the image optimiser" in
+`security-headers.spec.ts` asks the production build for the icon above and
+expects 404 `text/html` with the nonce'd `script-src`. With the option removed
+it fails on the status — 200, the PNG — and with the exclusion restored on the
+policy, an empty string; the unit tests fail on the same two mutations, and
+the loader assertion on `loader: "custom"`.
+
+**Found 2026-10-12: HSTS invited preloading of the operator's domain.**
+`next.config.ts` and Traefik's `stoky-security` middleware both sent
+`max-age=63072000; includeSubDomains; preload` on whatever `DOMAIN` the
+operator chose, and nothing in `example.env` changed it. `preload` is the
+domain owner's consent to the browsers' built-in HSTS lists, and
+hstspreload.org checks the header, not who submits: on an apex install the
+bundle met every criterion it controls (the header and the same-host HTTPS
+redirect; HTTPS on `www` depends on the operator's DNS), so anyone could have
+listed the domain and every host under it, and removal is slow. hstspreload.org asks software that ships
+HTTPS defaults not to send it. Low, and harm to the operator rather than an
+attack: the documented example is a subdomain, which the list does not accept.
+
+**Fixed: no `preload` in either layer, the rest kept.** The app sends
+`max-age=63072000; includeSubDomains` and Traefik has `stsPreload: false`.
+`includeSubDomains` stays because ASVS 5 V3.4.1 asks for it; its cost on an
+apex — every plain-http host under the domain unreachable for two years in a
+browser that has opened Stoky — is now a warning beside `DOMAIN` in
+`docs/INSTALL.md` instead of a surprise. Both layers change together because
+each reaches someone the other does not: Traefik's middleware replaces the
+app's value behind the bundle, and the app's is the only one behind an
+operator's own proxy. "HSTS" in `deployment.test.ts` asserts Traefik's options
+(no preload, two years, subdomains), the app's exact value, and that the app's
+equals the string Traefik builds from its options; restoring `stsPreload: true`
+fails the first and third, restoring `preload` in the app the second and
+third, and dropping `includeSubDomains` from the app alone the second and
+third. `security-headers.spec.ts` pins the new value on the production build.
+
+**Found 2026-10-12: no Cross-Origin-Opener-Policy or
+Cross-Origin-Resource-Policy.** The app's static set had neither, and neither
+did Traefik's middleware. Without COOP, a page on another origin that opens
+Stoky with `window.open` keeps a live handle to the window: it can navigate it
+to a look-alike sign-in page — inbound tabnabbing against a credentials-only
+app — or time its navigations. Without CORP, another origin can request any
+Stoky response as a no-cors subresource. Low, and defence in depth rather than
+an exploit: `X-Frame-Options: DENY` and `frame-ancestors 'none'` already
+refuse framing, the app has no frames for an opener to count, and browsers'
+opaque-response blocking, with `nosniff`, already withholds most JSON and HTML
+from another origin's no-cors request. Nothing in the app needs either
+absence: there is no OAuth popup, the only new windows Stoky opens are the
+Open Food Facts links (`rel=noreferrer`, which COOP on Stoky does not affect),
+and every subresource its pages load is same-origin.
+
+**Fixed: both, as `same-origin`, in `next.config.ts`; no embedder policy.**
+`same-origin` rather than `same-origin-allow-popups`, because no popup Stoky
+opens needs a way back. `Cross-Origin-Embedder-Policy`, the header usually set
+with these two, is left out on purpose and the config says so. All it would add
+is cross-origin isolation, which Stoky does not use, and `require-corp` would
+refuse the product photographs: the product page loads them as a plain `<img>`,
+and `images.openfoodfacts.org` sends no CORP. It does send
+`Access-Control-Allow-Origin: *` (measured with `curl -I` on a product image,
+2026-10-12), so `crossorigin` or `credentialless` would let them through — but
+only while a host that is not ours keeps answering that way, for a capability
+nothing here needs.
+Traefik is not changed; the app's headers pass through it.
+`security-headers.spec.ts` adds both to the headers every page must carry and
+asserts the whole set on `/api/health` and on an anonymous tRPC 401 as well.
+"isolated from other origins" opens Stoky from a page `page.route` serves at
+`http://localhost:3999` and asserts the opener's handle reads `closed` while
+the window is open on `/login`; loads `/icons/icon-192.png` as an image from
+the same page and asserts it fails with
+`net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`; and renders a product page with
+a stand-in Open Food Facts photograph and asserts it loads, with no embedder
+policy and `crossOriginIsolated` false. With both headers removed, the two
+header tests and the two browser tests go red (the handle reads open, the icon
+loads). With `require-corp` added, the photograph test fails on the header,
+and with that assertion set aside on `crossOriginIsolated`; the photograph
+itself still rendered — a response `page.route` fulfils is evidently not held
+to the check — which is why the decision is pinned on the header and the
+isolation state. With the Open Food Facts host dropped from `img-src`, the
+photograph does not load and the test fails on that.
+
+Loaded from `http://elsewhere.test`, as the subresource test first did, the
+icon fails before CORP is consulted: Chromium's Local Network Access refuses a
+request from an insecure page to a loopback address (`InsecureLocalNetwork`,
+measured on the icon and on `/api/health`), so a test that only expected the
+failure could not tell the header from its absence. The other page is
+`localhost`, granted `local-network-access`, and the error the test expects is
+CORP's own.
+
+**Found 2026-10-12: the Permissions-Policy denied three features and was
+described as denying all of them.** `next.config.ts` sent `camera=(self),
+microphone=(), geolocation=(), interest-cohort=()` under the comment
+"Everything off", and `SECURITY.md` said it "denies everything else". The
+header has no default-deny: every feature it does not name keeps the browser's
+default allowlist, `'self'` for most of the powerful ones — payment, USB,
+serial, HID, screen capture, wake lock and the rest. `interest-cohort` is
+FLoC's token, an API Chrome retired, and its successor `browsing-topics` was
+not denied. Info, and a document claiming more than the header did rather
+than an exposure: with `frame-ancestors 'none'`, `X-Frame-Options: DENY` and
+`default-src 'self'` there is no third-party frame to delegate a feature to,
+and any script that could call these APIs is already same-origin.
+
+**Fixed: an explicit deny list, of tokens the browser recognises.**
+`camera=(self)` stays — the scanner's `getUserMedia` and its torch need it —
+and nineteen features are `()`: microphone, geolocation, browsing-topics,
+payment, usb, serial, hid, midi, display-capture, screen-wake-lock,
+xr-spatial-tracking, the three motion sensors, publickey-credentials-create,
+otp-credentials, idle-detection, local-fonts and compute-pressure.
+`publickey-credentials-get` is left unset for passkey sign-in, and
+`fullscreen` and `picture-in-picture` are left alone. Each token was kept
+only if the browser recognises it, because an unknown one is ignored, with an
+"Unrecognized feature" error on every page, and a deny list copied from a
+generic recommendation can carry tokens of features that were renamed or
+never shipped. A test now asks for that: "the browser
+understands every feature the Permissions-Policy names" loads `/login` in the
+suite's Chromium (151, Playwright 1.62.1) and fails on any console message
+about the header. It caught `bluetooth`, which the plan for this fix listed
+and that Chromium does not recognise; it was dropped. Measured the other way,
+`interest-cohort` does not complain in Chromium 151, so the finding's "reported
+as unrecognised" did not reproduce — it was replaced because the API it
+guarded is gone, not because it was rejected. A made-up token in both the
+config and the pinned value fails that test alone; dropping `usb=()` from the
+config alone fails it and both header pins.
+
+**Found 2026-10-12: the product photograph told Open Food Facts where it was
+shown.** `Referrer-Policy: strict-origin-when-cross-origin` still sends the
+origin to another origin, and the product page's `<img>`, the one remote image
+Stoky renders, had no attribute of its own, so every product view sent
+`images.openfoodfacts.org` the instance's origin — its hostname, however
+private — alongside the viewer's address and the barcode in the image path.
+Low, a privacy disclosure rather than a compromise: it lets a third party
+enumerate instances and tie a household to a hostname. The Open Food Facts
+links were already `rel=noreferrer`; the image was the inconsistency.
+
+**Fixed: `Referrer-Policy: same-origin`, and `referrerpolicy="no-referrer"` on
+the image.** Measured in the suite's Chromium with both reverted, the
+photograph's request carried `Referer: http://127.0.0.1:3100/`; with either
+layer alone, none. The header covers any cross-origin request a later change
+adds, and the attribute holds behind a proxy that rewrites the header.
+`no-referrer` was the obvious stronger choice and is wrong here: it makes the
+browser send `Origin: null` on every POST, same-origin ones included, and Next
+aborts a Server Action whose Origin does not match the host. Measured, with it
+the no-JS screen choice in `e2e/screen-choice.spec.ts` fails and the server
+logs "does not match `origin` header with value `null` … Aborting the action".
+`same-origin` nulls the Origin only on a cross-origin POST, which Stoky's pages
+do not make. `e2e/security-headers.spec.ts` pins the header and, on the product
+page, checks that the photograph's request carries no `Referer` and that the
+element carries the attribute. What still reaches Open Food Facts is the image
+request itself, with the viewer's address; only a server-side image proxy
+would remove that, and it is not part of this fix.
+
+**Found 2026-10-12: `connect-src` allowed an origin no page contacts.** The
+policy read `connect-src 'self' https://world.openfoodfacts.org`, and had since
+the first CSP (`349680f`). Every Open Food Facts lookup is the server's
+(`src/server/services/openFoodFacts.ts`), where the policy does not apply;
+outside `src/server`, the host appears only in `ProductRating`'s links, which
+are navigations, and in the policy itself. At `349680f` the same was already
+true. Low, and least privilege rather than an open path: a script would first
+have to get past the nonce and `'strict-dynamic'`, and one that did could still
+send data out through an `img-src` query string or a navigation. But it was an
+allowance with no use, to a service that accepts writes from anyone.
+
+**Fixed: `connect-src 'self'`**, with the development websocket tail as
+before. `img-src` keeps `images.openfoodfacts.org`; the photographs are images,
+not connections. `src/__tests__/unit/csp.test.ts` now pins `connect-src` at its
+exact value in both environments, so the unit gate notices without the browser
+suite, and `security-headers.spec.ts` pins the production value; putting the
+host back fails both unit assertions on it. The unit file also checks that
+`img-src` keeps the image host, and fails when it is dropped.
 
 ---
 
@@ -526,8 +1003,23 @@ Named rather than omitted.
 - **Nothing was run against a deployment.** No TLS configuration, no proxy
   behaviour, no real Traefik. The per-IP finding in §3 in particular depends
   entirely on how an operator has deployed.
-- **The read path of household isolation.** The tripwire covers writes. Ten
-  queries were flagged as unconfirmed on the read side and have not been swept.
+
+  The TLS configuration has since been measured against the shipped bundle on
+  an isolated network (2026-10-12): Go's defaults accepted CBC/SHA-1 suites at
+  TLS 1.2, `deploy/traefik.yml` now refuses them, and the release smoke checks
+  it (`SECURITY.md`, Release deployment). That is the shipped Traefik, not a
+  deployment: a real installation's certificate and the network in front of it
+  are still `scripts/smoke-proxy.sh --live`'s to prove, or an external TLS
+  scan's.
+
+  So have its connection timeouts, the same way and the same day: Traefik's
+  defaults held a quiet keep-alive connection for 180s, the bundle now closes
+  it after 60s, and `unit/deployment.test.ts` pins the flags. What a shorter
+  timeout cannot do — stop one address holding enough connections to restart
+  Traefik — has no fix inside the bundle and is a known gap in `SECURITY.md`.
+- ~~**The read path of household isolation.** The tripwire covers writes. Ten
+  queries were flagged as unconfirmed on the read side and have not been swept.~~
+  **Swept 2026-08-31** — §2.
 - **iOS Safari, a real tablet, and a screen-reader pass** — three human passes
   §10 still owes. None is a security pass, and none substitutes for one.
 
@@ -544,7 +1036,224 @@ in the order they would pay off.
 | ~~The registration limiter refuses~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~Every limiter call site fails closed~~ | integration | **Built** — in `integration/rate-limit.test.ts` |
 | ~~A successful upload does what it claims~~ | integration | **Built** — `integration/receipt.upload.test.ts` |
-| ~~The image posture holds~~ | build | **Built** — `unit/image-posture.test.ts` (text) + a `RUN ! command -v npm` in the Dockerfile (build); `USER node`/read-only on the running image stay the CI image job's |
+| ~~The image posture holds~~ | build | **Built** — `unit/image-posture.test.ts` (text) + a `RUN` in the Dockerfile that fails the build if `node` is not Bun or npm/npx exist (build); ~~`USER node`/read-only on the running image stay the CI image job's~~ the release job starts the image read-only; nothing asserts the running user (corrected 2026-10-12, §7) |
+
+## The 2026-10-12 review
+
+Reviewed: 2026-10-12, at `e9d62eb` (`v0.1.0-alpha.3`), on branch
+`fix/security-hardening-2026-10-12`.
+
+**How it was done, and what it is worth.** Parallel audit lanes read the
+application, the HTTP edge, the data layer, uploads and outbound calls, the
+release bundle and image, CI and the supply chain. They reported 116 findings.
+Each went to two independent verifiers, who tried to refute it from the source
+and by running things: 110 were confirmed (26 medium, 60 low, 24
+informational), one was rejected, one stayed plausible, and four were disputed.
+Merged by cause, the 116 are 75 distinct issues. Each was then decided:
+fixed in a commit of its own (a code fix with a test shown to fail without
+it); an action only the repository's owner can take; or a risk accepted, with
+the reason written down. A final review of the finished branch, from the
+angles of bypass, upgrade, pipeline, documentation and code quality, found 20
+more defects in the remediation itself, most of them in its documents. The
+branch fixed 19 and filed the twentieth as TEST-9 in `ISSUES.md`. As with
+Phase 7, this reads code and runs suites and probes; it is not a penetration
+test of a deployed instance.
+
+Commits are named by their hash on the branch and by their subject. The squash
+merge gives `master` one commit in their place; the pull request keeps every
+branch commit, so `git fetch origin pull/<number>/head` makes these hashes
+resolve again, and the subject finds the commit in the pull request's list.
+Hashes, and not subjects alone, because a hash is the one name a command can
+check (D132): `unit/ledger-shas.test.ts` checks that every hash between the
+`branch-commits` markers below is a commit of this branch, for as long as the
+branch exists.
+
+<!-- branch-commits fix/security-hardening-2026-10-12 since e9d62eb -->
+
+### What it found, and what became of it
+
+The 116 reports, merged by cause, are 75 distinct issues; the remediation plan
+counted about fifty, because it folded related headers, Traefik settings and
+repository settings into one item each. Every report is in exactly one row
+below. *Reports* is how many of the 116 described that issue, with the highest
+severity the verifiers gave it; *accepted* points to SECURITY.md,
+[*What the 2026-10-12 review accepted*](../SECURITY.md#what-the-2026-10-12-review-accepted),
+and *owner* to [Owner actions](#owner-actions).
+
+#### Accounts and sign-in
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 1 | Registration open to anyone who reaches the instance, with no switch; the advice to restrict it at the proxy had no supported way to do so | 3, medium | `e6d263e` close registration after the first account unless the operator opens it; `6974fb6` show that registration is closed instead of a form that cannot succeed (D123). The first-user claim window: accepted |
+| 2 | No way to change one's own password or to reset a member's, so a leaked or admin-chosen password was permanent | 2, medium | `9c57340` hash and verify passwords through one helper; `f8f8205` let a person change their own password; `42fc6e9` let an admin reset a member's password |
+| 3 | Anyone who knows an address can keep its owner out of sign-in | 2, medium | `f95f282` give known devices their own sign-in budget (D124). A browser that has never signed in: accepted |
+| 4 | The identity password rule was documented and never applied; the screens stated a minimum of 8 | 1, low | `3d1c6a6` state the twelve-character password minimum; `65ad102` refuse a password built from the person's own email or name |
+| 5 | `register` and `addMember` reveal whether an address has an account | 2, low | Accepted; `first-user` closes the first after the first account |
+| 6 | `AUTH_SECRET` overrides the `NEXTAUTH_SECRET` the startup guard checks | 1, low | `1db505d` sign sessions with the secret the startup guard checked |
+| 7 | No absolute session lifetime; signing out does not invalidate a copied token | 1, low | `eed8b82` end every session thirty days after sign-in (D125). Per-session sign-out: accepted |
+| 8 | Cross-site requests rest on `SameSite=Lax` alone: tRPC takes multipart bodies, and input-less mutations take any input | 3, low | `5ebbd85` refuse cross-site and non-JSON requests to tRPC; `9068524` declare void inputs on the mutations that took none. A `__Host-` cookie prefix: rejected (Auth.js already sends `__Secure-` without `Domain`) |
+| 9 | `addMember` runs a 64 MiB Argon2id hash per call, unmetered | 1, medium | `cb4db92` meter adding members, which hashes a password; `8d04349` say a too-common password is the problem on the add-member form (final review) |
+| 10 | IPv6 clients share the bridge gateway's address; once IPv6 is on, one client rotates through its /64 | 1, medium | `a653ab1` rate-limit IPv6 clients by their /64 prefix. The shared default: accepted |
+| 11 | The security log holds every tried email in plaintext | 1, low | `511c193` log an account tag instead of the email a sign-in tried |
+| 12 | A missing or plain-HTTP `NEXTAUTH_URL` goes unnoticed | 1, low | `6acd907` warn at startup when the public URL is missing or plain HTTP. Plain-HTTP LAN installs: accepted (D84) |
+| 13 | Saved offline reads outlive a session that ends without the sign-out button | 1, low | `0f92a3a` forget the previous account's saved reads when its session ends. Up to 24 hours on a device left offline: accepted |
+| 14 | The native iOS client's sign-in is undocumented | 1, disputed | No change: nothing here consumes it, and #8 keeps clients without Fetch Metadata working |
+
+#### Authorisation and data
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 15 | Cross-household attempts were no longer security-logged | 1, low | `2f0d330` record household-scoped misses in the security log |
+| 16 | The isolation tripwire ignores `id`, `userId` and `parentId` | 1, low | `1088e94` cover the cross-household cases the tripwire cannot see |
+| 17 | Four write paths lock a product row before checking its household | 1, info | `46ce862` take row locks only inside the caller's household |
+| 18 | Receipt reads return the OCR dump, image path and uploader to every member | 1, low | `e51c722` return only the receipt fields the screens use |
+| 19 | An error log line can print Prisma's argument tree, hash included | 1, info | `96edf58` keep Prisma's argument dump out of error logs |
+| 20 | Concurrent location moves can form a cycle, and a later move loops forever | 1, medium | `b03754b` keep location moves from forming a cycle |
+| 21 | `register` and `household.create` can leave households with no members | 1, info | `2901d98` claim the account atomically when creating a household; `e6d263e` registers in one transaction |
+| 22 | An offline change resent after seven days is applied twice | 1, low | `366b303` keep replay records for ninety days. The client-side age gate: `ISSUES.md` OFFLINE-1 |
+| 23 | No `CHECK` constraints in the database | 1, info | Accepted; filed as `ISSUES.md` DB-1 by `cb972d4` file the defects the security review deferred |
+| 24 | `generateFromLowStock` races itself | 1, disputed | An integrity defect, not a security one: filed as `ISSUES.md` SHOP-2 by `cb972d4` |
+| 25 | Free-text inputs have no maximum length, including the unauthenticated ones | 2, medium | `bbf5c00` bound every free-text input; `b9a4221` accept only whole numbers for the history limit |
+| 26 | No inventory of personal data, an export that cannot answer an access request, and no erasure | 3, low | `67f9126` inventory personal data, outbound connections and secret handling; `77d6db1` document deleting a person's account by hand. In-app erasure: accepted |
+
+#### HTTP edge and headers
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 27 | A `Purpose: prefetch` header skips the proxy's body cap, and an unauthenticated POST is read whole | 2, medium | `2e9b15f` build the tRPC route handler in one testable function; `bbbdf54` bound request bodies in the API routes, not only in the proxy |
+| 28 | One tRPC batch runs hundreds of calls and writes a log line for each | 2, medium | `881c578` cap the number of calls in one tRPC batch; `46564ae` write at most one refusal line per anonymous tRPC request (final review, D131) |
+| 29 | tRPC responses carry no `Cache-Control` | 1, low | `3ff5fa8` mark every tRPC response no-store |
+| 30 | The proxy matcher's exclusions are unanchored prefixes | 1, low | `5c580a6` anchor the proxy matcher's exclusions |
+| 31 | `/_next/image` is live although nothing uses it | 1, low | `59b7e59` turn off the unused image optimizer |
+| 32 | HSTS asks for preloading of the operator's domain | 2, low | `5ebd8ed` stop inviting HSTS preloading of the operator's domain (D126) |
+| 33 | No Cross-Origin-Opener-Policy or Cross-Origin-Resource-Policy | 1, low | `ca43add` isolate Stoky's pages and resources from other origins |
+| 34 | Permissions-Policy names four features and claims to deny all | 1, info | `7df7574` deny the browser features Stoky does not use |
+| 35 | Product pages send the instance's origin to Open Food Facts; `connect-src` allows it needlessly | 2, low | `d9a2e37` keep the instance's origin out of the Referer sent to other origins (D127); `a18df04` drop Open Food Facts from connect-src |
+| 36 | Prefetch-labelled document requests skip the proxy | 1, disputed | Documents are `no-store`, so nothing caches them: `d83d80e` corrects §8 and pins `no-store` in e2e |
+| 37 | An absolute-form request line becomes an open redirect | 1, rejected | No change: a browser never sends an absolute-form request line to an origin server, so only the client that wrote one is redirected |
+
+#### Logs
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 38 | Container logs grow without bound, and every failed sign-in printed a stack | 2, medium | `f860b9f` rotate the bundle's container logs; `32a324b` log failed sign-ins without a stack trace each. An anonymous client rotating the log out: accepted |
+
+#### Uploads, OCR and outbound calls
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 39 | One receipt can exhaust the container's memory: OCR at full resolution with no timeout | 1, medium | `faf6ce8` downscale receipt photos to a 4000-pixel long edge; `8b86b42` time out recognition and replace a stuck worker; `a713491` fail receipts a restart left processing |
+| 40 | Re-encoding can turn 7 MB into 47 MB, with no quota and nothing deleted | 1, medium | `c910183` refuse a re-encoded receipt larger than the upload limit. The quota: accepted, `ISSUES.md` UPLOAD-1; Phase 7 #16 stays open |
+| 41 | ICC profiles and application segments survive the re-encode | 1, low | `88f1560` strip colour profiles and application segments from stored receipts |
+| 42 | Open Food Facts lookups have no deadline, are unmetered, and ask again for every miss | 2, low | `dbc2756` time out Open Food Facts lookups; `dc2d9bd` remember barcodes Open Food Facts does not know; `addb78e` meter Open Food Facts lookups that miss the cache; `c7f243c` remove the unused Open Food Facts search; `e4a7fad` identify Stoky to Open Food Facts by version and project URL |
+| 43 | The scanners cannot see the Bun runtime and its image decoders, and nothing re-scans a published image | 3, medium | `77356c8` re-scan the published release images every week (closes Phase 7 #17; its first run is an owner action). Bun's absence from Trivy's inventory: accepted |
+
+#### Release bundle and image
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 44 | Valkey has no memory bound, no service has a process limit, Traefik runs as root | 2, low | `d3f44ee` bound Valkey's memory with least-recently-used eviction (D129); `47f700c` limit how many processes each service may start. Traefik as root: accepted. Fixed CPU limits: rejected |
+| 45 | Traefik accepts CBC-SHA1 suites | 1, low | `ab7601c` require TLS 1.2 or later with forward-secret AEAD suites (D128) |
+| 46 | Traefik holds idle connections, with no per-address cap | 1, low | `881f41e` close idle client connections sooner at Traefik. A per-address cap: accepted |
+| 47 | Traefik checks for new versions | 1, info | `ca63982` stop Traefik checking for new versions |
+| 48 | The bundle's service images and the Bun base are named by mutable tags | 5, medium | `526ca29` update Traefik to v3.7.14; `3574344` pin the bundle's service images by digest (D130); `069734b` pin the Bun base image by digest |
+| 49 | Bun 1.4.0, three patches behind TLS and HTTP fixes | 1, low | `56be452` update Bun to 1.4.3 for its TLS and HTTP fixes |
+| 50 | The install downloads follow any redirect | 1, info | `315efe0` refuse non-HTTPS redirects in the install downloads |
+| 51 | The application is PostgreSQL's superuser, and Valkey has no password | 1, low | Accepted |
+| 52 | Secrets reach the containers as environment variables, and backups hold them in plaintext | 1, info | Documented by `67f9126`; `_FILE` secrets: accepted |
+| 53 | The production image ships the demo seed, runnable, with a published password | 1, info | `89edbb5` leave the demo seed out of the production image; `fe985f9` make the demo seed refuse production and apply atomically |
+| 54 | `.dockerignore` matches only the context root | 1, disputed | Not exploitable from CI's clean checkout; fixed as hygiene by `8a6b485` exclude nested env files and local agent state from the build context |
+| 55 | The Prisma engines enter the image unverified | 1, low | `7b5bbeb` verify the Prisma engines against pinned checksums |
+| 56 | Next's preview id and Server Action key are in the public image | 1, info | `4660375` refuse Server Actions that would carry bound values. The keys themselves: accepted |
+| 57 | A refused migration leaves the app in a restart loop, and the release notes' remedy fails | 1, low | `8a3a994` explain recovery from the failed email normalisation migration |
+
+#### CI and release integrity
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 58 | Cancelling a run mid-publish can leave an image unattested | 1, plausible | `6165fa0` never cancel a started run that can publish an image |
+| 59 | A `workflow_dispatch` from any branch publishes an image | 2, low | `b3fe22c` publish images only from pushes |
+| 60 | Two actions pinned to tag objects, not commits | 1, info | `5bc8fc6` pin the attestation and SARIF actions by commit |
+| 61 | Releases are rebuilt from shared caches, and the pushed digest is never scanned | 2, medium | `648f6c8` build and package releases without restoring caches; `7891107` scan the pushed release digest before promoting it. `master`'s `latest` from the cache: accepted |
+| 62 | The bundle names the application image by a mutable tag | 1, medium | `09ecfb6` name the release image by digest in the packaged Compose file |
+| 63 | Release assets are unsigned and releases mutable | 3, medium | `47692a9` attest the release installation files. Immutable releases: owner. alpha.1 and alpha.2 unattested, and the `candidate-` label: accepted |
+| 64 | Unattended agents push as the owner, past the documented branch rule | 1, medium | `d6a999f` align the workflow summaries with the branch rule for agent work. An identity for agents and the signing decision: owner |
+
+#### Supply chain and repository
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 65 | Nothing proposes dependency, action or image updates | 2, low | `d1d1723` let Dependabot propose dependency, action and image updates. Security updates and the ruleset exclusion it needs: owner |
+| 66 | Packages are installed the day they are published | 1, low | `4c4e9f4` hold newly published packages for three days before installing them |
+| 67 | Install scripts allowed for packages that do not need them | 1, low | `3f4f556` allow install scripts only for the packages that need them |
+| 68 | Type packages and TypeScript listed as runtime dependencies | 1, info | `64c7d6d` list only what the application runs as dependencies |
+| 69 | No licence text; empty OCI licence labels | 2, info | `c229051` add the ISC licence text the manifest declares. Confirming the holder: owner |
+| 70 | The private reporting channel SECURITY.md names is switched off | 2, low | `fc63185` route vulnerability reports to the private advisory form. Switching it on: owner |
+| 71 | Secret scanning, push protection and CodeQL off; any action allowed; fork runs approved only for first-timers | 4, low | `ec35c67` codify the repository's security settings with a drift check; `d141544` lint the workflows with zizmor. The settings: owner |
+| 72 | Release tags can be moved; the signature rule is bypassed by its only pusher | 2, low | `ec35c67` (the tag rulesets). Applying them, and deciding on signing: owner |
+| 73 | Merge and rebase merges allowed; merged branches kept | 1, info | `ec35c67` (squash-only merges). Applying them and deleting two branches: owner |
+
+#### Documentation
+
+| # | Issue | Reports | Outcome |
+|---|---|---|---|
+| 74 | The repository described as private and its attestations as absent | 6, low | `c36087b` describe the repository as public, with attested images |
+| 75 | Procedure and exemption counts, the header and sign-out posture, and the pre-Bun production Compose file misstated | 3, info | `e465b2b` correct the procedure counts and image description in the security review |
+
+#### Commits no audit report named
+
+Two enabled others (`2e9b15f`, `9c57340`, above). `990c606` build the same
+image whatever the host's umask fixed an image that would not start when built
+from a checkout made under umask 077, found while building it. The final
+review's own findings were fixed in the commits they concerned before this
+record was written, or in commits of their own: `46564ae` and `8d04349`
+(above), `7c31e41` point the rate-limit defaults at the code, and the
+re-encoder at Bun.Image, `b633684` give SECURITY.md log commands that parse
+Compose's output, `f31572c` count seven persisted offline queries in STATUS,
+`f1c2921` title SECURITY.md's rate-limit section by what it limits, and
+`13916c9` point the document map at the root ISSUES.md and SECURITY.md. The
+twentieth, a test gap in the member reset, is `ISSUES.md` TEST-9 and is
+accepted until fixed. `b61b451` and the commit after it record the review.
+
+The four disputed findings (#14, #24, #36, #54) and the rejected one (#37) are
+in the tables with the reason nothing, or only hygiene, changed. Remedies
+considered and rejected, with their reasons, are recorded beside the change
+each concerned (`SECURITY.md` and `docs/PROGRESS.md`): for example `sniStrict`,
+Valkey `noeviction`, counting only failed sign-ins, comparing `Origin` with
+`NEXTAUTH_URL`, `Referrer-Policy: no-referrer`, and `enable_ipv6` by default.
+
+<!-- /branch-commits -->
+
+### Accepted
+
+`SECURITY.md`, [*Known gaps*](../SECURITY.md#what-the-2026-10-12-review-accepted),
+lists each accepted risk with its reasoning and what would change it: the
+nineteen the remediation plan accepted, and two the final review added (an
+anonymous client can still rotate the log out, and TEST-9's untested guard).
+None lets one household read or change another's data.
+
+### Owner actions
+
+The branch cannot change repository settings. Seventeen actions are the
+owner's; `docs/STATUS.md` records which are still pending, as measured.
+
+- **Ten settings `scripts/github-settings.ts` codifies** (`check` reads them
+  with GET requests only; `apply` writes those that drift): private
+  vulnerability reporting, immutable releases, secret scanning with push
+  protection, CodeQL default setup with the extended suite, Dependabot
+  security updates, an Actions allow-list with SHA pinning (once the
+  re-pinned actions are on `master`), approval for every external
+  contributor's workflow runs, squash-only merges that delete their branch,
+  the two release-tag rulesets, and the ruleset exclusion that lets
+  Dependabot open branches. Dependabot alerts, the script's twelfth check, are
+  already on.
+- **Seven with no script:** a decision on commit signing; an identity for
+  unattended agents without the ruleset bypass; deleting two merged branches;
+  refreshing the alpha.2 release notes; confirming the LICENSE holder;
+  deleting the audit verifiers' test data from the development database and
+  Valkey (a verifier registered `a@b.co` there, and agents may not write to
+  it); and, after the squash merge, running `bun scripts/github-settings.ts
+  check` and the new workflows once, the first `rescan.yml` among them.
 
 ---
 

@@ -19,7 +19,15 @@ import {
   startOfToday,
 } from "@/lib/inventory/batches";
 import { replayable } from "@/lib/validations/idempotency";
-import { MAX_DAYS, MAX_PRICE, MAX_QUANTITY } from "@/lib/validations/bounds";
+import {
+  MAX_DAYS,
+  MAX_ID_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_PRICE,
+  MAX_QUANTITY,
+  MAX_UNIT_LENGTH,
+} from "@/lib/validations/bounds";
 import { withReplay } from "../replay";
 import type {
   StockDirection,
@@ -406,7 +414,7 @@ export const inventoryRouter = createTRPCRouter({
           // write no record (PRICE-1); refused at the edge instead, where the
           // person can fix it.
           price: z.number().positive().finite().max(MAX_PRICE).optional(),
-          storeId: z.string().optional(),
+          storeId: z.string().max(MAX_ID_LENGTH).optional(),
         })
         .merge(replayable)
     )
@@ -488,7 +496,7 @@ export const inventoryRouter = createTRPCRouter({
         procedure: "inventory.addStock",
         input,
         apply: async (tx) => {
-          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
+          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
           const entry = await tx.stockEntry.create({
             data: {
               productId: input.productId,
@@ -559,7 +567,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       consumeStockSchema
         .extend({
-          consumeFromLocationId: z.string().optional(),
+          consumeFromLocationId: z.string().max(MAX_ID_LENGTH).optional(),
         })
         .merge(replayable)
     )
@@ -603,8 +611,18 @@ export const inventoryRouter = createTRPCRouter({
            *
            * A tagged template, so the id is a bound parameter and never
            * concatenated into SQL (CLAUDE.md, Security Constraints).
+           *
+           * The household is in the lock's own WHERE, not only in the
+           * `findFirst` below. Without it the lock ran before anything had
+           * checked the id, so a caller holding another household's product
+           * id locked that household's row, and waited on it whenever its
+           * owner held it — authorise-after-act, and a timing oracle on
+           * someone else's activity. Postgres filters before it locks, so a
+           * foreign id now locks nothing and waits on nothing; the
+           * `findFirst` stays the authoritative refusal. Every product lock
+           * in this file and in `product.update` carries the same predicate.
            */
-          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
+          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
 
           const product = await tx.product.findFirst({
             where: {
@@ -715,7 +733,7 @@ export const inventoryRouter = createTRPCRouter({
       await assertOwnLocation(ctx.db, input.locationId, ctx.householdId);
 
       return ctx.db.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
         // Verify product exists and belongs to household
         const product = await tx.product.findFirst({
           where: {
@@ -779,12 +797,12 @@ export const inventoryRouter = createTRPCRouter({
   transferStock: writeProcedure
     .input(
       z.object({
-        productId: z.string(),
+        productId: z.string().max(MAX_ID_LENGTH),
         quantity: z.number().positive().finite().max(MAX_QUANTITY),
-        unit: z.string(),
-        fromLocationId: z.string(),
-        toLocationId: z.string(),
-        note: z.string().optional(),
+        unit: z.string().max(MAX_UNIT_LENGTH),
+        fromLocationId: z.string().max(MAX_ID_LENGTH),
+        toLocationId: z.string().max(MAX_ID_LENGTH),
+        note: z.string().max(MAX_NOTE_LENGTH).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -818,7 +836,7 @@ export const inventoryRouter = createTRPCRouter({
        */
       return ctx.db.$transaction(
         async (tx) => {
-          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
+          await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "householdId" = ${ctx.householdId} FOR UPDATE`;
 
           const product = await tx.product.findFirst({
             where: {
@@ -943,9 +961,11 @@ export const inventoryRouter = createTRPCRouter({
   getStockHistory: householdProcedure
     .input(
       z.object({
-        productId: z.string(),
-        cursor: z.string().optional(),
-        limit: z.number().min(1).max(100).default(20),
+        productId: z.string().max(MAX_ID_LENGTH),
+        cursor: z.string().max(MAX_ID_LENGTH).optional(),
+        // `.int()`: Prisma truncates a fractional `take`, so 2.5 was a page of
+        // two rows with a cursor, not an error. A page size is a count.
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -1007,7 +1027,7 @@ export const inventoryRouter = createTRPCRouter({
     .input(
       z.object({
         days: z.number().int().min(1).max(MAX_DAYS).default(7),
-        locationId: z.string().optional(),
+        locationId: z.string().max(MAX_ID_LENGTH).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -1044,7 +1064,7 @@ export const inventoryRouter = createTRPCRouter({
   getExpiredItems: householdProcedure
     .input(
       z.object({
-        locationId: z.string().optional(),
+        locationId: z.string().max(MAX_ID_LENGTH).optional(),
       })
     )
     .query(async ({ ctx, input }) => {

@@ -3,9 +3,10 @@
  * library.
  *
  * `Bun.Image.metadata()` returns `{width, height, format}` and nothing else —
- * measured on 1.3.14 and on the 1.4.0 that deploys — so it cannot answer
- * "does this carry EXIF". That question is the one proving `CLAUDE.md`'s upload
- * constraint: a photograph's GPS coordinates must not survive an upload. The
+ * measured on 1.3.14, on 1.4.0, and on the 1.4.3 that deploys (2026-10-12) —
+ * so it cannot answer "does this carry EXIF". That question is the one
+ * proving `CLAUDE.md`'s upload constraint: a photograph's GPS coordinates must
+ * not survive an upload. The
  * only thing that could answer it was `sharp`, which is why the test suite
  * still depends on a library the application has stopped using.
  *

@@ -1,0 +1,211 @@
+import { describe, it, expect, spyOn } from "bun:test";
+import { classifyPublicUrl, publicUrlWarning } from "@/lib/auth/public-url";
+import { warnAboutRiskyConfiguration } from "@/lib/auth/startup";
+
+/**
+ * The public URL, and saying so at start-up when it is missing or plain HTTP.
+ *
+ * Auth.js marks the session cookie `Secure` only when `AUTH_URL ??
+ * NEXTAUTH_URL` — or, with neither set, the request's own URL — is https.
+ * Until this, an instance that sent every password and session cookie in
+ * cleartext started without a line in its log saying so (security review,
+ * 2026-10-12). It warns rather than refuses: D84 keeps plain-http LAN installs
+ * working on purpose.
+ */
+
+const production = (urls: Record<string, string | undefined>) => ({
+  NODE_ENV: "production",
+  ...urls,
+});
+
+describe("what the configured URL means", () => {
+  it("is fine when it is https", () => {
+    expect(classifyPublicUrl({ NEXTAUTH_URL: "https://stoky.example.com" })).toEqual({
+      kind: "https",
+      origin: "https://stoky.example.com",
+    });
+  });
+
+  it("is fine over http to this machine, where CI and the browser suite serve", () => {
+    // ci.yml and ci-in-image.sh use localhost, playwright.config.ts and the
+    // RUNTIME-1 reproduction 127.0.0.1 (D86). Browsers treat all of these as
+    // potentially trustworthy, so nothing leaves the machine.
+    for (const url of [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://127.1:3000",
+      "http://[::1]:3000",
+      "http://stoky.localhost",
+    ]) {
+      expect(classifyPublicUrl({ NEXTAUTH_URL: url }).kind).toBe("loopback-http");
+    }
+  });
+
+  it("is cleartext over http to any other address", () => {
+    // The assertion this file exists for: a LAN address, a LAN name, a public
+    // name, and the address that is not loopback however it looks.
+    for (const url of [
+      "http://192.168.1.10:3000",
+      "http://stoky.lan",
+      "http://stoky.example.com",
+      "http://0.0.0.0:3000",
+      "http://localhost.example.com",
+    ]) {
+      expect(classifyPublicUrl({ NEXTAUTH_URL: url }).kind).toBe("insecure-http");
+    }
+  });
+
+  it("is missing when neither variable is set, or the one next-auth reads is empty", () => {
+    expect(classifyPublicUrl({})).toEqual({ kind: "missing" });
+    expect(classifyPublicUrl({ NEXTAUTH_URL: "" })).toEqual({ kind: "missing" });
+    // next-auth reads `AUTH_URL ?? NEXTAUTH_URL`: an empty AUTH_URL hides the
+    // other, there as here.
+    expect(classifyPublicUrl({ AUTH_URL: "", NEXTAUTH_URL: "https://stoky.example.com" })).toEqual({
+      kind: "missing",
+    });
+  });
+
+  it("reads AUTH_URL before NEXTAUTH_URL, as next-auth does", () => {
+    expect(
+      classifyPublicUrl({
+        AUTH_URL: "http://192.168.1.10:3000",
+        NEXTAUTH_URL: "https://stoky.example.com",
+      }),
+    ).toEqual({ kind: "insecure-http", variable: "AUTH_URL", origin: "http://192.168.1.10:3000" });
+  });
+
+  it("tells an unparsable value and another scheme apart from https", () => {
+    expect(classifyPublicUrl({ NEXTAUTH_URL: "stoky.example.com" }).kind).toBe("unparsable");
+    expect(classifyPublicUrl({ NEXTAUTH_URL: "ftp://stoky.example.com" }).kind).toBe("other-scheme");
+  });
+});
+
+describe("the warning", () => {
+  it("is given for every configuration that is not https or loopback, in production", () => {
+    for (const urls of [
+      {},
+      { NEXTAUTH_URL: "http://192.168.1.10:3000" },
+      { NEXTAUTH_URL: "stoky.example.com" },
+      { NEXTAUTH_URL: "ftp://stoky.example.com" },
+    ]) {
+      expect(publicUrlWarning(production(urls))).toStartWith("[auth] warning:");
+    }
+  });
+
+  it("is not given for https or loopback", () => {
+    expect(publicUrlWarning(production({ NEXTAUTH_URL: "https://stoky.example.com" }))).toBeNull();
+    expect(publicUrlWarning(production({ NEXTAUTH_URL: "http://127.0.0.1:3000" }))).toBeNull();
+  });
+
+  it("is not given outside production", () => {
+    // `bun run dev` and the suites run without a URL, or with any URL to hand.
+    expect(publicUrlWarning({ NODE_ENV: "development" })).toBeNull();
+    expect(publicUrlWarning({ NODE_ENV: "test", NEXTAUTH_URL: "http://192.168.1.10" })).toBeNull();
+  });
+
+  it("over plain http, names the consequences and the way out", () => {
+    const warning = publicUrlWarning(production({ NEXTAUTH_URL: "http://192.168.1.10:3000" }))!;
+    expect(warning).toContain("NEXTAUTH_URL is http://192.168.1.10:3000");
+    expect(warning).toMatch(/not marked Secure/);
+    expect(warning).toMatch(/password and session cookie across the network in cleartext/);
+    expect(warning).toMatch(/barcode camera and offline support are unavailable/);
+    expect(warning).toMatch(/X-Forwarded-Proto/);
+  });
+
+  it("when missing, says what decides the address instead", () => {
+    const warning = publicUrlWarning(production({}))!;
+    expect(warning).toMatch(/neither AUTH_URL nor NEXTAUTH_URL is set/);
+    expect(warning).toMatch(/X-Forwarded-Proto: https/);
+  });
+
+  it("never repeats credentials written into the URL", () => {
+    // The log outlives the configuration file it came from, and a
+    // `user:password@` in a URL is someone's password.
+    const warning = publicUrlWarning(
+      production({ NEXTAUTH_URL: "http://admin:s3cret@192.168.1.10:3000/path" }),
+    )!;
+    expect(warning).not.toContain("s3cret");
+    expect(warning).not.toContain("admin");
+    expect(warning).toContain("http://192.168.1.10:3000");
+  });
+});
+
+describe("at start-up", () => {
+  it("logs the warning and nothing else", () => {
+    // `process.exit` replaced, so a regression that made this fatal fails
+    // here rather than ending the suite.
+    const exit = spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as typeof process.exit);
+    const warned: string[] = [];
+
+    try {
+      warnAboutRiskyConfiguration(
+        production({ NEXTAUTH_URL: "http://192.168.1.10:3000" }),
+        (message) => warned.push(message),
+      );
+      expect(warned).toHaveLength(1);
+      expect(warned[0]).toMatch(/cleartext/);
+
+      warned.length = 0;
+      warnAboutRiskyConfiguration(production({ NEXTAUTH_URL: "https://stoky.example.com" }), (m) =>
+        warned.push(m),
+      );
+      expect(warned).toEqual([]);
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      exit.mockRestore();
+    }
+  });
+
+  it("is run by the instrumentation hook, and does not stop the server", async () => {
+    // A warning, not a refusal (D84): with a usable secret and a plain-http
+    // LAN URL, `register` warns and returns. `process.exit` is replaced so a
+    // regression that made it fatal fails here instead of ending the suite.
+    const env = process.env as Record<string, string | undefined>;
+    const keys = [
+      "NODE_ENV",
+      "NEXT_RUNTIME",
+      "NEXT_PHASE",
+      "NEXTAUTH_SECRET",
+      "NEXTAUTH_URL",
+      "AUTH_URL",
+      "STOKY_REGISTRATION",
+    ];
+    const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
+    const exit = spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as typeof process.exit);
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      env.NODE_ENV = "production";
+      env.NEXT_RUNTIME = "nodejs";
+      env.NEXTAUTH_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      env.NEXTAUTH_URL = "http://192.168.1.10:3000";
+      delete env.NEXT_PHASE;
+      delete env.AUTH_URL;
+      delete env.STOKY_REGISTRATION;
+
+      const { register } = await import("@/instrumentation");
+      await register();
+
+      expect(exit).not.toHaveBeenCalled();
+      // Only this module's lines: in the full suite another file's pending
+      // work reaches `console.warn` while the spy is installed (measured: an
+      // `auth.signin.failed` event from the sign-in tests).
+      const ours = warn.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.startsWith("[auth] warning:"));
+      expect(ours).toHaveLength(1);
+      expect(ours[0]).toMatch(/NEXTAUTH_URL is http:\/\/192\.168\.1\.10:3000/);
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete env[key];
+        else env[key] = value;
+      }
+      exit.mockRestore();
+      warn.mockRestore();
+    }
+  });
+});

@@ -1,8 +1,9 @@
-import { describe, it, expect, afterAll, beforeEach } from "bun:test";
+import { describe, it, expect, afterAll, afterEach, beforeEach, spyOn } from "bun:test";
 import Redis from "ioredis";
 import { closeValkey } from "@/lib/valkey";
 import {
   PRODUCT_CACHE_TTL_SECONDS,
+  PRODUCT_MISS_TTL_SECONDS,
   valkeyProductCache,
 } from "@/server/services/product-cache";
 import { OpenFoodFactsClient } from "@/server/services/openFoodFacts";
@@ -61,9 +62,14 @@ describe("what it keeps", () => {
     await inspector.set("rl:login:10.0.0.7", "3");
     await valkeyProductCache.set("8480000123456", "{}");
 
+    await valkeyProductCache.setMissing("8480000999999");
+
     await valkeyProductCache.clear();
 
     expect(await inspector.get("off:product:v2:8480000123456")).toBeNull();
+    // Misses too: a cleared cache that still answered "unknown" for a day
+    // would not be cleared.
+    expect(await inspector.exists("off:miss:v1:8480000999999")).toBe(0);
     expect(await inspector.get("rl:login:10.0.0.7")).toBe("3");
 
     await inspector.del("rl:login:10.0.0.7");
@@ -163,5 +169,106 @@ describe("what it refuses to hand back", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+});
+
+describe("a barcode Open Food Facts does not know", () => {
+  /**
+   * Remembered for a day, so the same unknown code is not fetched again and
+   * again from this instance's one address — but only the definitive answer.
+   * A failure is "unavailable", not "unknown", and stays asked again:
+   * `resolveScan` relies on a retry after an outage being free to succeed.
+   */
+  const unknown = "9990000000017";
+  const realFetch = globalThis.fetch;
+  let fetches: number;
+  // The service logs every failed lookup.
+  let quiet: ReturnType<typeof spyOn>;
+
+  /** Every lookup answered with a fresh copy of the same response. */
+  function upstream(answer: () => Response) {
+    fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return answer();
+    }) as unknown as typeof fetch;
+  }
+
+  beforeEach(() => {
+    quiet = spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    quiet.mockRestore();
+  });
+
+  it("asks once, and a second replica takes the answer", async () => {
+    // The live shape, measured 2026-10-12: the v2 API says "no such product"
+    // with HTTP 404 and a `status: 0` body, not with a 200.
+    upstream(
+      () =>
+        new Response(
+          JSON.stringify({ code: unknown, status: 0, status_verbose: "product not found" }),
+          { status: 404, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+
+    expect(await new OpenFoodFactsClient().getProductByBarcode(unknown)).toBeNull();
+    expect(await new OpenFoodFactsClient().getProductByBarcode(unknown)).toBeNull();
+
+    expect(fetches).toBe(1);
+    // For a day, and only as a miss — never as a product.
+    const ttl = await inspector.ttl(`off:miss:v1:${unknown}`);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(PRODUCT_MISS_TTL_SECONDS);
+    expect(await inspector.exists(`off:product:v2:${unknown}`)).toBe(0);
+  });
+
+  it("asks again once the barcode is cleared", async () => {
+    upstream(
+      () =>
+        new Response(
+          JSON.stringify({ code: unknown, status: 0, status_verbose: "product not found" }),
+          { status: 404, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+    const client = new OpenFoodFactsClient();
+
+    await client.getProductByBarcode(unknown);
+    await client.clearCache(unknown);
+    await client.getProductByBarcode(unknown);
+
+    expect(fetches).toBe(2);
+  });
+
+  it("asks again after Open Food Facts fails", async () => {
+    upstream(() => new Response("Internal Server Error", { status: 500 }));
+    const client = new OpenFoodFactsClient();
+
+    await client.getProductByBarcode(unknown);
+    await client.getProductByBarcode(unknown);
+
+    expect(fetches).toBe(2);
+    expect(await inspector.exists(`off:miss:v1:${unknown}`)).toBe(0);
+  });
+
+  it("asks again after a 404 that is not Open Food Facts' answer", async () => {
+    // A proxy's or CDN's error page: the status says "not found", but nothing
+    // in it is OFF saying it has no such product.
+    upstream(
+      () =>
+        new Response("<html><body>Not Found</body></html>", {
+          status: 404,
+          headers: { "Content-Type": "text/html" },
+        }),
+    );
+    const client = new OpenFoodFactsClient();
+
+    await client.getProductByBarcode(unknown);
+    await client.getProductByBarcode(unknown);
+
+    expect(fetches).toBe(2);
+    expect(await inspector.exists(`off:miss:v1:${unknown}`)).toBe(0);
   });
 });

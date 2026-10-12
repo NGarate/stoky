@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { existingPasswordSchema, newPasswordSchema } from "./password";
+import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from "./bounds";
+import {
+  existingPasswordSchema,
+  newPasswordSchema,
+  withIdentityRule,
+} from "./password";
 
 /**
  * An address as this application stores and looks it up: trimmed, lowercased.
@@ -10,8 +15,12 @@ import { existingPasswordSchema, newPasswordSchema } from "./password";
  * "noel@example.com", and the two spellings could be two accounts. The
  * migration `normalise_user_email` lowercased the rows already stored and put
  * a unique index on `lower(email)` under all of it.
+ *
+ * Bounded after the trim, so the limit applies to the spelling that is
+ * stored. Sign-in parses this without an account, and a failed one is logged:
+ * unbounded, a 10 MB address was a 10 MB line in the security log.
  */
-const emailSchema = z.string().trim().toLowerCase().email();
+export const emailSchema = z.string().trim().max(MAX_EMAIL_LENGTH).toLowerCase().email();
 
 export const loginSchema = z.object({
   email: emailSchema,
@@ -21,15 +30,31 @@ export const loginSchema = z.object({
   password: existingPasswordSchema,
 });
 
-export const registerSchema = z.object({
-  email: emailSchema,
-  name: z.string().trim().min(1),
-  password: newPasswordSchema,
-  householdName: z.string().trim().min(1).optional(),
+export const registerSchema = withIdentityRule(
+  z.object({
+    email: emailSchema,
+    name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
+    password: newPasswordSchema,
+    householdName: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+  }),
+);
+
+/**
+ * A signed-in person replacing their own password.
+ *
+ * The current one is bounded rather than policed, like sign-in's: an account
+ * whose password predates the policy must still be able to change it, and
+ * that is the account with most reason to. The new one meets the policy —
+ * except the identity rule, which needs the account's name and address and
+ * neither is in the input; `auth.changePassword` loads them and applies it.
+ */
+export const changePasswordSchema = z.object({
+  currentPassword: existingPasswordSchema,
+  newPassword: newPasswordSchema,
 });
 
 export const createHouseholdSchema = z.object({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
 });
 
 export const inviteMemberSchema = z.object({
@@ -39,5 +64,6 @@ export const inviteMemberSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type CreateHouseholdInput = z.infer<typeof createHouseholdSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

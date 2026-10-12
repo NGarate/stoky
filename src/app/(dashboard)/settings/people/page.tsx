@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { TRPCClientError } from "@trpc/client";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,13 @@ import { Input } from "@/components/ui/input";
 import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { ItemRow } from "@/components/ui/item-row";
 import { api } from "@/lib/trpc/client";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { RouteState } from "@/components/household/RouteState";
+import {
+  addRefusalOf,
+  type AddMemberRefusal,
+} from "@/components/household/add-member-refusal";
+import { ResetMemberPasswordDialog } from "@/components/household/ResetMemberPasswordDialog";
 import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
 
@@ -29,7 +35,9 @@ import type { FormEvent, JSX } from "react";
  * There is no email in this application, so the admin sets the first password
  * and hands the device over. That is the honest shape for a self-hosted
  * household rather than a placeholder for an invitation flow that does not
- * exist.
+ * exist. For the same reason the admin is also the way back from a forgotten
+ * password: "Cambiar su contraseña" sets a new one and ends every session the
+ * person had (`household.resetMemberPassword`).
  */
 export default function PeoplePage(): JSX.Element {
   const t = useTranslations("household");
@@ -38,12 +46,23 @@ export default function PeoplePage(): JSX.Element {
   const utils = api.useUtils();
 
   const members = api.household.members.useQuery();
+  // Only to know which row is the caller's own, which gets no reset: your own
+  // password changes from Settings, with your current one.
+  const me = api.auth.me.useQuery(undefined, { retry: false });
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"MEMBER" | "KITCHEN">("KITCHEN");
-  const [failure, setFailure] = useState<"taken" | "other" | null>(null);
+  const [failure, setFailure] = useState<AddMemberRefusal | null>(null);
+
+  const failureMessage = {
+    taken: t("addEmailTaken"),
+    identity: t("addPasswordIdentity"),
+    tooEasy: t("addPasswordTooEasy"),
+    tooMany: t("addTooMany"),
+    other: t("addFailed"),
+  } as const satisfies Record<AddMemberRefusal, string>;
 
   const addMember = api.household.addMember.useMutation({
     onSuccess: (member) => {
@@ -57,13 +76,7 @@ export default function PeoplePage(): JSX.Element {
       setPassword("");
       void utils.household.members.invalidate();
     },
-    onError: (error) => {
-      // The database's own unique constraint, translated. Checking first and
-      // then inserting would race with itself.
-      const conflict =
-        error instanceof TRPCClientError && error.data?.code === "CONFLICT";
-      setFailure(conflict ? "taken" : "other");
-    },
+    onError: (error) => setFailure(addRefusalOf(error)),
   });
 
   /**
@@ -79,6 +92,10 @@ export default function PeoplePage(): JSX.Element {
   const [rowFailure, setRowFailure] = useState<{ id: string; message: string } | null>(
     null,
   );
+  const [resetting, setResetting] = useState<{ id: string; name: string } | null>(null);
+  // The button that opened the dialog, where focus goes back to. One ref for
+  // every row, set on the click: only one dialog is open at a time.
+  const resetOpener = useRef<HTMLButtonElement | null>(null);
 
   /**
    * The server's refusal, in words this household can act on.
@@ -148,6 +165,27 @@ export default function PeoplePage(): JSX.Element {
     },
   });
 
+  const resetPassword = api.household.resetMemberPassword.useMutation({
+    // `always`, for `RevokeSessionsButton`'s reason: offline, an `online`
+    // mutation pauses, its promise never settles, and the dialog would sit on
+    // "Cambiando…" with nothing saying why.
+    networkMode: "always",
+    onSuccess: (_result, variables) => {
+      const target = members.data?.find((candidate) => candidate.id === variables.userId);
+      // What to do next, not only what happened: the person cannot sign in
+      // until they are given the password, and should not keep one somebody
+      // else chose.
+      snackbar.show({
+        kind: "confirm",
+        message: {
+          key: "household.resetDone",
+          values: { name: target?.name ?? "" },
+        },
+      });
+      setResetting(null);
+    },
+  });
+
   const removeMember = api.household.removeMember.useMutation({
     onSuccess: (_result, variables) => {
       const removed = members.data?.find((candidate) => candidate.id === variables.userId);
@@ -169,7 +207,7 @@ export default function PeoplePage(): JSX.Element {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    if (!name.trim() || !email.trim() || password.length < 8) return;
+    if (!name.trim() || !email.trim() || password.length < MIN_PASSWORD_LENGTH) return;
     addMember.mutate({ name: name.trim(), email: email.trim(), password, role });
   }
 
@@ -337,6 +375,24 @@ export default function PeoplePage(): JSX.Element {
                     </Button>
                   </form>
 
+                  {/* Not on the caller's own row: the server refuses it, and
+                      the way to change your own is Settings, which asks for
+                      the current one. Hidden until `me` says whose row is
+                      whose, rather than offered and then refused. */}
+                  {me.data && me.data.id !== member.id ? (
+                    <Button
+                      onClick={(event) => {
+                        resetOpener.current = event.currentTarget;
+                        setResetting({ id: member.id, name: member.name });
+                        setRowFailure(null);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("resetButton")}
+                    </Button>
+                  ) : null}
+
                   {/* Two different problems, two different acts. "They left"
                       is a removal; "their phone was stolen" is this, and
                       offering only the first would make a household delete
@@ -384,6 +440,17 @@ export default function PeoplePage(): JSX.Element {
           />
         ))}
       </ul>
+
+      <ResetMemberPasswordDialog
+        member={resetting}
+        onClose={() => setResetting(null)}
+        onSubmit={(newPassword) =>
+          resetting
+            ? resetPassword.mutateAsync({ userId: resetting.id, newPassword })
+            : Promise.resolve()
+        }
+        returnFocus={resetOpener}
+      />
 
       <section className="mt-8 rounded-lg border border-border bg-card p-4">
         <h2 className="text-lg font-semibold text-heading">{t("addTitle")}</h2>
@@ -436,7 +503,7 @@ export default function PeoplePage(): JSX.Element {
               autoComplete="new-password"
               className="mt-1"
               id={`${fieldId}-password`}
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               onChange={(event) => setPassword(event.target.value)}
               required
               type="password"
@@ -446,7 +513,7 @@ export default function PeoplePage(): JSX.Element {
               className="mt-1 text-sm text-muted-foreground"
               id={`${fieldId}-password-hint`}
             >
-              {t("addPasswordHint")}
+              {t("addPasswordHint", { min: MIN_PASSWORD_LENGTH })}
             </p>
           </div>
 
@@ -513,7 +580,7 @@ export default function PeoplePage(): JSX.Element {
             }
             role="status"
           >
-            {failure ? (failure === "taken" ? t("addEmailTaken") : t("addFailed")) : ""}
+            {failure ? failureMessage[failure] : ""}
           </p>
 
           <Button disabled={addMember.isPending} type="submit">

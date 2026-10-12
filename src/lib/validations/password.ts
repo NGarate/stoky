@@ -111,20 +111,113 @@ export function passwordProblems(
 }
 
 /**
+ * What the policy's refusal of a common password says, on the wire.
+ *
+ * Shared for the identity message's reason below: a form whose input has more
+ * fields than the password (`household.addMember`) cannot read every
+ * BAD_REQUEST as "too easy", and recognises this one by its words.
+ */
+export const PASSWORD_TOO_EASY_MESSAGE = "That password is too easy to guess";
+
+/** Whether a refusal's message is the policy's "too easy to guess". */
+export function isPasswordTooEasyRefusal(message: string | undefined): boolean {
+  return Boolean(message?.includes(PASSWORD_TOO_EASY_MESSAGE));
+}
+
+/**
  * The schema, for a password being *set*.
  *
  * Deliberately not applied to sign-in beyond the length bounds: an account
  * created before this rule existed must still be able to get in, and a
  * verifier that refuses a stored password because it is now too short locks
  * people out of their own household for a policy change.
+ *
+ * **Not the whole policy on its own.** A field cannot see the name and
+ * address beside it; a form that sets a password also goes through
+ * `withIdentityRule` below.
  */
 export const newPasswordSchema = z
   .string()
   .min(MIN_PASSWORD_LENGTH)
   .max(MAX_PASSWORD_LENGTH)
   .refine((value) => passwordProblems(value).length === 0, {
-    message: "That password is too easy to guess",
+    message: PASSWORD_TOO_EASY_MESSAGE,
   });
+
+/**
+ * What the identity refusal says, on the wire.
+ *
+ * English and not a translation key, like every other schema message: the
+ * screens recognise it and show their own words (`getAuthErrorKey`,
+ * `isPasswordIdentityRefusal`). One constant on both sides, so the server
+ * cannot reword it out from under the client.
+ */
+export const PASSWORD_CONTAINS_IDENTITY_MESSAGE =
+  "That password contains the person's own name or email address";
+
+/** Whether a refusal's message is the identity rule's. */
+export function isPasswordIdentityRefusal(message: string | undefined): boolean {
+  return Boolean(message?.includes(PASSWORD_CONTAINS_IDENTITY_MESSAGE));
+}
+
+/**
+ * What `auth.changePassword` says when the current password is wrong.
+ *
+ * Carried on a BAD_REQUEST and never on UNAUTHORIZED: the offline write queue
+ * and the screens read UNAUTHORIZED as "this session has ended", and a person
+ * who mistyped their current password is still signed in. One constant on
+ * both sides, for the same reason as the identity message above.
+ */
+export const WRONG_CURRENT_PASSWORD_MESSAGE = "The current password is not correct";
+
+/** Whether a refusal's message is the wrong-current-password one. */
+export function isWrongCurrentPasswordRefusal(message: string | undefined): boolean {
+  return Boolean(message?.includes(WRONG_CURRENT_PASSWORD_MESSAGE));
+}
+
+/**
+ * The identity rule, applied to a whole form rather than to the field.
+ *
+ * `newPasswordSchema` cannot apply it: a field schema never sees its siblings,
+ * so it calls `passwordProblems(value)` with no identity and the
+ * `containsIdentity` branch can never fire from it. Until this existed it
+ * never did — both schemas that set a password accepted `noelgarate2026` for
+ * `noelgarate@example.com` while this file and SECURITY.md said otherwise
+ * (security review, 2026-10-12).
+ *
+ * Object-level, and the issue is attached to `password` so a form reads it as
+ * that field's. Zod 3 still runs an object refinement when a field was only
+ * *dirty* (too short, too easy), so a short password that also contains the
+ * name reports both at once; it is skipped only when a field is missing or
+ * the wrong type, and then there is no name to compare against anyway.
+ *
+ * A procedure whose input carries no identity — changing your own password
+ * (`auth.changePassword`), resetting somebody else's — loads the person and
+ * calls `passwordProblems` with them instead, refusing with
+ * `PASSWORD_CONTAINS_IDENTITY_MESSAGE` so the screens recognise it the same
+ * way.
+ */
+export function withIdentityRule<
+  T extends z.ZodType<
+    { email: string; name: string; password: string },
+    z.ZodTypeDef,
+    unknown
+  >,
+>(schema: T): z.ZodEffects<T> {
+  return schema.superRefine((value, ctx) => {
+    const problems = passwordProblems(value.password, {
+      email: value.email,
+      name: value.name,
+    });
+    if (problems.includes("containsIdentity")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+      });
+    }
+  });
+}
 
 /**
  * The bounds a password is *checked* against at sign-in.

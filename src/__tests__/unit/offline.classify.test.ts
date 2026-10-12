@@ -154,4 +154,24 @@ describe("an unresolvable offline scan", () => {
       "auth",
     );
   });
+
+  it("asks for review when the account's lookup budget is spent", () => {
+    // `productLookupRateLimit` lasts an hour; the queue gives up after eight
+    // attempts at most thirty seconds apart and does not read Retry-After. As
+    // "transient" the scan held every queued change behind it for minutes and
+    // then ended as "not saved" — online the same 429 opens the form.
+    expect(classifyMutationError(refusal(429), "product.resolveScan")).toBe(
+      "review",
+    );
+  });
+
+  it("is the only 429 that means that", () => {
+    for (const other of [
+      "shopping.updateItem",
+      "shopping.addItem",
+      "inventory.consumeStock",
+    ]) {
+      expect(classifyMutationError(refusal(429), other)).toBe("transient");
+    }
+  });
 });

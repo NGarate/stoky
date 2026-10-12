@@ -1,13 +1,19 @@
 import { z } from "zod";
-import { MAX_PAGE_SIZE, MAX_SEARCH_LENGTH } from "./bounds";
+import {
+  MAX_ID_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_SEARCH_LENGTH,
+} from "./bounds";
 
 export const storeSchema = z.object({
-  name: z.string().min(1),
-  address: z.string().optional(),
+  name: z.string().min(1).max(MAX_NAME_LENGTH),
+  address: z.string().max(MAX_NOTE_LENGTH).optional(),
 });
 
 export const updateStoreSchema = storeSchema.partial().extend({
-  id: z.string(),
+  id: z.string().max(MAX_ID_LENGTH),
 });
 
 export const storeQuerySchema = z.object({

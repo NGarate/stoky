@@ -2,20 +2,39 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import {
+  forgetPersistedReads,
+  forgetPersistedReadsExcept,
+} from "@/lib/offline/persist";
 import { forgetCachedShell, reconcileUser } from "@/lib/sw/register";
 
 const STORAGE_KEY = "stoky.shell.user";
 
 /**
- * Drop the cached shell when the account behind it changes.
+ * Drop what the device keeps for an account once that account is gone.
  *
  * The shell is an authenticated document, kept so the app opens without a
  * signal. Four things make that defensible and this is one of them: it is
  * purged on a change of account, and on reaching `/login`.
  *
- * `/login` matters more than it looks. **There is no sign-out control in this
- * application** — `signOut` is exported and called nowhere — so a redirect to
- * `/login` is the only end-of-session signal that exists.
+ * `/login` matters more than it looks. Signing out (`useEndSession`, behind
+ * **Cerrar sesión** and every control that ends this account's sessions from
+ * here) purges this device itself before it leaves — but most sessions do not
+ * end that way. An idle token expiring, the thirty-day ceiling, or another
+ * device ending this account's sessions all end it on the server, and the
+ * browser only finds out by being sent to `/login`. Nothing runs on the client
+ * before that redirect, so this is the only cleanup those endings get.
+ *
+ * **The previous account's saved reads go too**, on `/login` and on a change
+ * of account: the allowlisted queries `ReadCache` keeps in `localStorage`
+ * under that account's key — and so does any other account's copy but the one
+ * signed in now, which is what clears a device updated after a copy was
+ * already orphaned. TanStack removes them only when the *same* account
+ * restores them past their age, so an account that never signs in here again
+ * left its inventory and shopping lists readable on the device for good
+ * (security review 2026-10-12). The write queue is deliberately kept: an
+ * expired session is told to sign in again, and its unsent changes are what it
+ * signs in to send.
  *
  * The previous id is kept in `localStorage` rather than in React state,
  * because the whole point is to notice across a full page load.
@@ -47,6 +66,16 @@ export function ShellCacheGuard({ userId }: { userId: string | null }): null {
     if (reconcileUser(previous, userId)) {
       forgetCachedShell();
     }
+
+    if (previous !== null && previous !== userId) {
+      // By name, not only through the sweep below: a save still on its
+      // throttle has not written the key yet, so the sweep cannot see it —
+      // naming the account is what makes the persister refuse it when it lands.
+      forgetPersistedReads(previous);
+    }
+    // And any other account's but this one's: copies left by an install that
+    // predates this guard forgetting them, whose owner nobody recorded.
+    forgetPersistedReadsExcept(userId);
 
     if (userId === null) {
       queryClient.clear();

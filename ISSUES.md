@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-09-25
+**Last Updated:** 2026-10-12
 
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
@@ -13,12 +13,15 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5 and RUNTIME-1.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1 and TEST-9.** TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
 reproduction in `docs/reproductions/`, and bun 1.4.0 was measured on 2026-08-25
-and does not fix it. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
+and does not fix it. On 2026-10-12, when the pin moved to 1.4.3, the
+reproduction failed **0 times in 80 on each of 1.4.0 and 1.4.3** under the
+documented load, so it no longer separates the two and neither can be said to
+fix it; the entry has the runs. TEST-6 closed on 2026-08-27: running its eight tests at a phone viewport
 failed four, all four on locators rather than on anything the product does, and
 they pass 8 of 8 now. RUNTIME-1 is the unhandled
 rejections Bun raises and Node does not, which cost the logs this project uses
@@ -28,7 +31,9 @@ entry's conclusion that it was not ours to fix), and the `AbortError` family —
 the larger number — is reproduced and localised but not fixed: one per completed
 router prefetch under Bun, none under Node on the identical artefact, and a
 one-line `curl -sL` reproduces it. `partialPrefetching` is what exposes it and
-stays on by the owner's decision.
+stays on by the owner's decision. That line stopped reproducing with Next 16.4.0
+(`d258c6e`), on Bun 1.4.0 and 1.4.3 alike — measured 2026-10-12, recorded in
+the entry, which stays open until what 16.4.0 changed is understood.
 
 **BUILD-1 closed on 2026-08-26** (`e2a6a8e`), in the direction its own entry
 advised against: `.bun-version` went forward to 1.4.0 on the owner's
@@ -42,6 +47,12 @@ one place to be fixed.
 
 PROD-1 and SHOP-1 were found while writing DOCS-1's docblocks, which is the
 argument for having written them, and are closed.
+
+The 2026-10-12 security review fixed what it could on its branch and filed
+the rest: LOC-2 and OFFLINE-1 alongside the fixes that found them, then
+SHOP-2, DB-1 and UPLOAD-1 — a race that is a defect rather than a weakness,
+and two gaps whose fixes need a schema change it did not take — and, from the
+final review of its branch, TEST-9, a test gap in the member password reset.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -88,7 +99,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | TEST-8 | `resolveScan` key-reuse test fails about one full run in four | ✅ Resolved `395570d` — an unawaited refusal in `withReplay` was an unhandled rejection |
 | BUILD-1 | The image and CI pin different bun versions, and nothing compares them | ✅ Resolved `e2a6a8e` — direction chosen by the owner, against this entry's recommendation; see the entry |
 | BUILD-2 | Development image cannot run Bash fixtures or inspect its mounted checkout | ✅ Resolved 2026-09-25 — Bash installed and Git trusts only `/app` |
-| RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open |
+| RUNTIME-1 | Serving under Bun raises unhandled rejections Node does not | 🟡 Partly closed — the `crypto` half fixed `d0e7566`; the `AbortError` half open, though its reproduction gives 0 since Next 16.4.0 (2026-10-12) |
 | NAV-1 | No mobile navigation — the dashboard is unusable on a phone | ✅ Resolved (`fcb3cad`) |
 | HOUSE-1 | An account without a household loads a skeleton forever | ✅ Resolved (Phase 3) |
 | UI-4 | LocationPicker's dropdown is not a real listbox | ✅ Resolved (`a6b01c2`) |
@@ -110,6 +121,15 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PRICE-1 | No UI path can create a price record | ✅ Resolved (`4bbb82d`) |
 | REV-1 | 2026-08-29 review: receipt pipeline discordances (apply untransacted, review edge-less, CREATE injection, append-on-reparse) | ✅ Resolved (this plan's commits) |
 | SEC-2 | `consumeStock` guards `?? ` but writes `\|\|`, so an empty `consumeFromLocationId` writes an unchecked `locationId` | ✅ Resolved 2026-08-31 |
+| LOC-1 | Two concurrent location moves could leave two locations inside each other, and a move into the loop never finished | ✅ Resolved 2026-10-12 |
+| LOC-2 | No screen or call can move a nested location back to the top level | 🟡 Open — found fixing LOC-1 |
+| HOUSE-2 | Two concurrent `household.create` calls from one account left a household with no member | ✅ Resolved 2026-10-12 |
+| OFFLINE-1 | A queued change resent after its replay record was swept is applied a second time | 🟡 Open — window widened from 7 to 90 days 2026-10-12; the client-side age gate is the fix |
+| OCR-3 | A restart left a receipt that was being read spinning on the upload screen for ever | ✅ Resolved 2026-10-12 |
+| SHOP-2 | Two concurrent "Añadir lo que se está acabando" make two automatic lists, or the same product twice on one | 🟡 Open — deferred by the 2026-10-12 security review; reproduced 10 of 10 |
+| DB-1 | The data model's invariants are held only by application code | 🟡 Open — deferred by the 2026-10-12 security review; needs a data audit first |
+| UPLOAD-1 | Receipt photographs have no per-household storage quota | 🟡 Open — deferred by the 2026-10-12 security review |
+| TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
 
 ---
 
@@ -610,6 +630,382 @@ until the number means what the screen says it means.
 
 ---
 
+### ✅ LOC-1: Two concurrent location moves could leave two locations inside each other
+
+**Files:** `src/server/trpc/routers/location.ts` (`update`, `getTree`),
+`src/components/inventory/LocationPicker.tsx`
+**Severity:** MEDIUM — availability of the shared server, and a household's
+own locations made invisible
+**Status:** RESOLVED 2026-10-12 — found by the 2026-10-12 security review,
+confirmed by both verifiers against the real router with a stubbed client
+
+`location.update` refused a move into the moved location's own subtree by
+walking up from the new parent with plain reads, and wrote `parentId`
+afterwards in a separate statement: no transaction, no lock, no constraint.
+Two moves sent together — A into B and B into A — each checked the tree as it
+was before either wrote, both passed, and left A and B each other's parent. A
+tRPC batch runs its calls concurrently, so one request was enough, and any
+self-registered account owns a household and so holds `adminProcedure`.
+
+What a loop then did:
+
+- **A move into it never finished.** The walk (`checkIsDescendant`) recursed on
+  `parentId` with no visited set and no depth limit, so moving any other
+  location under A went A → B → A → … one query per step for as long as the
+  process lived. The review's reproduction counted about 2 600 queries in three
+  seconds, still going. In the review's scenario, fifty such moves in one
+  batch are fifty endless query streams on the pool every household shares,
+  and the loop survives a restart because it is in the data.
+- **The loop disappeared.** `getTree` and `LocationPicker` attached every row
+  whose parent was present and treated only a parentless row as a root. In a
+  loop every member has a parent present, so neither member — nor anything
+  stored under them — appeared on any screen, and `location.delete` refuses a
+  location with sub-locations. The comment above `getTree` said an orphan
+  "cannot happen through this router"; a loop could.
+
+**Resolution.**
+
+- `update` runs its reads and its write in one transaction that starts with
+  `SELECT id FROM "Household" WHERE id = ${householdId} FOR NO KEY UPDATE`. A
+  second move in the same household waits for the first to commit and then
+  reads the tree the first one left, so it is refused rather than raced. `FOR
+  NO KEY UPDATE` rather than `FOR UPDATE` because the latter also blocks the
+  `FOR KEY SHARE` lock every foreign-key check on the household takes, so
+  creating a product or a location would have queued behind a rename
+  (measured: an insert into `StorageLocation` hit a 1 s `lock_timeout` under
+  `FOR UPDATE` and went straight through under `FOR NO KEY UPDATE`).
+  The final `update` is scoped to the household as well.
+- The walk is iterative and bounded twice: a visited set refuses at the first
+  repeated row ("The destination is inside a loop of locations"), and a cap of
+  64 reads refuses anything longer. The cap counts reads, not distinct rows, so
+  it ends a loop by itself if the set is ever lost.
+- Both trees attach by reachability (`src/lib/inventory/location-tree.ts`,
+  shared by the server and the picker): a row keeps its parent only if its
+  chain of parents reaches the top level, and an orphan or a loop member is
+  drawn at the top level. What hangs below a loop keeps its parent. The result
+  is always a forest, so the recursive walks downstream of it still terminate.
+  The picker also stops dropping orphans, which `getTree` already surfaced.
+
+**Pinned by** `src/__tests__/integration/location.cycles.test.ts` (real
+PostgreSQL), `src/__tests__/unit/location-tree.test.ts` and a `LOC-1` case in
+`src/__tests__/components/LocationPicker.test.tsx`. Each was seen to fail:
+
+- lock removed: 19 of 20 concurrent rounds left a loop;
+- visited set and cap both removed — the old walk: the move into a loop was
+  still running at the 5 s ceiling;
+- visited set alone removed: refused by the cap instead, and the test, which
+  asserts the loop refusal, went red; cap alone removed: a 71-deep chain was
+  accepted;
+- `getTree` attaching by `parentId` again: the loop's members missing from the
+  roots; the picker likewise lost three of its six options; the helper keeping
+  a loop member's parent: three of five unit tests red.
+
+**Data written before the fix is not rewritten.** No migration nulls a loop's
+links: a loop is now visible at the top level and can be broken by moving one
+of its members under a location outside it. Not by choosing "No está dentro de
+ninguna": the settings form sends that as an absent `parentId`, which `update`
+reads as "leave it where it is", so no screen can move a nested location back
+to the top level. That is a separate defect, found while fixing this one, and
+filed as LOC-2.
+
+---
+
+### 🟡 LOC-2: No screen or call can move a nested location back to the top level
+
+**Files:** `src/lib/validations/inventory.ts` (`updateStorageLocationSchema`),
+`src/app/(dashboard)/settings/locations/page.tsx` (`handleSubmit`)
+**Severity:** LOW — a location put inside another cannot be taken out again,
+only moved under a different one
+**Status:** OPEN — found 2026-10-12 while fixing LOC-1
+
+`updateStorageLocationSchema` takes `parentId` as an optional string, not a
+nullable one, so `null` is refused at validation (checked against the schema:
+`safeParse({ id, parentId: null })` fails). The settings form turns "No está
+dentro de ninguna" into `parentId: undefined`, which is dropped from the
+input, and `location.update` writes only the fields it is given — so the move
+to the top level arrives as a rename that leaves the parent where it was, and
+the screen reports success. The fix needs `parentId` nullable in the update
+schema, `update` writing `null` as "top level", and the form sending `null`
+rather than `undefined` when editing.
+
+---
+
+### ✅ HOUSE-2: Two concurrent `household.create` calls from one account left a household with no member
+
+**Files:** `src/server/trpc/routers/household.ts` (`create`)
+**Severity:** INFO — data integrity, not a security weakness: only the
+caller's own account is involved, and under `STOKY_REGISTRATION=open` (and on
+v0.1.0-alpha.3, which has no other mode) registration already lets anyone
+create a household with a name of their choosing
+**Status:** RESOLVED 2026-10-12 — found by the 2026-10-12 security review,
+confirmed by both verifiers, who lowered it from low to info
+
+`household.create` read the caller's `householdId` before its transaction and
+refused if it was set. The transaction then created the household and claimed
+the account with `user.update({ where: { id } })` — keyed on the id alone. Two
+creates sent together (a double tap, two tabs, one batched request) both
+passed the read; the second update waited on the first one's row lock and then
+overwrote `householdId`, so the first household lost its only member. The
+procedure's own comment says what that leaves: a row "unreachable by anyone",
+that no screen shows and no procedure deletes.
+
+**Resolution.** The claim is the conditional update, inside the same
+transaction as the insert:
+`updateMany({ where: { id, householdId: null }, data: { householdId, role: "OWNER" } })`.
+Under READ COMMITTED the second of two claims waits for the first to commit,
+re-evaluates its `WHERE` against the committed row, and matches nothing; a
+count of 0 throws `CONFLICT` ("This account already belongs to a household",
+the same answer as the early read), which rolls back that call's household. The
+early read stays, for the `UNAUTHORIZED` answer to a deleted account and so a
+sequential second create is refused without an insert.
+
+**Pinned by** "lets only one of two concurrent creates claim the account" in
+`src/__tests__/integration/household.test.ts` (real PostgreSQL; ten rounds of
+two concurrent creates, each round asserting one success, one `CONFLICT`, one
+household left with one member). Seen to fail: with the original
+`update({ where: { id } })` restored, both calls of the first round succeeded;
+with the conditional update kept but the zero-count refusal removed, likewise.
+
+**Not covered here, and since closed separately.** `auth.register` had the same
+shape: it created the household and then the user as two statements outside a
+transaction, so two concurrent registrations for one email left the loser's
+household behind when its `user.create` hit the unique email index. *Closed
+2026-10-12* by "feat(auth): close registration after the first account unless
+the operator opens it": registration is one transaction under an advisory
+lock, and the household is a nested write of the account, so a refused
+registration leaves nothing behind. Households already left without a member,
+by either path on an earlier release, are still not deleted: there is no
+erasure path yet, and a sweep would have to be checked against everything that
+cascades from a household first.
+
+---
+
+### 🟡 OFFLINE-1: A queued change resent after its replay record was swept is applied a second time
+
+**Files:** `src/server/trpc/replay.ts` (`REPLAY_RETENTION_DAYS`,
+`sweepExpired`), `src/lib/offline/queue.ts` (`drain`, `retry`)
+**Severity:** LOW — data integrity in the caller's own household: a stock
+consumption, a stock entry, a shopping item or a scan counted twice. No other
+household is reachable and nothing is bypassed.
+**Status:** OPEN — mitigated 2026-10-12 by a longer window, not fixed. Found by
+the 2026-10-12 security review, confirmed by both verifiers by reading the code
+
+`withReplay` remembers a claim for `REPLAY_RETENTION_DAYS` and every
+replayable call deletes the caller's expired claims on its way out. The
+client queue has no age limit: `createdAt` is read only for the undo hold, a
+request that never reached a server is not a strike, a 401 keeps the whole
+queue, and the `failed` list persists until a person discards it. So a change
+the server applied but whose reply was lost — most simply, the tab closed
+mid-flight — stays queued and is resent with the same key whenever the app is
+next opened online. If by then the claim has been swept, the resend claims
+afresh and applies again.
+
+Narrower than "any resend after the window": on one device the stale change
+is the head of the queue and drains first, and an expired claim nobody has
+swept yet still answers it (`answerFromRecord` does not read `expiresAt`). A
+double apply needs a replayable call from the **same account** after the
+window and before the resend — a second device signed in to it, or `retry`
+putting a failed change behind newer ones. `retry`'s comment, "a change the
+server did in fact apply is recognised rather than applied twice", holds only
+inside the window.
+
+**Mitigated:** `REPLAY_RETENTION_DAYS` went from 7 to 90. Seven days was
+shorter than a holiday, and the redesign's own kitchen tablet is "possibly
+untouched for days" (`docs/REDESIGN_PLAN.md` §4). Rows hold a few ids each and
+are swept per account, so the longer window is a slightly larger table and
+nothing else. Pinned by "still recognises a change applied thirty days ago" in
+`src/__tests__/integration/replay.test.ts` (real PostgreSQL): it ages a claim
+by thirty days, lets another call sweep, resends, and asserts one row and the
+first call's id. With the retention set back to 7 it goes red — the resend
+returned a new id. The window is stamped on a claim when it is written
+(`expiresAt`), and the sweep reads that, so on an upgraded install the claims
+written before the upgrade keep their seven days; the ninety are in force for
+every claim seven days after the upgrade.
+
+**Why that is not the fix.** Any finite retention leaves the same hole at its
+edge, and an infinite one is an unbounded table. The fix is on the client,
+which alone knows whether a change *may* have been applied: persist the time
+of an op's first attempt before sending it, in line with the queue's "persist,
+then attempt" rule; at drain time, move an op whose first attempt is older
+than the retention less a margin into `failed` with a reason of its own that
+asks the person to confirm, rather than sending it; and have `retry` say the
+same for such an op. A change that was never attempted cannot have a claim,
+so it keeps sending at any age and an offline shop is never lost. A
+server-side guard on a client-sent composition time was considered and is the
+weaker option: it trusts the device clock, needs an optional envelope field
+for queues already persisted in browsers, and would refuse never-sent changes
+that are safe to apply.
+
+---
+
+### 🟡 SHOP-2: Two concurrent "Añadir lo que se está acabando" make two automatic lists, or the same product twice on one
+
+**Files:** `src/server/trpc/routers/shopping.ts` (`generateFromLowStock`),
+`prisma/schema.prisma` (`ShoppingList`, `ShoppingItem`)
+**Severity:** LOW — data integrity in the caller's own household, not a
+security weakness: whoever can press the button can already add or remove
+any shopping item, so racing it gains nothing, and no other household is
+reachable
+**Status:** OPEN — found by the 2026-10-12 security review, which disputed it
+as a security finding and deferred it here; reproduced against PostgreSQL the
+same day
+
+The docblock promises "exactly one automatic list per household". Nothing
+holds that but the order of two statements: `findFirst` for the household's
+`isAutoGenerated` list, then `create` if there is none, on `ctx.db` with no
+transaction and no lock. The schema has nothing to refuse a second one —
+`ShoppingList` carries only `@@index([householdId])`, `ShoppingItem` no
+unique constraint at all, and the only unique indexes in any migration are
+`User_email_key`, `User_email_lower_key` and
+`Product_barcode_householdId_key`. The rows it then writes are decided from
+the same unlocked reads, so two calls that overlap each add a row for every
+product that is not on the automatic list yet.
+
+Measured on 2026-10-12 against real PostgreSQL (the integration database,
+Bun 1.4.2), with the router called twice at once through two callers for one
+owner, on a product with a minimum of 2 and no stock — one call alone writes
+one row of 3:
+
+- a household with no automatic list yet: **two automatic lists in 10 of 10
+  rounds**, and two rows totalling 6 in 9 of them;
+- a household whose automatic list exists but does not hold the product:
+  **one list, two rows, total 6, in 10 of 10 rounds**.
+
+`getBuyList` flattens every list, so the phone screen asks for the product
+twice at twice the quantity, and `getAutoList` returns whichever of two lists
+`findFirst` meets. The only caller, `/shopping/lists`, disables its button
+while the mutation is pending, so a double tap is not the way in; two tabs or
+two members pressing it together are. A product already on the list is not
+doubled: both calls read the same row and write the same absolute
+`row.quantity + shortfall` (read from the code by the review's verifier, not
+measured here).
+
+**The fix** is the one LOC-1 took: run the reads and writes in one
+transaction that starts by locking the household row
+`FOR NO KEY UPDATE`, so a second generate waits and then sees the first one's
+rows. Behind it, a partial unique index on `ShoppingList ("householdId")
+WHERE "isAutoGenerated"` turns the next forgotten lock into an error rather
+than a second list. Prisma cannot express a partial index, so it is raw SQL
+in the migration, like `User_email_lower_key`; and like that migration it has
+to refuse with a clear message — or merge — on an install that already holds
+two automatic lists, because `CREATE UNIQUE INDEX` fails on them otherwise.
+
+---
+
+### 🟡 DB-1: The data model's invariants are held only by application code
+
+**Files:** `prisma/schema.prisma`, `prisma/migrations/`
+**Severity:** INFO — defence in depth; no write path is known to break an
+invariant today
+**Status:** OPEN — deferred by the 2026-10-12 security review: a constraint
+migration needs a data audit of existing installs first
+
+`grep -rnw CHECK prisma/migrations/` returns nothing: the database holds no
+`CHECK` constraint, and three unique indexes beyond the primary keys (above,
+under SHOP-2). Every bound on a quantity, a price or a minimum is a Zod bound
+at the API (`src/lib/validations/` — `.positive()` on prices and on purchase,
+price-record and shopping quantities, `.min(0)` on `minStock`, a non-zero
+refinement on adjustments) or a range check in the receipt parser. The invariants
+that need more than a bound are held by locks and claims in the routers:
+non-negative stock by `FOR UPDATE` on the product, a receipt applied once by
+the `CONFIRMED → APPLIED` claim, at least one owner by `withOwnersLocked`. A
+script, a seed or a future procedure that skips them writes whatever it is
+given. Four references are plain text with no foreign key —
+`StockEntry.receiptItemId`, `StockEntry.createdBy`, `PriceRecord.receiptId`
+and `Receipt.uploadedBy` — and nothing unique stops a receipt line from
+producing two purchase entries if the claim is ever bypassed.
+
+**What the fix would add**, in one migration with the matching
+`schema.prisma` comments saying which invariant the database holds and which
+the code does: `CHECK ("minStock" IS NULL OR "minStock" >= 0)` on `Product`;
+`price > 0` and `quantity > 0` on `PriceRecord`; `quantity > 0` on
+`ShoppingItem`; a partial unique index on `StockEntry ("receiptItemId") WHERE
+"receiptItemId" IS NOT NULL AND "operationType" = 'PURCHASE'`; and SHOP-2's
+index. **Not** `quantity > 0` on `StockEntry`: it is signed by design —
+consumption writes a negative movement and an adjustment may go either way —
+so at most `quantity <> 0` holds, and only once it is confirmed that unit
+conversion and `transferStock`'s batch split can never write a zero.
+
+**Why it is not done yet.** On a self-hosted install a constraint that meets
+an old row aborts `prisma migrate deploy` on upgrade, and the application does
+not start. Each constraint needs a check of what existing data can hold and a
+migration that refuses with a message naming the rows, as
+`20261006120000_normalise_user_email` does, rather than a bare error.
+
+---
+
+### 🟡 UPLOAD-1: Receipt photographs have no per-household storage quota
+
+**Files:** `src/server/trpc/routers/receipt.ts` (`upload`),
+`src/lib/rate-limit.ts` (`uploadRateLimit`), `deploy/docker-compose.yml`
+(the `uploads` volume)
+**Severity:** LOW under the default `STOKY_REGISTRATION=first-user`, where
+only people an admin adds can upload; MEDIUM on an instance that sets it to
+`open`, where every self-registered account is a household of its own with
+its own allowance
+**Status:** OPEN — deferred by the 2026-10-12 security review: a quota needs a
+schema change, accounting and a screen to explain a refusal
+
+Each upload is bounded: at most 10 MB in, re-encoded to at most 4000 pixels
+on the long edge, and refused if the stored JPEG would exceed the same 10 MB
+(`SECURITY.md`, "Receipt uploads"). The total is not. `uploadRateLimit` lets
+an account make 30 uploads an hour, which is up to 300 MB an hour and about
+7 GB a day per account (30 × 10 MB × 24, arithmetic, not measured), and
+nothing ever deletes a photograph: there is no `receipt.delete`
+(`docs/SECURITY_REVIEW.md` finding 16), and an `upload` whose
+`receipt.create` insert fails after `writeFile` leaves its file behind. In the
+release bundle `uploads` is a plain named volume beside PostgreSQL's, so
+unless the operator moves it, filling one fills the disk the database writes
+to, and every household on the instance loses service, not only receipt
+scanning.
+
+**The fix** is three parts, none of them small: record the bytes stored per
+household (a column on `Household` or a sum over `Receipt`), refuse an upload
+past a configurable quota with a message in both catalogues, and finding 16's
+retention — `receipt.delete` removing its file, and a sweep for files no row
+names. Until then the operator's defence is disk monitoring and, for an open
+instance, an `uploads` volume on a filesystem of its own.
+
+---
+
+### 🟡 TEST-9: Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy"
+
+**Files:** `src/app/(dashboard)/settings/people/page.tsx` (the row's
+"Cambiar su contraseña" button), `src/components/household/ResetMemberPasswordDialog.tsx`
+(`resetRefusalOf`), `src/__tests__/components/PeopleRoles.test.tsx`
+**Severity:** INFO — a test gap, not a live defect: the server refuses a
+self-reset and the screen does not offer one today
+**Status:** OPEN — deferred by the final review of the 2026-10-12 security
+branch, which judged it a coverage gap in the new reset feature rather than
+something to hold the branch for
+
+The people page renders "Cambiar su contraseña" only when
+`me.data && me.data.id !== member.id`: your own password changes from
+Settings, with your current one. `resetRefusalOf` relies on that guard — its
+docblock says the screen never offers the caller's own row — and sends every
+`BAD_REQUEST` that is not the identity refusal to `"tooEasy"`. The server
+refuses a self-reset with `RESET_OWN_PASSWORD_MESSAGE`, which is a
+`BAD_REQUEST` (`household.ts`, `resetMemberPassword`). So if the guard ever
+regressed, an admin opening the dialog on their own row would be told "Esa
+contraseña es demasiado fácil de adivinar" for every password they tried.
+
+Nothing would notice. `PeopleRoles.test.tsx` does not render the page: it
+reproduces the row from `ItemRow`, `Badge` and `Button` and tests the dialog
+and `resetRefusalOf` directly, so changing the page's condition cannot turn
+it red (read, not mutated: the page is not imported). The e2e spec
+`member-password-reset.spec.ts` finds the member's row by its button and
+never checks that the owner's own row has none. The server half is pinned
+(`household.members.test.ts` expects `RESET_OWN_PASSWORD_MESSAGE`).
+
+**The fix** is two small parts: a component or e2e test that the caller's
+own row has no "Cambiar su contraseña" while another member's does, shown to
+go red with the `me.data.id !== member.id` check removed; and
+`resetRefusalOf` matching `RESET_OWN_PASSWORD_MESSAGE`, as it matches the
+identity message, and mapping it to `"failed"` or a sentence of its own,
+never `"tooEasy"`.
+
+---
+
 ### ✅ SEC-2: `consumeStock` guarded one location id and wrote another
 
 **File:** `src/server/trpc/routers/inventory.ts` (`consumeStock`)
@@ -903,6 +1299,54 @@ OCR-1 verified, is necessary and not sufficient.
 
 ---
 
+### ✅ OCR-3: A restart left a receipt that was being read spinning for ever
+
+**Files:** `src/server/services/receipt-recovery.ts`, `src/instrumentation.ts`
+**Severity:** MEDIUM — part of the 2026-10-12 security review's OCR
+denial-of-service finding, whose upload could get the app container
+OOM-killed: every receipt being read at that moment stayed where it was
+**Status:** RESOLVED 2026-10-12
+
+What happens to a receipt after its upload happens inside the process that
+took it. `receipt.upload` writes it as UPLOADING and starts
+`processReceiptAsync` without waiting for it, which moves it through
+PROCESSING (OCR) and PARSED (lines saved, matching under way) to
+NEEDS_REVIEW, CONFIRMED or FAILED. FAILED was reached only from that
+function's `catch`, so a process that stopped in between — a deploy, a
+restart, or the OOM kill the review's measurements point to (OCR on one
+upload passed 1.2 GB RSS against the app's 1 GiB limit) — left the receipt
+in its state with nothing to move it on. Nothing re-processes a stored receipt, and the
+upload screen polls all three states once a second, so it spun there and
+never offered the retry it shows for FAILED.
+
+**Resolution.** When the server starts (`register` in `src/instrumentation.ts`,
+Node runtime only; `next build` does not call it), every receipt in UPLOADING,
+PROCESSING or PARSED that was **created before that moment** becomes FAILED.
+The cutoff, not the timing, is what keeps the new process's own receipts out
+of it, so the sweep is not awaited: a database that is slow to come up gets
+an error in the log and the receipts wait for the next start, instead of the
+server waiting for the database. A receipt has no column for why it failed;
+the log line says how many were "interrupted by a restart".
+
+PARSED is beyond what the review named. It is as transient as the other two
+— `saveParsedItems` sets it and `matchReceiptItems` replaces it in the same
+call chain — and a restart between them strands it the same way.
+
+What it leaves: the person re-uploads, as for any FAILED receipt, and the
+failed row and its stored photograph stay (nothing deletes a receipt). A
+receipt already stuck on an existing installation becomes FAILED on the
+first start of a version with this. It assumes one application process per
+database, which is what the release bundle runs: a second process started
+against the same database would fail the first one's receipts in flight.
+
+Tested in `integration/ocr.pipeline.test.ts` ("Restart recovery") against
+receipts back-dated before a cutoff — the three in-flight states fail, the
+settled states and a receipt created after the cutoff do not — and in
+`unit/receipt-recovery.test.ts`: `register` calls the sweep with a cutoff
+taken before it returns, and an unreachable database is logged, not thrown.
+
+---
+
 ### 🟡 TEST-5: bun abandons a test body at a rejecting `await`
 
 **File:** `src/__tests__/integration/replay.test.ts`
@@ -1037,8 +1481,10 @@ recognise the signature, re-run, do not investigate.
 
 Nothing in this repository — `withReplay` is correct and its tests are correct.
 It wants an upstream report, and the reproduction plus the load recipe above are
-enough to write one. File it against **1.4.0**, the current release, and say it
-reproduces on 1.3.14 too. **A ready-to-file draft is
+enough to write one. ~~File it against **1.4.0**, the current release, and say it
+reproduces on 1.3.14 too.~~ 1.4.3 is the pin since 2026-10-12, and on that date
+the reproduction no longer failed under either version — see *Re-measured for
+1.4.3* below, which is what any report has to explain first. **A ready-to-file draft is
 `docs/reproductions/test-5-upstream-report.md`** (2026-08-31), alongside the
 self-contained `test-5.test.ts` — paste it, trim the internal references, and
 attach the file. Not yet filed: the issue URL goes here once it is.
@@ -1053,11 +1499,37 @@ origin. A fix would be 0.
 Everything *else* is unchanged under 1.4.0 — 569 unit, 602 component, 443
 integration, 0 fail, plus `check:links`, `check:contrast` and the seed's native
 argon2 — so the upgrade is available whenever it is wanted for its own reasons.
-It is simply not a remedy for this, which is why the trunk stays on 1.3.14 and
-the retry stays where it is.
+It is simply not a remedy for this, which is why ~~the trunk stays on 1.3.14
+and~~ the retry stays where it is. *The trunk did not stay on 1.3.14:
+`.bun-version` went to 1.4.0 on 2026-08-26 on the owner's instruction (BUILD-1),
+and to 1.4.3 on 2026-10-12 for its security fixes.*
 
 The production path is not in doubt: `withReplay` refuses a reused key correctly
 and there are passing assertions for every branch of it.
+
+## Re-measured for 1.4.3, 2026-10-12
+
+The pin moved to 1.4.3 for its TLS and HTTP fixes, not for this, and D106 says a
+runner change is measured before it is adopted, interleaved. So it was: the
+self-contained `docs/reproductions/test-5.test.ts`, the glibc binaries copied out
+of `oven/bun:1.4.0-slim` and `oven/bun:1.4.3-slim`, alternated run by run (the
+order flipping every pair) against a migrated scratch test database, while
+`bun test src/__tests__/integration` looped against the same database.
+
+| Batch | Load | 1.4.0 | 1.4.3 |
+|---|---|---|---|
+| 1 | one integration loop | 0 / 40 | 0 / 40 |
+| 2 | two integration loops, each run logged (562–579 of 598 passing; two suites sharing one database collide) | 0 / 40 | 0 / 40 |
+
+Every run printed `COMPLETED: ["refuses a key reused"]` and 13 `expect()` calls,
+the passing signature. **This is not evidence that 1.4.3 fixes TEST-5**: 1.4.0,
+which failed 14 in 40 under this recipe on 2026-08-25, failed none either, so
+what changed is the tree or the machine, not the binary. Under the same recipe the
+rate that used to separate a fix from noise is now 0 on both sides, and this
+reproduction can no longer make the comparison it was written for. The entry
+stays open: a race that the documented load no longer brings out is not a race
+that is gone, and the same day's suites (`verify:ci`, and the three suites in
+the 1.4.3 development image) each passed once, which says nothing either way.
 
 ---
 
@@ -1992,6 +2464,31 @@ people out of their own household; sign-in keeps only the maximum. Two existing
 tests asserted the old behaviour and now assert the new one, including that a
 short legacy password still signs in.
 
+**The screens did not follow at the time** (security review, 2026-10-12). The
+registration hint still said "Ocho caracteres o más", the add-a-member hint said
+8 and promised the person could change it later (nothing changes a password once
+it is set), and that field carried `minLength={8}` with a matching `< 8` guard. A
+password of nine to eleven characters passed the browser and came back as a
+generic refusal. Both hints now take the number as an ICU `{min}` parameter fed
+from `MIN_PASSWORD_LENGTH`, both fields use the same constant as `minLength`, and
+the change-it-later promise is gone. `unit/messages.test.ts` refuses a hint
+without the parameter, a call site that does not pass `MIN_PASSWORD_LENGTH` to
+it, and any `.tsx` that writes `minLength` or a `password.length` comparison
+with a literal number. `components/auth-pages.test.tsx` checks the rendered
+register field and hint. The promise came back the same day, true this time:
+`auth.changePassword` lets a signed-in person change their own password from
+Settings, the hint says so and names the screen, and `unit/messages.test.ts`
+now requires the procedure for as long as the hint makes the promise.
+
+**Nor did the identity refusal** (same review). `passwordProblems` could detect
+a password built from the account's name or address, but the only schema
+calling it was the field schema, which cannot see either, so it never did:
+`registerSchema` and `addMemberSchema` both accepted `noelgarate2026` for
+`noelgarate@example.com`, while the paragraph above and `SECURITY.md` said it
+was refused. `withIdentityRule` now applies it to both forms, and
+`unit/password.test.ts` drives it through the schemas rather than the helper,
+which is the level the earlier tests never reached.
+
 ---
 
 ### ✅ DEBT-2: Barcode scanner component has unused torch state
@@ -2097,7 +2594,11 @@ Three decisions worth keeping:
 
 - **It fails open**, unlike the rate limiter beside it. The fallback for a cache
   it cannot reach is to ask Open Food Facts, which is what a miss already means;
-  refusing would break scanning to protect an optimisation.
+  refusing would break scanning to protect an optimisation. *Since 2026-10-12
+  the lookup itself is metered per account (SECURITY.md, rate limiting), and a
+  lookup the meter cannot count is not sent: with Valkey down, a code the
+  household does not have now lands on the creation form, as in an Open Food
+  Facts outage. The cache still fails open; the request behind it does not.*
 - **`SCAN` on the prefix, not `KEYS *`.** It shares Valkey with the limiter, and
   clearing the product cache must not drop a sign-in counter.
 - **Entries are parsed on the way out.** The cache outlives a deploy, so one
@@ -2250,9 +2751,12 @@ The two previous answers were local: make *this* test create its own state. That
 does not work here, because producing a receipt with parsed lines means an
 upload and an OCR pass — minutes, and a language download (OCR-1). So the
 fixture is restored instead: `e2e/seed.setup.ts` is a project that the sign-in
-setup depends on, and it re-seeds before anything reads. The seed deletes only
-the demo household's rows, so it resets what the suite owns and touches nothing
-else in the same database.
+setup depends on, and it re-seeds before anything reads. The seed deletes the
+rows of the household the `demo@stoky.local` account belongs to, so it resets
+what the suite owns and nothing else. (Until 2026-10-12 it found that household
+by the name *Hogar Demo*, which would have deleted any real household carrying
+it; it now goes through the account, in one transaction, and refuses
+`NODE_ENV=production`. The production image does not contain it at all.)
 
 Proven by running the journey three times with no manual seeding between, which
 is the sequence that used to fail on the third.
@@ -2891,6 +3395,43 @@ rather than on curl's exit code, it confirms the process it started is the one
 answering, and it supplies a secret long enough for the server to render.
 Filed rather than fixed in passing (D6).
 
+### Re-measured for Bun 1.4.3, 2026-10-12: Next 16.4.0 is the variable, not Bun
+
+Measured because the pin moved to 1.4.3, whose notes include a stricter
+`Bun.serve` — a change at exactly this layer could have moved the count either
+way. It did not; the framework had already moved it.
+
+`docs/reproductions/runtime-1-abort.sh` on this tree, alternating the glibc
+binaries from `oven/bun:1.4.0-slim` and `oven/bun:1.4.3-slim` (1.4.0, 1.4.3,
+1.4.0, 1.4.3), each server answering 200 and printing its ready line first:
+**bun 0, node 0, every time**, and the script exits 1 — "NOT the shape RUNTIME-1
+describes". The prefetches were not failing to render: by hand, the same
+`curl -sL` with `Next-Router-Prefetch: 3` answers 200 with a 4 KB RSC body.
+
+So the split was taken at the Next.js move, `d258c6e` (16.3.8 → 16.4.0), with
+both sides built by `git archive <sha> | docker build --target builder` and
+served from the image's own `.next/standalone` with `bun server.js` — the image's
+1.4.0, then a 1.4.3 musl binary mounted over it. Ten kind-3 prefetches to
+`/inventory`, all answering 200:
+
+| Build | Next | Bun 1.4.0 | Bun 1.4.3 |
+|---|---|---|---|
+| `7365252` (the parent) | 16.3.8 | **10** AbortErrors | **10** AbortErrors |
+| `d258c6e` | 16.4.0 | 0 | 0 |
+
+The 16.3.8 / 1.4.0 cell was run twice, 10 both times. **1.4.3 neither fixes nor
+causes it; 16.4.0 is where the one-line reproduction stops.** The browser suite
+agrees as far as one run can: `bun run test:e2e` under 1.4.3 passed 181/181 and
+its captured server output — stdout and stderr both, since the security log's
+`console.warn` lines are in it — holds no `AbortError` and no
+`unhandledRejection`, where the entry above counted ~1500 per run.
+
+Not closed by this. What 16.4.0 changed in the prefetch path has not been read,
+so "fixed upstream" is an inference from two builds, not a cause; and
+`runtime-1-abort.sh` and `runtime-1-upstream-report.md` still describe 16.3,
+where the shape holds. Closing the entry, and retiring or re-pointing the
+draft report, is its own change.
+
 ### ✅ AUTH-1: An inert adapter picks a session strategy the schema cannot serve
 
 **Files:** `src/lib/auth.ts:71` (the adapter), `:210` (`strategy: "jwt"`), `prisma/schema.prisma`
@@ -3407,9 +3948,18 @@ which is short:
 
 - **TEST-5** — upstream (bun). Wants an issue filed against **bun 1.4.0** with
   the reproduction in `docs/reproductions/`, not more work here. Upgrading is
-  not the fix: 1.4.0 was measured on 2026-08-25 and still reproduces. Its
+  not the fix: 1.4.0 was measured on 2026-08-25 and still reproduces. On
+  2026-10-12 the reproduction failed 0 in 80 on 1.4.0 *and* 1.4.3 under load,
+  so before filing, it needs a recipe that reproduces on today's tree. Its
   honest cost: roughly one `verify:ci` or CI `test` job in seven goes red
   spuriously; re-run before investigating.
+- **What the 2026-10-12 security review filed rather than fixed** — LOC-2,
+  OFFLINE-1, SHOP-2, DB-1, UPLOAD-1 and TEST-9. None lets one household read
+  or change another's data, though UPLOAD-1 can cost all of them their service.
+  TEST-9 is a missing test, the cheapest of them.
+  OFFLINE-1 has the most specified fix (a client-side age gate) and SHOP-2 the
+  smallest (LOC-1's lock); DB-1 and UPLOAD-1 each need a schema change, and
+  DB-1 a data audit before it.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the three manual passes, T7, and
   Phase 8's done-when — the owner repeating their pass. The Phase 7 review

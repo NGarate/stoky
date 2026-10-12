@@ -1,9 +1,36 @@
 import { z } from "zod";
 import { UpstreamError } from "./errors";
 import { valkeyProductCache, type ProductCache } from "./product-cache";
+import packageJson from "../../../package.json";
 
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v2";
-const OFF_USER_AGENT = "Stoky/1.0 (contact@stoky.app)";
+
+/**
+ * How this server introduces itself to Open Food Facts, which asks every API
+ * client for `AppName/Version (contact)` so it can reach whoever is behind the
+ * traffic before throttling or banning an address.
+ *
+ * The version is the release's own, read from the manifest the release is cut
+ * from, so it cannot drift the way the hand-written `1.0` did. The contact is
+ * the project's public repository, `+URL` being the User-Agent convention for
+ * "about this client": it was `contact@stoky.app`, an address referenced
+ * nowhere else and not one the project is known to receive mail at.
+ */
+const OFF_USER_AGENT = `Stoky/${packageJson.version} (+https://github.com/NGarate/stoky)`;
+
+/**
+ * How long a barcode lookup may take, from the request to the last byte of
+ * the answer, before it counts as Open Food Facts being unavailable.
+ *
+ * Without one, Bun's only bound is its five-minute idle timer, which every
+ * byte resets: an Open Food Facts brownout, or an answer dripping in, held
+ * `scanBarcode` and `resolveScan` open for minutes while the person waited
+ * for a form they could have been filling in. The signal also covers the body
+ * read (measured under Bun 1.4.2: a stalled body rejects at the deadline like
+ * a stalled request), so the bound is the whole lookup. Five seconds is the
+ * security audit's figure; past it the person is better served by the form.
+ */
+const OFF_TIMEOUT_MS = 5_000;
 
 /** What `extractUnit` answers for a count, or for anything it cannot read. */
 const COUNT_UNIT = "unit";
@@ -113,14 +140,30 @@ export class OpenFoodFactsClient {
    * Valkey by default, so replicas share one answer instead of each fetching
    * the same barcode and disagreeing after an upstream edit. Injectable because
    * the unit tier must not need a service running; see `product-cache.ts`.
+   *
+   * `timeoutMs` is injectable so a test can prove the deadline without waiting
+   * out the real one.
    */
-  constructor(private readonly cache: ProductCache = valkeyProductCache) {}
+  constructor(
+    private readonly cache: ProductCache = valkeyProductCache,
+    private readonly timeoutMs: number = OFF_TIMEOUT_MS,
+  ) {}
 
   /**
-   * Fetch product by barcode from Open Food Facts API
+   * Fetch product by barcode from Open Food Facts API.
+   *
+   * `beforeFetch` is asked once a lookup has missed both caches and is about
+   * to leave for Open Food Facts, and at no other point — it is how the router
+   * meters the requests an account makes this instance send
+   * (`productLookupRateLimit`) without charging for answers already held.
+   * `false` leaves the request unsent and answers null, like an outage. A
+   * throw is the caller's refusal and reaches the caller as thrown: it runs
+   * outside the catch below, which turns every failure into null, so a
+   * throttled lookup is never mistaken for an unknown barcode.
    */
   async getProductByBarcode(
-    barcode: string
+    barcode: string,
+    beforeFetch?: () => Promise<boolean>,
   ): Promise<OpenFoodFactsProduct | null> {
     const cached = await this.cache.get(barcode);
     if (cached !== null) {
@@ -133,6 +176,11 @@ export class OpenFoodFactsClient {
       await this.cache.delete(barcode);
     }
 
+    // Asked within the last day and Open Food Facts had no record of it.
+    if (await this.cache.isMissing(barcode)) return null;
+
+    if (beforeFetch && !(await beforeFetch())) return null;
+
     try {
       const response = await fetch(
         `${OFF_API_BASE}/product/${encodeURIComponent(barcode)}.json?fields=code,product_name,brands,categories,image_url,image_front_url,quantity,serving_quantity,nutriments,ingredients_text,allergens,nutriscore_grade,nova_group,additives_n,additives_tags,nutrient_levels,labels_tags`,
@@ -140,15 +188,36 @@ export class OpenFoodFactsClient {
           headers: {
             "User-Agent": OFF_USER_AGENT,
           },
+          // A timeout lands in the catch below like any other failure: null,
+          // the same fail-open answer as an outage, and never cached. It must
+          // stay that way — `resolveScan` throws NOT_FOUND on null *before* it
+          // claims its replay key, which is what leaves a retry of the same key
+          // free to succeed once Open Food Facts answers again.
+          signal: AbortSignal.timeout(this.timeoutMs),
         }
       );
 
-      if (!response.ok) {
+      // A 404 is how the v2 API says "no such product" — HTTP 404 with a
+      // `status: 0` body, measured against the live API on 2026-10-12 — so it
+      // is read, not thrown. Any other non-2xx is OFF being unavailable.
+      if (!response.ok && response.status !== 404) {
         throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
       }
 
       const rawData = await response.json();
+      // A 404 that is not OFF's JSON — a proxy's error page — fails this parse
+      // and lands in the catch: unavailable, not unknown, and not remembered.
       const parsed = offResponseSchema.parse(rawData);
+
+      // The definitive "unknown": remembered for a day (`PRODUCT_MISS_TTL_SECONDS`),
+      // so rescanning a code OFF does not have stops costing a request each
+      // time. Only this answer — a timeout or an error status never reaches
+      // here, and must stay asked again: `resolveScan` relies on a retry after
+      // an outage being free to succeed.
+      if (parsed.status === 0) {
+        await this.cache.setMissing(barcode);
+        return null;
+      }
 
       // `status: 1` is not "OFF knows this product". An app that scans an
       // unknown code can make OFF create an empty stub (`"empty": 1`, no name,
@@ -156,7 +225,9 @@ export class OpenFoodFactsClient {
       // nothing in it. Taking that as a hit created a nameless "Product <code>"
       // instead of sending the person to the form to name it. A record with
       // neither a name nor a brand identifies nothing, so it counts as unknown
-      // and is not cached: the next lookup sees it once someone fills it in.
+      // — but is not remembered, even as a miss: a stub is a record somebody
+      // has started, the likeliest to be named soon, and the next lookup sees
+      // it once someone fills it in.
       if (parsed.status !== 1 || !parsed.product || !identifiesAProduct(parsed.product)) {
         return null;
       }
@@ -167,50 +238,6 @@ export class OpenFoodFactsClient {
     } catch (error) {
       console.error("Error fetching from Open Food Facts:", error);
       return null;
-    }
-  }
-
-  /**
-   * Search products by name
-   */
-  async searchProducts(
-    query: string,
-    limit = 10
-  ): Promise<OpenFoodFactsProduct[]> {
-    try {
-      const response = await fetch(
-        `${OFF_API_BASE}/search?search_terms=${encodeURIComponent(
-          query
-        )}&fields=code,product_name,brands,categories,image_url,image_front_url&page_size=${limit}&sort_by=popularity`,
-        {
-          headers: {
-            "User-Agent": OFF_USER_AGENT,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new UpstreamError(`Open Food Facts answered ${response.status}`, response.status);
-      }
-
-      const data = await response.json();
-
-      if (!data.products || !Array.isArray(data.products)) {
-        return [];
-      }
-
-      const products: OpenFoodFactsProduct[] = [];
-      for (const product of data.products) {
-        const parsed = offProductSchema.safeParse(product);
-        if (parsed.success) {
-          products.push(parsed.data);
-        }
-      }
-
-      return products;
-    } catch (error) {
-      console.error("Error searching Open Food Facts:", error);
-      return [];
     }
   }
 

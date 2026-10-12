@@ -1,12 +1,18 @@
+import { isRegistrationClosedRefusal } from "@/lib/auth/registration";
+import { isPasswordIdentityRefusal } from "@/lib/validations/password";
+
 export type AuthAction = "login" | "register";
 
 export type AuthErrorKey =
   | "emailExists"
   | "invalidCredentials"
   | "tooManyAttempts"
+  | "accountTooManyAttempts"
   | "authUnavailable"
   | "loginError"
-  | "registerError";
+  | "registerError"
+  | "passwordContainsIdentity"
+  | "registrationClosed";
 
 /**
  * Auth.js flattens every sign-in failure to "CredentialsSignin" so a login
@@ -21,6 +27,9 @@ export type AuthErrorKey =
  */
 const CODE_KEYS: Record<string, AuthErrorKey> = {
   rate_limited: "tooManyAttempts",
+  // The account's counter, not the address's: a different network cannot
+  // help, and the person may be the one someone else is locking out.
+  account_rate_limited: "accountTooManyAttempts",
   auth_unavailable: "authUnavailable",
 };
 
@@ -44,6 +53,18 @@ export function getAuthErrorKey(
 ): AuthErrorKey {
   const fromCode = code ? CODE_KEYS[code.trim().toLowerCase()] : undefined;
   if (fromCode) return fromCode;
+
+  // Before the lowercasing below: the marker is the schema's own message,
+  // shared as a constant, and tRPC carries it verbatim inside the ZodError's
+  // JSON. Checked before the generic fallback so a person refused for using
+  // their own name is told that, not "check the details".
+  if (isPasswordIdentityRefusal(message)) return "passwordContainsIdentity";
+
+  // The operator has closed registration (`STOKY_REGISTRATION`). Matched on
+  // the server's own constant for the same reason, and because the generic
+  // "check the details" would send someone round the form again for a refusal
+  // no detail of theirs can change.
+  if (isRegistrationClosedRefusal(message)) return "registrationClosed";
 
   const normalizedMessage = message?.trim().toLowerCase() ?? "";
 

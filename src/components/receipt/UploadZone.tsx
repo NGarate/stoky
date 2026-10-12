@@ -28,10 +28,11 @@ export function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
    *
    * **The size is refused here rather than by the server, because the server
    * cannot answer.** The photograph is base64'd into the request body — four
-   * bytes for every three — and Next truncates a body over
-   * `experimental.proxyClientMaxBodySize` before any procedure reads it. What
-   * comes back is `JSON Parse error: Unterminated string`, which tells somebody
-   * holding a phone nothing at all. The server's own check still exists and
+   * bytes for every three — and a body over the server's 15 MiB ceiling
+   * (`src/server/http/body-limit.ts`) is refused before any procedure reads
+   * it. What comes back is a bare 413 — until that bound it was
+   * `JSON Parse error: Unterminated string` — which tells somebody holding a
+   * phone nothing at all. The server's own check still exists and
    * still refuses; it just has no way to be the thing that explains it.
    *
    * Nothing is previewed and `onUpload` is not called, so a refused photograph

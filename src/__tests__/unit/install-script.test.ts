@@ -33,10 +33,15 @@ function setup(options: { volumeExists?: boolean } = {}) {
     writeFileSync(join(release, "SHA256SUMS"), files.map((name) => `${sha256(join(release, name))}  ${name}\n`).join(""));
   sums();
   // curl serves the release from the directory, as `--fail` would: the test
-  // image has no curl, and what is under test is the script, not curl.
+  // image has no curl, and what is under test is the script, not curl. Each
+  // call's arguments are recorded, one line per call, so a test can see the
+  // flags the script passes.
+  const curlCalls = join(fixture, "curl-calls");
+  writeFileSync(curlCalls, "");
   writeFileSync(
     join(bin, "curl"),
     `#!/bin/bash
+printf '%s\\n' "$*" >> "${curlCalls}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --output) output="$2"; shift ;;
@@ -61,16 +66,18 @@ cp "$source" "$output"
     release,
     install,
     sums,
+    curlCalls: () => readFileSync(curlCalls, "utf8").trim().split("\n").filter(Boolean),
     dockerCalls: () => readFileSync(calls, "utf8").trim().split("\n").filter(Boolean),
     env: () => readFileSync(join(install, ".env"), "utf8"),
     value: (key: string) => readFileSync(join(install, ".env"), "utf8").match(new RegExp(`^${key}=(.*)$`, "m"))?.[1],
     mode: (name: string) => statSync(join(install, name)).mode & 0o777,
     // umask 077 is the case that once left Traefik unable to read its routes.
-    run: (args: string[] = []) => {
-      const result = Bun.spawnSync(["bash", "-c", 'umask 077 && exec bash "$0" "$@"', script, ...args], {
-        cwd: install,
-        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, STOKY_RELEASE_BASE_URL: `file://${join(fixture, "release")}` },
-      });
+    // `baseUrl: null` leaves the override unset, as an operator's run does.
+    run: (args: string[] = [], { baseUrl = `file://${join(fixture, "release")}` }: { baseUrl?: string | null } = {}) => {
+      const env: Record<string, string | undefined> = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+      delete env.STOKY_RELEASE_BASE_URL;
+      if (baseUrl !== null) env.STOKY_RELEASE_BASE_URL = baseUrl;
+      const result = Bun.spawnSync(["bash", "-c", 'umask 077 && exec bash "$0" "$@"', script, ...args], { cwd: install, env });
       return { exitCode: result.exitCode, stdout: result.stdout.toString(), stderr: result.stderr.toString() };
     },
   };
@@ -98,6 +105,30 @@ describe("deploy/install.sh", () => {
     expect(fixture.value("DOMAIN")).toBe("");
     expect(fixture.value("ACME_EMAIL")).toBe("");
     expect(result.stdout).toContain("DOMAIN ACME_EMAIL");
+  });
+
+  it("follows redirects only to https, at TLS 1.2 or later", () => {
+    // SHA256SUMS arrives over the same hops as the files: a redirect that
+    // dropped to http would let anyone on the path serve both, and pass.
+    const fixture = setup();
+    expect(fixture.run().exitCode).toBe(0);
+    const calls = fixture.curlCalls();
+    expect(calls).toHaveLength(files.length + 1);
+    for (const call of calls) {
+      expect(` ${call} `).toContain(" --proto-redir =https ");
+      expect(` ${call} `).toContain(" --tlsv1.2 ");
+    }
+  });
+
+  it("starts every download from an https URL by default", () => {
+    // The redirect rule above is the only protocol restriction the script
+    // passes, so the first hop is https only because this URL is.
+    const fixture = setup();
+    // The stub serves only file://, so the run stops at the first download.
+    expect(fixture.run([], { baseUrl: null }).exitCode).not.toBe(0);
+    expect(fixture.curlCalls()[0]).toEndWith(
+      ` https://github.com/NGarate/stoky/releases/download/${version}/${files[0]}`,
+    );
   });
 
   it("leaves Traefik's file readable and .env private, whatever the umask", () => {

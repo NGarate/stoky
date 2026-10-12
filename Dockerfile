@@ -1,13 +1,18 @@
 # Stoky uses Bun for dependency installation, builds, migrations and serving.
 # The pinned upstream image includes a node-named symlink to Bun for third-party
 # shebangs; no separate Node.js, npm or npx runtime is installed in any stage.
-FROM oven/bun:1.4.0-alpine AS bun
+# Pinned by the digest of the multi-platform index, because a tag can be
+# re-pushed and a digest cannot; the tag is kept for readers and must name the
+# same index (`docker buildx imagetools inspect oven/bun:<version>-alpine`).
+FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS bun
 
 FROM bun AS deps
 USER root
 WORKDIR /app
-# Native package lifecycle scripts run through Bun's compatibility link.
-# Toolchains stay in this stage; production receives only built dependencies.
+# Only package.json's trustedDependencies run install scripts, through Bun's
+# compatibility link. argon2's node-gyp-build loads its shipped musl prebuild;
+# the toolchain is only its fallback if none matches. Toolchains stay in this
+# stage; production receives only built dependencies.
 RUN apk add --no-cache libc6-compat python3 make g++ openssl
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -43,12 +48,37 @@ RUN bun run build
 RUN bun scripts/stage-runtime-deps.ts tesseract.js /opt/ocr \
     && bun scripts/stage-runtime-deps.ts prisma /opt/prisma/node_modules
 
+# Prisma's postinstall downloads the native engines from binaries.prisma.sh and
+# checks them only against a .sha256 from the same origin; bun.lock covers the
+# npm tarballs, not these. Pin them as tessdata is, at the four paths that ship:
+# migrate deploy runs the schema engine, the server loads the standalone query
+# engine. The count catches a copy this list does not name. A Prisma upgrade
+# fails here until both values are refreshed (docs/RELEASING.md). amd64 only.
+ARG PRISMA_SCHEMA_ENGINE_SHA256=955e3bff1be23248a0922a219f7c4e200acc8fdd1fc72479557c0a9d782bd64a
+ARG PRISMA_QUERY_ENGINE_SHA256=28abc36457335e1a45fe2fe79a4c781b55347e696d6f4410c83bf232d92a726c
+RUN printf '%s  %s\n' \
+      "${PRISMA_SCHEMA_ENGINE_SHA256}" /opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-linux-musl-openssl-3.0.x \
+      "${PRISMA_QUERY_ENGINE_SHA256}" /opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node \
+      "${PRISMA_QUERY_ENGINE_SHA256}" /opt/prisma/node_modules/prisma/libquery_engine-linux-musl-openssl-3.0.x.so.node \
+      "${PRISMA_QUERY_ENGINE_SHA256}" /app/.next/standalone/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node \
+    | sha256sum -c - \
+    && test "$(find /opt/prisma /app/.next/standalone \( -name 'schema-engine*' -o -name 'query-engine*' -o -name '*.so.node' \) | wc -l)" = 4
+
 # Bundle the Spanish OCR model so receipt scanning needs no runtime download.
 ARG TESSDATA_SPA_SHA256=6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
 RUN mkdir -p /app/tessdata \
     && wget -q -O /app/tessdata/spa.traineddata \
        https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/spa.traineddata \
     && echo "${TESSDATA_SPA_SHA256}  /app/tessdata/spa.traineddata" | sha256sum -c -
+
+# COPY keeps the build context's modes, so a checkout made under umask 077 put
+# root-owned 0600 files and 0700 directories into production, where bun cannot
+# read them and the server dies with EACCES. Normalise everything production
+# copies, last, so nothing written after it escapes: readable and traversable by
+# all, writable by root alone, executables still executable. Not `go=rX`:
+# BusyBox clears the bits before testing X, so it strips execute from files.
+RUN chmod -R a+rX,go-w /app/.next/standalone /app/.next/static /app/public \
+      /app/prisma /app/package.json /app/tessdata /opt/ocr /opt/prisma
 
 FROM bun AS production
 USER root
@@ -62,7 +92,12 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
+# Migrations need the schema and the migrations directory, nothing else in
+# prisma/. The demo seed stays out: it hard-codes an OWNER with a password the
+# README publishes, and nothing at runtime reads it. Two COPYs, because a
+# directory source copies its contents, not itself.
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
+COPY --from=builder /app/prisma/migrations ./prisma/migrations
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/tessdata ./tessdata
 ENV TESSDATA_PATH=/app/tessdata
@@ -72,7 +107,9 @@ COPY --from=builder /opt/ocr/ ./node_modules/
 COPY --from=builder /opt/prisma/ /opt/prisma/
 RUN test -f /app/node_modules/tesseract.js/src/worker-script/index.js \
     && test -d /app/node_modules/tesseract.js/node_modules/tesseract.js-core \
-    && test -f /opt/prisma/node_modules/prisma/build/index.js
+    && test -f /opt/prisma/node_modules/prisma/build/index.js \
+    && test -f /app/prisma/migrations/migration_lock.toml \
+    && test ! -e /app/prisma/seed.ts
 
 # Assert the apparent node command is Bun, not a second runtime. A missing
 # migration engine or a reintroduced Node/npm installation fails the build.

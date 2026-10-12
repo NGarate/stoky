@@ -49,9 +49,14 @@ function jwtCallback() {
   return callback;
 }
 
-/** A token as Auth.js would hand it to the callback, `iat` in seconds. */
+/**
+ * A token as Auth.js would hand it to the callback, `iat` in seconds. Signed
+ * in an hour before it was issued, so the absolute lifetime — the other
+ * refusal in the same callback — is never what decides these cases.
+ */
 function tokenIssuedAt(userId: string, when: Date) {
-  return { sub: userId, iat: Math.floor(when.getTime() / 1000) };
+  const iat = Math.floor(when.getTime() / 1000);
+  return { sub: userId, iat, authTime: iat - 60 * 60 };
 }
 
 async function accountWithCaller(

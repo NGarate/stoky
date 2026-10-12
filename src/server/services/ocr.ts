@@ -104,17 +104,111 @@ export function sharedWorker<W extends { terminate(): Promise<unknown> }>(
   };
 }
 
+/** How long one recognition may take before its worker is replaced. */
+export const DEFAULT_OCR_TIMEOUT_MS = 120_000;
+
+/**
+ * The longest delay `setTimeout` honours. Past it the runtime warns
+ * (TimeoutOverflowWarning) and fires after 1 ms, so a value meant as "wait
+ * for days" would fail every scan at once.
+ */
+const MAX_TIMER_MS = 2_147_483_647;
+
+/**
+ * `OCR_TIMEOUT_MS` when it is a positive whole number of milliseconds a timer
+ * can hold, the default otherwise — an unset, empty or mistyped value must not
+ * turn the bound off, and one too large for a timer must not turn it into 1 ms.
+ */
+export function ocrTimeoutMs(configured = process.env.OCR_TIMEOUT_MS): number {
+  const value = Number(configured);
+  return Number.isInteger(value) && value > 0 && value <= MAX_TIMER_MS
+    ? value
+    : DEFAULT_OCR_TIMEOUT_MS;
+}
+
+type RecognisingWorker = {
+  recognize(image: Buffer): Promise<{ data: { text: string } }>;
+  terminate(): Promise<unknown>;
+};
+
+/**
+ * Recognition with a time limit, one image at a time.
+ *
+ * **Why a limit.** `recognize` had none, and there is one worker. An image
+ * Tesseract cannot finish — the security audit measured 49 MP of noise still
+ * running after 200 s and 12 MP of noise taking 131 s — held that worker, and
+ * every receipt queued behind it waited, for as long as it took or for ever.
+ *
+ * **Why termination.** tesseract.js has no way to cancel a recognition in
+ * progress, so giving up on the promise alone would leave the thread working
+ * on the image and the next receipt queued behind it. The only remedy is
+ * `terminate()`, after which the shared worker is gone and the next receipt
+ * loads a fresh one. The receipt that ran out of time throws, and
+ * `processReceiptOcr` marks it FAILED.
+ *
+ * **Why one at a time.** tesseract.js runs a worker's jobs in order, and its
+ * `terminate()` neither finishes nor rejects the ones still queued: their
+ * promises never settle (`createWorker.js`, 6.0.1). Handing a second image to
+ * the worker while the first runs would therefore start the second one's
+ * clock while it waits, and strand it for good when the first one's timeout
+ * kills the worker. Queuing here instead means the limit measures one
+ * recognition, not the backlog in front of it, and that a terminated worker
+ * has nothing else in it.
+ *
+ * A factory, like `sharedWorker`, so a worker that never answers can be
+ * tested without standing up tesseract.
+ */
+export function timedRecogniser<W extends RecognisingWorker>(
+  worker: { get(): Promise<W>; terminate(): Promise<void> },
+  timeoutMs: () => number = ocrTimeoutMs,
+): (image: Buffer) => Promise<string> {
+  let queue: Promise<unknown> = Promise.resolve();
+
+  async function recogniseOne(image: Buffer): Promise<string> {
+    // Loading the model is outside the limit: it is the same for every
+    // image, and a load that fails rejects on its own.
+    const current = await worker.get();
+    const limit = timeoutMs();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        // The image is what cannot be worked with in the time a scan gets;
+        // nothing outside failed, and nobody is waiting on a status code —
+        // `processReceiptAsync` logs this message as the reason.
+        reject(new InvalidInputError(`OCR did not finish within ${limit} ms`));
+      }, limit);
+    });
+
+    try {
+      const {
+        data: { text },
+      } = await Promise.race([current.recognize(image), expired]);
+      return text;
+    } catch (error) {
+      // Before the next image is let through, so it gets a fresh worker
+      // rather than the one still busy with this image.
+      if (timedOut) await worker.terminate();
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return (image) => {
+    const run = queue.then(() => recogniseOne(image));
+    // The next image waits for this one to end, however it ends.
+    queue = run.catch(() => undefined);
+    return run;
+  };
+}
+
 const ocrWorker = sharedWorker<Worker>(() =>
   createWorker("spa", undefined, workerOptions()),
 );
 
-async function recogniseWithTesseract(image: Buffer): Promise<string> {
-  const worker = await ocrWorker.get();
-  const {
-    data: { text },
-  } = await worker.recognize(image);
-  return text;
-}
+const recogniseWithTesseract = timedRecogniser(ocrWorker);
 
 /**
  * Reads the receipt's photograph and moves it to PARSED with the text — or to

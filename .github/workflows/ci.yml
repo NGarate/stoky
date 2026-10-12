@@ -3,7 +3,9 @@ name: CI
 # Trunk-based: every push to master is a release candidate, and this pipeline
 # is the gate, so it has to be trustworthy enough that a red run means
 # something. Pull requests into master come from unattended agent work
-# (CLAUDE.md, Git Workflow) and run the same gates; they never publish.
+# (CLAUDE.md, Git Workflow) and from Dependabot (.github/dependabot.yml) and run
+# the same gates; they never publish. Nor does a manual dispatch, on any ref:
+# only a push publishes (image-publish).
 on:
   push:
     branches: [master]
@@ -12,10 +14,28 @@ on:
     branches: [master]
   workflow_dispatch:
 
-# Superseded runs are wasted work on a trunk. Cancel them.
+# A superseded pull-request run is wasted work, so it is cancelled. Every other
+# run is not. A push (master or a release tag) reaches image-publish, and a
+# cancel between the push that moves `latest` or `sha-<commit>` and the step
+# that attests it leaves a published image with no provenance. A job-level
+# group on image-publish cannot protect it, because this cancel takes the whole
+# run. A newer run on the same ref therefore waits instead; GitHub keeps one
+# pending run per group and replaces it with the newest, so a burst of pushes
+# still collapses to the running run plus the latest one, published in commit
+# order.
+#
+# A dispatch publishes nothing, so it has a group of its own ("dispatch-"
+# before the ref). In the pushes' group it would be the newest arrival, and the
+# newest arrival replaces the *pending* run whatever `cancel-in-progress` says:
+# push A running, push B pending, a dispatch on master would cancel B and run
+# in its place, and B's commit would never be published. Pull-request refs
+# (refs/pull/N/merge) are never a push's ref either. So no run that cannot
+# publish shares a group with one that can, and none of them cancels a
+# publishing run, pending or running. src/__tests__/unit/ci-workflow.test.ts
+# holds this.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'dispatch-' || '' }}${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default. Jobs that need more ask for it explicitly.
 permissions:
@@ -31,7 +51,11 @@ permissions:
 # no report, no trace, and nothing anyone can act on.
 #
 # Actions are pinned by commit SHA rather than tag: a tag can be moved to point
-# at different code, a SHA cannot. The comment records the human-readable version.
+# at different code, a SHA cannot. The comment records the exact version the
+# SHA is. It must be the commit's SHA, not an annotated tag object's: the runner
+# resolves both, but the commits API answers 422 for a tag object, so pin
+# tooling (Dependabot, SHA-pinning enforcement) cannot reliably check or bump
+# it. src/__tests__/unit/ci-workflow.test.ts holds both rules.
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -53,7 +77,7 @@ jobs:
       # credential just declined, which on a private repository is the
       # "could not read Username" the `changes` job ran into. The whole
       # history is under 8 MB.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -64,18 +88,26 @@ jobs:
       - name: Lint the pipeline itself
         run: bash scripts/check-ci.sh
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # `no-cache`: this checks a release's assets, so it downloads Bun rather
+      # than restore a binary any master-run job could have written to the
+      # cache. The reasoning is at release-draft, which needs it most.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: github.ref_type == 'tag'
         with:
           bun-version-file: .bun-version
+          no-cache: true
 
       # A tag must name the version actually packaged. Check this before the
       # publish gate so a typo cannot create an image with the wrong version.
+      # No image exists yet, so the digest is a placeholder: this run checks
+      # the versions and that the image line can take a digest, and its output
+      # is discarded. release-draft packages with the digest it promoted.
       - name: Validate release assets
         if: github.ref_type == 'tag'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release"
+          PLACEHOLDER_DIGEST: sha256:0000000000000000000000000000000000000000000000000000000000000000
+        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release" "$PLACEHOLDER_DIGEST"
 
       # Every gate below this line runs inside this project's own development
       # image, not on the runner's toolchain.
@@ -140,7 +172,7 @@ jobs:
       NEXTAUTH_SECRET: ci-only-not-a-real-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       # The three suites inside the development image, for the reason the
@@ -262,7 +294,7 @@ jobs:
       # is the fix Playwright's own error message names.
       HOME: /root
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       # The image ships browsers, not a general toolchain, and it has no
@@ -276,9 +308,19 @@ jobs:
       - name: unzip, which setup-bun needs and the image does not ship
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends unzip
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # `no-cache`: Bun is downloaded, not restored. This job runs on a tag
+      # and gates image-publish, so a binary planted in the cache would run the
+      # gate a release passes through. With this and audit, no job in this
+      # workflow reads or writes setup-bun's cache, which is what lets
+      # ci-workflow.test.ts hold the whole release path cache-free rather than
+      # weigh each job. An ignore for zizmor's cache-poisoning finding was the
+      # alternative; it would have been an argument in a comment that no test
+      # can hold. The cost is the download quality and release-draft already
+      # make on a tag.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+          no-cache: true
 
       # No dependency cache, deliberately. There was one (`actions/cache` on
       # ~/.bun/install/cache), and measured it cost more than it saved: on run
@@ -321,7 +363,7 @@ jobs:
         env:
           PLAYWRIGHT_PORT: "3000"
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-report
@@ -334,19 +376,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # `no-cache`: the job installs nothing, so the only thing setup-bun
+      # would cache is Bun itself, and restoring it is a download from the
+      # Actions cache instead of from the release. Nothing saved; one more
+      # job reading a cache any master-run job can write (see e2e).
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+          no-cache: true
 
-      # Dependabot's automatic pull requests are off, because they open branches
-      # and this repository is trunk-only. Its alerts stay on for visibility, and
-      # this job is what actually blocks a vulnerable dependency tree.
+      # This job is what blocks a vulnerable dependency tree. Dependabot
+      # (.github/dependabot.yml) proposes version updates as reviewed pull
+      # requests and raises alerts, but GitHub offers no Dependabot security
+      # updates for the bun ecosystem, and an alert blocks nothing.
       #
       # No install, and no Node: `bun audit` answers from `bun.lock` alone.
-      # Measured on this tree under the pinned 1.4.0 — 586 packages checked in
+      # Measured on this tree under 1.4.0, then the pinned Bun — 586 packages checked in
       # 393ms — where `pnpm audit` needed a populated store first. That deletes
       # a whole dependency install from the pipeline rather than porting it.
       - name: bun audit
@@ -372,7 +420,7 @@ jobs:
       contents: read
       actions: read # find the last successful run on master
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
           # The whole history, so the base commit is already here and the
@@ -389,8 +437,13 @@ jobs:
       # previous push. Diffing against `github.event.before` lost images: push
       # A (code) then B (docs) cancels A's run, B's diff is docs-only, and A's
       # code never got an image. Same when A failed and B only fixed a doc.
-      # Every successful run either published or was docs-only against its own
-      # base, so the last success's commit is the newest one with an image.
+      # Every successful *push* run either published or was docs-only against
+      # its own base, so the last one's commit is the newest with an image.
+      # Only push runs: a dispatch on master succeeds without publishing, and
+      # a pull request from a fork's `master` lists under that branch name, so
+      # either would otherwise become a base whose commit has no image, and a
+      # docs-only push after it (or a re-run of the failed push) would skip
+      # the build. ci-workflow.test.ts holds the filter.
       - name: Diff against the last successful run
         id: diff
         # Through the environment, never interpolated into the script: an
@@ -410,7 +463,7 @@ jobs:
           # No earlier success, an API failure, or a base that is not an
           # ancestor of this commit (history rewritten under it) all mean
           # "cannot know", and "cannot know" means build.
-          BASE="$(gh run list --workflow ci.yml --branch master --status success \
+          BASE="$(gh run list --workflow ci.yml --branch master --event push --status success \
             --limit 1 --json headSha --jq '.[0].headSha // empty' || true)"
           if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" HEAD 2>/dev/null; then
             echo "image=true" >> "$GITHUB_OUTPUT"
@@ -453,17 +506,18 @@ jobs:
       # succeeded, so the pipeline reported failure while shipping the image.
       actions: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       # Built and loaded locally first so it is scanned before anyone can pull
       # it. Publishing an image and scanning it afterwards is the wrong order.
-      # cache-to here is what makes image-publish cheap: it rebuilds this same
-      # commit from these layers.
+      # cache-to here is what makes image-publish cheap on master: it rebuilds
+      # this same commit from these layers. A tag's image-publish does not read
+      # them — see there.
       - name: Build for scanning
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           target: production
@@ -475,25 +529,27 @@ jobs:
       # The SARIF pair below is reporting, not enforcement — the gate that
       # fails the build on findings is the separate Trivy step underneath, and
       # it runs unconditionally. These two run only where GitHub will accept
-      # the upload: code scanning on a **private** repository needs Advanced
+      # the upload. This repository is public, so they run and the results
+      # reach the Security tab. The condition stays for private forks and
+      # copies: code scanning on a **private** repository needs Advanced
       # Security, and without it the API answers 403 "Code scanning is not
-      # enabled" — which kept this job red for days while the build, the scan
-      # gate and the push all succeeded. If this repository goes public, the
-      # condition becomes true and the Security tab lights up on its own; a
-      # private repository that gains Advanced Security should drop the
-      # condition instead.
+      # enabled" — which kept this job red for days, while this repository
+      # was private, even though the build, the scan gate and the push all
+      # succeeded. A private copy that gains Advanced Security should drop
+      # the condition. `cache` is explained at the gate below.
       - name: Scan image
         if: github.event.repository.private == false
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           image-ref: stoky:scan
           format: sarif
           output: trivy.sarif
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          cache: ${{ github.ref_type != 'tag' }}
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@c3400c2f38909e0dcf3c3a41f2030a8217be5d3e # v3
+        uses: github/codeql-action/upload-sarif@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
         if: github.event.repository.private == false && always()
         with:
           sarif_file: trivy.sarif
@@ -501,29 +557,54 @@ jobs:
 
       # A separate gate so the SARIF above is always uploaded, even when this
       # fails. An image people self-host should not ship known criticals.
+      #
+      # `cache` restores both the Trivy binary (setup-trivy) and its
+      # vulnerability database from the Actions cache, which every master-run
+      # job can write. On a tag this is the release's gate, so it fetches both
+      # instead: a planted binary or database would pass anything. Branch runs
+      # keep the cache, which spares the database registry a download per run.
       - name: Fail on critical or high findings
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           image-ref: stoky:scan
           format: table
           exit-code: "1"
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          cache: ${{ github.ref_type != 'tag' }}
 
   # ---------------------------------------------------------- image-publish --
   # The only job that waits for everything, and the only one that can ship.
   # It rebuilds the commit image-build just scanned — same context, same
-  # Dockerfile — from the layer cache that build wrote moments ago, so this is
-  # minutes of cache hits plus the push, not a second build. The same
-  # two-build pattern the old single job already used.
+  # Dockerfile. On master it does so from the layer cache that build wrote
+  # moments ago, so this is minutes of cache hits plus the push, not a second
+  # build. The same two-build pattern the old single job already used.
+  #
+  # A tag builds from nothing. The Actions cache of a master or tag run can be
+  # written by any job in a master run, and e2e runs the whole dev-dependency
+  # tree in a container with the runner's docker socket — host root, and with
+  # it the cache token. A compromised test-only package could plant a
+  # production layer that this job restored after image-build's scan had
+  # passed, and push it as a release with valid provenance. A clean build is
+  # minutes longer, hence the longer limit; `latest` and `sha-` keep the
+  # cache, because no installation is told to run them (RELEASING.md).
+  # ci-workflow.test.ts holds both settings.
   image-publish:
     name: Publish image
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: ${{ github.ref_type == 'tag' && 30 || 10 }}
     needs: [quality, test, e2e, audit, image-build]
-    # A pull request is verified, scanned included, but publishes nothing: no
-    # `sha-` tag for a commit that is not on master, and no `latest`.
-    if: github.event_name != 'pull_request'
+    # Only a push publishes, and `on.push` admits only master and `v*` tags. A
+    # pull request or a manual dispatch is verified, scanned included, but
+    # publishes nothing: no `sha-` tag for a commit that is not on master, and
+    # no `latest`. A dispatch selects any ref, so publishing from one put an
+    # unreviewed branch on the public registry as `sha-<commit>`, attested.
+    # To retry a failed publish, re-run the newest push's run, which keeps its
+    # event (an older one would move `latest` back to its commit).
+    # This stops an accidental dispatch, not a writer: a dispatch runs the
+    # workflow file of the ref it selects. ci-workflow.test.ts holds this and
+    # the concurrency rule above it.
+    if: github.event_name == 'push'
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     permissions:
@@ -552,14 +633,14 @@ jobs:
             echo "::error::Release $RELEASE_TAG is already published; create a new version instead of replacing its image."
             exit 1
           fi
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Image metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # metadata-action otherwise adds latest automatically for tag refs.
@@ -580,7 +661,7 @@ jobs:
             type=raw,value=candidate-${{ github.ref_name }},enable=${{ github.ref_type == 'tag' }}
 
       - name: Log in to the registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -588,10 +669,10 @@ jobs:
 
       # cache-from only: image-build already exported these layers, and
       # re-exporting identical ones here would spend upload time saying
-      # nothing new.
+      # nothing new. Neither on a tag: see the comment above this job.
       - name: Push
         id: push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           target: production
@@ -600,17 +681,20 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: mode=max
-          cache-from: type=gha
+          cache-from: ${{ github.ref_type != 'tag' && 'type=gha' || '' }}
+          no-cache: ${{ github.ref_type == 'tag' }}
 
       # Lets an operator verify the image they are about to self-host really
       # was built from this repository, by this workflow, from this commit.
       #
-      # Public repositories only, like the SARIF upload in image-build and for
-      # the same shape of reason: GitHub answers "Feature not available for
-      # user-owned private repositories" after everything else has succeeded.
-      # If this repository goes public, provenance starts attesting on its
-      # own — which is also when it starts mattering, since it exists for
-      # people who did not build the image themselves.
+      # This repository is public, so every image this job pushes is attested
+      # (from v0.1.0-alpha.3 on; alpha.1 and alpha.2 were built while it was
+      # private and have none). SECURITY.md tells operators how to verify it,
+      # and that a missing attestation means do not run the image. The
+      # condition stays, like the SARIF upload's in image-build and for the
+      # same shape of reason: on a user-owned private fork or copy GitHub
+      # answers "Feature not available for user-owned private repositories"
+      # after the image has already been pushed.
       # OCI repository names are lowercase; `github.repository` is NGarate/stoky.
       # metadata-action lowercases its input, the attestation action does not,
       # so it would push to `ghcr.io/NGarate/stoky` and fail after the image
@@ -621,7 +705,7 @@ jobs:
         run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
       - name: Attest provenance
         if: github.event.repository.private == false
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -639,19 +723,58 @@ jobs:
     permissions:
       contents: write
       packages: write # promote the verified candidate to the version tag
+      id-token: write # provenance attestation of the installation files
+      attestations: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      # Downloaded, never restored from the Actions cache. setup-bun's cache key
+      # is the same in every job, and every job of a master run holds the token
+      # that writes the cache — e2e included, whose container holds the
+      # runner's docker socket — so test-only code could plant a binary under
+      # it even though no job here uses setup-bun's cache any more.
+      # This job holds contents: write and packages: write, logs in to GHCR
+      # next, and runs `bun` beside that credential. setup-bun checks a
+      # restored binary only by asking it for its revision.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+          no-cache: true
       - name: Log in for the published image smoke
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # image-build's Trivy gate scanned a different build: on a tag the pushed
+      # image is a clean rebuild, and nothing compares the two digests. So the
+      # exact digest the version tag will name is scanned here, from the
+      # registry, before the smoke and the promotion; the build scan stays as
+      # the pull-request and master gate. It closes the scanned-is-not-shipped
+      # gap, not cache poisoning: Trivy matches known CVEs and does not detect
+      # an implanted layer. A CVE disclosed since image-build's scan stops the
+      # release here too (RELEASING.md says how to recover).
+      # `version` is the action's default, pinned so a bump of the default
+      # cannot change the scanner of a release unseen; `cache: false` because
+      # this is the release's gate (see image-build's). OCI names are
+      # lowercase; `github.repository` is NGarate/stoky.
+      - name: Lowercase image name
+        id: image
+        run: echo "name=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+      - name: Scan the pushed digest
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        env:
+          # Never a copy in the local daemon: what the registry serves.
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ steps.image.outputs.name }}@${{ needs.image-publish.outputs.digest }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          cache: false
+          version: v0.69.3
       # Run the downloaded registry image, including its migrations, against
       # new volumes. This checks the actual publication, beyond the build and
       # source tests. Public DNS/certificate issuance is an operator check.
@@ -694,10 +817,56 @@ jobs:
             echo "::error::$IMAGE:$RELEASE_TAG resolves to $PROMOTED, not the verified $EXPECTED_DIGEST."
             exit 1
           fi
+      # The packaged Compose file names the image by this digest as well as
+      # the tag. A GHCR tag can be moved by anything holding packages: write;
+      # the digest cannot, and SHA256SUMS covers the line that carries it.
       - name: Package installation files
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release"
+          EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
+        run: bash scripts/release-assets.sh "$RELEASE_TAG" "$RUNNER_TEMP/release" "$EXPECTED_DIGEST"
+      # What an operator's Compose resolves, read from the file being attached,
+      # and pulled by it. The values are placeholders: `config` needs every
+      # required variable, and nothing here starts.
+      - name: Check the packaged Compose file pulls the promoted digest
+        env:
+          STOKY_VERSION: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
+          POSTGRES_PASSWORD: unused
+          NEXTAUTH_SECRET: unused
+          DOMAIN: release-check.invalid
+          ACME_EMAIL: release-check@example.invalid
+        run: |
+          COMPOSE=(docker compose --project-name "stoky-release-check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file "$RUNNER_TEMP/release/docker-compose.yml")
+          EXPECTED="${REGISTRY}/${IMAGE_NAME,,}:$RELEASE_TAG@$EXPECTED_DIGEST"
+          IMAGES="$("${COMPOSE[@]}" config --images)"
+          if ! grep -Fxq "$EXPECTED" <<< "$IMAGES"; then
+            echo "::error::The packaged Compose file does not name $EXPECTED; it names:"
+            echo "$IMAGES"
+            exit 1
+          fi
+          "${COMPOSE[@]}" pull app
+      # SHA256SUMS comes from the same release as the files it covers, so it
+      # detects damage, not replacement: anything holding contents: write can
+      # swap a published file and its checksum line together. A signed
+      # provenance attestation per file ties each one to this workflow, this
+      # tag and this commit, and is stored by GitHub, not in the release.
+      # Attested after the checks above and before the draft exists, so no
+      # draft carries a file without one; the list is the draft's, file for
+      # file. A path that matched nothing would be skipped silently, which
+      # ci-workflow.test.ts guards. Gated like the image's attestation, for
+      # the same private-fork reason.
+      - name: Attest the installation files
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            ${{ runner.temp }}/release/docker-compose.yml
+            ${{ runner.temp }}/release/example.env
+            ${{ runner.temp }}/release/traefik.yml
+            ${{ runner.temp }}/release/install.sh
+            ${{ runner.temp }}/release/SHA256SUMS
       - name: Create or refresh the draft
         env:
           GH_TOKEN: ${{ github.token }}

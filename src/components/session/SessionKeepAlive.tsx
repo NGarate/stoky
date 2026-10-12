@@ -19,7 +19,7 @@ import type { JSX } from "react";
  *
  * - **Activity refreshes silently.** A pointer or a key, throttled to once
  *   every four minutes, asks the server for the session; Auth.js re-issues the
- *   token because `updateAge` has passed. Someone who is using
+ *   token, with a fresh expiry, on every read. Someone who is using
  *   the application never sees this component at all, which is the point — a
  *   warning that fires while you are typing is a nuisance, not an
  *   accessibility feature.
@@ -37,10 +37,14 @@ const WARN_BEFORE_MS = 2 * 60 * 1000;
 /**
  * The shortest gap between two silent refreshes.
  *
- * Just under the five minutes of `updateAge`, so continuous use costs at most
- * one extra request every four minutes and every one of them actually moves
- * the expiry — a shorter throttle would mostly ask the server to re-issue a
- * token it had just issued.
+ * Continuous use costs at most one extra request every four minutes, which
+ * keeps an active session well inside its fifteen idle minutes. Every read
+ * re-issues the token (`src/lib/auth.ts`, the `session` settings), so a
+ * shorter throttle would only spend requests moving the expiry a little
+ * further each time.
+ *
+ * Nothing here can move the thirty-day limit (`MAX_SESSION_AGE_S`): the
+ * server refuses the token at that point however recently it was refreshed.
  */
 const REFRESH_THROTTLE_MS = 4 * 60 * 1000;
 

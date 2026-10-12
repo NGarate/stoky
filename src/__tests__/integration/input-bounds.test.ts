@@ -5,14 +5,20 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import {
   cleanupTestHouseholds,
+  cleanupTestProducts,
   cleanupTestUsers,
   createMockSession,
   createTestHousehold,
+  createTestProduct,
   createTestUser,
   envelope,
   generateTestEmail,
 } from "../utils/test-helpers";
-import { MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
+import {
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_RECEIPT_LINES,
+} from "@/lib/validations/bounds";
 
 /**
  * The bounds on inputs declared inline in a router, through the router.
@@ -29,6 +35,7 @@ import { MAX_RECEIPT_LINES } from "@/lib/validations/bounds";
 const MARKER = `bounds-${process.pid}-${Date.now().toString(36)}`;
 let api: ReturnType<typeof appRouter.createCaller>;
 let userId: string;
+let productId: string;
 
 beforeAll(async () => {
   const household = await createTestHousehold({ name: `${MARKER} household` });
@@ -39,12 +46,14 @@ beforeAll(async () => {
     role: "OWNER",
   });
   userId = user.id;
+  productId = (await createTestProduct({ name: `${MARKER} leche`, householdId: household.id })).id;
   api = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession({ ...user, household }) }),
   );
 });
 
 afterAll(async () => {
+  await cleanupTestProducts(MARKER);
   await cleanupTestUsers(MARKER);
   await cleanupTestHouseholds(MARKER);
 });
@@ -68,6 +77,15 @@ describe("inputs declared beside their procedure", () => {
     expect(await refusedFields(() => api.product.searchByName({ query: "leche", limit: -1 }))).toEqual(["limit"]);
     expect(await refusedFields(() => api.receipt.list({ limit: -1 }))).toEqual(["limit"]);
     expect(await refusedFields(() => api.price.getProductPrices({ limit: 1e9 }))).toEqual(["limit"]);
+  });
+
+  it("refuses a fractional page size before it reaches take", async () => {
+    // `getStockHistory` hands `limit + 1` to Prisma's `take`, which truncates
+    // it: 2.5 answered with two rows and a cursor rather than an error. The
+    // product is real so that, unbounded, the call is accepted, not NOT_FOUND.
+    expect(
+      await refusedFields(() => api.inventory.getStockHistory({ productId, limit: 2.5 })),
+    ).toEqual(["limit"]);
   });
 
   it("refuses a day window that cannot become a date", async () => {
@@ -108,9 +126,41 @@ describe("inputs declared beside their procedure", () => {
     expect(await refusedFields(() => api.receipt.confirmAll({ receiptId: "r", items }))).toEqual(["items"]);
   });
 
+  it("refuses stored text past its bound before anything is written", async () => {
+    // The disk-filling case from the 2026-10-12 review: one call stored as much
+    // as the request body could carry. `procedure-input-bounds.test.ts` proves
+    // every field has a maximum; this proves the router enforces it.
+    expect(
+      await refusedFields(() => api.store.create({ name: "M".repeat(MAX_NAME_LENGTH + 1) })),
+    ).toEqual(["name"]);
+    expect(
+      await refusedFields(() =>
+        api.inventory.transferStock({
+          productId: "p",
+          unit: "unidad",
+          quantity: 1,
+          fromLocationId: "a",
+          toLocationId: "b",
+          note: "n".repeat(MAX_NOTE_LENGTH + 1),
+        }),
+      ),
+    ).toEqual(["note"]);
+    expect(
+      await refusedFields(() => api.price.recordPrice({
+        productId: "p",
+        storeId: "s",
+        price: 1,
+        unit: "unidad",
+        currency: "EURO",
+      })),
+    ).toEqual(["currency"]);
+  });
+
   it("still takes the ordinary values", async () => {
     // So the bounds above are bounds and not a broken procedure.
     expect(await api.receipt.list({ limit: 20 })).toBeDefined();
+    // The history screen asks for a hundred, the most a page may hold.
+    expect((await api.inventory.getStockHistory({ productId, limit: 100 })).entries).toEqual([]);
     expect(Array.isArray(await api.inventory.getExpiringItems({ days: 30 }))).toBe(true);
     expect(Array.isArray(await api.product.searchByName({ query: "leche", limit: 10 }))).toBe(true);
   });

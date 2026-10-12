@@ -1,47 +1,39 @@
 import { describe, it, expect } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import nextConfig from "../../../next.config";
 
 /**
- * Nothing imports `next/image`, and `next.config.ts` depends on that.
+ * The Image Optimization endpoint is switched off, and `next.config.ts`
+ * depends on that.
  *
- * Next's Image Optimization endpoint decodes with `sharp`, and the config
- * excludes `sharp` from the standalone output — 19 MB of native library for a
- * route this application has no way to reach. That saving is only correct
- * while the premise holds. The moment a component renders `next/image`,
- * `/_next/image` becomes reachable and would fail at runtime, in production,
- * on an image that renders perfectly in development.
+ * The config excludes `sharp` from the standalone output — 19 MB of native
+ * library — on the grounds that `/_next/image` cannot be reached. Until
+ * 2026-10-12 this file guarded that premise by checking that nothing imports
+ * `next/image`, and the premise was false: Next 16 serves `/_next/image`
+ * whatever the source imports, and with the defaults it fetched any
+ * same-origin path for an anonymous caller, through the whole router, and
+ * returned whatever sniffed as a raster image. Without `sharp` it did not fail
+ * either; Next serves the original bytes (SECURITY_REVIEW §8).
  *
- * A build cannot notice: the trace exclusion is silent by design. So the
- * premise is asserted here instead.
+ * `images.unoptimized` is what makes the server answer the route with a 404
+ * before it reads a parameter (`next-server.js`, the `unoptimized` branch of
+ * the image handler), so that is what is asserted — on the config object Next
+ * is given, after the next-intl plugin has wrapped it.
+ * `e2e/security-headers.spec.ts` asks the production build for the route and
+ * expects the 404.
  *
- * If this goes red, the choice is real and either answer is fine — drop the
- * `next/image` usage, or drop the exclusion and carry the library. What is
- * not fine is having one without the other.
+ * An import of `next/image` is no longer checked for. With the endpoint off it
+ * renders the source file as it is, in development and production alike, so
+ * there is no longer a difference between the two for a guard to catch.
  */
-const ROOT = join(import.meta.dir, "..", "..", "..");
-const SRC = join(ROOT, "src");
-
-function sourceFiles(dir: string, found: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry);
-    if (path.includes("__tests__")) continue;
-    if (statSync(path).isDirectory()) sourceFiles(path, found);
-    else if (path.endsWith(".ts") || path.endsWith(".tsx")) found.push(path);
-  }
-  return found;
-}
-
-describe("the image optimiser stays unreachable", () => {
-  it("scans something, so the check below is not vacuous", () => {
-    expect(sourceFiles(SRC).length).toBeGreaterThan(100);
+describe("the image optimiser is switched off", () => {
+  it("declares images.unoptimized", () => {
+    expect(nextConfig.images?.unoptimized).toBe(true);
   });
 
-  it("finds no import of next/image", () => {
-    const offenders = sourceFiles(SRC)
-      .filter((path) => /from\s+["']next\/image["']/.test(readFileSync(path, "utf8")))
-      .map((path) => relative(SRC, path));
-
-    expect(offenders).toEqual([]);
+  it("does not hand the route to a custom loader instead", () => {
+    // A loader is the other way Next 404s the route, and it moves image
+    // requests somewhere this project does not review.
+    expect(nextConfig.images?.loader).toBeUndefined();
+    expect(nextConfig.images?.loaderFile).toBeUndefined();
   });
 });

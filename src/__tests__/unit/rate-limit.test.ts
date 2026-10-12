@@ -1,10 +1,16 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import {
   accountIdentifier,
+  addMemberRateLimit,
+  clientAddress,
   loginAccountRateLimit,
+  loginDeviceRateLimit,
   loginRateLimit,
+  passwordChangeRateLimit,
+  productLookupRateLimit,
   rateLimitIdentifier,
   registerRateLimit,
+  uploadRateLimit,
 } from "@/lib/rate-limit";
 
 /**
@@ -55,6 +61,83 @@ describe("rateLimitIdentifier", () => {
     // Over-restricting is the safe direction. Returning something unique per
     // caller here would mean no limit at all when the app is reached directly.
     expect(rateLimitIdentifier(new Headers())).toBe("unknown");
+  });
+});
+
+/**
+ * One IPv6 subscriber is a /64, not an address: a host picks addresses inside
+ * its prefix at will. Counted per address, each of the 2^64 would be a fresh
+ * budget, so these go red the moment the identifier is the raw address again.
+ */
+describe("rateLimitIdentifier on IPv6", () => {
+  const from = (address: string) =>
+    rateLimitIdentifier(new Headers({ "x-forwarded-for": `198.51.100.4, ${address}` }));
+
+  it("puts two addresses in one /64 in one bucket", () => {
+    // The rotation an attacker gets for free, privacy extensions included.
+    expect(from("2001:db8:aa:bb::1")).toBe(from("2001:db8:aa:bb:dead:beef:1234:5678"));
+    expect(from("2001:db8:aa:bb::1")).toBe("2001:db8:aa:bb::/64");
+  });
+
+  it("keeps different /64s apart", () => {
+    // Grouping is not collapsing: the next subscriber's prefix is someone else.
+    expect(from("2001:db8:aa:bb::1")).not.toBe(from("2001:db8:aa:bc::1"));
+    expect(from("2001:db8:aa:bb::1")).not.toBe(from("2001:db9:aa:bb::1"));
+  });
+
+  it("reads one address the same however it is spelled", () => {
+    // Case, leading zeros, `::`, brackets, a port and a zone are spellings,
+    // not clients. Each one left raw is another bucket for the same host.
+    const canonical = from("2001:db8:0:1::7");
+    for (const spelling of [
+      "2001:DB8:0:1::7",
+      "2001:0db8:0000:0001:0000:0000:0000:0007",
+      "2001:db8::1:0:0:0:7",
+      "[2001:db8:0:1::7]",
+      "[2001:db8:0:1::7]:443",
+      "2001:db8:0:1::7%eth0",
+    ]) {
+      expect(from(spelling)).toBe(canonical);
+    }
+  });
+
+  it("counts an IPv4-mapped address as the IPv4 client it is", () => {
+    // What a dual-stack socket reports for an IPv4 peer. As a /64 it would be
+    // `0:0:0:0::/64` — every IPv4 client in the world in one bucket.
+    expect(from("::ffff:192.0.2.1")).toBe("192.0.2.1");
+    expect(from("::FFFF:c000:201")).toBe("192.0.2.1");
+    expect(from("::ffff:192.0.2.1")).not.toBe(from("::ffff:192.0.2.2"));
+  });
+
+  it("leaves IPv4 and anything that is not an address alone", () => {
+    expect(from("192.0.2.1")).toBe("192.0.2.1");
+    expect(from("192.0.2.1:51234")).toBe("192.0.2.1");
+    expect(rateLimitIdentifier(new Headers())).toBe("unknown");
+    expect(from("not-an-address")).toBe("not-an-address");
+  });
+});
+
+describe("clientAddress", () => {
+  it("keeps the full address, so the security log can name the host", () => {
+    // The /64 is what a limit counts; an operator reading the log needs the
+    // address. One value used to serve both, and the grouping would have
+    // erased the second.
+    const headers = new Headers({
+      "x-forwarded-for": "198.51.100.4, 2001:db8:aa:bb:dead:beef:1234:5678",
+    });
+
+    expect(clientAddress(headers)).toBe("2001:db8:aa:bb:dead:beef:1234:5678");
+    expect(rateLimitIdentifier(headers)).toBe("2001:db8:aa:bb::/64");
+  });
+
+  it("reads the same hop the limiter does", () => {
+    // Two functions reading the header two ways would log one client and
+    // count another.
+    expect(clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 10.0.0.7" }))).toBe(
+      "10.0.0.7",
+    );
+    expect(clientAddress(new Headers({ "x-real-ip": "10.0.0.8" }))).toBe("10.0.0.8");
+    expect(clientAddress(new Headers())).toBe("unknown");
   });
 });
 
@@ -207,10 +290,121 @@ describe("the configured limits", () => {
     });
   });
 
+  it("gives a known device five attempts per fifteen minutes of its own", () => {
+    // The budget a browser that has signed in before is counted on instead of
+    // the account's (security review, 2026-10-12). Still a limit: a stolen
+    // device cookie buys this many guesses a window, and the browser suite's
+    // override must not become the product's number.
+    delete process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS;
+    delete process.env.RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS;
+
+    expect(loginDeviceRateLimit()).toEqual({
+      prefix: "rl:login:dev",
+      attempts: 5,
+      windowSeconds: 900,
+    });
+  });
+
+  it("reads the known-device override, and refuses one that would disable it", () => {
+    process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_LOGIN_DEVICE_WINDOW_SECONDS = "60";
+    expect(loginDeviceRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+
+    process.env.RATE_LIMIT_LOGIN_DEVICE_ATTEMPTS = "0";
+    expect(loginDeviceRateLimit().attempts).toBe(5);
+  });
+
+  it("meters adding a member at twenty per admin per hour", () => {
+    // Every call is a 64 MiB Argon2id hash before the database is asked
+    // anything (security review, 2026-10-12). The default is the product's
+    // number; the browser suite raises it, and this is why that cannot leak.
+    delete process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS;
+    delete process.env.RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS;
+
+    expect(addMemberRateLimit()).toEqual({
+      prefix: "rl:addmember",
+      attempts: 20,
+      windowSeconds: 3600,
+    });
+  });
+
+  it("reads the add-member override, and refuses one that would disable it", () => {
+    process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS = "60";
+    expect(addMemberRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+
+    process.env.RATE_LIMIT_ADD_MEMBER_ATTEMPTS = "0";
+    expect(addMemberRateLimit().attempts).toBe(20);
+  });
+
+  it("meters changing a password at five per account per fifteen minutes", () => {
+    // The procedure answers "is this the current password?" before anything
+    // else, so this is the number of guesses a stolen session gets at the
+    // password behind it (security review, 2026-10-12) — sign-in's own
+    // per-address number.
+    delete process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
+    delete process.env.RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS;
+
+    expect(passwordChangeRateLimit()).toEqual({
+      prefix: "rl:pwchange",
+      attempts: 5,
+      windowSeconds: 900,
+    });
+  });
+
+  it("reads the password-change override, and refuses one that would disable it", () => {
+    process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS = "60";
+    expect(passwordChangeRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+
+    process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = "0";
+    expect(passwordChangeRateLimit().attempts).toBe(5);
+  });
+
   it("counts the account separately from the address", () => {
     // Sharing a prefix would make five wrong passwords from one address spend
     // the account's budget too, and the two limits would stop being two.
     expect(loginAccountRateLimit().prefix).not.toBe(loginRateLimit().prefix);
     expect(loginAccountRateLimit().prefix).not.toBe(registerRateLimit().prefix);
+    // And adding a member shares a counter with nothing: an admin who signed
+    // in a few times has not spent any of it.
+    // A known device's budget is not the account's either: sharing it would
+    // put the owner's phone back on the counter a stranger can fill.
+    expect(loginDeviceRateLimit().prefix).not.toBe(loginAccountRateLimit().prefix);
+    const others = [loginRateLimit(), loginAccountRateLimit(), registerRateLimit(), uploadRateLimit()];
+    expect(others.map((limit) => limit.prefix)).not.toContain(addMemberRateLimit().prefix);
+    // Nor does changing a password: sign-in clears the account's sign-in
+    // counter on success, and sharing it would let a stolen session's
+    // guesses be wiped by the owner signing in somewhere else.
+    expect([...others, addMemberRateLimit()].map((limit) => limit.prefix)).not.toContain(
+      passwordChangeRateLimit().prefix,
+    );
+  });
+
+  it("meters sixty Open Food Facts lookups an hour per account", () => {
+    // The browser suite raises this in playwright.config.ts; this is why that
+    // cannot become what an operator gets.
+    delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS;
+    delete process.env.RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS;
+
+    expect(productLookupRateLimit()).toEqual({
+      prefix: "rl:off-lookup",
+      attempts: 60,
+      windowSeconds: 3600,
+    });
+  });
+
+  it("counts lookups apart from every other limit", () => {
+    const lookup = productLookupRateLimit().prefix;
+    for (const other of [
+      loginRateLimit(),
+      loginAccountRateLimit(),
+      registerRateLimit(),
+      uploadRateLimit(),
+      addMemberRateLimit(),
+      passwordChangeRateLimit(),
+    ]) {
+      expect(other.prefix).not.toBe(lookup);
+    }
   });
 });

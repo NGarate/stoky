@@ -526,6 +526,36 @@ describe("tRPC Router Integration Tests", () => {
         await expectCode(caller.auth.logout(), "UNAUTHORIZED");
       });
     });
+
+    describe("revokeMySessions", () => {
+      // It takes nothing, so it accepts nothing. Before `z.void()` it had no
+      // parser and ran on whatever arrived — a cross-site form's body
+      // included — and signed the account out everywhere. The walk in
+      // `unit/procedure-inputs.test.ts` holds every mutation to having one;
+      // this shows the refusal happens before the write.
+      it("refuses an input, and writes nothing", async () => {
+        const { user } = await createTestUserWithoutHousehold(
+          "revoke-input@example.com",
+          "Revoke Input User"
+        );
+        const { caller } = await createTestContext(user.id);
+        const form = new FormData();
+        form.set("anything", "1");
+
+        // The cast is the point: the type already says no, the runtime must too.
+        const revoke = caller.auth.revokeMySessions as (
+          input: unknown
+        ) => Promise<unknown>;
+        await expectCode(revoke({}), "BAD_REQUEST");
+        await expectCode(revoke(form), "BAD_REQUEST");
+
+        const after = await prisma.user.findUniqueOrThrow({
+          where: { id: user.id },
+          select: { sessionsValidFrom: true },
+        });
+        expect(after.sessionsValidFrom).toBeNull();
+      });
+    });
   });
 
   describe("Product Router", () => {

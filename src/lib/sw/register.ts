@@ -101,10 +101,10 @@ export async function disableServiceWorker(): Promise<void> {
  * Tell the worker to forget the previous account's shell.
  *
  * Called with the signed-in user's id inside the dashboard, and with `null` on
- * `/login`. The second is not belt and braces: **there is no sign-out control
- * in this application** — `signOut` is exported from `src/lib/auth.ts` and
- * called nowhere — so a redirect to `/login` is the only end-of-session signal
- * that exists.
+ * `/login`. The second is not belt and braces: signing out purges the shell
+ * itself (`useEndSession`), but a session that expires or is ended from
+ * another device never runs that, and a redirect to `/login` is the only
+ * end-of-session signal it gives this browser.
  */
 export function reconcileUser(
   previous: string | null,

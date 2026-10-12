@@ -108,7 +108,13 @@ unseeded database fails the whole matrix at its first step.
 
 Log in as **`demo@stoky.local`** / **`Demo1234!`**.
 
-Re-running the seed is safe — it clears the demo household first.
+Re-running the seed resets the demo data: it first deletes the household the
+`demo@stoky.local` account belongs to, with its receipts, stock and member
+accounts. It finds that household through the account, not through the name
+*Hogar Demo*, so another household that happens to share the name is left
+alone, and the removal and re-creation are one transaction. It is a development
+fixture with a published password: it refuses to run under
+`NODE_ENV=production`, and the production image does not contain it.
 
 ---
 
@@ -169,8 +175,9 @@ src/
   app/
     (auth)/                   login, register
     (dashboard)/              inventory, products, receipts, shopping, prices, settings
-    api/trpc/[trpc]/          tRPC HTTP handler
+    api/trpc/[trpc]/          tRPC route: wires the router and Auth.js into server/http
   server/
+    http/                     the tRPC HTTP handler and the API routes' body bound, testable without Next
     trpc/routers/             one router per domain
     services/                 ocr, receiptParser, productMatcher, openFoodFacts
   lib/
@@ -230,9 +237,13 @@ restricted tester access and operator-managed backups; read [Security](SECURITY.
 
 ## Contributing
 
-Trunk-based: work directly on `master`, in small focused commits. No feature
-branches, no pull requests. Since there is no PR gate, `master` must be green
-at every commit — run the checks before committing, not after.
+Trunk-based: work done with someone reading each change as it lands goes
+directly to `master`, in small focused commits, with no feature branch and no
+pull request. Unattended and semi-attended agent work is the exception: it goes
+on a `<type>/<topic>-<YYYY-MM-DD>` branch with a pull request, squash-merged once
+the owner has reviewed it. [`CLAUDE.md`](CLAUDE.md) (Git Workflow) owns the rule.
+Either way `master` must be green at every commit — run the checks before
+committing, not after.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -266,7 +277,7 @@ question. Start there; the table below is the short version.
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | Completed work and decision records |
 | [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) | What is being built, in what order, and what done means |
 | [`docs/DESIGN_AUDIT.md`](docs/DESIGN_AUDIT.md) | The interface and WCAG AAA audit, with numbered actions |
-| [`SECURITY.md`](SECURITY.md) | Threat model and hardening for a self-hosted deployment |
+| [`SECURITY.md`](SECURITY.md) | Threat model and hardening for a self-hosted deployment, and how to report a vulnerability |
 | [`docs/LOCAL_BOOTSTRAP.md`](docs/LOCAL_BOOTSTRAP.md) | Clone → running app, and what to record if it breaks |
 | [`docs/VERIFICATION_SEQUENCE.md`](docs/VERIFICATION_SEQUENCE.md) | The command ladder |
 | [`docs/SMOKE_JOURNEYS.md`](docs/SMOKE_JOURNEYS.md) | Journeys that must work before work is called done |
@@ -282,7 +293,10 @@ question. Start there; the table below is the short version.
 self-hosting an alpha. `docker-compose.prod.yml` is a source-build override on top
 of that bundle (`docker compose -f deploy/docker-compose.yml -f docker-compose.prod.yml
 up -d --build`), for development and diagnosis; it adds the build and nothing else.
+Like the published image, it is amd64 only: the `Dockerfile` checks the Prisma
+engines against checksums pinned for `linux-musl-openssl-3.0.x`, which an arm64
+build does not download ([Releasing](docs/RELEASING.md#upgrading-prisma)).
 
 ## Licence
 
-ISC
+[ISC](LICENSE)

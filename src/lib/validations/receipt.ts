@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
 
 /**
  * The image types a receipt photograph may be.
@@ -59,10 +60,11 @@ export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
  *   constant, and such a body was cut off first. A size limit no request can
  *   reach is not a limit.
  *
- * `next.config.ts` now sets that cap from this number rather than taking the
- * default, and `src/__tests__/unit/upload-body-limit.test.ts` asserts the two
- * still agree — because they are in different files and nothing else would
- * say so.
+ * The ceiling is now set explicitly, once, in `src/server/http/body-limit.ts`
+ * — the bound the API routes enforce themselves, and the number
+ * `next.config.ts` imports for the proxy's cap — and
+ * `src/__tests__/unit/upload-body-limit.test.ts` asserts it still clears this
+ * number, because they are in different files and nothing else would say so.
  */
 export const MAX_RECEIPT_BASE64_LENGTH = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4;
 
@@ -86,17 +88,18 @@ export const MAX_RECEIPT_BASE64_LENGTH = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4;
  */
 export const receiptItemMatchSchema = z.discriminatedUnion("action", [
   z.object({
-    receiptItemId: z.string().min(1),
+    receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
     action: z.literal("MATCH"),
-    productId: z.string().min(1),
+    productId: z.string().min(1).max(MAX_ID_LENGTH),
   }),
   z.object({
-    receiptItemId: z.string().min(1),
+    receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
     action: z.literal("CREATE"),
-    customName: z.string().trim().min(1),
+    // A product name, and the same bound: it becomes `Product.name`.
+    customName: z.string().trim().min(1).max(MAX_NAME_LENGTH),
   }),
   z.object({
-    receiptItemId: z.string().min(1),
+    receiptItemId: z.string().min(1).max(MAX_ID_LENGTH),
     action: z.literal("SKIP"),
   }),
 ]);

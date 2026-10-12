@@ -1,32 +1,16 @@
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
+import { createTrpcHandler } from "@/server/http/trpc-handler";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
-import { retryAfterSeconds } from "@/server/trpc/throttle";
 
 /**
- * `Retry-After` on a throttled response — RFC 9110 §10.2.3.
- *
- * **Not on the sign-in path**, which never produces a 429 at all: Auth.js
- * answers a refused credentials callback with a redirect to `/login?error=…`,
- * and §10.2.3 is about a status this can attach to. That path says it in words
- * instead.
+ * Wiring only. What the endpoint does with a request is in
+ * `src/server/http/trpc-handler.ts`, where it can be tested without Next.
  */
-
-const handler = async (req: NextRequest) => {
-  const session = await auth();
-
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req,
-    router: appRouter,
-    createContext: () => createTRPCContext({ session, headers: req.headers }),
-    responseMeta: ({ errors }) => {
-      const seconds = retryAfterSeconds(errors);
-      return seconds === null ? {} : { headers: { "retry-after": String(seconds) } };
-    },
-  });
-};
+const handler = createTrpcHandler({
+  router: appRouter,
+  getSession: auth,
+  createContext: createTRPCContext,
+});
 
 export { handler as GET, handler as POST };

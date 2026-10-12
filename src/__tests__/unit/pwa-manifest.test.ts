@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import manifest from "@/app/manifest";
+import { proxyRuns } from "../utils/proxy-matcher";
 
 /**
  * What makes Stoky installable, and what keeps it installable.
@@ -95,7 +96,10 @@ describe("the icons the root layout and the manifest reference", () => {
   });
 
   it("are reachable without the proxy, which would stamp a nonce and a cookie on them", () => {
-    expect(read("src/proxy.ts")).toContain("icons/|");
+    // Asked of the compiled matcher, not its text: the exclusion names each
+    // icon file now, so an icon renamed without it would quietly start going
+    // through the proxy.
+    for (const path of paths) expect(proxyRuns(path)).toBe(false);
   });
 
   it("paint the glyph and its ground in the tokens they were drawn from", () => {

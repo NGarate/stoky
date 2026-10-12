@@ -2408,3 +2408,153 @@ published digest with empty volumes and prepare a draft; reviewed alphas are
 published as prereleases. `latest` remains the master development channel. The
 first release records unsupported ARM/HEIC and outstanding human checks instead
 of presenting alpha verification as stable-product support.
+
+**D123 — Registration closes after the first account unless the operator opens it.**
+The 2026-10-12 security review found `auth.register` open to anyone who could
+reach an instance, with no switch, and an installation guide that told operators
+to restrict access at a proxy the bundle gives them no way to configure. A
+household never needed open sign-up: admins already add people through
+`household.addMember`. `STOKY_REGISTRATION` is `open`, `first-user` or `closed`,
+and **unset it is `first-user` in production** and `open` elsewhere — the
+secure default where strangers can reach it, and no burden on the suites, which
+register dozens of accounts (the browser suite sets `open` explicitly, because
+it runs a production build). The alternative of an `open` application default
+with `first-user` only in the bundle's `example.env` was rejected: an upgrading
+operator keeps their old `.env`, so it would have protected nobody who already
+had an instance. The cost is stated in INSTALL.md: on upgrade, an installation
+that relied on strangers registering must set `open`. An unknown value is
+`closed` and stops a production server, because a typo in a security setting
+must not mean its least safe value. `first-user` counts accounts inside a
+transaction holding an advisory lock, since a count followed by a create admits
+two simultaneous claimants; the household became a nested write of the account
+in the same transaction, which also ends the orphan households a failed
+registration used to leave. The claim window on a fresh install — whoever
+registers first owns it — is accepted and documented rather than closed with a
+setup token, which would be a bootstrap flow out of proportion for an alpha.
+
+**D124 — A browser that has signed in before gets its own sign-in budget.**
+The 2026-10-12 security review found that the per-account limit, which refuses
+even the right password once full, let anyone who knew a member's address keep
+them out by spending ten attempts every window from two addresses. Following
+OWASP's device-cookie pattern, a `stoky_device` id recorded by a successful
+sign-in to that account is counted on its own 5 per 15 minutes instead of the
+shared 10. Trust is a server-side record, not the cookie: the id is
+attacker-controlled, so an id nobody recorded — or one recorded for another
+account — stays on the shared budget, and minting cookies buys nothing. A
+Valkey sorted set (`rl:known:<account>`, fingerprints, newest twenty, a year)
+was chosen over a signed token or a table: the id is already a 122-bit
+`httpOnly` secret, so a lookup gives what a signature would without a key to
+derive or rotate, and the limiter's store needs no migration. The set lives
+outside `rl:login:` because a forged `X-Forwarded-For` could otherwise plant a
+string there and make every sign-in to the account fail closed. "Count only
+failures", the review's cheaper suggestion, was rejected: the attacker's
+attempts are all failures, and a success already clears the counter. A success
+on a known device clears only that device's counter, so the owner signing in
+does not refill an attacker's budget. Accepted, not solved: a browser that has
+never signed in to the account still shares the budget, because that is what
+bounds a distributed guess; INSTALL.md gives operators the command that clears
+an account's counter.
+
+**D125 — A session ends thirty days after sign-in, however active.**
+The 2026-10-12 security review found that the fifteen-minute `maxAge` is an
+idle timeout and nothing else: with the JWT strategy Auth.js re-issues the
+token, with a fresh `iat` and expiry, on every read of the session, so a
+session in use — or a cookie copied off a device and read every few minutes —
+never ended. Sign-in now stamps an `authTime` claim, which re-issue copies
+forward untouched, and the `jwt` callback refuses a token more than thirty days
+past it, before the revocation query. Thirty days is OWASP ASVS 4.0.3 V3.3.2's
+Level 1 ceiling and the longest that fits the kitchen tablet; Level 2's twelve
+hours would ask for the password every shift on a device whose point is to be
+picked up. A constant rather than an environment variable, because nothing
+about an installation makes another number right and every setting is one more
+thing an operator must get right. A token without `authTime` predates the claim
+and is refused rather than stamped: stamping would give a token stolen before
+the upgrade a fresh thirty days, and the cost of refusing is one sign-in per
+device, once. Per-session sign-out was not built with it: ending one token
+needs an identifier in it and a denylist read on every page render, and a
+denylist in Valkey either fails closed — every household signed out by a cache
+outage — or fails open. SECURITY.md records it as a known gap, with "end all
+sessions" as today's answer to a token that may have leaked.
+
+**D126 — HSTS keeps `includeSubDomains` and drops `preload`.** The 2026-10-12
+security review found both layers sending `preload` on whatever `DOMAIN` an
+operator chose, which is a domain owner's consent to the browsers' built-in
+lists, close to permanent, and given here by software rather than by the
+owner. It is gone from Traefik and from the app; an operator who wants it adds
+it at their own proxy. `includeSubDomains` stays, as ASVS 5 V3.4.1 asks, and
+its cost on an apex domain is warned about in INSTALL.md rather than avoided
+by weakening the header for everyone. SECURITY.md, *Release deployment*.
+
+**D127 — `Referrer-Policy: same-origin`, not `no-referrer`.** The review found
+every product page sending the instance's hostname to Open Food Facts with its
+photograph. `same-origin` sends nothing to another origin. `no-referrer`, the
+stricter answer, was rejected on a measurement: under it the Fetch standard
+sends `Origin: null` on same-origin POSTs as well, Next aborts a Server Action
+whose `Origin` does not match the host, and the no-JS screen choice failed its
+e2e test; sign-out and the language switch are Server Actions too.
+SECURITY.md, *Application headers*.
+
+**D128 — Traefik without `sniStrict` or `curvePreferences`.** The TLS floor is
+1.2 with forward-secret AEAD suites. `sniStrict` was left out because it
+refuses the handshake for the configured name itself while ACME has not yet
+issued, turning a pending certificate into an opaque failure and failing the
+release smoke; the cost is that a client without SNI sees Traefik's default
+certificate. `curvePreferences` was left out because replacing Go's list lost
+the post-quantum hybrid `X25519MLKEM768`. SECURITY.md, *Release deployment*.
+
+**D129 — Valkey evicts least-recently-used keys, never refuses.** The bundle
+bounds Valkey at 160 MiB under its 256 MiB container. `noeviction`, the
+default, refuses the limiter's `INCR` once full, and a refused count is a
+refused sign-in; `volatile-ttl` evicts the soonest-expiring keys first, which
+are the counters, so filling the cache would reset a lockout. `allkeys-lru`
+keeps live counters, which every attempt touches, and drops cold product
+cache entries; measured with 400 MB written against the bundle's own service.
+SECURITY.md, *Rate limiting*.
+
+**D130 — The bundle names every image by digest as well as tag.** PostgreSQL,
+Valkey and Traefik by exact version and index digest; the application image by
+digest in the packaged Compose file of each release; the Dockerfile's Bun base
+likewise. A tag can be re-pushed and a digest cannot, so what a release was
+smoked and scanned with is what `docker compose pull` fetches. The cost is that
+upstream fixes arrive only through a change in this repository: a Stoky
+release, or a Dependabot proposal once the owner lets Dependabot open branches.
+SECURITY.md, *Container and runtime*, *Release deployment* and *Supply chain*.
+
+**D131 — An anonymous tRPC request writes at most one refusal line.** The
+final review of the security branch measured one anonymous GET batch of 100
+calls writing 100 refusal lines, 13,100 bytes, to the security log; a few
+thousand such requests would rotate a guessing run's `auth.signin.failed`
+lines out of the bundle's 50 MB. The batch cap bounds the calls, not the
+lines. Anonymous requests now write only their first refusal (a `WeakSet` of
+the tRPC contexts, one per HTTP request), which still records that the request
+happened, from where and for which procedure: measured at 1 line and 131
+bytes for the same batch. A signed-in caller's refusals are each still
+written, because they name an accountable account and each can be a different
+row of somebody else's household. The cost, that an unauthenticated client can
+still rotate the log by request volume, is accepted in SECURITY.md; shipping
+logs off the host is the defence. "Write at most one refusal line per
+anonymous tRPC request", on the security branch.
+
+**D132 — The 2026-10-12 review names its commits by hash and subject.** The
+first draft of its record named commits by subject alone, because the branch
+is squash-merged and its hashes will not be on `master`. But a subject cannot
+be checked by a command and a hash can, the pull request keeps the branch's
+commits reachable after the squash, and the hashes are what the owner reads
+while reviewing. So `docs/SECURITY_REVIEW.md` gives both. The hashes would
+become dangling citations once the branch is deleted, and
+`unit/ledger-shas.test.ts` would go red on every full clone, so they sit
+between `branch-commits` markers. While the branch exists, the guard holds
+them to a stricter rule than other citations: each must be one of that
+branch's own commits. Once the branch is gone, the guard reports them as
+unchecked. Outside a marked region, a ledger cites only commits that survive a
+clone, and STATUS and this file name branch commits by subject. Per D113, the
+commit that writes the record does not name itself.
+
+**D133 — TEST-9 deferred, not fixed on the security branch.** The final review
+found that nothing pins the people screen's refusal to offer a reset on the
+caller's own row, and that `resetRefusalOf` would call the server's self-reset
+refusal "too easy". The server refuses a self-reset and the screen offers
+none, so nothing is exploitable or wrong today. Of the final review's 20
+defects it is the only one that is purely a missing test of new behaviour, and
+the branch was held for the other 19. It is filed with its two-part fix as
+`ISSUES.md` TEST-9 and listed among SECURITY.md's accepted gaps until then.

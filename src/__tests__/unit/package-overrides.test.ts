@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -154,15 +155,39 @@ describe("the dependency overrides", () => {
 });
 
 describe("the packages allowed to run install scripts", () => {
-  it("are declared, or four native builds are skipped in silence", () => {
-    // Bun blocks dependency lifecycle scripts by default, which is the right
-    // default. argon2 and @swc/core compile bindings, prisma and @prisma/client
-    // generate the client, @parcel/watcher builds from source: without this key
-    // each is skipped with no error and fails later at import.
-    const declared = manifest.trustedDependencies ?? [];
-    for (const required of ["argon2", "prisma", "@prisma/client", "@swc/core", "@parcel/watcher"]) {
-      expect(declared, `${required} needs its install script`).toContain(required);
-    }
+  it("are exactly the four whose scripts the install needs", () => {
+    // Every entry runs its code at install time, with network access and — on a
+    // developer machine — the repository's `.env` in its environment (Bun
+    // exports it to lifecycle scripts; `--no-env-file` and bunfig `env = false`
+    // do not stop it). So the list is exact, not a floor: an entry added
+    // "just in case" is a package trusted with that for nothing.
+    //
+    // - argon2: `install` is node-gyp-build, which picks the shipped prebuild
+    //   (musl and glibc, x64 and arm64) and compiles only if none matches.
+    // - @prisma/engines: `postinstall` downloads the query and schema engines.
+    // - @prisma/client: `postinstall` writes the stub client `prisma generate`
+    //   later replaces.
+    // - prisma: `preinstall` only checks the runtime version. Same publisher
+    //   and release as the two above, so it trusts no new party.
+    //
+    // Deliberately absent, and why (measured 2026-10-12): sharp 0.35.5 has no
+    // install script; tesseract.js's is a donation banner; @parcel/watcher's
+    // builds from source only under npm_config_build_from_source=true;
+    // @swc/core's only checks its prebuilt binding and, if that fails, runs
+    // `npm install @swc/wasm` from outside the lockfile. The last two are
+    // next-intl's, for a message extractor next.config.ts does not enable, yet
+    // its plugin imports both whenever the config loads — so every build loads
+    // their bindings, which come from optional platform packages with no script.
+    //
+    // The key must stay, even short: without it Bun falls back to its own
+    // curated default allow-list of popular packages (pm/lifecycle.mdx), which
+    // this list replaces rather than extends.
+    expect([...(manifest.trustedDependencies ?? [])].sort()).toEqual([
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "prisma",
+    ]);
   });
 
   it("is the list the lockfile recorded", () => {
@@ -171,6 +196,49 @@ describe("the packages allowed to run install scripts", () => {
     // from a different manifest than the committed one.
     expect([...(lock.trustedDependencies ?? [])].sort()).toEqual(
       [...(manifest.trustedDependencies ?? [])].sort(),
+    );
+  });
+});
+
+describe("the release-age gate", () => {
+  // `bunfig.toml` holds no other setting, so nothing else would notice it gone:
+  // installs keep working, every gate stays green, and the next `bun add` or
+  // `bun update` locks in whatever the registry published a minute earlier.
+  // SECURITY.md § Supply chain has the reasoning.
+  const bunfig = require(join(ROOT, "bunfig.toml")) as {
+    install?: { minimumReleaseAge?: unknown; minimumReleaseAgeExcludes?: unknown };
+  };
+  const THREE_DAYS = 3 * 24 * 60 * 60;
+
+  it("holds back anything published in the last three days", () => {
+    const age = bunfig.install?.minimumReleaseAge;
+    expect(typeof age, "bunfig.toml [install] minimumReleaseAge is missing").toBe("number");
+    expect(age as number).toBeGreaterThanOrEqual(THREE_DAYS);
+  });
+
+  it("exempts no package", () => {
+    // An exclusion is permanent where the gate's own bypasses are not: a fix
+    // too young for the gate goes in through `bun audit fix` or a one-off
+    // `--minimum-release-age 0`, and the gate stays whole for the next update.
+    const excludes = bunfig.install?.minimumReleaseAgeExcludes;
+    expect(excludes === undefined || (Array.isArray(excludes) && excludes.length === 0)).toBe(true);
+  });
+
+  it("is no longer than Dependabot's cooldown for the lockfile", () => {
+    // Dependabot proposes a version once it is `default-days` old and rewrites
+    // bun.lock with its own Bun in a checkout of this repository, where Bun
+    // reads bunfig.toml. Not yet observed (no Dependabot pull request has run
+    // here), but if it does, a gate longer than that wait refuses the version
+    // the pull request exists to add.
+    const dependabot = Bun.YAML.parse(
+      readFileSync(join(ROOT, ".github", "dependabot.yml"), "utf8"),
+    ) as { updates: { "package-ecosystem": string; cooldown?: { "default-days"?: number } }[] };
+    const bun = dependabot.updates.find((update) => update["package-ecosystem"] === "bun");
+    const cooldownDays = bun?.cooldown?.["default-days"];
+
+    expect(typeof cooldownDays, "the bun entry in .github/dependabot.yml has no cooldown").toBe("number");
+    expect(bunfig.install?.minimumReleaseAge as number).toBeLessThanOrEqual(
+      (cooldownDays as number) * 24 * 60 * 60,
     );
   });
 });

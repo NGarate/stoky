@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-11
+Updated: 2026-10-12
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,170 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-10-12 the security branch, finished:** `fix/security-hardening-2026-10-12`
+carries the 2026-10-12 review's fixes, and fixes for 19 of the 20 defects its
+final review found in them (the twentieth is filed as `ISSUES.md` TEST-9);
+`docs/SECURITY_REVIEW.md` (*The 2026-10-12 review*) maps every one of the 116
+reports to its commit, an owner action or an accepted risk. The final
+verification ran on its 98 commits after `e9d62eb`, ending at the first
+commit of that record (the hashes are the review table's; the squash merge
+replaces them), with the shared `stoky` services and
+`TEST_DB_NAME=stoky_test_sec_int`, every heavy command one at a time under a
+lock. What it measured:
+
+- **Every commit on its own.** In one detached worktree, at each of the 98:
+  `bun run typecheck`, `bun run lint`, `bun run test:unit` and
+  `bun run test:components`, all exit 0 at every commit, with no type error, no
+  lint error and no failing test (reinstalling and regenerating the Prisma
+  client wherever the manifest, lockfile or schema changed). Unit tests rise
+  from 897 in 98 files at the first commit to 1,481 in 118 at the last;
+  component tests from 879 to 931, in 77 files throughout. The first eleven
+  commits carry one lint warning (an unused `outsiderId` in
+  `integration/security-log.test.ts`) inherited from `master`; the twelfth,
+  "record household-scoped misses in the security log", removes it. Run with CI's placeholder `NEXTAUTH_SECRET` and a `.env`-less
+  tree; those suites touch no database.
+- **The head, whole.** `bun run verify:ci` exit 0 in 93 seconds: lint 0
+  warnings and 0 errors over 493 files and 101 rules; typecheck clean;
+  react-doctor no issues over 493 files; 118 links against 35 routes; 96
+  contrast checks, all AAA; audit clean over 563 packages; 1,481 unit tests in
+  118 files, 931 component tests in 77, 676 integration tests in 42; the build
+  (Next.js 16.4.0, Turbopack) generates 36 of 36 static pages and lists 8
+  Partial Prerender routes. `bun run test:e2e` **194 passed in 3.0 minutes**
+  on four workers, none retried (chromium 172, Mobile Safari 12, firefox 4,
+  webkit 4, seed 1, setup 1). `bash scripts/check-ci.sh` "CI lint: OK"
+  (actionlint, shellcheck; zizmor 1.16.3 "No findings to report", with
+  ten findings below its `regular` persona suppressed). `bun audit` at
+  every level: no vulnerabilities in 563 packages. All of this on the host's
+  Bun 1.4.2, one patch behind the 1.4.3 pin; the e2e and production images
+  carry 1.4.3.
+- **The production image** (`git archive HEAD | docker build --target
+  production`): 563 MB, runs as `bun` (uid 1000) under `dumb-init`,
+  `bun --version` 1.4.3, no `prisma/seed.ts` anywhere in it, the Prisma engine
+  and `spa.traineddata` checksums verified. Trivy 0.69.3 as CI runs it
+  (CRITICAL and HIGH, `--ignore-unfixed`): 0 vulnerabilities in Alpine 3.24.2's
+  20 packages and in all 73 Node package targets. Seen in passing and not
+  examined: inside it, `node --version` printed `error: Missing script to
+  execute` rather than a version; nothing in the application runs `node`.
+- **The release bundle, smoked** from `deploy/` with that image on a throwaway
+  Compose project (published on loopback only, removed afterwards): all four
+  services healthy. HTTP redirects to HTTPS and an unknown host gets 404. The
+  headers are as documented, HSTS without `preload` and a fresh CSP nonce on
+  every script. TLS 1.0 and 1.1, the 1.2 CBC suites and static-RSA are
+  refused, while 1.2 ECDHE-GCM and 1.3 (`X25519MLKEM768`) are accepted. The
+  first registration succeeds and the second gets 403. A signed-in session
+  uses a `__Secure-`, `HttpOnly`, `SameSite=Lax` cookie and gets `no-store`
+  answers. Cross-site and same-site POSTs get 403, logged as `access.denied`.
+  Multipart, text and octet-stream bodies get 415. A batch of 100 calls
+  answers, a batch of 101 gets 400, and none of 101 batched creates ran. Log
+  rotation, process and memory limits, `cap_drop: ALL`, `no-new-privileges`,
+  and read-only root filesystems for the app and Traefik are in place; only
+  Traefik publishes ports. Valkey is capped at 160 MiB with `allkeys-lru`. Two
+  limits on what this proves: ACME cannot issue for a test domain, so Traefik
+  served its default certificate; and the image carries no revision label, so
+  that it was built from that head is known from the build step, not from
+  the image.
+
+**Owner actions still pending.** `bun scripts/github-settings.ts check` (GET
+requests only), re-run 2026-10-12 after the verification above: 11 of its 12
+settings drift. They are private vulnerability reporting, immutable releases,
+secret scanning and push protection, Dependabot security updates, CodeQL
+default setup, the Actions allow-list with SHA pinning, approval for every
+external contributor, squash-only merges, the two release-tag rulesets, and the
+ruleset exclusion Dependabot needs. Dependabot alerts are on. The review's
+other owner actions have no check and are listed in `docs/SECURITY_REVIEW.md`
+(*Owner actions*): commit signing, an identity for agents, deleting two merged
+branches, the alpha.2 notes, the LICENSE holder, and the first `rescan.yml`
+run. Among them is **the audit's test account in the local development
+database**. An audit verifier registered `a@b.co` there, and it was still
+there on 2026-10-12, created 2026-10-11 23:14 (one read-only `SELECT`).
+Agents may not write to that database, so deleting it, with whatever it
+created, is the owner's.
+
+**2026-10-12 recovering from a refused migration:** a migration that fails
+leaves a failed row in `_prisma_migrations`, and every later start stops at
+`P3009`. So when `normalise_user_email` refuses, renaming the account and
+restarting, which is all the alpha.2 notes said, leaves the app restarting.
+`docs/INSTALL.md` *A migration stops the upgrade* now gives the whole procedure,
+and `docs/releases/v0.1.0-alpha.2.md` links to it; the published alpha.2 release
+page keeps the old text until its body is replaced with that file. The procedure
+was run as written, in a scratch Compose project from this branch's `deploy/`
+bundle on empty volumes, with Traefik's ports removed. The `v0.1.0-alpha.1`
+image registered `owner@example.com` and `Owner@Example.com` through
+`auth.register` (both 200). Switching to the local `v0.1.0-alpha.3` image, whose
+migration and Prisma path are byte-for-byte this tree's, gave one `P3018`
+naming `owner@example.com (2 accounts)`, then `P3009` on each of the next three
+restarts. `migrate resolve` run before fixing the data printed "marked as rolled
+back", and the next start failed with `P3018` again. Then, in order, the backup
+without its last line, the listing query, the rename (`UPDATE 1`), `migrate
+resolve` and `up -d --wait` brought every service up healthy: `/api/health`
+answered `{"status":"ok"}`, the migration was recorded finished,
+`User_email_lower_key` existed and the renamed account's sessions were revoked.
+The production image of this tree was not rebuilt for this.
+
+**2026-10-12 Bun base by digest:** the Dockerfile names its base
+`oven/bun:1.4.3-alpine@sha256:629e1741…`, the index digest
+`docker buildx imagetools inspect oven/bun:1.4.3-alpine` printed that day (it
+lists amd64 and arm64), so a re-pushed tag no longer changes what a release
+builds. `src/__tests__/unit/image-posture.test.ts` requires
+`@sha256:<64 hex>` on the base; dropping, truncating or changing the digest's
+algorithm each turned it red (1 fail, 18 pass across it and
+`bun-version.test.ts`). The pinned reference, run with `--network none`, reports
+Bun 1.4.3 with `node` resolving to `/usr/local/bin/bun` and no npm; the full
+production image builds from the tracked files and reports the same, as `bun`.
+
+**2026-10-12 Bun 1.4.3:** `.bun-version` and the Dockerfile's base move
+together from 1.4.0 to 1.4.3 (`oven/bun:1.4.3-alpine`, index digest
+`sha256:629e1741…`, built 2026-10-10), for the security section of its release
+notes: TLS host-name matching (CVE-2026-48618), certificate checks on reused TLS
+sessions and pooled `fetch()` connections, and stricter HTTP/1.1 parsing in
+`Bun.serve`. Taken two days after release, deliberately. In the 1.4.3
+development image `bun install --frozen-lockfile` installs 452 packages, and a
+plain `bun install` reports "no changes" and leaves `bun.lock` byte-identical at
+lockfileVersion 2. In that image the quality gates pass (lint 0 errors and the
+existing warning, typecheck, react-doctor, 96 contrast checks, 115 links) and so
+do 922 unit, 879 component and 598 integration tests. These counts, and the
+e2e run below, were measured on the lane's tree — `master` plus this change —
+not on the security branch it landed on, which by then had more tests; the
+branch's own are in the gate table. On the host with the 1.4.3
+binary, `bun run verify:ci` passes in 178 seconds (audit clean across 564
+packages, the same three counts, the build with 8 Partial Prerender routes), and
+`bun run test:e2e` passes **181/181 in 2.9 minutes**. The production image, built
+from `git archive` of the tree, reports `bun --version` 1.4.3 with `node`
+resolving to `/usr/local/bin/bun` and no npm; run read-only against a test
+database it finds no pending migrations and answers `/api/health`
+`{"status":"ok"}` and `/login`, `/register` and `/` with 200, `bun server.js`
+under `dumb-init`. Both versions keep `x_forwarded_for`, `x.forwarded.for` and
+`x-real_ip` as distinct header names and answer 400 to a request carrying both
+`Transfer-Encoding` and `Content-Length`. TEST-5's reproduction failed 0 of 80
+on each of 1.4.0 and 1.4.3, interleaved under load — the reproduction no longer
+separates them — and RUNTIME-1's `curl` reproduction gives 0 on both; split at
+the Next.js move it gives 10 of 10 on 16.3.8 under either Bun and 0 on 16.4.0,
+so the framework upgrade is where it stops (why has not been read). `ISSUES.md`
+has both measurements. A host Bun older than the pin now fails
+`scripts/dev-local.sh`'s version check, as designed: this machine's 1.4.2 does.
+
+**2026-10-12 image provenance:** the repository is public (`gh api
+repos/NGarate/stoky` answers `"private":false`) and already was for the
+`v0.1.0-alpha.3` tag run, whose `private == false` steps in `ci.yml` ran: its
+Trivy SARIF reached code scanning (`gh api
+repos/NGarate/stoky/code-scanning/analyses`, category `trivy`,
+`refs/tags/v0.1.0-alpha.3`) and its image is attested. With gh 2.102.0 the
+command `SECURITY.md` documents, `gh attestation verify
+oci://ghcr.io/ngarate/stoky:<tag> --repo NGarate/stoky --signer-workflow
+NGarate/stoky/.github/workflows/ci.yml --source-ref refs/tags/<tag>`, exits 0
+for `v0.1.0-alpha.3` (digest `sha256:81ebf432…`, the same digest as
+`candidate-v0.1.0-alpha.3`; signer `ci.yml@refs/tags/v0.1.0-alpha.3`, run
+38178388250). It exits 1 for `v0.1.0-alpha.2` and `v0.1.0-alpha.1`, both with
+`HTTP 404: Not Found` from `repos/NGarate/stoky/attestations/sha256:8474120a…`
+and `…/sha256:54f375ae…`: they were built while the repository was private. The
+alpha.3 image with `--source-ref refs/heads/master` exits 1 (`expected
+SourceRepositoryRef to be refs/heads/master, got refs/tags/v0.1.0-alpha.3`), and
+with `--signer-workflow` naming another workflow file it exits 1 as well, so both
+pins are checks that can fail; `latest` with `refs/heads/master` exits 0.
+Without a signed-in GitHub CLI the command exits 4 at `gh auth login` before
+checking anything, which is why `SECURITY.md` keeps it optional and the
+account-free install path relies on `SHA256SUMS`.
 
 **2026-10-11 third-alpha preparation:** `v0.1.0-alpha.3` changes installation,
 not the application: `git diff v0.1.0-alpha.2` touches no file under `src/`
@@ -30,9 +194,10 @@ the alpha.2 entry below tested, and the tag's CI smoke runs the published one.
 **2026-10-11 second-alpha preparation:** `v0.1.0-alpha.2` ships the 2026-10-05
 project review, the 2026-10-06 UI alignment, the installable PWA and the scoped
 checks. The one new migration, `normalise_user_email`, refuses to run while two
-accounts differ only by letter case; the release notes tell an upgrader how to
-clear it. The shipped bundle (`deploy/`, unmodified but for a loopback-ports
-override, because Tailscale holds TCP 443 on the test host) was started on fresh
+accounts differ only by letter case. The release notes as published said only to
+rename an account and start again, which still fails (2026-10-12, *recovering
+from a refused migration*). The shipped bundle (`deploy/`, unmodified but for a
+loopback-ports override, because Tailscale holds TCP 443 on the test host) was started on fresh
 volumes with an image built by `git archive master | docker build --target
 production` from `6007533` — the application tree of this release, since the
 later commits change only scripts, tests and documents. Migrations applied;
@@ -58,7 +223,8 @@ operator settings. The fixed project name `stoky-release` avoids the development
 project's volumes. Traefik uses a read-only file provider, no Docker socket, and
 is the only service publishing ports. Inline Compose config was rejected after a
 real start failed on read-only Traefik; the third downloadable file fixes it.
-The installation guide includes private-repository/package authentication,
+The installation guide then included private-repository/package authentication
+(gone since alpha.3, when the repository and package became public),
 backup/restore, upgrades and rollback limitations.
 
 `bun run verify:ci` passes in 65 seconds: 713 unit, 658 component and 549
@@ -68,9 +234,23 @@ The local Compose test used isolated projects, loopback ports and a test
 certificate: routing, redirect, registration/login, service health and restored
 household/upload persistence passed. **Public DNS and Let's Encrypt issuance were
 not exercised**; operators must check their actual HTTPS hostname. This alpha
-supports Linux amd64 and trusted testers; registration remains open. The release
-workflow runs the published image by its pushed digest on a fresh database before
+supports Linux amd64 and trusted testers; its registration is open to anyone.
+`master` closes registration after the first account unless `STOKY_REGISTRATION`
+opens it (SECURITY.md); no release carries that yet. The release
+workflow scans the published image by its pushed digest with Trivy (since
+2026-10-12; no tag has run it yet) and runs it on a fresh database before
 creating a draft; the maintainer publishes the reviewed prerelease afterward.
+The draft's Compose file names that digest beside the tag (since 2026-10-12, no
+tag has run it yet): packaged locally with the alpha.3 digest, `docker compose
+config --images` of it prints `ghcr.io/ngarate/stoky:v0.1.0-alpha.3@sha256:81ebf432…`
+and `pull app` succeeds; with `STOKY_VERSION=v0.1.0-alpha.1` it pulls the same
+digest, and with one hex digit of the digest changed it fails with `not found`.
+The newest published release's images are re-scanned every Monday by
+`rescan.yml` with the same scanner and gate (since 2026-10-12; it has not run on
+GitHub yet). Run by hand that day against `v0.1.0-alpha.3`'s images, the gate
+was clean for the application, Valkey and PostgreSQL (gosu left out, measured
+unreachable) and red for `traefik:v3.7.13` with four HIGH Go advisories that
+`v3.7.14` also carries ([Releasing](RELEASING.md#after-publication-weekly-re-scans)).
 
 `bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-08).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
@@ -189,29 +369,30 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 errors, 1 existing unused-variable warning — 392 files, 101 rules (2026-09-25) |
+| Lint | `bun run lint` | ✅ 0 errors, 0 warnings — 493 files, 101 rules (2026-10-12, security branch head) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
-| Internal links | `bun run check:links` | ✅ 123 links against 35 routes, none broken (2026-08-28) |
-| Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-06) |
-| Unit tests | `bun run test:unit` | ✅ 814 pass / 91 files (2026-10-06) |
-| Component tests | `bun run test:components` | ✅ 782 pass / 70 files (2026-10-06) |
-| Integration tests | `bun run test:integration` | ✅ 549 pass / 37 files (2026-09-25) |
+| Internal links | `bun run check:links` | ✅ 118 links against 35 routes, none broken (2026-10-12, security branch head) |
+| Contrast | `bun run check:contrast` | ✅ 96 checks over 37 tokens × 2 themes, all AAA (2026-10-12, security branch head) |
+| Unit tests | `bun run test:unit` | ✅ 1,483 pass / 118 files (2026-10-12, security branch head, host Bun 1.4.2: the final verification's 1,481 plus the two `ledger-shas` tests the review's record added) |
+| Component tests | `bun run test:components` | ✅ 931 pass / 77 files (2026-10-12, security branch head, host Bun 1.4.2) |
+| Integration tests | `bun run test:integration` | ✅ 676 pass / 42 files (2026-10-12, security branch head, host Bun 1.4.2) |
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 176 pass / 0 fail in 2.9 minutes (2026-10-09), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.0 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. The same day a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 564 packages (2026-10-08) |
+| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 563 packages (2026-10-12, security branch head) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
 single check is `scripts/dev-local.sh` comparing `bun --version` against
 `.bun-version` before it installs. It earns its place because bun is quiet in
-the direction that matters: `bun.lock` is lockfileVersion 2, written by 1.4.0,
-and an older bun prints "Unknown lockfile version", then "Ignoring lockfile",
-and resolves an unpinned tree nobody reviewed. Only `--frozen-lockfile` turns
-that into an error. Local development therefore wants bun at or above the
-pinned version, or the development image.
+the direction that matters: `bun.lock` is lockfileVersion 2, written by 1.4.0
+and left byte-identical by a plain `bun install` under 1.4.3, and an older bun
+prints "Unknown lockfile version", then "Ignoring lockfile", and resolves an
+unpinned tree nobody reviewed. Only `--frozen-lockfile` turns that into an
+error. Local development therefore wants bun at or above the pinned version, or
+the development image.
 
 `bun run verify:local` runs the first seven — **56s** of a **600s budget**
 (2026-08-28, on a Bun-installed tree; it was 33s under pnpm with roughly 200
@@ -348,7 +529,10 @@ beside the tests, and it holds neither `packages: write` nor a push step — a
 run whose tests fail can waste a build but cannot ship one. `image-publish`
 waits for all four test jobs plus the build and rebuilds the same commit from
 the layer cache the first job wrote, which is why it costs 44 seconds rather
-than a second build.
+than a second build. On a tag it no longer does: since 2026-10-12 a
+release's publish build reads no cache (RELEASING.md, *Verification
+boundaries*), so it pays a cold build — 428s for the build-and-scan job above;
+not yet measured on a tag's publish — and its limit is 30 minutes, not 10.
 
 `changes` decides whether the push could have altered the image at all — **5
 seconds**, an explicit diff against `github.event.before` rather than
@@ -375,6 +559,50 @@ appearing to work. It clones the full history instead now, so the diff is local
 and needs no credential. A gate whose failure mode is "does nothing quietly" has
 to be watched being exercised, which is what the docs-only push is for.
 
+**2026-10-12: a run that can publish is no longer cancelled.** The concurrency
+group used to cancel every superseded run. On master, a cancel can land inside
+`image-publish` after `Push` has moved `latest` and `sha-<commit>` but before
+`Attest provenance` runs, which leaves a published image with no signed
+provenance. Run `38159258844` was cancelled four seconds into `Push`. GHCR
+answers 404 for its `sha-` tag, so that run pushed nothing, and no unattested
+image has been found. The window is the last seconds of `Push` plus the 6–7s of
+attestation. `cancel-in-progress` is now `github.event_name == 'pull_request'`,
+so a superseded pull-request run is still cancelled and no run in a group that
+`image-publish` uses is: a master or tag push, and a `workflow_dispatch` on any
+ref, because it is the arriving run's condition that cancels the running one.
+The cost is that a newer run on the same ref waits for the running one instead
+of replacing it. GitHub keeps one pending run per group and replaces it with
+the newest, so a burst of pushes still collapses to two runs, but trunk feedback
+can lag by one run. The other proposed fix, a job-level group on
+`image-publish`, would not work: the workflow-level cancel takes every job in
+the run. `src/__tests__/unit/ci-workflow.test.ts` evaluates both conditions and
+the group for every trigger the workflow declares. Not yet exercised on GitHub.
+
+**2026-10-12: only a push publishes.** `image-publish` ran for every event but a
+pull request, and a `workflow_dispatch` selects any ref, so dispatching a
+feature branch "to see if it builds" would have pushed its unreviewed commit to
+the public registry as `sha-<commit>`, with an attestation that `--repo` alone
+accepts. No branch dispatch has run: the API lists one dispatch ever, on master
+on 2026-08-12, and it failed. The job is now `if: github.event_name == 'push'`,
+and `on.push` admits only `master` and `v*` tags; a dispatch, on any ref,
+verifies and publishes nothing, and a failed publish is retried by re-running
+the push's run. This stops an accident, not a writer: a dispatch runs the
+workflow file of the ref it selects, so a branch can edit the condition away. A
+deployment-branch policy on a GitHub environment is the control a branch cannot
+edit; none exists, and creating one is the owner's call. The same test file
+evaluates the condition for every trigger. A dispatch on master now succeeds
+without publishing, so `changes` takes its base from successful *push* runs only
+(`gh run list --event push`); otherwise that dispatch's commit would become the
+base, and a docs-only push after it, or a re-run of the failed push, would skip
+the image. The filter also drops a fork's pull request from its own `master`,
+which the API lists under that branch name (pull-request runs report their head
+branch, as this repository's `build/scoped-checks-2026-10-11` run does). A
+dispatch also has a concurrency group of its own (`CI-dispatch-<ref>`): the
+newest run to arrive in a group replaces the pending one whatever
+`cancel-in-progress` says, so a dispatch on master sharing the pushes' group
+would cancel a pending push and leave its commit unpublished. Not yet
+exercised on GitHub.
+
 **The pipeline lints itself.** `bash scripts/check-ci.sh` runs actionlint
 over the workflow and shellcheck over `scripts/*.sh`, and runs as the first step
 of the `quality` job. Both come from `rhysd/actionlint:1.7.12` pinned by its
@@ -387,8 +615,24 @@ repository's red runs actually were. Verified able to fail in both halves —
 an injected `SC2168` and an `env` context in `runs-on:` were each caught, then
 reverted.
 
-**Bun is pinned** in `.bun-version` (**1.4.0** since 2026-08-26; 1.3.14
-before), read by CI through `bun-version-file` where `setup-bun` still runs.
+**…and audits it for security** (2026-10-12). The same script runs zizmor
+1.16.3 over `.github/` — both workflows and `dependabot.yml` — from
+`ghcr.io/zizmorcore/zizmor` pinned by index digest, `--offline` and with no
+network, the `regular` persona, failing on any finding at any severity; the
+binary fallback checks the release asset against GitHub's recorded SHA-256.
+Its first run found two `cache-poisoning` findings: `e2e` and `audit` restored
+Bun from setup-bun's cache on a tag. Both now download it, so no step of
+`ci.yml` uses that cache. Verified able to fail on scratch copies: a
+`${{ github.event.pull_request.title }}` in a `run:` step (template injection,
+exit 14), the pre-fix `ci.yml` (exit 14), a Dependabot entry without its
+cooldown (four medium findings, exit 13) and an unparseable workflow (exit 1,
+which without `--strict-collection` was a skipped file and exit 0). The
+`auditor` persona is not the gate; what it adds is in SECURITY.md, Known gaps.
+
+**Bun is pinned** in `.bun-version` (**1.4.3** since 2026-10-12; 1.4.0 from
+2026-08-26, 1.3.14 before), read by CI through `bun-version-file` where `setup-bun` still runs.
+The Dockerfile names the same version by tag and by index digest (since
+2026-10-12), so moving the version moves the digest too.
 Unpinned, `setup-bun` resolved to whatever had shipped most recently, so a Bun
 release could turn the trunk red with nothing to revert; the pin made the
 version reviewable.
@@ -645,14 +889,18 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **62 procedures** — a count
-that has moved six times (44 → 45 → 55 → 59 → 64 → 62: it reached 64
-unrecorded while this file said 59, which is the drift this sentence exists to
-prevent, and fell to 62 when the two dead pipeline procedures were deleted) as
-phases closed and the export router arrived, which is why
-`capabilities.test.ts` asserts it structurally instead of anyone trusting a
-document. 10 Zod validation modules. 6 service
-modules: `ocr`, `receiptParser`, `productMatcher`, `openFoodFacts`,
+`shopping`) merged in `src/server/trpc/router.ts`, **65 procedures** — a count
+that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65: it reached 64
+unrecorded while this file said 59, fell to 62 when the two dead pipeline
+procedures were deleted, reached 63 with `product.resolveScan` on
+2026-08-31 while this file went on saying 62 until 2026-10-12, 64 with
+`auth.changePassword` on 2026-10-12, and 65 with
+`household.resetMemberPassword` the same day) as phases closed
+and the export router arrived. Asserting the count structurally did not stop
+the drift, because nothing compared it with this sentence; since 2026-10-12
+`capabilities.test.ts` does, and fails when the two disagree. 10 Zod
+validation modules. 6 service modules: `ocr`, `receiptParser`,
+`productMatcher`, `openFoodFacts`,
 `product-cache`, `errors` — plus `src/lib/rating.ts`, the pure module behind
 Phase 6.
 
@@ -707,7 +955,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 62 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 65 procedures assigned. Membership and role
 are read from the database on every call rather than from the JWT, so a
 demotion takes effect on the next request rather than whenever the 15-minute
 token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
@@ -824,8 +1072,23 @@ fixed release exists), was removed by moving react-doctor from 0.9.11 to
 16.3.8 for GHSA-vcvr-r3jv-pc5j (critical, `next/og`). `bun audit`: no
 vulnerabilities across 564 packages.
 
-GitHub's Dependabot count is higher than `bun audit`'s because it counts one
-alert per advisory-path pair.
+Dependabot alerts are enabled (`gh api repos/NGarate/stoky/vulnerability-alerts`
+answers 204) and on 2026-10-12 none was open: all 58 it ever raised are
+`fixed`. It counts one alert per advisory-path pair, so its totals do not compare
+with `bun audit`'s.
+
+Until 2026-10-12 nothing proposed an update: of the six commits that have
+touched `bun.lock`, the first being the move from pnpm, four answered an
+advisory. Dependabot version updates are now configured
+(`.github/dependabot.yml`) for `bun.lock`, the workflows' action pins, the
+Dockerfile's base and the release bundle's service images: weekly, seven days
+after a release, minor and patch grouped, no PostgreSQL, Valkey or Traefik
+major. **Not yet in effect:** the branch ruleset does not let Dependabot create
+its branches, which no version update can open without; Dependabot security
+updates are separately off. Both are owner settings, which
+`bun scripts/github-settings.ts check` reports with the repository's other
+security settings. No Dependabot pull request has run yet. `docs/RELEASING.md`
+(Dependency updates) says how one is reviewed.
 
 ---
 
@@ -843,9 +1106,10 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
-| bun | 1.4.0 — `.bun-version` and the Dockerfile pin; all application image stages use Bun |
+| bun | 1.4.3 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:629e1741…`); all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
+| traefik | v3.7.14 — `deploy/docker-compose.yml`, the release bundle's proxy; the newest v3 release on 2026-10-12 (`gh api repos/traefik/traefik/releases`) |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next
 dev` and `next start` run under `bun --bun` (`b81102d`), the production image
@@ -880,8 +1144,8 @@ prevent, and it survived because nobody re-read the source it was describing.
 no version numbers at all since 2026-08-27 — four of the nine claims it had
 gone stale on were versions, and a file loaded into every context is the worst
 place to keep a number that changes. This table is the only owner, and it is
-read out of `package.json`, `.bun-version` and the `Dockerfile` rather than
-recalled.
+read out of `package.json`, `.bun-version`, the `Dockerfile` and
+`deploy/docker-compose.yml` rather than recalled.
 
 ---
 
@@ -909,7 +1173,9 @@ recalled.
   **Closed.** One JSON object per event on stderr, written by a tRPC middleware
   rather than by the resolvers, so a new router cannot forget to be audited.
   Only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS — logging everything would
-  bury the refusals in NOT_FOUNDs.
+  bury the refusals in NOT_FOUNDs. Since 2026-10-12 a NOT_FOUND from a
+  household procedure is recorded as well, because another household's id is
+  refused with it (SECURITY.md "Refusals are recorded").
 - ~~Roles are enforced on the server per procedure, but no interface creates a
   KITCHEN account.~~ **Closed in Phase 5.** `/settings/people` lists the
   household and creates an account with a role, which is what makes `KITCHEN`
@@ -1022,7 +1288,9 @@ Two things that sequence surfaced, both operational rather than defects:
   again on run `32792826678` (`e13c540`) on 2026-08-25. A pin forward was the
   documented workaround, and **it has been measured and does not work**: bun
   1.4.0 shipped on 2026-08-20 and still reproduces the defect, at a rate this
-  many runs cannot tell apart from 1.3.14's. `ISSUES.md` TEST-5 carries the
+  many runs cannot tell apart from 1.3.14's. On 2026-10-12, moving to 1.4.3,
+  the same recipe failed 0 in 80 on *both* 1.4.0 and 1.4.3, so it no longer
+  measures the defect at all, and nothing says 1.4.3 fixed it. `ISSUES.md` TEST-5 carries the
   numbers, and the interleaving the comparison turns out to need. Narrowing the
   exit code without also hiding genuine unhandled rejections across the other
   442 tests is a judgement call that has not been made.
@@ -1041,7 +1309,7 @@ Two things that sequence surfaced, both operational rather than defects:
   rather than implied by a green suite.
 - The 2,500 ms navigation timeout in `public/sw.js` is a guess calibrated on
   "supermarket lie-fi", not a measurement.
-- ~~Read persistence is not implemented.~~ **Built.** Six allowlisted queries
+- ~~Read persistence is not implemented.~~ **Built.** Seven allowlisted queries
   are kept per account in `localStorage` for 24 hours. Restoration happens
   after the first render rather than before it, so a screen opened with no
   signal shows the "nothing saved" panel for a moment before the cache
@@ -1144,7 +1412,7 @@ taken without asking are in `docs/PROGRESS.md`.
 | 4b — Client state, the compiler, a React gate | ✅ Complete |
 | 5 — Kitchen screen, and Screen A's layout | ✅ Complete against its done-when, except a week on a real tablet |
 | 6 — Product rating | ✅ Complete against its done-when — T7 (offline scan resolution) landed 2026-09-01 |
-| 7 — Security review | ✅ **Complete** — `docs/SECURITY_REVIEW.md` (2026-08-26). Found and closed four household-isolation defects and a shipped OpenSSL CVE |
+| 7 — Security review | ✅ **Complete** — `docs/SECURITY_REVIEW.md` (2026-08-26). Found and closed four household-isolation defects and a shipped OpenSSL CVE. Reviewed again 2026-10-12 (*The 2026-10-12 review* in the same file), with owner actions pending |
 | 8 — The owner's first pass | ✅ All six closed; the done-when — the owner repeats their pass — is the owner's to run |
 
 **What remains, in one place.** The three human

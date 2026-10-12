@@ -7,6 +7,14 @@ import { ItemRow } from "@/components/ui/item-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { TRPCClientError } from "@trpc/client";
+import { addRefusalOf } from "@/components/household/add-member-refusal";
+import {
+  ResetMemberPasswordDialog,
+  resetRefusalOf,
+} from "@/components/household/ResetMemberPasswordDialog";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
+import { addMemberSchema } from "@/lib/validations/household";
 import type { JSX } from "react";
 import { useState } from "react";
 
@@ -166,6 +174,50 @@ describe("changing a member's role", () => {
   });
 });
 
+describe("creating an account", () => {
+  /** A refusal as the client receives it: the code is what the form reads. */
+  function refused(code: string, message = "refused"): TRPCClientError<never> {
+    const error = new TRPCClientError<never>(message);
+    Object.defineProperty(error, "data", { value: { code } });
+    return error;
+  }
+
+  it("tells an admin who has run out of the hourly meter to wait, not to retry", () => {
+    // The per-admin meter refuses for up to an hour; "Inténtalo otra vez"
+    // would send the admin straight back into the same refusal.
+    expect(addRefusalOf(refused("TOO_MANY_REQUESTS", "Too many accounts created"))).toBe(
+      "tooMany",
+    );
+  });
+
+  it("tells an admin who chose a common password to choose another, not to retry", () => {
+    // Built from the procedure's own schema, as tRPC carries a ZodError's
+    // message, so rewording the refusal cannot leave this passing against words
+    // the server no longer sends.
+    const refusal = addMemberSchema.safeParse({
+      name: "Ana",
+      email: "ana@example.com",
+      password: "password1234",
+      role: "MEMBER",
+    });
+    expect(refusal.success).toBe(false);
+    expect(addRefusalOf(refused("BAD_REQUEST", refusal.error?.message))).toBe("tooEasy");
+  });
+
+  it("reads each other refusal the procedure can give", () => {
+    expect(addRefusalOf(refused("CONFLICT"))).toBe("taken");
+    expect(
+      addRefusalOf(
+        refused("BAD_REQUEST", "That password contains the person's own name or email address"),
+      ),
+    ).toBe("identity");
+    expect(addRefusalOf(refused("INTERNAL_SERVER_ERROR"))).toBe("other");
+    // Another field's BAD_REQUEST is not the password's fault.
+    expect(addRefusalOf(refused("BAD_REQUEST", "Invalid email address"))).toBe("other");
+    expect(addRefusalOf(new Error("offline"))).toBe("other");
+  });
+});
+
 describe("removing a member", () => {
   it("asks before doing it", async () => {
     const onRemove = mock(() => {});
@@ -266,5 +318,168 @@ describe("ending a member's sessions", () => {
     );
 
     expect(onRevoke).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Setting a member's password — `household.resetMemberPassword`, security
+ * review 2026-10-12. The real dialog rather than a reproduction: it takes the
+ * server call as a prop, so it needs no tRPC provider, and what is under test
+ * is exactly what ships. The procedure's own guards are
+ * `integration/household.members.test.ts`'s.
+ */
+describe("setting a member's password", () => {
+  const ANA = { id: "member-ana", name: "Ana" };
+
+  /** A refusal as the client receives it: the code is what the dialog reads. */
+  function refusal(code: string, message = "refused"): TRPCClientError<never> {
+    const error = new TRPCClientError<never>(message);
+    Object.defineProperty(error, "data", { value: { code } });
+    return error;
+  }
+
+  function Harness({
+    onSubmit,
+    initial = ANA,
+  }: {
+    onSubmit: (password: string) => Promise<unknown>;
+    initial?: { id: string; name: string } | null;
+  }): JSX.Element {
+    const [member, setMember] = useState(initial);
+    return (
+      <ResetMemberPasswordDialog
+        member={member}
+        onClose={() => setMember(null)}
+        onSubmit={onSubmit}
+      />
+    );
+  }
+
+  const field = () => screen.getByLabelText("Contraseña nueva");
+  const submit = () => screen.getByRole("button", { name: "Cambiar la contraseña" });
+
+  it("names the person, and says every session they have will end", () => {
+    // The title is the dialog's accessible name: a field for a password is
+    // one somebody can fill in for the wrong person.
+    renderWithIntl(<Harness onSubmit={async () => {}} />, { locale: "es" });
+
+    const dialog = screen.getByRole("dialog", { name: "Nueva contraseña para Ana" });
+    expect(dialog).toHaveAccessibleDescription(/se cerrarán todas sus sesiones/i);
+  });
+
+  it("renders nothing while nobody is chosen", () => {
+    renderWithIntl(<Harness initial={null} onSubmit={async () => {}} />, {
+      locale: "es",
+    });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("attaches the rule to the field, with the server's minimum", () => {
+    // WCAG 3.3.5: the help is announced with the field, not found by looking.
+    renderWithIntl(<Harness onSubmit={async () => {}} />, { locale: "es" });
+
+    expect(field()).toHaveAccessibleDescription(
+      new RegExp(`Al menos ${MIN_PASSWORD_LENGTH} caracteres`),
+    );
+  });
+
+  it("refuses a short password without asking the server, and says why", async () => {
+    const onSubmit = mock(async (_password: string) => {});
+    renderWithIntl(<Harness onSubmit={onSubmit} />, { locale: "es" });
+
+    await userEvent.type(field(), "corta");
+    await userEvent.click(submit());
+
+    expect(onSubmit).toHaveBeenCalledTimes(0);
+    expect(
+      screen.getByText(`La contraseña necesita al menos ${MIN_PASSWORD_LENGTH} caracteres.`),
+    ).toBeInTheDocument();
+    expect(field()).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("sends the password from the footer's button, which sits outside the form", async () => {
+    // The button is this form's submit only through its `form` attribute.
+    const onSubmit = mock(async (_password: string) => {});
+    renderWithIntl(<Harness onSubmit={onSubmit} />, { locale: "es" });
+
+    await userEvent.type(field(), "tarro de garbanzos azul");
+    await userEvent.click(submit());
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]?.[0]).toBe("tarro de garbanzos azul");
+  });
+
+  it("keeps the dialog open on a refusal and says what to do", async () => {
+    // An admin acting on an owner: the answer is to ask an owner, and the
+    // field is still there to try somebody else's password.
+    renderWithIntl(
+      <Harness onSubmit={() => Promise.reject(refusal("FORBIDDEN"))} />,
+      { locale: "es" },
+    );
+
+    await userEvent.type(field(), "tarro de garbanzos azul");
+    await userEvent.click(submit());
+
+    expect(
+      await screen.findByText(
+        "Solo otra persona propietaria puede cambiar esta contraseña.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("clears a refusal when it is closed, so the next person's dialog starts clean", async () => {
+    function Reopening(): JSX.Element {
+      const [member, setMember] = useState<{ id: string; name: string } | null>(ANA);
+      return (
+        <>
+          <Button
+            onClick={() => setMember({ id: "member-luis", name: "Luis" })}
+            type="button"
+          >
+            Luis
+          </Button>
+          <ResetMemberPasswordDialog
+            member={member}
+            onClose={() => setMember(null)}
+            onSubmit={() => Promise.reject(refusal("INTERNAL_SERVER_ERROR"))}
+          />
+        </>
+      );
+    }
+    renderWithIntl(<Reopening />, { locale: "es" });
+
+    await userEvent.type(field(), "tarro de garbanzos azul");
+    await userEvent.click(submit());
+    expect(
+      await screen.findByText("No se ha podido cambiar la contraseña. Inténtalo otra vez."),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Luis" }));
+
+    expect(screen.getByRole("dialog", { name: "Nueva contraseña para Luis" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("No se ha podido cambiar la contraseña. Inténtalo otra vez."),
+    ).toBeNull();
+  });
+
+  it("reads each refusal the procedure can give", () => {
+    expect(resetRefusalOf(refusal("TOO_MANY_REQUESTS"))).toBe("tooMany");
+    expect(resetRefusalOf(refusal("FORBIDDEN"))).toBe("notOwner");
+    expect(
+      resetRefusalOf(
+        refusal("BAD_REQUEST", "That password contains the person's own name or email address"),
+      ),
+    ).toBe("identity");
+    expect(resetRefusalOf(refusal("BAD_REQUEST", "That password is too easy to guess"))).toBe(
+      "tooEasy",
+    );
+    // Gone from the household, or changed while the hash ran: try again.
+    expect(resetRefusalOf(refusal("NOT_FOUND"))).toBe("failed");
+    expect(resetRefusalOf(refusal("CONFLICT"))).toBe("failed");
+    expect(resetRefusalOf(new Error("offline"))).toBe("failed");
   });
 });

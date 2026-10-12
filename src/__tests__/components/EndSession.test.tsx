@@ -1,4 +1,5 @@
 import "../setup/matchers";
+import { TRPCClientError } from "@trpc/client";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -10,11 +11,12 @@ import { persistKey } from "@/lib/offline/persist";
 import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
 
 /**
- * The two controls that end a session, in one file because they share a hook.
+ * The three controls that end a session, in one file because they share a hook.
  *
  * `SignOutButton` ends this device's visit. `RevokeSessionsButton` ends every
- * session the account has, this one included. Both run the same purge sequence
- * — `useEndSession` — and that is also why their tests live together: the
+ * session the account has, this one included, and `ChangePasswordForm` does
+ * the same as the consequence of a new password. All three run the same purge
+ * sequence — `useEndSession` — and that is also why their tests live together: the
  * mocks below replace modules for the *whole process* (D50), so two files
  * mocking `@/lib/auth/actions` and the queue with different spies would each
  * be asserting against the other's. Measured: they did, and eighteen tests in
@@ -73,6 +75,10 @@ let pending: QueuedOp[] = [];
 let failedOps: FailedOp[] = [];
 /** Whether the server accepts the revocation, per test. */
 let serverRefuses = false;
+/** What `auth.changePassword` answers, per test: null accepts. */
+let changeRefusal: unknown = null;
+/** What each password change was sent. */
+let changeInputs: unknown[] = [];
 
 mock.module("@/lib/auth/actions", () => ({ signOutAction }));
 /**
@@ -131,6 +137,16 @@ mock.module("@/lib/trpc/client", () => ({
           },
         }),
       },
+      changePassword: {
+        useMutation: () => ({
+          mutateAsync: async (input: unknown) => {
+            steps.push("changePassword");
+            changeInputs.push(input);
+            if (changeRefusal !== null) throw changeRefusal;
+            return { success: true };
+          },
+        }),
+      },
     },
   },
 }));
@@ -139,6 +155,11 @@ const { SignOutButton } = await import("@/components/session/SignOutButton");
 const { RevokeSessionsButton } = await import(
   "@/components/session/RevokeSessionsButton"
 );
+const { ChangePasswordForm } = await import("@/components/session/ChangePasswordForm");
+const {
+  PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+  WRONG_CURRENT_PASSWORD_MESSAGE,
+} = await import("@/lib/validations/password");
 
 function op(id: string): QueuedOp {
   return {
@@ -168,6 +189,8 @@ beforeEach(() => {
   );
   queriesAtSignOut = null;
   serverRefuses = false;
+  changeRefusal = null;
+  changeInputs = [];
   signOutFails = false;
   unsentAfterFlush = 0;
 });
@@ -714,5 +737,187 @@ describe("where focus goes when the question appears", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("group", { name: "¿Cerrar sesión?" }),
     );
+  });
+});
+
+/**
+ * Changing the password, which ends every session as a consequence.
+ *
+ * The server half is `integration/auth.flow.test.ts` ("Changing your own
+ * password"). What only the form can get wrong is the same order as the revoke
+ * control's — the server write first, and a refusal discards nothing — plus
+ * saying *which* refusal it was: a wrong current password told as "try again"
+ * sends somebody round the form retyping the wrong thing.
+ */
+
+/** A refusal shaped the way tRPC delivers one to the browser. */
+function trpcRefusal(code: string, message: string): TRPCClientError<never> {
+  const error = new TRPCClientError<never>(message);
+  Object.defineProperty(error, "data", { value: { code } });
+  return error;
+}
+
+const CURRENT = "cocina despensa nevera";
+const NEXT = "tarro de garbanzos azul";
+
+/** Fill the three fields and submit. */
+async function changePassword(
+  fields: { current?: string; next?: string; again?: string } = {},
+): Promise<void> {
+  const { current = CURRENT, next = NEXT, again = next } = fields;
+  if (current) await userEvent.type(screen.getByLabelText("Contraseña actual"), current);
+  if (next) await userEvent.type(screen.getByLabelText("Contraseña nueva"), next);
+  if (again) {
+    await userEvent.type(screen.getByLabelText("Repite la contraseña nueva"), again);
+  }
+  await userEvent.click(screen.getByRole("button", { name: "Cambiar la contraseña" }));
+}
+
+describe("changing the password", () => {
+  it("says before the fact that this device is signed out too", () => {
+    renderWithIntl(<ChangePasswordForm />);
+
+    // Attached to the button, so it is heard with the button's name rather
+    // than discovered from the redirect.
+    expect(
+      screen.getByRole("button", { name: "Cambiar la contraseña" }),
+    ).toHaveAccessibleDescription(/también en este/);
+  });
+
+  it("attaches help to every field", () => {
+    // WCAG 3.3.5 (AAA), which `e2e/a11y-aaa.spec.ts` checks per route; the
+    // first version of this form left two fields without any and it went red.
+    renderWithIntl(<ChangePasswordForm />);
+
+    for (const label of [
+      "Contraseña actual",
+      "Contraseña nueva",
+      "Repite la contraseña nueva",
+    ]) {
+      expect(screen.getByLabelText(label)).toHaveAccessibleDescription(/\S/);
+    }
+  });
+
+  it("reports everything the browser can see at once, and sends nothing", async () => {
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword({ current: "", next: "corta", again: "otra" });
+
+    const summary = screen.getByTestId("form-error-summary");
+    expect(summary).toHaveTextContent("No se ha cambiado la contraseña");
+    expect(summary).toHaveTextContent("Escribe tu contraseña actual.");
+    expect(summary).toHaveTextContent("al menos 12 caracteres");
+    expect(summary).toHaveTextContent("no coinciden");
+    // Focused, so the reasons are read where the submit failed.
+    expect(document.activeElement).toBe(summary);
+    expect(steps).toEqual([]);
+  });
+
+  it("changes it on the server before discarding anything local, then signs out", async () => {
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(changeInputs).toEqual([{ currentPassword: CURRENT, newPassword: NEXT }]);
+    expect(steps).toEqual(["changePassword", "purgeQueue", "purgeShell", "signOut"]);
+  });
+
+  it("names a wrong current password, and leaves the person signed in", async () => {
+    changeRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(screen.getByTestId("form-error-summary")).toHaveTextContent(
+      "La contraseña actual no es correcta.",
+    );
+    expect(screen.getByLabelText("Contraseña actual")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(steps).toEqual(["changePassword"]);
+    expect(purgeAll).not.toHaveBeenCalled();
+    expect(signOutAction).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Cambiar la contraseña" })).not.toBeDisabled();
+  });
+
+  it("names a new password built from the person's name or address", async () => {
+    changeRefusal = trpcRefusal("BAD_REQUEST", PASSWORD_CONTAINS_IDENTITY_MESSAGE);
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(screen.getByTestId("form-error-summary")).toHaveTextContent(
+      "contiene tu nombre o tu correo",
+    );
+  });
+
+  it("names a new password the policy refuses", async () => {
+    // What the input schema answers: BAD_REQUEST with the Zod issues as the
+    // message, neither of the two named refusals above.
+    changeRefusal = trpcRefusal("BAD_REQUEST", '[{"path":["newPassword"]}]');
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(screen.getByTestId("form-error-summary")).toHaveTextContent(
+      "demasiado fácil de adivinar",
+    );
+  });
+
+  it("says to wait when the limit is spent", async () => {
+    changeRefusal = trpcRefusal("TOO_MANY_REQUESTS", "Too many password changes.");
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(screen.getByTestId("form-error-summary")).toHaveTextContent(
+      "Espera unos minutos",
+    );
+  });
+
+  it("sends unsent changes first, and says it will", async () => {
+    pending = [op("a"), op("b")];
+    renderWithIntl(<ChangePasswordForm />);
+
+    expect(screen.getByText(/se enviarán antes de cambiarla/i)).toBeInTheDocument();
+    await changePassword();
+
+    expect(steps.slice(0, 2)).toEqual(["flush", "changePassword"]);
+  });
+
+  it("changes nothing when they cannot all be sent", async () => {
+    pending = [op("a"), op("b")];
+    unsentAfterFlush = 2;
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(steps).toEqual(["flush"]);
+    expect(screen.getByTestId("form-error-summary")).toHaveTextContent(
+      "La contraseña sigue igual",
+    );
+  });
+
+  it("does not say it failed when only signing out here did", async () => {
+    // The password was changed and every session ended. "Not changed" would
+    // send the person back to type the old one, which no longer works.
+    signOutFails = true;
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    const summary = screen.getByTestId("form-error-summary");
+    expect(summary).toHaveTextContent("La contraseña ya está cambiada");
+    expect(summary).not.toHaveTextContent("No se ha cambiado");
+  });
+
+  it("carries the English copy too", async () => {
+    renderWithIntl(<ChangePasswordForm />, { locale: "en" });
+
+    expect(
+      screen.getByRole("button", { name: "Change the password" }),
+    ).toHaveAccessibleDescription(/this one included/);
+    expect(screen.getByLabelText("Repeat the new password")).toBeInTheDocument();
   });
 });

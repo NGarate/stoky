@@ -1,10 +1,40 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import * as argon2 from "argon2";
-import { registerSchema } from "@/lib/validations/auth";
+import { changePasswordSchema, registerSchema } from "@/lib/validations/auth";
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
-import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
+import {
+  PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+  WRONG_CURRENT_PASSWORD_MESSAGE,
+  passwordProblems,
+} from "@/lib/validations/password";
+import {
+  clientAddress,
+  passwordChangeRateLimit,
+  rateLimitIdentifier,
+  registerRateLimit,
+} from "@/lib/rate-limit";
+import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import { logSecurityEvent } from "@/lib/security-log";
+import {
+  REGISTRATION_CLOSED_MESSAGE,
+  REGISTRATION_LOCK_KEY,
+  registrationAllows,
+  registrationMode,
+} from "@/lib/auth/registration";
+
+/**
+ * The refusal when `STOKY_REGISTRATION` says no.
+ *
+ * FORBIDDEN rather than anything that names a reason: the security-event
+ * middleware logs every FORBIDDEN as `access.denied` with the path, which is
+ * the line an operator greps for, and the caller learns only that the door is
+ * shut — not how many accounts exist behind it.
+ */
+function registrationClosed(): TRPCError {
+  return new TRPCError({ code: "FORBIDDEN", message: REGISTRATION_CLOSED_MESSAGE });
+}
 
 /**
  * Accounts, as far as tRPC is concerned.
@@ -16,7 +46,8 @@ import { rateLimitIdentifier, registerRateLimit } from "@/lib/rate-limit";
  * was removed; `src/__tests__/utils/authorize.ts` drives the real path instead.
  *
  * So what is left is the parts Auth.js has no opinion about: creating an
- * account, reading the current one, and a `logout` that exists for shape.
+ * account, reading the current one, changing its password, ending its
+ * sessions, and a `logout` that exists for shape.
  */
 export const authRouter = createTRPCRouter({
   /**
@@ -24,19 +55,49 @@ export const authRouter = createTRPCRouter({
    *
    * `publicProcedure`, necessarily — there is nobody to authenticate yet — which
    * makes it one of the two endpoints reachable from the internet by anyone.
-   * That is why it is rate limited before it reads anything and why the
+   * That is why it is rate limited before any work is done and why the
    * password has a maximum length: Argon2id here is 64 MB per call, so an
    * unbounded body would make this a memory amplifier (ISSUES.md CRITICAL-4,
    * DEBT-1).
    *
+   * "Before any work", not "before it reads anything": tRPC has read and
+   * JSON-parsed the body, and Zod has validated it, before the resolver can
+   * count the attempt. What bounds that read is the route, which refuses a
+   * body over 15 MiB with 413 before tRPC sees it
+   * (`src/server/http/body-limit.ts`) — the proxy's cap alone did not, for a
+   * request labelled a prefetch (`docs/SECURITY_REVIEW.md` §8).
+   *
    * The household is optional. An account can exist without one, and
    * `householdRouter` is what such an account uses to get out of that state
    * (HOUSE-1).
+   *
+   * **Whether anyone may call it at all is the operator's**, through
+   * `STOKY_REGISTRATION` (`src/lib/auth/registration.ts`): `first-user` by
+   * default in production, so the person who installs the instance claims it
+   * and everybody after is added through `household.addMember`. The order of
+   * the checks below is the point of them:
+   *
+   * 1. `closed` refuses before anything — no limiter call, no query, no hash.
+   * 2. The per-address limiter, before any query.
+   * 3. `first-user` counts accounts and refuses once one exists. Before the
+   *    existence check, so a refusal says nothing about whether an address
+   *    is registered.
+   * 4. The existence check, then the hash.
+   * 5. One transaction creates the household and the account together, under
+   *    an advisory lock, re-counting in `first-user` mode — see there.
    */
   register: publicProcedure
     .input(registerSchema)
     .mutation(async ({ ctx, input }) => {
       const { email, name, password, householdName } = input;
+
+      // Read per call rather than at import, so a test can set it and so
+      // nothing here can disagree with what the startup guard checked.
+      const mode = registrationMode();
+
+      // Not inside the `if (ctx.headers)` below: a closed instance is closed
+      // to a caller with no request behind it too.
+      if (mode === "closed") throw registrationClosed();
 
       // ISSUES.md CRITICAL-4. Counted before anything is created, and before
       // the ~250ms of Argon2id below, so the endpoint cannot be used to make
@@ -57,7 +118,17 @@ export const authRouter = createTRPCRouter({
         );
       }
 
-      // Check if user already exists
+      // After the limiter, so a closed-after-first-user instance cannot be
+      // made to count its accounts on demand. A fast answer for the common
+      // refusal; the decision that counts is the one inside the transaction.
+      if (mode === "first-user" && !registrationAllows(mode, await ctx.db.user.count())) {
+        throw registrationClosed();
+      }
+
+      // A courtesy, not the guard: it answers a duplicate before spending
+      // Argon2id on it, with the message the screens match. Two registrations
+      // of one address at once both pass it, and the unique index on `email`
+      // refuses the second — as P2002, which `domainErrors` answers CONFLICT.
       const existingUser = await ctx.db.user.findUnique({
         where: { email },
       });
@@ -69,33 +140,44 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      // Hash password with Argon2id
-      const passwordHash = await argon2.hash(password, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      });
+      // Hash password with Argon2id. Outside the transaction: a quarter of a
+      // second holding the lock below would queue every other registration
+      // behind it.
+      const passwordHash = await hashPassword(password);
 
-      // Create household if provided
-      let householdId: string | undefined;
-      if (householdName) {
-        const household = await ctx.db.household.create({
+      const user = await ctx.db.$transaction(async (tx) => {
+        // `first-user` is "while there are no accounts", and a count followed
+        // by a create is a race: two people registering a fresh instance at
+        // once both count zero and both get in. A transaction-scoped advisory
+        // lock on a constant key makes the count and the create one step —
+        // the second registration waits here until the first has committed,
+        // then counts one. Released at commit or rollback; nothing to undo.
+        //
+        // Taken in every mode, not only `first-user`: registration is metered
+        // to a handful an hour, so serialising it costs nothing, and one code
+        // path is one thing to test. `$executeRaw` because the function
+        // returns `void`, which `$queryRaw` cannot deserialise. The key is a
+        // bound `bigint`, so Postgres resolves the one-argument overload.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
+
+        if (mode === "first-user" && !registrationAllows(mode, await tx.user.count())) {
+          throw registrationClosed();
+        }
+
+        // The household as a nested write of the account, so the two commit or
+        // roll back together with this transaction. They used to be two writes
+        // with no transaction: an account create that failed — the duplicate
+        // above, raced — left a household nobody belonged to and nothing could
+        // reach.
+        return tx.user.create({
           data: {
-            name: householdName,
+            email,
+            name,
+            passwordHash,
+            role: householdName ? "OWNER" : "MEMBER",
+            ...(householdName ? { household: { create: { name: householdName } } } : {}),
           },
         });
-        householdId = household.id;
-      }
-
-      // Create user
-      const user = await ctx.db.user.create({
-        data: {
-          email,
-          name,
-          passwordHash,
-          householdId,
-          role: householdId ? "OWNER" : "MEMBER",
-        },
       });
 
       return {
@@ -198,8 +280,11 @@ export const authRouter = createTRPCRouter({
    * `protectedProcedure`, not `householdProcedure`: an account with no
    * household still has sessions, and needing a household to end them would
    * put the control out of reach of exactly the account that has least else.
+   *
+   * `z.void()`, because it takes nothing and should accept nothing — see
+   * `logout` below.
    */
-  revokeMySessions: protectedProcedure.mutation(async ({ ctx }) => {
+  revokeMySessions: protectedProcedure.input(z.void()).mutation(async ({ ctx }) => {
     // `updateMany`, so a session whose account has since been deleted records
     // nothing rather than throwing P2025 — the same reasoning as
     // `setSnackbarDuration` above.
@@ -210,6 +295,100 @@ export const authRouter = createTRPCRouter({
 
     return { success: true };
   }),
+
+  /**
+   * A signed-in person replaces their own password, and every session the
+   * account has ends — this one included.
+   *
+   * Until this existed nothing changed a password once it was set (security
+   * review, 2026-10-12): a password an admin chose in `household.addMember`
+   * stayed known to that admin for good, and a leaked one could not be
+   * rotated — `revokeMySessions` ended the sessions and whoever held the
+   * password signed straight back in.
+   *
+   * `protectedProcedure`, not `householdProcedure`, for the reason
+   * `revokeMySessions` gives: an account with no household still has a
+   * password. The order of the steps is the point of them:
+   *
+   * 1. **The limit, first.** The next step answers "is this the password?",
+   *    and a stolen session asking it in a loop is the attack; counted before
+   *    Argon2id runs, like sign-in.
+   * 2. **The current password**, through the same `verifyPassword` sign-in
+   *    uses. Wrong is BAD_REQUEST, never UNAUTHORIZED: the offline queue and
+   *    the screens read UNAUTHORIZED as a session that has ended, and this
+   *    person is still signed in. It is logged here because the refusal
+   *    middleware records only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS.
+   * 3. **The identity rule**, against the account's own address and name,
+   *    which the input does not carry — so the schema cannot apply it
+   *    (`withIdentityRule`). After the check above, so it answers nobody who
+   *    has not proved they know the password.
+   * 4. **One update** sets the hash and `sessionsValidFrom`. Two writes could
+   *    leave a new password beside sessions that were meant to end; one
+   *    cannot. The `jwt` callback in `src/lib/auth.ts` then refuses every
+   *    token issued before now, the caller's own among them, and the screen
+   *    signs out and asks for the new password.
+   *
+   * **Ending this session too is deliberate.** Re-issuing it would have to
+   * happen in Auth.js's own route, and the person who suspects their password
+   * leaked is the one who most needs every device asked again. The form says
+   * so before it is submitted.
+   */
+  changePassword: protectedProcedure
+    .input(changePasswordSchema)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const address = ctx.headers ? clientAddress(ctx.headers) : undefined;
+
+      await enforceRateLimit(
+        passwordChangeRateLimit(),
+        userId,
+        "Too many password changes. Try again in a little while.",
+      );
+
+      const account = await ctx.db.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true, passwordHash: true },
+      });
+
+      // A session whose account is gone has nothing to change; UNAUTHORIZED is
+      // the truth here, as it is in `householdProcedure`.
+      if (!account) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "This account no longer exists",
+        });
+      }
+
+      if (!(await verifyPassword(account.passwordHash, input.currentPassword))) {
+        logSecurityEvent("auth.password.change.refused", { userId, address });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: WRONG_CURRENT_PASSWORD_MESSAGE,
+        });
+      }
+
+      const problems = passwordProblems(input.newPassword, {
+        email: account.email,
+        name: account.name,
+      });
+      if (problems.includes("containsIdentity")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: PASSWORD_CONTAINS_IDENTITY_MESSAGE,
+        });
+      }
+
+      const passwordHash = await hashPassword(input.newPassword);
+
+      await ctx.db.user.update({
+        where: { id: userId },
+        data: { passwordHash, sessionsValidFrom: new Date() },
+      });
+
+      logSecurityEvent("auth.password.changed", { userId, address });
+
+      return { success: true };
+    }),
 
   /**
    * Does nothing, on purpose, and is not how anybody signs out.
@@ -225,10 +404,25 @@ export const authRouter = createTRPCRouter({
    * paragraph instead of concluding that signing out is unimplemented, which is
    * what its previous silence invited.
    *
-   * Either way a stolen token stays valid until it expires, which is what the
-   * 15-minute `maxAge` in `src/lib/auth.ts` is for.
+   * **Signing out clears this device's cookie and nothing else.** A copy of
+   * the token taken before it stays valid: it slides on every read, so it ends
+   * only after fifteen minutes unused (`maxAge` in `src/lib/auth.ts`), thirty
+   * days after the sign-in that minted it (`MAX_SESSION_AGE_S`), or when
+   * somebody ends the account's sessions — `revokeMySessions` above, or an
+   * admin from the members panel. That last one is the answer to a token that
+   * may have leaked; a plain sign-out is not.
+   *
+   * **`z.void()` on the three mutations that take nothing** — this,
+   * `revokeMySessions` and `shopping.generateFromLowStock`. With no parser
+   * tRPC hands the resolver whatever body arrived, a multipart form included,
+   * so the one check every other procedure has on what reaches it was absent
+   * from the three a cross-site form could most easily trigger. `z.void()`
+   * refuses anything but `undefined`, which is what the client sends;
+   * `z.object({})` would not, because a `FormData` is an object and passes.
+   * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.
    */
   logout: protectedProcedure
+    .input(z.void())
     .mutation(async () => {
       return { success: true };
     }),

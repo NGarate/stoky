@@ -232,6 +232,14 @@ describe("reads never reach across households", () => {
     const latest = await api.price.getLatestPrices({ productId: B.productId });
     expect(latest).toEqual([]);
   });
+
+  it("shopping.getById refuses another household's list", async () => {
+    // The one read here that throws rather than narrowing: it is a lookup by
+    // id, so a foreign id must be NOT_FOUND, not B's list and its items.
+    const api = await callerFor(A);
+    const error = await refusal(() => api.shopping.getById({ id: B.listId }));
+    expect(error.code).toBe("NOT_FOUND");
+  });
 });
 
 describe("writes never reach across households", () => {
@@ -353,5 +361,99 @@ describe("writes never reach across households", () => {
       }),
     );
     expect(error.code).toBe("NOT_FOUND");
+  });
+
+  // The cases below are the ones `unit/tenant-scoped-ids.test.ts` cannot see:
+  // each is guarded by a primary `id` (or, for `location.update`, by a
+  // `parentId` beside a lookup it already has), and that scan only knows the
+  // foreign-key-shaped fields. Removing any of these guards left every gate
+  // green until they were here (docs/SECURITY_REVIEW.md §2). Each update
+  // carries a real field, so the "unchanged" half has something to catch: an
+  // update that changes nothing leaves B's row as it was whether or not the
+  // guard held.
+
+  it("shopping.update refuses a foreign list and leaves its name", async () => {
+    const api = await callerFor(A);
+    const error = await refusal(() =>
+      api.shopping.update({ id: B.listId, name: "Renombrada por A" }),
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    const after = await prisma.shoppingList.findUnique({
+      where: { id: B.listId },
+    });
+    expect(after?.name).toBe("Lista de B");
+  });
+
+  it("store.update refuses a foreign store and leaves it unchanged", async () => {
+    const api = await callerFor(A);
+    const error = await refusal(() =>
+      api.store.update({ id: B.storeId, name: "Renombrada por A" }),
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    const after = await prisma.store.findUnique({ where: { id: B.storeId } });
+    expect(after?.name).toBe("Tienda de B");
+  });
+
+  it("location.create refuses a foreign parent and creates nothing", async () => {
+    const api = await callerFor(A);
+    const error = await refusal(() =>
+      api.location.create({ name: "Dentro de B", parentId: B.locationId }),
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    expect(
+      await prisma.storageLocation.count({ where: { parentId: B.locationId } }),
+    ).toBe(0);
+    expect(
+      await prisma.storageLocation.count({
+        where: { householdId: A.householdId, name: "Dentro de B" },
+      }),
+    ).toBe(0);
+  });
+
+  it("location.update refuses a foreign id and leaves it unchanged", async () => {
+    // Two guards stand here, the existence check and the household in the
+    // write's own `where`; either alone refuses. The test is red only when
+    // both are gone, which is what "the procedure is not scoped" means.
+    const api = await callerFor(A);
+    const error = await refusal(() =>
+      api.location.update({ id: B.locationId, name: "Renombrado por A" }),
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    const after = await prisma.storageLocation.findUnique({
+      where: { id: B.locationId },
+    });
+    expect(after?.name).toBe("Estante de B");
+    expect(after?.parentId).toBeNull();
+  });
+
+  it("location.update refuses a foreign parent for an own location", async () => {
+    // The move's cycle walk reads inside the caller's household, so a
+    // foreign parent looks like a root to it and would pass: the parent
+    // lookup is the only thing that refuses this.
+    const api = await callerFor(A);
+    const error = await refusal(() =>
+      api.location.update({ id: A.locationId, parentId: B.locationId }),
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    const after = await prisma.storageLocation.findUnique({
+      where: { id: A.locationId },
+    });
+    expect(after?.parentId).toBeNull();
+  });
+
+  it("location.delete refuses a foreign location and it survives", async () => {
+    // An empty one. B's seeded location holds stock, so with the guard gone
+    // the delete would still stop at CONFLICT — a different code, but a
+    // refusal that would hide the missing household filter behind an
+    // unrelated rule. An empty location is the one that would actually go.
+    const empty = await prisma.storageLocation.create({
+      data: { name: "Estante vacío de B", householdId: B.householdId },
+    });
+    const api = await callerFor(A);
+    const error = await refusal(() => api.location.delete({ id: empty.id }));
+    expect(error.code).toBe("NOT_FOUND");
+    expect(
+      await prisma.storageLocation.findUnique({ where: { id: empty.id } }),
+    ).not.toBeNull();
   });
 });

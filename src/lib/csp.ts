@@ -27,7 +27,13 @@ export function buildCsp(
     // preview, which is a FileReader URL before upload.
     "img-src 'self' data: blob: https://images.openfoodfacts.org",
     "font-src 'self'",
-    `connect-src 'self' https://world.openfoodfacts.org${isDev ? " ws: http://localhost:*" : ""}`,
+    // Same-origin only. Open Food Facts lookups run on the server, where CSP
+    // does not reach, and the product page's links to it are navigations,
+    // which connect-src does not govern. Until 2026-10-12 this also allowed
+    // https://world.openfoodfacts.org, which no page ever fetched: an origin a
+    // script that slipped past the nonce could post to, for no use of ours.
+    // Dev adds the hot-reload websocket.
+    `connect-src 'self'${isDev ? " ws: http://localhost:*" : ""}`,
     "media-src 'self'",
     /**
      * The service worker.

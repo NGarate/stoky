@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { renderWithIntl as renderWithIntlOnly, type TestLocale } from "../utils/render";
 import { resolve } from "../setup/tailwind";
+import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
+import { registerSchema } from "@/lib/validations/auth";
+import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -34,6 +37,9 @@ mock.module("next-auth/react", () => ({
   signIn: async () => signInResult,
 }));
 
+/** What the next registration throws, or `null` for success. Reset by each test that sets it. */
+let registerFailure: Error | null = null;
+
 /** Every path a page asked the router to replace the current entry with. */
 const replaced: string[] = [];
 
@@ -59,7 +65,13 @@ mock.module("@/components/providers/TRPCProvider", () => ({
   api: {
     auth: {
       register: {
-        useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }),
+        useMutation: () => ({
+          mutateAsync: async () => {
+            if (registerFailure) throw registerFailure;
+            return {};
+          },
+          isPending: false,
+        }),
       },
     },
   },
@@ -77,8 +89,50 @@ function renderWithIntl(ui: ReactElement, options?: { locale?: TestLocale }) {
   );
 }
 
+/**
+ * What `/register` did on its way to choosing a screen, in order: `connection`
+ * when it declared itself request-bound, `count` when it asked how many
+ * accounts exist. Cleared by each test that reads it.
+ */
+const pageSteps: string[] = [];
+
+/** What the account count answers. Each test that changes it puts it back. */
+let userCount = 0;
+
+/**
+ * `connection()` throws outside a request scope, which is every test. The
+ * real module is spread in so the mock is complete (D50): `src/lib/auth.ts`
+ * and the proxy import other exports from it, and none of them is replaced.
+ */
+const realServer = await import("next/server");
+mock.module("next/server", () => ({
+  ...realServer,
+  connection: async () => {
+    pageSteps.push("connection");
+  },
+}));
+
+/**
+ * Complete: `prisma` is the module's only export. Nothing in this suite may
+ * reach a database, and the page's single query is the one thing it needs.
+ * No other component suite calls Prisma; `@/lib/i18n/cookies`, which imports
+ * it, is mocked wherever it is rendered.
+ */
+mock.module("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      count: async () => {
+        pageSteps.push("count");
+        return userCount;
+      },
+    },
+  },
+}));
+
 const { default: LoginPage } = await import("@/app/(auth)/login/page");
 const { default: RegisterPage } = await import("@/app/(auth)/register/page");
+const { RegisterForm } = await import("@/components/session/RegisterForm");
+const { RegistrationClosed } = await import("@/components/session/RegistrationClosed");
 
 afterEach(cleanup);
 
@@ -134,19 +188,19 @@ describe("the login page", () => {
   });
 });
 
-describe("the register page", () => {
+describe("the register form", () => {
   it("heads the page in each language", () => {
-    renderWithIntl(<RegisterPage />, { locale: "es" });
+    renderWithIntl(<RegisterForm />, { locale: "es" });
     expect(headings()).toEqual(["Registrarse", "Registrarse"]);
 
     cleanup();
 
-    renderWithIntl(<RegisterPage />, { locale: "en" });
+    renderWithIntl(<RegisterForm />, { locale: "en" });
     expect(headings()).toEqual(["Sign up", "Sign up"]);
   });
 
   it("says nothing in Spanish to an English reader", () => {
-    const { container } = renderWithIntl(<RegisterPage />, { locale: "en" });
+    const { container } = renderWithIntl(<RegisterForm />, { locale: "en" });
 
     for (const spanish of SPANISH_ONLY) {
       expect(container.textContent).not.toContain(spanish);
@@ -154,10 +208,28 @@ describe("the register page", () => {
   });
 
   it("translates the panel beside the form", () => {
-    const { container } = renderWithIntl(<RegisterPage />, { locale: "en" });
+    const { container } = renderWithIntl(<RegisterForm />, { locale: "en" });
 
     expect(container.textContent).toContain("Your first household");
   });
+
+  // The hint said eight while the server asked for twelve, and the field let
+  // eleven through to a refusal that did not say why. The page has to hand the
+  // catalogue the number and the browser the same one.
+  for (const [locale, label] of [
+    ["es", "Contraseña"],
+    ["en", "Password"],
+  ] as const) {
+    it(`asks for the minimum the server enforces, in ${locale}`, () => {
+      renderWithIntl(<RegisterForm />, { locale });
+
+      const field = screen.getByLabelText(label) as HTMLInputElement;
+      expect(field.minLength).toBe(MIN_PASSWORD_LENGTH);
+      expect(document.getElementById("password-hint")?.textContent).toContain(
+        `${MIN_PASSWORD_LENGTH} `,
+      );
+    });
+  }
 });
 
 /**
@@ -194,7 +266,7 @@ async function backgroundOf(classNames: string): Promise<string | undefined> {
 describe("the panel beside the form is a surface, not the action colour", () => {
   const pages = [
     { name: "login", Page: LoginPage, asideTitle: "Hogar compartido" },
-    { name: "register", Page: RegisterPage, asideTitle: "Primer hogar" },
+    { name: "register", Page: RegisterForm, asideTitle: "Primer hogar" },
   ] as const;
 
   for (const { name, Page, asideTitle } of pages) {
@@ -226,7 +298,7 @@ describe("neither page renders a raw key", () => {
 describe("how a failed sign-in reaches someone who cannot see the form", () => {
   for (const [name, Page] of [
     ["login", LoginPage],
-    ["register", RegisterPage],
+    ["register", RegisterForm],
   ] as const) {
     it(`${name} carries its region before it has anything to say`, () => {
       const { container } = renderWithIntl(<Page />, { locale: "es" });
@@ -277,7 +349,7 @@ describe("where signing in leads", () => {
 
   it("goes to the landing decision after a registration", async () => {
     replaced.length = 0;
-    renderWithIntl(<RegisterPage />, { locale: "es" });
+    renderWithIntl(<RegisterForm />, { locale: "es" });
 
     await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
     await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
@@ -310,5 +382,262 @@ describe("what a refused sign-in says", () => {
     } finally {
       signInResult = { ok: true, error: null };
     }
+  });
+});
+
+describe("what a refused sign-in says when it has been tried too often", () => {
+  // Two limits refuse with two codes. The address's says "this connection";
+  // the account's must not, because a different network cannot help and the
+  // person may be the one someone else is spending the attempts of.
+  for (const [locale, code, words, labels] of [
+    [
+      "es",
+      "account_rate_limited",
+      "Demasiados intentos con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu hogar.",
+      { email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión" },
+    ],
+    [
+      "en",
+      "account_rate_limited",
+      "Too many attempts with this account. Wait a few minutes; if it keeps happening, tell whoever runs your household.",
+      { email: "Email", password: "Password", submit: "Sign in" },
+    ],
+    [
+      "es",
+      "rate_limited",
+      "Demasiados intentos desde esta conexión. Espera unos minutos y vuelve a probar.",
+      { email: "Correo electrónico", password: "Contraseña", submit: "Iniciar sesión" },
+    ],
+  ] as const) {
+    it(`says what ran out for ${code}, in ${locale}`, async () => {
+      signInResult = { ok: false, error: "CredentialsSignin", code };
+      try {
+        renderWithIntl(<LoginPage />, { locale });
+
+        await userEvent.type(screen.getByLabelText(labels.email), "a@b.es");
+        await userEvent.type(screen.getByLabelText(labels.password), "secreta123");
+        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+
+        expect(await screen.findByText(words)).toBeInTheDocument();
+      } finally {
+        signInResult = { ok: true, error: null };
+      }
+    });
+  }
+});
+
+describe("what a refused registration says", () => {
+  // `STOKY_REGISTRATION` closed, or first-user with the instance claimed: the
+  // server's FORBIDDEN carries the shared constant, and the form must say the
+  // door is shut — not "check the details", which would send someone round the
+  // form again for a refusal nothing they type can change.
+  for (const [locale, words, labels] of [
+    [
+      "es",
+      "El registro está cerrado en este servidor. Pide a quien administra tu hogar que te añada desde «Personas del hogar», en Configuración.",
+      { name: "Nombre", email: "Correo electrónico", password: "Contraseña", submit: "Registrarse" },
+    ],
+    [
+      "en",
+      "Registration is closed on this server. Ask whoever runs your household to add you from “People in the household”, in Settings.",
+      { name: "Name", email: "Email", password: "Password", submit: "Sign up" },
+    ],
+  ] as const) {
+    it(`says registration is closed, in ${locale}`, async () => {
+      registerFailure = new Error(REGISTRATION_CLOSED_MESSAGE);
+      try {
+        renderWithIntl(<RegisterForm />, { locale });
+
+        await userEvent.type(screen.getByLabelText(labels.name), "Ana");
+        await userEvent.type(screen.getByLabelText(labels.email), "ana@example.com");
+        await userEvent.type(screen.getByLabelText(labels.password), "cocina despensa nevera");
+        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+
+        expect(await screen.findByText(words)).toBeInTheDocument();
+      } finally {
+        registerFailure = null;
+      }
+    });
+  }
+
+  // The identity rule's refusal arrives as tRPC's BAD_REQUEST, whose message is
+  // the ZodError's own JSON. Built here from the real schema rather than
+  // written out, so a reworded server message cannot leave this test passing
+  // against a string the server no longer sends.
+  const identity = { email: "noel@example.com", name: "Noel" };
+  const password = "noel despensa 2026";
+
+  for (const [locale, words, labels] of [
+    [
+      "es",
+      "La contraseña contiene tu nombre o tu correo. Elige una que no los incluya.",
+      { name: "Nombre", email: "Correo electrónico", password: "Contraseña", submit: "Registrarse" },
+    ],
+    [
+      "en",
+      "The password contains your name or your email address. Choose one that does not include them.",
+      { name: "Name", email: "Email", password: "Password", submit: "Sign up" },
+    ],
+  ] as const) {
+    it(`says the password contains the person's own name, in ${locale}`, async () => {
+      const refusal = registerSchema.safeParse({ ...identity, password });
+      expect(refusal.success).toBe(false);
+      registerFailure = new Error(refusal.error?.message);
+      try {
+        renderWithIntl(<RegisterForm />, { locale });
+
+        await userEvent.type(screen.getByLabelText(labels.name), identity.name);
+        await userEvent.type(screen.getByLabelText(labels.email), identity.email);
+        await userEvent.type(screen.getByLabelText(labels.password), password);
+        await userEvent.click(screen.getByRole("button", { name: labels.submit }));
+
+        expect(await screen.findByText(words)).toBeInTheDocument();
+      } finally {
+        registerFailure = null;
+      }
+    });
+  }
+});
+
+/**
+ * Registration closed (`STOKY_REGISTRATION`), said before anybody fills in a
+ * form that cannot succeed.
+ *
+ * The page rendered the form whatever the setting, so a visitor on a closed
+ * instance chose a password and learnt the answer from the refusal — and,
+ * without JavaScript, never learnt it at all. The page now decides on the
+ * server and renders one of two screens.
+ */
+describe("the screen that says registration is closed", () => {
+  for (const [locale, words] of [
+    [
+      "es",
+      {
+        title: "El registro está cerrado",
+        body: "En este servidor, las cuentas nuevas las crea quien administra el hogar. Pídele que te añada desde «Personas del hogar», en Configuración.",
+        back: "Volver a iniciar sesión",
+      },
+    ],
+    [
+      "en",
+      {
+        title: "Registration is closed",
+        body: "On this server, new accounts are created by whoever runs the household. Ask them to add you from “People in the household”, in Settings.",
+        back: "Back to sign in",
+      },
+    ],
+  ] as const) {
+    it(`says what is closed and who can let the person in, in ${locale}`, () => {
+      renderWithIntl(<RegistrationClosed />, { locale });
+
+      expect(headings()).toEqual([words.title]);
+      expect(screen.getByText(words.body)).toBeInTheDocument();
+    });
+
+    it(`leads back to sign-in by name alone, in ${locale}`, () => {
+      renderWithIntl(<RegistrationClosed />, { locale });
+
+      // BackLink's arrow is aria-hidden, so the accessible name is the words;
+      // an arrow typed into the string would make this name longer.
+      const back = screen.getByRole("link", { name: words.back });
+      expect(back.getAttribute("href")).toBe("/login");
+      expect(back.querySelector('svg[aria-hidden="true"]')).not.toBeAbsent();
+    });
+  }
+
+  it("offers nothing to fill in", () => {
+    const { container } = renderWithIntl(<RegistrationClosed />, { locale: "es" });
+
+    expect(container.querySelector("form")).toBeAbsent();
+    // Not "no input": the theme and language controls are inputs, and stay.
+    expect(container.querySelector('input[type="email"], input[type="password"]')).toBeAbsent();
+    expect(screen.queryByRole("button", { name: "Registrarse" })).toBeAbsent();
+  });
+
+  it("says nothing in Spanish to an English reader, and renders no raw key", () => {
+    const { container } = renderWithIntl(<RegistrationClosed />, { locale: "en" });
+
+    expect(container.textContent).not.toContain("auth.");
+    for (const spanish of ["registro", "Configuración", "Personas del hogar"]) {
+      expect(container.textContent).not.toContain(spanish);
+    }
+  });
+});
+
+describe("which screen /register chooses", () => {
+  /** Runs `body` with `STOKY_REGISTRATION` set, and the count it would see. */
+  async function withSetting(
+    mode: string,
+    count: number,
+    body: () => Promise<void>,
+  ): Promise<void> {
+    const previous = process.env.STOKY_REGISTRATION;
+    process.env.STOKY_REGISTRATION = mode;
+    userCount = count;
+    pageSteps.length = 0;
+    try {
+      await body();
+    } finally {
+      if (previous === undefined) delete process.env.STOKY_REGISTRATION;
+      else process.env.STOKY_REGISTRATION = previous;
+      userCount = 0;
+    }
+  }
+
+  /** The page's own output, rendered as the server would have sent it. */
+  async function renderPage(): Promise<HTMLElement> {
+    return renderWithIntl(await RegisterPage(), { locale: "es" }).container;
+  }
+
+  it("shows the closed screen when closed, without asking the database", async () => {
+    await withSetting("closed", 0, async () => {
+      const page = await renderPage();
+
+      expect(headings()).toEqual(["El registro está cerrado"]);
+      expect(page.querySelector("form")).toBeAbsent();
+      expect(pageSteps).toEqual(["connection"]);
+    });
+  });
+
+  it("shows the closed screen once a first-user instance has its account", async () => {
+    await withSetting("first-user", 1, async () => {
+      const page = await renderPage();
+
+      expect(headings()).toEqual(["El registro está cerrado"]);
+      expect(page.querySelector("form")).toBeAbsent();
+      // Declared request-bound before it counted: a prerender would otherwise
+      // have counted at build time and baked the answer in.
+      expect(pageSteps).toEqual(["connection", "count"]);
+    });
+  });
+
+  it("shows the form on a first-user instance nobody has claimed", async () => {
+    await withSetting("first-user", 0, async () => {
+      const page = await renderPage();
+
+      expect(page.querySelector("form")).not.toBeAbsent();
+      expect(headings()).toEqual(["Registrarse", "Registrarse"]);
+      expect(pageSteps).toEqual(["connection", "count"]);
+    });
+  });
+
+  it("shows the form when open, without asking the database", async () => {
+    await withSetting("open", 7, async () => {
+      const page = await renderPage();
+
+      expect(page.querySelector("form")).not.toBeAbsent();
+      expect(pageSteps).toEqual(["connection"]);
+    });
+  });
+
+  it("shows the closed screen for a value it does not know", async () => {
+    // Outside production an unknown value does not stop the server, so the
+    // page is what a mistyped setting looks like there: closed, never open.
+    await withSetting("Open", 0, async () => {
+      const page = await renderPage();
+
+      expect(page.querySelector("form")).toBeAbsent();
+      expect(headings()).toEqual(["El registro está cerrado"]);
+    });
   });
 });

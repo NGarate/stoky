@@ -20,7 +20,7 @@ that answers it, and the others link rather than restate.
 | # | Read | To learn |
 |---|---|---|
 | 1 | [`STATUS.md`](STATUS.md) | What is true right now. Gate results, versions, known gaps, which phase is next |
-| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D99 |
+| 2 | [`PROGRESS.md`](PROGRESS.md) | What has been done and **why the decisions were made that way**. Every judgement call taken without asking, numbered D1–D133 |
 | 3 | [`REDESIGN_PLAN.md`](REDESIGN_PLAN.md) | What is being built, in what order, and what "done" means for each phase |
 
 That is enough to start work. Everything else is reference for a specific task.
@@ -28,10 +28,12 @@ That is enough to start work. Everything else is reference for a specific task.
 Then, before writing code, read `CLAUDE.md` in the repository root. It is
 deliberately short and holds only what applies to *every* task: the design
 system, the commit conventions and the git workflow — this project has unusual
-rules about the last two (trunk only, atomic commits, no branches, no pull
-requests). It carries **no versions, commands or directory listings on
-purpose**, because it is loaded into every context and that is the worst place
-to keep something that goes stale. Those live in the owners above.
+rules about the last two (atomic commits; watched work straight to `master`;
+unattended or semi-attended agent work on a dated branch with a pull request,
+squash-merged once the owner approves it). It carries **no versions, commands
+or directory listings on purpose**, because it is loaded into every context and
+that is the worst place to keep something that goes stale. Those live in the
+owners above.
 
 ---
 
@@ -51,11 +53,12 @@ document.
 | What must work before calling a slice done? | `SMOKE_JOURNEYS.md` |
 | What is the interface supposed to look like, and what is wrong with it? | `DESIGN_AUDIT.md` |
 | How do I run the manual screen-reader pass? | `SCREEN_READER_PASS.md` |
-| What is the threat model, and what is hardened? | `SECURITY.md` |
+| What is the threat model, what is hardened, and how do I report a vulnerability? | `SECURITY.md` |
 | What did the security review find, and what is still open? | `SECURITY_REVIEW.md` |
 | How do I install or upgrade a released version? | `INSTALL.md` |
 | How do I get a development checkout running? | `LOCAL_BOOTSTRAP.md` |
 | How do I publish a release? | `RELEASING.md` |
+| Which GitHub repository settings must be on, and are they? | `RELEASING.md` (Repository settings) |
 | Which command do I run, and what does it prove? | `VERIFICATION_SEQUENCE.md` |
 | How are the test suites configured? | `TEST_SETUP.md` |
 | What does the product do? | `README.md` (root) |
@@ -82,7 +85,7 @@ run a gate, the file says so and says why, rather than omitting it.
 
 **[`PROGRESS.md`](PROGRESS.md)**
 Working memory for executing the plan. A table of completed units with their
-commits, and — the part worth reading in full — **99 numbered decisions taken
+commits, and — the part worth reading in full — **133 numbered decisions taken
 without asking**, each with its reasoning.
 
 The decisions are the highest-value thing in this repository for an agent
@@ -113,7 +116,7 @@ two §3/§5.1 promises found unbuilt when the journeys were re-audited on
 - **Write** when a phase closes — with what it actually did, including where the
   plan turned out to be wrong. Phase 1 said four dead routes; there were six.
 
-**[`ISSUES.md`](ISSUES.md)**
+**[`ISSUES.md`](../ISSUES.md)**
 Every known defect, with a file reference, evidence, and a severity. Resolved
 entries are kept with their resolution rather than deleted, because the same
 defect recurs and the note about why it happened is worth more than the fix.
@@ -169,7 +172,7 @@ rule mirrors §10's: an item leaves by being done, promoted to `ISSUES.md`, or
 dropped in writing — never by being forgotten. Two of its items are owner
 decisions, not code.
 
-**[`SECURITY.md`](SECURITY.md)**
+**[`SECURITY.md`](../SECURITY.md)**
 The threat model for a self-hosted deployment, what is already hardened
 (container, network, CSP, image supply chain), what is *not* — read that part
 first — and operator guidance.
@@ -180,10 +183,12 @@ posture is worse than none.
 
 **[`SECURITY_REVIEW.md`](SECURITY_REVIEW.md)**
 Phase 7's deliverable: the review itself, finding by finding, each either closed
-with its commit or written up with an owner. `SECURITY.md` says what the posture
-*is*; this says what was looked for, what was found, and which findings are
-still open and whose they are. Four are, at the time of writing — two of them
-the operator's rather than the code's.
+with its commit or written up with an owner, and the 2026-10-12 review after it,
+with what became of each finding, what it accepted and the owner actions it
+left. `SECURITY.md` says what the posture *is*; this says what was looked for,
+what was found, and which findings are still open and whose they are. Two of
+Phase 7's are open at the time of writing: #9, the operator's and the owner's,
+and #16, the owner's.
 
 **[`VERIFICATION_SEQUENCE.md`](VERIFICATION_SEQUENCE.md)**
 The command ladder, what each gate proves, the environment each needs, and the
@@ -207,7 +212,9 @@ upgrades and troubleshooting. Owns the self-hosted installation path.
 
 **[`RELEASING.md`](RELEASING.md)**
 Maintainer checklist for versioning, verification, tagging and publishing. Release
-notes live in `docs/releases/` and describe the specific tagged version.
+notes live in `docs/releases/` and describe the specific tagged version. Also
+owns the GitHub repository settings the release depends on, and the drift check
+(`scripts/github-settings.ts`) that holds them.
 
 ### Proposed — read, then decide; nothing here is scheduled
 

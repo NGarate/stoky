@@ -5,18 +5,18 @@ import {
   assertUsableSecret,
   secretProblem,
 } from "@/lib/auth/secret";
+import * as receiptRecovery from "@/server/services/receipt-recovery";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
  * The signing key, and refusing to start without a real one.
  *
- * `NEXTAUTH_SECRET` signs the session JWT. Auth.js reads it from the
- * environment itself and never inspects it, so until this nothing in the
- * application had ever looked at what it was — while `.env.example` ships a
- * placeholder that is published in this repository. An instance deployed with
- * that value signs sessions with a key anybody can read, and nothing about it
- * looks wrong from outside.
+ * `NEXTAUTH_SECRET` signs the session JWT. Auth.js never inspects it, so
+ * until this nothing in the application had ever looked at what it was — while
+ * `.env.example` ships a placeholder that is published in this repository. An
+ * instance deployed with that value signs sessions with a key anybody can
+ * read, and nothing about it looks wrong from outside.
  */
 
 const REAL = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
@@ -115,6 +115,9 @@ describe("when it refuses", () => {
       throw new Error(`exit ${code}`);
     }) as typeof process.exit);
     const logged = spyOn(console, "error").mockImplementation(() => {});
+    // `register` goes on to sweep interrupted receipts once the secret passes;
+    // replaced, so this suite never touches whatever database `.env` names.
+    const sweep = spyOn(receiptRecovery, "recoverInterruptedReceipts").mockResolvedValue();
 
     try {
       await asProductionServer(PLACEHOLDER_SECRET, async () => {
@@ -134,7 +137,45 @@ describe("when it refuses", () => {
     } finally {
       exit.mockRestore();
       logged.mockRestore();
+      sweep.mockRestore();
     }
+  });
+});
+
+describe("the key that actually signs sessions", () => {
+  /**
+   * Imports `@/lib/auth` in a fresh process with `env` and reports the secret
+   * Auth.js ended up with.
+   *
+   * A fresh process because the value is read when the module loads, and
+   * every other file in this suite shares one module cache in which it loaded
+   * long ago. `NextAuth(authConfig)` runs next-auth's `setEnvDefaults` on the
+   * config object at load, so `authConfig.secret` afterwards is the resolved
+   * key — the one that signs and decrypts — not just what the file wrote.
+   */
+  function resolvedSecret(env: Record<string, string>) {
+    const base: Record<string, string | undefined> = { ...process.env };
+    for (const key of Object.keys(base)) {
+      if (/^(NEXT)?AUTH_SECRET/.test(key)) delete base[key];
+    }
+    delete base.NEXT_PHASE;
+    const script = `const { authConfig } = await import("@/lib/auth");
+      console.log(JSON.stringify({ secret: authConfig.secret }));`;
+    const child = Bun.spawnSync([process.execPath, "-e", script], {
+      cwd: join(import.meta.dir, "../../.."),
+      env: { ...base, NODE_ENV: "production", NEXT_RUNTIME: "nodejs", ...env },
+    });
+    if (child.exitCode !== 0) throw new Error(child.stderr.toString());
+    return (JSON.parse(child.stdout.toString()) as { secret: unknown }).secret;
+  }
+
+  it("is the NEXTAUTH_SECRET the guard checked, even when AUTH_SECRET is set", () => {
+    // next-auth resolves `config.secret ??= AUTH_SECRET ?? NEXTAUTH_SECRET`,
+    // and the guard reads only NEXTAUTH_SECRET. Without an explicit `secret`
+    // in authConfig this started — the guard passed on REAL — and signed every
+    // session with "changeme". `AUTH_SECRET` is what the Auth.js v5 docs and
+    // `npx auth secret` write, so it is the likely stray.
+    expect(resolvedSecret({ NEXTAUTH_SECRET: REAL, AUTH_SECRET: "changeme" })).toBe(REAL);
   });
 });
 
