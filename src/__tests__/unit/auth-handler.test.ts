@@ -89,13 +89,15 @@ afterEach(() => {
 });
 
 describe("which endpoints answer", () => {
-  it("is the five this application uses", () => {
+  it("is the seven this application uses", () => {
     expect([...ALLOWED_AUTH_ENDPOINTS].sort()).toEqual([
       "GET /error",
       "GET /get-session",
       "GET /ok",
       "POST /sign-in/email",
       "POST /sign-out",
+      "POST /two-factor/verify-backup-code",
+      "POST /two-factor/verify-totp",
     ]);
   });
 
@@ -107,6 +109,11 @@ describe("which endpoints answer", () => {
       post("/sign-up/email", "{}"),
       post("/change-password", "{}"),
       post("/revoke-sessions", "{}"),
+      // Two-step verification beyond the second step of a sign-in.
+      post("/two-factor/enable", "{}"),
+      post("/two-factor/get-totp-uri", "{}"),
+      post("/two-factor/generate-backup-codes", "{}"),
+      post("/two-factor/disable", "{}"),
       new Request(`${BASE}/list-sessions`),
       // The same endpoints by another method or spelling.
       new Request(`${BASE}/sign-in/email`),
@@ -419,6 +426,9 @@ describe("what a sign-in ends", () => {
         tidied.push(input);
         return tidy(input);
       },
+      end: async () => {
+        order.push("end");
+      },
     };
     return { sessions, order, tidied };
   }
@@ -618,5 +628,267 @@ describe("the body bound", () => {
 
     expect(response.status).toBe(413);
     expect(handle).not.toHaveBeenCalled();
+  });
+});
+
+describe("two-step verification", () => {
+  const CHALLENGE = "stoky.two_factor";
+  const SESSION = "stoky.session_token";
+  const twoFactorCookies = async () => ({ challenge: CHALLENGE, session: SESSION });
+
+  /** Sessions that record what the route asked of them. */
+  function recordingSessions(presented: { id: string; userId: string } | null) {
+    const asked: unknown[][] = [];
+    const sessions: SignInSessions = {
+      presented: async () => presented,
+      tidy: async (input) => {
+        asked.push(["tidy", input]);
+      },
+      end: async (previous, account) => {
+        asked.push(["end", previous, account]);
+      },
+    };
+    return { sessions, asked };
+  }
+
+  const events = () =>
+    securityLines.mock.calls.flatMap((call) => {
+      try {
+        return [JSON.parse(String(call[0])) as Record<string, string>];
+      } catch {
+        return [];
+      }
+    });
+
+  const challenged = () =>
+    Response.json({ twoFactorRedirect: true, twoFactorMethods: ["totp"] }, {
+      headers: { "set-cookie": `${CHALLENGE}=abc.sig; Max-Age=600; Path=/; HttpOnly` },
+    });
+
+  /** Better Auth's answer to a code that signed somebody in. */
+  const signedInByCode = () => {
+    const response = Response.json({ token: "raw-token", user: { id: "user-1", email: "ana@example.com" } });
+    response.headers.append("set-cookie", `${SESSION}=new.sig; Path=/; HttpOnly; SameSite=Lax`);
+    response.headers.append("set-cookie", `${CHALLENGE}=; Max-Age=0; Path=/`);
+    return response;
+  };
+
+  const code = (path: string, body: unknown, cookie = `${CHALLENGE}=abc.sig`) =>
+    post(path, JSON.stringify(body), cookie ? { cookie } : {});
+
+  describe("a password step that asks for a code", () => {
+    it("settles the charge, ends the presented session and is logged as challenged", async () => {
+      const { handler } = fakeHandler(challenged);
+      const { limiter, calls } = fakeLimiter();
+      const { sessions, asked } = recordingSessions({ id: "s-old", userId: "user-9" });
+
+      const response = await handleAuthRequest(
+        post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" }), {
+          cookie: `${SESSION}=old.sig`,
+        }),
+        { handler, limiter, sessions },
+      );
+
+      expect(response.status).toBe(200);
+      const kinds = calls.map(([what]) => what);
+      // The account counter cleared and the address refunded, as a sign-in.
+      expect(kinds).toContain("reset");
+      expect(kinds).toContain("refund");
+      // But the browser is not a known device yet: it has not got in.
+      expect(kinds).not.toContain("rememberDevice");
+      expect(asked).toEqual([["end", { id: "s-old", userId: "user-9" }, expect.any(String)]]);
+      const written = events().map((line) => line.event);
+      expect(written).toContain("auth.signin.challenged");
+      expect(written).not.toContain("auth.signin.succeeded");
+      expect(written).not.toContain("auth.signin.failed");
+    });
+
+    it("ends nothing when the browser presented no session", async () => {
+      const { sessions, asked } = recordingSessions(null);
+
+      await handleAuthRequest(
+        post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" })),
+        { handler: fakeHandler(challenged).handler, limiter: fakeLimiter().limiter, sessions },
+      );
+
+      expect(asked).toEqual([]);
+    });
+  });
+
+  describe("the second step", () => {
+    it("reaches Better Auth with the code and nothing else", async () => {
+      for (const path of ["/two-factor/verify-totp", "/two-factor/verify-backup-code"]) {
+        const { handler, seen } = fakeHandler(signedInByCode);
+
+        await handleAuthRequest(
+          post(
+            `${path}?callbackURL=https://evil.example`,
+            JSON.stringify({ code: "123456", trustDevice: true, disableSession: true }),
+            { cookie: `${CHALLENGE}=abc.sig`, "x-stoky-remember": "1" },
+          ),
+          { handler, limiter: fakeLimiter().limiter, twoFactorCookies },
+        );
+
+        expect(seen, path).toHaveLength(1);
+        expect(await seen[0].json()).toEqual({ code: "123456" });
+        expect(new URL(seen[0].url).search).toBe("");
+        expect(seen[0].headers.get("x-stoky-remember")).toBeNull();
+      }
+    });
+
+    it("is charged against the address alone", async () => {
+      const { limiter, calls } = fakeLimiter();
+
+      await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
+        handler: fakeHandler(() => Response.json({ code: "INVALID_CODE" }, { status: 401 })).handler,
+        limiter,
+        twoFactorCookies,
+      });
+
+      expect(calls.filter(([what]) => what === "consume")).toEqual([
+        ["consume", ADDRESS, "203.0.113.9"],
+      ]);
+    });
+
+    it("is refused 429 before Better Auth when the address has no attempts left", async () => {
+      const { handler, handle } = fakeHandler(signedInByCode);
+      const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 12 } });
+
+      const response = await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
+        handler,
+        limiter,
+        twoFactorCookies,
+      });
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("12");
+      expect(handle).not.toHaveBeenCalled();
+    });
+
+    it("answers a body without a code 400, charged and without Better Auth", async () => {
+      const { handler, handle } = fakeHandler(signedInByCode);
+      const { limiter, calls } = fakeLimiter();
+
+      for (const body of ["{not json", JSON.stringify({ code: 123456 }), JSON.stringify({})]) {
+        const response = await handleAuthRequest(
+          post("/two-factor/verify-totp", body, { cookie: `${CHALLENGE}=abc.sig` }),
+          { handler, limiter, twoFactorCookies },
+        );
+        expect(response.status, body).toBe(400);
+      }
+
+      expect(handle).not.toHaveBeenCalled();
+      expect(calls.filter(([what]) => what === "consume")).toHaveLength(3);
+    });
+
+    it("signs in when it carried the challenge and was answered with a session", async () => {
+      for (const [path, method] of [
+        ["/two-factor/verify-totp", "totp"],
+        ["/two-factor/verify-backup-code", "backup-code"],
+      ] as const) {
+        securityLines.mockClear();
+        const deviceId = mintDeviceId();
+        const { limiter, calls } = fakeLimiter();
+        const { sessions, asked } = recordingSessions(null);
+
+        const response = await handleAuthRequest(
+          code(path, { code: "123456" }, `${CHALLENGE}=abc.sig; ${DEVICE_ID_COOKIE}=${deviceId}`),
+          { handler: fakeHandler(signedInByCode).handler, limiter, sessions, twoFactorCookies },
+        );
+
+        expect(response.status).toBe(200);
+        expect(calls.filter(([what]) => what === "refund")).toEqual([
+          ["refund", ADDRESS, "203.0.113.9", 7],
+        ]);
+        expect(calls.filter(([what]) => what === "rememberDevice")).toEqual([
+          ["rememberDevice", expect.any(String), deviceId],
+        ]);
+        // The presented session ended at the password step; the tidy is the
+        // account's expired rows and the cap, never the new session.
+        expect(asked).toEqual([["tidy", { previous: null, userId: "user-1", newToken: "raw-token" }]]);
+        expect(events().find((line) => line.event === "auth.signin.succeeded")).toMatchObject({
+          userId: "user-1",
+          method,
+          address: "203.0.113.9",
+        });
+        // The token is read for the tidy and still never handed to the page.
+        expect(JSON.stringify(await response.json())).not.toContain("raw-token");
+        expect(securityLines.mock.calls.join("\n")).not.toContain("ana@example.com");
+      }
+    });
+
+    it("is not a sign-in without the challenge cookie", async () => {
+      const { limiter, calls } = fakeLimiter();
+      const { sessions, asked } = recordingSessions(null);
+
+      await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }, ""), {
+        handler: fakeHandler(signedInByCode).handler,
+        limiter,
+        sessions,
+        twoFactorCookies,
+      });
+
+      expect(calls.map(([what]) => what)).not.toContain("refund");
+      expect(asked).toEqual([]);
+      expect(events().map((line) => line.event)).not.toContain("auth.signin.succeeded");
+    });
+
+    it("is not a sign-in when the answer sets no session cookie", async () => {
+      const { limiter, calls } = fakeLimiter();
+      const { sessions, asked } = recordingSessions(null);
+
+      await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
+        handler: fakeHandler(() =>
+          Response.json({ token: "raw-token", user: { id: "user-1", email: "ana@example.com" } }),
+        ).handler,
+        limiter,
+        sessions,
+        twoFactorCookies,
+      });
+
+      expect(calls.map(([what]) => what)).not.toContain("refund");
+      expect(asked).toEqual([]);
+      expect(events().map((line) => line.event)).not.toContain("auth.signin.succeeded");
+    });
+
+    it("is an enrolment when a signed-in session's first code re-creates it", async () => {
+      const { sessions, asked } = recordingSessions({ id: "s-1", userId: "user-1" });
+
+      await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
+        { handler: fakeHandler(signedInByCode).handler, limiter: fakeLimiter().limiter, sessions, twoFactorCookies },
+      );
+
+      expect(asked).toEqual([]);
+      const written = events();
+      expect(written.find((line) => line.event === "auth.twofactor.enabled")).toMatchObject({
+        userId: "user-1",
+      });
+      expect(written.map((line) => line.event)).not.toContain("auth.signin.succeeded");
+    });
+
+    it("logs a refused code as failed, a locked account as locked, and an unreadable secret once", async () => {
+      const cases = [
+        [401, "INVALID_CODE", "auth.twofactor.failed"],
+        [401, "INVALID_BACKUP_CODE", "auth.twofactor.failed"],
+        [400, "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE", "auth.twofactor.failed"],
+        [429, "ACCOUNT_TEMPORARILY_LOCKED", "auth.twofactor.locked"],
+        [401, "TWO_FACTOR_UNREADABLE", null],
+      ] as const;
+      for (const [status, refusal, event] of cases) {
+        securityLines.mockClear();
+
+        const response = await handleAuthRequest(code("/two-factor/verify-totp", { code: "123456" }), {
+          handler: fakeHandler(() => Response.json({ code: refusal }, { status })).handler,
+          limiter: fakeLimiter().limiter,
+          twoFactorCookies,
+        });
+
+        expect(response.status, refusal).toBe(status);
+        const twoFactor = events().filter((line) => line.event.startsWith("auth.twofactor."));
+        // The guard writes `unreadable` itself, inside Better Auth.
+        expect(twoFactor, refusal).toEqual(event ? [expect.objectContaining({ event, code: refusal })] : []);
+      }
+    });
   });
 });

@@ -52,6 +52,24 @@ export type SecurityEvent =
   // and `address` a failure carries, so one jq filter follows a person from
   // their refusals to their way in.
   | "auth.signin.succeeded"
+  // The password was right and the account asks for a second step (D148):
+  // not a sign-in yet, so not `succeeded`, and not a failure either. The
+  // same `account` tag and `address`; the sign-in, if it completes, is the
+  // `succeeded` line that follows with `method: "totp"` or `"backup-code"`.
+  | "auth.signin.challenged"
+  // Two-step verification (D148), never with the code or the secret:
+  // `enabled` when an enrolment's first code is accepted; `failed` when a
+  // code is refused at the second step, with the refusal as `code`;
+  // `replayed` when a right code is sent again for a step already used
+  // (ASVS 5.0.0 6.5.1); `locked` when the account's wrong codes have locked
+  // it for a while; `unreadable` when the stored secret no longer decrypts
+  // because `STOKY_SECRET` changed — the person cannot get in with that
+  // authenticator, and the operator is the one who can tell them why.
+  | "auth.twofactor.enabled"
+  | "auth.twofactor.failed"
+  | "auth.twofactor.replayed"
+  | "auth.twofactor.locked"
+  | "auth.twofactor.unreadable"
   | "auth.unavailable"
   // Sessions somebody ended on purpose, with the `reason`: the account's own
   // holder ending all of theirs (`self`), a password change ending every

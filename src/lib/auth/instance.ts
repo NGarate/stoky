@@ -4,12 +4,14 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { isAPIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins/bearer";
+import { twoFactor } from "better-auth/plugins/two-factor";
 import { prisma } from "@/lib/prisma";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
 import { configuredSecret } from "@/lib/auth/secret";
+import { stokyPolicy } from "@/lib/auth/policy-plugin";
 import {
   REMEMBERED_IDLE_S,
   REMEMBERED_REFRESH_S,
@@ -302,6 +304,19 @@ function build(env: Record<string, string | undefined>) {
       // on the caller's behalf: the database holds tokens unsigned, so
       // without this a read of the `Session` table would be a credential.
       bearer({ requireSignature: true }),
+      // Two-step verification with an authenticator app (D148). At the
+      // password step of an account that has it, Better Auth deletes the
+      // session it made and answers `twoFactorRedirect` with a signed
+      // `two_factor` cookie naming a ten-minute challenge, which
+      // `/two-factor/verify-totp` or `/two-factor/verify-backup-code` turns
+      // into a session. Its own limits stay on: five wrong codes end a
+      // challenge, ten across challenges lock the account for fifteen
+      // minutes. The route answers only those two endpoints for now: the
+      // enrolment ones open when the settings screen does
+      // (`src/server/http/auth-handler.ts`).
+      twoFactor({ issuer: "Stoky" }),
+      // Ours: a TOTP code works once (`src/lib/auth/policy-plugin.ts`).
+      stokyPolicy({ db: prisma }),
       // Last, as Better Auth asks: it copies every Set-Cookie into Next's
       // cookie store when an endpoint is called from a Server Action.
       nextCookies(),

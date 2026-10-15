@@ -9,8 +9,11 @@ import { prisma } from "@/lib/prisma";
  * tokens still name it — the exception to the schema's no-cascades rule that
  * `Account` already makes (PROGRESS D134).
  *
- * Rows are written directly: nothing in the application creates a session
- * yet, and what is under test is the foreign key, not who writes the rows.
+ * The same holds for an authenticator secret (`TwoFactor`, PROGRESS D148): a
+ * credential, which goes with its account.
+ *
+ * Rows are written directly: what is under test is the foreign key, not who
+ * writes the rows.
  */
 
 const RUN = `authtables-${process.pid}-${Date.now().toString(36)}`;
@@ -29,10 +32,17 @@ beforeAll(async () => {
       { token: `${RUN}-staying-phone`, userId: staying, expiresAt: inAnHour() },
     ],
   });
+  await prisma.twoFactor.createMany({
+    data: [
+      { userId: leaving, secret: `${RUN}-leaving-secret`, backupCodes: "[]" },
+      { userId: staying, secret: `${RUN}-staying-secret`, backupCodes: "[]" },
+    ],
+  });
 });
 
 afterAll(async () => {
   await prisma.session.deleteMany({ where: { token: { startsWith: RUN } } });
+  await prisma.twoFactor.deleteMany({ where: { secret: { startsWith: RUN } } });
   await prisma.user.deleteMany({ where: { email: { startsWith: RUN } } });
   await prisma.$disconnect();
 });
@@ -43,5 +53,15 @@ describe("an account's sessions", () => {
 
     expect(await prisma.session.count({ where: { userId: leaving } })).toBe(0);
     expect(await prisma.session.count({ where: { userId: staying } })).toBe(1);
+  });
+});
+
+describe("an account's authenticator", () => {
+  it("goes with the account when it is deleted, and nobody else's does", async () => {
+    // The account was deleted by the test above; the order is the file's.
+    expect(await prisma.user.count({ where: { id: leaving } })).toBe(0);
+
+    expect(await prisma.twoFactor.count({ where: { userId: leaving } })).toBe(0);
+    expect(await prisma.twoFactor.count({ where: { userId: staying } })).toBe(1);
   });
 });

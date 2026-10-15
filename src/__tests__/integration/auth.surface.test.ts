@@ -14,8 +14,8 @@ import { createTestUser, generateTestEmail } from "../utils/test-helpers";
  * against. This one reads the list of endpoints off the running instance, so
  * an endpoint a future Better Auth adds — or one nobody thought of — is
  * tried too, by every method, with a signed-in browser's cookie and its own
- * origin: everything it would need to act. Nothing may answer but the five,
- * and no session, account or user row may change.
+ * origin: everything it would need to act. Nothing may answer but the
+ * seven, and no session, account, user or authenticator row may change.
  */
 
 const PASSWORD = "cocina despensa nevera";
@@ -37,12 +37,16 @@ afterAll(async () => {
 });
 
 /**
- * The five, written out rather than read from the handler: an endpoint added
+ * The seven, written out rather than read from the handler: an endpoint added
  * to its allowlist is exactly what this test must notice, and reading the
  * list would make it agree.
  */
 const ANSWERED = new Set([
   "POST /sign-in/email",
+  // The second step of a sign-in (D148); nothing else of two-step
+  // verification until the settings screen opens enrolment.
+  "POST /two-factor/verify-totp",
+  "POST /two-factor/verify-backup-code",
   "POST /sign-out",
   "GET /get-session",
   "GET /ok",
@@ -56,6 +60,7 @@ async function snapshot() {
     accounts: await prisma.account.findMany({ where: { userId }, orderBy: { id: "asc" } }),
     sessions: await prisma.session.findMany({ where: { userId }, orderBy: { id: "asc" } }),
     verifications: await prisma.verification.count(),
+    twoFactor: await prisma.twoFactor.findMany({ where: { userId } }),
   };
 }
 
@@ -96,6 +101,11 @@ describe("the endpoints Better Auth mounts", () => {
     expect(endpoints).toContain("POST /change-password");
     expect(endpoints).toContain("POST /revoke-sessions");
     expect(endpoints).toContain("POST /sign-up/email");
+    // Two-step verification's own: enrolment, and the one that hands the
+    // decrypted secret back to whoever holds the session.
+    expect(endpoints).toContain("POST /two-factor/enable");
+    expect(endpoints).toContain("POST /two-factor/get-totp-uri");
+    expect(endpoints).toContain("POST /two-factor/generate-backup-codes");
   });
 
   it("answer 404 unless allowed, and change nothing", async () => {

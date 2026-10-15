@@ -39,7 +39,11 @@
     "registrationClosedBody": "En este servidor, las cuentas nuevas las crea quien administra el hogar. Pídele que te añada desde «Personas del hogar», en Configuración.",
     "backToLogin": "Volver a iniciar sesión",
     "invalidCredentials": "El correo o la contraseña no son correctos. Revisa los dos; la contraseña distingue mayúsculas.",
-    "emailExists": "Ya hay una cuenta con este correo. Inicia sesión con él o usa otro."
+    "emailExists": "Ya hay una cuenta con este correo. Inicia sesión con él o usa otro.",
+    "twoFactorInvalidCode": "El código no es correcto o ya se ha usado. Escribe el que muestra ahora tu aplicación de autenticación.",
+    "twoFactorExpired": "La comprobación del código ha caducado o se ha intentado demasiadas veces. Vuelve a escribir tu contraseña.",
+    "twoFactorLocked": "Demasiados códigos incorrectos con esta cuenta. Espera 15 minutos y vuelve a intentarlo.",
+    "twoFactorUnreadable": "Este servidor ya no puede comprobar tu aplicación de autenticación. Avisa a quien administra Stoky en tu casa."
   },
   "navigation": {
     "inventory": "Inventario",

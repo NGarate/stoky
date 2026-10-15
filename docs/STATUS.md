@@ -931,8 +931,10 @@ is not a failure but a question — see *Reconciliation* below. Proven by
 **Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
 post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
 error mapping and i18n; the route in front of Better Auth
-(`src/server/http/auth-handler.ts`) answers five endpoints and applies the
-limits. Sessions are database rows: fifteen idle minutes, slid only by the
+(`src/server/http/auth-handler.ts`) answers seven endpoints and applies the
+limits. Two-step verification with an authenticator app is in on the server,
+each code usable once (D148); only its sign-in step is reachable, and nothing
+in the interface sets it up yet. Sessions are database rows: fifteen idle minutes, slid only by the
 keep-alive, a day at most, and deleted to end them — or, with "Mantener la
 sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
 since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3

@@ -89,6 +89,35 @@ describe("getAuthErrorKey", () => {
     ).toBe("accountTooManyAttempts");
   });
 
+  it("words each refusal of a second step by what the person can do about it", () => {
+    // Better Auth's codes as its answer carries them, and the guard's own
+    // (`src/lib/auth/policy-plugin.ts`): retype, start again with the
+    // password, wait, or ask the operator.
+    const words = (code: string) => getAuthErrorKey(undefined, "login", code);
+    expect(words("INVALID_CODE")).toBe("twoFactorInvalidCode");
+    expect(words("INVALID_BACKUP_CODE")).toBe("twoFactorInvalidCode");
+    expect(words("INVALID_TWO_FACTOR_COOKIE")).toBe("twoFactorExpired");
+    expect(words("TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE")).toBe("twoFactorExpired");
+    expect(words("ACCOUNT_TEMPORARILY_LOCKED")).toBe("twoFactorLocked");
+    expect(words("TWO_FACTOR_UNREADABLE")).toBe("twoFactorUnreadable");
+  });
+
+  it("has words in both languages for every key it can answer", async () => {
+    const catalogues = {
+      es: (await import("../../../messages/es.json")).default.auth as Record<string, string>,
+      en: (await import("../../../messages/en.json")).default.auth as Record<string, string>,
+    };
+    for (const key of [
+      "twoFactorInvalidCode",
+      "twoFactorExpired",
+      "twoFactorLocked",
+      "twoFactorUnreadable",
+    ]) {
+      expect(catalogues.es[key], `es ${key}`).toBeTruthy();
+      expect(catalogues.en[key], `en ${key}`).toBeTruthy();
+    }
+  });
+
   it("falls back to the action-specific generic error", () => {
     expect(getAuthErrorKey(undefined, "login")).toBe("loginError");
     expect(getAuthErrorKey("unexpected failure", "register")).toBe(

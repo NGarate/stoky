@@ -154,6 +154,53 @@ function retryAfter(seconds: number): number {
   return Math.max(1, Math.ceil(seconds));
 }
 
+/** The per-address half of a charge: what every step of a sign-in costs. */
+export interface AddressCharge {
+  /** The client's address in full, for the security log. */
+  address: string;
+  addressLimit: RateLimit;
+  addressIdentifier: string;
+  /** The window the attempt landed in, so a refund goes back to it alone. */
+  addressWindow: number;
+}
+
+/**
+ * Counts one attempt against the client's address, and nothing else.
+ *
+ * The first step of every sign-in, and the whole charge of a second step
+ * (D148): an authenticator code arrives with no address typed and no account
+ * named, only the challenge cookie, so there is no account to count it
+ * against here — Better Auth counts wrong codes per challenge and per
+ * account itself. Throws `SignInRefusedError` as `chargeSignInAttempt` does.
+ */
+export async function chargeSignInAddress(
+  headers: Headers,
+  limiter: SignInLimiter = valkeySignInLimiter,
+): Promise<AddressCharge> {
+  const addressLimit = loginRateLimit();
+  // Counted against the /64 for an IPv6 client, logged with the address in
+  // full: the bucket is what stops a client rotating through its own prefix,
+  // and the address is what an operator needs to read.
+  const addressIdentifier = rateLimitIdentifier(headers);
+  const address = clientAddress(headers);
+
+  try {
+    const result = await limiter.consume(addressLimit, addressIdentifier);
+    if (!result.allowed) {
+      const seconds = retryAfter(result.retryAfterSeconds);
+      logSecurityEvent("auth.signin.throttled", {
+        address,
+        code: `retry-after=${seconds}`,
+      });
+      throw new SignInRefusedError("rate_limited", seconds);
+    }
+    return { address, addressLimit, addressIdentifier, addressWindow: result.window };
+  } catch (error) {
+    if (error instanceof RateLimitUnavailableError) throw unavailable(address, error);
+    throw error;
+  }
+}
+
 /**
  * Counts one sign-in attempt, before anything about it is believed.
  *
@@ -168,29 +215,10 @@ export async function chargeSignInAttempt(
   rawEmail: unknown,
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<SignInAttempt> {
-  const addressLimit = loginRateLimit();
-  // Counted against the /64 for an IPv6 client, logged with the address in
-  // full: the bucket is what stops a client rotating through its own prefix,
-  // and the address is what an operator needs to read.
-  const addressIdentifier = rateLimitIdentifier(headers);
-  const address = clientAddress(headers);
-
-  let addressWindow: number;
-  try {
-    const result = await limiter.consume(addressLimit, addressIdentifier);
-    addressWindow = result.window;
-    if (!result.allowed) {
-      const seconds = retryAfter(result.retryAfterSeconds);
-      logSecurityEvent("auth.signin.throttled", {
-        address,
-        code: `retry-after=${seconds}`,
-      });
-      throw new SignInRefusedError("rate_limited", seconds);
-    }
-  } catch (error) {
-    if (error instanceof RateLimitUnavailableError) throw unavailable(address, error);
-    throw error;
-  }
+  const { address, addressLimit, addressIdentifier, addressWindow } = await chargeSignInAddress(
+    headers,
+    limiter,
+  );
 
   const parsed = loginSchema.shape.email.safeParse(rawEmail);
   if (!parsed.success) {
@@ -329,6 +357,59 @@ export async function signInSucceeded(
     userId,
     method,
     account: charge.accountTag,
+    address: charge.address,
+  });
+}
+
+/**
+ * The password was right and the account asks for a second step (D148).
+ *
+ * The charge is settled here, as for a sign-in — the budget it was charged to
+ * cleared, the address refunded — because the password was the guess the
+ * account budget exists to count, and it was not one. The second step is
+ * counted on its own: per address by the route, per challenge and per
+ * account by Better Auth. Not `rememberDevice`: a browser is a known device
+ * for an account once it has got in, and it has not yet.
+ */
+export async function signInChallenged(
+  charge: SignInCharge,
+  limiter: SignInLimiter = valkeySignInLimiter,
+): Promise<void> {
+  await settleSignIn(charge, limiter);
+  logSecurityEvent("auth.signin.challenged", {
+    account: charge.accountTag,
+    address: charge.address,
+  });
+}
+
+/** Who a second step signed in, from Better Auth's answer. */
+export interface SecondFactorSignIn {
+  userId: string;
+  /** The account's address, for its budget key and log tag; never logged itself. */
+  email: string | undefined;
+  /** The `stoky_device` id the request carried, when it carried a valid one. */
+  deviceId: string | undefined;
+}
+
+/**
+ * An authenticator code or a backup code completed a sign-in (D148): the
+ * address refunded the attempt it was charged, this browser remembered for
+ * the account — now it has got in — and the sign-in recorded with the factor
+ * that finished it. Written last, as `signInSucceeded` is, so a line never
+ * describes a sign-in that did not complete.
+ */
+export async function secondFactorSucceeded(
+  charge: AddressCharge,
+  { userId, email, deviceId }: SecondFactorSignIn,
+  method: Extract<SignInMethod, "totp" | "backup-code">,
+  limiter: SignInLimiter = valkeySignInLimiter,
+): Promise<void> {
+  await limiter.refund(charge.addressLimit, charge.addressIdentifier, charge.addressWindow);
+  if (email && deviceId) await limiter.rememberDevice(accountIdentifier(email), deviceId);
+  logSecurityEvent("auth.signin.succeeded", {
+    userId,
+    method,
+    account: email ? accountTag(email) : undefined,
     address: charge.address,
   });
 }

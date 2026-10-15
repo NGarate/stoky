@@ -186,8 +186,9 @@ changes nothing: registration there stays open to anyone (see Requirements).
 
 Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating the
-session secret signs everybody out and changes every account tag in the
-security log. From the release after v0.1.0-alpha.3 the secret is called
+session secret signs everybody out, changes every account tag in the
+security log and makes every authenticator app unreadable (see
+[Rotating `STOKY_SECRET`](#rotating-stoky_secret)). From the release after v0.1.0-alpha.3 the secret is called
 `STOKY_SECRET`; the old name, `NEXTAUTH_SECRET`, is still read when
 `STOKY_SECRET` is unset, with a `[config]` warning at start-up, until a later
 release stops reading it (see [Upgrade and rollback](#upgrade-and-rollback)).
@@ -363,18 +364,22 @@ WHERE "providerId" = 'credential'
   AND "accountId" = "userId";
 DELETE FROM "Session"
 WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
+DELETE FROM "Verification"
+WHERE identifier LIKE '2fa-%'
+  AND value = (SELECT id FROM "User" WHERE email = lower(:'email'));
 COMMIT;
 SQL
 unset STOKY_HASH
 ```
 
 `psql` must answer `UPDATE 1` to the update, and `DELETE` with the number of
-sessions it ended, which may be 0; `UPDATE 0` means no account has that
+sessions it ended, which may be 0, then the number of two-step sign-ins in
+progress it ended, usually 0; `UPDATE 0` means no account has that
 address. From the release after v0.1.0-alpha.3 the hash is kept in the
 account's `credential` row of the `Account` table, which is where sign-in reads
 it, and each session is a row of `Session`. On v0.1.0-alpha.3 the hash is
-still a column of `User` and there are no session rows: there, replace both
-statements with
+still a column of `User` and there are no session or verification rows:
+there, replace the three statements with
 
 ```sql
 UPDATE "User"
@@ -390,10 +395,70 @@ The password is read without echo and passed on standard input, so it stays out
 of your shell history and the process list; `IFS=` keeps any leading or
 trailing space in it, which a plain `read` would drop and sign-in would not. The hash is made by the
 application's own Argon2id library with its own parameters. Both statements
-run in one transaction, so the new password never stands without the second
-one, which deletes every session the account had, as a reset from the
-application does. This path skips the application's password rules: choose at
+run in one transaction, so the new password never stands without the others,
+which delete every session the account had and any sign-in waiting for its
+authenticator code, as a reset from the application does. This path skips the application's password rules: choose at
 least 12 characters that do not contain your name or address.
+
+## A lost authenticator
+
+From the release after v0.1.0-alpha.3 an account can ask for a code from an
+authenticator app after its password (two-step verification). Somebody who
+has lost the phone with the app signs in with one of the backup codes they
+were given when they set it up, then sets the app up again. If they have no
+backup code either, remove two-step verification in the database, so the
+password alone signs them in. Run this in the installation directory,
+replacing the address with the person's:
+
+```bash
+docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+  -v email='person@example.com' <<'SQL'
+BEGIN;
+DELETE FROM "TwoFactor"
+WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
+UPDATE "User"
+SET "twoFactorEnabled" = false,
+    "updatedAt" = now() AT TIME ZONE 'UTC'
+WHERE email = lower(:'email');
+DELETE FROM "Session"
+WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
+DELETE FROM "Verification"
+WHERE identifier LIKE '2fa-%'
+  AND value = (SELECT id FROM "User" WHERE email = lower(:'email'));
+COMMIT;
+SQL
+```
+
+`psql` must answer `DELETE 1` and then `UPDATE 1`; `UPDATE 0` means no account
+has that address, and `DELETE 0` first means it had no authenticator. The
+last two statements sign the account out everywhere and end any sign-in
+waiting for a code, because whoever has the lost phone may have used it. Ask
+the person to set two-step verification up again once they are in. Do this
+only for somebody whose identity you are sure of: it leaves their password as
+the only thing protecting the account.
+
+## Rotating `STOKY_SECRET`
+
+`STOKY_SECRET` signs every session and encrypts every authenticator secret,
+so replacing it is not only a new value. From the release after
+v0.1.0-alpha.3, a new value:
+
+- **signs everybody out**, phones and the kitchen screen included: every
+  cookie and native token was signed with the old one;
+- **changes every account tag in the security log**, so lines written before
+  and after cannot be matched to the same account by tag;
+- **makes every authenticator unreadable**. A person with two-step
+  verification is told at sign-in that the server can no longer check their
+  app, and their way in is a backup code, then setting the app up again — or
+  [A lost authenticator](#a-lost-authenticator). Their backup codes are
+  encrypted with the same secret, so until a release stores them differently
+  they are unreadable too, and the database is the only way back.
+
+Passwords are not affected. Old values are not kept: Stoky reads one secret,
+so there is no way to rotate without these consequences. Rotate when the
+secret may have leaked, not on a schedule. To do it, generate a new value with
+`openssl rand -hex 32`, replace `STOKY_SECRET` in `.env`, and run
+`docker compose up -d --wait`.
 
 ## Somebody keeps being told to wait
 
@@ -558,7 +623,11 @@ installation directory, replacing the address with the person's:
    v0.1.0-alpha.3 the account's password hash, in its `credential` row of the
    `Account` table, goes with it too: the database deletes that row along with
    the account, so the statement does not name it, and so do its sessions: a
-   browser signed in to it is signed out on its next request. On
+   browser signed in to it is signed out on its next request. Its
+   authenticator secret and backup codes, if it set up two-step verification,
+   go the same way. A sign-in waiting for its code is a `Verification` row
+   that names the deleted `id`; it expires within ten minutes and can no
+   longer become a session. On
    v0.1.0-alpha.3 a browser still signed in keeps its cookie, but every
    request it makes for household data is refused; it can still record a
    start screen, see what stays, below.
@@ -905,6 +974,7 @@ migration again.
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
+| Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | From the release after v0.1.0-alpha.3: a backup code signs them in; without one, see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
 | Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |
 | `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |

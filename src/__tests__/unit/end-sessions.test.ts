@@ -11,9 +11,34 @@ import { endSessions, type SessionDb } from "@/lib/auth/end-sessions";
  * them, is `integration/session.revocation.test.ts`.
  */
 
-function fakeDb(count = 2) {
+/**
+ * A client whose sessions belong to `owners`, whose household-wide `user`
+ * filter finds `members`, and whose `Verification` table holds `challenges`
+ * (identifier → value).
+ */
+function fakeDb(
+  count = 2,
+  {
+    owners = [] as string[],
+    members = [] as string[],
+    challenges = {} as Record<string, string>,
+  } = {},
+) {
   const deleteMany = mock(async (_args: unknown) => ({ count }));
-  return { db: { session: { deleteMany } } as unknown as SessionDb, deleteMany };
+  const sessionFindMany = mock(async (_args: unknown) => owners.map((userId) => ({ userId })));
+  const userFindMany = mock(async (_args: unknown) => members.map((id) => ({ id })));
+  const verificationFindMany = mock(async (args: { where: { value: { in: string[] } } }) =>
+    Object.entries(challenges)
+      .filter(([, value]) => args.where.value.in.includes(value))
+      .map(([identifier]) => ({ identifier })),
+  );
+  const verificationDeleteMany = mock(async (_args: unknown) => ({ count: 0 }));
+  const db = {
+    session: { deleteMany, findMany: sessionFindMany },
+    user: { findMany: userFindMany },
+    verification: { findMany: verificationFindMany, deleteMany: verificationDeleteMany },
+  } as unknown as SessionDb;
+  return { db, deleteMany, userFindMany, verificationFindMany, verificationDeleteMany };
 }
 
 describe("endSessions", () => {
@@ -59,5 +84,85 @@ describe("endSessions", () => {
 
     await expect(endSessions(db, {})).rejects.toThrow(/every session/);
     expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  describe("with the two-step sign-ins in progress (D148)", () => {
+    const deleted = (call: unknown) =>
+      (call as { where: { identifier: { in: string[] } } }).where.identifier.in.sort();
+
+    it("deletes the challenges of the account it names, and their attempt counters", async () => {
+      const { db, verificationFindMany, verificationDeleteMany } = fakeDb(0, {
+        members: ["user-1"],
+        challenges: { "2fa-abc": "user-1", "2fa-other": "user-2" },
+      });
+
+      // No session left at all: the password step's was deleted by Better
+      // Auth, and the challenge is all the sign-in has.
+      await endSessions(db, { userId: "user-1" });
+
+      expect(verificationFindMany).toHaveBeenCalledWith({
+        where: { identifier: { startsWith: "2fa-" }, value: { in: ["user-1"] } },
+        select: { identifier: true },
+      });
+      expect(deleted(verificationDeleteMany.mock.calls[0][0])).toEqual([
+        "2fa-abc",
+        "2fa-attempts-2fa-abc",
+      ]);
+    });
+
+    it("finds the accounts behind a filter that names none by id", async () => {
+      // "End every session in the household": the owner's filter is a
+      // relation, and members with no session left still have challenges.
+      const { db, userFindMany, verificationFindMany } = fakeDb(1, {
+        owners: ["user-1"],
+        members: ["user-1", "user-2"],
+        challenges: { "2fa-b": "user-2" },
+      });
+
+      await endSessions(db, { user: { householdId: "h-1" } });
+
+      expect(userFindMany).toHaveBeenCalledWith({
+        where: { householdId: "h-1" },
+        select: { id: true },
+      });
+      expect(verificationFindMany.mock.calls[0][0].where.value.in.sort()).toEqual([
+        "user-1",
+        "user-2",
+      ]);
+    });
+
+    it("keeps an admin's guard on the account when it looks for whose they are", async () => {
+      const { db, userFindMany } = fakeDb(1);
+
+      await endSessions(db, { userId: "user-1", user: { householdId: "h-1", role: "MEMBER" } });
+
+      expect(userFindMany).toHaveBeenCalledWith({
+        where: { id: "user-1", householdId: "h-1", role: "MEMBER" },
+        select: { id: true },
+      });
+    });
+
+    it("leaves them alone when asked to, for the sign-in's own housekeeping", async () => {
+      const { db, verificationFindMany, verificationDeleteMany } = fakeDb(1, {
+        members: ["user-1"],
+        challenges: { "2fa-abc": "user-1" },
+      });
+
+      await endSessions(db, { userId: "user-1" }, { challenges: false });
+
+      expect(verificationFindMany).not.toHaveBeenCalled();
+      expect(verificationDeleteMany).not.toHaveBeenCalled();
+    });
+
+    it("deletes nothing else when there is nothing to delete", async () => {
+      const { db, verificationDeleteMany } = fakeDb(1, {
+        members: ["user-1"],
+        challenges: { "2fa-x": "user-9" },
+      });
+
+      await endSessions(db, { userId: "user-1" });
+
+      expect(verificationDeleteMany).not.toHaveBeenCalled();
+    });
   });
 });

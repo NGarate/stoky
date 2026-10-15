@@ -2,13 +2,18 @@ import { clientAddress } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   SignInRefusedError,
+  chargeSignInAddress,
   chargeSignInAttempt,
+  secondFactorSucceeded,
+  signInChallenged,
   signInFailed,
   signInSucceeded,
   valkeySignInLimiter,
+  type AddressCharge,
   type SignInLimiter,
 } from "@/lib/auth/sign-in-policy";
 import type { PresentedSession, SignInTidy } from "@/lib/auth/sign-in-tidy";
+import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { REMEMBER_HEADER } from "@/lib/auth/session-policy";
 import { MAX_AUTH_BODY_BYTES, readBodyWithin } from "./body-limit";
 import { refuseCrossSite, refuseNonJson } from "./request-guards";
@@ -25,7 +30,7 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *
  * 1. **An allowlist of method and path.** Better Auth mounts dozens of
  *    endpoints — sign-up, password reset, account deletion, session listing —
- *    and this application uses five. Anything else is 404 before Better Auth
+ *    and this application uses seven. Anything else is 404 before Better Auth
  *    sees it, so an endpoint a future version adds is closed until somebody
  *    decides otherwise. `disabledPaths` is not used: it is a denylist.
  * 2. **The body, bounded** (`readBodyWithin`, 64 KiB), before anything is
@@ -36,7 +41,10 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *    preflight.
  * 5. **Only the body keys each endpoint needs**, rebuilt rather than passed:
  *    a sign-in carries an address, a password and `rememberMe`, and nothing —
- *    no `callbackURL` — that Better Auth would act on. `x-stoky-remember` is
+ *    no `callbackURL` — that Better Auth would act on; a second step carries
+ *    its `code` and nothing else, so no `trustDevice` (a cookie that skips the
+ *    code for a month) and no `disableSession` (a backup code spent without
+ *    a session to show for it). `x-stoky-remember` is
  *    this route's to set, so a copy a client sent is deleted from every
  *    request forwarded.
  * 6. **Our limits** (`src/lib/auth/sign-in-policy.ts`), charged before the
@@ -58,6 +66,14 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  * A sign-in that gets in is followed by its tidy (`sessions.tidy`): the
  * session the browser presented ends, the account's expired rows go (D139),
  * and the account is held to ten sessions (D140) — `src/lib/auth/sign-in-tidy.ts`.
+ *
+ * **Two-step verification** (D148). A right password on an account that has
+ * it is not a sign-in: Better Auth answers `twoFactorRedirect` with a
+ * challenge cookie instead of a session. The password's charge is settled
+ * then, the session the browser presented ends then, and the line says
+ * `challenged`. The code that follows is a request of its own
+ * (`secondStep`), charged per address — it names no account — and a sign-in
+ * only when it carried the challenge and was answered with a session.
  *
  * Every answer is `no-store`: a refusal served from a cache would refuse
  * somebody else.
@@ -88,6 +104,13 @@ export interface AuthHandlerOptions {
    * passes it; without it a ticked sign-in leaves the cookie alone.
    */
   dontRememberCookie?: () => Promise<{ name: string; secure: boolean }>;
+  /**
+   * The names of Better Auth's challenge cookie (`two_factor`) and session
+   * cookie, as the instance names them (prefixed on https): what tells a
+   * second step that signed somebody in from one that did not. Without it,
+   * no second step is recorded as a sign-in.
+   */
+  twoFactorCookies?: () => Promise<{ challenge: string; session: string }>;
 }
 
 export interface SignInSessions {
@@ -98,6 +121,11 @@ export interface SignInSessions {
   presented: (headers: Headers) => Promise<PresentedSession | null>;
   /** Ends what a sign-in replaces, and what is past the cap (`tidyAfterSignIn`). */
   tidy: (input: SignInTidy) => Promise<unknown>;
+  /**
+   * Ends the presented session of a password step that stopped for a code
+   * (`endPresentedSession`); `account` is the tag of the account asking.
+   */
+  end: (previous: PresentedSession, account: string) => Promise<unknown>;
 }
 
 export const AUTH_BASE_PATH = "/api/auth";
@@ -109,11 +137,23 @@ export const AUTH_BASE_PATH = "/api/auth";
  */
 export const ALLOWED_AUTH_ENDPOINTS: ReadonlySet<string> = new Set([
   "POST /sign-in/email",
+  // The second step of a sign-in, and nothing else of two-step verification
+  // yet (D148): enrolment opens with the settings screen, never
+  // `/two-factor/get-totp-uri` (it hands the secret back to anyone holding
+  // the session).
+  "POST /two-factor/verify-totp",
+  "POST /two-factor/verify-backup-code",
   "POST /sign-out",
   "GET /get-session",
   "GET /ok",
   "GET /error",
 ]);
+
+/** The factor each second-step endpoint proves, as the log names it. */
+const SECOND_STEPS: Record<string, "totp" | "backup-code"> = {
+  "POST /two-factor/verify-totp": "totp",
+  "POST /two-factor/verify-backup-code": "backup-code",
+};
 
 export async function handleAuthRequest(
   incoming: Request,
@@ -157,6 +197,10 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
 
   if (endpoint === "POST /sign-in/email") {
     return signIn(incoming, body, handle, options);
+  }
+  const secondStepMethod = SECOND_STEPS[endpoint];
+  if (secondStepMethod) {
+    return secondStep(incoming, body, handle, options, secondStepMethod);
   }
   if (endpoint === "POST /sign-out") {
     // It takes nothing this application uses.
@@ -235,6 +279,13 @@ async function signIn(
       if (issued.token && sessions) {
         await tidyQuietly(sessions, { previous, userId: issued.userId, newToken: issued.token });
       }
+    } else if (await asksForSecondStep(response)) {
+      await signInChallenged(attempt, limiter);
+      if (previous && sessions) {
+        await quietly("ending the presented session", () =>
+          sessions.end(previous, attempt.accountTag),
+        );
+      }
     }
   } else if (response.status >= 400 && response.status < 500) {
     signInFailed(attempt);
@@ -303,16 +354,20 @@ function parseJsonObject(body: Uint8Array<ArrayBuffer> | null): Record<string, u
  */
 async function issuedSession(
   response: Response,
-): Promise<{ userId: string; token: string | null } | null> {
+): Promise<{ userId: string; email: string | undefined; token: string | null } | null> {
   try {
     const body = (await response.clone().json()) as {
-      user?: { id?: unknown };
+      user?: { id?: unknown; email?: unknown };
       token?: unknown;
       session?: { token?: unknown };
     } | null;
     if (typeof body?.user?.id !== "string") return null;
     const token = typeof body.token === "string" ? body.token : body.session?.token;
-    return { userId: body.user.id, token: typeof token === "string" && token ? token : null };
+    return {
+      userId: body.user.id,
+      email: typeof body.user.email === "string" ? body.user.email : undefined,
+      token: typeof token === "string" && token ? token : null,
+    };
   } catch {
     return null;
   }
@@ -326,11 +381,139 @@ async function issuedSession(
  * failure is on the log.
  */
 async function tidyQuietly(sessions: SignInSessions, input: SignInTidy): Promise<void> {
+  await quietly("the sign-in tidy", () => sessions.tidy(input));
+}
+
+/**
+ * Runs `work` after an answer has been decided, logging rather than throwing
+ * if it fails: what it would have ended still ends on its own clock.
+ */
+async function quietly(what: string, work: () => Promise<unknown>): Promise<void> {
   try {
-    await sessions.tidy(input);
+    await work();
   } catch (error) {
     const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    console.error(`[auth] error the sign-in tidy failed: ${reason.replace(/\s+/g, " ").slice(0, 300)}`);
+    console.error(`[auth] error ${what} failed: ${reason.replace(/\s+/g, " ").slice(0, 300)}`);
+  }
+}
+
+/** Whether Better Auth answered a right password with "now the code" (D148). */
+async function asksForSecondStep(response: Response): Promise<boolean> {
+  try {
+    const body = (await response.clone().json()) as { twoFactorRedirect?: unknown } | null;
+    return body?.twoFactorRedirect === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A second step: an authenticator code or a backup code, after a password
+ * step that asked for one (D148).
+ *
+ * - **Charged per address only**, before the body is believed: the request
+ *   names no account — only the challenge cookie does, and only Better Auth
+ *   reads it — and Better Auth counts wrong codes itself, five per
+ *   challenge and ten per account.
+ * - **`code` and nothing else** reaches Better Auth.
+ * - **A sign-in only when** the request carried the challenge cookie, did not
+ *   already hold a session, and was answered with a session cookie. Then:
+ *   the address refunded, this browser remembered, the account tidied
+ *   (expired rows, the ten-session cap; the presented session was ended at
+ *   the password step), and `auth.signin.succeeded` with the factor.
+ * - **The same endpoint with a session and no challenge** is Better Auth's
+ *   enrolment check: the first code from a new authenticator. When it
+ *   re-creates the session, two-step verification has just been turned on,
+ *   and the line says so.
+ * - **A refusal** is `auth.twofactor.failed` with Better Auth's code, or
+ *   `locked`. An unreadable secret or a replayed code was already written by
+ *   the guard that refused it (`src/lib/auth/policy-plugin.ts`); a replay is
+ *   also a failed code, and is written as one too.
+ */
+async function secondStep(
+  incoming: Request,
+  body: Uint8Array<ArrayBuffer> | null,
+  handle: AuthEndpointHandler,
+  options: AuthHandlerOptions,
+  method: "totp" | "backup-code",
+): Promise<Response> {
+  const limiter = options.limiter ?? valkeySignInLimiter;
+  const sessions = options.sessions;
+
+  let charge: AddressCharge;
+  try {
+    charge = await chargeSignInAddress(incoming.headers, limiter);
+  } catch (error) {
+    if (error instanceof SignInRefusedError) return refusedSignIn(error);
+    throw error;
+  }
+
+  const code = parseJsonObject(body)?.code;
+  if (typeof code !== "string") {
+    logSecurityEvent("auth.twofactor.failed", { address: charge.address, code: "malformed" });
+    return invalidRequest();
+  }
+
+  const names = options.twoFactorCookies ? await options.twoFactorCookies() : null;
+  const carriedChallenge = names ? hasCookie(incoming.headers.get("cookie"), names.challenge) : false;
+  const previous = sessions ? await sessions.presented(incoming.headers) : null;
+
+  const response = await handle(rebuild(incoming, JSON.stringify({ code })));
+
+  if (response.ok) {
+    const setsSession = names ? setsCookie(response, names.session) : false;
+    const issued = setsSession ? await issuedSession(response) : null;
+    if (issued && carriedChallenge && !previous) {
+      await secondFactorSucceeded(
+        charge,
+        { userId: issued.userId, email: issued.email, deviceId: deviceIdFromHeaders(incoming.headers) },
+        method,
+        limiter,
+      );
+      if (issued.token && sessions) {
+        await tidyQuietly(sessions, { previous: null, userId: issued.userId, newToken: issued.token });
+      }
+    } else if (issued && previous && method === "totp") {
+      logSecurityEvent("auth.twofactor.enabled", { userId: previous.userId, address: charge.address });
+    }
+  } else {
+    const refusal = await refusalCode(response);
+    if (refusal === "ACCOUNT_TEMPORARILY_LOCKED") {
+      logSecurityEvent("auth.twofactor.locked", { address: charge.address, code: refusal });
+    } else if (refusal !== "TWO_FACTOR_UNREADABLE" && response.status >= 400 && response.status < 500) {
+      logSecurityEvent("auth.twofactor.failed", { address: charge.address, code: refusal ?? undefined });
+    }
+  }
+
+  return guardResponse(incoming, response);
+}
+
+/** Whether a `Cookie` header holds a non-empty cookie called `name`. */
+function hasCookie(header: string | null, name: string): boolean {
+  if (!header) return false;
+  return header.split(";").some((pair) => {
+    const [key, ...value] = pair.trim().split("=");
+    return key.trim() === name && value.join("=").length > 0;
+  });
+}
+
+/** Whether an answer sets (not expires) the cookie called `name`. */
+function setsCookie(response: Response, name: string): boolean {
+  return response.headers.getSetCookie().some((line) => {
+    const [pair, ...attributes] = line.split(";");
+    const [key, ...value] = pair.trim().split("=");
+    const expired = attributes.some((attribute) => /^\s*max-age=0\s*$/i.test(attribute));
+    return key.trim() === name && value.join("=").length > 0 && !expired;
+  });
+}
+
+/** The `code` of a refusal's JSON body, or null. */
+async function refusalCode(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.clone().json()) as { code?: unknown } | null;
+    return typeof body?.code === "string" ? body.code : null;
+  } catch {
+    return null;
   }
 }
 

@@ -12,7 +12,11 @@ export type AuthErrorKey =
   | "loginError"
   | "registerError"
   | "passwordContainsIdentity"
-  | "registrationClosed";
+  | "registrationClosed"
+  | "twoFactorInvalidCode"
+  | "twoFactorExpired"
+  | "twoFactorLocked"
+  | "twoFactorUnreadable";
 
 /**
  * Refusal codes, read before any message so a refusal is worded by what it
@@ -42,6 +46,19 @@ const CODE_KEYS: Record<string, AuthErrorKey> = {
   // person's input; "unavailable" is the only true thing to tell them.
   invalid_origin: "authUnavailable",
   missing_or_null_origin: "authUnavailable",
+  // The second step of a sign-in (D148). A replayed code is refused as
+  // INVALID_CODE too, so the sentence says "or already used".
+  invalid_code: "twoFactorInvalidCode",
+  invalid_backup_code: "twoFactorInvalidCode",
+  // The challenge is gone — ten minutes passed, or five wrong codes ended it
+  // — and only the password step makes another.
+  invalid_two_factor_cookie: "twoFactorExpired",
+  too_many_attempts_request_new_code: "twoFactorExpired",
+  // Better Auth's lockout, per account, across challenges: fifteen minutes.
+  account_temporarily_locked: "twoFactorLocked",
+  // `STOKY_SECRET` changed and the stored secret no longer decrypts: no code
+  // will ever work, and only the operator can say why.
+  two_factor_unreadable: "twoFactorUnreadable",
 };
 
 const INVALID_CREDENTIALS_MARKERS = ["invalid credentials", "invalid email or password"];

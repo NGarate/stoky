@@ -68,6 +68,7 @@ Rules for this log:
 | "feat(household): let an admin end a member's sessions" (D145) | ASVS 5.0.0 7.4.5: `household.revokeMemberSessions`, which ended all of a member's sessions and nothing less — and the admin's own with no password — is replaced by `household.memberSessions` (the member's live sessions, read by `liveSessionsOf` in `src/lib/auth/session-list.ts`, now shared with `auth.listSessions`) and `household.endMemberSessions` (one by id, or every one). Both refuse the caller's own id (`BAD_REQUEST`), another household's member (`NOT_FOUND`) and an admin acting on an owner (`FORBIDDEN`); the delete scopes the session id by the member's id and repeats the household and role checked; `auth.session.ended` `reason: "admin"` with the count; no password, as the owner confirmed. On **Personas del hogar**, "Ver sus sesiones" (absent from the admin's own row) opens `MemberSessionsDialog`: compact `ItemRow`s named as **Tus dispositivos** names them (`useSessionName`, extracted from `DeviceList`), **Cerrar esta** and **Cerrar todas sus sesiones**; the inline two-step confirmation and its strings are gone. 68 procedures. `integration/session.revocation.test.ts`: all and one ended with the log line and nothing but the count answered, the list with no token, device id or expired row, another account's session id `NOT_FOUND`, cross-household `NOT_FOUND`, owner `FORBIDDEN`, a `MEMBER` refused, the caller's own id `BAD_REQUEST`, an owner ending another owner's. `components/PeopleRoles.test.tsx` holds the dialog, `components/EndSession.test.tsx` the page (whose row offers it, what it sends, nothing read until asked), and `e2e/session-revocation.spec.ts` ends one of a member's two browsers, then both, with the admin still signed in. Breaks that went red: no owner guard (on the list, the end, both), no self refusal, an unscoped member lookup, the session id ignored or not scoped to the member, no `NOT_FOUND`, no log line, rows in the answer, expired rows or the token listed; on the client the button on the admin's own row, no session id sent (component and e2e), end-all not closing, the query always on, `FORBIDDEN` unmapped, refusals or the load error not shown, a row ending all, end-all enabled with nothing to end, the device meta dropped, and (e2e) the list kept across a close, which reopened the dialog on the sessions just ended. |
 | "feat(household): end a member's sessions when they are removed" (D146) | ASVS 5.0.0 7.4.2: `household.removeMember` deletes every session the member has (`endSessions`) inside the transaction that clears their household, after the existing guards, and logs `auth.session.ended` `reason: "removed"` with the admin, the member and the count once it has committed. Before, removal took the household and left the sessions, so a device the household no longer controlled still reached the account: its password, its devices, a new household. The confirmation on **Personas del hogar** now says the member is signed out on every device (Spanish and English). `integration/household.members.test.ts` "removing a member": two real sign-ins' cookies refused and their rows gone, a bystander still signed in, the log line, the account able to sign in again with no household; a refused removal (admin on an owner) ends nothing and writes no line. `components/EndSession.test.tsx`: the confirmation says so. Breaks that went red: no `endSessions`, no log line, reason `admin`, actor and target swapped, a fixed count, ending before the guards outside the transaction, logging before the guards, ending the whole household's sessions; the old confirmation text. |
 | "feat(household): let an owner end every session in the household" (D147) | ASVS 5.0.0 7.4.5: `household.endHouseholdSessions` ends every session of everybody in the household, the owners and the caller included, after the owner's current password. `adminProcedure`, then owners only inside the resolver (`FORBIDDEN` before the password is asked), then `confirmCurrentPassword` with `via: "household-end-all"`, then one `endSessions` filtered by the household through each session's account; one `auth.session.ended` `reason: "owner"` with the count and no `targetUserId`. On **Personas del hogar**, owners alone see a **Cerrar todas las sesiones del hogar** section (`EndHouseholdSessions`): `ReauthDialog`, then the sign-out sequence (`useEndSession` with the server call as its `before`), with the send-first offer for unsent changes. 69 procedures. `integration/session.revocation.test.ts` (+3): two owners, an admin and a kitchen account signed in for real are all signed out and their rows gone while another household's owner stays signed in, with the one log line; an admin, a member and a kitchen account are `FORBIDDEN` with no password asked (a wrong one writes no refusal) and end nothing; a wrong password is `BAD_REQUEST`, ends nothing and is logged. `components/EndSession.test.tsx` (+7): offered to an owner and not to an admin, says the owner leaves too, sends the password and ends on the server before purging and signing out, a wrong password or `FORBIDDEN` discards nothing and is said in the dialog, unsent changes are offered to be sent first. `e2e/session-revocation.spec.ts` (+1): an owner registered for the test adds a kitchen account, which signs in on its own browser; the owner ends every session with the password, lands on `/login`, and both browsers' `get-session` answers `null`. Breaks that went red: no household filter, only the owner's own, no owner check, the password before the role, no password, reason `admin`, `via` `end-sessions`, a target named, a fixed count; on the client the section offered to everyone or to nobody, no server call before leaving, no password sent, `FORBIDDEN` unmapped, unsent changes ignored, never sending first; in the e2e, ending only the owner's own sessions and a `before` that never calls the server (both: "the member's browser was still signed in"). |
+| "feat(auth): add TOTP two-step verification with single-use codes" (D148) | ASVS 5.0.0 6.5.1: Better Auth's two-factor plugin, `TwoFactor` table and `User.twoFactorEnabled` (`20261015150000_two_factor`), with a code usable once. Only the sign-in's second step answers over HTTP — `POST /two-factor/verify-totp` and `/verify-backup-code`, seven endpoints in all; enrolment opens with the settings screen. A before-hook of ours (`src/lib/auth/policy-plugin.ts`) finds the step the code is for and claims it in one conditional `UPDATE` of `TwoFactor.lastTotpCounter`; a code matching no step is rewritten to one Better Auth must refuse and count; a secret that no longer decrypts is `TWO_FACTOR_UNREADABLE`, uncounted. The route settles the password's charge at `twoFactorRedirect`, ends the presented session there and logs `auth.signin.challenged`; the code step is charged per address, passes `code` alone, and is a sign-in only with the challenge cookie in and a session cookie out (refund, known device, tidy and cap, `auth.signin.succeeded` `method: "totp"`/`"backup-code"`). `endSessions` deletes the named accounts' challenges, the sign-in tidy excepted; a password change deletes them after Better Auth's own delete. Five new refusal codes worded in both languages. `integration/two-factor.test.ts` (17): the two steps; a code refused across two sign-ins in one step, for an earlier step, and for the enrolment; two sign-ins with one code while the row is held locked, exactly one in; a guard clock two steps behind Better Auth's lets nothing through unclaimed; five wrong codes end the challenge and are counted; an unticked and a ticked box survive the second step; `trustDevice` and `disableSession` ignored; a challenge dead after an admin reset and after a password change; the account counter cleared at the challenge; an unreadable secret refused, uncounted and logged; the presented session of another person ended at the password step; the eleventh session evicting the least used. `unit/totp-guard.test.ts`, `unit/auth-handler.test.ts` (+11), `unit/end-sessions.test.ts` (+5), `integration/auth.surface.test.ts`, `auth-tables.test.ts`, `data-export.test.ts`. Breaks that went red: the plugin unregistered, the claim unchecked, a read-then-write claim, no rewrite, refusing a no-match uncounted, the decrypt error escaping, no settle, no presented end, no tidy, the body passed through, challenges kept by `endSessions` or by the password change, the remember header defaulted either way, the cascade `RESTRICT`, the export selecting `twoFactor`, `get-totp-uri` allowlisted, and the unit breaks listed in the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -3193,3 +3194,83 @@ for last — an admin cannot reach them at all — and the owner's own never.
   disabled: nothing an admin could do on that page would enable it. A role
   that changes after the page is drawn is refused by the server and said in
   the dialog.
+
+**D148 — Two-step verification with an authenticator app, each code usable
+once.** ASVS 5.0.0 6.5.1 asks that a time-based code be accepted once.
+Better Auth's two-factor plugin accepts any code inside its window as often
+as it is sent — the spike (`1c8156b`) signed in twice with one code — and
+stores nothing that would say a code was used (ISSUES AUTH-5).
+
+- **The plugin, behind the route's allowlist.** `twoFactor({ issuer: "Stoky"
+  })` in `src/lib/auth/instance.ts`, with its defaults: 30-second steps, six
+  digits, a ten-minute challenge, five wrong codes per challenge and ten in a
+  row per account before a fifteen-minute lock. Only the sign-in's second
+  step is answered over HTTP in this commit: enrolment, disabling and
+  backup-code generation open with the settings screen, after backup codes
+  are stored as hashes, so no release between the two has weak codes to
+  give. `/two-factor/get-totp-uri` is never opened: it returns the decrypted
+  secret to whoever holds the session.
+- **Single use is a column of ours, claimed in the statement that checks
+  it.** A before-hook (`src/lib/auth/policy-plugin.ts`, `stokyPolicy`) finds
+  whose code it is as Better Auth will — the session, else the signed
+  `two_factor` cookie's challenge — decrypts the secret, compares the code
+  against the three steps Better Auth accepts in constant time, and runs
+  `UPDATE "TwoFactor" SET "lastTotpCounter" = step WHERE id = … AND
+  ("lastTotpCounter" IS NULL OR "lastTotpCounter" < step)`. Zero rows is a
+  replay, refused `INVALID_CODE`. A read and then a write would let two
+  requests with one code both read the old step;
+  `integration/two-factor.test.ts` holds the row locked while two requests
+  reach the claim and that version lets both in. Monotonic rather than a set
+  of used steps: an earlier step's code after a later one is refused too,
+  which costs a person nothing.
+- **A code matching no step is made a certain failure, not passed on.** The
+  hook and Better Auth read the clock separately; a request straddling a
+  step boundary would otherwise be checked by Better Auth against a window
+  the hook never claimed in. Rewriting the code to `stoky-no-match`, which
+  no step produces, keeps Better Auth's own counting — refusing in the hook
+  would skip both its per-challenge limit and its account lockout.
+- **±1 step stays** (ASVS 5.0.0 6.5.5 deviation, accepted by the owner on
+  2026-10-15): Better Auth's window, kept for phones whose clocks drift.
+- **An unreadable secret is its own answer.** `STOKY_SECRET` encrypts the
+  secret; after a rotation it no longer decrypts. The hook answers
+  `TWO_FACTOR_UNREADABLE` before Better Auth counts an attempt — no number of
+  attempts would succeed, and a lockout would be a second wrong answer — and
+  logs `auth.twofactor.unreadable`. Better Auth's versioned secrets are not
+  adopted (the owner's "only if trivial", which it is not: a second variable
+  of retired values, version numbers kept by hand); SECURITY.md *Secrets*
+  and INSTALL list what a rotation costs.
+- **Budgets.** The password step is where the account budget is settled: a
+  right password is not the guess that budget counts, so at
+  `twoFactorRedirect` the route clears the account or device counter and
+  refunds the address (`signInChallenged`), without `rememberDevice`. The
+  code step names no account, so it is charged per address only
+  (`chargeSignInAddress`); Better Auth counts wrong codes per challenge and
+  per account. It is a sign-in only when it carried the challenge cookie,
+  presented no session, and was answered with a session cookie; then the
+  address is refunded, the browser remembered, and the account tidied and
+  capped (D139, D140) — never from a session hook, as D140 says.
+- **The presented session ends at the password step.** Better Auth expires
+  its cookie in the answer that asks for the code, so on a shared tablet the
+  previous person's row would otherwise outlive every browser holding it.
+  Ended then, not when the code arrives, because the code may never come.
+- **A challenge goes where the account's sessions go.** Whoever holds one
+  has the password. `endSessions` deletes the challenges (`2fa-…` rows whose
+  value is the account, and their attempt counters) of every account its
+  filter names or whose session it matched, so a password reset, a
+  removal, an owner's household-wide end and a person's own end all take
+  them. The sign-in tidy and the cap pass `challenges: false`: an expired row
+  going is no reason to stop the same person signing in on another device.
+  Better Auth's password change deletes sessions with its own adapter, so
+  `auth.changePassword` deletes the challenges itself.
+- **The route passes on `code` alone.** `trustDevice` would set a cookie that
+  skips the code on that browser for a month; `disableSession` spends a
+  backup code without a session to show for it.
+- **The schema departs from Better Auth's optional columns.** `userId` is
+  unique, so the hook and Better Auth always read the same row; `verified`,
+  `failedVerificationCount` and `twoFactorEnabled` are `NOT NULL` with
+  defaults, because a null counter plus one is still null and the lockout
+  would never fire. Cascades from `User`, the auth tables' exception (D134).
+- **Coupled to 1.7.7's internals**: `secretConfig`, the `two_factor` cookie
+  and the challenge row it names, how a before-hook's returned body is
+  merged, and the `2fa-` identifier prefix. The version is pinned exactly
+  and `integration/two-factor.test.ts` goes red if any of them moves.

@@ -19,7 +19,7 @@ import {
 } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
-import { endSessions } from "@/lib/auth/end-sessions";
+import { endSessions, endTwoFactorChallenges } from "@/lib/auth/end-sessions";
 import { liveSessionsOf } from "@/lib/auth/session-list";
 import { changeOwnPassword } from "@/lib/auth/password-change";
 import { MISSING_SESSION_ID_MESSAGE, confirmCurrentPassword } from "@/lib/auth/reauth";
@@ -514,6 +514,11 @@ export const authRouter = createTRPCRouter({
 
       const { rotated } = await changeOwnPassword(headers, input);
       const ended = rotated ? others : await endSessions(ctx.db, { userId });
+      // Better Auth ended the others with its own delete, which leaves a
+      // two-step sign-in in progress alone: whoever started one has the old
+      // password, and it must not outlive it (D148). `endSessions` already did
+      // this for the native branch.
+      if (rotated) await endTwoFactorChallenges(ctx.db, [userId]);
 
       logSecurityEvent("auth.password.changed", { userId, address });
       logSecurityEvent("auth.session.ended", {

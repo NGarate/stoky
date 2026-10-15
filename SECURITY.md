@@ -817,7 +817,73 @@ Verified against the files named in each row.
   succeeded, never from a session-create hook: Better Auth creates and then
   deletes a session at the password step of a two-step sign-in, and a hook
   would let a password alone end other sessions.
-- **Only five endpoints of the auth API answer**: `POST /sign-in/email`,
+- **Two-step verification with an authenticator app** (TOTP, PROGRESS D148),
+  Better Auth's two-factor plugin. For an account that has it, a right
+  password is not a sign-in: Better Auth deletes the session it made and
+  answers `twoFactorRedirect` with a signed `two_factor` cookie naming a
+  ten-minute challenge (a `Verification` row), and `POST
+  /two-factor/verify-totp` or `/two-factor/verify-backup-code` with the code
+  turns the challenge into a session. The password step settles its budget
+  there — the account's counter cleared, the address refunded — ends the
+  session the browser presented, as a sign-in does (Better Auth has already
+  expired its cookie, so the row would otherwise outlive any copy of it), and
+  is logged `auth.signin.challenged`. The code is charged against the address
+  only, since it names no account; Better Auth counts wrong codes itself, five
+  per challenge and ten in a row per account, which locks the account's
+  second step for fifteen minutes. The code step is a sign-in only when it
+  carried the challenge cookie and was answered with a session: then the
+  address is refunded, the browser becomes a known device, the account is
+  tidied and held to ten sessions as above, and `auth.signin.succeeded` says
+  `method: "totp"` or `"backup-code"`. The route passes on the `code` alone:
+  not `trustDevice`, a cookie that would skip the code on that browser for a
+  month, nor `disableSession`, which spends a backup code without a session
+  to show for it. A remembered-or-not choice made at the password step
+  carries through.
+  - **A code works once** (ASVS 5.0.0 6.5.1). Better Auth accepts any code
+    inside its window as often as it is sent — the spike signed in twice with
+    one — so a before-hook of ours (`src/lib/auth/policy-plugin.ts`) works out
+    which time step the code is for and claims it in the same `UPDATE` that
+    checks it: `TwoFactor.lastTotpCounter` must be below the step. A code for
+    a step already used, or for an earlier one, is refused as `INVALID_CODE`
+    and logged `auth.twofactor.replayed`. A code matching no step is replaced
+    with one no step can produce, so Better Auth refuses it *and counts it*;
+    passing it on would let a request whose two clock reads straddle a step
+    boundary through unclaimed. The first code from a new authenticator is
+    claimed the same way, a native client's included: Better Auth hands the
+    hook the request before the bearer plugin turns `Authorization: Bearer`
+    into the session cookie, so the hook runs that plugin's own conversion
+    first and reads the session the endpoint will (`requestSession`);
+    without it a bearer enrolment's code was never claimed and worked again
+    at a web sign-in. `integration/two-factor.test.ts` holds the row
+    locked while two requests with one code reach the claim, and exactly one
+    gets in.
+  - **±1 step** (ASVS 5.0.0 6.5.5 deviation, accepted by the owner on
+    2026-10-15). Better Auth accepts the code for the previous and the next
+    30-second step as well as the current one, so a code is good for up to a
+    minute and a half. The window is Better Auth's, kept for phones whose
+    clocks drift; single use, above, is what stops a code being reused within
+    it.
+  - **Only the second step is reachable over HTTP for now.** Enrolment,
+    disabling and backup-code generation open with the settings screen, and
+    `POST /two-factor/get-totp-uri` never does: it hands the decrypted secret
+    back to whoever holds the session.
+  - **A challenge ends with the account's sessions.** Whoever holds one has
+    the password, so a password set by an admin or changed by its owner, a
+    removal from the household and every "end these sessions" also delete
+    the account's challenges in progress (`src/lib/auth/end-sessions.ts`).
+    The sign-in's own tidy does not: an expired row going is no reason to
+    stop the same person signing in on another device.
+  - **The secret is encrypted with `STOKY_SECRET`**
+    ([*Secrets*](#secrets)). One that no longer decrypts — the secret was
+    rotated — is refused as `TWO_FACTOR_UNREADABLE` before Better Auth counts
+    an attempt, and logged `auth.twofactor.unreadable`: no code will ever
+    work, and the operator is the one who can say why. The way back is a
+    backup code, or the operator's runbook in
+    [the installation guide](docs/INSTALL.md#a-lost-authenticator).
+  - **Not for native clients yet**: an account with two-step verification
+    signs in from a browser (D142).
+- **Only seven endpoints of the auth API answer**: `POST /sign-in/email`,
+  `POST /two-factor/verify-totp`, `POST /two-factor/verify-backup-code`,
   `POST /sign-out`, `GET /get-session`, `GET /ok` and `GET /error`. Every other
   path Better Auth mounts — sign-up, password reset, account deletion, session
   listing, about forty in all — is 404 before Better Auth sees it, so one a
@@ -1625,6 +1691,12 @@ are not JSON. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.signin.succeeded`,
 `auth.unavailable`,
 `auth.session.ended`, `auth.password.changed`, `auth.password.reset`,
+`auth.signin.challenged` (a right password on an account with two-step
+verification, before the code; D148), `auth.twofactor.failed` (a code
+refused, with Better Auth's refusal as `code`), `auth.twofactor.replayed` (a
+right code sent again), `auth.twofactor.locked` (wrong codes have locked the
+account's second step), `auth.twofactor.unreadable` (the stored secret no
+longer decrypts), `auth.twofactor.enabled`,
 `auth.reauth.refused` (a wrong current password re-entered to confirm an
 action, with the action as `via` — `end-sessions`, `password-change`, which
 replaces the `auth.password.change.refused` event of earlier releases, or
@@ -1647,8 +1719,8 @@ its row is deleted when next read.
 
 A sign-in that gets in is recorded as well, as ASVS 5.0.0 **16.3.1** asks:
 `auth.signin.succeeded` carries the `userId` it signed in as, the factor in
-`method` (`password` today; `totp`, `backup-code` and `passkey` are reserved
-for the methods still to come), and the same `account` tag and `address` a
+`method` (`password`, `totp` or `backup-code`; `passkey` is reserved for
+the method still to come), and the same `account` tag and `address` a
 failure carries, so one filter follows an account from its refusals to the
 sign-in that ended them — the line that tells a member who mistyped twenty
 times from somebody who guessed right on the twenty-first. Like every other
@@ -2298,7 +2370,8 @@ is stored, logged or sent.
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
-| Better Auth's short-lived values: an identifier, a value and an expiry. Nothing writes one yet | PostgreSQL `Verification` | Until it expires and is cleared |
+| Each account's authenticator, once two-step verification is set up (D148): the account id, the TOTP secret and the backup codes, both encrypted with `STOKY_SECRET`, whether the first code has been accepted, the count of wrong codes in a row and the lockout's end, and the last time step a code was accepted for | PostgreSQL `TwoFactor` | Until two-step verification is removed, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
+| Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
@@ -2407,9 +2480,9 @@ An operator who runs the image any other way should set
 ### Secrets
 
 `.env` holds `POSTGRES_PASSWORD` and `STOKY_SECRET` (`NEXTAUTH_SECRET` in an
-`.env` not yet renamed; D137). `STOKY_SECRET` signs sessions and keys the
-security log's account tags. Both reach the containers as environment
-variables:
+`.env` not yet renamed; D137). `STOKY_SECRET` signs sessions, keys the
+security log's account tags and encrypts each authenticator's TOTP secret and
+backup codes (D148). Both reach the containers as environment variables:
 
 - the database password in `db`'s environment and inside the app's
   `DATABASE_URL`;
@@ -2435,6 +2508,28 @@ mounted into it. What remains is accidental disclosure: pasting `inspect` or
 warns against that. Backups copy `.env` in plaintext beside the database dump,
 and the backup instructions say to
 [encrypt them](docs/INSTALL.md#backup-and-restore).
+
+**Rotating `STOKY_SECRET`** does three things at once, and the
+[installation guide](docs/INSTALL.md#rotating-stoky_secret) lists them before
+the command:
+
+- everyone is signed out, native clients included, because every cookie and
+  bearer token is signed with it;
+- every account tag in the security log changes, so a filter written for one
+  account stops matching its older lines;
+- every authenticator becomes unreadable: a sign-in answers
+  `TWO_FACTOR_UNREADABLE`, and the person's way back is a backup code and
+  then setting the authenticator up again, or the operator removing it. Until
+  backup codes are stored as hashes, they are unreadable too, and the
+  operator's runbook is the only way back.
+
+Passwords are unaffected. **Better Auth's versioned secrets are not
+adopted** beyond the single version-1 entry the instance is given (PROGRESS
+D135, D148): keeping old enrolments readable through a rotation would need a
+second variable holding every retired value until each enrolment was redone,
+and version numbers the operator keeps stable by hand, which the owner's
+condition — "only if trivial" — rules out. Every ciphertext already carries
+Better Auth's `$ba$1$` envelope, so adopting versions later is additive.
 
 ### Keys `next build` writes into the image
 

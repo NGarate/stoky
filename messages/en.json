@@ -39,7 +39,11 @@
     "registrationClosedBody": "On this server, new accounts are created by whoever runs the household. Ask them to add you from “People in the household”, in Settings.",
     "backToLogin": "Back to sign in",
     "invalidCredentials": "The email or the password is not right. Check both; the password is case-sensitive.",
-    "emailExists": "There is already an account with this email. Sign in with it, or use another one."
+    "emailExists": "There is already an account with this email. Sign in with it, or use another one.",
+    "twoFactorInvalidCode": "The code is not right, or it has already been used. Enter the one your authenticator app shows now.",
+    "twoFactorExpired": "The code check has expired or had too many tries. Enter your password again.",
+    "twoFactorLocked": "Too many wrong codes for this account. Wait 15 minutes and try again.",
+    "twoFactorUnreadable": "This server can no longer check your authenticator app. Tell whoever runs Stoky at home."
   },
   "navigation": {
     "inventory": "Inventory",

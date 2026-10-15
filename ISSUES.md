@@ -96,6 +96,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | AUTH-2 | Better Auth refuses to serve with a required column it never writes | ✅ Resolved 2026-10-15 by D134 — the hash moved to `Account` and `User.passwordHash` went before the switch |
 | AUTH-3 | Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options | ✅ Resolved 2026-10-15 by D135 and D136 — the secrets are named in the options, the other two stop the server at start-up |
 | AUTH-4 | `set-auth-token` exposed to cookie clients; native 403 from an injected cookie | ✅ Resolved 2026-10-15 — the proxy stops injecting `stoky_device` on the auth API and bearer calls, and the route withholds the header from any request that carried a cookie (D142) |
+| AUTH-5 | Better Auth accepts one TOTP code more than once | ✅ Resolved 2026-10-15 by D148 — a before-hook claims the code's time step in the same statement that checks it |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
@@ -3604,6 +3605,30 @@ answer to a request that carried a cookie, which a browser always does here;
 the bodies never carry the token. `integration/bearer.test.ts` signs in with
 and without a cookie through the real route: only the cookie-less request
 gets the header, and removing the strip turns it red.
+
+### ✅ AUTH-5: Better Auth accepts one TOTP code more than once
+
+**Files:** `src/lib/auth/policy-plugin.ts`, `prisma/schema.prisma` (`TwoFactor.lastTotpCounter`)
+**Severity:** HIGH for the migration — a code seen over a shoulder, or replayed from a captured request, signs in again for up to a minute and a half
+**Status:** RESOLVED 2026-10-15 by "feat(auth): add TOTP two-step verification with single-use codes" (PROGRESS D148).
+
+Found by the Better Auth spike (`spike/better-auth-2026-10-15`, `1c8156b`):
+`/two-factor/verify-totp` checks a code against the current 30-second step
+and the one either side, and stores nothing about it, so the same code
+completed two sign-ins in a row. ASVS 5.0.0 6.5.1 asks that a time-based code
+be usable once.
+
+**How it closed.** A before-hook on that endpoint works out which of the three
+steps the code is for and claims it with one conditional `UPDATE` on a column
+of ours, `TwoFactor.lastTotpCounter`, which must be below the step; zero rows
+is a replay, refused as `INVALID_CODE` and logged `auth.twofactor.replayed`.
+A code matching no step is rewritten to one Better Auth must refuse, so a
+request whose clock reads straddle a step cannot be accepted unclaimed, and
+Better Auth still counts the failure. `integration/two-factor.test.ts` signs
+in with one code twice, with an earlier step after a later one, with the
+enrolment's code, and twice at once while the row is held locked — exactly
+one gets in — and goes red when the hook is removed, when the claim is not
+checked, and when it is made a read followed by a write.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 

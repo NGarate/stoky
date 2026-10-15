@@ -32,6 +32,7 @@ let owner: Caller;
 let member: Caller;
 let householdId: string;
 let productId: string;
+const AUTHENTICATOR_SECRET = "$ba$1$secreto-del-autenticador";
 
 beforeAll(async () => {
   const household = await createTestHousehold({ name: HOUSEHOLD });
@@ -49,6 +50,12 @@ beforeAll(async () => {
     householdId,
     role: "MEMBER",
   });
+
+  // An authenticator secret, which the export must not carry (D148).
+  await prisma.twoFactor.create({
+    data: { userId: ownerUser.id, secret: AUTHENTICATOR_SECRET, backupCodes: AUTHENTICATOR_SECRET },
+  });
+  await prisma.user.update({ where: { id: ownerUser.id }, data: { twoFactorEnabled: true } });
 
   owner = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession(ownerUser) }),
@@ -146,6 +153,17 @@ describe("what must never be in the file", () => {
     expect(dump).not.toContain("$argon2");
     expect(
       keysOf(exported).filter((key) => /^(password|passwordHash|accounts)$/i.test(key)),
+    ).toEqual([]);
+  });
+
+  it("carries no authenticator secret or backup codes", async () => {
+    // `TwoFactor` is a credential like the password hash: a relation of the
+    // member, so it would arrive the same way, selected beside the columns.
+    const exported = await owner.data.exportHousehold();
+
+    expect(JSON.stringify(exported)).not.toContain(AUTHENTICATOR_SECRET);
+    expect(
+      keysOf(exported).filter((key) => /^(twoFactor|secret|backupCodes)$/i.test(key)),
     ).toEqual([]);
   });
 

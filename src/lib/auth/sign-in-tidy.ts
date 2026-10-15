@@ -120,7 +120,13 @@ export async function capSessions(db: SessionDb, { userId, keepToken }: SessionC
     select: { id: true },
   });
   if (beyond.length === 0) return 0;
-  return endSessions(db, { userId, id: { in: beyond.map(({ id }) => id) } });
+  // Housekeeping, not an account's sign-ins ended on purpose: a two-step
+  // sign-in in progress on another device stays (`EndSessionsOptions`).
+  return endSessions(
+    db,
+    { userId, id: { in: beyond.map(({ id }) => id) } },
+    { challenges: false },
+  );
 }
 
 /** What a sign-in's tidy ended. */
@@ -161,7 +167,7 @@ export async function tidyAfterSignIn(
   const result = await db.$transaction(async (tx) => {
     // A tagged template, so the id is a bound parameter.
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${input.userId} FOR UPDATE`;
-    const replaced = await endSessions(tx, filter);
+    const replaced = await endSessions(tx, filter, { challenges: false });
     const evicted = await capSessions(tx, { userId: input.userId, keepToken: input.newToken });
     return { replaced, evicted };
   });
@@ -182,4 +188,33 @@ export async function tidyAfterSignIn(
     });
   }
   return result;
+}
+
+/**
+ * Ends the session a browser presented when its sign-in stopped at the second
+ * step (D148), and returns how many rows went.
+ *
+ * Better Auth has already expired that session's cookie in the answer that
+ * asks for the code, so the row would outlive any browser holding it: on a
+ * shared tablet, the previous person's session would go on working for
+ * whoever kept a copy. Ended now rather than when the code arrives, because
+ * the code may never come. The account asking is not signed in yet and has
+ * no id here; the line names it by `account`, its tag, beside `targetUserId`,
+ * whose session it was.
+ */
+export async function endPresentedSession(
+  db: SessionDb,
+  previous: PresentedSession,
+  account: string,
+): Promise<number> {
+  // The challenge this sign-in has just been given may be the same
+  // account's: it is the sign-in in progress, not something this ends.
+  const count = await endSessions(db, { id: previous.id }, { challenges: false });
+  logSecurityEvent("auth.session.ended", {
+    reason: "replaced",
+    targetUserId: previous.userId,
+    account,
+    count,
+  });
+  return count;
 }
