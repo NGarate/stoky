@@ -14,6 +14,7 @@ export type AuthErrorKey =
   | "passwordContainsIdentity"
   | "registrationClosed"
   | "twoFactorInvalidCode"
+  | "backupCodeInvalid"
   | "twoFactorExpired"
   | "twoFactorLocked"
   | "twoFactorUnreadable";
@@ -47,17 +48,24 @@ const CODE_KEYS: Record<string, AuthErrorKey> = {
   invalid_origin: "authUnavailable",
   missing_or_null_origin: "authUnavailable",
   // The second step of a sign-in (D148). A replayed code is refused as
-  // INVALID_CODE too, so the sentence says "or already used".
+  // INVALID_CODE too, so the sentence says "or already used". A backup code
+  // has its own sentence: "the one your app shows now" is the wrong advice
+  // for a code written on paper.
   invalid_code: "twoFactorInvalidCode",
-  invalid_backup_code: "twoFactorInvalidCode",
+  invalid_backup_code: "backupCodeInvalid",
   // The challenge is gone — ten minutes passed, or five wrong codes ended it
-  // — and only the password step makes another.
+  // — and only the password step makes another. `two_factor_expired` and
+  // `two_factor_locked` are the sign-in module's names for these
+  // (`SecondStepRefusalCode`, `src/lib/auth/client.ts`).
   invalid_two_factor_cookie: "twoFactorExpired",
   too_many_attempts_request_new_code: "twoFactorExpired",
+  two_factor_expired: "twoFactorExpired",
   // Better Auth's lockout, per account, across challenges: fifteen minutes.
   account_temporarily_locked: "twoFactorLocked",
-  // `STOKY_SECRET` changed and the stored secret no longer decrypts: no code
-  // will ever work, and only the operator can say why.
+  two_factor_locked: "twoFactorLocked",
+  // `STOKY_SECRET` changed and the stored secret no longer decrypts: no
+  // authenticator code will ever work, but a backup code, stored as a hash,
+  // still does (D149), so the sentence offers one before the operator.
   two_factor_unreadable: "twoFactorUnreadable",
 };
 

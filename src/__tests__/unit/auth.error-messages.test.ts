@@ -95,7 +95,8 @@ describe("getAuthErrorKey", () => {
     // password, wait, or ask the operator.
     const words = (code: string) => getAuthErrorKey(undefined, "login", code);
     expect(words("INVALID_CODE")).toBe("twoFactorInvalidCode");
-    expect(words("INVALID_BACKUP_CODE")).toBe("twoFactorInvalidCode");
+    // Its own sentence: "the one your app shows now" is wrong for paper.
+    expect(words("INVALID_BACKUP_CODE")).toBe("backupCodeInvalid");
     expect(words("INVALID_TWO_FACTOR_COOKIE")).toBe("twoFactorExpired");
     expect(words("TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE")).toBe("twoFactorExpired");
     expect(words("ACCOUNT_TEMPORARILY_LOCKED")).toBe("twoFactorLocked");
@@ -109,6 +110,7 @@ describe("getAuthErrorKey", () => {
     };
     for (const key of [
       "twoFactorInvalidCode",
+      "backupCodeInvalid",
       "twoFactorExpired",
       "twoFactorLocked",
       "twoFactorUnreadable",

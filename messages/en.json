@@ -43,7 +43,19 @@
     "twoFactorInvalidCode": "The code is not right, or it has already been used. Enter the one your authenticator app shows now.",
     "twoFactorExpired": "The code check has expired or had too many tries. Enter your password again.",
     "twoFactorLocked": "Too many wrong codes for this account. Wait 15 minutes and try again.",
-    "twoFactorUnreadable": "This server can no longer check your authenticator app. Tell whoever runs Stoky at home."
+    "twoFactorUnreadable": "This server cannot check your authenticator app's code. Use a recovery code, or ask whoever runs the household for help.",
+    "twoFactorTitle": "Two-step verification",
+    "totpLabel": "Verification code",
+    "totpHint": "The 6 digits your authenticator app shows now. They change every 30 seconds.",
+    "useBackupCode": "Use a recovery code",
+    "backupCodeTitle": "Sign in with a recovery code",
+    "backupCodeLabel": "Recovery code",
+    "backupCodeHint": "One of the codes you saved when you turned on two-step verification. Each one works once; capitals, spaces and dashes make no difference.",
+    "useTotp": "Use the authenticator app",
+    "twoFactorVerify": "Check the code",
+    "twoFactorVerifying": "Checking…",
+    "twoFactorBack": "Back",
+    "backupCodeInvalid": "The recovery code is not right, or it has already been used. Try another of the ones you saved."
   },
   "navigation": {
     "inventory": "Inventory",

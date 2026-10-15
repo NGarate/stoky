@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
-import { signInWithPassword } from "@/lib/auth/client";
+import { signInWithPassword, verifyBackupCode, verifyTotp } from "@/lib/auth/client";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import type { FormEvent, JSX } from "react";
 import type { AuthErrorKey } from "@/lib/auth/error-messages";
@@ -26,15 +26,91 @@ import type { AuthErrorKey } from "@/lib/auth/error-messages";
  * deciding. The hint says who should tick it: a home device used every day,
  * the kitchen screen above all, which would otherwise ask for the password
  * every time somebody walks up to it.
+ *
+ * **The second step** (D148, D149) is this form's own state, not a page: an
+ * account with two-step verification answers a right password with a
+ * challenge, and the same form then asks for the authenticator code — or, one
+ * button away, a backup code. Nothing about it is a place to go back to or
+ * share, and a URL for it would be a page that is wrong whenever the
+ * challenge has expired. Step 1's fields, their order and their names are
+ * untouched; the status region and the one submit button stay mounted across
+ * the steps, so what the region says when a step changes is said by a region
+ * that was already there (WCAG 4.1.3).
+ *
+ * - Entering a code step moves focus to its heading: the field that had it is
+ *   gone, and focus left on `<body>` would leave a screen reader saying
+ *   nothing about the question now being asked.
+ * - A challenge that has gone — ten minutes, or five wrong codes — sends the
+ *   form back to the password with the sentence that says why, and the
+ *   address still filled in and the box as it was ticked, as "Volver" does.
+ * - An authenticator secret the server can no longer read keeps the form on
+ *   the step, and the sentence points at the backup-code button beside it.
  */
+type Step = "password" | "totp" | "backup";
+
 export function LoginForm(): JSX.Element {
   const t = useTranslations("auth");
   const router = useRouter();
   const [errorKey, setErrorKey] = useState<AuthErrorKey | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNavigating, startTransition] = useTransition();
+  const [step, setStep] = useState<Step>("password");
+  // Kept so that coming back from a code step does not ask for it again.
+  const [email, setEmail] = useState("");
+  // The box, kept for the same return: it is unmounted with the password
+  // step, and coming back to it unticked would quietly make the next sign-in
+  // a browser session the person had said no to.
+  const [remember, setRemember] = useState(false);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const passwordField = useRef<HTMLInputElement>(null);
+  const leftPassword = useRef(false);
 
   const isBusy = isSubmitting || isNavigating;
+
+  useEffect(() => {
+    if (step !== "password") {
+      leftPassword.current = true;
+      stepHeading.current?.focus();
+    } else if (leftPassword.current) {
+      // Back from a code step: the password is what is asked next.
+      passwordField.current?.focus();
+    }
+  }, [step]);
+
+  function goTo(next: Step): void {
+    setErrorKey(null);
+    setStep(next);
+  }
+
+  /** The password step. True when it signed somebody in. */
+  async function submitPassword(formData: FormData): Promise<boolean> {
+    const typedEmail = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+    // Uncontrolled: a ticked box submits "on", an unticked one nothing.
+    const rememberMe = formData.get("rememberMe") === "on";
+    setEmail(typedEmail);
+    setRemember(rememberMe);
+
+    const result = await signInWithPassword({ email: typedEmail, password, rememberMe });
+    if (result.ok) return true;
+    if (result.twoFactor) {
+      setStep("totp");
+      return false;
+    }
+    setErrorKey(getAuthErrorKey(undefined, "login", result.code));
+    return false;
+  }
+
+  /** A code step. True when it signed somebody in. */
+  async function submitCode(formData: FormData): Promise<boolean> {
+    const code = String(formData.get("code") ?? "").trim();
+    const result = step === "backup" ? await verifyBackupCode(code) : await verifyTotp(code);
+    if (result.ok) return true;
+    // Only the password step makes a new challenge.
+    if (result.code === "two_factor_expired") setStep("password");
+    setErrorKey(getAuthErrorKey(undefined, "login", result.code));
+    return false;
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -42,10 +118,6 @@ export function LoginForm(): JSX.Element {
     setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-    // Uncontrolled: a ticked box submits "on", an unticked one nothing.
-    const rememberMe = formData.get("rememberMe") === "on";
 
     // The React Compiler cannot yet memoise a component containing this
     // `try`/`catch` around an await, so it declines to optimise the whole
@@ -54,12 +126,9 @@ export function LoginForm(): JSX.Element {
     // form. Revisit when babel-plugin-react-compiler supports it.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      const result = await signInWithPassword({ email, password, rememberMe });
-
-      if (!result.ok) {
-        setErrorKey(getAuthErrorKey(undefined, "login", result.code));
-        return;
-      }
+      const signedIn =
+        step === "password" ? await submitPassword(formData) : await submitCode(formData);
+      if (!signedIn) return;
 
       startTransition(() => {
         // `/`, not a screen: it is where this device's screen choice is
@@ -141,57 +210,122 @@ export function LoginForm(): JSX.Element {
                   server logs. The JS path calls preventDefault and never
                   reaches it. */}
               <form className="space-y-5" method="post" onSubmit={handleSubmit}>
-                <div className="space-y-2">
-                  <label
-                    className="text-sm font-medium text-foreground"
-                    htmlFor="email"
-                  >
-                    {t("email")}
-                  </label>
-                  {/* WCAG 3.3.5 (AAA). The hint is attached with
-                      `aria-describedby` rather than merely placed underneath,
-                      because otherwise a screen reader announces "Correo
-                      electrónico, editable" and stops — the help exists for
-                      sighted mouse users and for nobody else. */}
-                  <Input
-                    aria-describedby="email-hint"
-                    autoComplete="email"
-                    id="email"
-                    name="email"
-                    required
-                    type="email"
-                  />
-                  <p className="text-sm text-muted-foreground" id="email-hint">
-                    {t("emailHint")}
-                  </p>
-                </div>
+                {step === "password" ? (
+                  <>
+                    <div className="space-y-2">
+                      <label
+                        className="text-sm font-medium text-foreground"
+                        htmlFor="email"
+                      >
+                        {t("email")}
+                      </label>
+                      {/* WCAG 3.3.5 (AAA). The hint is attached with
+                          `aria-describedby` rather than merely placed underneath,
+                          because otherwise a screen reader announces "Correo
+                          electrónico, editable" and stops — the help exists for
+                          sighted mouse users and for nobody else. */}
+                      <Input
+                        aria-describedby="email-hint"
+                        autoComplete="email"
+                        defaultValue={email}
+                        id="email"
+                        name="email"
+                        required
+                        type="email"
+                      />
+                      <p className="text-sm text-muted-foreground" id="email-hint">
+                        {t("emailHint")}
+                      </p>
+                    </div>
 
-                <div className="space-y-2">
-                  <label
-                    className="text-sm font-medium text-foreground"
-                    htmlFor="password"
-                  >
-                    {t("password")}
-                  </label>
-                  <Input
-                    aria-describedby="password-hint"
-                    autoComplete="current-password"
-                    id="password"
-                    name="password"
-                    required
-                    type="password"
-                  />
-                  <p className="text-sm text-muted-foreground" id="password-hint">
-                    {t("passwordHintLogin")}
-                  </p>
-                </div>
+                    <div className="space-y-2">
+                      <label
+                        className="text-sm font-medium text-foreground"
+                        htmlFor="password"
+                      >
+                        {t("password")}
+                      </label>
+                      <Input
+                        aria-describedby="password-hint"
+                        autoComplete="current-password"
+                        id="password"
+                        name="password"
+                        ref={passwordField}
+                        required
+                        type="password"
+                      />
+                      <p className="text-sm text-muted-foreground" id="password-hint">
+                        {t("passwordHintLogin")}
+                      </p>
+                    </div>
 
-                <Checkbox
-                  hint={t("rememberMeHint")}
-                  id="rememberMe"
-                  label={t("rememberMe")}
-                  name="rememberMe"
-                />
+                    <Checkbox
+                      defaultChecked={remember}
+                      hint={t("rememberMeHint")}
+                      id="rememberMe"
+                      label={t("rememberMe")}
+                      name="rememberMe"
+                    />
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <h2
+                      className="text-xl font-semibold text-heading"
+                      ref={stepHeading}
+                      tabIndex={-1}
+                    >
+                      {step === "totp" ? t("twoFactorTitle") : t("backupCodeTitle")}
+                    </h2>
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="code"
+                    >
+                      {step === "totp" ? t("totpLabel") : t("backupCodeLabel")}
+                    </label>
+                    {/* Keyed by the step, so switching between the two kinds
+                        of code empties the field rather than carrying six
+                        digits into a backup code. `one-time-code` lets a phone
+                        offer the code from its own authenticator; a backup
+                        code is read off paper, and its own autofill would
+                        only offer a stale one. */}
+                    {step === "totp" ? (
+                      <Input
+                        aria-describedby="code-hint"
+                        autoComplete="one-time-code"
+                        id="code"
+                        inputMode="numeric"
+                        key="totp"
+                        maxLength={6}
+                        name="code"
+                        required
+                        type="text"
+                      />
+                    ) : (
+                      <Input
+                        aria-describedby="code-hint"
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        id="code"
+                        key="backup"
+                        maxLength={40}
+                        name="code"
+                        required
+                        spellCheck={false}
+                        type="text"
+                      />
+                    )}
+                    <p className="text-sm text-muted-foreground" id="code-hint">
+                      {step === "totp" ? t("totpHint") : t("backupCodeHint")}
+                    </p>
+                    <Button
+                      onClick={() => goTo(step === "totp" ? "backup" : "totp")}
+                      type="button"
+                      variant="link"
+                    >
+                      {step === "totp" ? t("useBackupCode") : t("useTotp")}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Present from the first render, empty until it has
                     something to say.
@@ -216,8 +350,30 @@ export function LoginForm(): JSX.Element {
                 </p>
 
                 <Button className="w-full" disabled={isBusy} type="submit">
-                  {isBusy ? t("loggingIn") : t("login")}
+                  {step === "password"
+                    ? isBusy
+                      ? t("loggingIn")
+                      : t("login")
+                    : isBusy
+                      ? t("twoFactorVerifying")
+                      : t("twoFactorVerify")}
                 </Button>
+
+                {/* Back to the password, not out of the page: a person who
+                    cannot reach their authenticator or their codes may want
+                    another account. The challenge is left to expire; the next
+                    password makes a new one. */}
+                {step !== "password" && (
+                  <Button
+                    className="w-full"
+                    disabled={isBusy}
+                    onClick={() => goTo("password")}
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("twoFactorBack")}
+                  </Button>
+                )}
               </form>
 
               <p className="text-sm text-muted-foreground">

@@ -64,8 +64,12 @@ export function RegisterForm(): JSX.Element {
       // (`/settings/screen` says so).
       const result = await signInWithPassword({ email, password, rememberMe: false });
 
+      // An account made a moment ago has no second step to ask for; if one
+      // ever did, the generic sentence is right and the login form handles it.
       if (!result.ok) {
-        setErrorKey(getAuthErrorKey(undefined, "login", result.code));
+        setErrorKey(
+          getAuthErrorKey(undefined, "login", result.twoFactor ? undefined : result.code),
+        );
         return;
       }
 

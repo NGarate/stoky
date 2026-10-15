@@ -9,7 +9,7 @@ import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
-import type { PasswordCredentials, SignInResult } from "@/lib/auth/client";
+import type { PasswordCredentials, SecondStepResult, SignInResult } from "@/lib/auth/client";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -34,11 +34,18 @@ let signInResult: SignInResult = { ok: true };
 /** What every sign-in was called with, in order. */
 const signInCalls: PasswordCredentials[] = [];
 
+/** What the next second steps answer, in order; `{ ok: true }` once it runs out. */
+const secondStepResults: SecondStepResult[] = [];
+
+/** Every second step, in order: which kind of code and what was typed. */
+const secondStepCalls: { kind: "totp" | "backup"; code: string }[] = [];
+
 /**
  * The browser's one auth module, replaced **completely** (D50): the real
  * module is spread in, so `readSessionExpiry` and anything added later stay
- * real for every other suite in the process, and only the sign-in call, which
- * would otherwise reach for a server, answers from `signInResult`.
+ * real for every other suite in the process, and only the calls that would
+ * otherwise reach for a server answer from `signInResult` and
+ * `secondStepResults`.
  */
 const realAuthClient = await import("@/lib/auth/client");
 mock.module("@/lib/auth/client", () => ({
@@ -46,6 +53,14 @@ mock.module("@/lib/auth/client", () => ({
   signInWithPassword: async (credentials: PasswordCredentials) => {
     signInCalls.push(credentials);
     return signInResult;
+  },
+  verifyTotp: async (code: string) => {
+    secondStepCalls.push({ kind: "totp", code });
+    return secondStepResults.shift() ?? { ok: true };
+  },
+  verifyBackupCode: async (code: string) => {
+    secondStepCalls.push({ kind: "backup", code });
+    return secondStepResults.shift() ?? { ok: true };
   },
 }));
 
@@ -758,4 +773,276 @@ describe("which screen /register chooses", () => {
       expect(headings()).toEqual(["El registro está cerrado"]);
     });
   });
+});
+
+/**
+ * The second step of a sign-in (D148, D149): an account with two-step
+ * verification answers a right password with a challenge, and the same form
+ * asks for the code. Component state on `/login`, not a page.
+ */
+describe("the second step of a sign-in", () => {
+  const WORDS = {
+    es: {
+      email: "Correo electrónico",
+      password: "Contraseña",
+      submit: "Iniciar sesión",
+      title: "Verificación en dos pasos",
+      totp: "Código de verificación",
+      totpHint:
+        "Los 6 números que muestra ahora tu aplicación de autenticación. Cambian cada 30 segundos.",
+      verify: "Comprobar el código",
+      useBackup: "Usar un código de recuperación",
+      backupTitle: "Entrar con un código de recuperación",
+      backup: "Código de recuperación",
+      useTotp: "Usar la aplicación de autenticación",
+      back: "Volver",
+    },
+    en: {
+      email: "Email",
+      password: "Password",
+      submit: "Sign in",
+      title: "Two-step verification",
+      totp: "Verification code",
+      totpHint: "The 6 digits your authenticator app shows now. They change every 30 seconds.",
+      verify: "Check the code",
+      useBackup: "Use a recovery code",
+      backupTitle: "Sign in with a recovery code",
+      backup: "Recovery code",
+      useTotp: "Use the authenticator app",
+      back: "Back",
+    },
+  } as const;
+
+  /** Renders the form and gets past a right password to the challenge. */
+  async function challenged(locale: TestLocale = "es"): Promise<HTMLElement> {
+    const words = WORDS[locale as "es" | "en"];
+    signInResult = { ok: false, twoFactor: true };
+    replaced.length = 0;
+    secondStepCalls.length = 0;
+    const { container } = renderWithIntl(<LoginForm />, { locale });
+    await userEvent.type(screen.getByLabelText(words.email), "ana@example.com");
+    await userEvent.type(screen.getByLabelText(words.password), "secreta123");
+    await userEvent.click(screen.getByRole("button", { name: words.submit }));
+    await screen.findByRole("heading", { name: words.title });
+    return container;
+  }
+
+  afterEach(() => {
+    signInResult = { ok: true };
+    secondStepResults.length = 0;
+  });
+
+  /**
+   * What has focus, as a short string: comparing the elements themselves
+   * makes a failing `waitFor` print the whole document on every retry, which
+   * is enough to take the test runner down.
+   */
+  function focused(): string {
+    const active = document.activeElement;
+    if (!active) return "nothing";
+    return active.tagName === "INPUT"
+      ? `INPUT ${active.id}`
+      : `${active.tagName} ${active.textContent ?? ""}`;
+  }
+
+  for (const locale of ["es", "en"] as const) {
+    it(`asks for the authenticator code after a right password, in ${locale}`, async () => {
+      const words = WORDS[locale];
+      const container = await challenged(locale);
+
+      const field = screen.getByLabelText(words.totp) as HTMLInputElement;
+      // What lets a phone offer the code, and a number pad to type it.
+      expect(field.getAttribute("autocomplete")).toBe("one-time-code");
+      expect(field.getAttribute("inputmode")).toBe("numeric");
+      expect(field.maxLength).toBe(6);
+      expect(field).toHaveAccessibleDescription(words.totpHint);
+      // The password is gone from the screen, and nobody was sent anywhere.
+      expect(screen.queryByLabelText(words.password)).toBeNull();
+      expect(replaced).toEqual([]);
+      // The field that had focus is gone: the question now being asked has it.
+      await waitFor(() => expect(focused()).toBe(`H2 ${words.title}`));
+      // Still one way to submit; the others only change the step.
+      expect(container.querySelectorAll('[type="submit"]')).toHaveLength(1);
+      expect(screen.getByRole("button", { name: words.verify }).getAttribute("type")).toBe(
+        "submit",
+      );
+      for (const name of [words.useBackup, words.back]) {
+        expect(screen.getByRole("button", { name }).getAttribute("type")).toBe("button");
+      }
+      expect(container.textContent).not.toContain("auth.");
+    });
+  }
+
+  it("signs in with the code and goes to the landing decision", async () => {
+    await challenged();
+
+    await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+
+    await waitFor(() => expect(replaced).toEqual(["/"]));
+    expect(secondStepCalls).toEqual([{ kind: "totp", code: "123456" }]);
+  });
+
+  it("switches to a backup code and back, and sends each to its own check", async () => {
+    await challenged();
+
+    await userEvent.type(screen.getByLabelText(WORDS.es.totp), "12");
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.useBackup }));
+
+    await screen.findByRole("heading", { name: WORDS.es.backupTitle });
+    await waitFor(() => expect(focused()).toBe(`H2 ${WORDS.es.backupTitle}`));
+    const field = screen.getByLabelText(WORDS.es.backup) as HTMLInputElement;
+    // A different field, not the digits carried over into it.
+    expect(field.value).toBe("");
+    expect(field.getAttribute("autocomplete")).toBe("off");
+    expect(screen.queryByLabelText(WORDS.es.totp)).toBeNull();
+
+    secondStepResults.push({ ok: false, code: "invalid_backup_code" });
+    await userEvent.type(field, "abcd-efgh");
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+    expect(
+      await screen.findByText(
+        "El código de recuperación no es correcto o ya se ha usado. Prueba con otro de los que guardaste.",
+      ),
+    ).toBeInTheDocument();
+    expect(secondStepCalls).toEqual([{ kind: "backup", code: "abcd-efgh" }]);
+
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.useTotp }));
+    expect(await screen.findByLabelText(WORDS.es.totp)).toBeInTheDocument();
+    // A new step starts without the last one's refusal.
+    expect(screen.getByRole("status").textContent).toBe("");
+  });
+
+  it("goes back to the password when the challenge has expired, and says why", async () => {
+    await challenged();
+
+    secondStepResults.push({ ok: false, code: "two_factor_expired" });
+    await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+
+    expect(
+      await screen.findByText(
+        "La comprobación del código ha caducado o se ha intentado demasiadas veces. Vuelve a escribir tu contraseña.",
+      ),
+    ).toBeInTheDocument();
+    // The address is kept; the password is what is asked for, and has focus.
+    expect((screen.getByLabelText(WORDS.es.email) as HTMLInputElement).value).toBe(
+      "ana@example.com",
+    );
+    await waitFor(() => expect(focused()).toBe("INPUT password"));
+    expect(screen.queryByLabelText(WORDS.es.totp)).toBeNull();
+    expect(screen.getByRole("button", { name: WORDS.es.submit })).toBeInTheDocument();
+  });
+
+  it("goes back to the password when asked to", async () => {
+    await challenged();
+
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.back }));
+
+    expect(await screen.findByLabelText(WORDS.es.password)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: WORDS.es.back })).toBeNull();
+    expect(secondStepCalls).toEqual([]);
+  });
+
+  for (const way of ["Volver", "an expired challenge"] as const) {
+    it(`keeps the box ticked when ${way} brings the password back`, async () => {
+      // Unmounted with the password step: back unticked, the next password
+      // would quietly be a browser session the person had said no to.
+      signInResult = { ok: false, twoFactor: true };
+      signInCalls.length = 0;
+      renderWithIntl(<LoginForm />, { locale: "es" });
+      await userEvent.type(screen.getByLabelText(WORDS.es.email), "ana@example.com");
+      await userEvent.type(screen.getByLabelText(WORDS.es.password), "secreta123");
+      await userEvent.click(screen.getByRole("checkbox", { name: "Mantener la sesión iniciada" }));
+      await userEvent.click(screen.getByRole("button", { name: WORDS.es.submit }));
+      await screen.findByRole("heading", { name: WORDS.es.title });
+
+      if (way === "Volver") {
+        await userEvent.click(screen.getByRole("button", { name: WORDS.es.back }));
+      } else {
+        secondStepResults.push({ ok: false, code: "two_factor_expired" });
+        await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
+        await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+      }
+
+      const box = await screen.findByRole("checkbox", { name: "Mantener la sesión iniciada" });
+      expect(box).toBeChecked();
+      await userEvent.type(screen.getByLabelText(WORDS.es.password), "secreta123");
+      await userEvent.click(screen.getByRole("button", { name: WORDS.es.submit }));
+      await waitFor(() => expect(signInCalls).toHaveLength(2));
+      expect(signInCalls[1].rememberMe).toBe(true);
+    });
+  }
+
+  it("stays on the step when the server cannot read the authenticator, and points at a backup code", async () => {
+    await challenged();
+
+    secondStepResults.push({ ok: false, code: "two_factor_unreadable" });
+    await userEvent.type(screen.getByLabelText(WORDS.es.totp), "123456");
+    await userEvent.click(screen.getByRole("button", { name: WORDS.es.verify }));
+
+    expect(
+      await screen.findByText(
+        "No se puede comprobar el código de tu aplicación en este servidor. Usa un código de recuperación o pide ayuda a quien administra el hogar.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(WORDS.es.totp)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: WORDS.es.useBackup })).toBeInTheDocument();
+    expect(replaced).toEqual([]);
+  });
+
+  // Each refusal of a code in each language: next-intl renders a missing key
+  // as the key itself, so only the words on screen show it is there.
+  for (const [locale, code, words] of [
+    [
+      "es",
+      "invalid_code",
+      "El código no es correcto o ya se ha usado. Escribe el que muestra ahora tu aplicación de autenticación.",
+    ],
+    [
+      "en",
+      "invalid_code",
+      "The code is not right, or it has already been used. Enter the one your authenticator app shows now.",
+    ],
+    [
+      "en",
+      "invalid_backup_code",
+      "The recovery code is not right, or it has already been used. Try another of the ones you saved.",
+    ],
+    [
+      "es",
+      "two_factor_locked",
+      "Demasiados códigos incorrectos con esta cuenta. Espera 15 minutos y vuelve a intentarlo.",
+    ],
+    [
+      "en",
+      "two_factor_locked",
+      "Too many wrong codes for this account. Wait 15 minutes and try again.",
+    ],
+    [
+      "en",
+      "two_factor_unreadable",
+      "This server cannot check your authenticator app's code. Use a recovery code, or ask whoever runs the household for help.",
+    ],
+    [
+      "en",
+      "two_factor_expired",
+      "The code check has expired or had too many tries. Enter your password again.",
+    ],
+    [
+      "es",
+      "rate_limited",
+      "Demasiados intentos desde esta conexión. Espera unos minutos y vuelve a probar.",
+    ],
+  ] as const) {
+    it(`words ${code} in ${locale}`, async () => {
+      await challenged(locale);
+
+      secondStepResults.push({ ok: false, code });
+      await userEvent.type(screen.getByLabelText(WORDS[locale].totp), "123456");
+      await userEvent.click(screen.getByRole("button", { name: WORDS[locale].verify }));
+
+      expect(await screen.findByText(words)).toBeInTheDocument();
+    });
+  }
 });

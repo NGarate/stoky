@@ -1,9 +1,13 @@
 import { describe, expect, it, mock } from "bun:test";
 import {
   readSessionExpiry,
+  secondStepResultFrom,
   signInResultFrom,
   signInWithPassword,
+  verifyBackupCode,
+  verifyTotp,
 } from "@/lib/auth/client";
+import type { SecondStepRefusalCode } from "@/lib/auth/client";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import { SignInRefusedError } from "@/lib/auth/sign-in-policy";
 
@@ -19,6 +23,17 @@ import { SignInRefusedError } from "@/lib/auth/sign-in-policy";
 describe("signInResultFrom", () => {
   it("reads a 200 as signed in", () => {
     expect(signInResultFrom(200, { user: { id: "u" } }, null)).toEqual({ ok: true });
+  });
+
+  it("reads a right password that asks for a code as not signed in yet", () => {
+    // D148: Better Auth answers 200 with a challenge cookie and no session.
+    // Read as signed in, the form would navigate to a screen that sends the
+    // person straight back to /login.
+    expect(
+      signInResultFrom(200, { twoFactorRedirect: true, twoFactorMethods: ["totp"] }, null),
+    ).toEqual({ ok: false, twoFactor: true });
+    // Only the literal flag: anything else is the ordinary answer.
+    expect(signInResultFrom(200, { twoFactorRedirect: "true" }, null)).toEqual({ ok: true });
   });
 
   it("calls Better Auth's refusal a wrong address or password", () => {
@@ -133,6 +148,94 @@ describe("signInWithPassword", () => {
         fetcher as unknown as typeof fetch,
       ),
     ).toEqual({ ok: false, code: "account_rate_limited", retryAfterSeconds: 812 });
+  });
+});
+
+describe("secondStepResultFrom", () => {
+  it("reads a 200 as signed in", () => {
+    expect(secondStepResultFrom(200, { token: null, user: { id: "u" } }, null)).toEqual({
+      ok: true,
+    });
+  });
+
+  it("names each refusal by what the person can do about it", () => {
+    const cases: [string, SecondStepRefusalCode][] = [
+      ["INVALID_CODE", "invalid_code"],
+      ["INVALID_BACKUP_CODE", "invalid_backup_code"],
+      // The challenge is gone: only the password step makes another.
+      ["INVALID_TWO_FACTOR_COOKIE", "two_factor_expired"],
+      ["TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE", "two_factor_expired"],
+      ["ACCOUNT_TEMPORARILY_LOCKED", "two_factor_locked"],
+      // The TOTP guard's own (`policy-plugin.ts`).
+      ["TWO_FACTOR_UNREADABLE", "two_factor_unreadable"],
+      ["RATE_LIMITED", "rate_limited"],
+      ["AUTH_UNAVAILABLE", "auth_unavailable"],
+      ["INVALID_ORIGIN", "auth_unavailable"],
+    ];
+    for (const [sent, ours] of cases) {
+      expect(secondStepResultFrom(401, { code: sent }, null), sent).toEqual({
+        ok: false,
+        code: ours,
+      });
+    }
+  });
+
+  it("does not read a password refusal as a code refusal, or pass an unknown one through", () => {
+    expect(secondStepResultFrom(401, { code: "INVALID_EMAIL_OR_PASSWORD" }, null)).toEqual({
+      ok: false,
+      code: "unknown",
+    });
+    expect(secondStepResultFrom(500, null, null)).toEqual({ ok: false, code: "unknown" });
+  });
+
+  it("carries Retry-After", () => {
+    expect(secondStepResultFrom(429, { code: "RATE_LIMITED" }, "30")).toEqual({
+      ok: false,
+      code: "rate_limited",
+      retryAfterSeconds: 30,
+    });
+  });
+
+  it("hands the form codes it has words for", () => {
+    const words = (code: string) => getAuthErrorKey(undefined, "login", code);
+    expect(words("invalid_code")).toBe("twoFactorInvalidCode");
+    expect(words("invalid_backup_code")).toBe("backupCodeInvalid");
+    expect(words("two_factor_expired")).toBe("twoFactorExpired");
+    expect(words("two_factor_locked")).toBe("twoFactorLocked");
+    expect(words("two_factor_unreadable")).toBe("twoFactorUnreadable");
+  });
+});
+
+describe("verifyTotp and verifyBackupCode", () => {
+  function answering(status: number, body: unknown) {
+    return mock(async (_url: string, _init: RequestInit) => Response.json(body, { status }));
+  }
+
+  for (const [name, call, path] of [
+    ["verifyTotp", verifyTotp, "/api/auth/two-factor/verify-totp"],
+    ["verifyBackupCode", verifyBackupCode, "/api/auth/two-factor/verify-backup-code"],
+  ] as const) {
+    it(`${name} posts the code and nothing else, never from a cache`, async () => {
+      const fetcher = answering(200, { token: null, user: { id: "u" } });
+
+      expect(await call("ab12 cd34", fetcher as unknown as typeof fetch)).toEqual({ ok: true });
+      const [url, init] = fetcher.mock.calls[0];
+      expect(url).toBe(path);
+      expect(init.method).toBe("POST");
+      expect(new Headers(init.headers).get("content-type")).toBe("application/json");
+      // As typed: the server normalises a backup code (D149).
+      expect(JSON.parse(String(init.body))).toEqual({ code: "ab12 cd34" });
+      expect(init.cache).toBe("no-store");
+      expect(init.credentials).toBe("same-origin");
+    });
+  }
+
+  it("returns the translated refusal", async () => {
+    const fetcher = answering(401, { code: "INVALID_TWO_FACTOR_COOKIE" });
+    expect(await verifyTotp("123456", fetcher as unknown as typeof fetch)).toEqual({
+      ok: false,
+      code: "two_factor_expired",
+    });
   });
 });
 

@@ -43,7 +43,19 @@
     "twoFactorInvalidCode": "El código no es correcto o ya se ha usado. Escribe el que muestra ahora tu aplicación de autenticación.",
     "twoFactorExpired": "La comprobación del código ha caducado o se ha intentado demasiadas veces. Vuelve a escribir tu contraseña.",
     "twoFactorLocked": "Demasiados códigos incorrectos con esta cuenta. Espera 15 minutos y vuelve a intentarlo.",
-    "twoFactorUnreadable": "Este servidor ya no puede comprobar tu aplicación de autenticación. Avisa a quien administra Stoky en tu casa."
+    "twoFactorUnreadable": "No se puede comprobar el código de tu aplicación en este servidor. Usa un código de recuperación o pide ayuda a quien administra el hogar.",
+    "twoFactorTitle": "Verificación en dos pasos",
+    "totpLabel": "Código de verificación",
+    "totpHint": "Los 6 números que muestra ahora tu aplicación de autenticación. Cambian cada 30 segundos.",
+    "useBackupCode": "Usar un código de recuperación",
+    "backupCodeTitle": "Entrar con un código de recuperación",
+    "backupCodeLabel": "Código de recuperación",
+    "backupCodeHint": "Uno de los códigos que guardaste al activar la verificación en dos pasos. Cada uno sirve una sola vez; dan igual las mayúsculas, los espacios y los guiones.",
+    "useTotp": "Usar la aplicación de autenticación",
+    "twoFactorVerify": "Comprobar el código",
+    "twoFactorVerifying": "Comprobando…",
+    "twoFactorBack": "Volver",
+    "backupCodeInvalid": "El código de recuperación no es correcto o ya se ha usado. Prueba con otro de los que guardaste."
   },
   "navigation": {
     "inventory": "Inventario",
