@@ -70,9 +70,13 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // is asking. `integration/household.roles.test.ts` holds both.
     updateRole: "adminProcedure",
     removeMember: "adminProcedure",
-    // Ending somebody else's sessions is the same authority as removing them,
-    // and a strictly smaller act — it changes nothing about the household.
-    revokeMemberSessions: "adminProcedure",
+    // Seeing and ending somebody else's sessions is the same authority as
+    // removing them, and a strictly smaller act — it changes nothing about
+    // the household. Not the whole guard: not the caller, the member must be
+    // this household's, and only an owner may act on an owner — inside the
+    // resolver (D145). `integration/session.revocation.test.ts` holds them.
+    memberSessions: "adminProcedure",
+    endMemberSessions: "adminProcedure",
     // Setting somebody else's password is the same authority that set their
     // first one in `addMember`. Not the whole guard: the member must be this
     // household's, only an owner may act on an owner, and nobody may use it

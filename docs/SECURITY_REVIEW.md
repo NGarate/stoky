@@ -416,7 +416,10 @@ Since 2026-10-15 (D135, D143) both delete session rows instead, and an
 account's own sessions are listed and ended one at a time, every other or
 all together from **Tus dispositivos** at `/settings/security`, after the
 password — `auth.listSessions` and `auth.endSessions`, which replaced
-`auth.revokeMySessions` and its button.
+`auth.revokeMySessions` and its button. Since D145 an admin lists a member's
+sessions and ends one or every one (`household.memberSessions`,
+`household.endMemberSessions`), which replaced
+`household.revokeMemberSessions`.
 
 **And the mitigation had no test.** Replacing that query with the token's own
 values — an obvious optimisation, one fewer database round trip per request —

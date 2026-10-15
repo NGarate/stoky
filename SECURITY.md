@@ -677,8 +677,9 @@ Verified against the files named in each row.
   idle for fifteen minutes, a day after their sign-in, or when somebody ends
   the account's sessions — from **Tus dispositivos** in Configuración ›
   **Seguridad y acceso** (`auth.endSessions`, below), or an admin from
-  **Personas del hogar** — which delete the rows and log `auth.session.ended`
-  with the `reason` (`self`, `admin`), who asked and how many sessions went.
+  **Personas del hogar** (`household.endMemberSessions`, below) — which
+  delete the rows and log `auth.session.ended` with the `reason` (`self`,
+  `admin`), who asked and how many sessions went.
 - **A person can list their sessions and end one, every other or every one,
   after re-entering the current password** (ASVS 5.0.0 7.5.2, PROGRESS
   D143). `auth.listSessions` answers each live row as the browser and system
@@ -720,6 +721,32 @@ Verified against the files named in each row.
   the cached shell go, then the redirect — and one that does not purges
   nothing. The screen also says the account holds ten sessions at most and
   which one an eleventh sign-in ends.
+- **An admin can list a member's sessions and end one or every one**
+  (ASVS 5.0.0 7.4.5, PROGRESS D145). On **Personas del hogar**, "Ver sus
+  sesiones" on another member's row opens their sessions
+  (`household.memberSessions`), read exactly as the member's own list is
+  (`liveSessionsOf`, `src/lib/auth/session-list.ts`) — the device and the
+  screen it opens on, never a token or the device id — each with **Cerrar
+  esta**, and **Cerrar todas sus sesiones** below them
+  (`household.endMemberSessions`). One rather than only all: the lost
+  kitchen tablet need not sign the member out of the phone in their pocket.
+  `adminProcedure`, then the guards of the rest of member management: the
+  caller's own id is `BAD_REQUEST` — their own sessions end from **Tus
+  dispositivos**, behind their password, and an admin session must not be a
+  way round that question — the member must be this household's
+  (`NOT_FOUND` otherwise, without confirming the id exists), and only an
+  owner may list or end an owner's (`FORBIDDEN`, logged as
+  `access.denied`). The delete names the member's id beside the session id,
+  so another account's session id is `NOT_FOUND` and ends nothing, and it
+  repeats the household and the role that were checked, so a member who
+  left or was made an owner in between is not touched. Logged as
+  `auth.session.ended` with `reason: "admin"`, the admin as `userId`, the
+  member as `targetUserId` and the count; the answer is the count alone.
+  **No password**: the owner confirmed on 2026-10-15 that an admin ending
+  somebody else's sessions is not re-asked. Whoever holds an admin's
+  session can therefore sign the household's non-owners out — and they can
+  sign straight back in, since nothing about their password changes — but
+  cannot reach an owner's sessions or the admin's own.
 - **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
   PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
   the old row alive, so after the sign-in succeeds the auth route deletes the
@@ -1963,7 +1990,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 67 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 68 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a

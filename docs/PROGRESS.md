@@ -65,6 +65,7 @@ Rules for this log:
 | "feat(auth): show your devices in security settings" | **Seguridad y acceso** (`/settings/security`, linked first from the settings hub) shows **Tus dispositivos**: one `ItemRow` per session, named by the screen the device chose or its browser and system, this device's marked, with last use, sign-in, end and whether it is remembered, and the ten-session cap (D140) said under the list. **Cerrar esta sesión**, **Cerrar las demás** and **Cerrar todas** each ask for the password in `ReauthDialog` before `auth.endSessions` runs; an ending that includes this device goes through `useEndSession` (server first, then the purge, then the redirect), one that does not purges nothing and reads the list again. `auth.revokeMySessions` and `RevokeSessionsButton` are deleted (67 procedures). `components/DeviceList.test.tsx` (13) and `EndSession.test.tsx` (48 → 54: the old button's cases moved onto the list, plus "others", another device's row, this device's row, and this row's post-purge failure worded as one session) go red under each of seventeen breaks — "others" or "all" routed the wrong way, send-first that discards, the badge, the cap hint, the screen name, the session id, the re-read, the gone and wrong-password wording, the empty-password check, the refusal not unwrapped from `EndSessionError`, "Cerrar las demás" with nobody else. `e2e/session-revocation.spec.ts` signs a second browser in separately and ends it alone, then both, then refuses a wrong password; it reads each browser's state from `get-session`, because a signed-out `goto("/dashboard")` lands on the prerendered shell before `/login` and the URL check passed against a build whose "one" ended all. `e2e/request-guards.spec.ts` sends `auth.endSessions` with the right password. |
 | "refactor(auth): move the password form to security settings" | `ChangePasswordForm` moves from the settings hub to **Seguridad y acceso**, as a **Contraseña** section after **Tus dispositivos**: it ends sessions too, so it sits beside the list of what it would end, and the next commit changes what it ends. The hub row's description names the password. Behaviour is unchanged; `e2e/password-change.spec.ts` changes only its URL, and went red when the form was left off `/settings/security`. |
 | "feat(auth): keep this device signed in when its password changes" (D144) | ASVS 5.0.0 7.4.3: `auth.changePassword` confirms the current password through `confirmCurrentPassword` (the D143 budgets; `passwordChangeRateLimit` and `RATE_LIMIT_PASSWORD_CHANGE_*` are retired, and a wrong password is `auth.reauth.refused` `via: "password-change"`), then the identity rule, then Better Auth's `changePassword` with `revokeOtherSessions` (`src/lib/auth/password-change.ts`): every other session ends and this one is re-created under a new token that keeps `authenticatedAt`, `persistent` and the device. The browser sends the call by `httpLink` through a `splitLink` (`src/lib/trpc/links.ts`), and the form says it is done in place instead of signing out and purging. A request with no cookie (native) ends every session, its own too. `integration/auth.flow.test.ts` signs in through the route and drives real sessions: other browsers and a bearer session end and log `reason: "password-change"` with the count; the old row is gone and the new one keeps sign-in time, kind and device for a browser and a remembered session, and opens with a token signed as the cookie is; a wrong password changes nothing and never reaches Better Auth (no Argon2id hash), and is answered before the identity rule; one session's spent budget leaves another able to change it. `unit/password-change.test.ts` maps Better Auth's refusals, `unit/trpc-links.test.ts` measures which request each call makes, `components/EndSession.test.tsx` holds the form to no purge and no sign-out, and `e2e/password-change.spec.ts` shows this browser still signed in after a reload, under a new cookie that is still a browser session's (no expiry: Better Auth picks the `Max-Age` from the `dont_remember` cookie the request carried, which the database row cannot show), while another device and a copy of the old cookie are refused. Breaks that went red: the hook not inheriting, the identity rule before the verify, no re-entry, `revokeOtherSessions` off, rotating without a cookie, no `endSessions` for native, no ended line, the two refusal mappings, the split off (unit, and the e2e: "the rotated cookie did not arrive") or everything unstreamed, `dont_remember` withheld from Better Auth (e2e only: the cookie came back expiring), and the form's sign-out, reset, status and re-read. |
+| "feat(household): let an admin end a member's sessions" (D145) | ASVS 5.0.0 7.4.5: `household.revokeMemberSessions`, which ended all of a member's sessions and nothing less — and the admin's own with no password — is replaced by `household.memberSessions` (the member's live sessions, read by `liveSessionsOf` in `src/lib/auth/session-list.ts`, now shared with `auth.listSessions`) and `household.endMemberSessions` (one by id, or every one). Both refuse the caller's own id (`BAD_REQUEST`), another household's member (`NOT_FOUND`) and an admin acting on an owner (`FORBIDDEN`); the delete scopes the session id by the member's id and repeats the household and role checked; `auth.session.ended` `reason: "admin"` with the count; no password, as the owner confirmed. On **Personas del hogar**, "Ver sus sesiones" (absent from the admin's own row) opens `MemberSessionsDialog`: compact `ItemRow`s named as **Tus dispositivos** names them (`useSessionName`, extracted from `DeviceList`), **Cerrar esta** and **Cerrar todas sus sesiones**; the inline two-step confirmation and its strings are gone. 68 procedures. `integration/session.revocation.test.ts`: all and one ended with the log line and nothing but the count answered, the list with no token, device id or expired row, another account's session id `NOT_FOUND`, cross-household `NOT_FOUND`, owner `FORBIDDEN`, a `MEMBER` refused, the caller's own id `BAD_REQUEST`, an owner ending another owner's. `components/PeopleRoles.test.tsx` holds the dialog, `components/EndSession.test.tsx` the page (whose row offers it, what it sends, nothing read until asked), and `e2e/session-revocation.spec.ts` ends one of a member's two browsers, then both, with the admin still signed in. Breaks that went red: no owner guard (on the list, the end, both), no self refusal, an unscoped member lookup, the session id ignored or not scoped to the member, no `NOT_FOUND`, no log line, rows in the answer, expired rows or the token listed; on the client the button on the admin's own row, no session id sent (component and e2e), end-all not closing, the query always on, `FORBIDDEN` unmapped, refusals or the load error not shown, a row ending all, end-all enabled with nothing to end, the device meta dropped, and (e2e) the list kept across a close, which reopened the dialog on the sessions just ended. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -3074,3 +3075,49 @@ is not one of them.
   transaction; it ends every session of somebody else, so nothing is
   re-created. The log line `auth.password.change.refused` is gone: a wrong
   password here is `auth.reauth.refused` with `via: "password-change"`.
+
+**D145 — An admin lists a member's sessions and ends one or every one,
+without re-entering a password.** ASVS 5.0.0 7.4.5 asks that an
+administrator can end a user's sessions, individually or all at once.
+`household.revokeMemberSessions` ended them all and nothing less, so the lost
+kitchen tablet cost the member the phone in their pocket too, and it ended
+the admin's own sessions with no password — a way round D143's question for
+whoever held an admin's session.
+
+- **Two procedures replace it.** `household.memberSessions` lists, with the
+  member's own reading (`liveSessionsOf`, `src/lib/auth/session-list.ts`, now
+  shared with `auth.listSessions`) so an admin is never shown more about
+  somebody than they are shown about themselves: no token, no device id,
+  no "this one". `household.endMemberSessions` ends one by id, or every one.
+  Both are `adminProcedure`, so the capability count goes 67 → 68.
+- **The guards of member management, in the same order for both.** The
+  caller's own id is `BAD_REQUEST` (their own sessions are in **Tus
+  dispositivos**, behind their password); `memberOfHousehold`, so another
+  household's member is `NOT_FOUND`; `assertMayActOnOwner`, so only an
+  owner lists or ends an owner's. Listing is guarded as ending is, because
+  what an admin may not end they have no reason to see.
+- **Scoped in the filter.** The delete names the member's id beside the
+  session id — another account's session id is `NOT_FOUND` and ends nothing
+  — and repeats the household and role that were checked, as
+  `resetMemberPassword`'s write does, so a member who left or was made an
+  owner between the check and the delete is not touched.
+- **No password, and not asked twice.** The owner confirmed on 2026-10-15
+  that an admin acting on somebody else is not re-asked; the household-wide
+  ending planned for owners will be, because it includes the owner's own
+  sessions. The inline "¿Cerrar todas las sesiones de…?" confirmation went
+  with the old button: opening the dialog and pressing a button that names
+  what it ends are already two acts, and nothing is destroyed.
+- **The screen.** "Ver sus sesiones", absent from the admin's own row, opens
+  a dialog titled with the member's name (`MemberSessionsDialog`): a compact
+  `ItemRow` per session named as **Tus dispositivos** names it
+  (`useSessionName`, extracted from `DeviceList`), **Cerrar esta** on each,
+  and **Cerrar todas sus sesiones**. `FORBIDDEN` reads as
+  `revokeFailedNotOwner`, `NOT_FOUND` as a session already ended. The list
+  is dropped when the dialog closes (`gcTime: 0`). If it were kept, opening
+  the dialog again within the client's 30-second `staleTime` would show the
+  sessions "Cerrar todas" had just ended. The e2e test caught this.
+- **What it costs.** Whoever holds an admin's session can sign the
+  household's non-owners out without the admin's password. They sign
+  straight back in — nothing about their password changes — so it is a
+  nuisance rather than a takeover, and the owner's sessions and the admin's
+  own are out of its reach.

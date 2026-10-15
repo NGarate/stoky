@@ -165,22 +165,96 @@ describe("who may end whose sessions", () => {
     expect(await signedIn(own)).toBe(false);
   });
 
-  it("lets an admin end a member's, and records that it was the admin", async () => {
+  it("lets an admin end every one of a member's, and records that it was the admin", async () => {
     const admin = await accountWithCaller("ADMIN", "Admin");
     const target = await accountWithCaller("KITCHEN", "Tablet");
 
-    const events = await eventsDuring(() =>
-      admin.caller.household.revokeMemberSessions({ userId: target.id }),
-    );
+    let answer: unknown;
+    const events = await eventsDuring(async () => {
+      answer = await admin.caller.household.endMemberSessions({ userId: target.id });
+    });
 
+    // The count and nothing else: no token, no row.
+    expect(answer).toEqual({ ended: 1 });
     expect(await signedIn(target)).toBe(false);
     expect(await signedIn(admin)).toBe(true);
-    expect(events.find((event) => event.event === "auth.session.ended")).toMatchObject({
-      userId: admin.id,
-      targetUserId: target.id,
-      reason: "admin",
-      count: "1",
+    expect(events.filter((event) => event.event === "auth.session.ended")).toEqual([
+      expect.objectContaining({
+        userId: admin.id,
+        targetUserId: target.id,
+        reason: "admin",
+        count: "1",
+      }),
+    ]);
+  });
+
+  it("lets an admin end one of a member's sessions, and leaves the others", async () => {
+    // The lost kitchen tablet, and not the phone in the member's pocket.
+    const admin = await accountWithCaller("ADMIN", "Admin");
+    const target = await accountWithCaller("MEMBER", "TwoDevices");
+    const email = (await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).email;
+    const second = await signInWith({ email, password: PASSWORD });
+    const phone = new Headers({ cookie: second.cookieHeader });
+    const tablet = await readSession(target.browser, { refresh: false });
+    if (!tablet) throw new Error("the member's first browser is not signed in");
+
+    const answer = await admin.caller.household.endMemberSessions({
+      userId: target.id,
+      sessionId: tablet.sessionId,
     });
+
+    expect(answer).toEqual({ ended: 1 });
+    expect(await signedIn(target)).toBe(false);
+    expect(await readSession(phone, { refresh: false })).not.toBeNull();
+  });
+
+  it("lists a member's live sessions for an admin, with no token and no device id", async () => {
+    const admin = await accountWithCaller("ADMIN", "Admin");
+    const target = await accountWithCaller("KITCHEN", "Listed");
+    const deviceId = crypto.randomUUID();
+    const email = (await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).email;
+    const kitchen = await signInWith({ email, password: PASSWORD }, { deviceId });
+    expect(kitchen.status).toBe(200);
+    await prisma.screenChoice.create({ data: { userId: target.id, deviceId, screen: "KITCHEN" } });
+    await prisma.session.create({
+      data: { token: `${PREFIX}expired-${crypto.randomUUID()}`, userId: target.id, expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const listed = await admin.caller.household.memberSessions({ userId: target.id });
+
+    const rowsOf = await prisma.session.findMany({
+      where: { userId: target.id, expiresAt: { gt: new Date() } },
+      select: { id: true, token: true },
+    });
+    expect(listed.map((row) => row.id).toSorted()).toEqual(rowsOf.map((row) => row.id).toSorted());
+    expect(listed.some((row) => row.screen === "KITCHEN")).toBe(true);
+    for (const row of listed) {
+      // `current` too: none of these is the admin's.
+      expect(Object.keys(row).toSorted()).toEqual(
+        ["device", "expiresAt", "id", "lastUsedAt", "remembered", "screen", "signedInAt"],
+      );
+    }
+    const text = JSON.stringify(listed);
+    expect(text).not.toContain(deviceId);
+    for (const row of rowsOf) expect(text).not.toContain(row.token);
+  });
+
+  it("answers another account's session id as not found, and ends nothing", async () => {
+    // The id is scoped by the member's id in the delete itself: naming the
+    // member and somebody else's session ends neither.
+    const admin = await accountWithCaller("ADMIN", "Admin");
+    const target = await accountWithCaller("MEMBER", "Named");
+    const bystander = await accountWithCaller("MEMBER", "Bystander");
+    const theirs = await readSession(bystander.browser, { refresh: false });
+    if (!theirs) throw new Error("the bystander is not signed in");
+
+    expect(
+      await codeOf(
+        admin.caller.household.endMemberSessions({ userId: target.id, sessionId: theirs.sessionId }),
+      ),
+    ).toBe("NOT_FOUND");
+    expect(await signedIn(bystander)).toBe(true);
+    expect(await signedIn(target)).toBe(true);
   });
 
   it("refuses a member from another household, and ends nothing", async () => {
@@ -188,33 +262,65 @@ describe("who may end whose sessions", () => {
     const stranger = await createTestHousehold({ name: `${PREFIX}Stranger` });
     const outsider = await accountWithCaller("MEMBER", "Outsider", stranger.id);
 
-    expect(await codeOf(admin.caller.household.revokeMemberSessions({ userId: outsider.id }))).toBe(
+    expect(await codeOf(admin.caller.household.memberSessions({ userId: outsider.id }))).toBe("NOT_FOUND");
+    expect(await codeOf(admin.caller.household.endMemberSessions({ userId: outsider.id }))).toBe(
       "NOT_FOUND",
     );
     expect(await signedIn(outsider)).toBe(true);
+    expect(await rows(outsider.id)).toBe(1);
   });
 
-  it("refuses an admin ending an owner's", async () => {
+  it("refuses an admin listing or ending an owner's", async () => {
     // The same guard as the rest of member management: an admin who could sign
     // an owner out could lock them out of answering.
     const admin = await accountWithCaller("ADMIN", "Admin");
     const owner = await accountWithCaller("OWNER", "Owner");
+    const ownerSession = await readSession(owner.browser, { refresh: false });
+    if (!ownerSession) throw new Error("the owner is not signed in");
 
-    expect(await codeOf(admin.caller.household.revokeMemberSessions({ userId: owner.id }))).toBe(
+    expect(await codeOf(admin.caller.household.memberSessions({ userId: owner.id }))).toBe("FORBIDDEN");
+    expect(await codeOf(admin.caller.household.endMemberSessions({ userId: owner.id }))).toBe(
       "FORBIDDEN",
     );
+    expect(
+      await codeOf(
+        admin.caller.household.endMemberSessions({ userId: owner.id, sessionId: ownerSession.sessionId }),
+      ),
+    ).toBe("FORBIDDEN");
     expect(await signedIn(owner)).toBe(true);
   });
 
-  it("lets an owner end another owner's, including the last one's", async () => {
-    // Deliberately no last-owner guard here. Ending sessions changes nothing
-    // about who owns the household, and refusing the sole owner would refuse
-    // exactly the person most likely to have lost a device.
+  it("refuses a member who is not an admin, and ends nothing", async () => {
+    const member = await accountWithCaller("MEMBER", "NotAdmin");
+    const target = await accountWithCaller("KITCHEN", "Kept");
+
+    expect(await codeOf(member.caller.household.memberSessions({ userId: target.id }))).toBe("FORBIDDEN");
+    expect(await codeOf(member.caller.household.endMemberSessions({ userId: target.id }))).toBe(
+      "FORBIDDEN",
+    );
+    expect(await signedIn(target)).toBe(true);
+  });
+
+  it("refuses the caller's own id: their own sessions end behind their password", async () => {
+    // An admin session that could end its own account's sessions here would
+    // be the way round `auth.endSessions`' password for whoever holds it.
     const sole = await accountWithCaller("OWNER", "Sole");
 
-    await sole.caller.household.revokeMemberSessions({ userId: sole.id });
+    expect(await codeOf(sole.caller.household.memberSessions({ userId: sole.id }))).toBe("BAD_REQUEST");
+    expect(await codeOf(sole.caller.household.endMemberSessions({ userId: sole.id }))).toBe("BAD_REQUEST");
+    expect(await signedIn(sole)).toBe(true);
+  });
 
-    expect(await signedIn(sole)).toBe(false);
+  it("lets an owner end another owner's", async () => {
+    // Deliberately no last-owner guard here. Ending sessions changes nothing
+    // about who owns the household.
+    const owner = await accountWithCaller("OWNER", "First");
+    const other = await accountWithCaller("OWNER", "Second");
+
+    await owner.caller.household.endMemberSessions({ userId: other.id });
+
+    expect(await signedIn(other)).toBe(false);
+    expect(await signedIn(owner)).toBe(true);
   });
 });
 

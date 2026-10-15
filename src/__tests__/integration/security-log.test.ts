@@ -175,18 +175,18 @@ describe("a refusal a resolver made", () => {
     // An admin reaching for an owner's sessions: assertMayActOnOwner refuses
     // it in the resolver body, with no middleware involved.
     await expect(
-      admin.household.revokeMemberSessions({ userId: ownerId }),
+      admin.household.endMemberSessions({ userId: ownerId }),
     ).rejects.toThrow();
 
     const denial = lines.find((line) => line.event === "access.denied");
     expect(denial).toBeDefined();
-    expect(denial?.path).toBe("household.revokeMemberSessions");
+    expect(denial?.path).toBe("household.endMemberSessions");
     expect(denial?.userId).toBe(adminId);
   });
 
   it("names the code it was refused with", async () => {
     await expect(
-      admin.household.revokeMemberSessions({ userId: ownerId }),
+      admin.household.endMemberSessions({ userId: ownerId }),
     ).rejects.toThrow();
 
     // FORBIDDEN and UNAUTHORIZED are different incidents: one is somebody

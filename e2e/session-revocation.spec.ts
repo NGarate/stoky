@@ -203,3 +203,97 @@ test.describe("ending sessions from the devices list", () => {
     expect(await signedIn(page), "a wrong password ended the session").toBe(true);
   });
 });
+
+/**
+ * An admin ending a member's sessions from **Personas del hogar** (ASVS 5.0.0
+ * 7.4.5, PROGRESS D145): one, then every one, with no password asked.
+ *
+ * The member signs in on two browsers of its own, so "one" and "every one"
+ * are different answers; the admin's own browser is the control that the
+ * admin's session was never among them.
+ */
+test.describe("ending a member's sessions from the people page", () => {
+  const h = es.household;
+  const MEMBER_PASSWORD = "E2EMemberSessions123!";
+
+  /** A browser of the member's: signs in with the form, and is shown to work. */
+  async function memberDevice(
+    browser: Browser,
+    email: string,
+  ): Promise<{ context: BrowserContext; page: Page }> {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto("/login");
+    await page.waitForSelector('input[name="email"]');
+    await page.waitForTimeout(1500);
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', MEMBER_PASSWORD);
+    await page.click('button[type="submit"]');
+    // A kitchen account is sent straight to its screen.
+    await expect(page).toHaveURL(/\/kitchen/, { timeout: 30_000 });
+    expect(await signedIn(page), "the member's browser was not signed in to begin with").toBe(true);
+    return { context, page };
+  }
+
+  test("ends the one chosen, then every one, and never the admin's", async ({ page, browser }) => {
+    // ---------------------------------------------------------------- given --
+    await register(page);
+    const memberEmail = freshEmail();
+    const memberName = `Sesiones E2E ${Date.now()}`;
+    await page.goto("/settings/people");
+    await page.getByLabel(h.addName, { exact: true }).fill(memberName);
+    await page.getByLabel(h.addEmail, { exact: true }).fill(memberEmail);
+    await page.getByLabel(h.addPassword, { exact: true }).fill(MEMBER_PASSWORD);
+    await page.getByRole("button", { name: h.addSubmit }).click();
+    const row = page
+      .getByRole("listitem")
+      .filter({ hasText: memberName })
+      .filter({ has: page.getByRole("button", { name: h.memberSessionsButton }) });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+
+    const tablet = await memberDevice(browser, memberEmail);
+    const phone = await memberDevice(browser, memberEmail);
+
+    // ----------------------------------------------------------------- when --
+    await row.getByRole("button", { name: h.memberSessionsButton }).click();
+    const dialog = page.getByRole("dialog", {
+      name: h.memberSessionsTitle.replace("{name}", memberName),
+    });
+    const listed = dialog.getByRole("listitem");
+    await expect(listed).toHaveCount(2, { timeout: 30_000 });
+    await listed
+      .first()
+      .getByRole("button", { name: new RegExp(`^${h.memberSessionsEndOne}`) })
+      .click();
+
+    // ----------------------------------------------------------------- then --
+    await expect(listed).toHaveCount(1, { timeout: 30_000 });
+    const stillIn = [await signedIn(tablet.page), await signedIn(phone.page)];
+    expect(
+      stillIn.filter(Boolean),
+      "ending one of the member's sessions did not end exactly one browser",
+    ).toHaveLength(1);
+
+    // ------------------------------------------------------- and every one --
+    await dialog.getByRole("button", { name: h.memberSessionsEndAll }).click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    expect(
+      [await signedIn(tablet.page), await signedIn(phone.page)],
+      "a member's browser was still signed in after every session was ended",
+    ).toEqual([false, false]);
+    expect(await signedIn(page), "ending a member's sessions signed the admin out").toBe(true);
+
+    // ------------------------------------------- and opened again, read again --
+    // Not the list from before "Cerrar todas", still inside the client's
+    // 30-second staleTime: that would show the admin the sessions just ended.
+    await row.getByRole("button", { name: h.memberSessionsButton }).click();
+    await expect(
+      dialog.getByText(h.memberSessionsNone.replace("{name}", memberName)),
+      "reopening the dialog showed the sessions it had just ended",
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(listed).toHaveCount(0);
+
+    await tablet.context.close();
+    await phone.context.close();
+  });
+});

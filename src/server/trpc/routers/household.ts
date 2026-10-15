@@ -5,6 +5,7 @@ import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser, setPasswordAndEndSessions } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
+import { liveSessionsOf } from "@/lib/auth/session-list";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -13,7 +14,10 @@ import {
 import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
+  endMemberSessionsSchema,
   householdSchema,
+  memberSessionsSchema,
+  OWN_SESSIONS_MESSAGE,
   RESET_OWN_PASSWORD_MESSAGE,
   removeMemberSchema,
   resetMemberPasswordSchema,
@@ -371,44 +375,111 @@ export const householdRouter = createTRPCRouter({
     }),
 
   /**
-   * End every session a member of this household has.
+   * A member's live sessions, for an admin deciding which to end (ASVS 5.0.0
+   * 7.4.5, PROGRESS D145).
    *
-   * The other half of what §10 asked for, and the reason the admin panel
-   * exists: "the kitchen tablet has walked out of the house" needs an answer
-   * that is not "wait fifteen minutes and hope nobody touches it" — a session
-   * in use lasts up to a day (`src/lib/auth/session-policy.ts`). Deleting the
-   * rows (`endSessions`) signs every one of their devices out on its next
-   * request.
+   * The same reading as the member's own **Tus dispositivos**
+   * (`liveSessionsOf`), so an admin is never shown more about somebody than
+   * they are shown about themselves: the device and the screen it opens on,
+   * when it signed in, was last used and ends, whether it is remembered —
+   * never a token, never the device id. There is no "this one": none of
+   * these is the admin's.
    *
-   * The same two guards as the rest of member management: the member must be
-   * **this** household's, and only an owner may act on an owner. There is no
-   * last-owner guard here and there should not be — ending somebody's sessions
-   * does not change who owns anything, and refusing to sign out the last owner
-   * would be refusing exactly the person most likely to have lost a device.
+   * The guards of the rest of member management, in the same order as
+   * `endMemberSessions` below, because what an admin may not end they have
+   * no reason to list: not the caller (their own are behind their password,
+   * D143), the member must be **this** household's (`NOT_FOUND` otherwise,
+   * which does not confirm the id exists), and only an owner may act on an
+   * owner.
+   */
+  memberSessions: adminProcedure
+    .input(memberSessionsSchema)
+    .query(async ({ ctx, input }) => {
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: OWN_SESSIONS_MESSAGE });
+      }
+
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+
+      return liveSessionsOf(ctx.db, member.id);
+    }),
+
+  /**
+   * End one of a member's sessions, or every one (ASVS 5.0.0 7.4.5, PROGRESS
+   * D145).
+   *
+   * The answer to "the kitchen tablet has walked out of the house" that is
+   * not "wait and hope nobody touches it": a session in use lasts up to a
+   * day, a remembered one up to a year (`src/lib/auth/session-policy.ts`).
+   * Deleting the rows (`endSessions`) signs those devices out on their next
+   * request. With a `sessionId` it ends that one — the lost tablet, and not
+   * the phone in the member's pocket — and with none, every one.
+   *
+   * **No password**, unlike ending your own (D143): the owner confirmed on
+   * 2026-10-15 that an admin acting on somebody else is not re-asked. What
+   * stands in for it is the tier and the guards:
+   *
+   * 1. **Not yourself.** Your own sessions end from **Tus dispositivos**,
+   *    which asks for your password; an admin session that could skip that
+   *    question would be the way round it for whoever holds the session.
+   * 2. **The member is this household's**, through `memberOfHousehold`.
+   * 3. **Only an owner may act on an owner** (`assertMayActOnOwner`): an
+   *    admin who could sign an owner out could keep them out of answering.
+   *    There is no last-owner guard, and there should not be — ending
+   *    somebody's sessions changes nothing about who owns what, and refusing
+   *    the last owner would refuse the person most likely to have lost a
+   *    device.
+   * 4. **Scoped in the filter.** The delete names the member's id beside the
+   *    session's, so another account's session id ends nothing and is
+   *    `NOT_FOUND`, like an id nobody has; and it repeats the household and
+   *    the role that were checked, so a member who left the household or was
+   *    made an owner in between is not acted on.
+   *
+   * Logged as `auth.session.ended` with `reason: "admin"`, who asked, whose,
+   * and how many. Answers only the count.
    *
    * Removing a member ends their access to this household; this ends their
    * sessions. They are different acts and the screen offers both, because
    * "they left" and "their phone was stolen" are different problems.
    */
-  revokeMemberSessions: adminProcedure
-    .input(removeMemberSchema)
+  endMemberSessions: adminProcedure
+    .input(endMemberSessionsSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: OWN_SESSIONS_MESSAGE });
+      }
+
       const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
 
       assertMayActOnOwner(ctx.role, member.role);
 
-      const count = await endSessions(ctx.db, { userId: member.id });
+      // The guards again, in the write: a member who stopped being the one
+      // checked above — gone from the household, or made an owner — matches
+      // nothing. Written as two literals rather than a spread, so the session
+      // id never sits in a filter without the member's id beside it.
+      const still = { householdId: ctx.householdId, role: member.role };
+      const where =
+        input.sessionId === undefined
+          ? { userId: member.id, user: still }
+          : { userId: member.id, id: input.sessionId, user: still };
+      const ended = await endSessions(ctx.db, where);
+
+      if (input.sessionId !== undefined && ended === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      }
 
       logSecurityEvent("auth.session.ended", {
         userId: ctx.session.user.id,
         targetUserId: member.id,
         householdId: ctx.householdId,
         reason: "admin",
-        count,
+        count: ended,
         address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
 
-      return { success: true };
+      return { ended };
     }),
 
   /**

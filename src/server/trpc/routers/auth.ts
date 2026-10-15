@@ -20,7 +20,7 @@ import {
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
-import { deviceLabel } from "@/lib/auth/device-label";
+import { liveSessionsOf } from "@/lib/auth/session-list";
 import { changeOwnPassword } from "@/lib/auth/password-change";
 import { MISSING_SESSION_ID_MESSAGE, confirmCurrentPassword } from "@/lib/auth/reauth";
 import {
@@ -349,18 +349,10 @@ export const authRouter = createTRPCRouter({
    * This account's live sessions, one per signed-in browser or app — what a
    * person needs to see before ending one (ASVS 5.0.0 7.5.2, PROGRESS D143).
    *
-   * **Never a token, never the device id.** The select names its columns, so
-   * a column added later is not listed until somebody decides it should be:
-   * `token` is the credential the cookie signs, and `deviceId` is the
-   * `stoky_device` cookie's value, read here only to join `ScreenChoice`.
-   * What a session is shown as is the browser and system its User-Agent names
-   * (`deviceLabel`) and, where the device has chosen one, the screen it opens
-   * on — which is what tells the kitchen tablet from a phone.
-   *
-   * Expired rows are left out: they are sessions that have ended and are only
-   * waiting to be deleted (D139). `signedInAt` is `authenticatedAt`, not
-   * `createdAt`, which Better Auth resets when it re-creates a session.
-   * `lastUsedAt` is `updatedAt`, as coarse as the writes that move it (D140).
+   * The reading is `liveSessionsOf` (`src/lib/auth/session-list.ts`), shared
+   * with the admin's view of a member's sessions so the two cannot drift:
+   * never a token, never the device id, expired rows left out. What this adds
+   * is `current`, which only a person's own list has.
    *
    * `protectedProcedure`, not `householdProcedure`: an account with no
    * household still has sessions, and needing a household to see or end them
@@ -370,40 +362,10 @@ export const authRouter = createTRPCRouter({
    * `/settings/security` shows it as **Tus dispositivos** (`DeviceList`).
    */
   listSessions: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-    const rows = await ctx.db.session.findMany({
-      where: { userId, expiresAt: { gt: new Date() } },
-      select: {
-        id: true,
-        authenticatedAt: true,
-        updatedAt: true,
-        expiresAt: true,
-        userAgent: true,
-        persistent: true,
-        deviceId: true,
-      },
-      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-    });
-
-    const deviceIds = [...new Set(rows.flatMap((row) => (row.deviceId ? [row.deviceId] : [])))];
-    const choices =
-      deviceIds.length === 0
-        ? []
-        : await ctx.db.screenChoice.findMany({
-            where: { userId, deviceId: { in: deviceIds } },
-            select: { deviceId: true, screen: true },
-          });
-    const screenOf = new Map(choices.map((choice) => [choice.deviceId, choice.screen]));
-
-    return rows.map((row) => ({
-      id: row.id,
-      device: deviceLabel(row.userAgent),
-      screen: (row.deviceId && screenOf.get(row.deviceId)) || null,
-      signedInAt: row.authenticatedAt,
-      lastUsedAt: row.updatedAt,
-      expiresAt: row.expiresAt,
-      remembered: row.persistent,
-      current: row.id === ctx.session.sessionId,
+    const sessions = await liveSessionsOf(ctx.db, ctx.session.user.id);
+    return sessions.map((session) => ({
+      ...session,
+      current: session.id === ctx.session.sessionId,
     }));
   }),
 

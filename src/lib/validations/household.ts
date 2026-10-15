@@ -104,9 +104,43 @@ export const resetMemberPasswordSchema = z.object({
 export const RESET_OWN_PASSWORD_MESSAGE =
   "Change your own password from Settings, with your current one";
 
+/**
+ * The member whose sessions an admin is looking at (`household.memberSessions`,
+ * D145). Never the caller: their own are in **Tus dispositivos**, behind
+ * their password (`OWN_SESSIONS_MESSAGE`).
+ */
+export const memberSessionsSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+});
+
+/**
+ * An admin ending a member's sessions: one, by the id `memberSessions`
+ * listed, or — with no `sessionId` — every one (`household.endMemberSessions`,
+ * ASVS 5.0.0 7.4.5, D145).
+ *
+ * No password. An admin acting on somebody else is the household's authority
+ * over its own accounts, the same one that sets their password in
+ * `resetMemberPassword`, and the owner confirmed on 2026-10-15 that it is
+ * not re-asked here. A person ending their *own* sessions is asked
+ * (`auth.endSessions`, D143), which is why the caller's own id is refused.
+ */
+export const endMemberSessionsSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+  sessionId: z.string().min(1).max(MAX_ID_LENGTH).optional(),
+});
+
+/**
+ * What `household.memberSessions` and `household.endMemberSessions` say when
+ * the member named is the caller. English and shared, like
+ * `RESET_OWN_PASSWORD_MESSAGE`: the screen never offers it.
+ */
+export const OWN_SESSIONS_MESSAGE =
+  "Your own sessions are in Settings, under Security, where ending them asks for your password";
+
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
+export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
 export type ResetMemberPasswordInput = z.infer<typeof resetMemberPasswordSchema>;
 export type HouseholdInput = z.infer<typeof householdSchema>;
 export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;

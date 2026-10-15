@@ -19,7 +19,8 @@ import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
  * tests live together. `ChangePasswordForm` used to be the third: it ended
  * every session, this one's included. Since D144 it keeps this device signed
  * in and purges nothing, and its tests stay here to prove exactly that
- * against the same spies. The
+ * against the same spies. The people page's "Ver sus sesiones" (D145) is
+ * here for the same reason: it needs the tRPC mock, and there is one. The
  * mocks below replace modules for the *whole process* (D50), so two files
  * mocking `@/lib/auth/actions` and the queue with different spies would each
  * be asserting against the other's. Measured: they did, and eighteen tests in
@@ -156,12 +157,77 @@ const DEVICES = [
 /** What the list was asked to read again. */
 let invalidated = 0;
 
+/** The household on `/settings/people`: the admin signed in, and Ana. */
+const MEMBERS = [
+  { id: "u-alba", name: "Alba", email: "alba@example.com", role: "ADMIN" },
+  { id: "u-ana", name: "Ana", email: "ana@example.com", role: "KITCHEN" },
+];
+/** Ana's sessions, as `household.memberSessions` answers them. */
+const ANA_SESSIONS = [
+  {
+    id: "m-tablet",
+    device: { browser: "Firefox", os: "Android" },
+    screen: "KITCHEN",
+    signedInAt: new Date("2026-10-10T08:00:00.000Z"),
+    lastUsedAt: new Date("2026-10-15T08:30:00.000Z"),
+    expiresAt: new Date("2027-01-13T08:30:00.000Z"),
+    remembered: true,
+  },
+  {
+    id: "m-phone",
+    device: { browser: "Chrome", os: "Android" },
+    screen: null,
+    signedInAt: new Date("2026-10-15T07:00:00.000Z"),
+    lastUsedAt: new Date("2026-10-15T07:10:00.000Z"),
+    expiresAt: new Date("2026-10-15T07:25:00.000Z"),
+    remembered: false,
+  },
+];
+/** Whose sessions the people page asked for, last; null when it asked for none. */
+let memberSessionsFor: unknown = null;
+/** What each `household.endMemberSessions` call was sent. */
+let memberEndInputs: unknown[] = [];
+/** What `household.endMemberSessions` answers, per test: null accepts. */
+let memberEndRefusal: unknown = null;
+/** The people page's other mutations, which these tests never press. */
+const untouched = () => ({ mutate: () => {}, mutateAsync: async () => ({}), isPending: false });
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
       auth: { listSessions: { invalidate: async () => void invalidated++ } },
+      household: { members: { invalidate: async () => {} } },
     }),
+    household: {
+      members: {
+        useQuery: () => ({ data: MEMBERS, error: null, fetchStatus: "idle", isPending: false, refetch: async () => {} }),
+      },
+      memberSessions: {
+        useQuery: (input: unknown, options?: { enabled?: boolean }) => {
+          memberSessionsFor = options?.enabled ? input : null;
+          return {
+            data: options?.enabled ? ANA_SESSIONS : undefined,
+            error: null,
+            refetch: async () => {},
+          };
+        },
+      },
+      endMemberSessions: {
+        useMutation: () => ({
+          mutateAsync: async (input: { sessionId?: string }) => {
+            memberEndInputs.push(input);
+            if (memberEndRefusal !== null) throw memberEndRefusal;
+            return { ended: input.sessionId ? 1 : 2 };
+          },
+        }),
+      },
+      addMember: { useMutation: untouched },
+      updateRole: { useMutation: untouched },
+      resetMemberPassword: { useMutation: untouched },
+      removeMember: { useMutation: untouched },
+    },
     auth: {
+      me: { useQuery: () => ({ data: { id: "u-alba" } }) },
       listSessions: {
         useQuery: () => ({ data: DEVICES, error: null, fetchStatus: "idle", refetch: async () => {} }),
       },
@@ -197,6 +263,7 @@ const { SignOutButton } = await import("@/components/session/SignOutButton");
 const { DeviceList } = await import("@/components/session/DeviceList");
 const { SnackbarProvider } = await import("@/components/ui/snackbar");
 const { ChangePasswordForm } = await import("@/components/session/ChangePasswordForm");
+const { default: PeoplePage } = await import("@/app/(dashboard)/settings/people/page");
 const {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
   WRONG_CURRENT_PASSWORD_MESSAGE,
@@ -236,6 +303,9 @@ beforeEach(() => {
   changeInputs = [];
   signOutFails = false;
   unsentAfterFlush = 0;
+  memberSessionsFor = null;
+  memberEndInputs = [];
+  memberEndRefusal = null;
 });
 
 afterEach(cleanup);
@@ -1056,5 +1126,111 @@ describe("changing the password", () => {
       screen.getByRole("button", { name: "Change the password" }),
     ).toHaveAccessibleDescription(/this one stays signed in/);
     expect(screen.getByLabelText("Repeat the new password")).toBeInTheDocument();
+  });
+});
+
+/**
+ * An admin ending a member's sessions, on `/settings/people` (ASVS 5.0.0
+ * 7.4.5, D145).
+ *
+ * The real page, with the server mocked: here because the tRPC mock is
+ * process-wide (D50), and this file already holds it. The server half — the
+ * guards, the scoping, the log line — is `integration/session.revocation
+ * .test.ts`'s; `components/PeopleRoles.test.tsx` holds the dialog on its own.
+ * What only the page can get wrong is whose row offers it and what it sends.
+ */
+describe("a member's sessions, from the people page", () => {
+  function renderPeople() {
+    return renderWithIntl(
+      <SnackbarProvider>
+        <PeoplePage />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+  }
+
+  const rowOf = (name: string) =>
+    screen.getAllByRole("listitem").find((item) => within(item).queryByText(name, { exact: true }));
+
+  it("is offered on another member's row, beside removing them, and not on the admin's own", () => {
+    renderPeople();
+
+    const ana = rowOf("Ana");
+    const alba = rowOf("Alba");
+    if (!ana || !alba) throw new Error("the members are not listed");
+    // "They left" and "their phone was stolen" are different acts, both offered.
+    expect(within(ana).getByRole("button", { name: "Ver sus sesiones" })).toBeInTheDocument();
+    expect(within(ana).getByRole("button", { name: "Quitar del hogar" })).toBeInTheDocument();
+    // Your own are in Seguridad y acceso, behind your password.
+    expect(within(alba).queryByRole("button", { name: "Ver sus sesiones" })).toBeNull();
+    // Nothing is read until somebody asks.
+    expect(memberSessionsFor).toBeNull();
+  });
+
+  it("opens a dialog named for the member, listing their sessions by device", async () => {
+    renderPeople();
+
+    const ana = rowOf("Ana");
+    if (!ana) throw new Error("Ana is not listed");
+    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
+    expect(memberSessionsFor).toEqual({ userId: "u-ana" });
+    expect(within(dialog).getByText("Pantalla de cocina")).toBeInTheDocument();
+    expect(within(dialog).getByText("Chrome en Android")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("ends the one chosen, by its id, says so, and stays open", async () => {
+    renderPeople();
+    const ana = rowOf("Ana");
+    if (!ana) throw new Error("Ana is not listed");
+    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
+
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cerrar esta: Pantalla de cocina" }),
+    );
+
+    expect(memberEndInputs).toEqual([{ userId: "u-ana", sessionId: "m-tablet" }]);
+    expect(
+      await screen.findByText("Se ha cerrado la sesión de Ana en Pantalla de cocina."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Sesiones de Ana" })).toBeInTheDocument();
+  });
+
+  it("ends every one with no session named, and closes", async () => {
+    renderPeople();
+    const ana = rowOf("Ana");
+    if (!ana) throw new Error("Ana is not listed");
+    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar todas sus sesiones" }));
+
+    expect(memberEndInputs).toEqual([{ userId: "u-ana" }]);
+    expect(await screen.findByText("Se han cerrado las sesiones de Ana.")).toBeInTheDocument();
+    // `hidden: true`, measured: with the dialog left open, the plain query
+    // still answered null here under happy-dom, so it could not see the
+    // dialog fail to close.
+    expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(0);
+  });
+
+  it("says an owner's are an owner's to end, in the dialog, and ends nothing", async () => {
+    const refused = new TRPCClientError<never>("Only an owner may change who owns this household");
+    Object.defineProperty(refused, "data", { value: { code: "FORBIDDEN" } });
+    memberEndRefusal = refused;
+    renderPeople();
+    const ana = rowOf("Ana");
+    if (!ana) throw new Error("Ana is not listed");
+    await userEvent.click(within(ana).getByRole("button", { name: "Ver sus sesiones" }));
+    const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar todas sus sesiones" }));
+
+    expect(
+      await within(dialog).findByText("Solo una persona propietaria puede cerrar las sesiones de otra."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Sesiones de Ana" })).toBeInTheDocument();
   });
 });

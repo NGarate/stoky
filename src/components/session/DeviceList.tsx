@@ -11,6 +11,7 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { SectionState } from "@/components/household/RouteState";
 import { ReauthDialog, type ReauthAction } from "@/components/session/ReauthDialog";
 import { EndSessionError, useEndSession } from "@/components/session/use-end-session";
+import { useSessionName } from "@/components/session/session-name";
 import { api } from "@/lib/trpc/client";
 import { formatDateTime } from "@/lib/dates";
 import type { EndSessionsInput } from "@/lib/validations/auth";
@@ -59,10 +60,10 @@ function includesCurrent(target: Target): boolean {
  * "Cerrar las demás", and "Cerrar esta sesión" on any other row, leave this
  * device signed in: they purge nothing, and the list is read again.
  *
- * **What a row is called.** The screen the device opens on, where it has
- * chosen one — that is what tells the kitchen tablet from a phone of the same
- * make — else the browser and system its User-Agent names. Never a token or
- * the device id, which the server does not send.
+ * **What a row is called** is `useSessionName`'s answer, shared with the
+ * admin's view of a member's sessions: the screen the device opens on, else
+ * the browser and system. Never a token or the device id, which the server
+ * does not send.
  */
 export function DeviceList(): JSX.Element {
   const t = useTranslations("security");
@@ -71,6 +72,7 @@ export function DeviceList(): JSX.Element {
   const locale = useLocale();
   const snackbar = useSnackbar();
   const utils = api.useUtils();
+  const { nameOf, deviceName } = useSessionName();
 
   const sessions = api.auth.listSessions.useQuery();
   const endSessions = api.auth.endSessions.useMutation({
@@ -105,17 +107,6 @@ export function DeviceList(): JSX.Element {
   // Where focus goes when the ending took the opener with it: the row whose
   // "Cerrar esta sesión" it was, or "Cerrar las demás" once there are none.
   const list = useRef<HTMLUListElement>(null);
-
-  function nameOf(session: Listed): string {
-    if (session.screen) return t(`screen${session.screen}`);
-    return deviceName(session);
-  }
-
-  function deviceName(session: Listed): string {
-    const { browser, os } = session.device;
-    if (browser && os) return t("deviceOn", { browser, os });
-    return browser ?? os ?? t("deviceUnknown");
-  }
 
   function open(next: Target, button: HTMLButtonElement): void {
     opener.current = button;
