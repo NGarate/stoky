@@ -9,6 +9,7 @@ import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
+import type { SignInResult } from "@/lib/auth/client";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -28,13 +29,18 @@ import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
  */
 
 /** What the next sign-in answers. Each test that changes it puts it back. */
-let signInResult: { ok: boolean; error: string | null; code?: string } = {
-  ok: true,
-  error: null,
-};
+let signInResult: SignInResult = { ok: true };
 
-mock.module("next-auth/react", () => ({
-  signIn: async () => signInResult,
+/**
+ * The browser's one auth module, replaced **completely** (D50): the real
+ * module is spread in, so `readSessionExpiry` and anything added later stay
+ * real for every other suite in the process, and only the sign-in call, which
+ * would otherwise reach for a server, answers from `signInResult`.
+ */
+const realAuthClient = await import("@/lib/auth/client");
+mock.module("@/lib/auth/client", () => ({
+  ...realAuthClient,
+  signInWithPassword: async () => signInResult,
 }));
 
 /** What the next registration throws, or `null` for success. Reset by each test that sets it. */
@@ -363,10 +369,10 @@ describe("where signing in leads", () => {
 describe("what a refused sign-in says", () => {
   it("says what was wrong and what to check, not a word for it", async () => {
     // "Credenciales inválidas" named the failure in the system's word and
-    // said nothing about what to do. Auth.js will not say which of the two
-    // was wrong — deliberately — so the message names both, and the one
+    // said nothing about what to do. The server will not say which of the
+    // two was wrong — deliberately — so the message names both, and the one
     // detail that most often explains a right-looking password.
-    signInResult = { ok: false, error: "CredentialsSignin" };
+    signInResult = { ok: false, code: "invalid_credentials" };
     try {
       renderWithIntl(<LoginPage />, { locale: "es" });
 
@@ -380,7 +386,7 @@ describe("what a refused sign-in says", () => {
         ),
       ).toBeInTheDocument();
     } finally {
-      signInResult = { ok: true, error: null };
+      signInResult = { ok: true };
     }
   });
 });
@@ -410,7 +416,7 @@ describe("what a refused sign-in says when it has been tried too often", () => {
     ],
   ] as const) {
     it(`says what ran out for ${code}, in ${locale}`, async () => {
-      signInResult = { ok: false, error: "CredentialsSignin", code };
+      signInResult = { ok: false, code };
       try {
         renderWithIntl(<LoginPage />, { locale });
 
@@ -420,10 +426,37 @@ describe("what a refused sign-in says when it has been tried too often", () => {
 
         expect(await screen.findByText(words)).toBeInTheDocument();
       } finally {
-        signInResult = { ok: true, error: null };
+        signInResult = { ok: true };
       }
     });
   }
+});
+
+describe("what a sign-in refused straight after registering says", () => {
+  // The account exists by then, so the form signs it in. A refusal there
+  // must still be worded, not swallowed into a navigation to a screen the
+  // person cannot reach — the register form's own call to the sign-in module.
+  it("says the account limit ran out, in es", async () => {
+    signInResult = { ok: false, code: "account_rate_limited" };
+    try {
+      replaced.length = 0;
+      renderWithIntl(<RegisterForm />, { locale: "es" });
+
+      await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
+      await userEvent.type(screen.getByLabelText("Correo electrónico"), "ana@example.com");
+      await userEvent.type(screen.getByLabelText("Contraseña"), "cocina despensa nevera");
+      await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
+
+      expect(
+        await screen.findByText(
+          "Demasiados intentos con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu hogar.",
+        ),
+      ).toBeInTheDocument();
+      expect(replaced).toEqual([]);
+    } finally {
+      signInResult = { ok: true };
+    }
+  });
 });
 
 describe("what a refused registration says", () => {

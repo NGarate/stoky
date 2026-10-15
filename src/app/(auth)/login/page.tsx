@@ -2,13 +2,13 @@
 
 import { ShellCacheGuard } from "@/components/session/ShellCacheGuard";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
+import { signInWithPassword } from "@/lib/auth/client";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import type { FormEvent, JSX } from "react";
 import type { AuthErrorKey } from "@/lib/auth/error-messages";
@@ -38,14 +38,10 @@ export default function LoginPage(): JSX.Element {
     // form. Revisit when babel-plugin-react-compiler supports it.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
+      const result = await signInWithPassword({ email, password });
 
-      if (!result || result.error) {
-        setErrorKey(getAuthErrorKey(result?.error, "login", result?.code));
+      if (!result.ok) {
+        setErrorKey(getAuthErrorKey(undefined, "login", result.code));
         return;
       }
 

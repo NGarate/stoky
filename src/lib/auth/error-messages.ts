@@ -26,6 +26,10 @@ export type AuthErrorKey =
  * password was very likely right.
  */
 const CODE_KEYS: Record<string, AuthErrorKey> = {
+  // The sign-in module's name for a plain wrong address or password
+  // (`SignInRefusalCode`, `src/lib/auth/client.ts`), which the forms now pass
+  // here as a code rather than as next-auth's message.
+  invalid_credentials: "invalidCredentials",
   rate_limited: "tooManyAttempts",
   // The account's counter, not the address's: a different network cannot
   // help, and the person may be the one someone else is locking out.

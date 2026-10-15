@@ -4,6 +4,7 @@ import { useOnline } from "@/lib/useOnline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { readSessionExpiry } from "@/lib/auth/client";
 import type { JSX } from "react";
 
 /**
@@ -54,13 +55,16 @@ const TICK_MS = 15 * 1000;
 interface SessionKeepAliveProps {
   /** `session.expires`, as the server rendered it. */
   expiresAt: string;
-  /** Injected by the tests; the browser's own fetch otherwise. */
-  fetcher?: typeof fetch;
+  /**
+   * Reads, and so slides, the session's expiry. Injected by the tests;
+   * `readSessionExpiry` (`src/lib/auth/client.ts`) otherwise.
+   */
+  readExpiry?: () => Promise<{ expires: string } | null>;
 }
 
 export function SessionKeepAlive({
   expiresAt,
-  fetcher,
+  readExpiry = readSessionExpiry,
 }: SessionKeepAliveProps): JSX.Element | null {
   const t = useTranslations("session");
   const online = useOnline();
@@ -79,10 +83,8 @@ export function SessionKeepAlive({
     // stays, because a failed session refresh must not take the timer with it.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      const request = fetcher ?? fetch;
-      const response = await request("/api/auth/session", { cache: "no-store" });
-      const session = (await response.json()) as { expires?: string } | null;
-      if (session?.expires) {
+      const session = await readExpiry();
+      if (session) {
         setExpiry(new Date(session.expires).getTime());
         setRemainingMs(new Date(session.expires).getTime() - Date.now());
       }
@@ -94,7 +96,7 @@ export function SessionKeepAlive({
     } finally {
       refreshing.current = false;
     }
-  }, [fetcher]);
+  }, [readExpiry]);
 
   // The countdown. Recomputed rather than decremented, because a laptop that
   // slept through the timer would otherwise think it still had time.

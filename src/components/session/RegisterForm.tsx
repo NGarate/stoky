@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { api } from "@/components/providers/TRPCProvider";
+import { signInWithPassword } from "@/lib/auth/client";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import type { FormEvent, JSX } from "react";
@@ -59,14 +59,10 @@ export function RegisterForm(): JSX.Element {
         householdName: householdName || undefined,
       });
 
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
+      const result = await signInWithPassword({ email, password });
 
-      if (!result || result.error) {
-        setErrorKey(getAuthErrorKey(result?.error, "login", result?.code));
+      if (!result.ok) {
+        setErrorKey(getAuthErrorKey(undefined, "login", result.code));
         return;
       }
 

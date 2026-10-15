@@ -87,7 +87,7 @@ describe("the seam is the only door to the session", () => {
  * the application, because most of those twenty were tests.
  *
  * It matches the package root only. `next-auth/react`, the browser's sign-in
- * call, is a different seam with its own way out.
+ * call, is a different seam, held by the next describe.
  */
 describe("only the auth seam imports next-auth", () => {
   // An import or re-export statement, which may span lines, naming the
@@ -127,6 +127,46 @@ describe("only the auth seam imports next-auth", () => {
       .filter((path) => !allowed(path))
       .filter((path) => NEXT_AUTH_ROOT.test(readFileSync(path, "utf8")))
       .map((path) => relative(SRC, path));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Only `src/lib/auth/client.ts` speaks to the auth library from the browser.
+ *
+ * The login form, the registration form and the session keep-alive called
+ * next-auth directly, so the swap would have rewritten three components and
+ * the tests that mocked a package they did not own. They call the module now,
+ * and this keeps a fourth from going round it — which is how the swap would
+ * find a caller it did not know about. Tests are scanned too, and a
+ * `mock.module` of the package counts: a component test mocks
+ * `@/lib/auth/client`, completely (D50), not the library underneath it.
+ */
+describe("only the browser auth module reaches next-auth/react", () => {
+  const CLIENT_LIBRARY =
+    /\bfrom\s+["']next-auth\/react["']|\bimport\s*\(\s*["']next-auth\/react["']|\bmock\.module\(\s*["']next-auth\/react["']/;
+
+  function everyFile(dir: string, found: string[] = []): string[] {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) everyFile(path, found);
+      else if (path.endsWith(".ts") || path.endsWith(".tsx")) found.push(path);
+    }
+    return found;
+  }
+
+  it("is what the module itself imports, so the pattern can match", () => {
+    // Without this, a pattern that matched nothing would pass the scan below.
+    const client = readFileSync(join(SRC, "lib", "auth", "client.ts"), "utf8");
+    expect(CLIENT_LIBRARY.test(client)).toBe(true);
+  });
+
+  it("finds no other file that imports or mocks it", () => {
+    const offenders = everyFile(SRC)
+      .map((path) => relative(SRC, path))
+      .filter((rel) => rel !== join("lib", "auth", "client.ts"))
+      .filter((rel) => CLIENT_LIBRARY.test(readFileSync(join(SRC, rel), "utf8")));
 
     expect(offenders).toEqual([]);
   });
