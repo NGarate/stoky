@@ -169,7 +169,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky_test?schema=public
       VALKEY_URL: redis://localhost:6379
-      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+      STOKY_SECRET: ci-only-not-a-real-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -280,7 +280,7 @@ jobs:
       # already scoped to the job, so a rename inside them buys nothing.
       E2E_DATABASE_URL: postgresql://stoky:stoky_ci@postgres:5432/stoky?schema=public
       E2E_VALKEY_URL: redis://cache:6379
-      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+      STOKY_SECRET: ci-only-not-a-real-secret
       # No NEXTAUTH_URL here: playwright.config.ts sets it on the server it
       # starts, derived from the same base URL the tests use, so the two can
       # never disagree about the address.
@@ -789,8 +789,8 @@ jobs:
           ACME_EMAIL: release-smoke@example.invalid
         run: |
           POSTGRES_PASSWORD="$(openssl rand -hex 32)"
-          NEXTAUTH_SECRET="$(openssl rand -hex 32)"
-          export POSTGRES_PASSWORD NEXTAUTH_SECRET
+          STOKY_SECRET="$(openssl rand -hex 32)"
+          export POSTGRES_PASSWORD STOKY_SECRET
           COMPOSE=(docker compose --project-name "stoky-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --file deploy/docker-compose.yml)
           trap '"${COMPOSE[@]}" logs --tail=100 app db cache traefik; "${COMPOSE[@]}" down --volumes' EXIT
           "${COMPOSE[@]}" pull app
@@ -834,7 +834,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           EXPECTED_DIGEST: ${{ needs.image-publish.outputs.digest }}
           POSTGRES_PASSWORD: unused
-          NEXTAUTH_SECRET: unused
+          STOKY_SECRET: unused
           DOMAIN: release-check.invalid
           ACME_EMAIL: release-check@example.invalid
         run: |

@@ -71,7 +71,7 @@ troubleshooting.
 
 ```bash
 bun install --frozen-lockfile
-cp .env.example .env                                  # then set NEXTAUTH_SECRET
+cp .env.example .env                                  # then set STOKY_SECRET
 docker compose -f docker-compose.dev.yml up -d db cache
 bunx --bun prisma generate
 bunx --bun prisma migrate dev

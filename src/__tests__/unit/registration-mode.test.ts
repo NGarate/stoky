@@ -160,6 +160,7 @@ describe("refusing to start", () => {
     const env = process.env as Record<string, string | undefined>;
     const keys = [
       "NODE_ENV",
+      "STOKY_SECRET",
       "NEXTAUTH_SECRET",
       "NEXTAUTH_URL",
       "NEXT_PHASE",
@@ -177,7 +178,8 @@ describe("refusing to start", () => {
       env.NODE_ENV = "production";
       env.NEXT_RUNTIME = "nodejs";
       delete env.NEXT_PHASE;
-      env.NEXTAUTH_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      env.STOKY_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      delete env.NEXTAUTH_SECRET;
       // Production refuses to start without one (D136), which would be a
       // third line below.
       env.NEXTAUTH_URL = "https://stoky.example.com";
@@ -190,15 +192,15 @@ describe("refusing to start", () => {
 
       // Both wrong: one exit, two lines, so one restart fixes both.
       logged.mockClear();
-      delete env.NEXTAUTH_SECRET;
+      delete env.STOKY_SECRET;
       await expect(register()).rejects.toThrow("exit 1");
       const lines = logged.mock.calls.map((call) => String(call[0]));
       expect(lines).toHaveLength(2);
-      expect(lines.some((line) => line.includes("NEXTAUTH_SECRET"))).toBe(true);
+      expect(lines.some((line) => line.includes("STOKY_SECRET"))).toBe(true);
       expect(lines.some((line) => line.includes(REGISTRATION_ENV))).toBe(true);
 
       exit.mockClear();
-      env.NEXTAUTH_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      env.STOKY_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
       env[REGISTRATION_ENV] = "first-user";
       await register();
       delete env[REGISTRATION_ENV];

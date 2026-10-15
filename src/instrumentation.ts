@@ -2,7 +2,7 @@
  * Runs once as the server starts, before it serves a request — Next's
  * `instrumentation.ts` convention.
  *
- * **Here so that an unusable `NEXTAUTH_SECRET` stops the process**, which is
+ * **Here so that an unusable `STOKY_SECRET` stops the process**, which is
  * what `SECURITY.md` has always said happens and did not. The check used to
  * run only when `@/lib/auth` was first imported: by the first request that
  * needed a session, inside a route module Next loads lazily and whose load
@@ -32,7 +32,10 @@
  * and does not stop it: plain-http LAN installs work on purpose (D84), but
  * nobody running one should learn from a packet capture that passwords cross
  * their network in cleartext (`src/lib/auth/public-url.ts`). Nor does a
- * variable that is set and ignored, which is named in a warning of its own.
+ * variable that is set and ignored, which is named in a warning of its own,
+ * nor one still set under its name from before the `STOKY_` rename — the
+ * deprecated `NEXTAUTH_SECRET` is read, and said to be, once, here
+ * (`src/lib/env-names.ts`, D137).
  *
  * It also fails the receipts a previous process left half-read, in
  * development as well as production; see

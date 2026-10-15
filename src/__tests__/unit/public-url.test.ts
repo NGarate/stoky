@@ -156,7 +156,7 @@ describe("the URL Better Auth is built with", () => {
       env: {
         ...base,
         NODE_ENV: "production",
-        NEXTAUTH_SECRET: "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=",
+        STOKY_SECRET: "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=",
         NEXTAUTH_URL: url,
       },
     });
@@ -213,6 +213,7 @@ describe("at start-up", () => {
       "NODE_ENV",
       "NEXT_RUNTIME",
       "NEXT_PHASE",
+      "STOKY_SECRET",
       "NEXTAUTH_SECRET",
       "NEXTAUTH_URL",
       "AUTH_URL",
@@ -227,7 +228,8 @@ describe("at start-up", () => {
     try {
       env.NODE_ENV = "production";
       env.NEXT_RUNTIME = "nodejs";
-      env.NEXTAUTH_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      env.STOKY_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      delete env.NEXTAUTH_SECRET;
       env.NEXTAUTH_URL = "http://192.168.1.10:3000";
       delete env.NEXT_PHASE;
       delete env.AUTH_URL;

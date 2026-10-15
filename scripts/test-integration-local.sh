@@ -149,7 +149,7 @@ export VALKEY_URL="${VALKEY_URL:-redis://localhost:6379}"
 # (src/lib/auth/secret.ts), so the suites sign with a key of the shape a real
 # one has. The URL is the one Better Auth is built with, and the origin the
 # sign-in helper sends (src/__tests__/utils/authorize.ts).
-export NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-integration-suite-secret-not-a-real-one}"
+export STOKY_SECRET="${STOKY_SECRET:-integration-suite-secret-not-a-real-one}"
 export NEXTAUTH_URL="${NEXTAUTH_URL:-http://localhost:3000}"
 
 echo "Applying database migrations..."

@@ -31,7 +31,9 @@ import { classifyPublicUrl } from "@/lib/auth/public-url";
  * names both `secret` and `secrets`), `BETTER_AUTH_URL` (it names `baseURL`),
  * and next-auth's `AUTH_URL`, which next-auth read ahead of `NEXTAUTH_URL` and
  * nothing reads now. An operator who set one of them believes it does
- * something; a line in the start-up log says it does not.
+ * something; a line in the start-up log says it does not. `NEXTAUTH_SECRET`
+ * is not among them: it is the deprecated name of `STOKY_SECRET`, still read
+ * when that is unset, and warned about by `src/lib/env-names.ts` (D137).
  *
  * Refused twice, deliberately: at start-up, where the process exits with the
  * reason as its last line (`src/lib/auth/startup.ts`), and again when the
@@ -97,9 +99,9 @@ export function assertAuthEnvironment(env: Env = process.env): void {
 
 /** Each variable that is read by nobody, and what is read in its place. */
 const IGNORED: ReadonlyArray<readonly [name: string, instead: string]> = [
-  ["BETTER_AUTH_SECRET", "NEXTAUTH_SECRET"],
-  ["BETTER_AUTH_SECRETS", "NEXTAUTH_SECRET"],
-  ["AUTH_SECRET", "NEXTAUTH_SECRET"],
+  ["BETTER_AUTH_SECRET", "STOKY_SECRET"],
+  ["BETTER_AUTH_SECRETS", "STOKY_SECRET"],
+  ["AUTH_SECRET", "STOKY_SECRET"],
   ["BETTER_AUTH_URL", "NEXTAUTH_URL"],
   ["AUTH_URL", "NEXTAUTH_URL"],
 ];

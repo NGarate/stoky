@@ -162,7 +162,7 @@ Open `.env` in your editor and fill in:
 | `DOMAIN` | The hostname alone, for example `stoky.example.com`; no scheme or path |
 | `ACME_EMAIL` | Your email address for Let's Encrypt |
 | `POSTGRES_PASSWORD` | The first generated hex value |
-| `NEXTAUTH_SECRET` | The second generated hex value |
+| `STOKY_SECRET` (`NEXTAUTH_SECRET` in v0.1.0-alpha.3's files) | The second generated hex value |
 
 From the release after v0.1.0-alpha.3, `.env` also carries
 `STOKY_REGISTRATION`, which decides who may create an account at `/register`:
@@ -185,9 +185,12 @@ v0.1.0-alpha.3's files have no such setting, and adding the line to its `.env`
 changes nothing: registration there stays open to anyone (see Requirements).
 
 Use hex for the database password: it is inserted into a connection URL without
-percent-encoding. Do not reuse the development `.env.example`. Rotating
-`NEXTAUTH_SECRET` signs everybody out and changes every account tag in the
-security log. The bundle derives `DATABASE_URL`, `VALKEY_URL` and
+percent-encoding. Do not reuse the development `.env.example`. Rotating the
+session secret signs everybody out and changes every account tag in the
+security log. From the release after v0.1.0-alpha.3 the secret is called
+`STOKY_SECRET`; the old name, `NEXTAUTH_SECRET`, is still read when
+`STOKY_SECRET` is unset, with a `[config]` warning at start-up, until a later
+release stops reading it (see [Upgrade and rollback](#upgrade-and-rollback)). The bundle derives `DATABASE_URL`, `VALKEY_URL` and
 `NEXTAUTH_URL` itself, so you do not edit them. Outside the bundle,
 `NEXTAUTH_URL` is required in production and must be the address people type:
 from the release after v0.1.0-alpha.3 sign-in is accepted from a signed-in
@@ -199,7 +202,7 @@ start while `BETTER_AUTH_TRUSTED_ORIGINS` is set or `BETTER_AUTH_TELEMETRY` is
 on, because Better Auth, which signs people in, would obey those over its
 configuration. It ignores `BETTER_AUTH_SECRET`, `BETTER_AUTH_SECRETS`,
 `AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL`, logging an `[auth] warning:`
-line for each one set: `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are what it reads.
+line for each one set: `STOKY_SECRET` and `NEXTAUTH_URL` are what it reads.
 Keep `.env` private and out of version control.
 
 **Prefer a dedicated subdomain for `DOMAIN`.** Stoky sends HSTS for two years
@@ -306,7 +309,7 @@ Check it with `docker compose config --quiet`, keep it with your backups, and
 apply it with `docker compose up -d --wait`;
 `docker inspect --format '{{.HostConfig.LogConfig.Type}}' stoky-release-app-1`
 then names the driver in use. Plain `docker compose config` would show the
-override too, but it prints your database password and `NEXTAUTH_SECRET` with
+override too, but it prints your database password and session secret with
 it. Upgrades replace the Compose and Traefik files, not the override, so it
 stays in place.
 
@@ -627,7 +630,7 @@ cp .env docker-compose.yml traefik.yml "$STOKY_BACKUP/"
 docker compose up -d --wait app
 ```
 
-The directory holds `.env` (the database password and `NEXTAUTH_SECRET`), every
+The directory holds `.env` (the database password and the session secret), every
 account's password hash and every receipt, all in plaintext. **Encrypt it before
 it leaves the server.** With [age](https://age-encryption.org), installed on
 both machines, create a key pair once on the machine that keeps the backups,
@@ -756,6 +759,20 @@ in [SECURITY.md](../SECURITY.md) says why. Set `NEXTAUTH_URL` to the address
 people use before upgrading a deployment that is not the bundle; the bundle
 sets it from `DOMAIN`.
 
+**`NEXTAUTH_SECRET` is now `STOKY_SECRET`** from the release after
+v0.1.0-alpha.3: names starting `NEXTAUTH_`, `AUTH_` and `BETTER_AUTH_` are read
+by libraries on their own, and Stoky's settings should be read by Stoky alone.
+The new release's `install.sh` renames the line in `.env` and keeps its value,
+printing `renombrado NEXTAUTH_SECRET → STOKY_SECRET`. By hand, rename the key
+and keep the value: generating a new one signs everybody out and changes every
+account tag in the security log. Until the line is renamed the app starts and
+reads the old name, logging `[config] NEXTAUTH_SECRET is deprecated` once at
+start-up; with both set, `STOKY_SECRET` is used and the warning says the other
+is ignored. A later release stops reading the old name. The Compose file no
+longer refuses an empty secret itself: the app does, at start-up, with a line
+naming `STOKY_SECRET`, and `docker compose up --wait` reports the container
+unhealthy.
+
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
 and URL-safe credentials. Review custom database names, passwords, networks and
@@ -851,7 +868,8 @@ migration again.
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
-| App exits with `[auth] refusing to start:` | From the release after v0.1.0-alpha.3: the line names the setting to fix — `NEXTAUTH_URL` unset or not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
+| App exits with `[auth] refusing to start:` | From the release after v0.1.0-alpha.3: the line names the setting to fix — `STOKY_SECRET` unset, the example value or too short, `NEXTAUTH_URL` unset or not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
+| Log says `[config] NEXTAUTH_SECRET is deprecated` | From the release after v0.1.0-alpha.3: rename the key to `STOKY_SECRET` in `.env`, keeping the value, then `docker compose up -d --wait`. See [Upgrade and rollback](#upgrade-and-rollback) |
 | Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | From the release after v0.1.0-alpha.3: the browser is at an address other than `NEXTAUTH_URL`, or a proxy strips `Origin`. Sign in at the address `NEXTAUTH_URL` names, or set it to the one people use; in development, add the host to `DEV_ALLOWED_ORIGIN` |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
@@ -870,7 +888,8 @@ database dumps, session cookies or unredacted receipt photos.
 **Never share the output of `docker inspect` or of `docker compose config`
 without `--quiet`.** The secrets reach the containers as environment variables,
 and both commands print them: the database password, which is also in
-`DATABASE_URL`, and `NEXTAUTH_SECRET`, which signs every session. Remove client
+`DATABASE_URL`, and `STOKY_SECRET` (`NEXTAUTH_SECRET` before the release after
+v0.1.0-alpha.3), which signs every session. Remove client
 addresses and email addresses from log lines before you share them as well.
 
 A security problem is not an issue: report it through the private form in

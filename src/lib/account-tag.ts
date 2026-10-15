@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { configuredSecret } from "@/lib/auth/secret";
 
 /**
  * The name a sign-in attempt is logged under, instead of the address it tried.
@@ -15,7 +16,7 @@ import { createHmac } from "node:crypto";
  * **Keyed, not a plain hash.** `accountIdentifier` in `@/lib/rate-limit` is an
  * unkeyed SHA-256, and an email address is guessable: anyone holding a pasted
  * log and a list of likely addresses could confirm each one. An HMAC under
- * `NEXTAUTH_SECRET` cannot be checked without the secret, which the operator
+ * `STOKY_SECRET` cannot be checked without the secret, which the operator
  * has and a reader of the paste does not. The `stoky-log-account:` prefix
  * keeps this use of the key apart from any other: the HMAC is over a message
  * no other part of the application signs.
@@ -30,10 +31,13 @@ import { createHmac } from "node:crypto";
  * Sixteen hex characters, 64 bits: far beyond colliding among the addresses one
  * household's instance will ever see, short enough to read and grep.
  *
- * **Rotating `NEXTAUTH_SECRET` changes every tag**, so lines written before a
+ * **Rotating `STOKY_SECRET` changes every tag**, so lines written before a
  * rotation no longer match lines written after it. That is the price of a key
  * the operator already has to keep secret; rotation also signs everybody out,
- * so it is not something that happens quietly.
+ * so it is not something that happens quietly. Renaming it is not rotating
+ * it: an installation still on the deprecated `NEXTAUTH_SECRET` is keyed with
+ * that value until the line is renamed, and with the same value after, which
+ * is why `deploy/install.sh` renames the key and never generates a new one.
  */
 
 /** Separates this HMAC from any other use of the same key. */
@@ -43,14 +47,15 @@ export const ACCOUNT_TAG_CONTEXT = "stoky-log-account:";
 export const ACCOUNT_TAG_LENGTH = 16;
 
 /**
- * `secret` defaults to `NEXTAUTH_SECRET`, read at call time. Production refuses
+ * `secret` defaults to `STOKY_SECRET` (or the deprecated `NEXTAUTH_SECRET`;
+ * `configuredSecret`), read at call time. Production refuses
  * to start without one (`@/lib/auth/secret`); in development and the suites it
  * may be unset, and the tag is then keyed with the empty string — still not
  * the address, just not a secret worth the name.
  */
 export function accountTag(
   email: string,
-  secret: string = process.env.NEXTAUTH_SECRET ?? "",
+  secret: string = configuredSecret().value ?? "",
 ): string {
   const normalised = email.trim().toLowerCase();
   return createHmac("sha256", secret)

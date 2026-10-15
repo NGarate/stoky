@@ -296,7 +296,7 @@ export default defineConfig({
       // secret — the point of that guard — so this suite supplies a genuine
       // value. Not a secret in any meaningful sense: it signs sessions for a
       // server that lives five minutes.
-      NEXTAUTH_SECRET: "playwright-suite-secret-not-a-real-one-0001",
+      STOKY_SECRET: "playwright-suite-secret-not-a-real-one-0001",
       // Must match the address the tests use: Better Auth accepts a sign-in
       // from a cookie-bearing browser only at this origin, and marks the
       // cookie Secure only when it is https (src/lib/auth/public-url.ts).

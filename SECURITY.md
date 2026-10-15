@@ -1460,7 +1460,7 @@ written only once the sign-in has completed.
   database never holds, kept for as long as the container's output and in
   every paste of `docker compose logs` (security review, 2026-10-12). They
   now carry `account`: the first 16 hex characters of an HMAC-SHA256, keyed
-  with `NEXTAUTH_SECRET`, over `stoky-log-account:` and the address trimmed
+  with `STOKY_SECRET`, over `stoky-log-account:` and the address trimmed
   and lowercased (`src/lib/account-tag.ts`). Keyed rather than a plain hash
   because an address is guessable: without the secret, a pasted log cannot be
   checked against a list of likely addresses. `email` is one of the keys the
@@ -1471,13 +1471,16 @@ written only once the sign-in has completed.
 
   ```bash
   printf 'stoky-log-account:%s' 'ana@example.org' \
-    | openssl dgst -sha256 -hmac "$(sed -n 's/^NEXTAUTH_SECRET=//p' .env)" \
+    | openssl dgst -sha256 -hmac "$(sed -n 's/^STOKY_SECRET=//p' .env)" \
     | cut -d' ' -f2 | cut -c1-16
   ```
 
   Type the address in lowercase. The command reads the secret as `install.sh`
   writes it, without quotes; a value quoted by hand in `.env` gives a tag that
-  matches nothing. **Rotating `NEXTAUTH_SECRET` changes every
+  matches nothing. On an installation whose `.env` still says
+  `NEXTAUTH_SECRET` (PROGRESS D137), read that line instead: it is the key in
+  use until it is renamed, and renaming it, value kept, leaves every tag as it
+  was. **Rotating `STOKY_SECRET` changes every
   tag**, so lines from before a rotation do not match lines from after it.
   Lines written before this change keep the address they were written with
   until the log holding them is removed.
@@ -1507,7 +1510,7 @@ expires. The counting itself is proven against a real Valkey in
 
 ### The session signing key cannot be the example one
 
-`NEXTAUTH_SECRET` signs the session cookie, and Better Auth only warns about a
+`STOKY_SECRET` signs the session cookie, and Better Auth only warns about a
 weak one — so until Phase 7's slice nothing in this application had looked at
 what it was. `.env.example` ships a placeholder, and that placeholder is
 **published in this repository**: an instance deployed without changing it
@@ -1532,7 +1535,7 @@ reading it is looking at a container that will not start.
   any other failed dependency, so an instance that somehow got past start-up
   with an unusable key is reported unhealthy rather than healthy.
 - **The key it checks is the key that signs.** `src/lib/auth/instance.ts`
-  hands Better Auth `NEXTAUTH_SECRET` twice: as `secret`, and as the one entry
+  hands Better Auth `STOKY_SECRET` twice: as `secret`, and as the one entry
   of `secrets` (`[{ version: 1, value }]`). Left to itself Better Auth reads
   `BETTER_AUTH_SECRETS`, then `BETTER_AUTH_SECRET`, then `AUTH_SECRET`; with
   `secrets` named it never reads the first, and with `secret` named the other
@@ -1541,16 +1544,30 @@ reading it is looking at a container that will not start.
   `[auth] warning: … is set and ignored` line at start-up naming the variable
   read instead, never its value (PROGRESS D136; `BETTER_AUTH_URL` and
   next-auth's `AUTH_URL` likewise, since `NEXTAUTH_URL` is what is read).
+  The guard, `/api/health`, the account tag and the instance all read the key
+  through one function (`configuredSecret`), so they cannot disagree about
+  which variable it came from.
   The same bug was found under next-auth on 2026-10-12, where
   `AUTH_SECRET` won over `NEXTAUTH_SECRET` while the guard and `/api/health`
   read only the latter: a valid `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme`
   started, answered healthy, and signed every session with `changeme`.
   `src/__tests__/unit/auth-secret.test.ts` builds the instance in a fresh
-  production process with `NEXTAUTH_SECRET` beside `BETTER_AUTH_SECRETS`,
+  production process with `STOKY_SECRET` beside `BETTER_AUTH_SECRETS`,
   `BETTER_AUTH_SECRET` and `AUTH_SECRET` all set to something else, and reads
-  back the key it signs with: `NEXTAUTH_SECRET`. Outside production, with no
+  back the key it signs with: `STOKY_SECRET`. Outside production, with no
   key set, it signs with a random 32-byte key for the life of the process and
   says so once, so a restart signs everybody out.
+- **Its name is ours.** Until D137 it was `NEXTAUTH_SECRET`, a name a library
+  reads on its own, as `AUTH_*` and `BETTER_AUTH_*` are; that is how
+  `AUTH_SECRET` came to win above. An installation not yet renamed keeps
+  working: with `STOKY_SECRET` unset the old name is read, and the start-up
+  log says once `[config] NEXTAUTH_SECRET is deprecated`; with both set
+  `STOKY_SECRET` wins and the log says the other is ignored. An empty value is
+  unset, as Compose passes it. Every refusal names the variable the value came
+  from. `deploy/install.sh` renames the line and keeps the value — a new key
+  would sign everybody out and change every account tag — and the bundle's
+  Compose file passes both names through, so the application, not Compose,
+  refuses an empty one.
 - **Rotating it signs everybody out** and changes every account tag in the
   security log. Better Auth's versioned keys are not used beyond that single
   version-1 entry, so there is no window in which an old key still verifies.
@@ -2022,7 +2039,7 @@ is stored, logged or sent.
 | Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env`, and the Compose and Traefik files | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
 
 Two hashes in that table are weaker than they look. The security log's
-account tag is keyed with `NEXTAUTH_SECRET`, so a pasted log line cannot be
+account tag is keyed with `STOKY_SECRET`, so a pasted log line cannot be
 checked against a list of likely addresses. The Valkey account hash is not
 keyed. Anyone who can read the Valkey data can confirm whether a guessed
 address has tried to sign in during the window, or has a known device.
@@ -2115,13 +2132,17 @@ An operator who runs the image any other way should set
 
 ### Secrets
 
-`.env` holds `POSTGRES_PASSWORD` and `NEXTAUTH_SECRET`. `NEXTAUTH_SECRET`
-signs sessions and keys the security log's account tags. Both reach the
-containers as environment variables:
+`.env` holds `POSTGRES_PASSWORD` and `STOKY_SECRET` (`NEXTAUTH_SECRET` in an
+`.env` not yet renamed; D137). `STOKY_SECRET` signs sessions and keys the
+security log's account tags. Both reach the containers as environment
+variables:
 
 - the database password in `db`'s environment and inside the app's
   `DATABASE_URL`;
-- `NEXTAUTH_SECRET` in the app's environment.
+- `STOKY_SECRET` in the app's environment, beside an empty `NEXTAUTH_SECRET`
+  unless the `.env` still uses the old name. The Compose file passes both
+  through without requiring either; the application refuses to start without
+  a usable one and names the variable.
 
 Measured, `docker inspect` of a container prints its environment. Plain
 `docker compose config` printed both secrets of a filled-in `.env`, while
@@ -2133,7 +2154,7 @@ They are not mounted as files, because files would help less than it seems.
 Prisma reads `DATABASE_URL` from the environment, so `POSTGRES_PASSWORD_FILE`
 on `db` alone would leave the same password in the app's environment. Moving
 it properly needs an entrypoint that builds the URL from a mounted file, plus
-`_FILE` support for `NEXTAUTH_SECRET`. Anyone who can read a container's
+`_FILE` support for `STOKY_SECRET`. Anyone who can read a container's
 environment, as root or as code running inside it, can also read a file
 mounted into it. What remains is accidental disclosure: pasting `inspect` or
 `config` output into an issue. [Troubleshooting](docs/INSTALL.md#troubleshooting)

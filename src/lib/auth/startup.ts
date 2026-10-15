@@ -1,7 +1,8 @@
 import { authEnvironmentProblems, ignoredAuthVariableWarnings } from "@/lib/auth/environment";
 import { publicUrlWarning } from "@/lib/auth/public-url";
-import { assertKnownRegistrationMode } from "@/lib/auth/registration";
-import { assertUsableSecret } from "@/lib/auth/secret";
+import { REGISTRATION_ENV, assertKnownRegistrationMode } from "@/lib/auth/registration";
+import { assertUsableSecret, configuredSecret } from "@/lib/auth/secret";
+import { renamedVariableWarnings } from "@/lib/env-names";
 
 /**
  * Logs, without stopping anything, a configuration this application tolerates
@@ -12,7 +13,12 @@ import { assertUsableSecret } from "@/lib/auth/secret";
  *   refusal);
  * - a variable Better Auth or next-auth would have read and this application
  *   ignores — `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL`,
- *   `AUTH_URL` (`src/lib/auth/environment.ts`).
+ *   `AUTH_URL` (`src/lib/auth/environment.ts`);
+ * - a variable still set under the name it had before the `STOKY_` rename
+ *   — `NEXTAUTH_SECRET` alone, or beside `STOKY_SECRET` (`src/lib/env-names.ts`,
+ *   D137). In every environment, and only here: this runs once, from
+ *   `register()`, so each deprecation is said once per process rather than per
+ *   read.
  *
  * Called before `refuseToStartMisconfigured`, so an operator whose instance
  * refuses to start reads this too, in the same log.
@@ -24,6 +30,7 @@ export function warnAboutRiskyConfiguration(
   const warning = publicUrlWarning(env);
   if (warning) warn(warning);
   for (const ignored of ignoredAuthVariableWarnings(env)) warn(ignored);
+  for (const renamed of renamedVariableWarnings(env)) warn(renamed);
 }
 
 /**
@@ -61,7 +68,11 @@ export function refuseToStartMisconfigured(
 ): void {
   let refused = false;
 
-  for (const check of [assertUsableSecret, assertKnownRegistrationMode]) {
+  const secret = configuredSecret(env);
+  for (const check of [
+    () => assertUsableSecret(secret.value, env.NODE_ENV, env.NEXT_PHASE, secret.name),
+    () => assertKnownRegistrationMode(env[REGISTRATION_ENV], env.NODE_ENV, env.NEXT_PHASE),
+  ]) {
     try {
       check();
     } catch (error) {

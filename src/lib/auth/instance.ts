@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { classifyPublicUrl, publicUrl } from "@/lib/auth/public-url";
+import { configuredSecret } from "@/lib/auth/secret";
 import { nextExpiry } from "@/lib/auth/session-policy";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 
@@ -41,7 +42,9 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/pass
 let generatedSecret: string | undefined;
 
 /**
- * The key that signs session cookies: `NEXTAUTH_SECRET`.
+ * The key that signs session cookies: `STOKY_SECRET`, or the deprecated
+ * `NEXTAUTH_SECRET` when only that is set (`configuredSecret`, D137) — the
+ * same value the start-up guard checked, read through the same rule.
  *
  * Outside production, with none set, a random 32-byte key for the life of this
  * process, said once in the log: a restart then signs everybody out, which is
@@ -54,15 +57,16 @@ let generatedSecret: string | undefined;
  * error.
  */
 export function resolveSecret(env: Record<string, string | undefined> = process.env): string {
-  const configured = env.NEXTAUTH_SECRET?.trim();
+  const { value, name } = configuredSecret(env);
+  const configured = value?.trim();
   if (configured) return configured;
   if (env.NODE_ENV === "production") {
-    throw new Error("[auth] unavailable: NEXTAUTH_SECRET is not set.");
+    throw new Error(`[auth] unavailable: ${name} is not set.`);
   }
   if (!generatedSecret) {
     generatedSecret = randomBytes(32).toString("base64");
     console.warn(
-      "[auth] warning: NEXTAUTH_SECRET is not set; sessions are signed with a key that lasts until this process stops.",
+      `[auth] warning: ${name} is not set; sessions are signed with a key that lasts until this process stops.`,
     );
   }
   return generatedSecret;

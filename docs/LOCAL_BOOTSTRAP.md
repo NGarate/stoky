@@ -78,7 +78,7 @@ above, is unaffected.
 Four packages run code at install time (`trustedDependencies` in
 `package.json`: argon2 and Prisma's three), and Bun gives each of them the
 repository's `.env` in its environment — `DATABASE_URL` with its password,
-`NEXTAUTH_SECRET`. `--no-env-file` and bunfig `env = false` do not stop it;
+`STOKY_SECRET`. `--no-env-file` and bunfig `env = false` do not stop it;
 both were measured not to, on Bun 1.4.0 and 1.4.2. Nothing in the repository
 can, which is why that list is kept to what the install needs and
 `package-overrides.test.ts` refuses an addition. If a dependency asks to run
@@ -279,8 +279,10 @@ These are the steps the browser suite runs (`playwright.config.ts`,
 `webServer`) and the image runs. `bun run start` *appears* to work, but it warns
 `"next start" does not work with "output: standalone"` and serves `.next/`
 rather than the bundle the image ships, so it can hide a tracing defect.
-`NEXTAUTH_SECRET` must not be the example value, because production refuses to
-start on it. Served through row 2, with `NEXTAUTH_URL` set to the LAN address,
+`STOKY_SECRET` must not be the example value, because production refuses to
+start on it. An `.env` copied before the rename still says `NEXTAUTH_SECRET`;
+that is read, with a `[config] … is deprecated` line at start-up, until the key
+is renamed (PROGRESS D137). Served through row 2, with `NEXTAUTH_URL` set to the LAN address,
 it starts with an `[auth] warning:` line saying the URL is plain HTTP to
 another machine; that is the truth about row 2, not a fault (`SECURITY.md`,
 *Authentication*).

@@ -60,13 +60,19 @@ describe("the downloadable installation", () => {
     expect(app.DATABASE_URL).toBe(
       `postgresql://${database.POSTGRES_USER}:${database.POSTGRES_PASSWORD}@db:5432/${database.POSTGRES_DB}?schema=public`,
     );
-    expect(app.NEXTAUTH_SECRET).toMatch(/^\$\{NEXTAUTH_SECRET:\?.+\}$/);
+    // Passed through rather than required by Compose (D137): the application
+    // refuses a missing or unusable secret at start-up and names the variable,
+    // and an .env from before the rename still holds the old name, which is
+    // read with a warning until install.sh or the operator renames it.
+    expect(app.STOKY_SECRET).toBe("${STOKY_SECRET:-}");
+    expect(app.NEXTAUTH_SECRET).toBe("${NEXTAUTH_SECRET:-}");
     // The version comes from .env alone. A `:-` default is a hand-kept copy that
     // goes stale on the next release and is what an .env without the line pulls.
     expect(compose.services.app.image).toMatch(/^ghcr\.io\/ngarate\/stoky:\$\{STOKY_VERSION:\?.+\}$/);
     expect(template).toMatch(/^STOKY_VERSION=v\S+$/m);
     expect(template).toMatch(/^POSTGRES_PASSWORD=$/m);
-    expect(template).toMatch(/^NEXTAUTH_SECRET=$/m);
+    expect(template).toMatch(/^STOKY_SECRET=$/m);
+    expect(template).not.toMatch(/NEXTAUTH_SECRET/);
     expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|NEXTAUTH_URL)=/m);
   });
 

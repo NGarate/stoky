@@ -170,7 +170,7 @@ wear two different words (ISSUES UI-11).
 - Never raw SQL without parameterised queries (tagged template literals). An
   `ORDER BY` built by interpolation is the one that looks fine.
 - Never commit secrets. `.env.example` is documentation, and the application
-  refuses to start on its published `NEXTAUTH_SECRET`.
+  refuses to start on its published `STOKY_SECRET`.
 
 ---
 

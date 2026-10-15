@@ -101,7 +101,7 @@ measure() {
   NODE_ENV=production \
   PORT="$port" \
   HOSTNAME=127.0.0.1 \
-  NEXTAUTH_SECRET="$SECRET" \
+  STOKY_SECRET="$SECRET" \
   NEXTAUTH_URL="http://127.0.0.1:$port" \
     "$runtime" "$ARTEFACT" >"$log" 2>&1 &
   pid=$!

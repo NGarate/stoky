@@ -54,6 +54,7 @@ Rules for this log:
 | "feat(auth)!: replace next-auth with Better Auth" (D135; supersedes D125, amends D31) | Better Auth 1.7.7, sessions in the `Session` table, behind `src/server/http/auth-handler.ts` (five allowlisted endpoints, the body bound, Fetch Metadata, JSON only, our limits, the token kept out of bodies). `integration/auth.surface.test.ts` tries every endpoint the instance mounts with a signed-in cookie and finds only the five answer and no row changed; allowlisting `/change-password` turns it red. `integration/session.policy.test.ts` signs in for real: fifteen idle minutes, slid by `auth.session` and by nothing else, a day's cap, a deleted row refused at once; sliding inside `readSession`, dropping the clamp or enabling the cookie cache each turns it red. Ten wrong passwords write ten security lines and no Better Auth line. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(db): drop the sessions-valid-from column" | `20261015131000_drop_sessions_valid_from` drops `User.sessionsValidFrom`, the revocation line next-auth needed and nothing has read since the switch: ending a session is deleting its row (D135). `migration.credential-account.test.ts` migrates a database where an account still has the line set and finds the column gone; leaving the migration out turns it red. `bun run verify:ci` green on the commit. |
 | "feat(auth): refuse to start on settings Better Auth would misread" (D136) | `refuseToStartMisconfigured` exits on production without `NEXTAUTH_URL`, a `NEXTAUTH_URL` that is not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set and `BETTER_AUTH_TELEMETRY` on, each named on its own `[auth] refusing to start:` line; `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL` are each warned about as ignored. `unit/auth-environment.test.ts` runs the instrumentation hook as a production server for each: removing the start-up call, or any one check, turns it red; so does dropping the warning or letting the value into it. `bun run verify:ci` green on the commit. |
+| "feat(auth): read the signing secret from STOKY_SECRET" (D137) | The signing key is `STOKY_SECRET`; `NEXTAUTH_SECRET` is still read when it is unset, with one `[config]` deprecation line at start-up (`src/lib/env-names.ts`). `install.sh` renames the line keeping its value, and the bundle's Compose file passes both names through. `unit/env-names.test.ts`, `unit/auth-secret.test.ts` (the key Better Auth signs with, in a fresh process), `unit/auth-environment.test.ts` (the hook, once), `integration/health.test.ts`, `unit/install-script.test.ts` and `unit/security-log.test.ts` pin the rule; preferring the legacy name, dropping the rename step or the start-up warning each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2699,9 +2700,48 @@ that used to work. An empty value counts as unset, because Compose passes
 `""` for `${X:-}`. A warning rather than a refusal because none of them can
 change what the instance does (`unit/auth-secret.test.ts` reads back the key
 it signs with); the line is for the operator who believes one is in use.
+*D137 (2026-10-15) renames the key `STOKY_SECRET`, which these warnings now
+name.*
 
 The start-up warnings about a URL that is missing or not a URL are gone: the
 refusal names them on its own line, and the warning said sign-in would answer
 503 from a server that now never starts. Source deployments with no
 `NEXTAUTH_URL` stop at boot from this release; the bundle has always set it.
 Closes ISSUES AUTH-3.
+
+**D137 — Environment variables take the `STOKY_` prefix; `NEXTAUTH_SECRET` is
+now `STOKY_SECRET`.** Owner's answer of 2026-10-15. `NEXTAUTH_*`, `AUTH_*` and
+`BETTER_AUTH_*` are names libraries read on their own initiative, sometimes in
+preference to the options they are given: `AUTH_SECRET` once signed every
+session behind the guard's back (security review 2026-10-12, row 6), and
+D136 exists because Better Auth obeys two of its own. A setting an operator
+writes for Stoky should be read by Stoky alone, so its names carry `STOKY_`,
+as `STOKY_REGISTRATION` and `STOKY_VERSION` already did.
+
+The rule lives in one module, `src/lib/env-names.ts`: the new name is read
+first; with it unset the old one is read and a `[config] … is deprecated`
+line is logged; with both set the new one wins and the line says the old one
+is ignored; an empty value is unset, because Compose passes `""` for an unset
+`${X:-}`. The lines are written by `warnAboutRiskyConfiguration`, which runs
+once from `register()`, so each is said once per process, in every
+environment, and never with the value. The start-up guard, `/api/health`, the
+account tag and the Better Auth instance all read the key through
+`configuredSecret`, so none of them can disagree about which name won, and
+every refusal names the variable the value came from.
+
+The bundle keeps existing installations signed in. `deploy/install.sh`
+renames a non-empty `NEXTAUTH_SECRET` to `STOKY_SECRET` in `.env` in place,
+keeping the value, unless `STOKY_SECRET` is already set: a generated value
+beside the old one would sign everybody out and change every account tag in
+the security log. The Compose file passes `STOKY_SECRET` and the legacy name
+through with `${X:-}` instead of `${NEXTAUTH_SECRET:?}`, so an `.env` not yet
+renamed starts with the warning; an operator who sets neither is refused by
+the application, with a line naming `STOKY_SECRET`, instead of by Compose.
+
+Why right after D136 and not before the swap: until D135 next-auth read
+`NEXTAUTH_SECRET` and `AUTH_SECRET` itself, so "the new name wins" could not
+have held. A separate change from the URL list (`STOKY_URLS`), which also
+changes meaning: one URL becomes several. The old name stops being read in a
+later release, not yet chosen. Historical records — closed ISSUES entries,
+earlier decisions here, SECURITY_REVIEW rows, STATUS measurement history,
+`docs/releases` — keep the names they were written with.
