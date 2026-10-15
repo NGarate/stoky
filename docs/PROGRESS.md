@@ -61,6 +61,7 @@ Rules for this log:
 | "feat(auth): keep a person signed in when they ask to" (D141) | The login form's "Mantener la sesión iniciada" box, unticked by default, makes a remembered session: `Session.persistent` (migration `20261015140000_persistent_sessions`), a ninety-day cookie, ninety idle days slid at most daily by a tRPC read, a year from `authenticatedAt` at most. The route passes `rememberMe` only for a literal `true`, sets `x-stoky-remember` after deleting the client's copy on every request, and on a ticked sign-in strips and expires `dont_remember`. `integration/session.policy.test.ts` signs in ticked, omitted and in a jar an unticked sign-in left, slides a day-old row, refuses one a year and a second on though used the day before, and checks the keep-alive never shortens one; `unit/auth-handler.test.ts` the coercion, the header and the cookie; `components/auth-pages.test.tsx` the box; `e2e/remember-me.spec.ts` what a real browser keeps. |
 | "feat(auth): tell an idle timeout from the session limit in the warning" | WCAG 2.2.6: in the day's last fifteen minutes the expiry is the limit from the sign-in and "Seguir conectado" cannot move it. `deadlineKind` (`src/lib/auth/session-policy.ts`) says which deadline an expiry is, with a second's slack; `AppSession.expiresKind` and `auth.session`'s `kind` carry it, and `SessionKeepAlive` names the limit and drops the button for `"cap"`. `SessionKeepAlive.test.tsx` (ignoring the kind turns three red), `session-policy.test.ts` (the boundary at ±1 s) and `session.policy.test.ts` (both answers of `auth.session` and the render's read). SECURITY.md no longer says nothing warns before the day runs out. `bun run verify:ci` green; `bun run test:e2e` 194 passed on six of eight runs, the other two being the service-worker offline test (flaky since commit 15's measurement) and a Firefox navigation timeout. |
 | "feat(auth): sign native clients in with bearer tokens" (D142) | Better Auth's `bearer({ requireSignature: true })` plugin: a client that keeps no cookies signs in at `/sign-in/email` with `rememberMe: true`, reads `<token>.<signature>` from `set-auth-token`, and sends it as `Authorization: Bearer` to tRPC and the auth API; the contract is in SECURITY.md *Authentication*. The route withholds `set-auth-token` and its expose entry from any request that carried a cookie, and the body never has the token. `integration/bearer.test.ts`: a cookie-less, Origin-less sign-in gets the signed token in the header alone; any cookie gets none; the token opens `get-session` and a tRPC query; unsigned and foreign-signed tokens are refused (with a control signed by the instance's own key); sign-out deletes the row; a remembered bearer row slides to the year and no further, a browser-kind one is never moved; a re-sign-in ends the presented bearer session. Removing the plugin, the strip, the body strip, the signature requirement, the update hook's drop, the year's clamp, the sign-out's header or the presented read each turns it red. `unit/trpc-handler.test.ts`: a bearer call with no Fetch Metadata passes, a cross-site one with the cookie is 403. |
+| "feat(auth): let a person end their own sessions after re-entering the password" (D143) | ASVS 5.0.0 7.5.2: `auth.listSessions` lists the account's live sessions as browser, system and — through the new `Session.deviceId` joined to `ScreenChoice` — the screen the device opens on, with no token and no device id; `auth.endSessions` ends one, every other or every one after `confirmCurrentPassword` (`src/lib/auth/reauth.ts`), metered per session (5, refunded on success) and per account (20). Re-entry does not rotate the token, an ASVS 7.2.4 deviation the owner accepted. `integration/session.revocation.test.ts` (+15) signs every session in for real: each scope ends exactly its rows and leaves another account's; a wrong password ends nothing, is `BAD_REQUEST` and logged; the sixth wrong try is 429; a right answer is refunded; one session's spent budget leaves another able to end it; twenty wrong tries across four sessions stop a fifth; a right answer stays counted against the account; a screen another account chose on a shared device is not this one's; another account's id is `NOT_FOUND`; a context without a session id is refused; get-session never carries the device id. Each of nineteen deliberate breaks (the not-current filter, the verify, the per-session key, the account id in "one", the guard, the refund, a refund of the account budget too, the account budget, the account id in the screen join, the hook's device id, `returned: false`, the list's fields, expired rows, the screen join, `NOT_FOUND`, both log lines, `current`, `includedCurrent`) turns it red. `unit/end-sessions.test.ts` refuses `{ id: { not: undefined } }`; `tenant-scoped-ids`, `procedure-inputs`, `rate-limit`, `capabilities` (68) and `device-label` cover the rest. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2975,3 +2976,54 @@ applies unchanged.
   with the browsers'. The contract is written in SECURITY.md
   *Authentication*; ISSUES AUTH-4 and the 2026-10-12 review's #14 point
   there.
+
+**D143 — A person lists their own sessions and ends one, every other or every
+one, only after re-entering the current password; re-entering it does not
+rotate the token.** ASVS 5.0.0 7.5.2 asks that a person can see their active
+sessions and end any of them. `auth.revokeMySessions` could only end every
+one, without a password, and nothing listed them. Now `auth.listSessions`
+lists them and `auth.endSessions` ends them; the settings screen moves onto
+both in a later commit.
+
+- **What a session is shown as.** The browser and system its User-Agent
+  names, coarsely and from a short list (`src/lib/auth/device-label.ts`) —
+  never the string, which the client writes. What tells two Android tablets
+  apart is the screen the device opens on: `Session.deviceId` (migration
+  `20261015141000_session_device`) is the `stoky_device` cookie the sign-in
+  carried, set by the create hook from the request on a sign-in and on a
+  re-create alike, and joined to `ScreenChoice`, so the kitchen tablet reads
+  as the kitchen screen. It is a cookie value: Better Auth is told never to
+  return it (`returned: false`), and the list selects it only for the join.
+  That same flag is why a re-create reads it from the request rather than
+  from the prior session, as `authenticatedAt` and `persistent` are: the
+  prior session reaches the hook as Better Auth answers clients, without it.
+  Personal data, and listed in SECURITY.md's table.
+- **The password every time.** A session somebody else holds must not end
+  the owner's, nor the one it is about to be evicted from.
+  `confirmCurrentPassword` (`src/lib/auth/reauth.ts`) is the one way any
+  action re-asks for it, and later actions use it too.
+- **Two budgets.** Per session (`reauthRateLimit`, five per fifteen minutes),
+  so a thief guessing from a stolen session spends that session's budget and
+  not the owner's — the owner, on their own session, can still end the
+  thief's. Per account (`reauthAccountRateLimit`, twenty), so the ten
+  sessions an account may hold (D140) are not ten budgets. A right answer
+  refunds the per-session attempt to the window that counted it; the
+  account's is never refunded. Both are counted before Argon2id.
+- **Scoped in the filter, not after it.** `"one"` deletes by id *and* the
+  caller's account id, so another account's id is `NOT_FOUND`, like an id
+  nobody has. `"others"` keeps the asking session by its id; a context with
+  no id is refused before the password is asked, and `endSessions` now also
+  refuses a missing value one level down, because Prisma reads `{ id: { not:
+  undefined } }` as no condition and "every other" would become "every one".
+- **No token rotation — a deviation from ASVS 5.0.0 7.2.4**, accepted by the
+  owner on 2026-10-15. 7.2.4 reads a re-authentication as an
+  authentication, after which a new token is due. Here the password confirms
+  one action and grants nothing beyond it — the session is not marked as
+  freshly authenticated — and the call is tRPC, whose response headers are
+  sent before a resolver could set a rotated cookie. Every later re-entry
+  (two-step verification, passkeys, an admin removing a member's two-step
+  verification) is the same and cites this decision.
+- **What it costs.** A wrong password is `BAD_REQUEST`, logged as
+  `auth.reauth.refused` with the action as `via`, because the refusal
+  middleware does not record `BAD_REQUEST`. The per-session counter's key
+  is the session id, which is not a credential.

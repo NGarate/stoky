@@ -118,6 +118,15 @@ model Session {
   /// stays null.
   ipAddress       String?
   userAgent       String?
+  /// The `stoky_device` cookie the sign-in carried, if it carried a valid
+  /// one (PROGRESS D143); carried across Better Auth's re-creates. What joins
+  /// a session to the screen its device opens on (`ScreenChoice`), so the
+  /// list of a person's sessions can say "kitchen screen" where the
+  /// User-Agent alone cannot tell two tablets apart. Never sent to a client:
+  /// it is a cookie value, and the list reads it only to make that join.
+  /// Null for a native client, which keeps no cookies, and for rows written
+  /// before.
+  deviceId        String?
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

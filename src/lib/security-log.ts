@@ -80,6 +80,11 @@ export type SecurityEvent =
   // it and `targetUserId` the account it was done to: the line that answers
   // "who set my password?" when the answer is not "you".
   | "auth.password.reset"
+  // The current password re-entered to confirm an action was wrong
+  // (`src/lib/auth/reauth.ts`). `via` names the action — `end-sessions` —
+  // so a grep tells a typo before ending a session from a stolen session
+  // guessing. BAD_REQUEST, like the password change's, so written here.
+  | "auth.reauth.refused"
   | "access.denied"
   | "request.throttled";
 
@@ -123,6 +128,8 @@ export interface SecurityDetails {
   method?: SignInMethod;
   /** How many things an action affected: sessions, for `auth.session.ended`. */
   count?: number;
+  /** The action a re-entered password was to confirm (`auth.reauth.refused`). */
+  via?: string;
 }
 
 /**

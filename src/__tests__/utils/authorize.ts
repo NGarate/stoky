@@ -72,6 +72,8 @@ export interface SignInOptions {
   rawBody?: string;
   /** Sent as `Authorization`, as a native client holding a session does. */
   authorization?: string;
+  /** Sent as `User-Agent`, which the session row records. */
+  userAgent?: string;
 }
 
 /** The cookies a `Set-Cookie` list leaves a browser holding, as a `Cookie` header. */
@@ -101,6 +103,7 @@ export async function signInWith(
   if (origin) headers.set("origin", origin);
   if (options.fetchSite) headers.set("sec-fetch-site", options.fetchSite);
   if (options.authorization) headers.set("authorization", options.authorization);
+  if (options.userAgent) headers.set("user-agent", options.userAgent);
 
   const response = await POST(
     new Request(`${testOrigin()}/api/auth/sign-in/email`, {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_EMAIL_LENGTH, MAX_NAME_LENGTH } from "./bounds";
+import { MAX_EMAIL_LENGTH, MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
 import {
   existingPasswordSchema,
   newPasswordSchema,
@@ -53,6 +53,27 @@ export const changePasswordSchema = z.object({
   newPassword: newPasswordSchema,
 });
 
+/**
+ * A signed-in person ending their own sessions (`auth.endSessions`, D143):
+ * one of them, every one but this, or every one.
+ *
+ * The current password every time — bounded like sign-in's, not policed — so
+ * a session somebody else is holding cannot end the owner's. `sessionId` is a
+ * row id from `auth.listSessions`, bounded like every other id; `"one"`
+ * needs it and the others ignore it. It is only ever matched beside the
+ * caller's own account id, so an id that is not theirs ends nothing.
+ */
+export const endSessionsSchema = z
+  .object({
+    currentPassword: existingPasswordSchema,
+    scope: z.enum(["one", "others", "all"]),
+    sessionId: z.string().min(1).max(MAX_ID_LENGTH).optional(),
+  })
+  .refine((input) => input.scope !== "one" || input.sessionId !== undefined, {
+    message: "Choose the session to end",
+    path: ["sessionId"],
+  });
+
 export const createHouseholdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
 });
@@ -65,5 +86,6 @@ export const inviteMemberSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type EndSessionsInput = z.infer<typeof endSessionsSchema>;
 export type CreateHouseholdInput = z.infer<typeof createHouseholdSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

@@ -2,7 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { changePasswordSchema, registerSchema } from "@/lib/validations/auth";
+import {
+  changePasswordSchema,
+  endSessionsSchema,
+  registerSchema,
+} from "@/lib/validations/auth";
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -22,6 +26,8 @@ import {
   setPasswordAndEndSessions,
 } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
+import { deviceLabel } from "@/lib/auth/device-label";
+import { confirmCurrentPassword } from "@/lib/auth/reauth";
 import {
   capFor,
   deadlineKind,
@@ -61,7 +67,8 @@ function registrationClosed(): TRPCError {
  *
  * So what is left is the parts Better Auth is not asked to do: creating an
  * account, reading the current one and its session's expiry, changing its
- * password, ending its sessions, and a `logout` that exists for shape.
+ * password, listing and ending its sessions, and a `logout` that exists for
+ * shape.
  */
 export const authRouter = createTRPCRouter({
   /**
@@ -377,6 +384,124 @@ export const authRouter = createTRPCRouter({
   }),
 
   /**
+   * This account's live sessions, one per signed-in browser or app — what a
+   * person needs to see before ending one (ASVS 5.0.0 7.5.2, PROGRESS D143).
+   *
+   * **Never a token, never the device id.** The select names its columns, so
+   * a column added later is not listed until somebody decides it should be:
+   * `token` is the credential the cookie signs, and `deviceId` is the
+   * `stoky_device` cookie's value, read here only to join `ScreenChoice`.
+   * What a session is shown as is the browser and system its User-Agent names
+   * (`deviceLabel`) and, where the device has chosen one, the screen it opens
+   * on — which is what tells the kitchen tablet from a phone.
+   *
+   * Expired rows are left out: they are sessions that have ended and are only
+   * waiting to be deleted (D139). `signedInAt` is `authenticatedAt`, not
+   * `createdAt`, which Better Auth resets when it re-creates a session.
+   * `lastUsedAt` is `updatedAt`, as coarse as the writes that move it (D140).
+   *
+   * `protectedProcedure`, for the reason `revokeMySessions` gives. A query,
+   * so it takes no input.
+   */
+  listSessions: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const rows = await ctx.db.session.findMany({
+      where: { userId, expiresAt: { gt: new Date() } },
+      select: {
+        id: true,
+        authenticatedAt: true,
+        updatedAt: true,
+        expiresAt: true,
+        userAgent: true,
+        persistent: true,
+        deviceId: true,
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    });
+
+    const deviceIds = [...new Set(rows.flatMap((row) => (row.deviceId ? [row.deviceId] : [])))];
+    const choices =
+      deviceIds.length === 0
+        ? []
+        : await ctx.db.screenChoice.findMany({
+            where: { userId, deviceId: { in: deviceIds } },
+            select: { deviceId: true, screen: true },
+          });
+    const screenOf = new Map(choices.map((choice) => [choice.deviceId, choice.screen]));
+
+    return rows.map((row) => ({
+      id: row.id,
+      device: deviceLabel(row.userAgent),
+      screen: (row.deviceId && screenOf.get(row.deviceId)) || null,
+      signedInAt: row.authenticatedAt,
+      lastUsedAt: row.updatedAt,
+      expiresAt: row.expiresAt,
+      remembered: row.persistent,
+      current: row.id === ctx.session.sessionId,
+    }));
+  }),
+
+  /**
+   * End one of this account's sessions, every one but this, or every one —
+   * after the current password (ASVS 5.0.0 7.5.2, PROGRESS D143).
+   *
+   * **The password first** (`confirmCurrentPassword`): a session somebody
+   * else is holding — a phone picked up, a tablet left signed in — must not
+   * be able to sign the owner out of theirs, or end the one it is being
+   * evicted from. It is counted per session and per account before Argon2id
+   * runs, and a wrong one is BAD_REQUEST, logged, and ends nothing.
+   *
+   * **Scoped to the account in every branch.** `"one"` deletes the row with
+   * that id *and* this account's id, so another account's id ends nothing and
+   * is answered NOT_FOUND, the same as an id nobody has: the caller learns
+   * nothing about other people's sessions. `"others"` keeps the session
+   * asking, by its id; a context without one is refused before the password
+   * is asked, because Prisma reads `{ id: { not: undefined } }` as no
+   * condition and `"others"` would become `"all"`.
+   *
+   * Logged as `auth.session.ended` with `reason: "self"`, and answers how
+   * many ended and whether this session was one of them, so the screen knows
+   * whether to sign out.
+   *
+   * No token rotation for the session that confirmed: SECURITY.md
+   * *Authentication* records that deviation from ASVS 7.2.4.
+   */
+  endSessions: protectedProcedure
+    .input(endSessionsSchema)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const current = ctx.session.sessionId;
+
+      await confirmCurrentPassword(ctx, input.currentPassword, "end-sessions");
+
+      const where =
+        input.scope === "one"
+          ? { userId, id: input.sessionId }
+          : input.scope === "others"
+            ? { userId, id: { not: current } }
+            : { userId };
+      const ended = await endSessions(ctx.db, where);
+
+      if (input.scope === "one" && ended === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      }
+
+      logSecurityEvent("auth.session.ended", {
+        userId,
+        targetUserId: userId,
+        reason: "self",
+        count: ended,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
+      });
+
+      return {
+        ended,
+        includedCurrent:
+          input.scope === "all" || (input.scope === "one" && input.sessionId === current),
+      };
+    }),
+
+  /**
    * A signed-in person replaces their own password, and every session the
    * account has ends — this one included.
    *
@@ -491,8 +616,8 @@ export const authRouter = createTRPCRouter({
    * deleted, so a copy of the cookie taken before is refused too. The other
    * devices' sessions end when they sit idle for fifteen minutes, a day after
    * their sign-in (`src/lib/auth/session-policy.ts`), or when somebody ends
-   * the account's sessions — `revokeMySessions` above, or an admin from the
-   * members panel.
+   * the account's sessions — `revokeMySessions` or `endSessions` above, or an
+   * admin from the members panel.
    *
    * **`z.void()` on the three mutations that take nothing** — this,
    * `revokeMySessions` and `shopping.generateFromLowStock`. With no parser

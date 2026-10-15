@@ -7,6 +7,7 @@ import { bearer } from "better-auth/plugins/bearer";
 import { prisma } from "@/lib/prisma";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
 import { configuredSecret } from "@/lib/auth/secret";
 import {
@@ -170,6 +171,10 @@ function build(env: Record<string, string | undefined>) {
         // would be applied before the hook could tell a re-create from a
         // sign-in.
         persistent: { type: "boolean", required: false, input: false },
+        // The `stoky_device` cookie, for the list of a person's sessions
+        // (D143). `returned: false` keeps it out of every answer Better Auth
+        // gives, `get-session` included: it is a cookie value.
+        deviceId: { type: "string", required: false, input: false, returned: false },
       },
     },
     rateLimit: { enabled: false },
@@ -207,12 +212,20 @@ function build(env: Record<string, string | undefined>) {
            * that already has one: a password change, two-step verification
            * being turned on — carries both over, so the limit still counts
            * from the sign-in and a remembered device stays remembered.
+           *
+           * **The device, either way, is the `stoky_device` cookie the
+           * request carried**, if a valid one (D143). For a re-create that is
+           * the same device, asking from the same browser. It is not taken
+           * from the prior session as the other two are, because Better Auth
+           * hands this hook that session as it answers clients, without the
+           * fields marked `returned: false` — `deviceId` among them.
            */
           before: async (session, ctx) => {
             const now = new Date();
             const prior = ctx?.context?.session?.session as
               | { authenticatedAt?: Date | string | null; persistent?: boolean | null }
               | undefined;
+            const deviceId = (ctx?.headers && deviceIdFromHeaders(ctx.headers)) ?? null;
 
             let authenticatedAt: Date;
             let persistent: boolean;
@@ -240,6 +253,7 @@ function build(env: Record<string, string | undefined>) {
                 ...session,
                 authenticatedAt,
                 persistent,
+                deviceId,
                 expiresAt: initialExpiry({ persistent, authenticatedAt, now }),
                 ipAddress: null,
               },

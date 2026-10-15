@@ -677,6 +677,38 @@ Verified against the files named in each row.
   Configuración (`auth.revokeMySessions`), or an admin from **Personas del
   hogar** — which delete the rows and log `auth.session.ended` with the
   `reason` (`self`, `admin`), who asked and how many sessions went.
+- **A person can list their sessions and end one, every other or every one,
+  after re-entering the current password** (ASVS 5.0.0 7.5.2, PROGRESS
+  D143). `auth.listSessions` answers each live row as the browser and system
+  its User-Agent names (`src/lib/auth/device-label.ts`), the screen its
+  device opens on when it has chosen one — so the kitchen tablet reads as the
+  kitchen screen — when it was signed in, last used and ends, whether it is
+  remembered, and whether it is the one asking. It never answers a token or
+  the device id: the select names its columns, and the device id is
+  `Session.deviceId`, the `stoky_device` cookie the sign-in carried, which
+  Better Auth is told never to return (`returned: false`) and which the list
+  reads only to join `ScreenChoice`. `auth.endSessions` takes the current
+  password and a scope. Every branch deletes only rows of the caller's own
+  account, so another account's session id is `NOT_FOUND`, like an id
+  nobody has; "every other" keeps the asking session by its id, and a
+  context without one is refused before the password is asked, because
+  Prisma reads `{ id: { not: undefined } }` as no condition and
+  `endSessions` refuses that filter too. A wrong password is `BAD_REQUEST`,
+  ends nothing and logs `auth.reauth.refused` with `via: "end-sessions"`.
+  The re-entry is metered twice before Argon2id runs: five per fifteen
+  minutes **per session**, refunded when the password is right, so whoever
+  holds a stolen session cannot spend the owner's way to end it; and twenty
+  per fifteen minutes **per account**, never refunded, so ten sessions are
+  not ten budgets (`reauthRateLimit`, `reauthAccountRateLimit`). Better
+  Auth's own session-listing and revoking endpoints stay closed (below).
+  **Deviation from ASVS 5.0.0 7.2.4**, accepted by the owner on 2026-10-15:
+  re-entering the password does not rotate the session token. 7.2.4 reads a
+  re-authentication as an authentication, after which a new token is due.
+  Here the password confirms one action and nothing else — the session is
+  not marked as freshly authenticated and gains no standing it did not have
+  — and the call is tRPC, whose response headers are on their way before a
+  resolver could set a rotated cookie. The same holds for every later
+  re-entry (`confirmCurrentPassword`, `src/lib/auth/reauth.ts`).
 - **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
   PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
   the old row alive, so after the sign-in succeeds the auth route deletes the
@@ -1472,8 +1504,10 @@ publishing an instance:
   `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
   `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`,
-  `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS` and
-  `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`. Raising them raises the
+  `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS`,
+  `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
+  `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS` and
+  `RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS`. Raising them raises the
   exposure; the browser suite raises the sign-in, known-device, registration,
   add-member and product-lookup attempts (`playwright.config.ts` says why for
   each), and a
@@ -1498,7 +1532,9 @@ are not JSON. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.signin.succeeded`,
 `auth.unavailable`,
 `auth.session.ended`, `auth.password.changed`,
-`auth.password.change.refused`, `auth.password.reset`, `access.denied` and
+`auth.password.change.refused`, `auth.password.reset`, `auth.reauth.refused`
+(a wrong current password re-entered to confirm an action, with the action as
+`via`; D143), `access.denied` and
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
 `reason` — `self` for a person ending their own, `admin` for an admin ending a
@@ -1506,7 +1542,8 @@ member's, `replaced` for a sign-in ending the session its browser presented
 (D139), `evicted` for a sign-in ending the account's least recently used
 session to stay within ten (D140) — the `userId` who asked, the
 `targetUserId` whose they were, and
-the `count` of sessions ended (for `replaced`, the account's expired rows the
+the `count` of sessions ended (`self` covers ending one, every other or every
+one, D143; for `replaced`, the account's expired rows the
 same sign-in deleted are counted too). A session that simply runs out writes nothing;
 its row is deleted when next read.
 
@@ -1896,7 +1933,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 66 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 68 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
@@ -2158,7 +2195,7 @@ is stored, logged or sent.
 |---|---|---|
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
-| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, and the browser's User-Agent string. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
+| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Nothing writes one yet | PostgreSQL `Verification` | Until it expires and is cleared |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
@@ -2166,7 +2203,7 @@ is stored, logged or sent.
 | Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
 | The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
 | An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
-| Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
+| Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions, and the session id for the per-session budget of a re-entered password (D143) | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
 | Known devices: for each account (keyed by the same unkeyed hash), SHA-256 fingerprints of up to 20 `stoky_device` ids | Valkey | A year after the last successful sign-in from that device |
 | The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
 | Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |

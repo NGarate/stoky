@@ -32,6 +32,28 @@ describe("endSessions", () => {
     expect(deleteMany).not.toHaveBeenCalled();
   });
 
+  it("refuses a missing value one level down, which would also be everyone", async () => {
+    // "Every session but this one" from a context with no "this one": Prisma
+    // reads `{ not: undefined }` as no condition, so it would end them all.
+    const { db, deleteMany } = fakeDb();
+
+    await expect(
+      endSessions(db, { userId: "user-1", id: { not: undefined } }),
+    ).rejects.toThrow(/every session/);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("still runs a filter whose nested values are all there", async () => {
+    const { db, deleteMany } = fakeDb(1);
+    const now = new Date();
+
+    expect(
+      await endSessions(db, { userId: "user-1", id: { not: "s-1" }, expiresAt: { lt: now } }),
+    ).toBe(1);
+    expect(await endSessions(db, { userId: "user-1", id: { in: ["s-2", "s-3"] } })).toBe(1);
+    expect(deleteMany).toHaveBeenCalledTimes(2);
+  });
+
   it("refuses an empty filter, which would be everyone", async () => {
     const { db, deleteMany } = fakeDb();
 

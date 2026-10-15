@@ -5,7 +5,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { readSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { signInWith } from "../utils/authorize";
+import { signInWith, testOrigin } from "../utils/authorize";
 import {
   createMockSession,
   createTestHousehold,
@@ -211,5 +211,336 @@ describe("who may end whose sessions", () => {
     await sole.caller.household.revokeMemberSessions({ userId: sole.id });
 
     expect(await signedIn(sole)).toBe(false);
+  });
+});
+
+/**
+ * A person's own sessions, listed and ended after the current password
+ * (`auth.listSessions`, `auth.endSessions`; ASVS 5.0.0 7.5.2, PROGRESS D143).
+ *
+ * Every session here is a real sign-in, and every caller runs on the session
+ * one of them got — read back with `readSession`, as the tRPC route does —
+ * because "this session", "the others" and "the per-session budget" all mean
+ * the row a real cookie names.
+ */
+
+const WRONG = "no es la contraseña";
+const FIREFOX_ANDROID = "Mozilla/5.0 (Android 14; Mobile; rv:131.0) Gecko/131.0 Firefox/131.0";
+
+interface Device {
+  /** What the browser sends: the session cookie, and `stoky_device` when it has one. */
+  headers: Headers;
+  sessionId: string;
+}
+
+interface Person {
+  id: string;
+  email: string;
+}
+
+async function person(label: string): Promise<Person> {
+  const email = generateTestEmail(`own-${label.toLowerCase()}`);
+  const user = await createTestUser({
+    email,
+    name: `${PREFIX}${label}`,
+    password: PASSWORD,
+    householdId,
+    role: "MEMBER",
+  });
+  return { id: user.id, email };
+}
+
+async function signInDevice(
+  who: Person,
+  options: { deviceId?: string; userAgent?: string } = {},
+): Promise<Device> {
+  const outcome = await signInWith({ email: who.email, password: PASSWORD }, options);
+  expect(outcome.status).toBe(200);
+  const cookie = [
+    options.deviceId ? `stoky_device=${options.deviceId}` : "",
+    outcome.cookieHeader,
+  ]
+    .filter(Boolean)
+    .join("; ");
+  const headers = new Headers({ cookie });
+  const session = await readSession(headers, { refresh: false });
+  if (!session) throw new Error("the sign-in left no session to read");
+  return { headers, sessionId: session.sessionId };
+}
+
+/** A caller on `device`'s own session, as the tRPC route builds one. */
+async function callerOn(device: Device): Promise<Caller> {
+  const session = await readSession(device.headers, { refresh: false });
+  if (!session) throw new Error("that device is signed out");
+  const ctx = await createTRPCContext({
+    session,
+    headers: new Headers({ "x-forwarded-for": "203.0.113.21" }),
+  });
+  return appRouter.createCaller(ctx);
+}
+
+const alive = async (device: Device) => (await readSession(device.headers, { refresh: false })) !== null;
+
+describe("a person's own sessions", () => {
+  it("lists each live one by device, with no token and no device id", async () => {
+    const me = await person("Lists");
+    const deviceId = crypto.randomUUID();
+    const kitchen = await signInDevice(me, { deviceId, userAgent: FIREFOX_ANDROID });
+    const laptop = await signInDevice(me);
+    await prisma.screenChoice.create({ data: { userId: me.id, deviceId, screen: "KITCHEN" } });
+    // An expired row is a session that has ended; it is not listed.
+    const expired = await prisma.session.create({
+      data: { token: `${PREFIX}expired-${crypto.randomUUID()}`, userId: me.id, expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const listed = await (await callerOn(laptop)).auth.listSessions();
+
+    expect(listed.map((row) => row.id).toSorted()).toEqual([kitchen.sessionId, laptop.sessionId].toSorted());
+    expect(listed.map((row) => row.id)).not.toContain(expired.id);
+    const tablet = listed.find((row) => row.id === kitchen.sessionId);
+    expect(tablet).toMatchObject({
+      device: { browser: "Firefox", os: "Android" },
+      screen: "KITCHEN",
+      remembered: false,
+      current: false,
+    });
+    expect(listed.find((row) => row.id === laptop.sessionId)).toMatchObject({ current: true, screen: null });
+    for (const row of listed) {
+      expect(Object.keys(row).toSorted()).toEqual(
+        ["current", "device", "expiresAt", "id", "lastUsedAt", "remembered", "screen", "signedInAt"],
+      );
+      expect(JSON.stringify(row)).not.toContain(deviceId);
+    }
+    // And the row really holds it: the join above is not a coincidence.
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: kitchen.sessionId } })).deviceId).toBe(deviceId);
+  });
+
+  it("names a device by this account's screen choice, never another account's on it", async () => {
+    // A shared tablet: another person chose a screen on it, this one did not.
+    const me = await person("SharedTablet");
+    const other = await person("OtherOnTablet");
+    const deviceId = crypto.randomUUID();
+    const tablet = await signInDevice(me, { deviceId });
+    await prisma.screenChoice.create({ data: { userId: other.id, deviceId, screen: "SHOPPING" } });
+
+    const listed = await (await callerOn(tablet)).auth.listSessions();
+
+    expect(listed).toEqual([expect.objectContaining({ id: tablet.sessionId, screen: null })]);
+  });
+
+  it("never hands the device id to the browser that signed in", async () => {
+    // `returned: false`: Better Auth's own answers leave it out, the sign-in's
+    // and get-session's alike.
+    const me = await person("Hidden");
+    const deviceId = crypto.randomUUID();
+    const outcome = await signInWith({ email: me.email, password: PASSWORD }, { deviceId });
+
+    expect(outcome.status).toBe(200);
+    expect(JSON.stringify(outcome.body)).not.toContain(deviceId);
+    const { GET } = await import("@/app/api/auth/[...all]/route");
+    const read = await GET(
+      new Request(`${testOrigin()}/api/auth/get-session`, {
+        headers: { cookie: `stoky_device=${deviceId}; ${outcome.cookieHeader}` },
+      }),
+    );
+    const text = await read.text();
+    expect(text).toContain(me.id);
+    expect(text).not.toContain(deviceId);
+    expect(text).not.toContain("deviceId");
+  });
+
+  it("ends one, by id, and nothing else", async () => {
+    const me = await person("One");
+    const [here, phone, tablet] = [await signInDevice(me), await signInDevice(me), await signInDevice(me)];
+
+    const answer = await (await callerOn(here)).auth.endSessions({
+      currentPassword: PASSWORD,
+      scope: "one",
+      sessionId: phone.sessionId,
+    });
+
+    expect(answer).toEqual({ ended: 1, includedCurrent: false });
+    expect([await alive(here), await alive(phone), await alive(tablet)]).toEqual([true, false, true]);
+  });
+
+  it("ends every other one, and keeps the one asking", async () => {
+    const me = await person("Others");
+    const someoneElse = await person("Bystander");
+    const [here, phone, tablet] = [await signInDevice(me), await signInDevice(me), await signInDevice(me)];
+    const theirs = await signInDevice(someoneElse);
+
+    const answer = await (await callerOn(here)).auth.endSessions({
+      currentPassword: PASSWORD,
+      scope: "others",
+    });
+
+    expect(answer).toEqual({ ended: 2, includedCurrent: false });
+    expect([await alive(here), await alive(phone), await alive(tablet)]).toEqual([true, false, false]);
+    expect(await alive(theirs)).toBe(true);
+  });
+
+  it("ends every one, the one asking included, and says so", async () => {
+    const me = await person("All");
+    const someoneElse = await person("Untouched");
+    const [here, phone] = [await signInDevice(me), await signInDevice(me)];
+    const theirs = await signInDevice(someoneElse);
+
+    let answer: unknown;
+    const events = await eventsDuring(async () => {
+      answer = await (await callerOn(here)).auth.endSessions({ currentPassword: PASSWORD, scope: "all" });
+    });
+
+    expect(answer).toEqual({ ended: 2, includedCurrent: true });
+    expect([await alive(here), await alive(phone)]).toEqual([false, false]);
+    expect(await rows(me.id)).toBe(0);
+    expect(await alive(theirs)).toBe(true);
+    expect(events.filter((event) => event.event === "auth.session.ended")).toEqual([
+      expect.objectContaining({ userId: me.id, targetUserId: me.id, reason: "self", count: "2" }),
+    ]);
+  });
+
+  it("answers this session's own id, ended alone, as including the current one", async () => {
+    const me = await person("Self");
+    const here = await signInDevice(me);
+
+    expect(
+      await (await callerOn(here)).auth.endSessions({ currentPassword: PASSWORD, scope: "one", sessionId: here.sessionId }),
+    ).toEqual({ ended: 1, includedCurrent: true });
+    expect(await alive(here)).toBe(false);
+  });
+
+  it("refuses a wrong password, ends nothing, and records it", async () => {
+    const me = await person("Wrong");
+    const [here, phone] = [await signInDevice(me), await signInDevice(me)];
+    const caller = await callerOn(here);
+
+    let code = null as string | null;
+    const events = await eventsDuring(async () => {
+      code = await codeOf(caller.auth.endSessions({ currentPassword: WRONG, scope: "others" }));
+    });
+
+    expect(code).toBe("BAD_REQUEST");
+    expect([await alive(here), await alive(phone)]).toEqual([true, true]);
+    expect(events.filter((event) => event.event === "auth.reauth.refused")).toEqual([
+      expect.objectContaining({ userId: me.id, via: "end-sessions", address: "203.0.113.21" }),
+    ]);
+    expect(events.some((event) => event.event === "auth.session.ended")).toBe(false);
+  });
+
+  it("counts wrong passwords against the session, and refuses the sixth before checking it", async () => {
+    const me = await person("Counted");
+    const here = await signInDevice(me);
+    const caller = await callerOn(here);
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      expect(await codeOf(caller.auth.endSessions({ currentPassword: WRONG, scope: "others" }))).toBe("BAD_REQUEST");
+    }
+    // The right password now, and still refused: the budget is spent.
+    expect(await codeOf(caller.auth.endSessions({ currentPassword: PASSWORD, scope: "others" }))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("gives a right answer's attempt back, so confirming again and again is never refused", async () => {
+    const me = await person("Refunded");
+    const here = await signInDevice(me);
+    const caller = await callerOn(here);
+
+    expect(await codeOf(caller.auth.endSessions({ currentPassword: WRONG, scope: "others" }))).toBe("BAD_REQUEST");
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      expect(await codeOf(caller.auth.endSessions({ currentPassword: PASSWORD, scope: "others" }))).toBeNull();
+    }
+  });
+
+  it("leaves another session of the account able to confirm after one has spent its budget", async () => {
+    // The point of counting per session: the owner, on their own session,
+    // can still end the one somebody else is guessing from.
+    const me = await person("Evicts");
+    const stolen = await signInDevice(me);
+    const owner = await signInDevice(me);
+    const thief = await callerOn(stolen);
+
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      await codeOf(thief.auth.endSessions({ currentPassword: WRONG, scope: "others" }));
+    }
+    expect(await codeOf(thief.auth.endSessions({ currentPassword: PASSWORD, scope: "others" }))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+
+    expect(
+      await (await callerOn(owner)).auth.endSessions({ currentPassword: PASSWORD, scope: "one", sessionId: stolen.sessionId }),
+    ).toEqual({ ended: 1, includedCurrent: false });
+    expect(await alive(stolen)).toBe(false);
+    expect(await alive(owner)).toBe(true);
+  });
+
+  it("stops guessing spread over many sessions at the account's twenty", async () => {
+    // The backstop: ten sessions are not ten budgets of five.
+    const me = await person("Spread");
+    const devices = [];
+    for (let i = 0; i < 5; i += 1) devices.push(await signInDevice(me));
+    for (const device of devices.slice(0, 4)) {
+      const caller = await callerOn(device);
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        expect(await codeOf(caller.auth.endSessions({ currentPassword: WRONG, scope: "others" }))).toBe("BAD_REQUEST");
+      }
+    }
+
+    // A fifth session's own budget is untouched; the account's is spent.
+    expect(
+      await codeOf((await callerOn(devices[4])).auth.endSessions({ currentPassword: PASSWORD, scope: "others" })),
+    ).toBe("TOO_MANY_REQUESTS");
+    expect(await rows(me.id)).toBe(5);
+  });
+
+  it("keeps a right answer counted against the account, so the owner cannot refill it", async () => {
+    // Only the per-session charge is given back. Were the account's refunded
+    // too, the owner's own confirmations would hand the thief more guesses.
+    const me = await person("Backstop");
+    const devices = [];
+    for (let i = 0; i < 5; i += 1) devices.push(await signInDevice(me));
+    for (const [index, device] of devices.slice(0, 4).entries()) {
+      const caller = await callerOn(device);
+      for (let attempt = 1; attempt <= (index === 3 ? 4 : 5); attempt += 1) {
+        expect(await codeOf(caller.auth.endSessions({ currentPassword: WRONG, scope: "others" }))).toBe("BAD_REQUEST");
+      }
+    }
+
+    // Nineteen wrong; the owner's right answer is the twentieth, and allowed.
+    const owner = await callerOn(devices[4]);
+    expect(await codeOf(owner.auth.endSessions({ currentPassword: PASSWORD, scope: "others" }))).toBeNull();
+    // Its session's attempt came back; the account's did not.
+    expect(await codeOf(owner.auth.endSessions({ currentPassword: PASSWORD, scope: "others" }))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("answers another account's session id as not found, and ends nothing", async () => {
+    const me = await person("Prober");
+    const other = await person("Probed");
+    const here = await signInDevice(me);
+    const theirs = await signInDevice(other);
+
+    expect(
+      await codeOf(
+        (await callerOn(here)).auth.endSessions({ currentPassword: PASSWORD, scope: "one", sessionId: theirs.sessionId }),
+      ),
+    ).toBe("NOT_FOUND");
+    expect(await alive(theirs)).toBe(true);
+    expect(await alive(here)).toBe(true);
+  });
+
+  it("refuses 'every other' from a context that names no session, before asking anything", async () => {
+    // Prisma reads `{ id: { not: undefined } }` as no condition: without the
+    // refusal, "every other" would be every one.
+    const me = await person("Nameless");
+    const [phone, tablet] = [await signInDevice(me), await signInDevice(me)];
+    const session = await readSession(phone.headers, { refresh: false });
+    if (!session) throw new Error("unreachable");
+    const nameless = { ...session, sessionId: undefined as unknown as string };
+    const caller = appRouter.createCaller(await createTRPCContext({ session: nameless }));
+
+    expect(await codeOf(caller.auth.endSessions({ currentPassword: PASSWORD, scope: "others" }))).toBe("BAD_REQUEST");
+    expect([await alive(phone), await alive(tablet)]).toEqual([true, true]);
   });
 });

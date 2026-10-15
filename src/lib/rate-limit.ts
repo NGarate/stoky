@@ -19,9 +19,11 @@ import { closeValkey, valkey } from "@/lib/valkey";
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
  * receipt upload, `addMemberRateLimit` the Argon2id hash behind adding a
- * member, and `passwordChangeRateLimit` a signed-in person's own password
- * change — all authenticated, all expensive enough that an account looping
- * on them is its own denial of service — and `productLookupRateLimit` meters
+ * member, `passwordChangeRateLimit` a signed-in person's own password
+ * change, and `reauthRateLimit` with `reauthAccountRateLimit` the password
+ * re-entered to confirm an action — all authenticated, all either expensive
+ * enough that an account looping on them is its own denial of service or a
+ * way to guess the password behind a session — and `productLookupRateLimit` meters
  * the requests an account makes this instance send to Open Food Facts. The
  * counting machinery is the
  * same; what differs per limit is the number, the window, and what the counter
@@ -241,6 +243,47 @@ export function passwordChangeRateLimit(): RateLimit {
     "RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS",
     "RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS",
     5,
+    15 * 60,
+  );
+}
+
+/**
+ * Re-entering the current password to confirm an action — ending sessions
+ * today — counted **per session** (`src/lib/auth/reauth.ts`, PROGRESS D143).
+ *
+ * The question is the one `passwordChangeRateLimit` meters, "is this the
+ * password?", asked from a session somebody may have stolen. Per session
+ * rather than per account because of what the answer is for: the owner
+ * ending a stolen session re-enters the password *from their own session*,
+ * and a budget the thief could spend from theirs would let the thief keep the
+ * owner from evicting them. Five a quarter of an hour is sign-in's
+ * per-address number. A right answer gives its attempt back, so a person who
+ * confirms several actions in a row is never refused.
+ */
+export function reauthRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:reauth",
+    "RATE_LIMIT_REAUTH_ATTEMPTS",
+    "RATE_LIMIT_REAUTH_WINDOW_SECONDS",
+    5,
+    15 * 60,
+  );
+}
+
+/**
+ * The same re-entry, counted **per account**: the backstop to the per-session
+ * budget above, which ten sessions (D140), each signed in afresh, would
+ * otherwise multiply. Twenty a quarter of an hour is above anything a person
+ * does and below what guessing needs. Not refunded on a right answer: only
+ * the per-session charge is, so a thief's wrong guesses stay counted here
+ * whatever the owner does. Keyed on the account id, which is already opaque.
+ */
+export function reauthAccountRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:reauth-acct",
+    "RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS",
+    "RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS",
+    20,
     15 * 60,
   );
 }

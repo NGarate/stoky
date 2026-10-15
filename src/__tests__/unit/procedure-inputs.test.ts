@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { appRouter } from "@/server/trpc/router";
+import { MAX_PASSWORD_LENGTH } from "@/lib/validations/password";
 
 /**
  * Every mutation declares what it accepts.
@@ -61,4 +62,25 @@ describe("mutation inputs", () => {
       expect(schema.safeParse({}).success).toBe(false);
     },
   );
+
+  it("auth.endSessions asks for the password, and for the session when it ends one", () => {
+    // D143. Without the password a session somebody else holds could end the
+    // owner's; without the id, "one" would have nothing to scope to.
+    const schema = (procedures["auth.endSessions"] as ProcedureDef)._def.inputs[0] as {
+      safeParse: (value: unknown) => { success: boolean };
+    };
+    const ok = (value: unknown) => schema.safeParse(value).success;
+
+    expect(ok({ currentPassword: "x", scope: "all" })).toBe(true);
+    expect(ok({ currentPassword: "x", scope: "others" })).toBe(true);
+    expect(ok({ currentPassword: "x", scope: "one", sessionId: "s1" })).toBe(true);
+
+    expect(ok({ scope: "all" })).toBe(false);
+    expect(ok({ currentPassword: "", scope: "all" })).toBe(false);
+    expect(ok({ currentPassword: "x", scope: "one" })).toBe(false);
+    expect(ok({ currentPassword: "x", scope: "one", sessionId: "" })).toBe(false);
+    expect(ok({ currentPassword: "x", scope: "one", sessionId: "s".repeat(65) })).toBe(false);
+    expect(ok({ currentPassword: "x", scope: "everyone" })).toBe(false);
+    expect(ok({ currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1), scope: "all" })).toBe(false);
+  });
 });

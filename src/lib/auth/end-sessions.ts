@@ -23,14 +23,22 @@ export type SessionDb = PrismaClient | Prisma.TransactionClient;
  * **Refuses a filter with a missing value.** Prisma reads `{ userId:
  * undefined }` as "no condition", so a caller that lost its id on the way
  * here would end every session on the instance. An empty filter is refused for
- * the same reason: nothing here ever means "everyone".
+ * the same reason: nothing here ever means "everyone". So is a missing value
+ * one level down — `{ id: { not: undefined } }`, "every session but this
+ * one" asked by a caller that has no "this one", is no condition either
+ * (D143).
  */
 export async function endSessions(
   db: SessionDb,
   where: Prisma.SessionWhereInput,
 ): Promise<number> {
   const entries = Object.entries(where);
-  if (entries.length === 0 || entries.some(([, value]) => value === undefined)) {
+  const missing = (value: unknown) =>
+    value === undefined ||
+    (value !== null &&
+      typeof value === "object" &&
+      Object.values(value).some((inner) => inner === undefined));
+  if (entries.length === 0 || entries.some(([, value]) => missing(value))) {
     throw new Error("endSessions refuses a filter that would match every session");
   }
   const { count } = await db.session.deleteMany({ where });

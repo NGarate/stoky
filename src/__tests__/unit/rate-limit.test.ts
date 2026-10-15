@@ -9,6 +9,8 @@ import {
   passwordChangeRateLimit,
   productLookupRateLimit,
   rateLimitIdentifier,
+  reauthAccountRateLimit,
+  reauthRateLimit,
   registerRateLimit,
   uploadRateLimit,
 } from "@/lib/rate-limit";
@@ -361,6 +363,41 @@ describe("the configured limits", () => {
     expect(passwordChangeRateLimit().attempts).toBe(5);
   });
 
+  it("meters re-entering the password at five per session and twenty per account", () => {
+    // D143: per session, so a stolen session cannot spend the owner's way to
+    // end it; per account as the backstop ten sessions would otherwise
+    // multiply.
+    for (const name of [
+      "RATE_LIMIT_REAUTH_ATTEMPTS",
+      "RATE_LIMIT_REAUTH_WINDOW_SECONDS",
+      "RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS",
+      "RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS",
+    ]) {
+      delete process.env[name];
+    }
+
+    expect(reauthRateLimit()).toEqual({ prefix: "rl:reauth", attempts: 5, windowSeconds: 900 });
+    expect(reauthAccountRateLimit()).toEqual({
+      prefix: "rl:reauth-acct",
+      attempts: 20,
+      windowSeconds: 900,
+    });
+  });
+
+  it("reads the re-entry overrides, and refuses ones that would disable them", () => {
+    process.env.RATE_LIMIT_REAUTH_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_REAUTH_WINDOW_SECONDS = "60";
+    process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "3";
+    process.env.RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS = "120";
+    expect(reauthRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+    expect(reauthAccountRateLimit()).toMatchObject({ attempts: 3, windowSeconds: 120 });
+
+    process.env.RATE_LIMIT_REAUTH_ATTEMPTS = "0";
+    process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "-1";
+    expect(reauthRateLimit().attempts).toBe(5);
+    expect(reauthAccountRateLimit().attempts).toBe(20);
+  });
+
   it("counts the account separately from the address", () => {
     // Sharing a prefix would make five wrong passwords from one address spend
     // the account's budget too, and the two limits would stop being two.
@@ -406,5 +443,24 @@ describe("the configured limits", () => {
     ]) {
       expect(other.prefix).not.toBe(lookup);
     }
+  });
+
+  it("counts re-entries apart from every other limit, and the two apart", () => {
+    // Sharing the sign-in account counter would let the owner's sign-in
+    // elsewhere wipe a thief's guesses; sharing the two re-entry budgets
+    // would make the per-session one the account's.
+    const others = [
+      loginRateLimit(),
+      loginAccountRateLimit(),
+      loginDeviceRateLimit(),
+      registerRateLimit(),
+      uploadRateLimit(),
+      addMemberRateLimit(),
+      passwordChangeRateLimit(),
+      productLookupRateLimit(),
+    ].map((limit) => limit.prefix);
+    expect(others).not.toContain(reauthRateLimit().prefix);
+    expect(others).not.toContain(reauthAccountRateLimit().prefix);
+    expect(reauthRateLimit().prefix).not.toBe(reauthAccountRateLimit().prefix);
   });
 });
