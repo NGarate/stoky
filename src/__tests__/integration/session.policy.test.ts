@@ -473,3 +473,72 @@ describe("a remembered session", () => {
     );
   });
 });
+
+describe("a read of a session that has gone (D144)", () => {
+  const SESSION_COOKIE = "stoky.session_token";
+  const DONT_REMEMBER = "stoky.dont_remember";
+
+  /** Whether `lines` expire the cookie called `name`. */
+  const expires = (lines: string[], name: string) =>
+    lines.some((line) => line.startsWith(`${name}=`) && (/;\s*max-age=0\b/i.test(line) || line.startsWith(`${name}=;`)));
+
+  /** A browser session whose row has just been deleted, as a password change deletes it. */
+  async function goneSession(): Promise<Headers> {
+    const browser = await signIn({ rememberMe: false });
+    expect(browser.headers.get("cookie")).toContain(`${DONT_REMEMBER}=`);
+    await prisma.session.delete({ where: { id: browser.sessionId } });
+    return browser.headers;
+  }
+
+  it("answers no session and leaves the browser's cookies alone, read as the tRPC route reads it", async () => {
+    // A request sent with this device's old cookie just before its password
+    // change replaced it is read after the row went. Its expiring cookies,
+    // copied into its answer by `nextCookies`, would sign the device out if
+    // that answer arrived after the rotation's.
+    const headers = await goneSession();
+
+    const read = await getAuth().api.getSession({
+      headers,
+      query: { disableRefresh: true },
+      returnHeaders: true,
+    });
+
+    expect(read.response).toBeNull();
+    const lines = read.headers?.getSetCookie() ?? [];
+    expect(expires(lines, SESSION_COOKIE), lines.join("\n")).toBe(false);
+    expect(expires(lines, DONT_REMEMBER), lines.join("\n")).toBe(false);
+    expect(await readSession(headers, { refresh: true })).toBeNull();
+  });
+
+  it("does the same through the auth API's get-session", async () => {
+    const headers = await goneSession();
+    const { GET } = await import("@/app/api/auth/[...all]/route");
+
+    const response = await GET(
+      new Request(`${testOrigin()}/api/auth/get-session`, { headers }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBeNull();
+    const lines = response.headers.getSetCookie();
+    expect(expires(lines, SESSION_COOKIE), lines.join("\n")).toBe(false);
+    expect(expires(lines, DONT_REMEMBER), lines.join("\n")).toBe(false);
+  });
+
+  it("still lets a sign-out clear them", async () => {
+    // The control: the cookies can still be expired, by the one request that
+    // means to.
+    const browser = await signIn({ rememberMe: false });
+    const { POST } = await import("@/app/api/auth/[...all]/route");
+    const headers = new Headers(browser.headers);
+    headers.set("origin", testOrigin());
+    headers.set("content-type", "application/json");
+
+    const response = await POST(
+      new Request(`${testOrigin()}/api/auth/sign-out`, { method: "POST", headers, body: "{}" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(expires(response.headers.getSetCookie(), SESSION_COOKIE)).toBe(true);
+  });
+});

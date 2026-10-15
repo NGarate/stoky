@@ -71,9 +71,10 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  * unticked box must not become a ninety-day cookie. The route says which it
  * was in `x-stoky-remember`, which the create hook records on the row. A ticked
  * sign-in also clears the `dont_remember` cookie an earlier unticked one left:
- * Better Auth clears that cookie only at a sign-out or a read that finds the
- * session gone, never at a ticked sign-in, and while the browser holds it
- * Better Auth treats every session there as not remembered.
+ * Better Auth clears that cookie only at a sign-out (a read that finds the
+ * session gone no longer does, `src/lib/auth/policy-plugin.ts`), never at a
+ * ticked sign-in, and while the browser holds it Better Auth treats every
+ * session there as not remembered.
  *
  * A sign-in that gets in is followed by its tidy (`sessions.tidy`): the
  * session the browser presented ends, the account's expired rows go (D139),
@@ -399,8 +400,8 @@ async function signIn(
  *   not remembered.
  * - **`finish`** clears `dont_remember` from the browser too, once the
  *   sign-in got in. Not on a refusal, which changes nothing about the
- *   browser. Better Auth clears that cookie only at a sign-out or a read that
- *   finds the session gone, never at a ticked sign-in.
+ *   browser. Better Auth clears that cookie only at a sign-out, never at a
+ *   ticked sign-in.
  */
 async function rememberChoice(
   parsed: Record<string, unknown> | null,

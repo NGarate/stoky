@@ -3072,6 +3072,16 @@ is not one of them.
   kept presenting the deleted token: measured, the e2e device was signed out
   by its own change. `auth.changePassword` goes by a plain `httpLink` through
   a `splitLink` (`src/lib/trpc/links.ts`); every other call still streams.
+- **A read never expires the cookie.** Any request this device sent with the
+  old cookie before the new one arrived — a batch in flight, the kitchen's
+  five-minute refetch, another tab — is read after the old row went, and
+  Better Auth's `get-session` answers that by expiring the session and
+  `dont_remember` cookies, which `nextCookies` copies onto the tRPC answer.
+  Arriving after the rotation's answer, it would expire the new cookie: the
+  same sign-out as streaming, by a race. An after-hook of `stokyPolicy`
+  takes those expiring lines out of every `get-session` answer; a dead
+  cookie stays in the jar, refused on every read, until a sign-in replaces
+  it, and only a sign-in, a rotation and a sign-out write the jar.
 - **A request with no cookie keeps nothing.** A native client keeps no
   cookies, so a rotated session would be a row nobody can present and its
   bearer token would be the deleted one. It asks Better Auth for the hash

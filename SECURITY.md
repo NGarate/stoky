@@ -1103,7 +1103,12 @@ Verified against the files named in each row.
   back with the answer. The browser sends this one call without streaming
   (`src/lib/trpc/links.ts`), because a streamed answer's headers leave before
   the resolver sets the cookie — measured: with the stream, the device was
-  signed out by its own change. A copy of the old cookie is refused, its row
+  signed out by its own change. Nor does a request this device sent with the
+  old cookie just before the change undo it: a session read that finds the
+  row gone answers no session without expiring any cookie (the policy
+  plugin takes Better Auth's expiring `Set-Cookie` lines out of every
+  `get-session` answer), so an answer arriving after the rotation's cannot
+  delete the new cookie. A copy of the old cookie is refused, its row
   being gone. Nothing on the device is discarded, since the same person is
   still there. A request that carried no cookie — a native client — is not
   given a new session: every session ends, its own included, and the app asks

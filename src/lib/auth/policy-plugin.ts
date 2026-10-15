@@ -74,6 +74,12 @@ import { logSecurityEvent } from "@/lib/security-log";
  * Refused as `STEP_UP_REQUIRED` (403) otherwise. Every role may, the
  * kitchen's shared account included (the owner's decision of 2026-10-15).
  *
+ * **A session read never signs a browser out** (PROGRESS D144): Better
+ * Auth's `get-session` expires the session cookie when the row it names is
+ * gone, and a request sent with this device's old cookie just before a
+ * rotation would then delete the new one. Those expiring lines are taken out
+ * of every `get-session` answer.
+ *
  * **A registration never signs anybody in**: `createSession` is forced off.
  * The person registering already has a session, and a second, made by a
  * passkey nobody has used yet, would be one the route never tidied.
@@ -375,11 +381,64 @@ function removeSetCookie(headers: Headers | undefined, name: string): void {
   for (const line of kept) headers.append("set-cookie", line);
 }
 
+/**
+ * Takes out of `headers` the `Set-Cookie` lines that expire one of `names` —
+ * an empty value or `Max-Age=0` — and keeps every other line, in order.
+ */
+function removeExpiringSetCookies(headers: Headers | undefined, names: readonly string[]): void {
+  if (!headers) return;
+  const existing = headers.getSetCookie();
+  const kept = existing.filter((line) => {
+    const [pair, ...attributes] = line.split(";");
+    const separator = pair.indexOf("=");
+    const name = (separator === -1 ? pair : pair.slice(0, separator)).trim();
+    if (!names.includes(name)) return true;
+    const value = separator === -1 ? "" : pair.slice(separator + 1).trim();
+    const expires = value === "" || attributes.some((attribute) => /^\s*max-age\s*=\s*0\s*$/i.test(attribute));
+    return !expires;
+  });
+  if (kept.length === existing.length) return;
+  headers.delete("set-cookie");
+  for (const line of kept) headers.append("set-cookie", line);
+}
+
+/** The parts of a session read's context the cookie guard reads. */
+interface ReadContext {
+  context: {
+    authCookies: { sessionToken: { name: string }; dontRememberToken: { name: string } };
+    responseHeaders?: Headers;
+  };
+}
+
 export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOptions) {
   return {
     id: "stoky-policy",
     hooks: {
       after: [
+        {
+          // **A session read never signs a browser out** (D144). When the
+          // row a cookie names is gone, Better Auth's get-session answers
+          // null and expires the session and dont_remember cookies, and
+          // `nextCookies` copies that into the answer of whatever route read
+          // it — the tRPC route on every request. A request sent with this
+          // device's old cookie just before a password change, a change to
+          // two-step verification or a sign-in replaced it is read after the
+          // row went, and if its answer arrives after the one that set the
+          // new cookie, it expires the new one: the device signed out by its
+          // own change. So a read keeps the cookie jar as it was, and says no
+          // session; only a sign-in, a rotation and a sign-out write it. A
+          // dead cookie left behind costs nothing — every read refuses it —
+          // and the next sign-in replaces it (a ticked one clears
+          // dont_remember itself, `src/server/http/auth-handler.ts`).
+          matcher: (context: { path?: string }) => context.path === "/get-session",
+          handler: createAuthMiddleware(async (raw) => {
+            const ctx = raw as unknown as ReadContext;
+            removeExpiringSetCookies(ctx.context.responseHeaders, [
+              ctx.context.authCookies.sessionToken.name,
+              ctx.context.authCookies.dontRememberToken.name,
+            ]);
+          }),
+        },
         {
           matcher: (context: { path?: string }) => context.path === "/passkey/verify-authentication",
           handler: createAuthMiddleware(async (raw) => {
