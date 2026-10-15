@@ -8,6 +8,7 @@ import {
   valkeySignInLimiter,
   type SignInLimiter,
 } from "@/lib/auth/sign-in-policy";
+import type { PresentedSession, SignInTidy } from "@/lib/auth/sign-in-tidy";
 import { MAX_AUTH_BODY_BYTES, readBodyWithin } from "./body-limit";
 import { refuseCrossSite, refuseNonJson } from "./request-guards";
 
@@ -41,6 +42,10 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  * 8. **The response, guarded:** the session token is the cookie's value, and
  *    no script on the page needs it in a body or a header.
  *
+ * A sign-in that gets in is followed by its tidy (`sessions.tidy`): the
+ * session the browser presented ends, and the account's expired rows go
+ * (`src/lib/auth/sign-in-tidy.ts`, D139).
+ *
  * Every answer is `no-store`: a refusal served from a cache would refuse
  * somebody else.
  */
@@ -57,6 +62,22 @@ export interface AuthHandlerOptions {
   handler: () => AuthEndpointHandler;
   /** The counters; Valkey unless a test passes its own. */
   limiter?: SignInLimiter;
+  /**
+   * The session rows around a sign-in. The route always passes them
+   * (`src/app/api/auth/[...all]/route.ts`); a unit test that leaves them out
+   * gets a sign-in with no tidy, since both need the database.
+   */
+  sessions?: SignInSessions;
+}
+
+export interface SignInSessions {
+  /**
+   * The valid session a request carries, or null — read before Better Auth
+   * answers the sign-in, so it is the session being replaced.
+   */
+  presented: (headers: Headers) => Promise<PresentedSession | null>;
+  /** Ends what a sign-in replaces (`tidyAfterSignIn`). */
+  tidy: (input: SignInTidy) => Promise<unknown>;
 }
 
 export const AUTH_BASE_PATH = "/api/auth";
@@ -115,7 +136,13 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   }
 
   if (endpoint === "POST /sign-in/email") {
-    return signIn(incoming, body, handle, options.limiter ?? valkeySignInLimiter);
+    return signIn(
+      incoming,
+      body,
+      handle,
+      options.limiter ?? valkeySignInLimiter,
+      options.sessions,
+    );
   }
   if (endpoint === "POST /sign-out") {
     // It takes nothing this application uses.
@@ -133,12 +160,18 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
  * "malformed"). Only then is the password looked at, by Better Auth, and its
  * answer settles the charge: a success refunds it and records the sign-in, a
  * refusal of the caller's input is a failed attempt.
+ *
+ * The session the request presented is read before Better Auth answers, and
+ * ended after it lets the caller in, with the account's expired rows
+ * (`tidyAfterSignIn`). Not before: a wrong password ends nothing, or anybody
+ * could sign a shared tablet out by typing at it.
  */
 async function signIn(
   incoming: Request,
   body: Uint8Array<ArrayBuffer> | null,
   handle: AuthEndpointHandler,
   limiter: SignInLimiter,
+  sessions: SignInSessions | undefined,
 ): Promise<Response> {
   const parsed = parseJsonObject(body);
 
@@ -157,6 +190,8 @@ async function signIn(
     return invalidRequest();
   }
 
+  const previous = sessions ? await sessions.presented(incoming.headers) : null;
+
   const response = await handle(
     rebuild(
       incoming,
@@ -169,8 +204,13 @@ async function signIn(
   );
 
   if (response.ok) {
-    const userId = await signedInUserId(response);
-    if (userId) await signInSucceeded(attempt, userId, "password", limiter);
+    const issued = await issuedSession(response);
+    if (issued) {
+      await signInSucceeded(attempt, issued.userId, "password", limiter);
+      if (issued.token && sessions) {
+        await tidyQuietly(sessions, { previous, userId: issued.userId, newToken: issued.token });
+      }
+    }
   } else if (response.status >= 400 && response.status < 500) {
     signInFailed(attempt);
   }
@@ -191,12 +231,42 @@ function parseJsonObject(body: Uint8Array<ArrayBuffer> | null): Record<string, u
   }
 }
 
-async function signedInUserId(response: Response): Promise<string | null> {
+/**
+ * Who a successful answer signed in, and the raw token of the session it
+ * issued — read here, before `guardResponse` strips the token from the body.
+ * The token is `token` in a sign-in's answer and `session.token` in one that
+ * carries the session; a 200 without one issued no session.
+ */
+async function issuedSession(
+  response: Response,
+): Promise<{ userId: string; token: string | null } | null> {
   try {
-    const body = (await response.clone().json()) as { user?: { id?: unknown } } | null;
-    return typeof body?.user?.id === "string" ? body.user.id : null;
+    const body = (await response.clone().json()) as {
+      user?: { id?: unknown };
+      token?: unknown;
+      session?: { token?: unknown };
+    } | null;
+    if (typeof body?.user?.id !== "string") return null;
+    const token = typeof body.token === "string" ? body.token : body.session?.token;
+    return { userId: body.user.id, token: typeof token === "string" && token ? token : null };
   } catch {
     return null;
+  }
+}
+
+/**
+ * The tidy, without letting it fail a sign-in that has already succeeded: the
+ * new session exists and its cookie is in this answer, and throwing here would
+ * withhold the cookie and leave its row behind. The session it could not end
+ * still ends on its own clock — fifteen idle minutes, a day at most — and the
+ * failure is on the log.
+ */
+async function tidyQuietly(sessions: SignInSessions, input: SignInTidy): Promise<void> {
+  try {
+    await sessions.tidy(input);
+  } catch (error) {
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.error(`[auth] error the sign-in tidy failed: ${reason.replace(/\s+/g, " ").slice(0, 300)}`);
   }
 }
 

@@ -12,6 +12,7 @@ import {
   ALLOWED_AUTH_ENDPOINTS,
   handleAuthRequest,
   type AuthEndpointHandler,
+  type SignInSessions,
 } from "@/server/http/auth-handler";
 
 /**
@@ -291,6 +292,120 @@ describe("a password sign-in", () => {
     const written = securityLines.mock.calls.map((call) => String(call[0])).join("\n");
     expect(written).toContain('"event":"auth.signin.failed"');
     expect(written).not.toContain("a@b.es");
+  });
+});
+
+describe("what a sign-in ends", () => {
+  /** Sessions that record the order things happened in. */
+  function fakeSessions(
+    presented: { id: string; userId: string } | null = { id: "s-old", userId: "user-9" },
+    tidy: (input: unknown) => Promise<unknown> = async () => 1,
+  ) {
+    const order: string[] = [];
+    const tidied: unknown[] = [];
+    const sessions: SignInSessions = {
+      presented: async () => {
+        order.push("presented");
+        return presented;
+      },
+      tidy: async (input) => {
+        order.push("tidy");
+        tidied.push(input);
+        return tidy(input);
+      },
+    };
+    return { sessions, order, tidied };
+  }
+
+  const signInRequest = () =>
+    post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x" }), {
+      cookie: "stoky.session_token=old",
+    });
+
+  it("reads the presented session before Better Auth answers, and tidies after with the raw token", async () => {
+    const { sessions, order, tidied } = fakeSessions();
+    const handle = mock(async () => {
+      order.push("better-auth");
+      return signedIn();
+    });
+
+    const response = await handleAuthRequest(signInRequest(), {
+      handler: () => handle,
+      limiter: fakeLimiter().limiter,
+      sessions,
+    });
+
+    expect(order).toEqual(["presented", "better-auth", "tidy"]);
+    expect(tidied).toEqual([
+      { previous: { id: "s-old", userId: "user-9" }, userId: "user-1", newToken: "raw-token" },
+    ]);
+    // Read for the tidy, still never handed to the page.
+    expect(JSON.stringify(await response.json())).not.toContain("raw-token");
+  });
+
+  it("finds the token inside the session when the answer carries it there", async () => {
+    const { sessions, tidied } = fakeSessions(null);
+    const { handler } = fakeHandler(() =>
+      Response.json({ session: { token: "nested-token" }, user: { id: "user-1" } }),
+    );
+
+    await handleAuthRequest(signInRequest(), { handler, limiter: fakeLimiter().limiter, sessions });
+
+    expect(tidied).toEqual([{ previous: null, userId: "user-1", newToken: "nested-token" }]);
+  });
+
+  it("ends nothing when Better Auth refuses the password", async () => {
+    const { sessions, order } = fakeSessions();
+    const { handler } = fakeHandler(() =>
+      Response.json({ code: "INVALID_EMAIL_OR_PASSWORD" }, { status: 401 }),
+    );
+
+    await handleAuthRequest(signInRequest(), { handler, limiter: fakeLimiter().limiter, sessions });
+
+    expect(order).not.toContain("tidy");
+  });
+
+  it("ends nothing when the answer issued no session", async () => {
+    const { sessions, order } = fakeSessions();
+    const { handler } = fakeHandler(() =>
+      Response.json({ redirect: false, user: { id: "user-1" } }),
+    );
+
+    await handleAuthRequest(signInRequest(), { handler, limiter: fakeLimiter().limiter, sessions });
+
+    expect(order).not.toContain("tidy");
+  });
+
+  it("reads nothing for a sign-in refused before Better Auth", async () => {
+    const { sessions, order } = fakeSessions();
+    const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 9 } });
+
+    await handleAuthRequest(signInRequest(), { handler: fakeHandler(signedIn).handler, limiter, sessions });
+
+    expect(order).toEqual([]);
+  });
+
+  it("still signs the person in when the tidy fails, and says so in the log", async () => {
+    const { sessions } = fakeSessions(undefined, async () => {
+      throw new Error("database went away");
+    });
+    const { handler } = fakeHandler(() => {
+      const response = signedIn();
+      response.headers.append("set-cookie", "stoky.session_token=new; Path=/; HttpOnly");
+      return response;
+    });
+
+    const response = await handleAuthRequest(signInRequest(), {
+      handler,
+      limiter: fakeLimiter().limiter,
+      sessions,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(errors.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
+      "sign-in tidy failed: Error: database went away",
+    );
   });
 });
 

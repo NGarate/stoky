@@ -1,5 +1,8 @@
 import { toNextJsHandler } from "better-auth/next-js";
+import { readSession } from "@/lib/auth";
 import { getAuth } from "@/lib/auth/instance";
+import { tidyAfterSignIn } from "@/lib/auth/sign-in-tidy";
+import { prisma } from "@/lib/prisma";
 import { handleAuthRequest, type AuthHandlerOptions } from "@/server/http/auth-handler";
 
 /**
@@ -12,6 +15,14 @@ import { handleAuthRequest, type AuthHandlerOptions } from "@/server/http/auth-h
  */
 const options: AuthHandlerOptions = {
   handler: () => toNextJsHandler(getAuth()).POST,
+  sessions: {
+    // Without a refresh: reading the session being replaced must not move it.
+    presented: async (headers) => {
+      const session = await readSession(headers, { refresh: false });
+      return session ? { id: session.sessionId, userId: session.user.id } : null;
+    },
+    tidy: (input) => tidyAfterSignIn(prisma, input),
+  },
 };
 
 export function GET(request: Request): Promise<Response> {

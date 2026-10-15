@@ -597,6 +597,17 @@ Verified against the files named in each row.
   Configuración (`auth.revokeMySessions`), or an admin from **Personas del
   hogar** — which delete the rows and log `auth.session.ended` with the
   `reason` (`self`, `admin`), who asked and how many sessions went.
+- **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
+  PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
+  the old row alive, so after the sign-in succeeds the auth route deletes the
+  session whose cookie the request carried — whoever it belonged to: on a
+  shared tablet, the previous person's — together with the signing-in
+  account's expired rows (`src/lib/auth/sign-in-tidy.ts`). A wrong password
+  ends nothing. Another browser's session is untouched: the tidy knows only
+  the cookie this request sent. It writes `auth.session.ended` with `reason:
+  "replaced"`, the `userId` who signed in and the `targetUserId` whose session
+  went. If the tidy itself fails, the sign-in still succeeds and the failure
+  is an `[auth] error` line; the old session then ends on its own clock.
 - **Only five endpoints of the auth API answer**: `POST /sign-in/email`,
   `POST /sign-out`, `GET /get-session`, `GET /ok` and `GET /error`. Every other
   path Better Auth mounts — sign-up, password reset, account deletion, session
@@ -1390,8 +1401,10 @@ are not JSON. The events are
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
 `reason` — `self` for a person ending their own, `admin` for an admin ending a
-member's — the `userId` who asked, the `targetUserId` whose they were, and
-the `count` of sessions ended. A session that simply runs out writes nothing;
+member's, `replaced` for a sign-in ending the session its browser presented
+(D139) — the `userId` who asked, the `targetUserId` whose they were, and
+the `count` of sessions ended (for `replaced`, the account's expired rows the
+same sign-in deleted are counted too). A session that simply runs out writes nothing;
 its row is deleted when next read.
 
 A sign-in that gets in is recorded as well, as ASVS 5.0.0 **16.3.1** asks:
@@ -2042,7 +2055,7 @@ is stored, logged or sent.
 |---|---|---|
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
-| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, and the browser's User-Agent string. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read. A row whose cookie is never sent again stays, expired, until it is. At most fifteen idle minutes and a day in all for a live one (PROGRESS D135) |
+| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, and the browser's User-Agent string. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, signing in again in the same browser, or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live one (PROGRESS D135) |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Nothing writes one yet | PostgreSQL `Verification` | Until it expires and is cleared |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |

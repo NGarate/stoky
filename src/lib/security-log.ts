@@ -54,13 +54,15 @@ export type SecurityEvent =
   | "auth.signin.succeeded"
   | "auth.unavailable"
   // Sessions somebody ended on purpose, with the `reason`: the account's own
-  // holder ending all of theirs (`self`), or an admin ending a member's
-  // (`admin`). `userId` did it, `targetUserId` is whose they were, `count` is
-  // how many rows went. Worth a line of its own rather than folding into
-  // `access.denied`: it is the only event here that somebody *asked for*, and
-  // an operator reading a household's log should be able to tell "they ended
-  // their sessions" from "somebody was refused". A session that simply runs
-  // out writes nothing; its row is deleted when next read.
+  // holder ending all of theirs (`self`), an admin ending a member's
+  // (`admin`), or a sign-in ending the session its browser presented
+  // (`replaced`, `src/lib/auth/sign-in-tidy.ts`). `userId` did it,
+  // `targetUserId` is whose they were, `count` is how many rows went. Worth a
+  // line of its own rather than folding into `access.denied`: it is the only
+  // event here that somebody *asked for*, and an operator reading a
+  // household's log should be able to tell "they ended their sessions" from
+  // "somebody was refused". A session that simply runs out writes nothing; its
+  // row is deleted when next read, or at its account's next sign-in.
   | "auth.session.ended"
   // A signed-in person changed their own password, which also ended every
   // session the account had. The credential change ASVS V7 asks to be able
@@ -103,7 +105,7 @@ export interface SecurityDetails {
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
    * it, which has no procedure to have thrown it. On `auth.session.ended` it
-   * is who asked: `"self"` or `"admin"`.
+   * is why: `"self"`, `"admin"` or `"replaced"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */

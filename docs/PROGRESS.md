@@ -56,6 +56,7 @@ Rules for this log:
 | "feat(auth): refuse to start on settings Better Auth would misread" (D136) | `refuseToStartMisconfigured` exits on production without `NEXTAUTH_URL`, a `NEXTAUTH_URL` that is not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set and `BETTER_AUTH_TELEMETRY` on, each named on its own `[auth] refusing to start:` line; `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL` are each warned about as ignored. `unit/auth-environment.test.ts` runs the instrumentation hook as a production server for each: removing the start-up call, or any one check, turns it red; so does dropping the warning or letting the value into it. `bun run verify:ci` green on the commit. |
 | "feat(auth): read the signing secret from STOKY_SECRET" (D137) | The signing key is `STOKY_SECRET`; `NEXTAUTH_SECRET` is still read when it is unset, with one `[config]` deprecation line at start-up (`src/lib/env-names.ts`). `install.sh` renames the line keeping its value, and the bundle's Compose file passes both names through. `unit/env-names.test.ts`, `unit/auth-secret.test.ts` (the key Better Auth signs with, in a fresh process), `unit/auth-environment.test.ts` (the hook, once), `integration/health.test.ts`, `unit/install-script.test.ts` and `unit/security-log.test.ts` pin the rule; preferring the legacy name, dropping the rename step or the start-up warning each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(auth): list every address the instance answers at in STOKY_URLS" (D138) | `STOKY_URLS` is a comma-separated list: the first entry is Better Auth's `baseURL` and alone decides `Secure`; every entry's origin is trusted for sign-in, and in production nothing else is. Production refuses no entry, an entry that is not a bare origin, and an https first entry beside LAN http; `NEXTAUTH_URL` is read as a list of one with a deprecation line. `unit/public-url.test.ts` (the list, the cookie in a fresh process), `unit/auth-environment.test.ts` (the hook) and `integration/auth.origins.test.ts` (a production instance with two entries signs in at both and refuses an unlisted origin and a `DEV_ALLOWED_ORIGIN` host) pin it; trusting only the first entry, dropping the mixed-scheme check or reading `DEV_ALLOWED_ORIGIN` in production each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
+| "feat(auth): tidy a person's stale sessions at sign-in" (D139) | ASVS 5.0.0 7.2.4: after a sign-in succeeds the auth route ends the session the browser presented — whoever's it was — and the account's expired rows, never the one just issued (`src/lib/auth/sign-in-tidy.ts`), logging `auth.session.ended` `reason: "replaced"`. `integration/session.sign-in-tidy.test.ts` signs in twice with one cookie jar (one row left, the old cookie refused, the new row's clock fresh), across a shared tablet, from a second browser (both stay), with a wrong password (nothing ends) and after a row expires (gone); `unit/sign-in-tidy.test.ts` pins that no `{id: undefined}` reaches the `OR` (which Prisma 6.19 reads as matching nothing, so only the unit test sees it). Skipping the delete, deleting by account, dropping or widening the expired clause, or tidying before the password is checked each turns them red. `bun run verify:ci` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2787,3 +2788,45 @@ instance. Every listed origin can send a cookie-bearing sign-in, which is why
 INSTALL says to list only addresses that reach this instance. Why after D137:
 it reuses the rename helper, and since D135 no library reads `NEXTAUTH_URL`
 or `AUTH_URL` itself.
+
+**D139 — A sign-in ends the session its browser presented, and the account's
+expired rows.** ASVS 5.0.0 7.2.4 asks that a new authentication terminate the
+session it replaces. Better Auth issues a fresh token at every sign-in and
+leaves the row the browser already had alive, so a person who signed in again
+after the idle warning — or the next person on a shared kitchen tablet — left
+a working session behind, reachable by any copy of the old cookie. The auth
+route now reads the session the request presented *before* forwarding the
+sign-in (`readSession`, without a refresh), and once Better Auth has let the
+caller in — and only then, so a wrong password typed at somebody else's
+tablet ends nothing — `tidyAfterSignIn` (`src/lib/auth/sign-in-tidy.ts`)
+deletes, through `endSessions`, that session and the signing-in account's
+expired rows, excluding the token just issued. The token is read from the
+answer before the response guard strips it.
+
+- **Whoever's it was.** The presented session is ended even when it belonged
+  to another account: on a shared device that is the point. The log line
+  (`auth.session.ended`, `reason: "replaced"`) names both: `userId` signed in,
+  `targetUserId` held the replaced session.
+- **Expired rows.** Better Auth deletes one only when its cookie is read
+  again, and a closed browser never sends it, so they stayed until the
+  account was deleted. They go at the account's next sign-in, from any
+  browser; another account's are left alone. `count` on the line includes
+  them.
+- **The id clause is left out, not left empty,** when nothing was presented.
+  The plan expected `{ id: undefined }` inside the `OR` to match every session
+  on the instance. Measured against Prisma 6.19.3 it matches none: Prisma drops
+  the `undefined`, and an `OR` holding `{}` selects nothing (`OR: [{}]` and
+  `OR: [{ id: undefined }]` both counted 0 of 2 rows). The clause is still left
+  out, because what an empty clause means is the client's choice and a filter
+  that leans on it is one upgrade from ending everybody's session.
+  `endSessions` checks only the top level, so `signInTidyFilter` is where it
+  is guaranteed, and `unit/sign-in-tidy.test.ts` asserts it on the filter: the
+  database cannot tell the two apart today.
+- **The tidy never fails a sign-in.** It runs after the new session exists and
+  its cookie is in the answer; an error is logged as one `[auth] error` line
+  and the old session ends on its own clock (fifteen idle minutes, a day at
+  most).
+- **Called from the route, never from a session-create hook,** because Better
+  Auth creates and then deletes a session at the password step of a two-step
+  account. The two-step and passkey sign-ins (later commits) call the same
+  helper; the session cap (a later commit) joins it there.

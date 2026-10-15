@@ -57,6 +57,11 @@ export interface SignInOptions {
   address?: string;
   /** Sent as the `stoky_device` cookie, as a browser that has been here does. */
   deviceId?: string;
+  /**
+   * The rest of the browser's `Cookie` header — the cookies an earlier sign-in
+   * left (`SignInOutcome.cookieHeader`), for a browser signing in again.
+   */
+  cookie?: string;
   /** `Origin`; defaults to the instance's own whenever a cookie is sent. */
   origin?: string;
   /** Sent as `Sec-Fetch-Site`, as a browser on https does. */
@@ -82,8 +87,12 @@ export async function signInWith(
     "content-type": "application/json",
     "x-forwarded-for": options.address ?? freshTestAddress(),
   });
-  if (options.deviceId) headers.set("cookie", `${DEVICE_ID_COOKIE}=${options.deviceId}`);
-  const origin = options.origin ?? (options.deviceId ? testOrigin() : undefined);
+  const cookies = [
+    options.deviceId ? `${DEVICE_ID_COOKIE}=${options.deviceId}` : "",
+    options.cookie ?? "",
+  ].filter(Boolean);
+  if (cookies.length) headers.set("cookie", cookies.join("; "));
+  const origin = options.origin ?? (cookies.length ? testOrigin() : undefined);
   if (origin) headers.set("origin", origin);
   if (options.fetchSite) headers.set("sec-fetch-site", options.fetchSite);
 
