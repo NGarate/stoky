@@ -297,3 +297,65 @@ test.describe("ending a member's sessions from the people page", () => {
     await phone.context.close();
   });
 });
+
+/**
+ * An owner ending every session in the household from **Personas del
+ * hogar** (ASVS 5.0.0 7.4.5, PROGRESS D147): the member's browser and the
+ * owner's own, after the owner's password.
+ *
+ * The chain the integration and component tests cannot show together: the
+ * section reaches `household.endHouseholdSessions` from a real browser, a
+ * cookie already issued to *another* account's browser stops working, and
+ * this tab leaves through the sign-out sequence rather than sitting on a
+ * page whose session has gone.
+ */
+test.describe("ending every session in the household from the people page", () => {
+  const h = es.household;
+  const MEMBER_PASSWORD = "E2EHouseholdEnd123!";
+
+  test("signs out a member's browser and the owner's own", async ({ page, browser }) => {
+    // ---------------------------------------------------------------- given --
+    await register(page);
+    const memberEmail = freshEmail();
+    const memberName = `Hogar E2E ${Date.now()}`;
+    await page.goto("/settings/people");
+    await page.getByLabel(h.addName, { exact: true }).fill(memberName);
+    await page.getByLabel(h.addEmail, { exact: true }).fill(memberEmail);
+    await page.getByLabel(h.addPassword, { exact: true }).fill(MEMBER_PASSWORD);
+    await page.getByRole("button", { name: h.addSubmit }).click();
+    await expect(
+      page
+        .getByRole("listitem")
+        .filter({ hasText: memberName })
+        .filter({ has: page.getByRole("button", { name: h.memberSessionsButton }) }),
+    ).toBeVisible({ timeout: 30_000 });
+
+    const context = await browser.newContext();
+    const member = await context.newPage();
+    await member.goto("/login");
+    await member.waitForSelector('input[name="email"]');
+    await member.waitForTimeout(1500);
+    await member.fill('input[name="email"]', memberEmail);
+    await member.fill('input[name="password"]', MEMBER_PASSWORD);
+    await member.click('button[type="submit"]');
+    await expect(member).toHaveURL(/\/kitchen/, { timeout: 30_000 });
+    expect(await signedIn(member), "the member's browser was not signed in to begin with").toBe(true);
+
+    // ----------------------------------------------------------------- when --
+    const section = page.getByRole("region", { name: h.endAllHouseholdTitle });
+    await section.getByRole("button", { name: h.endAllHouseholdButton }).click();
+    const dialog = page.getByRole("dialog", { name: h.endAllHouseholdDialogTitle });
+    await dialog.getByLabel(es.reauth.password).fill(PASSWORD);
+    await dialog.getByRole("button", { name: h.endAllHouseholdButton, exact: true }).click();
+
+    // ----------------------------------------------------------------- then --
+    await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
+    expect(await signedIn(page), "the owner's own browser was still signed in").toBe(false);
+    expect(
+      await signedIn(member),
+      "the member's browser was still signed in after every session in the household ended",
+    ).toBe(false);
+
+    await context.close();
+  });
+});

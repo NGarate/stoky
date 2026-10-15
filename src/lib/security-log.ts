@@ -57,6 +57,8 @@ export type SecurityEvent =
   // holder ending all of theirs (`self`), a password change ending every
   // other one (`password-change`), an admin ending a member's
   // (`admin`), an admin removing a member from the household (`removed`),
+  // an owner ending every session in the household (`owner`, with no
+  // `targetUserId`: they were everybody's),
   // a sign-in ending the session its browser presented
   // (`replaced`), or a sign-in that would be the account's eleventh session
   // ending its least recently used one (`evicted`; both in
@@ -81,9 +83,9 @@ export type SecurityEvent =
   | "auth.password.reset"
   // The current password re-entered to confirm an action was wrong
   // (`src/lib/auth/reauth.ts`). `via` names the action — `end-sessions`,
-  // `password-change` — so a grep tells a typo before ending a session from
-  // a stolen session guessing. BAD_REQUEST, which the refusal middleware in
-  // `trpc.ts` does not record, so written here.
+  // `password-change`, `household-end-all` — so a grep tells a typo before
+  // ending a session from a stolen session guessing. BAD_REQUEST, which the
+  // refusal middleware in `trpc.ts` does not record, so written here.
   | "auth.reauth.refused"
   | "access.denied"
   | "request.throttled";
@@ -113,7 +115,7 @@ export interface SecurityDetails {
    * `"cross-site"` marks a request the route handler refused before tRPC saw
    * it, which has no procedure to have thrown it. On `auth.session.ended` it
    * is why: `"self"`, `"password-change"`, `"admin"`, `"removed"`,
-   * `"replaced"` or `"evicted"`.
+   * `"owner"`, `"replaced"` or `"evicted"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */

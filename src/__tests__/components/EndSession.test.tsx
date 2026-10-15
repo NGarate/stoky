@@ -189,6 +189,12 @@ let memberSessionsFor: unknown = null;
 let memberEndInputs: unknown[] = [];
 /** What `household.endMemberSessions` answers, per test: null accepts. */
 let memberEndRefusal: unknown = null;
+/** The caller's role, as `auth.me` answers it on the people page. */
+let meRole = "ADMIN";
+/** What each `household.endHouseholdSessions` call was sent. */
+let householdEndInputs: unknown[] = [];
+/** What `household.endHouseholdSessions` answers, per test: null accepts. */
+let householdEndRefusal: unknown = null;
 /** The people page's other mutations, which these tests never press. */
 const untouched = () => ({ mutate: () => {}, mutateAsync: async () => ({}), isPending: false });
 
@@ -221,13 +227,23 @@ mock.module("@/lib/trpc/client", () => ({
           },
         }),
       },
+      endHouseholdSessions: {
+        useMutation: () => ({
+          mutateAsync: async (input: unknown) => {
+            steps.push("endHouseholdSessions");
+            householdEndInputs.push(input);
+            if (householdEndRefusal !== null) throw householdEndRefusal;
+            return { ended: 4 };
+          },
+        }),
+      },
       addMember: { useMutation: untouched },
       updateRole: { useMutation: untouched },
       resetMemberPassword: { useMutation: untouched },
       removeMember: { useMutation: untouched },
     },
     auth: {
-      me: { useQuery: () => ({ data: { id: "u-alba" } }) },
+      me: { useQuery: () => ({ data: { id: "u-alba", role: meRole } }) },
       listSessions: {
         useQuery: () => ({ data: DEVICES, error: null, fetchStatus: "idle", refetch: async () => {} }),
       },
@@ -306,6 +322,9 @@ beforeEach(() => {
   memberSessionsFor = null;
   memberEndInputs = [];
   memberEndRefusal = null;
+  meRole = "ADMIN";
+  householdEndInputs = [];
+  householdEndRefusal = null;
 });
 
 afterEach(cleanup);
@@ -1246,5 +1265,104 @@ describe("a member's sessions, from the people page", () => {
     expect(
       screen.getByRole("group", { name: "¿Quitar a Ana del hogar?" }),
     ).toHaveTextContent("se cierran sus sesiones en todos sus dispositivos");
+  });
+});
+
+/**
+ * **Cerrar todas las sesiones del hogar**, an owner's alone (D147).
+ *
+ * The server half — owners only, the password, the household's reach — is
+ * `integration/session.revocation.test.ts`'s. What only the page can get
+ * wrong is who is offered it, and that it is the sign-out sequence: it ends
+ * this device's session too, so the server answers before anything local is
+ * discarded, and a refusal discards nothing.
+ */
+describe("every session in the household, from the people page", () => {
+  function renderPeople() {
+    return renderWithIntl(
+      <SnackbarProvider>
+        <PeoplePage />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+  }
+
+  const TITLE = "Cerrar todas las sesiones del hogar";
+
+  async function openHouseholdEnd(): Promise<HTMLElement> {
+    const section = screen.getByRole("region", { name: TITLE });
+    await userEvent.click(within(section).getByRole("button", { name: "Cerrar todas las sesiones" }));
+    return screen.getByRole("dialog", { name: "¿Cerrar todas las sesiones del hogar?" });
+  }
+
+  it("is offered to an owner", () => {
+    meRole = "OWNER";
+    renderPeople();
+
+    expect(screen.getByRole("region", { name: TITLE })).toBeInTheDocument();
+  });
+
+  it("is not offered to an admin, who could not use it", () => {
+    meRole = "ADMIN";
+    renderPeople();
+
+    expect(screen.queryByRole("region", { name: TITLE })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cerrar todas las sesiones" })).toBeNull();
+  });
+
+  it("says before the fact that the owner is signed out too, and ends nothing on opening", async () => {
+    meRole = "OWNER";
+    renderPeople();
+
+    expect(await openHouseholdEnd()).toHaveTextContent("también la tuya en este");
+    expect(steps).toEqual([]);
+  });
+
+  it("ends them on the server with the password, then leaves this device", async () => {
+    meRole = "OWNER";
+    renderPeople();
+
+    await confirmWith(await openHouseholdEnd(), "Cerrar todas las sesiones");
+
+    expect(householdEndInputs).toEqual([{ currentPassword: "cocina despensa nevera" }]);
+    expect(steps).toEqual(["endHouseholdSessions", "purgeQueue", "purgeShell", "signOut"]);
+  });
+
+  it("discards nothing on a wrong password, and says so in the dialog", async () => {
+    meRole = "OWNER";
+    householdEndRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
+    renderPeople();
+
+    const dialog = await openHouseholdEnd();
+    await confirmWith(dialog, "Cerrar todas las sesiones");
+
+    expect(steps).toEqual(["endHouseholdSessions"]);
+    expect(signOutAction).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("La contraseña no es correcta");
+  });
+
+  it("says an owner's act is an owner's, when the role changed under the page", async () => {
+    meRole = "OWNER";
+    householdEndRefusal = trpcRefusal("FORBIDDEN", "Only an owner may end every session in the household");
+    renderPeople();
+
+    const dialog = await openHouseholdEnd();
+    await confirmWith(dialog, "Cerrar todas las sesiones");
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Solo una persona propietaria puede cerrar todas las sesiones del hogar.",
+    );
+    expect(signOutAction).not.toHaveBeenCalled();
+  });
+
+  it("offers to send unsent changes first", async () => {
+    meRole = "OWNER";
+    pending = [op("a")];
+    renderPeople();
+
+    const dialog = await openHouseholdEnd();
+    await confirmWith(dialog, "Enviar y cerrar");
+
+    expect(steps.slice(0, 2)).toEqual(["flush", "endHouseholdSessions"]);
   });
 });

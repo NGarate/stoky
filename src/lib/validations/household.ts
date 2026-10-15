@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { emailSchema } from "./auth";
 import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
-import { newPasswordSchema, withIdentityRule } from "./password";
+import { existingPasswordSchema, newPasswordSchema, withIdentityRule } from "./password";
 
 export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
@@ -130,6 +130,27 @@ export const endMemberSessionsSchema = z.object({
 });
 
 /**
+ * An owner ending every session in the household, their own included
+ * (`household.endHouseholdSessions`, ASVS 5.0.0 7.4.5, D147).
+ *
+ * The current password, bounded like sign-in's and not policed, as
+ * `auth.endSessions` asks it: this ends the owner's own sessions too, and a
+ * session somebody else is holding must not be able to sign the whole
+ * household out. Nothing else: there is no "which", it is every one.
+ */
+export const endHouseholdSessionsSchema = z.object({
+  currentPassword: existingPasswordSchema,
+});
+
+/**
+ * What `household.endHouseholdSessions` says to an admin who is not an owner.
+ * English and shared, like `OWN_SESSIONS_MESSAGE`: the screen offers the
+ * control to owners only.
+ */
+export const OWNERS_ONLY_MESSAGE =
+  "Only an owner may end every session in the household";
+
+/**
  * What `household.memberSessions` and `household.endMemberSessions` say when
  * the member named is the caller. English and shared, like
  * `RESET_OWN_PASSWORD_MESSAGE`: the screen never offers it.
@@ -141,6 +162,7 @@ export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
 export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
+export type EndHouseholdSessionsInput = z.infer<typeof endHouseholdSessionsSchema>;
 export type ResetMemberPasswordInput = z.infer<typeof resetMemberPasswordSchema>;
 export type HouseholdInput = z.infer<typeof householdSchema>;
 export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;

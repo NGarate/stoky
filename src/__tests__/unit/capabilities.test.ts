@@ -77,6 +77,12 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // resolver (D145). `integration/session.revocation.test.ts` holds them.
     memberSessions: "adminProcedure",
     endMemberSessions: "adminProcedure",
+    // Every session in the household, the owner's own included (D147).
+    // Narrower than the tier: owners only, refused inside the resolver
+    // before the owner's password is asked — the matrix has no owner tier,
+    // and one procedure is no reason to add it.
+    // `integration/session.revocation.test.ts` holds the refusals.
+    endHouseholdSessions: "adminProcedure",
     // Setting somebody else's password is the same authority that set their
     // first one in `addMember`. Not the whole guard: the member must be this
     // household's, only an owner may act on an owner, and nobody may use it

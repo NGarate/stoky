@@ -325,6 +325,88 @@ describe("who may end whose sessions", () => {
 });
 
 /**
+ * An owner ending every session in the household, their own included, after
+ * their password (`household.endHouseholdSessions`; ASVS 5.0.0 7.4.5,
+ * PROGRESS D147). The reach is the point: everybody in this household, the
+ * owners too, and nobody outside it.
+ */
+describe("an owner ending every session in the household", () => {
+  const WRONG_PASSWORD = "no es la contraseña";
+  const endHousehold = (account: Account, currentPassword = PASSWORD) =>
+    account.caller.household.endHouseholdSessions({ currentPassword });
+
+  it("ends everybody's in this household, the owners' included, and nobody else's", async () => {
+    const owner = await accountWithCaller("OWNER", "HouseOwner");
+    const coOwner = await accountWithCaller("OWNER", "HouseCoOwner");
+    const admin = await accountWithCaller("ADMIN", "HouseAdmin");
+    const kitchen = await accountWithCaller("KITCHEN", "HouseKitchen");
+    const elsewhere = await createTestHousehold({ name: `${PREFIX}Elsewhere` });
+    const outsider = await accountWithCaller("OWNER", "Outsider", elsewhere.id);
+    const house = [owner, coOwner, admin, kitchen];
+    // The control: every cookie works before.
+    expect(await Promise.all([...house, outsider].map(signedIn))).toEqual([true, true, true, true, true]);
+
+    let answer: unknown;
+    const events = await eventsDuring(async () => {
+      answer = await endHousehold(owner);
+    });
+
+    expect(answer).toEqual({ ended: 4 });
+    expect(await Promise.all(house.map(signedIn))).toEqual([false, false, false, false]);
+    expect(await Promise.all(house.map((account) => rows(account.id)))).toEqual([0, 0, 0, 0]);
+    expect(await signedIn(outsider)).toBe(true);
+    expect(await rows(outsider.id)).toBe(1);
+    // One line for the lot: who asked, which household, how many — and no
+    // target, because they were everybody's.
+    const ended = events.filter((event) => event.event === "auth.session.ended");
+    expect(ended).toEqual([
+      expect.objectContaining({ userId: owner.id, householdId, reason: "owner", count: "4" }),
+    ]);
+    expect(ended[0]).not.toHaveProperty("targetUserId");
+  });
+
+  it("refuses an admin, a member and a kitchen account before asking for the password, and ends nothing", async () => {
+    // An admin may not reach an owner's sessions one at a time (D145), so not
+    // all at once either. Refused before the password, so a wrong one is not
+    // even recorded: the question is never asked.
+    const owner = await accountWithCaller("OWNER", "KeptOwner");
+    const others = [
+      await accountWithCaller("ADMIN", "NotOwnerAdmin"),
+      await accountWithCaller("MEMBER", "NotOwnerMember"),
+      await accountWithCaller("KITCHEN", "NotOwnerKitchen"),
+    ];
+
+    const codes: (string | null)[] = [];
+    const events = await eventsDuring(async () => {
+      for (const account of others) codes.push(await codeOf(endHousehold(account)));
+      codes.push(await codeOf(endHousehold(others[0] as Account, WRONG_PASSWORD)));
+    });
+
+    expect(codes).toEqual(["FORBIDDEN", "FORBIDDEN", "FORBIDDEN", "FORBIDDEN"]);
+    expect(await Promise.all([owner, ...others].map(signedIn))).toEqual([true, true, true, true]);
+    expect(events.some((event) => event.event === "auth.session.ended")).toBe(false);
+    expect(events.some((event) => event.event === "auth.reauth.refused")).toBe(false);
+  });
+
+  it("refuses a wrong password, ends nothing, and records it", async () => {
+    const owner = await accountWithCaller("OWNER", "WrongOwner");
+    const member = await accountWithCaller("MEMBER", "WrongMember");
+
+    let code = null as string | null;
+    const events = await eventsDuring(async () => {
+      code = await codeOf(endHousehold(owner, WRONG_PASSWORD));
+    });
+
+    expect(code).toBe("BAD_REQUEST");
+    expect([await signedIn(owner), await signedIn(member)]).toEqual([true, true]);
+    expect(events.filter((event) => event.event === "auth.reauth.refused")).toEqual([
+      expect.objectContaining({ userId: owner.id, via: "household-end-all" }),
+    ]);
+    expect(events.some((event) => event.event === "auth.session.ended")).toBe(false);
+  });
+});
+
+/**
  * A person's own sessions, listed and ended after the current password
  * (`auth.listSessions`, `auth.endSessions`; ASVS 5.0.0 7.5.2, PROGRESS D143).
  *

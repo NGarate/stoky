@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser, setPasswordAndEndSessions } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
 import { liveSessionsOf } from "@/lib/auth/session-list";
+import { confirmCurrentPassword } from "@/lib/auth/reauth";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -14,10 +15,12 @@ import {
 import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
+  endHouseholdSessionsSchema,
   endMemberSessionsSchema,
   householdSchema,
   memberSessionsSchema,
   OWN_SESSIONS_MESSAGE,
+  OWNERS_ONLY_MESSAGE,
   RESET_OWN_PASSWORD_MESSAGE,
   removeMemberSchema,
   resetMemberPasswordSchema,
@@ -500,6 +503,58 @@ export const householdRouter = createTRPCRouter({
         targetUserId: member.id,
         householdId: ctx.householdId,
         reason: "admin",
+        count: ended,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
+      });
+
+      return { ended };
+    }),
+
+  /**
+   * End every session in the household, the owner's own included, after the
+   * owner's password (ASVS 5.0.0 7.4.5, PROGRESS D147).
+   *
+   * The answer to "somebody has been in the house who should not have been":
+   * every phone, tablet and laptop signed in to this household signs in
+   * again, and the owner with them. One act rather than a round of
+   * `endMemberSessions` per member, which leaves the owner's own and the
+   * other owners' for last, or never.
+   *
+   * The order is the point:
+   *
+   * 1. **Owners only.** `adminProcedure` lets an admin in, and an admin is
+   *    refused here before the password is asked: an admin may not reach an
+   *    owner's sessions one at a time (`assertMayActOnOwner`, D145), so not
+   *    all at once either. `FORBIDDEN`, which the refusal middleware logs.
+   * 2. **The password** (`confirmCurrentPassword`, D143), because this ends
+   *    the owner's own sessions too, and a session somebody else is holding
+   *    must not be able to sign the household out — the owner included, out
+   *    of the screen that would answer it. Unlike an admin ending one
+   *    member's (D145), which the owner confirmed is not re-asked.
+   * 3. **One filter**, the household through each session's account, so
+   *    nothing outside it is touched and a member who joined a moment ago is
+   *    included. Removed members have no household and are not.
+   *
+   * Logged as one `auth.session.ended` with `reason: "owner"`, the owner as
+   * `userId`, the household and the count — no `targetUserId`, because it
+   * was everybody's. The answer is the count; the screen then signs this
+   * device out, as `auth.endSessions` with `"all"` does.
+   */
+  endHouseholdSessions: adminProcedure
+    .input(endHouseholdSessionsSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.role !== "OWNER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: OWNERS_ONLY_MESSAGE });
+      }
+
+      await confirmCurrentPassword(ctx, input.currentPassword, "household-end-all");
+
+      const ended = await endSessions(ctx.db, { user: { householdId: ctx.householdId } });
+
+      logSecurityEvent("auth.session.ended", {
+        userId: ctx.session.user.id,
+        householdId: ctx.householdId,
+        reason: "owner",
         count: ended,
         address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });

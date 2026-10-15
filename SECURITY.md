@@ -748,6 +748,27 @@ Verified against the files named in each row.
   session can therefore sign the household's non-owners out — and they can
   sign straight back in, since nothing about their password changes — but
   cannot reach an owner's sessions or the admin's own.
+- **An owner can end every session in the household, their own included**
+  (ASVS 5.0.0 7.4.5, PROGRESS D147). On **Personas del hogar**, owners alone
+  are shown "Cerrar todas las sesiones del hogar"
+  (`household.endHouseholdSessions`): every member signed out of every
+  device, other owners and the owner asking included, for when somebody who
+  should not have been has had an account or a device. `adminProcedure`,
+  then owners only inside the resolver — an admin is `FORBIDDEN` before the
+  password is asked, since an admin may not reach an owner's sessions one at
+  a time either — then the owner's current password through
+  `confirmCurrentPassword` and its two budgets, because this ends the
+  owner's own sessions too and a session somebody else is holding must not
+  be able to sign the household out. A wrong password is `BAD_REQUEST`,
+  ends nothing and logs `auth.reauth.refused` with `via:
+  "household-end-all"`. One filter, the household through each session's
+  account, so nothing outside it is touched. Logged as one
+  `auth.session.ended` with `reason: "owner"`, the owner as `userId`, the
+  household and the count, with no `targetUserId`. The screen then signs
+  this device out the way **Cerrar todas** on **Tus dispositivos** does —
+  the server first, then the queue, the saved reads and the cached shell —
+  and offers to send unsent changes first. No token rotation, as for every
+  re-entry (the 7.2.4 deviation above).
 - **Removing somebody from the household signs them out everywhere** (ASVS
   5.0.0 7.4.2, PROGRESS D146). `household.removeMember` deletes every
   session the member has (`endSessions`) in the transaction that clears
@@ -1605,14 +1626,16 @@ are not JSON. The events are
 `auth.unavailable`,
 `auth.session.ended`, `auth.password.changed`, `auth.password.reset`,
 `auth.reauth.refused` (a wrong current password re-entered to confirm an
-action, with the action as `via` — `end-sessions` or `password-change`, which
-replaces the `auth.password.change.refused` event of earlier releases; D143,
-D144), `access.denied` and
+action, with the action as `via` — `end-sessions`, `password-change`, which
+replaces the `auth.password.change.refused` event of earlier releases, or
+`household-end-all`; D143, D144, D147), `access.denied` and
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
 `reason` — `self` for a person ending their own, `password-change` for the
 other sessions a password change ended (D144), `admin` for an admin ending a
 member's, `removed` for an admin removing a member from the household (D146),
+`owner` for an owner ending every session in the household, with no
+`targetUserId` (D147),
 `replaced` for a sign-in ending the session its browser presented
 (D139), `evicted` for a sign-in ending the account's least recently used
 session to stay within ten (D140) — the `userId` who asked, the
@@ -2008,7 +2031,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 68 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 69 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
@@ -2274,7 +2297,7 @@ is stored, logged or sent.
 |---|---|---|
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
-| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
+| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Nothing writes one yet | PostgreSQL `Verification` | Until it expires and is cleared |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |

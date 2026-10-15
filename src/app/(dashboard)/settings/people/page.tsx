@@ -20,6 +20,8 @@ import {
 } from "@/components/household/add-member-refusal";
 import { ResetMemberPasswordDialog } from "@/components/household/ResetMemberPasswordDialog";
 import { MemberSessionsDialog } from "@/components/household/MemberSessionsDialog";
+import { EndHouseholdSessions } from "@/components/household/EndHouseholdSessions";
+import { Section } from "@/components/ui/section";
 import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
 
@@ -44,6 +46,13 @@ import type { FormEvent, JSX } from "react";
  * one (`household.memberSessions`, `household.endMemberSessions`, D145): the
  * answer to a lost kitchen tablet that does not also sign the member out of
  * the phone in their pocket.
+ *
+ * Last, for owners only, "Cerrar todas las sesiones del hogar"
+ * (`household.endHouseholdSessions`, D147): every member signed out of every
+ * device, the owner too, after the owner's password. Below everything else
+ * because it is the widest act on the screen, and absent rather than
+ * disabled for an admin, because nothing an admin can do here would enable
+ * it.
  */
 export default function PeoplePage(): JSX.Element {
   const t = useTranslations("household");
@@ -52,8 +61,9 @@ export default function PeoplePage(): JSX.Element {
   const utils = api.useUtils();
 
   const members = api.household.members.useQuery();
-  // Only to know which row is the caller's own, which gets no reset: your own
-  // password changes from Settings, with your current one.
+  // To know which row is the caller's own, which gets no reset — your own
+  // password changes from Settings, with your current one — and whether the
+  // caller is an owner, who alone is offered the household-wide ending.
   const me = api.auth.me.useQuery(undefined, { retry: false });
 
   const [name, setName] = useState("");
@@ -601,6 +611,12 @@ export default function PeoplePage(): JSX.Element {
           </Button>
         </form>
       </section>
+
+      {me.data?.role === "OWNER" ? (
+        <Section className="mt-8" title={t("endAllHouseholdTitle")}>
+          <EndHouseholdSessions />
+        </Section>
+      ) : null}
     </PageShell>
   );
 }
