@@ -70,6 +70,7 @@ async function createTestContext(
             role,
           },
           expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+          expiresKind: "idle",
           sessionId: crypto.randomUUID(),
         };
 

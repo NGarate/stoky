@@ -68,3 +68,34 @@ export function nextExpiry({
 export function shouldSlide(expiresAt: Date, now: Date): boolean {
   return expiresAt.getTime() - now.getTime() < (BROWSER_IDLE_S - SLIDE_MARGIN_S) * 1000;
 }
+
+/**
+ * Which deadline a session's expiry is: `"idle"`, which activity can still
+ * move, or `"cap"`, the limit from the sign-in, which nothing moves.
+ *
+ * WCAG 2.2.6 is about a warning that tells the truth. Fifteen minutes from the
+ * end of the day, `nextExpiry` stops sliding and the expiry *is* the limit, so
+ * "Seguir conectado" would answer with the same time and the countdown would
+ * carry on as if the button had not been pressed. The keep-alive asks this to
+ * say which deadline is coming and to offer the button only when pressing it
+ * can do something (`src/components/session/SessionKeepAlive.tsx`).
+ *
+ * A second's slack, because the limit is computed as a sum and stored at
+ * millisecond precision by a different process than the one reading it: an
+ * expiry within a second of the limit is the limit. Past it counts too — a row
+ * that would outlive its limit is not one activity can extend.
+ */
+export type DeadlineKind = "idle" | "cap";
+
+export function deadlineKind({
+  expiresAt,
+  authenticatedAt,
+  capS,
+}: {
+  expiresAt: Date;
+  authenticatedAt: Date;
+  capS: number;
+}): DeadlineKind {
+  const limit = authenticatedAt.getTime() + capS * 1000;
+  return expiresAt.getTime() >= limit - 1000 ? "cap" : "idle";
+}

@@ -201,3 +201,47 @@ describe("whose session it is", () => {
     expect(session?.user.householdId).toBeUndefined();
   });
 });
+
+describe("which deadline it says is next", () => {
+  // WCAG 2.2.6: the keep-alive offers "Seguir conectado" only while pressing
+  // it can move the expiry. The server is what knows.
+  it("is the idle one for a session with its day ahead, on the render and the keep-alive", async () => {
+    const browser = await signIn();
+    await idle(browser.sessionId, 14 * MINUTE);
+
+    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("idle");
+    expect((await keepAlive(browser))?.kind).toBe("idle");
+  });
+
+  it("is the limit once activity can no longer move it", async () => {
+    // Signed in a day less ten minutes ago, slid six minutes ago: the idle
+    // deadline is nine minutes out, a minute short of the limit. Activity now
+    // slides it to the limit and no further, and both answers say so.
+    const browser = await signIn();
+    await idle(browser.sessionId, 6 * MINUTE, BROWSER_CAP_S * 1000 - 10 * MINUTE);
+    const authenticatedAt = (await row(browser.sessionId))!.authenticatedAt.getTime();
+    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("idle");
+
+    const answer = await keepAlive(browser);
+
+    expect(answer?.kind).toBe("cap");
+    expect(new Date(answer!.expires).getTime()).toBe(authenticatedAt + BROWSER_CAP_S * 1000);
+    expect((await readSession(browser.headers, { refresh: false }))?.expiresKind).toBe("cap");
+  });
+
+  it("is the limit on an answer that did not slide, too", async () => {
+    // Fresh enough not to be written, already at the limit: the early answer
+    // must carry the kind as well as the write's.
+    const browser = await signIn();
+    const now = Date.now();
+    await prisma.session.update({
+      where: { id: browser.sessionId },
+      data: {
+        authenticatedAt: new Date(now - BROWSER_CAP_S * 1000 + BROWSER_IDLE_S * 1000 - 30_000),
+        expiresAt: new Date(now + BROWSER_IDLE_S * 1000 - 30_000),
+      },
+    });
+
+    expect((await keepAlive(browser))?.kind).toBe("cap");
+  });
+});

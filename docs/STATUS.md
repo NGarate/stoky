@@ -1014,7 +1014,7 @@ What is measured, and by what:
 | Reading order | `screen-reader.spec.ts`, tree order vs geometry | ✅ desktop only |
 | Announcements | `screen-reader.spec.ts` | ✅ refusals and saved movements both announced — A11Y-1 closed in Phase 5, and the pinned assertion flipped |
 | Reading level (3.1.5) | `src/__tests__/unit/readability.test.ts` | ✅ es 69.0 "fácil", en 66.3 |
-| Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, driven in a browser | ✅ slides on activity, warns at T−2min |
+| Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, `session.policy.test.ts`, driven in a browser | ✅ slides on activity, warns at T−2min, and says which deadline: inactivity with "Seguir conectado", or the day's limit with no button, because nothing extends it (re-measured 2026-10-15: 12 component, 13 integration, 10 unit cases) |
 
 **Two honest limits.** Automated testing catches roughly a third of real
 accessibility problems, so this is a floor that stops regressions, not a

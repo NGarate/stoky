@@ -76,7 +76,7 @@ export default async function DashboardLayout({
           <DashboardNav />
           <CompactNav />
           {/* WCAG 2.2.6: an idle session must say so before it takes work with it. */}
-          <SessionKeepAlive expiresAt={session.expires} />
+          <SessionKeepAlive expiresAt={session.expires} kind={session.expiresKind} />
         {/* The cached shell belongs to this account and no other. */}
         <ShellCacheGuard userId={session.user.id} />
         {/* Renders nothing; hands the account's answer to the store the

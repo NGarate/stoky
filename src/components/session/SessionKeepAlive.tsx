@@ -4,7 +4,8 @@ import { useOnline } from "@/lib/useOnline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { readSessionExpiry } from "@/lib/auth/client";
+import { readSessionExpiry, type SessionExpiry } from "@/lib/auth/client";
+import type { DeadlineKind } from "@/lib/auth/session-policy";
 import type { JSX } from "react";
 
 /**
@@ -20,17 +21,27 @@ import type { JSX } from "react";
  *
  * - **Activity refreshes silently.** A pointer or a key, throttled to once
  *   every four minutes, asks `auth.session`, which moves the session's expiry
- *   fifteen minutes on. It is the only thing that does: a background read is
- *   not somebody at the screen (`src/lib/auth/session-policy.ts`). Someone who
- *   is using the application never sees this component at all, which is the
+ *   fifteen minutes on — up to the day's limit from the sign-in and never past
+ *   it. It is the only thing that moves it: a background read is not somebody
+ *   at the screen (`src/lib/auth/session-policy.ts`). Someone who is using the
+ *   application never sees this component until that limit, which is the
  *   point — a warning that fires while you are typing is a nuisance, not an
  *   accessibility feature.
- * - **Inactivity warns, out loud.** Two minutes before expiry a live region
- *   announces how long is left and offers to stay signed in. It is
- *   `role="alert"`, so a screen reader says it without anyone having to look,
- *   and it does **not** take focus: the warning arrives when the person is
- *   already away from the keyboard, and stealing focus would move a caret that
- *   someone may be about to come back to.
+ * - **The deadline warns, out loud.** Two minutes before expiry a live region
+ *   announces how long is left. It is `role="alert"`, so a screen reader says
+ *   it without anyone having to look, and it does **not** take focus: the
+ *   warning arrives when the person is already away from the keyboard, and
+ *   stealing focus would move a caret that someone may be about to come back
+ *   to.
+ *
+ * **Which deadline it is decides what the warning says.** An idle deadline
+ * (`kind: "idle"`) names the inactivity and offers to stay signed in, because
+ * pressing the button moves it. The day's limit (`kind: "cap"`) names the limit
+ * and offers nothing: no request can extend it, and a button that answers with
+ * the same countdown tells the person they did something when they did not.
+ * The server says which (`deadlineKind`), on the first render and on every
+ * refresh, so a session that slides into its last fifteen minutes changes its
+ * warning without a reload.
  */
 
 /** How long before expiry the warning appears. */
@@ -44,8 +55,9 @@ const WARN_BEFORE_MS = 2 * 60 * 1000;
  * throttle would only spend requests moving the expiry a little further each
  * time.
  *
- * Nothing here can move the day's limit from the sign-in (`BROWSER_CAP_S`,
- * `src/lib/auth/session-policy.ts`): `auth.session` never slides past it.
+ * It keeps asking at the day's limit, where the expiry no longer moves: the
+ * answer still says the session is live, and the slide's write is what dates
+ * the row's last use for the ten-session cap (`src/lib/auth/sign-in-tidy.ts`).
  */
 const REFRESH_THROTTLE_MS = 4 * 60 * 1000;
 
@@ -55,20 +67,24 @@ const TICK_MS = 15 * 1000;
 interface SessionKeepAliveProps {
   /** `session.expires`, as the server rendered it. */
   expiresAt: string;
+  /** `session.expiresKind`: which deadline `expiresAt` is. */
+  kind: DeadlineKind;
   /**
    * Reads, and so slides, the session's expiry. Injected by the tests;
    * `readSessionExpiry` (`src/lib/auth/client.ts`) otherwise.
    */
-  readExpiry?: () => Promise<{ expires: string } | null>;
+  readExpiry?: () => Promise<SessionExpiry | null>;
 }
 
 export function SessionKeepAlive({
   expiresAt,
+  kind: renderedKind,
   readExpiry = readSessionExpiry,
 }: SessionKeepAliveProps): JSX.Element | null {
   const t = useTranslations("session");
   const online = useOnline();
   const [expiry, setExpiry] = useState(() => new Date(expiresAt).getTime());
+  const [kind, setKind] = useState<DeadlineKind>(renderedKind);
   const [remainingMs, setRemainingMs] = useState(
     () => new Date(expiresAt).getTime() - Date.now(),
   );
@@ -86,6 +102,7 @@ export function SessionKeepAlive({
       const session = await readExpiry();
       if (session) {
         setExpiry(new Date(session.expires).getTime());
+        setKind(session.kind);
         setRemainingMs(new Date(session.expires).getTime() - Date.now());
       }
       lastRefresh.current = Date.now();
@@ -141,6 +158,14 @@ export function SessionKeepAlive({
 
   const minutesLeft = Math.max(0, Math.ceil(remainingMs / 60000));
   const expired = remainingMs <= 0;
+  const atLimit = kind === "cap";
+  const message = atLimit
+    ? expired
+      ? t("capReached")
+      : t("capIn", { minutes: minutesLeft })
+    : expired
+      ? t("expired")
+      : t("expiringIn", { minutes: minutesLeft });
 
   return (
     <div
@@ -148,16 +173,16 @@ export function SessionKeepAlive({
       role="alert"
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-warn-foreground">
-          {expired ? t("expired") : t("expiringIn", { minutes: minutesLeft })}
-        </p>
-        <Button
-          className="sm:w-auto"
-          onClick={() => void refresh()}
-          type="button"
-        >
-          {t("staySignedIn")}
-        </Button>
+        <p className="text-sm text-warn-foreground">{message}</p>
+        {atLimit ? null : (
+          <Button
+            className="sm:w-auto"
+            onClick={() => void refresh()}
+            type="button"
+          >
+            {t("staySignedIn")}
+          </Button>
+        )}
       </div>
     </div>
   );

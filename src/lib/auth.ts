@@ -5,6 +5,7 @@ import type { HouseholdRole } from "@prisma/client";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { getAuth } from "@/lib/auth/instance";
 import type { AppSession } from "@/lib/auth/session";
+import { BROWSER_CAP_S, deadlineKind } from "@/lib/auth/session-policy";
 
 /**
  * Checked here because this is the module every server path goes through, and
@@ -20,7 +21,11 @@ assertUsableSecret();
  * from Better Auth's inferred type so this file says what it relies on.
  */
 interface LibrarySession {
-  session: { id: string; expiresAt: Date | string };
+  session: {
+    id: string;
+    expiresAt: Date | string;
+    authenticatedAt?: Date | string | null;
+  };
   user: {
     id: string;
     email: string;
@@ -39,9 +44,14 @@ interface LibrarySession {
  * session can never outrank its account; `User.role` has a default, so no row
  * should lack one. The role is not an authority either way:
  * `householdProcedure` reads it from the database on every call.
+ *
+ * A row without `authenticatedAt` — the column has a default, so none should
+ * lack it — reads as an idle deadline: the warning then offers the button,
+ * and pressing it asks `auth.session`, which answers from the row.
  */
 export function toAppSession(result: LibrarySession): AppSession {
   const { session, user } = result;
+  const expiresAt = new Date(session.expiresAt);
   return {
     user: {
       id: user.id,
@@ -50,7 +60,14 @@ export function toAppSession(result: LibrarySession): AppSession {
       householdId: user.householdId ?? undefined,
       role: (user.role as HouseholdRole | null | undefined) ?? "KITCHEN",
     },
-    expires: new Date(session.expiresAt).toISOString(),
+    expires: expiresAt.toISOString(),
+    expiresKind: session.authenticatedAt
+      ? deadlineKind({
+          expiresAt,
+          authenticatedAt: new Date(session.authenticatedAt),
+          capS: BROWSER_CAP_S,
+        })
+      : "idle",
     sessionId: session.id,
   };
 }

@@ -22,7 +22,13 @@ import {
   setPasswordAndEndSessions,
 } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
-import { nextExpiry, shouldSlide } from "@/lib/auth/session-policy";
+import {
+  BROWSER_CAP_S,
+  deadlineKind,
+  nextExpiry,
+  shouldSlide,
+  type DeadlineKind,
+} from "@/lib/auth/session-policy";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   REGISTRATION_CLOSED_MESSAGE,
@@ -267,6 +273,11 @@ export const authRouter = createTRPCRouter({
    *
    * The write is conditioned on the row still being live, so a session that
    * ended between the read and the write is not brought back.
+   *
+   * `kind` says which deadline `expires` is: `"idle"` while activity can
+   * still move it, `"cap"` once it is the day's limit and nothing can. The
+   * keep-alive reads it to stop offering "Seguir conectado" when pressing it
+   * would change nothing (WCAG 2.2.6).
    */
   session: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.session) return null;
@@ -277,14 +288,22 @@ export const authRouter = createTRPCRouter({
       select: { expiresAt: true, authenticatedAt: true },
     });
     if (!row || row.expiresAt <= now) return null;
-    if (!shouldSlide(row.expiresAt, now)) return { expires: row.expiresAt.toISOString() };
+    const answer = (expiresAt: Date): { expires: string; kind: DeadlineKind } => ({
+      expires: expiresAt.toISOString(),
+      kind: deadlineKind({
+        expiresAt,
+        authenticatedAt: row.authenticatedAt,
+        capS: BROWSER_CAP_S,
+      }),
+    });
+    if (!shouldSlide(row.expiresAt, now)) return answer(row.expiresAt);
 
     const expires = nextExpiry({ authenticatedAt: row.authenticatedAt, now });
     const { count } = await ctx.db.session.updateMany({
       where: { id: ctx.session.sessionId, expiresAt: { gt: now } },
       data: { expiresAt: expires },
     });
-    return count === 0 ? null : { expires: expires.toISOString() };
+    return count === 0 ? null : answer(expires);
   }),
 
   /**

@@ -870,6 +870,8 @@
   "session": {
     "expiringIn": "Your session will close in {minutes} min after being idle. Anything unsaved will be lost.",
     "expired": "Your session closed after being idle. Sign in again to carry on.",
+    "capIn": "Your session will close in {minutes} min because it has reached its time limit, which cannot be extended. Anything unsaved will be lost.",
+    "capReached": "Your session reached its time limit and has closed. Sign in again to carry on.",
     "staySignedIn": "Stay signed in",
     "signOut": "Sign out",
     "signOutTitle": "Sign out?",

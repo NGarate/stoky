@@ -123,15 +123,38 @@ describe("readSessionExpiry", () => {
 
   it("reads the expiry auth.session answered, never from a cache", async () => {
     const fetcher = answering({
-      result: { data: { json: { expires: "2026-10-15T12:00:00.000Z" } } },
+      result: { data: { json: { expires: "2026-10-15T12:00:00.000Z", kind: "idle" } } },
     });
 
     expect(await readSessionExpiry(fetcher as unknown as typeof fetch)).toEqual({
       expires: "2026-10-15T12:00:00.000Z",
+      kind: "idle",
     });
     const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe("/api/trpc/auth.session");
     expect(init.cache).toBe("no-store");
+  });
+
+  it("passes on that the expiry is the day's limit", async () => {
+    const fetcher = answering({
+      result: { data: { json: { expires: "2026-10-15T12:00:00.000Z", kind: "cap" } } },
+    });
+
+    expect(await readSessionExpiry(fetcher as unknown as typeof fetch)).toEqual({
+      expires: "2026-10-15T12:00:00.000Z",
+      kind: "cap",
+    });
+  });
+
+  it("reads anything but an explicit limit as the idle deadline", async () => {
+    // Wrong one way, the warning offers a button that changes nothing; wrong
+    // the other, it hides one that works. The first is the cheaper mistake.
+    for (const kind of ["idle", "CAP", 1, undefined]) {
+      const fetcher = answering({
+        result: { data: { json: { expires: "2026-10-15T12:00:00.000Z", kind } } },
+      });
+      expect((await readSessionExpiry(fetcher as unknown as typeof fetch))?.kind).toBe("idle");
+    }
   });
 
   it("answers null when there is no session", async () => {

@@ -1,4 +1,5 @@
 import type { HouseholdRole } from "@prisma/client";
+import type { DeadlineKind } from "@/lib/auth/session-policy";
 
 /**
  * The session as the application reads it — owned here, not by the library
@@ -30,6 +31,13 @@ export interface AppSession {
   user: AppSessionUser;
   /** When the session lapses, as an ISO 8601 string. */
   expires: string;
+  /**
+   * Whether `expires` is the idle deadline, which activity moves, or the
+   * limit from the sign-in, which nothing does (`deadlineKind`,
+   * `src/lib/auth/session-policy.ts`). The keep-alive's warning says which,
+   * and offers to stay signed in only for the first.
+   */
+  expiresKind: DeadlineKind;
   /**
    * The `Session` row this is. Required, because a procedure that ends or
    * keeps "this session" filters on it, and Prisma reads `{ id: undefined }`

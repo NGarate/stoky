@@ -279,6 +279,7 @@ export function createMockSession(user: User & { household?: Household | null })
       role: user.role,
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
     // A fresh id that names no row: a procedure that filters on "this
     // session" then matches nothing rather than, through an undefined id,
     // everything.

@@ -870,6 +870,8 @@
   "session": {
     "expiringIn": "Tu sesión se cerrará en {minutes} min por inactividad. Lo que no hayas guardado se perderá.",
     "expired": "Tu sesión se ha cerrado por inactividad. Vuelve a entrar para seguir.",
+    "capIn": "Tu sesión se cerrará en {minutes} min porque ha llegado a su tiempo máximo, y no se puede alargar. Lo que no hayas guardado se perderá.",
+    "capReached": "Tu sesión ha llegado a su tiempo máximo y se ha cerrado. Vuelve a entrar para seguir.",
     "staySignedIn": "Seguir conectado",
     "signOut": "Cerrar sesión",
     "signOutTitle": "¿Cerrar sesión?",

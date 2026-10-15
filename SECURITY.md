@@ -585,9 +585,12 @@ Verified against the files named in each row.
   from `createdAt`, which Better Auth resets when it re-creates a session. The
   slide is clamped to it. This replaces D125's thirty days: every session is a
   browser session for now, and a day is what one shift on a shared device
-  needs. Nothing warns before the day runs out: the next read is refused, the
-  same path an ended session takes, so the offline queue keeps its unsent
-  changes and asks for a sign-in. Everybody signed in on a JWT before this
+  needs. Two minutes before the day runs out the keep-alive says so, and
+  says that it is the day's limit rather than inactivity, with no "Seguir
+  conectado" button, because nothing can extend it (WCAG 2.2.6; `auth.session`
+  answers which deadline is next, `deadlineKind`). Then the next read is
+  refused, the same path an ended session takes, so the offline queue keeps
+  its unsent changes and asks for a sign-in. Everybody signed in on a JWT before this
   release signs in once after upgrading; passwords are kept.
 - **Signing out ends this device's session**: `signOutAction` asks Better Auth
   to delete the row and expire the cookies, so a copy of the cookie taken

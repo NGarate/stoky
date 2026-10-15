@@ -1,4 +1,5 @@
 import type { SignInRefusal } from "@/lib/auth/sign-in-policy";
+import type { DeadlineKind } from "@/lib/auth/session-policy";
 
 /**
  * Every call the browser makes to authenticate, and nothing else.
@@ -108,6 +109,15 @@ export async function signInWithPassword(
 }
 
 /**
+ * The session's expiry and which deadline it is (`deadlineKind`,
+ * `src/lib/auth/session-policy.ts`).
+ */
+export interface SessionExpiry {
+  expires: string;
+  kind: DeadlineKind;
+}
+
+/**
  * Reads the session's current expiry, which also slides it: `auth.session`
  * moves a browser session's idle expiry forward when it is asked, and is asked
  * only on real activity (`SessionKeepAlive`). `null` when there is no session.
@@ -121,15 +131,19 @@ export async function signInWithPassword(
  */
 export async function readSessionExpiry(
   fetcher: typeof fetch = fetch,
-): Promise<{ expires: string } | null> {
+): Promise<SessionExpiry | null> {
   const response = await fetcher("/api/trpc/auth.session", {
     cache: "no-store",
     credentials: "same-origin",
   });
   if (!response.ok) throw new Error(`auth.session answered ${response.status}`);
   const body = (await response.json()) as {
-    result?: { data?: { json?: { expires?: unknown } | null } };
+    result?: { data?: { json?: { expires?: unknown; kind?: unknown } | null } };
   };
-  const expires = body.result?.data?.json?.expires;
-  return typeof expires === "string" ? { expires } : null;
+  const answer = body.result?.data?.json;
+  if (typeof answer?.expires !== "string") return null;
+  // Anything but an explicit "cap" is the idle deadline: the warning then
+  // offers the button, and the worst a wrong guess costs is one press that
+  // changes nothing. The other way round would hide a button that works.
+  return { expires: answer.expires, kind: answer.kind === "cap" ? "cap" : "idle" };
 }

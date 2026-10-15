@@ -14,6 +14,7 @@ describe("tRPC Infrastructure", () => {
           role: "MEMBER",
         },
         expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+        expiresKind: "idle",
         sessionId: crypto.randomUUID(),
       };
 
@@ -39,6 +40,7 @@ describe("tRPC Infrastructure", () => {
           role: "MEMBER",
         },
         expires: new Date().toISOString(),
+        expiresKind: "idle",
         sessionId: crypto.randomUUID(),
       };
 
