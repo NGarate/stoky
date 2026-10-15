@@ -2,6 +2,7 @@ import { afterAll, afterEach, describe, expect, it, spyOn } from "bun:test";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { POST } from "@/app/api/auth/[...all]/route";
 import { readSession } from "@/lib/auth";
+import { BACKUP_CODE_HASH_PREFIX, generateBackupCodes, normaliseBackupCode } from "@/lib/auth/backup-codes";
 import { getAuth } from "@/lib/auth/instance";
 import { NO_MATCH_CODE, hotp, totpClock, totpStep } from "@/lib/auth/policy-plugin";
 import { MAX_SESSIONS_PER_ACCOUNT } from "@/lib/auth/session-policy";
@@ -592,5 +593,130 @@ describe("the sessions a two-step sign-in ends", () => {
     const left = await prisma.session.findMany({ where: { userId: ana.id }, select: { id: true } });
     expect(left).toHaveLength(MAX_SESSIONS_PER_ACCOUNT);
     expect(left.map((row) => row.id)).not.toContain(leastUsed.id);
+  });
+});
+
+describe("backup codes (ASVS 5.0.0 6.5.2)", () => {
+  /** The list as Better Auth stores it. */
+  const storedCodes = async (userId: string) => JSON.parse((await twoFactorRow(userId)).backupCodes) as string[];
+
+  /** How a person types a code off paper: lower case, spaces for dashes. */
+  const typedCasually = (code: string) => code.toLowerCase().replaceAll("-", " ");
+
+  it("are 120-bit codes stored as hashes: the column gives none of them back", async () => {
+    const ana = await enrolled("hashed");
+
+    expect(ana.backupCodes).toHaveLength(10);
+    for (const issued of ana.backupCodes) {
+      expect(issued).toMatch(/^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){5}$/);
+    }
+    const raw = (await twoFactorRow(ana.id)).backupCodes;
+    const stored = JSON.parse(raw) as string[];
+    expect(stored).toHaveLength(10);
+    for (const entry of stored) expect(entry).toMatch(/^sha256:[0-9a-f]{64}$/);
+    for (const issued of ana.backupCodes) {
+      expect(raw).not.toContain(issued);
+      expect(raw).not.toContain(normaliseBackupCode(issued));
+    }
+  });
+
+  it("work once, typed in lower case with spaces", async () => {
+    const ana = await enrolled("once");
+    const [spent, kept] = ana.backupCodes;
+
+    const first = await secondStep("backup-code", await challenge(ana), { code: typedCasually(spent) });
+    expect(first.status).toBe(200);
+    expect(await signedInAs(first.jar)).toBe(ana.id);
+    expect(await storedCodes(ana.id)).toHaveLength(9);
+
+    const again = await secondStep("backup-code", await challenge(ana), { code: spent });
+    expect(again.status).toBe(401);
+    expect(again.code).toBe("INVALID_BACKUP_CODE");
+    expect(await signedInAs(again.jar)).toBeNull();
+
+    // The others still do; spending one rewrote the list without it alone.
+    expect((await secondStep("backup-code", await challenge(ana), { code: kept })).status).toBe(200);
+    const left = await storedCodes(ana.id);
+    expect(left).toHaveLength(8);
+    for (const entry of left) expect(entry.startsWith(BACKUP_CODE_HASH_PREFIX)).toBe(true);
+  });
+
+  it("refuse the stored hash typed as a code: reading the column is not a way in", async () => {
+    const ana = await enrolled("column");
+    const [hash] = await storedCodes(ana.id);
+
+    const answer = await secondStep("backup-code", await challenge(ana), { code: hash });
+
+    expect(answer.status).toBe(401);
+    expect(answer.code).toBe("INVALID_BACKUP_CODE");
+    expect(await storedCodes(ana.id)).toHaveLength(10);
+  });
+
+  it("are all replaced by a new set, and the old ones stop working", async () => {
+    const ana = await enrolled("regenerate");
+    const regenerated = await getAuth().api.generateBackupCodes({
+      body: { password: PASSWORD },
+      headers: new Headers({ cookie: ana.jar }),
+    });
+    expect(regenerated.backupCodes).toHaveLength(10);
+    expect(regenerated.backupCodes).not.toContain(ana.backupCodes[0]);
+    for (const entry of await storedCodes(ana.id)) expect(entry).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    const old = await secondStep("backup-code", await challenge(ana), { code: ana.backupCodes[0] });
+    expect(old.status).toBe(401);
+    expect(old.code).toBe("INVALID_BACKUP_CODE");
+
+    const fresh = await secondStep("backup-code", await challenge(ana), { code: regenerated.backupCodes[0] });
+    expect(fresh.status).toBe(200);
+    expect(await signedInAs(fresh.jar)).toBe(ana.id);
+  });
+
+  it("count a wrong one toward the account's lockout", async () => {
+    const ana = await enrolled("wrong");
+    // A well-formed code of the right length that was never issued to her.
+    const [never] = generateBackupCodes();
+
+    const answer = await secondStep("backup-code", await challenge(ana), { code: never });
+
+    expect(answer.status).toBe(401);
+    expect(answer.code).toBe("INVALID_BACKUP_CODE");
+    expect((await twoFactorRow(ana.id)).failedVerificationCount).toBe(1);
+  });
+
+  it("still sign in once the authenticator is unreadable, and two-step verification can be set up again", async () => {
+    // What a rotated STOKY_SECRET leaves: the TOTP secret in an envelope this
+    // instance holds no key for. The backup codes involve no secret.
+    const ana = await enrolled("rotated");
+    await prisma.twoFactor.update({ where: { userId: ana.id }, data: { secret: "$ba$9$00ff" } });
+    const jar = await challenge(ana);
+    expect((await secondStep("totp", jar, { code: code(ana, 1) })).code).toBe("TWO_FACTOR_UNREADABLE");
+
+    const answer = await secondStep("backup-code", jar, { code: ana.backupCodes[0] });
+    expect(answer.status).toBe(200);
+    expect(await signedInAs(answer.jar)).toBe(ana.id);
+
+    // Then off and on again, which needs only the password: a new secret,
+    // readable under this server's key, and a new set of codes.
+    const auth = getAuth();
+    const off = await auth.api.disableTwoFactor({
+      body: { password: PASSWORD },
+      headers: new Headers({ cookie: answer.jar }),
+      asResponse: true,
+    });
+    expect(off.status).toBe(200);
+    const signedIn = mergeJar(answer.jar, off.headers.getSetCookie());
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: ana.id } })).twoFactorEnabled).toBe(false);
+
+    const on = await auth.api.enableTwoFactor({
+      body: { password: PASSWORD },
+      headers: new Headers({ cookie: signedIn }),
+    });
+    if (on.method !== "totp") throw new Error("enrolment did not set up an authenticator");
+    expect(on.backupCodes).toHaveLength(10);
+    const secret = await symmetricDecrypt({
+      key: (await auth.$context).secretConfig,
+      data: (await twoFactorRow(ana.id)).secret,
+    });
+    expect(secret).toHaveLength(32);
   });
 });

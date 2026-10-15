@@ -148,8 +148,9 @@ model Session {
 /// `secret` is the TOTP seed, encrypted with `STOKY_SECRET` (Better Auth's
 /// `$ba$1$` envelope): rotating the secret makes it unreadable, which a
 /// sign-in answers with `TWO_FACTOR_UNREADABLE` (SECURITY.md, *Secrets*).
-/// `backupCodes` is Better Auth's list of one-off recovery codes, also
-/// encrypted.
+/// `backupCodes` is the list of one-off recovery codes, as JSON, each stored
+/// as `sha256:<hex>` and never encrypted (D149, `src/lib/auth/backup-codes.ts`):
+/// the column gives none of them back, and a rotation leaves them working.
 ///
 /// **One per person** (`userId` is unique). Better Auth's enrolment updates
 /// the row it finds rather than adding a second, and the replay guard

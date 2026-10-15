@@ -12,6 +12,7 @@ import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
 import { configuredSecret } from "@/lib/auth/secret";
 import { stokyPolicy } from "@/lib/auth/policy-plugin";
+import { generateBackupCodes, storeBackupCodes } from "@/lib/auth/backup-codes";
 import {
   REMEMBERED_IDLE_S,
   REMEMBERED_REFRESH_S,
@@ -314,8 +315,16 @@ function build(env: Record<string, string | undefined>) {
       // minutes. The route answers only those two endpoints for now: the
       // enrolment ones open when the settings screen does
       // (`src/server/http/auth-handler.ts`).
-      twoFactor({ issuer: "Stoky" }),
-      // Ours: a TOTP code works once (`src/lib/auth/policy-plugin.ts`).
+      twoFactor({
+        issuer: "Stoky",
+        // Backup codes of 120 bits, stored as SHA-256 hashes rather than
+        // Better Auth's 60-bit codes encrypted with `STOKY_SECRET` (D149,
+        // `src/lib/auth/backup-codes.ts`): the database alone gives none
+        // back, and a rotation of the secret leaves them working.
+        backupCodeOptions: { customBackupCodesGenerate: generateBackupCodes, storeBackupCodes },
+      }),
+      // Ours: a TOTP code works once, and a typed backup code is compared as
+      // its hash (`src/lib/auth/policy-plugin.ts`).
       stokyPolicy({ db: prisma }),
       // Last, as Better Auth asks: it copies every Set-Cookie into Next's
       // cookie store when an endpoint is called from a Server Action.

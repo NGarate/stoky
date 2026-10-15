@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { symmetricDecrypt } from "better-auth/crypto";
+import { hashBackupCode } from "@/lib/auth/backup-codes";
 import { clientAddress } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 
@@ -38,10 +39,18 @@ import { logSecurityEvent } from "@/lib/security-log";
  *    between this check and its own would let through a code for a step this
  *    guard never claimed.
  *
+ * **A backup code is compared as its hash** (PROGRESS D149, ASVS 5.0.0
+ * 6.5.2). The codes are stored as `sha256:<hex>` (`src/lib/auth/backup-codes.ts`)
+ * and Better Auth looks for the typed code in the stored list as it is, so
+ * `/two-factor/verify-backup-code` is given the typed code's hash instead.
+ * Always hashed, whatever was typed: a stored hash sent as the code is hashed
+ * again and matches nothing, so reading the column is not a way in.
+ *
  * Coupled to Better Auth 1.7.7's internals: the `two_factor` cookie and the
- * challenge row it names, `secretConfig`, and how a before-hook's returned
- * body is merged. The version is pinned exactly, and
- * `integration/two-factor.test.ts` fails if any of them moves.
+ * challenge row it names, `secretConfig`, how a before-hook's returned body
+ * is merged, and how a backup code is looked up (`includes` over the decoded
+ * list, then a write conditional on the list read). The version is pinned
+ * exactly, and `integration/two-factor.test.ts` fails if any of them moves.
  */
 
 /** Better Auth's defaults, which the instance does not change. */
@@ -203,6 +212,16 @@ export function stokyPolicy({ db }: PolicyPluginOptions) {
     id: "stoky-policy",
     hooks: {
       before: [
+        {
+          matcher: (context: { path?: string }) => context.path === "/two-factor/verify-backup-code",
+          handler: createAuthMiddleware(async (raw) => {
+            const ctx = raw as unknown as GuardContext;
+            const code = ctx.body?.code;
+            // Not a string: Better Auth's own schema refuses it.
+            if (typeof code !== "string") return;
+            return { context: { body: { ...ctx.body, code: hashBackupCode(code) } } };
+          }),
+        },
         {
           matcher: (context: { path?: string }) => context.path === "/two-factor/verify-totp",
           handler: createAuthMiddleware(async (raw) => {

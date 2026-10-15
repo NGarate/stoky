@@ -873,6 +873,21 @@ Verified against the files named in each row.
     the account's challenges in progress (`src/lib/auth/end-sessions.ts`).
     The sign-in's own tidy does not: an expired row going is no reason to
     stop the same person signing in on another device.
+  - **Backup codes are 120-bit codes stored as hashes** (ASVS 5.0.0 6.5.2,
+    PROGRESS D149, `src/lib/auth/backup-codes.ts`). Ten, each 24 Crockford
+    base32 characters shown as six groups of four, drawn from
+    `crypto.getRandomValues`, in place of Better Auth's ten-character codes
+    of about 60 bits kept encrypted with `STOKY_SECRET`. Each is stored as
+    `sha256:` and the hex digest of the code upper-cased without spaces or
+    dashes, O read as 0 and I or L as 1, so a code typed off paper in lower
+    case still matches; ASVS 6.5.2 allows a plain hash at 112 bits or more.
+    The policy plugin hashes whatever is typed before Better Auth compares
+    it, so a stored hash sent as the code is hashed again and refused:
+    reading the column is not a way in. A code works once — Better Auth
+    rewrites the list without it, conditionally on the list it read — and a
+    wrong one counts towards the same lockout as a wrong TOTP code.
+    Generating a new set replaces the old one whole. No secret is involved,
+    so a rotation of `STOKY_SECRET` leaves them working.
   - **The secret is encrypted with `STOKY_SECRET`**
     ([*Secrets*](#secrets)). One that no longer decrypts — the secret was
     rotated — is refused as `TWO_FACTOR_UNREADABLE` before Better Auth counts
@@ -2370,7 +2385,7 @@ is stored, logged or sent.
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
-| Each account's authenticator, once two-step verification is set up (D148): the account id, the TOTP secret and the backup codes, both encrypted with `STOKY_SECRET`, whether the first code has been accepted, the count of wrong codes in a row and the lockout's end, and the last time step a code was accepted for | PostgreSQL `TwoFactor` | Until two-step verification is removed, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
+| Each account's authenticator, once two-step verification is set up (D148): the account id, the TOTP secret, encrypted with `STOKY_SECRET`, the unused backup codes as SHA-256 hashes (D149), whether the first code has been accepted, the count of wrong codes in a row and the lockout's end, and the last time step a code was accepted for | PostgreSQL `TwoFactor` | Until two-step verification is removed, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
@@ -2481,8 +2496,9 @@ An operator who runs the image any other way should set
 
 `.env` holds `POSTGRES_PASSWORD` and `STOKY_SECRET` (`NEXTAUTH_SECRET` in an
 `.env` not yet renamed; D137). `STOKY_SECRET` signs sessions, keys the
-security log's account tags and encrypts each authenticator's TOTP secret and
-backup codes (D148). Both reach the containers as environment variables:
+security log's account tags and encrypts each authenticator's TOTP secret
+(D148). Backup codes are hashes, not encrypted, so it does not reach them
+(D149). Both reach the containers as environment variables:
 
 - the database password in `db`'s environment and inside the app's
   `DATABASE_URL`;
@@ -2519,11 +2535,11 @@ the command:
   account stops matching its older lines;
 - every authenticator becomes unreadable: a sign-in answers
   `TWO_FACTOR_UNREADABLE`, and the person's way back is a backup code and
-  then setting the authenticator up again, or the operator removing it. Until
-  backup codes are stored as hashes, they are unreadable too, and the
-  operator's runbook is the only way back.
+  then turning two-step verification off and on again, which needs only the
+  password, or the operator removing it.
 
-Passwords are unaffected. **Better Auth's versioned secrets are not
+Passwords and backup codes are unaffected: backup codes are stored as
+hashes, which no secret goes into (D149). **Better Auth's versioned secrets are not
 adopted** beyond the single version-1 entry the instance is given (PROGRESS
 D135, D148): keeping old enrolments readable through a rotation would need a
 second variable holding every retired value until each enrolment was redone,

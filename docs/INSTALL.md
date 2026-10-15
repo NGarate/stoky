@@ -439,8 +439,8 @@ the only thing protecting the account.
 
 ## Rotating `STOKY_SECRET`
 
-`STOKY_SECRET` signs every session and encrypts every authenticator secret,
-so replacing it is not only a new value. From the release after
+`STOKY_SECRET` signs every session and encrypts every authenticator secret
+(not the backup codes, which are hashes), so replacing it is not only a new value. From the release after
 v0.1.0-alpha.3, a new value:
 
 - **signs everybody out**, phones and the kitchen screen included: every
@@ -449,12 +449,13 @@ v0.1.0-alpha.3, a new value:
   and after cannot be matched to the same account by tag;
 - **makes every authenticator unreadable**. A person with two-step
   verification is told at sign-in that the server can no longer check their
-  app, and their way in is a backup code, then setting the app up again — or
-  [A lost authenticator](#a-lost-authenticator). Their backup codes are
-  encrypted with the same secret, so until a release stores them differently
-  they are unreadable too, and the database is the only way back.
+  app. Their way in is one of their backup codes, which are stored as hashes
+  rather than encrypted and so still work; once in, they turn two-step
+  verification off and on again, which sets up the app with a new secret and
+  gives them new codes. Somebody without a backup code needs
+  [A lost authenticator](#a-lost-authenticator).
 
-Passwords are not affected. Old values are not kept: Stoky reads one secret,
+Passwords and backup codes are not affected. Old values are not kept: Stoky reads one secret,
 so there is no way to rotate without these consequences. Rotate when the
 secret may have leaked, not on a schedule. To do it, generate a new value with
 `openssl rand -hex 32`, replace `STOKY_SECRET` in `.env`, and run

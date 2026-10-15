@@ -69,6 +69,7 @@ Rules for this log:
 | "feat(household): end a member's sessions when they are removed" (D146) | ASVS 5.0.0 7.4.2: `household.removeMember` deletes every session the member has (`endSessions`) inside the transaction that clears their household, after the existing guards, and logs `auth.session.ended` `reason: "removed"` with the admin, the member and the count once it has committed. Before, removal took the household and left the sessions, so a device the household no longer controlled still reached the account: its password, its devices, a new household. The confirmation on **Personas del hogar** now says the member is signed out on every device (Spanish and English). `integration/household.members.test.ts` "removing a member": two real sign-ins' cookies refused and their rows gone, a bystander still signed in, the log line, the account able to sign in again with no household; a refused removal (admin on an owner) ends nothing and writes no line. `components/EndSession.test.tsx`: the confirmation says so. Breaks that went red: no `endSessions`, no log line, reason `admin`, actor and target swapped, a fixed count, ending before the guards outside the transaction, logging before the guards, ending the whole household's sessions; the old confirmation text. |
 | "feat(household): let an owner end every session in the household" (D147) | ASVS 5.0.0 7.4.5: `household.endHouseholdSessions` ends every session of everybody in the household, the owners and the caller included, after the owner's current password. `adminProcedure`, then owners only inside the resolver (`FORBIDDEN` before the password is asked), then `confirmCurrentPassword` with `via: "household-end-all"`, then one `endSessions` filtered by the household through each session's account; one `auth.session.ended` `reason: "owner"` with the count and no `targetUserId`. On **Personas del hogar**, owners alone see a **Cerrar todas las sesiones del hogar** section (`EndHouseholdSessions`): `ReauthDialog`, then the sign-out sequence (`useEndSession` with the server call as its `before`), with the send-first offer for unsent changes. 69 procedures. `integration/session.revocation.test.ts` (+3): two owners, an admin and a kitchen account signed in for real are all signed out and their rows gone while another household's owner stays signed in, with the one log line; an admin, a member and a kitchen account are `FORBIDDEN` with no password asked (a wrong one writes no refusal) and end nothing; a wrong password is `BAD_REQUEST`, ends nothing and is logged. `components/EndSession.test.tsx` (+7): offered to an owner and not to an admin, says the owner leaves too, sends the password and ends on the server before purging and signing out, a wrong password or `FORBIDDEN` discards nothing and is said in the dialog, unsent changes are offered to be sent first. `e2e/session-revocation.spec.ts` (+1): an owner registered for the test adds a kitchen account, which signs in on its own browser; the owner ends every session with the password, lands on `/login`, and both browsers' `get-session` answers `null`. Breaks that went red: no household filter, only the owner's own, no owner check, the password before the role, no password, reason `admin`, `via` `end-sessions`, a target named, a fixed count; on the client the section offered to everyone or to nobody, no server call before leaving, no password sent, `FORBIDDEN` unmapped, unsent changes ignored, never sending first; in the e2e, ending only the owner's own sessions and a `before` that never calls the server (both: "the member's browser was still signed in"). |
 | "feat(auth): add TOTP two-step verification with single-use codes" (D148) | ASVS 5.0.0 6.5.1: Better Auth's two-factor plugin, `TwoFactor` table and `User.twoFactorEnabled` (`20261015150000_two_factor`), with a code usable once. Only the sign-in's second step answers over HTTP — `POST /two-factor/verify-totp` and `/verify-backup-code`, seven endpoints in all; enrolment opens with the settings screen. A before-hook of ours (`src/lib/auth/policy-plugin.ts`) finds the step the code is for and claims it in one conditional `UPDATE` of `TwoFactor.lastTotpCounter`; a code matching no step is rewritten to one Better Auth must refuse and count; a secret that no longer decrypts is `TWO_FACTOR_UNREADABLE`, uncounted. The route settles the password's charge at `twoFactorRedirect`, ends the presented session there and logs `auth.signin.challenged`; the code step is charged per address, passes `code` alone, and is a sign-in only with the challenge cookie in and a session cookie out (refund, known device, tidy and cap, `auth.signin.succeeded` `method: "totp"`/`"backup-code"`). `endSessions` deletes the named accounts' challenges, the sign-in tidy excepted; a password change deletes them after Better Auth's own delete. Five new refusal codes worded in both languages. `integration/two-factor.test.ts` (17): the two steps; a code refused across two sign-ins in one step, for an earlier step, and for the enrolment; two sign-ins with one code while the row is held locked, exactly one in; a guard clock two steps behind Better Auth's lets nothing through unclaimed; five wrong codes end the challenge and are counted; an unticked and a ticked box survive the second step; `trustDevice` and `disableSession` ignored; a challenge dead after an admin reset and after a password change; the account counter cleared at the challenge; an unreadable secret refused, uncounted and logged; the presented session of another person ended at the password step; the eleventh session evicting the least used. `unit/totp-guard.test.ts`, `unit/auth-handler.test.ts` (+11), `unit/end-sessions.test.ts` (+5), `integration/auth.surface.test.ts`, `auth-tables.test.ts`, `data-export.test.ts`. Breaks that went red: the plugin unregistered, the claim unchecked, a read-then-write claim, no rewrite, refusing a no-match uncounted, the decrypt error escaping, no settle, no presented end, no tidy, the body passed through, challenges kept by `endSessions` or by the password change, the remember header defaulted either way, the cascade `RESTRICT`, the export selecting `twoFactor`, `get-totp-uri` allowlisted, and the unit breaks listed in the commit. |
+| "feat(auth): store two-factor backup codes as hashes" (D149) | ASVS 5.0.0 6.5.2: two-step verification's backup codes are ten codes of 24 Crockford base32 characters (120 bits each, six groups of four, `crypto.getRandomValues`) stored as `sha256:<hex>` of the normalised code, in place of Better Auth's ten codes of about 60 bits encrypted with `STOKY_SECRET` (ISSUES AUTH-6). New `src/lib/auth/backup-codes.ts` (`generateBackupCodes`, `normaliseBackupCode`, `hashBackupCode`, and `storeBackupCodes`, whose `encrypt` hashes what is not yet a hash and whose `decrypt` is the identity), passed to `twoFactor({ backupCodeOptions })`; a before-hook in the policy plugin turns the typed code into its hash on `/two-factor/verify-backup-code`. Still no HTTP endpoint hands codes out: enrolment and regeneration open with the settings screen. `unit/backup-codes.test.ts` (12) and `integration/two-factor.test.ts` (+6): the column holds only hashes and none of the codes issued; a code typed in lower case with spaces signs in once and the rest still do; a stored hash typed as the code is refused; regeneration retires the old set; a wrong code is counted towards the lockout; a code signs in after the TOTP secret became unreadable, and two-step verification can then be turned off and on. Breaks that went red: Better Auth's `"encrypted"` storage, its generator, the hook unmatched, a stored hash passed through, `encrypt` rehashing hashes, no normalisation, `decrypt` losing the list, the hook refusing a code itself (uncounted), a biased `% 31`, 20 characters, a fixed random source, codes stored in the clear and an unchecked list. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -3274,3 +3275,50 @@ stores nothing that would say a code was used (ISSUES AUTH-5).
   and the challenge row it names, how a before-hook's returned body is
   merged, and the `2fa-` identifier prefix. The version is pinned exactly
   and `integration/two-factor.test.ts` goes red if any of them moves.
+
+**D149 — Backup codes of 120 bits, stored as hashes.** ASVS 5.0.0 6.5.2 asks
+that lookup secrets be stored hashed, with a plain hash allowed only at 112
+bits of entropy or more. Better Auth's are ten codes of ten characters from
+62 (about 60 bits) kept encrypted with `STOKY_SECRET`: the database and the
+secret together read every code back, and a rotation of the secret makes
+them unreadable on exactly the day a person needs one, because the same
+rotation has just made their authenticator unreadable (ISSUES AUTH-6).
+
+- **Ten codes of 24 Crockford base32 characters**, 120 bits each, shown as
+  six groups of four (`src/lib/auth/backup-codes.ts`). One random byte per
+  character, its low five bits picking it: 256 is a multiple of 32, so no
+  character is likelier than another. Crockford because the codes are
+  copied onto paper and typed back: no I, L, O or U, and a code is read
+  upper-cased, without spaces or dashes, O as 0 and I or L as 1.
+- **Stored as `sha256:<hex>` of that normalised form**, through Better
+  Auth's custom `storeBackupCodes`. Its `encrypt` is idempotent — it hashes
+  only what is not already a hash — because Better Auth calls it twice: on
+  the new plain codes at enrolment or regeneration, and on the list of
+  remaining hashes after spending one. Its `decrypt` returns the stored
+  list as it is.
+- **The typed code is hashed before Better Auth compares it**, by a
+  before-hook in the policy plugin, always, whatever was typed: a stored
+  hash sent as a code is hashed again and matches nothing, so a read of the
+  column is not a way in. Better Auth still does the rest — `includes` over
+  the list, the list written back without the code conditionally on the one
+  it read, so two requests cannot spend one code twice, and its own counting
+  of wrong codes towards the challenge's five and the account's lockout.
+- **A plain hash, not Argon2id.** At 120 bits nobody enumerates the code
+  space, and the password's Argon2id (about 250 ms a hash) would cost some
+  2.5 s for the ten at enrolment and, being salted, up to ten verifications
+  for every code typed, for nothing ASVS asks. The comparison is `includes` over digests, not constant
+  time; what it could leak is how much of a digest an attacker's guess
+  shares, which says nothing about a code.
+- **They survive a rotation.** No secret goes into them, so after
+  `STOKY_SECRET` changes a backup code is the way back in, and turning
+  two-step verification off and on again (which needs only the password)
+  replaces the unreadable secret. INSTALL and SECURITY.md *Secrets* say so.
+- **No release hands out the old kind.** The enrolment and regeneration
+  endpoints were never opened with Better Auth's codes (D148). Rows written
+  by development databases before this commit hold encrypted lists, which
+  `decrypt` does not parse as a list: such a code is refused and counted,
+  and the person regenerates.
+- **Coupled to 1.7.7**: `customBackupCodesGenerate` and the object form of
+  `storeBackupCodes`, `includes` plus the compare-and-set write, and how a
+  before-hook's returned body is merged. `integration/two-factor.test.ts`
+  goes red if any of them changes.

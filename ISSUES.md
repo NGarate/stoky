@@ -97,6 +97,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | AUTH-3 | Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options | ✅ Resolved 2026-10-15 by D135 and D136 — the secrets are named in the options, the other two stop the server at start-up |
 | AUTH-4 | `set-auth-token` exposed to cookie clients; native 403 from an injected cookie | ✅ Resolved 2026-10-15 — the proxy stops injecting `stoky_device` on the auth API and bearer calls, and the route withholds the header from any request that carried a cookie (D142) |
 | AUTH-5 | Better Auth accepts one TOTP code more than once | ✅ Resolved 2026-10-15 by D148 — a before-hook claims the code's time step in the same statement that checks it |
+| AUTH-6 | Better Auth's backup codes are 60 bits, kept encrypted with the secret that a rotation replaces | ✅ Resolved 2026-10-15 by D149 — 120-bit codes stored as SHA-256 hashes, before any endpoint hands one out |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
@@ -3629,6 +3630,36 @@ in with one code twice, with an earlier step after a later one, with the
 enrolment's code, and twice at once while the row is held locked — exactly
 one gets in — and goes red when the hook is removed, when the claim is not
 checked, and when it is made a read followed by a write.
+
+### ✅ AUTH-6: Better Auth's backup codes are 60 bits, kept encrypted with the secret that a rotation replaces
+
+**Files:** `src/lib/auth/backup-codes.ts`, `src/lib/auth/policy-plugin.ts`, `src/lib/auth/instance.ts`
+**Severity:** MEDIUM for the migration — no release handed one out (the enrolment endpoints were still closed), but the first that did would have
+**Status:** RESOLVED 2026-10-15 by "feat(auth): store two-factor backup codes as hashes" (PROGRESS D149).
+
+Better Auth's two-factor plugin makes ten backup codes of ten characters
+from 62 — about 60 bits each — and by default stores the list encrypted with
+the instance's secret, `STOKY_SECRET` here. Two things follow. ASVS 5.0.0
+6.5.2 asks for lookup secrets to be hashed, and allows a plain hash only at
+112 bits or more, so neither the storage nor the size met it: the database
+plus the secret read every code back. And rotating the secret makes the codes
+unreadable on the very day they are needed, because the same rotation makes
+every TOTP secret unreadable (`TWO_FACTOR_UNREADABLE`, D148): the documented
+way back from a rotation went through a door the rotation had just shut.
+
+**How it closed.** The plugin's own extension points, not a patch: a
+generator of ten 24-character Crockford base32 codes (120 bits), and a
+`storeBackupCodes` whose `encrypt` hashes each code to `sha256:<hex>` and
+leaves existing hashes alone, whose `decrypt` returns the list as stored. A
+before-hook on `/two-factor/verify-backup-code` hashes the typed code, so
+Better Auth's comparison, its single-use rewrite of the list and its failure
+counting run unchanged over hashes. `integration/two-factor.test.ts` finds
+none of the issued codes in the column, signs in with a code typed in lower
+case with spaces once and not twice, refuses a stored hash typed as the code,
+retires the old set on regeneration, counts a wrong code, and signs in with a
+code after the TOTP secret has become unreadable. Better Auth's `"encrypted"`
+storage, its generator, an unmatched hook and a hook that passes hashes
+through each turn it red.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
