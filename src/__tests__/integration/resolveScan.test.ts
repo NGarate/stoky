@@ -12,7 +12,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 import { closeValkey } from "@/lib/valkey";
@@ -32,7 +32,7 @@ import { createMockSession, createTestUser, generateTestEmail } from "../utils/t
 const OWNER = { userId: "", householdId: "" };
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: "resolvescan@example.com",

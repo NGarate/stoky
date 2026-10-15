@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { createTRPCRouter, createTRPCContext, writeProcedure } from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
 import { replayable } from "@/lib/validations/idempotency";
@@ -82,7 +82,7 @@ const testRouter = createTRPCRouter({
 });
 
 async function caller(account: { userId: string; householdId: string }) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: account.userId,
       email: `${account.userId}@example.com`,

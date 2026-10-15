@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { cache } from "react";
 import superjson from "superjson";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import type { HouseholdRole, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { translatePrismaError, underlying } from "./prisma-errors";
@@ -12,7 +12,7 @@ import { clientAddress } from "@/lib/rate-limit";
 
 export const createTRPCContext = cache(
   async (opts: {
-    session: Session | null;
+    session: AppSession | null;
     headers?: Headers;
     db?: PrismaClient;
   }) => {
@@ -137,7 +137,7 @@ const anonymousRefusalRecorded = new WeakSet<object>();
  * account, which is accountable, and each one can be a different row of
  * somebody else's household.
  */
-function mayRecordRefusal(ctx: { session: Session | null }): boolean {
+function mayRecordRefusal(ctx: { session: AppSession | null }): boolean {
   if (ctx.session?.user?.id) return true;
   if (anonymousRefusalRecorded.has(ctx)) return false;
   anonymousRefusalRecorded.add(ctx);

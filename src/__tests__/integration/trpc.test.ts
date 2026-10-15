@@ -1,11 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { createTRPCContext, protectedProcedure } from "@/server/trpc/trpc";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 describe("tRPC Infrastructure", () => {
   describe("createTRPCContext", () => {
     it("should create context with session", async () => {
-      const mockSession: Session = {
+      const mockSession: AppSession = {
         user: {
           id: "user-123",
           email: "test@example.com",
@@ -30,7 +30,7 @@ describe("tRPC Infrastructure", () => {
     });
 
     it("should create context with minimal session", async () => {
-      const minimalSession: Session = {
+      const minimalSession: AppSession = {
         user: {
           id: "user-456",
           email: "minimal@example.com",

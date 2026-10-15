@@ -1,6 +1,6 @@
 import type { TRPCError } from "@trpc/server";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
@@ -25,7 +25,7 @@ const OWNER = { userId: "", householdId: "" };
 const stamp = Date.now();
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: `overview-${stamp}@example.com`,

@@ -1,7 +1,7 @@
 import { describe, it, expect, spyOn } from "bun:test";
 import type { JWT } from "next-auth/jwt";
 import type { Session } from "next-auth";
-import { authConfig, MAX_SESSION_AGE_S } from "@/lib/auth";
+import { authConfig, MAX_SESSION_AGE_S, toAppSession } from "@/lib/auth";
 
 /**
  * The role has to survive two hops before a procedure can check it: the
@@ -79,6 +79,47 @@ describe("auth session callbacks", () => {
     // Not MEMBER: an old token must not be able to outrank a new one. The
     // `jwt` callback refuses it first, having no `authTime` either.
     expect(session.user.role).toBe("KITCHEN");
+  });
+});
+
+/**
+ * What the rest of the application reads. `auth()` cannot be called outside a
+ * request scope, so the mapping it applies is tested on its own: the session
+ * callback's output in, `AppSession` out, with nothing dropped that a
+ * procedure reads and nothing added that the library carries.
+ */
+describe("the session the application reads", () => {
+  it("carries every field the callback produced, and only those", async () => {
+    const session = await runSession({
+      session: { ...emptySession(), user: { ...emptySession().user, image: null } } as Session,
+      token: { sub: "user-1", householdId: "house-1", role: "ADMIN" } as JWT,
+    });
+
+    expect(toAppSession(session)).toEqual({
+      user: {
+        id: "user-1",
+        email: "u@example.com",
+        name: "U",
+        householdId: "house-1",
+        role: "ADMIN",
+      },
+      expires: session.expires,
+    });
+  });
+
+  it("leaves householdId absent for an account with no household", async () => {
+    const session = await runSession({
+      session: emptySession(),
+      token: { sub: "user-1", role: "OWNER" } as JWT,
+    });
+
+    const app = toAppSession(session);
+    expect(app?.user.householdId).toBeUndefined();
+    expect(app?.user.role).toBe("OWNER");
+  });
+
+  it("is null when there is no session", () => {
+    expect(toAppSession(null)).toBeNull();
   });
 });
 

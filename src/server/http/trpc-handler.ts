@@ -1,6 +1,6 @@
 import type { AnyTRPCRouter, inferRouterContext } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { clientAddress } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
@@ -22,9 +22,9 @@ import { MAX_TRPC_BODY_BYTES, initWithBody, readBodyWithin } from "./body-limit"
 export interface TrpcHandlerOptions<TRouter extends AnyTRPCRouter> {
   router: TRouter;
   /** The caller's session — `auth()` in the application, a stub in tests. */
-  getSession: () => Promise<Session | null>;
+  getSession: () => Promise<AppSession | null>;
   createContext: (opts: {
-    session: Session | null;
+    session: AppSession | null;
     headers: Headers;
   }) => inferRouterContext<TRouter> | Promise<inferRouterContext<TRouter>>;
 }

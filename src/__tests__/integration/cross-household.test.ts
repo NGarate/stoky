@@ -3,7 +3,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
 
 /**
@@ -47,7 +47,7 @@ const B = {
 };
 
 async function callerFor(account: { userId: string; householdId: string }) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: account.userId,
       email: `${account.userId}@example.com`,

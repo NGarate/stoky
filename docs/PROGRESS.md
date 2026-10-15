@@ -44,6 +44,7 @@ Rules for this log:
 | Change | Evidence |
 |---|---|
 | "feat(db): move password hashes into a credential Account row" (D134) | `migration.credential-account.test.ts` migrates a populated database and signs its accounts in with their old passwords; a migration that writes another `providerId` turns it red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
+| "refactor(auth): own the session type the app reads" | `AppSession` (`src/lib/auth/session.ts`) replaces next-auth's `Session` in the tRPC context, the HTTP handler and 18 integration tests. `auth-dynamic.test.ts` fails when any file outside `src/lib/auth*`, `src/types` and the two tests of next-auth's own configuration imports from `next-auth`; re-adding the import to `trpc.ts` turns it red. `bun run verify:ci` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { z } from "zod";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { MAX_TRPC_BODY_BYTES } from "@/server/http/body-limit";
@@ -26,8 +26,8 @@ import {
  * application's own middleware stack.
  */
 
-const SIGNED_IN: Session = {
-  user: { id: "user-1", role: "MEMBER" },
+const SIGNED_IN: AppSession = {
+  user: { id: "user-1", email: "u@example.com", name: "U", role: "MEMBER" },
   expires: "2099-01-01T00:00:00.000Z",
 };
 
@@ -60,7 +60,7 @@ const router = createTRPCRouter({
   }),
 });
 
-function handlerFor(session: Session | null, onSession?: () => void) {
+function handlerFor(session: AppSession | null, onSession?: () => void) {
   return createTrpcHandler({
     router,
     getSession: async () => {

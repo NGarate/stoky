@@ -7,7 +7,7 @@ import * as argon2 from "argon2";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
 import type { HouseholdRole } from "@prisma/client";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 import { RESET_OWN_PASSWORD_MESSAGE } from "@/lib/validations/household";
@@ -29,7 +29,7 @@ const HOUSEHOLD = { id: "", ownerId: "", memberId: "" };
 const OTHER = { id: "", adminId: "" };
 
 async function callerFor(userId: string, householdId: string) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: userId,
       email: `${userId}@example.com`,

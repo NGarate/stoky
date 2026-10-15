@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
 import type { User, Household, HouseholdRole, Product, StockEntry, StorageLocation } from "@prisma/client";
+import type { AppSession } from "@/lib/auth/session";
 
 /**
  * Test data factories for creating database entities
@@ -265,7 +266,7 @@ export function generateTestName(prefix = "Test"): string {
 /**
  * Helper to create a mock session for tRPC context
  */
-export function createMockSession(user: User & { household?: Household | null }) {
+export function createMockSession(user: User & { household?: Household | null }): AppSession {
   return {
     user: {
       id: user.id,

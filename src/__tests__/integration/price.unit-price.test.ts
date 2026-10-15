@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 /**
  * A `PriceRecord`'s `price` is what was paid for `quantity` units: the receipt
@@ -20,7 +20,7 @@ let carrefour = "";
 let dia = "";
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: "unit-price@example.com",

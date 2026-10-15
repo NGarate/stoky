@@ -77,6 +77,61 @@ describe("the seam is the only door to the session", () => {
   });
 });
 
+/**
+ * Only the auth seam knows which library signs the session.
+ *
+ * Everything else reads `AppSession` (`src/lib/auth/session.ts`), so replacing
+ * the library changes `src/lib/auth.ts`, `src/lib/auth/` and the type
+ * augmentation in `src/types/`, and not the twenty files that used to import
+ * next-auth's `Session` for a type annotation. This scans tests as well as
+ * the application, because most of those twenty were tests.
+ *
+ * It matches the package root only. `next-auth/react`, the browser's sign-in
+ * call, is a different seam with its own way out.
+ */
+describe("only the auth seam imports next-auth", () => {
+  // An import or re-export statement, which may span lines, naming the
+  // package root — not a string that mentions it, as this file does.
+  const NEXT_AUTH_ROOT = /^\s*(?:import|export)\b[^;]*?\bfrom\s+["']next-auth["']/m;
+
+  function allFiles(dir: string, found: string[] = []): string[] {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) allFiles(path, found);
+      else if (path.endsWith(".ts") || path.endsWith(".tsx")) found.push(path);
+    }
+    return found;
+  }
+
+  const allowed = (path: string): boolean => {
+    const rel = relative(SRC, path);
+    return (
+      rel === join("lib", "auth.ts") ||
+      rel.startsWith(join("lib", "auth") + "/") ||
+      rel.startsWith("types/") ||
+      // These two test next-auth's own configuration in `src/lib/auth.ts` —
+      // its error classes and its callbacks — and go when that does.
+      rel === join("__tests__", "unit", "auth-logger.test.ts") ||
+      rel === join("__tests__", "unit", "auth.session.test.ts")
+    );
+  };
+
+  it("scans the tests too, so the check covers where the imports were", () => {
+    const scanned = allFiles(SRC).map((path) => relative(SRC, path));
+    expect(scanned).toContain(join("__tests__", "integration", "routers.test.ts"));
+    expect(scanned).toContain(join("server", "trpc", "trpc.ts"));
+  });
+
+  it("finds no import of next-auth outside src/lib/auth*, src/types and its own tests", () => {
+    const offenders = allFiles(SRC)
+      .filter((path) => !allowed(path))
+      .filter((path) => NEXT_AUTH_ROOT.test(readFileSync(path, "utf8")))
+      .map((path) => relative(SRC, path));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("/offline blocks rather than attempting a prerender it cannot have", () => {
   it("exports instant = false", async () => {
     const page = await import("@/app/offline/page");

@@ -10,6 +10,7 @@ import { accountTag } from "@/lib/account-tag";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { verifyPassword } from "@/lib/auth/password-hash";
 import { findCredentialByEmail } from "@/lib/auth/credentials";
+import type { AppSession } from "@/lib/auth/session";
 import {
   deviceFingerprint,
   deviceIdFromRequest,
@@ -584,7 +585,31 @@ export { handlers, signIn, signOut };
  * all nine call sites. Nothing has ever used those shapes; a narrower export
  * is one fewer to keep dynamic-safe.
  */
-export async function auth(): Promise<Session | null> {
+export async function auth(): Promise<AppSession | null> {
   await connection();
-  return readSession();
+  return toAppSession(await readSession());
+}
+
+/**
+ * next-auth's session, as the application reads it (`src/lib/auth/session.ts`).
+ *
+ * Copied field by field rather than cast, so the type the rest of the code
+ * base reads is what this returns and not a claim about it. next-auth types
+ * `email` and `name` as possibly null; the `authorize` result above always
+ * sets both from non-null columns, so the empty-string fallback is for the
+ * type checker, not for a session that can occur.
+ */
+export function toAppSession(session: Session | null): AppSession | null {
+  if (!session) return null;
+  const { user } = session;
+  return {
+    user: {
+      id: user.id,
+      email: user.email ?? "",
+      name: user.name ?? "",
+      householdId: user.householdId,
+      role: user.role,
+    },
+    expires: session.expires,
+  };
 }

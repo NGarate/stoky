@@ -4,7 +4,7 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import type { PrismaClient } from "@prisma/client";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
 
 /**
@@ -36,7 +36,7 @@ let shelfId = "";
 let cupboardId = "";
 
 async function caller(db?: PrismaClient) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: "net-stock@example.com",

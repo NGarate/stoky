@@ -1674,7 +1674,8 @@ a household can perform any operation on that household's data". All four were
 false, and had been since Phase 3.
 
 What is actually true: `HouseholdRole` has four values including `KITCHEN`;
-`src/types/next-auth.d.ts` declares `role` on the session non-optionally;
+`src/lib/auth/session.ts` declares `role` on the session the application reads
+(`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
 and all 65 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`

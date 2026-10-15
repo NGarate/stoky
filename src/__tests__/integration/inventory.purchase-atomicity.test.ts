@@ -3,7 +3,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@prisma/client";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
 
 /**
@@ -40,7 +40,7 @@ function clientThatCannotWritePrices(): PrismaClient {
 }
 
 async function caller(db?: PrismaClient) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: "atomicity@example.com",

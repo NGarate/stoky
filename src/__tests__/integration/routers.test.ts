@@ -4,7 +4,7 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser } from "@/lib/auth/credentials";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { signInWith, freshTestAddress } from "../utils/authorize";
 import { loginRateLimit } from "@/lib/rate-limit";
@@ -57,7 +57,7 @@ async function createTestContext(
   /** A fresh replay envelope for this account. See validations/idempotency. */
   envelope: () => { idempotencyKey: string; composedByUserId: string };
 }> {
-  const session: Session | null =
+  const session: AppSession | null =
     userId === "anon"
       ? null
       : {

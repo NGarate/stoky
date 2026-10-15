@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createTRPCRouter, writeProcedure, createTRPCContext } from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
 import { prisma } from "@/lib/prisma";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 /**
  * A self-contained reproduction of ISSUES.md TEST-5.
@@ -72,7 +72,7 @@ async function caller() {
   const session = {
     user: { id: userId, email: "r@example.com", name: "R", householdId, role: "OWNER" },
     expires: new Date(Date.now() + 3600_000).toISOString(),
-  } as unknown as Session;
+  } as unknown as AppSession;
   return router.createCaller(await createTRPCContext({ session }));
 }
 

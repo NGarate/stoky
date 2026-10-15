@@ -3,7 +3,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import type { LocationTreeNode } from "@/server/trpc/routers/location";
 
 /**
@@ -28,7 +28,7 @@ const ROUNDS = 20;
 const account = { userId: "", householdId: "" };
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: account.userId,
       email: `${account.userId}@example.com`,

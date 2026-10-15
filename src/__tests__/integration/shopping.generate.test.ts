@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test"
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 /**
  * "Generar desde stock bajo", and what counts as already covered.
@@ -21,7 +21,7 @@ import type { Session } from "next-auth";
 const A = { userId: "", householdId: "", productId: "", manualListId: "" };
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: A.userId,
       email: `${A.userId}@example.com`,
