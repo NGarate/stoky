@@ -57,6 +57,9 @@ const CHROMIUM_ONLY = [
   "**/password-change.spec.ts",
   // And the same about a password an admin set for somebody else.
   "**/member-password-reset.spec.ts",
+  // How long a server tells a browser to keep its session cookie, which also
+  // registers an account per run.
+  "**/remember-me.spec.ts",
 ];
 
 /**

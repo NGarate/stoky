@@ -22,6 +22,8 @@
     "emailHint": "El mismo con el que te registraste. Lo usamos para identificarte, no para escribirte.",
     "emailHintRegister": "Será tu usuario para entrar. Se queda en tu servidor: Stoky no envía correos.",
     "passwordHintLogin": "La que elegiste al crear la cuenta. Distingue mayúsculas de minúsculas.",
+    "rememberMe": "Mantener la sesión iniciada",
+    "rememberMeHint": "Márcala en los dispositivos de casa que usas a diario, como la pantalla de la cocina. Sin marcar, la sesión se cierra al cerrar el navegador o tras 15 minutos sin uso.",
     "passwordHintRegister": "Al menos {min} caracteres. Elige algo que puedas recordar: no hay forma de recuperarla por correo.",
     "nameHint": "Cómo aparecerás para el resto de la casa. Con el nombre de pila basta.",
     "loggingIn": "Entrando…",
@@ -1040,6 +1042,7 @@
     "settingsLink": "Pantalla de inicio",
     "settingsLinkDescription": "Elige con qué pantalla empieza este dispositivo.",
     "currentlyStartingAt": "Ahora mismo empiezas en: {screen}.",
-    "notChosenYet": "En este dispositivo todavía no has elegido."
+    "notChosenYet": "En este dispositivo todavía no has elegido.",
+    "kitchenSignIn": "Si este dispositivo es la pantalla de la cocina, inicia sesión en él con «Mantener la sesión iniciada» marcada. Así no te pedirá la contraseña cada vez que pasen 15 minutos sin usarla."
   }
 }

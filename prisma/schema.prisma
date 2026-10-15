@@ -107,6 +107,13 @@ model Session {
   /// sign-in, carried across Better Auth's re-creates. The absolute session
   /// ceiling is measured from here, not from `createdAt`.
   authenticatedAt DateTime @default(now())
+  /// Whether the person ticked "Mantener la sesión iniciada" when they signed
+  /// in (PROGRESS D141). It decides which lifetime the row lives under: a
+  /// browser session's fifteen idle minutes under a day, or a remembered
+  /// session's ninety idle days under a year, both from `authenticatedAt`
+  /// (`src/lib/auth/session-policy.ts`). Carried across Better Auth's
+  /// re-creates with `authenticatedAt`. False for every row written before.
+  persistent      Boolean  @default(false)
   /// Better Auth's. Its address tracking is to be switched off, so this
   /// stays null.
   ipAddress       String?

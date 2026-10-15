@@ -58,6 +58,7 @@ Rules for this log:
 | "feat(auth): list every address the instance answers at in STOKY_URLS" (D138) | `STOKY_URLS` is a comma-separated list: the first entry is Better Auth's `baseURL` and alone decides `Secure`; every entry's origin is trusted for sign-in, and in production nothing else is. Production refuses no entry, an entry that is not a bare origin, and an https first entry beside LAN http; `NEXTAUTH_URL` is read as a list of one with a deprecation line. `unit/public-url.test.ts` (the list, the cookie in a fresh process), `unit/auth-environment.test.ts` (the hook) and `integration/auth.origins.test.ts` (a production instance with two entries signs in at both and refuses an unlisted origin and a `DEV_ALLOWED_ORIGIN` host) pin it; trusting only the first entry, dropping the mixed-scheme check or reading `DEV_ALLOWED_ORIGIN` in production each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(auth): tidy a person's stale sessions at sign-in" (D139) | ASVS 5.0.0 7.2.4: after a sign-in succeeds the auth route ends the session the browser presented — whoever's it was — and the account's expired rows, never the one just issued (`src/lib/auth/sign-in-tidy.ts`), logging `auth.session.ended` `reason: "replaced"`. `integration/session.sign-in-tidy.test.ts` signs in twice with one cookie jar (one row left, the old cookie refused, the new row's clock fresh), across a shared tablet, from a second browser (both stay), with a wrong password (nothing ends) and after a row expires (gone); `unit/sign-in-tidy.test.ts` pins that no `{id: undefined}` reaches the `OR` (which Prisma 6.19 reads as matching nothing, so only the unit test sees it). Skipping the delete, deleting by account, dropping or widening the expired clause, or tidying before the password is checked each turns them red. `bun run verify:ci` green on the commit. |
 | "feat(auth): cap each account at ten concurrent sessions" (D140) | ASVS 5.0.0 7.1.2: `MAX_SESSIONS_PER_ACCOUNT` is ten, and the sign-in that would make the eleventh ends the least recently used session — oldest `updatedAt`, never the one just issued — logging `auth.session.ended` `reason: "evicted"` (`capSessions`, `src/lib/auth/sign-in-tidy.ts`). It runs after the tidy, in the same transaction, which holds the account's `User` row `FOR UPDATE`. `integration/session.cap.test.ts`: an eleventh sign-in ends the least recently used row, not the oldest, and its cookie stops working; a re-sign-in at ten ends only the presented row and evicts nothing; three sign-ins at once on top of nine leave ten. Ordering by `createdAt`, capping before the tidy, dropping the cap, an off-by-one, or counting the new session each turn it red; the lock and the order are pinned in `unit/sign-in-tidy.test.ts`. `bun run verify:ci` green on the commit. |
+| "feat(auth): keep a person signed in when they ask to" (D141) | The login form's "Mantener la sesión iniciada" box, unticked by default, makes a remembered session: `Session.persistent` (migration `20261015140000_persistent_sessions`), a ninety-day cookie, ninety idle days slid at most daily by a tRPC read, a year from `authenticatedAt` at most. The route passes `rememberMe` only for a literal `true`, sets `x-stoky-remember` after deleting the client's copy on every request, and on a ticked sign-in strips and expires `dont_remember`. `integration/session.policy.test.ts` signs in ticked, omitted and in a jar an unticked sign-in left, slides a day-old row, refuses one a year and a second on though used the day before, and checks the keep-alive never shortens one; `unit/auth-handler.test.ts` the coercion, the header and the cookie; `components/auth-pages.test.tsx` the box; `e2e/remember-me.spec.ts` what a real browser keeps. |
 | "feat(auth): tell an idle timeout from the session limit in the warning" | WCAG 2.2.6: in the day's last fifteen minutes the expiry is the limit from the sign-in and "Seguir conectado" cannot move it. `deadlineKind` (`src/lib/auth/session-policy.ts`) says which deadline an expiry is, with a second's slack; `AppSession.expiresKind` and `auth.session`'s `kind` carry it, and `SessionKeepAlive` names the limit and drops the button for `"cap"`. `SessionKeepAlive.test.tsx` (ignoring the kind turns three red), `session-policy.test.ts` (the boundary at ±1 s) and `session.policy.test.ts` (both answers of `auth.session` and the render's read). SECURITY.md no longer says nothing warns before the day runs out. `bun run verify:ci` green; `bun run test:e2e` 194 passed on six of eight runs, the other two being the service-worker offline test (flaky since commit 15's measurement) and a Firefox navigation timeout. |
 
 ### Stock recounts retain only supported details (2026-09-12)
@@ -2502,7 +2503,9 @@ an account's counter.
 **D125 — A session ends thirty days after sign-in, however active.**
 *Superseded by D135 (2026-10-15): sessions are database rows, a browser
 session ends after fifteen idle minutes or a day from the sign-in, and signing
-out deletes the row.*
+out deletes the row. The kitchen tablet's case this decision was sized for is
+D141's remembered session: ninety idle days, a year at most, when the box at
+sign-in is ticked.*
 The 2026-10-12 security review found that the fifteen-minute `maxAge` is an
 idle timeout and nothing else: with the JWT strategy Auth.js re-issues the
 token, with a fresh `iat` and expiry, on every read of the session, so a
@@ -2665,7 +2668,8 @@ and the swap moves no data: the hashes were already in its `Account` row
   keep an unattended session alive. A database hook sets the expiry at
   creation and drops `expiresAt` from every update Better Auth makes. This
   replaces D125's thirty days, which fitted a token that could not be ended;
-  a remembered session for the kitchen tablet is a later, separate decision.
+  a remembered session for the kitchen tablet is a later, separate decision
+  (D141).
 - **Revocation is deletion**, through one helper (`end-sessions.ts`), which
   refuses a filter with an undefined value because Prisma reads one as no
   condition. `auth.session.ended` replaces `auth.session.revoked`.
@@ -2851,6 +2855,8 @@ the rest through `endSessions`, logging `auth.session.ended` with `reason:
   and only once more than a minute has passed — so it trails real use by
   about five minutes at most. No `lastSeen` column: a write per request is
   what D135 removed, and five minutes is far finer than the choice needs.
+  *D141 adds the remembered session, whose `updatedAt` moves with Better
+  Auth's daily refresh and so trails its use by up to a day.*
   Ties fall to `createdAt`, then the id, so the choice is deterministic.
 - **After the tidy, in one transaction.** The tidy (D139) runs first, so a
   person signing in again in the same browser has already ended the session
@@ -2870,3 +2876,61 @@ the rest through `endSessions`, logging `auth.session.ended` with `reason:
 - **What it costs.** An account signed in on more than ten devices loses its
   least-used one at each new sign-in, the kitchen screen included if that is
   the one.
+
+**D141 — "Mantener la sesión iniciada": a remembered session is ninety idle
+days under a year, and the box starts unticked.** D135 made every session a
+browser session — fifteen idle minutes, a day at most — and left the kitchen
+tablet for a separate decision, because a screen whose point is to be picked
+up cannot ask for a password at nearly every glance. The owner settled it on
+2026-10-15: a box on the login form, unchecked by default, whose hint says to
+tick it on home devices used every day, the kitchen screen included.
+
+- **The numbers.** Ticked, the row is `persistent`, created ninety days out
+  and slid back to ninety days by Better Auth's refresh, never past a year
+  from `authenticatedAt` (`REMEMBERED_IDLE_S`, `REMEMBERED_CAP_S`,
+  `src/lib/auth/session-policy.ts`). Ninety idle days ends a device left in a
+  drawer; the year asks for the password again however the device is used.
+  The cookie's `Max-Age` is the same ninety days, re-set at each slide.
+- **Recorded on the row, not read from the cookie.** Better Auth's own signal
+  is the `dont_remember` cookie, which is the browser's to keep or lose, and
+  which it sets at an unticked sign-in and clears only at a sign-out or a
+  read that finds the session gone — never at a ticked sign-in.
+  `Session.persistent` is what every policy
+  reads: the create hook sets it from the route's `x-stoky-remember` header
+  (or, on a step the route does not rebuild, from no `dont_remember` and
+  Better Auth's ninety-day proposal together), a re-create carries it over
+  with `authenticatedAt`, and the update hook clamps a remembered row's slide
+  to the year and drops a browser row's.
+- **Exactly `true`.** Better Auth reads a missing `rememberMe` as true. The
+  route passes `parsed.rememberMe === true`, so an old client, a typo or the
+  string `"true"` is a browser session; and `x-stoky-remember` is deleted from
+  every request it forwards before it sets its own.
+- **A ticked sign-in clears `dont_remember`** from the request Better Auth
+  reads and, once the password is accepted, from the browser, with the name
+  asked of the instance because it carries `__Secure-` behind https. Without
+  it a browser that once signed in unticked would keep Better Auth from ever
+  sliding a remembered session there.
+- **Slid at most daily, decided from `updatedAt`.** Better Auth decides from
+  the expiry — "less than ninety days less a day ahead" — which the year's
+  clamp holds still for the session's last three months, and would then
+  write on every tRPC read. `readSession` reads without a refresh and asks
+  again with one only for a remembered row last written a day or more ago:
+  one extra read a day per remembered device. Renders never slide it, and
+  `auth.session`, the keep-alive's call, only reads one: its browser formula
+  would cut ninety days to fifteen minutes, and near the year write a time
+  already past.
+- **ASVS 5.0.0 7.1.1 and NIST SP 800-63B-4.** 7.1.1 asks for the timeouts to
+  be documented with the justification for any deviation from SP 800-63B's
+  re-authentication guidance. A password alone is AAL1, whose guidance is
+  re-authentication at least every thirty days; a remembered session asks
+  yearly. Accepted for the compensating controls — every session a row ended
+  at once by signing out, by ending every session, by an admin or by a
+  password change; ten per account (D140); the box off unless ticked — and
+  written in SECURITY.md *Authentication*. A browser session meets AAL2's
+  figures.
+- **What it costs.** A remembered device's `updatedAt` trails its use by up
+  to a day, so the ten-session cap's "least recently used" is that coarse
+  between two remembered devices (D140). Kitchen tablets signed in before the
+  upgrade are browser sessions and have to be signed in again with the box
+  ticked (INSTALL); a forgotten KITCHEN password is reset by an admin from
+  **Personas del hogar**.

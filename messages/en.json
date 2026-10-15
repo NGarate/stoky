@@ -22,6 +22,8 @@
     "emailHint": "The one you signed up with. We use it to identify you, not to write to you.",
     "emailHintRegister": "This will be your username. It stays on your server — Stoky sends no email.",
     "passwordHintLogin": "The one you chose when you created the account. It is case sensitive.",
+    "rememberMe": "Keep me signed in",
+    "rememberMeHint": "Tick it on home devices you use every day, such as the kitchen screen. Unticked, the session ends when you close the browser or after 15 minutes without use.",
     "passwordHintRegister": "At least {min} characters. Pick something you can remember: there is no email recovery.",
     "nameHint": "How you will appear to the rest of the household. A first name is enough.",
     "loggingIn": "Signing in…",
@@ -1040,6 +1042,7 @@
     "settingsLink": "Starting screen",
     "settingsLinkDescription": "Choose which screen this device starts on.",
     "currentlyStartingAt": "Right now you start at: {screen}.",
-    "notChosenYet": "You have not chosen on this device yet."
+    "notChosenYet": "You have not chosen on this device yet.",
+    "kitchenSignIn": "If this device is the kitchen screen, sign in on it with “Keep me signed in” ticked. That way it will not ask for the password every time 15 minutes pass without use."
   }
 }

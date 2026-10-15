@@ -80,7 +80,8 @@ export function cookieHeaderFrom(setCookie: string[]): string {
 }
 
 export async function signInWith(
-  credentials: { email: string; password: string },
+  /** Sent as the JSON body; `rememberMe` is the login form's box, left out unless given. */
+  credentials: { email: string; password: string; rememberMe?: unknown },
   options: SignInOptions = {},
 ): Promise<SignInOutcome> {
   const headers = new Headers({

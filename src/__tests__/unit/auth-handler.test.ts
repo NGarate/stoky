@@ -205,7 +205,7 @@ describe("a password sign-in", () => {
     expect(await seen[0].json()).toEqual({
       email: "ana@example.com",
       password: " con espacios ",
-      rememberMe: false,
+      rememberMe: true,
     });
     expect(new URL(seen[0].url).search).toBe("");
     expect(seen[0].headers.get("x-forwarded-for")).toBe("203.0.113.9");
@@ -292,6 +292,112 @@ describe("a password sign-in", () => {
     const written = securityLines.mock.calls.map((call) => String(call[0])).join("\n");
     expect(written).toContain('"event":"auth.signin.failed"');
     expect(written).not.toContain("a@b.es");
+  });
+});
+
+describe("remember-me", () => {
+  const DONT_REMEMBER = "__Secure-stoky.dont_remember";
+  const dontRememberCookie = async () => ({ name: DONT_REMEMBER, secure: true });
+
+  async function signInWithBody(
+    body: Record<string, unknown>,
+    headers: Record<string, string> = {},
+    answer: () => Response = signedIn,
+  ) {
+    const { handler, seen } = fakeHandler(answer);
+    const response = await handleAuthRequest(
+      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x", ...body }), headers),
+      { handler, limiter: fakeLimiter().limiter, dontRememberCookie },
+    );
+    return { response, forwarded: seen[0] };
+  }
+
+  it("is true only for a body that says exactly true", async () => {
+    // Better Auth reads a missing value as true: an unticked box, or a client
+    // that never heard of it, must not become a ninety-day cookie.
+    for (const [value, expected] of [
+      [true, true],
+      [undefined, false],
+      [false, false],
+      ["true", false],
+      [1, false],
+      ["on", false],
+    ] as const) {
+      const { forwarded } = await signInWithBody(value === undefined ? {} : { rememberMe: value });
+      const label = JSON.stringify(value);
+      expect((await forwarded.json()).rememberMe, label).toBe(expected);
+      expect(forwarded.headers.get("x-stoky-remember"), label).toBe(expected ? "1" : "0");
+    }
+  });
+
+  it("is said by the route, never by the client's own header", async () => {
+    const { forwarded } = await signInWithBody({}, { "x-stoky-remember": "1" });
+    expect(forwarded.headers.get("x-stoky-remember")).toBe("0");
+  });
+
+  it("never lets a client's header through on any other path", async () => {
+    const { handler, seen } = fakeHandler();
+    await handleAuthRequest(
+      new Request(`${BASE}/get-session`, { headers: { "x-stoky-remember": "1" } }),
+      { handler },
+    );
+    await handleAuthRequest(post("/sign-out", "{}", { "x-stoky-remember": "1" }), { handler });
+
+    expect(seen).toHaveLength(2);
+    for (const request of seen) expect(request.headers.get("x-stoky-remember")).toBeNull();
+  });
+
+  it("ticked, takes dont_remember out of what Better Auth reads, and nothing else", async () => {
+    const { forwarded } = await signInWithBody(
+      { rememberMe: true },
+      { cookie: `stoky_device=abc; ${DONT_REMEMBER}=true.sig; odd; other=1` },
+    );
+    expect(forwarded.headers.get("cookie")).toBe("stoky_device=abc; odd; other=1");
+  });
+
+  it("ticked, with dont_remember the only cookie, sends none", async () => {
+    const { forwarded } = await signInWithBody(
+      { rememberMe: true },
+      { cookie: `${DONT_REMEMBER}=true.sig` },
+    );
+    expect(forwarded.headers.get("cookie")).toBeNull();
+  });
+
+  it("ticked, expires dont_remember in the browser, as the instance names it", async () => {
+    const { response } = await signInWithBody({ rememberMe: true });
+    expect(response.headers.getSetCookie()).toContain(
+      `${DONT_REMEMBER}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure`,
+    );
+  });
+
+  it("ticked on plain HTTP, expires it without Secure", async () => {
+    const { handler } = fakeHandler(signedIn);
+    const response = await handleAuthRequest(
+      post("/sign-in/email", JSON.stringify({ email: "a@b.es", password: "x", rememberMe: true })),
+      {
+        handler,
+        limiter: fakeLimiter().limiter,
+        dontRememberCookie: async () => ({ name: "stoky.dont_remember", secure: false }),
+      },
+    );
+    expect(response.headers.getSetCookie()).toContain(
+      "stoky.dont_remember=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+    );
+  });
+
+  it("unticked, leaves the cookies alone both ways", async () => {
+    const cookie = `stoky_device=abc; ${DONT_REMEMBER}=true.sig`;
+    const { response, forwarded } = await signInWithBody({ rememberMe: false }, { cookie });
+    expect(forwarded.headers.get("cookie")).toBe(cookie);
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("ticked but refused, changes nothing in the browser", async () => {
+    const { response } = await signInWithBody({ rememberMe: true }, {}, () =>
+      Response.json({ code: "INVALID_EMAIL_OR_PASSWORD" }, { status: 401 }),
+    );
+    expect(response.status).toBe(401);
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 });
 

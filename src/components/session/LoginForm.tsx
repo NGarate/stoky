@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { signInWithPassword } from "@/lib/auth/client";
@@ -19,6 +20,12 @@ import type { AuthErrorKey } from "@/lib/auth/error-messages";
  * server component: the server is what will know whether this host can offer
  * a passkey, and a client component cannot ask it before it renders. The form
  * is unchanged by the move.
+ *
+ * **"Mantener la sesión iniciada" starts unticked** (D141): a browser session
+ * — fifteen idle minutes, a day at most — is the default anybody gets without
+ * deciding. The hint says who should tick it: a home device used every day,
+ * the kitchen screen above all, which would otherwise ask for the password
+ * every time somebody walks up to it.
  */
 export function LoginForm(): JSX.Element {
   const t = useTranslations("auth");
@@ -37,6 +44,8 @@ export function LoginForm(): JSX.Element {
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    // Uncontrolled: a ticked box submits "on", an unticked one nothing.
+    const rememberMe = formData.get("rememberMe") === "on";
 
     // The React Compiler cannot yet memoise a component containing this
     // `try`/`catch` around an await, so it declines to optimise the whole
@@ -45,7 +54,7 @@ export function LoginForm(): JSX.Element {
     // form. Revisit when babel-plugin-react-compiler supports it.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      const result = await signInWithPassword({ email, password });
+      const result = await signInWithPassword({ email, password, rememberMe });
 
       if (!result.ok) {
         setErrorKey(getAuthErrorKey(undefined, "login", result.code));
@@ -176,6 +185,13 @@ export function LoginForm(): JSX.Element {
                     {t("passwordHintLogin")}
                   </p>
                 </div>
+
+                <Checkbox
+                  hint={t("rememberMeHint")}
+                  id="rememberMe"
+                  label={t("rememberMe")}
+                  name="rememberMe"
+                />
 
                 {/* Present from the first render, empty until it has
                     something to say.

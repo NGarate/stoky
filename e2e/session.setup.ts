@@ -10,7 +10,10 @@ import { DEMO_EMAIL, DEMO_PASSWORD, SESSION_FILE } from "./session";
  * the whole sign-in journey including a refusal — but those tests are about
  * login, and they run signed out.
  *
- * The session is a browser session: its row ends fifteen minutes after it was
+ * The session is a browser session — "Mantener la sesión iniciada" is left
+ * unticked, as most people will leave it, so the shared session is the
+ * representative one (`remember-me.spec.ts` covers the ticked box with an
+ * account of its own): its row ends fifteen minutes after it was
  * last slid, and only the keep-alive's `auth.session` slides it
  * (`src/lib/auth/session-policy.ts`), which a test rarely waits long enough to
  * trigger. So the cookie saved here goes stale about 15 minutes after this

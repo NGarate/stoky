@@ -9,7 +9,7 @@ import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
-import type { SignInResult } from "@/lib/auth/client";
+import type { PasswordCredentials, SignInResult } from "@/lib/auth/client";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -31,6 +31,9 @@ import type { SignInResult } from "@/lib/auth/client";
 /** What the next sign-in answers. Each test that changes it puts it back. */
 let signInResult: SignInResult = { ok: true };
 
+/** What every sign-in was called with, in order. */
+const signInCalls: PasswordCredentials[] = [];
+
 /**
  * The browser's one auth module, replaced **completely** (D50): the real
  * module is spread in, so `readSessionExpiry` and anything added later stay
@@ -40,7 +43,10 @@ let signInResult: SignInResult = { ok: true };
 const realAuthClient = await import("@/lib/auth/client");
 mock.module("@/lib/auth/client", () => ({
   ...realAuthClient,
-  signInWithPassword: async () => signInResult,
+  signInWithPassword: async (credentials: PasswordCredentials) => {
+    signInCalls.push(credentials);
+    return signInResult;
+  },
 }));
 
 /** What the next registration throws, or `null` for success. Reset by each test that sets it. */
@@ -385,6 +391,63 @@ describe("where signing in leads", () => {
     await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
 
     await waitFor(() => expect(replaced).toEqual(["/"]));
+  });
+});
+
+describe("keep me signed in", () => {
+  // D141. Unticked by default: a browser session is what anybody gets without
+  // deciding, and the box is for a home device used every day.
+  const LABEL = { es: "Mantener la sesión iniciada", en: "Keep me signed in" } as const;
+  const HINT = {
+    es: "Márcala en los dispositivos de casa que usas a diario, como la pantalla de la cocina. Sin marcar, la sesión se cierra al cerrar el navegador o tras 15 minutos sin uso.",
+    en: "Tick it on home devices you use every day, such as the kitchen screen. Unticked, the session ends when you close the browser or after 15 minutes without use.",
+  } as const;
+
+  for (const locale of ["es", "en"] as const) {
+    it(`is a labelled box with its hint, unticked, in ${locale}`, () => {
+      renderWithIntl(<LoginForm />, { locale });
+
+      const box = screen.getByRole("checkbox", { name: LABEL[locale] });
+      expect(box).not.toBeChecked();
+      expect(box).toHaveAccessibleDescription(HINT[locale]);
+    });
+  }
+
+  async function submit(tick: boolean): Promise<PasswordCredentials> {
+    signInCalls.length = 0;
+    renderWithIntl(<LoginForm />, { locale: "es" });
+    await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
+    await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
+    if (tick) await userEvent.click(screen.getByRole("checkbox", { name: LABEL.es }));
+    await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+    await waitFor(() => expect(signInCalls).toHaveLength(1));
+    return signInCalls[0];
+  }
+
+  it("sends rememberMe: false when it is left alone", async () => {
+    expect(await submit(false)).toEqual({
+      email: "a@b.es",
+      password: "secreta123",
+      rememberMe: false,
+    });
+  });
+
+  it("sends rememberMe: true when it is ticked", async () => {
+    expect((await submit(true)).rememberMe).toBe(true);
+  });
+
+  it("is not on the registration form, which signs in for a browser session", async () => {
+    signInCalls.length = 0;
+    renderWithIntl(<RegisterForm />, { locale: "es" });
+    expect(screen.queryByRole("checkbox")).toBeNull();
+
+    await userEvent.type(screen.getByLabelText("Nombre"), "Ana");
+    await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
+    await userEvent.type(screen.getByLabelText("Contraseña"), "Secreta1234!");
+    await userEvent.click(screen.getByRole("button", { name: "Registrarse" }));
+
+    await waitFor(() => expect(signInCalls).toHaveLength(1));
+    expect(signInCalls[0].rememberMe).toBe(false);
   });
 });
 

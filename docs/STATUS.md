@@ -927,7 +927,8 @@ post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
 error mapping and i18n; the route in front of Better Auth
 (`src/server/http/auth-handler.ts`) answers five endpoints and applies the
 limits. Sessions are database rows: fifteen idle minutes, slid only by the
-keep-alive, a day at most, and deleted to end them. Rate-limited in Valkey
+keep-alive, a day at most, and deleted to end them — or, with "Mantener la
+sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
 since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
 registrations per hour (CRITICAL-4 closed); Better Auth's own limiter is off.
 

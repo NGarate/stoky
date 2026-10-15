@@ -59,7 +59,10 @@ export function RegisterForm(): JSX.Element {
         householdName: householdName || undefined,
       });
 
-      const result = await signInWithPassword({ email, password });
+      // A browser session: the box is on the login form, and somebody
+      // registering on a kitchen tablet signs in there with it ticked
+      // (`/settings/screen` says so).
+      const result = await signInWithPassword({ email, password, rememberMe: false });
 
       if (!result.ok) {
         setErrorKey(getAuthErrorKey(undefined, "login", result.code));

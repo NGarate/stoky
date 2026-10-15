@@ -769,7 +769,14 @@ is asked to sign in again the first time it is used; passwords are kept, and
 changes a phone queued offline are kept, as they are whenever a session ends.
 From then on a session ends after fifteen minutes unused, a day after
 sign-in however much it is used, or when somebody ends it — *Authentication*
-in [SECURITY.md](../SECURITY.md) says why. Set `STOKY_URLS` to the addresses
+in [SECURITY.md](../SECURITY.md) says why — unless **Mantener la sesión
+iniciada** was ticked at sign-in: then it ends after ninety days unused or a
+year after sign-in. **Sign each kitchen tablet in again with that box
+ticked**, or it asks for the password after every fifteen idle minutes; the
+box is unticked by default, and an old session does not become a remembered
+one. If nobody remembers the kitchen account's password, an admin sets a new
+one from **Configuración → Personas del hogar** (see
+[A forgotten password](#a-forgotten-password)). Set `STOKY_URLS` to the addresses
 people use before upgrading a deployment that is not the bundle; the bundle
 sets it from `DOMAIN`.
 

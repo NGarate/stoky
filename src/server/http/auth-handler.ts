@@ -9,6 +9,7 @@ import {
   type SignInLimiter,
 } from "@/lib/auth/sign-in-policy";
 import type { PresentedSession, SignInTidy } from "@/lib/auth/sign-in-tidy";
+import { REMEMBER_HEADER } from "@/lib/auth/session-policy";
 import { MAX_AUTH_BODY_BYTES, readBodyWithin } from "./body-limit";
 import { refuseCrossSite, refuseNonJson } from "./request-guards";
 
@@ -34,13 +35,24 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *    post on sign-in, which a page on another origin can send without a
  *    preflight.
  * 5. **Only the body keys each endpoint needs**, rebuilt rather than passed:
- *    a sign-in carries an address, a password and `rememberMe: false`, and
- *    nothing — no `callbackURL` — that Better Auth would act on.
+ *    a sign-in carries an address, a password and `rememberMe`, and nothing —
+ *    no `callbackURL` — that Better Auth would act on. `x-stoky-remember` is
+ *    this route's to set, so a copy a client sent is deleted from every
+ *    request forwarded.
  * 6. **Our limits** (`src/lib/auth/sign-in-policy.ts`), charged before the
  *    JSON is believed, so a body that does not parse is still an attempt.
  * 7. **Better Auth.**
  * 8. **The response, guarded:** the session token is the cookie's value, and
  *    no script on the page needs it in a body or a header.
+ *
+ * **Remember-me** (D141): the box is `rememberMe`, true only when the body
+ * says exactly `true` — Better Auth reads a missing value as true, and an
+ * unticked box must not become a ninety-day cookie. The route says which it
+ * was in `x-stoky-remember`, which the create hook records on the row. A ticked
+ * sign-in also clears the `dont_remember` cookie an earlier unticked one left:
+ * Better Auth clears that cookie only at a sign-out or a read that finds the
+ * session gone, never at a ticked sign-in, and while the browser holds it
+ * Better Auth treats every session there as not remembered.
  *
  * A sign-in that gets in is followed by its tidy (`sessions.tidy`): the
  * session the browser presented ends, the account's expired rows go (D139),
@@ -68,6 +80,13 @@ export interface AuthHandlerOptions {
    * gets a sign-in with no tidy, since both need the database.
    */
   sessions?: SignInSessions;
+  /**
+   * Better Auth's `dont_remember` cookie, as the instance names it: the name
+   * carries the `__Secure-` prefix when the canonical address is https, so it
+   * is asked of the instance rather than written here. The route always
+   * passes it; without it a ticked sign-in leaves the cookie alone.
+   */
+  dontRememberCookie?: () => Promise<{ name: string; secure: boolean }>;
 }
 
 export interface SignInSessions {
@@ -136,19 +155,13 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   }
 
   if (endpoint === "POST /sign-in/email") {
-    return signIn(
-      incoming,
-      body,
-      handle,
-      options.limiter ?? valkeySignInLimiter,
-      options.sessions,
-    );
+    return signIn(incoming, body, handle, options);
   }
   if (endpoint === "POST /sign-out") {
     // It takes nothing this application uses.
     return guardResponse(incoming, await handle(rebuild(incoming, "{}")));
   }
-  return guardResponse(incoming, await handle(incoming));
+  return guardResponse(incoming, await handle(withoutInternalHeaders(incoming)));
 }
 
 /**
@@ -165,14 +178,19 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
  * ended after it lets the caller in, with the account's expired rows
  * (`tidyAfterSignIn`). Not before: a wrong password ends nothing, or anybody
  * could sign a shared tablet out by typing at it.
+ *
+ * A ticked box clears `dont_remember` twice over: from the request Better
+ * Auth reads, and, once the password is accepted, from the browser. Not on a
+ * refusal, which changes nothing about the browser.
  */
 async function signIn(
   incoming: Request,
   body: Uint8Array<ArrayBuffer> | null,
   handle: AuthEndpointHandler,
-  limiter: SignInLimiter,
-  sessions: SignInSessions | undefined,
+  options: AuthHandlerOptions,
 ): Promise<Response> {
+  const limiter = options.limiter ?? valkeySignInLimiter;
+  const sessions = options.sessions;
   const parsed = parseJsonObject(body);
 
   let attempt;
@@ -192,15 +210,21 @@ async function signIn(
 
   const previous = sessions ? await sessions.presented(incoming.headers) : null;
 
+  // Exactly `true`, nothing else: Better Auth reads a missing value as true.
+  const rememberMe = parsed?.rememberMe === true;
+  const dontRemember = rememberMe && options.dontRememberCookie
+    ? await options.dontRememberCookie()
+    : null;
+
   const response = await handle(
-    rebuild(
-      incoming,
-      // `rememberMe: false` until the form can ask (a later commit): a browser
-      // session, whose cookie ends with the browser and whose row the create
-      // hook bounds (`src/lib/auth/instance.ts`). Better Auth reads a missing
-      // value as true.
-      JSON.stringify({ email: attempt.email, password, rememberMe: false }),
-    ),
+    rebuild(incoming, JSON.stringify({ email: attempt.email, password, rememberMe }), (headers) => {
+      headers.set(REMEMBER_HEADER, rememberMe ? "1" : "0");
+      if (dontRemember) {
+        const cookie = withoutCookie(headers.get("cookie"), dontRemember.name);
+        if (cookie) headers.set("cookie", cookie);
+        else headers.delete("cookie");
+      }
+    }),
   );
 
   if (response.ok) {
@@ -215,7 +239,46 @@ async function signIn(
     signInFailed(attempt);
   }
 
-  return guardResponse(incoming, response);
+  const answer = await guardResponse(incoming, response);
+  if (dontRemember && response.ok) {
+    answer.headers.append(
+      "set-cookie",
+      `${dontRemember.name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${
+        dontRemember.secure ? "; Secure" : ""
+      }`,
+    );
+  }
+  return answer;
+}
+
+/**
+ * A `Cookie` header without the cookie called `name`, every other pair left
+ * exactly as it came — including ones that do not parse, which are not this
+ * function's to judge. Null when nothing is left.
+ */
+function withoutCookie(header: string | null, name: string): string | null {
+  if (!header) return null;
+  const kept = header
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter((pair) => pair && pair.split("=", 1)[0].trim() !== name);
+  return kept.length ? kept.join("; ") : null;
+}
+
+/**
+ * A GET as it came, less the headers only this route may set: a GET is
+ * forwarded rather than rebuilt, and a client's own `x-stoky-remember` must
+ * not reach Better Auth's hooks on any path.
+ *
+ * Made from the URL, not as `new Request(incoming, { headers })`: Bun 1.4.3
+ * keeps the original headers when the replacement is empty, so a request
+ * whose only header was this one would keep it.
+ */
+function withoutInternalHeaders(incoming: Request): Request {
+  if (!incoming.headers.has(REMEMBER_HEADER)) return incoming;
+  const headers = new Headers(incoming.headers);
+  headers.delete(REMEMBER_HEADER);
+  return new Request(incoming.url, { method: incoming.method, headers, signal: incoming.signal });
 }
 
 /** The JSON object a body holds, or null for anything else. */
@@ -273,14 +336,21 @@ async function tidyQuietly(sessions: SignInSessions, input: SignInTidy): Promise
 /**
  * The POST Better Auth gets: the same URL without its query (nothing this
  * application sends uses one), every header but the length, which `Request`
- * restates for the new body, and the body this route wrote.
+ * restates for the new body, and `x-stoky-remember`, which only this route
+ * sets (`adjust` is where it does) — and the body this route wrote.
  */
-function rebuild(incoming: Request, body: string): Request {
+function rebuild(
+  incoming: Request,
+  body: string,
+  adjust?: (headers: Headers) => void,
+): Request {
   const url = new URL(incoming.url);
   url.search = "";
   const headers = new Headers(incoming.headers);
   headers.delete("content-length");
   headers.delete("transfer-encoding");
+  headers.delete(REMEMBER_HEADER);
+  adjust?.(headers);
   return new Request(url, { method: "POST", headers, body, signal: incoming.signal });
 }
 

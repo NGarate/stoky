@@ -90,11 +90,14 @@ export interface SessionCap {
  *
  * "Least recently used" is the oldest `updatedAt`, ties broken by the oldest
  * `createdAt`, then the id, so the choice is the same on every run.
- * `updatedAt` is only as current as the writes that move it, and today there
- * is one: the keep-alive's slide (`auth.session`), which asks at most every
- * four minutes of activity and writes when more than a minute has passed, so
- * a row trails real use by about five minutes at most. There is no `lastSeen`
- * column, because a write per request is exactly what D135 took away.
+ * `updatedAt` is only as current as the writes that move it, and there are
+ * two. A browser session's moves with the keep-alive's slide (`auth.session`),
+ * which asks at most every four minutes of activity and writes when more than
+ * a minute has passed, so the row trails real use by about five minutes at
+ * most. A remembered session's (D141) moves with Better Auth's daily refresh
+ * on a tRPC read (`readSession`), so it trails real use by up to a day. There
+ * is no `lastSeen` column, because a write per request is exactly what D135
+ * took away.
  *
  * Meant to run inside `tidyAfterSignIn`'s transaction, which holds the
  * account's `User` row, so two sign-ins of one account count one after the

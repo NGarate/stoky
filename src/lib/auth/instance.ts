@@ -8,7 +8,14 @@ import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
 import { configuredSecret } from "@/lib/auth/secret";
-import { nextExpiry } from "@/lib/auth/session-policy";
+import {
+  REMEMBERED_IDLE_S,
+  REMEMBERED_REFRESH_S,
+  REMEMBER_HEADER,
+  clampRemembered,
+  initialExpiry,
+  persistentAtCreate,
+} from "@/lib/auth/session-policy";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 
 /**
@@ -28,10 +35,13 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/pass
  * - **Sessions are rows, read on every request.** The cookie cache is off, so
  *   deleting a row ends that session everywhere at once; that is the whole of
  *   revocation (`src/lib/auth/end-sessions.ts`).
- * - **Every session is a browser session** for now: sign-in sends
- *   `rememberMe: false` (`src/server/http/auth-handler.ts`), so the cookie has
- *   no `Max-Age`, and the create hook below gives the row fifteen idle minutes
- *   under a day's ceiling (`src/lib/auth/session-policy.ts`).
+ * - **A browser session unless the person asks to be remembered** (D141).
+ *   The route passes the login form's box as `rememberMe` and says which it
+ *   was in a header of its own (`src/server/http/auth-handler.ts`); the create
+ *   hook below records it on the row and gives the row its lifetime — fifteen
+ *   idle minutes under a day, or ninety idle days under a year
+ *   (`src/lib/auth/session-policy.ts`). A browser session's cookie has no
+ *   `Max-Age`; a remembered one's has ninety days.
  * - **Better Auth's own limiter is off.** Ours runs in the route, per address,
  *   per account and per known device (`src/lib/auth/sign-in-policy.ts`).
  * - **No telemetry, no IP addresses.** Nothing leaves the instance, and
@@ -139,15 +149,21 @@ function build(env: Record<string, string | undefined>) {
       },
     },
     session: {
-      // Better Auth's figures for a remembered session, which nothing creates
-      // yet: every row is given its own expiry by the hook below.
-      expiresIn: 90 * 24 * 60 * 60,
-      updateAge: 24 * 60 * 60,
+      // A remembered session's: the cookie's `Max-Age`, and what Better
+      // Auth's daily refresh proposes, which the update hook holds to a year
+      // from the sign-in. A browser session's row is given its own expiry by
+      // the create hook and is never refreshed.
+      expiresIn: REMEMBERED_IDLE_S,
+      updateAge: REMEMBERED_REFRESH_S,
       freshAge: 0,
       // Off, so a deleted row is refused on the very next read.
       cookieCache: { enabled: false },
       additionalFields: {
         authenticatedAt: { type: "date", required: false, input: false },
+        // No default here: the create hook always sets it, and a default
+        // would be applied before the hook could tell a re-create from a
+        // sign-in.
+        persistent: { type: "boolean", required: false, input: false },
       },
     },
     rateLimit: { enabled: false },
@@ -171,28 +187,54 @@ function build(env: Record<string, string | undefined>) {
       session: {
         create: {
           /**
-           * The row's lifetime, set here because Better Auth gives a browser
-           * session a flat day.
+           * The row's kind and lifetime, set here because Better Auth gives a
+           * browser session a flat day and a remembered one ninety days with
+           * no ceiling.
            *
-           * `authenticatedAt` is when the password was typed. On a sign-in it
-           * is now. When Better Auth re-creates the session of a request that
-           * already has one — a password change, two-step verification being
-           * turned on — it is carried over, so the day's ceiling still counts
-           * from the sign-in and not from the re-creation.
+           * **A sign-in** — no session on the request — starts the clock:
+           * `authenticatedAt` is now, and whether the row is remembered is
+           * what the route said in `x-stoky-remember`, or, on a sign-in step
+           * the route does not rebuild, what Better Auth was told
+           * (`persistentAtCreate`).
+           *
+           * **A re-create** — Better Auth replacing the session of a request
+           * that already has one: a password change, two-step verification
+           * being turned on — carries both over, so the limit still counts
+           * from the sign-in and a remembered device stays remembered.
            */
           before: async (session, ctx) => {
             const now = new Date();
             const prior = ctx?.context?.session?.session as
-              | { authenticatedAt?: Date | string | null }
+              | { authenticatedAt?: Date | string | null; persistent?: boolean | null }
               | undefined;
-            const authenticatedAt = prior?.authenticatedAt
-              ? new Date(prior.authenticatedAt)
-              : now;
+
+            let authenticatedAt: Date;
+            let persistent: boolean;
+            if (prior) {
+              authenticatedAt = prior.authenticatedAt ? new Date(prior.authenticatedAt) : now;
+              persistent = prior.persistent === true;
+            } else {
+              authenticatedAt = now;
+              const dontRemember = ctx
+                ? await ctx.getSignedCookie(
+                    ctx.context.authCookies.dontRememberToken.name,
+                    ctx.context.secret,
+                  )
+                : null;
+              persistent = persistentAtCreate({
+                remember: ctx?.headers?.get(REMEMBER_HEADER) ?? null,
+                dontRememberCookie: Boolean(dontRemember),
+                proposedExpiresAt: new Date(session.expiresAt),
+                now,
+              });
+            }
+
             return {
               data: {
                 ...session,
                 authenticatedAt,
-                expiresAt: nextExpiry({ authenticatedAt, now }),
+                persistent,
+                expiresAt: initialExpiry({ persistent, authenticatedAt, now }),
                 ipAddress: null,
               },
             };
@@ -200,14 +242,34 @@ function build(env: Record<string, string | undefined>) {
         },
         update: {
           /**
-           * Better Auth never moves an expiry. Its daily refresh would push a
-           * row ninety days out; only `auth.session`, on real activity, slides
-           * one, and it writes the row itself. Removed in place, because a
-           * hook's returned data is merged over the patch and cannot take a
-           * field out of it.
+           * What Better Auth may do to an expiry: its daily refresh proposes
+           * ninety days from now.
+           *
+           * - **A browser session's is never moved here.** Only
+           *   `auth.session`, on real activity, slides one, and it writes the
+           *   row itself. Removed in place, because a hook's returned data is
+           *   merged over the patch and cannot take a field out of it.
+           * - **A remembered session's is held to a year from the sign-in**
+           *   (`clampRemembered`), which Better Auth has no notion of.
+           *
+           * The session is the one the request presented, which is the one
+           * Better Auth refreshes. When it cannot be read, the expiry is
+           * dropped: a patch that cannot be bounded is not written.
            */
-          before: async (patch) => {
-            delete (patch as { expiresAt?: unknown }).expiresAt;
+          before: async (patch, ctx) => {
+            const update = patch as { expiresAt?: Date | string };
+            if (update.expiresAt === undefined) return;
+            const current = ctx?.context?.session?.session as
+              | { authenticatedAt?: Date | string | null; persistent?: boolean | null }
+              | undefined;
+            if (current?.persistent === true && current.authenticatedAt) {
+              update.expiresAt = clampRemembered({
+                proposed: new Date(update.expiresAt),
+                authenticatedAt: new Date(current.authenticatedAt),
+              });
+            } else {
+              delete update.expiresAt;
+            }
           },
         },
       },

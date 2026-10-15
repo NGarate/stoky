@@ -23,7 +23,7 @@ import {
 } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
 import {
-  BROWSER_CAP_S,
+  capFor,
   deadlineKind,
   nextExpiry,
   shouldSlide,
@@ -278,6 +278,12 @@ export const authRouter = createTRPCRouter({
    * still move it, `"cap"` once it is the day's limit and nothing can. The
    * keep-alive reads it to stop offering "Seguir conectado" when pressing it
    * would change nothing (WCAG 2.2.6).
+   *
+   * **A remembered session is only read here** (D141). Its expiry is slid by
+   * Better Auth's daily refresh, which this very request's session read has
+   * already run when it was due (`readSession`); fifteen minutes from now
+   * would cut ninety days short, and near the year's limit `nextExpiry` would
+   * write a time already past.
    */
   session: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.session) return null;
@@ -285,7 +291,7 @@ export const authRouter = createTRPCRouter({
     const now = new Date();
     const row = await ctx.db.session.findUnique({
       where: { id: ctx.session.sessionId },
-      select: { expiresAt: true, authenticatedAt: true },
+      select: { expiresAt: true, authenticatedAt: true, persistent: true },
     });
     if (!row || row.expiresAt <= now) return null;
     const answer = (expiresAt: Date): { expires: string; kind: DeadlineKind } => ({
@@ -293,10 +299,10 @@ export const authRouter = createTRPCRouter({
       kind: deadlineKind({
         expiresAt,
         authenticatedAt: row.authenticatedAt,
-        capS: BROWSER_CAP_S,
+        capS: capFor(row.persistent),
       }),
     });
-    if (!shouldSlide(row.expiresAt, now)) return answer(row.expiresAt);
+    if (row.persistent || !shouldSlide(row.expiresAt, now)) return answer(row.expiresAt);
 
     const expires = nextExpiry({ authenticatedAt: row.authenticatedAt, now });
     const { count } = await ctx.db.session.updateMany({

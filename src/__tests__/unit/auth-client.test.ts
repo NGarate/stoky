@@ -94,7 +94,7 @@ describe("signInWithPassword", () => {
     const fetcher = answering(200, { user: { id: "u" } });
 
     const result = await signInWithPassword(
-      { email: "a@b.es", password: "secreta123" },
+      { email: "a@b.es", password: "secreta123", rememberMe: false },
       fetcher as unknown as typeof fetch,
     );
 
@@ -103,15 +103,35 @@ describe("signInWithPassword", () => {
     expect(url).toBe("/api/auth/sign-in/email");
     expect(init.method).toBe("POST");
     expect(new Headers(init.headers).get("content-type")).toBe("application/json");
-    expect(JSON.parse(String(init.body))).toEqual({ email: "a@b.es", password: "secreta123" });
+    expect(JSON.parse(String(init.body))).toEqual({
+      email: "a@b.es",
+      password: "secreta123",
+      rememberMe: false,
+    });
     expect(init.cache).toBe("no-store");
+  });
+
+  it("says rememberMe in so many words, ticked or not", async () => {
+    // Left out, Better Auth would read it as true; the route reads anything
+    // but `true` as false. The body says which, both ways.
+    for (const rememberMe of [true, false]) {
+      const fetcher = answering(200, { user: { id: "u" } });
+      await signInWithPassword(
+        { email: "a@b.es", password: "x", rememberMe },
+        fetcher as unknown as typeof fetch,
+      );
+      expect(JSON.parse(String(fetcher.mock.calls[0][1].body)).rememberMe).toBe(rememberMe);
+    }
   });
 
   it("returns the translated refusal with its wait", async () => {
     const fetcher = answering(429, { code: "ACCOUNT_RATE_LIMITED" }, { "retry-after": "812" });
 
     expect(
-      await signInWithPassword({ email: "a@b.es", password: "x" }, fetcher as unknown as typeof fetch),
+      await signInWithPassword(
+        { email: "a@b.es", password: "x", rememberMe: false },
+        fetcher as unknown as typeof fetch,
+      ),
     ).toEqual({ ok: false, code: "account_rate_limited", retryAfterSeconds: 812 });
   });
 });

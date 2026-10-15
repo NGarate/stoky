@@ -5,7 +5,7 @@ import type { HouseholdRole } from "@prisma/client";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { getAuth } from "@/lib/auth/instance";
 import type { AppSession } from "@/lib/auth/session";
-import { BROWSER_CAP_S, deadlineKind } from "@/lib/auth/session-policy";
+import { capFor, deadlineKind, rememberedRefreshDue } from "@/lib/auth/session-policy";
 
 /**
  * Checked here because this is the module every server path goes through, and
@@ -24,7 +24,9 @@ interface LibrarySession {
   session: {
     id: string;
     expiresAt: Date | string;
+    updatedAt: Date | string;
     authenticatedAt?: Date | string | null;
+    persistent?: boolean | null;
   };
   user: {
     id: string;
@@ -47,7 +49,9 @@ interface LibrarySession {
  *
  * A row without `authenticatedAt` — the column has a default, so none should
  * lack it — reads as an idle deadline: the warning then offers the button,
- * and pressing it asks `auth.session`, which answers from the row.
+ * and pressing it asks `auth.session`, which answers from the row. The limit
+ * the deadline is measured against is the session's kind's: a day, or a year
+ * for a remembered one (`capFor`).
  */
 export function toAppSession(result: LibrarySession): AppSession {
   const { session, user } = result;
@@ -65,7 +69,7 @@ export function toAppSession(result: LibrarySession): AppSession {
       ? deadlineKind({
           expiresAt,
           authenticatedAt: new Date(session.authenticatedAt),
-          capS: BROWSER_CAP_S,
+          capS: capFor(session.persistent === true),
         })
       : "idle",
     sessionId: session.id,
@@ -80,21 +84,44 @@ export function toAppSession(result: LibrarySession): AppSession {
  * Request-free on purpose: it takes the headers rather than reading them, so
  * a test can drive it with a cookie and the tRPC route with its own request.
  *
- * `refresh` lets Better Auth run its daily refresh of a remembered session.
- * Every session today is a browser session, which Better Auth never refreshes
- * and whose expiry nothing but `auth.session` moves, so it changes nothing
- * yet; the tRPC route asks for it and a page render does not, so a render
- * never writes.
+ * `refresh` lets Better Auth slide a remembered session (D141): ninety days
+ * from now, held to a year from the sign-in by the update hook
+ * (`src/lib/auth/instance.ts`), with the cookie's `Max-Age` re-set to match.
+ * The tRPC route asks for it and a page render does not, so a render never
+ * writes. A browser session is never refreshed here, whatever is asked: only
+ * `auth.session`, on real activity, slides one.
+ *
+ * **Read first, refreshed only when due.** Better Auth decides on its own
+ * from the expiry — "less than ninety days less a day ahead" — which is right
+ * until the year's limit holds the expiry still and then true on every read
+ * for the session's last three months. So the session is read without a
+ * refresh, and read again with one only when it is remembered and its row was
+ * last written a day or more ago (`rememberedRefreshDue`): one extra read a
+ * day for a remembered device, instead of a write per request.
  */
 export async function readSession(
   requestHeaders: Headers,
   { refresh }: { refresh: boolean },
 ): Promise<AppSession | null> {
-  const result = await getAuth().api.getSession({
+  const api = getAuth().api;
+  const read = (await api.getSession({
     headers: requestHeaders,
-    query: { disableRefresh: !refresh },
-  });
-  return result ? toAppSession(result as unknown as LibrarySession) : null;
+    query: { disableRefresh: true },
+  })) as unknown as LibrarySession | null;
+  if (!read) return null;
+
+  if (
+    refresh &&
+    read.session.persistent === true &&
+    rememberedRefreshDue(new Date(read.session.updatedAt), new Date())
+  ) {
+    const refreshed = (await api.getSession({
+      headers: requestHeaders,
+      query: { disableRefresh: false },
+    })) as unknown as LibrarySession | null;
+    return refreshed ? toAppSession(refreshed) : null;
+  }
+  return toAppSession(read);
 }
 
 /**

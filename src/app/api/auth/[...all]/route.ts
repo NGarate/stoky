@@ -23,6 +23,12 @@ const options: AuthHandlerOptions = {
     },
     tidy: (input) => tidyAfterSignIn(prisma, input),
   },
+  // From the instance's own cookie table: the name is `__Secure-` prefixed
+  // when the canonical address is https.
+  dontRememberCookie: async () => {
+    const cookie = (await getAuth().$context).authCookies.dontRememberToken;
+    return { name: cookie.name, secure: cookie.attributes.secure === true };
+  },
 };
 
 export function GET(request: Request): Promise<Response> {

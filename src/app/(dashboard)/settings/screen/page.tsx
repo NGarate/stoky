@@ -30,6 +30,11 @@ import type { JSX } from "react";
  * when a server action redirects to the route it was called from, so the flag
  * never arrived. The write had happened and only the sentence was missing,
  * which is the worst shape for this to fail in.
+ *
+ * **It also says how the kitchen screen should be signed in**: with
+ * "Mantener la sesión iniciada" ticked (D141). This is where somebody setting
+ * a tablet up as the kitchen screen is, and without the box it asks for the
+ * password after every fifteen idle minutes.
  */
 export default async function ScreenSettingsPage(): Promise<JSX.Element> {
   const session = await auth();
@@ -82,6 +87,8 @@ export default async function ScreenSettingsPage(): Promise<JSX.Element> {
       <div className="mt-6">
         <ScreenChoiceForm current={choice?.screen} then="stay" />
       </div>
+
+      <p className="mt-6 text-sm text-muted-foreground">{t("kitchenSignIn")}</p>
     </PageShell>
   );
 }

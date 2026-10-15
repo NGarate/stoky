@@ -567,31 +567,61 @@ Verified against the files named in each row.
   its cookie cache is off — and refuses one whose `expiresAt` has passed,
   deleting it as it does. The cookies are `stoky.session_token` and
   `stoky.dont_remember`, `HttpOnly`, `SameSite=Lax` and with no `Max-Age`, so
-  they end with the browser; behind https they are `__Secure-` prefixed and
+  they end with the browser — except a remembered session's token, below,
+  which has ninety days; behind https they are `__Secure-` prefixed and
   `Secure` (below). The token is never in a response body: the auth route
   strips `token` and `session.token` from every JSON answer, and a bearer
   `set-auth-token` header from any answer to a request that carried a cookie
   (`src/server/http/auth-handler.ts`).
-- **Fifteen minutes is the idle timeout, and only activity moves it.** The
-  row is created fifteen minutes out, and only `auth.session` — which the
+- **Fifteen minutes is a browser session's idle timeout, and only activity
+  moves it.** The row is created fifteen minutes out, and only `auth.session` — which the
   keep-alive calls when a pointer or a key moves, at most every four minutes —
   slides it, by writing the row itself (`src/lib/auth/session-policy.ts`).
   Page renders and tRPC calls read the session without moving it: a
   dashboard left polling on a counter is not somebody at the screen, and its
-  session ends. Better Auth's own refresh would push a row ninety days out; a
-  database hook drops `expiresAt` from every update it makes.
+  session ends. Better Auth's own refresh would push a row ninety days out; it
+  is never asked for on a browser session, and a database hook drops
+  `expiresAt` from any update it makes to one anyway.
 - **A session lasts a day at most, however active** (`BROWSER_CAP_S`),
   counted from `Session.authenticatedAt` — when the password was typed — not
   from `createdAt`, which Better Auth resets when it re-creates a session. The
-  slide is clamped to it. This replaces D125's thirty days: every session is a
-  browser session for now, and a day is what one shift on a shared device
-  needs. Two minutes before the day runs out the keep-alive says so, and
+  slide is clamped to it. This replaces D125's thirty days for a browser
+  session, which is what a sign-in gets unless the box below is ticked, and a
+  day is what one shift on a shared device needs. Two minutes before the day runs out the keep-alive says so, and
   says that it is the day's limit rather than inactivity, with no "Seguir
   conectado" button, because nothing can extend it (WCAG 2.2.6; `auth.session`
   answers which deadline is next, `deadlineKind`). Then the next read is
   refused, the same path an ended session takes, so the offline queue keeps
   its unsent changes and asks for a sign-in. Everybody signed in on a JWT before this
   release signs in once after upgrading; passwords are kept.
+- **"Mantener la sesión iniciada" makes a remembered session** (ASVS 5.0.0
+  7.1.1, PROGRESS D141). The login form's box, unticked by default, with a hint
+  saying it is for home devices used every day, the kitchen screen included.
+  Ticked, the row is marked `persistent`, the cookie gets a ninety-day
+  `Max-Age`, and the row lives ninety idle days under a year from
+  `authenticatedAt` (`REMEMBERED_IDLE_S`, `REMEMBERED_CAP_S`). Better Auth
+  slides it on a tRPC read at most once a day — `readSession` asks for the
+  refresh only when the row was last written a day or more ago — and a
+  database hook holds the slide to the year. Page renders never slide it, and
+  `auth.session` only reads it. The route passes `rememberMe` only when the
+  body says exactly `true`, because Better Auth reads a missing value as
+  true; it says which it was in an internal `x-stoky-remember` header that it
+  deletes from every client request; and a ticked sign-in expires the
+  `dont_remember` cookie an earlier unticked one left, which Better Auth
+  clears only at a sign-out or a read that finds the session gone, never at a
+  ticked sign-in. **Why these numbers** (7.1.1 asks for the justification):
+  the kitchen screen is a shared device in a home whose point is to be picked
+  up, and fifteen minutes would ask for a password at nearly every glance —
+  which in practice means a password taped to the tablet. Ninety idle days
+  ends a device left in a drawer; the year ends any session however used.
+  **Deviation from NIST SP 800-63B-4**: a password alone is AAL1, for which
+  the guidance is re-authentication at least every thirty days; a remembered
+  session asks once a year. Accepted by the owner on 2026-10-15 for the
+  compensating controls: every session is a row that can be ended at once — by
+  signing out, by **Cerrar la sesión en todos los dispositivos**, by an admin,
+  by a password change — the account holds ten at most (below), and the box
+  is off unless somebody ticks it. A browser session meets AAL2's figures
+  (fifteen idle minutes, a day in all).
 - **Signing out ends this device's session**: `signOutAction` asks Better Auth
   to delete the row and expire the cookies, so a copy of the cookie taken
   before the sign-out is refused too. The other devices' sessions end when
@@ -619,12 +649,14 @@ Verified against the files named in each row.
   another device its session, and inside one transaction holding the
   account's `User` row `FOR UPDATE`, so sign-ins of one account at the same
   moment still leave ten. "Least recently used" is as fine-grained as the
-  writes that move `updatedAt`, and today there is one: the keep-alive's
-  slide (`auth.session`), which asks at most every four minutes of activity
-  and writes only when more than a minute has passed since the last write,
-  so the row trails real use by about five minutes at most. A row is not
-  written on every request, by design (D135), so there is no finer clock to
-  read. Ten is above a household's devices; an account signed in on more
+  writes that move `updatedAt`. For a browser session that is the
+  keep-alive's slide (`auth.session`), which asks at most every four minutes
+  of activity and writes only when more than a minute has passed since the
+  last write, so the row trails real use by about five minutes at most. For a
+  remembered session it is Better Auth's daily refresh, so the row trails
+  real use by up to a day: of two remembered devices used on the same day,
+  either may be the one evicted. A row is not written on every request, by
+  design (D135), so there is no finer clock to read. Ten is above a household's devices; an account signed in on more
   loses its least-used one at each new sign-in, the kitchen screen included
   if that is it. Like the tidy, it runs from the route once a sign-in has
   succeeded, never from a session-create hook: Better Auth creates and then
@@ -2079,7 +2111,7 @@ is stored, logged or sent.
 |---|---|---|
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
-| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, and the browser's User-Agent string. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live one (PROGRESS D135) |
+| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, and the browser's User-Agent string. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions, a password being set, signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Nothing writes one yet | PostgreSQL `Verification` | Until it expires and is cleared |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |

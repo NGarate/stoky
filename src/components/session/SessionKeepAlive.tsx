@@ -11,6 +11,10 @@ import type { JSX } from "react";
 /**
  * Keeps an active session alive, and warns before an idle one ends.
  *
+ * A remembered session (the login form's box, D141) has ninety days ahead of
+ * it, so the warning below never appears in a day's use; the activity refresh
+ * still asks, and only reads it (`auth.session`).
+ *
  * WCAG 2.1 **2.2.6 Timeouts** (AAA): a user must be warned of an inactivity
  * duration that could cause data loss. This application had neither half — the
  * session expired fifteen minutes after sign-in regardless of what the person

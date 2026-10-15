@@ -38,6 +38,12 @@ export type SignInResult =
 export interface PasswordCredentials {
   email: string;
   password: string;
+  /**
+   * The login form's "Mantener la sesión iniciada" box (D141). Required, so
+   * every caller decides: a remembered session lasts ninety idle days rather
+   * than fifteen minutes, and the server reads anything but `true` as no.
+   */
+  rememberMe: boolean;
 }
 
 /**
@@ -94,13 +100,13 @@ export function signInResultFrom(
  * honoured). Throws only when the request itself could not be made.
  */
 export async function signInWithPassword(
-  { email, password }: PasswordCredentials,
+  { email, password, rememberMe }: PasswordCredentials,
   fetcher: typeof fetch = fetch,
 ): Promise<SignInResult> {
   const response = await fetcher("/api/auth/sign-in/email", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, rememberMe: rememberMe === true }),
     cache: "no-store",
     credentials: "same-origin",
   });
