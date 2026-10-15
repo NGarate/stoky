@@ -54,7 +54,8 @@ export type SecurityEvent =
   | "auth.signin.succeeded"
   | "auth.unavailable"
   // Sessions somebody ended on purpose, with the `reason`: the account's own
-  // holder ending all of theirs (`self`), an admin ending a member's
+  // holder ending all of theirs (`self`), a password change ending every
+  // other one (`password-change`), an admin ending a member's
   // (`admin`), a sign-in ending the session its browser presented
   // (`replaced`), or a sign-in that would be the account's eleventh session
   // ending its least recently used one (`evicted`; both in
@@ -66,24 +67,22 @@ export type SecurityEvent =
   // "somebody was refused". A session that simply runs out writes nothing; its
   // row is deleted when next read, or at its account's next sign-in.
   | "auth.session.ended"
-  // A signed-in person changed their own password, which also ended every
-  // session the account had. The credential change ASVS V7 asks to be able
-  // to reconstruct — "who changed it, and when" — with no password in it.
+  // A signed-in person changed their own password. The credential change
+  // ASVS V7 asks to be able to reconstruct — "who changed it, and when" —
+  // with no password in it. The sessions it ended are their own
+  // `auth.session.ended` line, `reason: "password-change"` (D144); a wrong
+  // current password is `auth.reauth.refused`, `via: "password-change"`.
   | "auth.password.changed"
-  // The current password offered for a change was wrong. From a signed-in
-  // session, so it is either a typo or somebody holding a session that is not
-  // theirs guessing at the password behind it. Refused with BAD_REQUEST, which
-  // the refusal middleware in `trpc.ts` does not record, so it is written here.
-  | "auth.password.change.refused"
   // An admin set a new password for somebody else in the household, which
   // also ended every session that person had. `userId` is the admin who did
   // it and `targetUserId` the account it was done to: the line that answers
   // "who set my password?" when the answer is not "you".
   | "auth.password.reset"
   // The current password re-entered to confirm an action was wrong
-  // (`src/lib/auth/reauth.ts`). `via` names the action — `end-sessions` —
-  // so a grep tells a typo before ending a session from a stolen session
-  // guessing. BAD_REQUEST, like the password change's, so written here.
+  // (`src/lib/auth/reauth.ts`). `via` names the action — `end-sessions`,
+  // `password-change` — so a grep tells a typo before ending a session from
+  // a stolen session guessing. BAD_REQUEST, which the refusal middleware in
+  // `trpc.ts` does not record, so written here.
   | "auth.reauth.refused"
   | "access.denied"
   | "request.throttled";
@@ -112,7 +111,8 @@ export interface SecurityDetails {
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
    * it, which has no procedure to have thrown it. On `auth.session.ended` it
-   * is why: `"self"`, `"admin"`, `"replaced"` or `"evicted"`.
+   * is why: `"self"`, `"password-change"`, `"admin"`, `"replaced"` or
+   * `"evicted"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */

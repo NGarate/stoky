@@ -19,9 +19,9 @@ import { closeValkey, valkey } from "@/lib/valkey";
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
  * receipt upload, `addMemberRateLimit` the Argon2id hash behind adding a
- * member, `passwordChangeRateLimit` a signed-in person's own password
- * change, and `reauthRateLimit` with `reauthAccountRateLimit` the password
- * re-entered to confirm an action — all authenticated, all either expensive
+ * member, and `reauthRateLimit` with `reauthAccountRateLimit` the password
+ * re-entered to confirm an action, a person's own password change among them
+ * — all authenticated, all either expensive
  * enough that an account looping on them is its own denial of service or a
  * way to guess the password behind a session — and `productLookupRateLimit` meters
  * the requests an account makes this instance send to Open Food Facts. The
@@ -224,35 +224,14 @@ export function addMemberRateLimit(): RateLimit {
 }
 
 /**
- * A signed-in person changing their own password, per account.
+ * Re-entering the current password to confirm an action — ending sessions,
+ * changing the password — counted **per session** (`src/lib/auth/reauth.ts`,
+ * PROGRESS D143, D144).
  *
- * Not for the hash this time but for the question it answers. The procedure
- * checks the current password before anything else, so unmetered it would be
- * a way for whoever holds a stolen session — a phone left unlocked, a kitchen
- * tablet — to guess the password behind it, with none of the limits sign-in
- * has. Five per fifteen minutes is sign-in's per-address number: a person who
- * mistypes the current password twice and then changes it is three, and an
- * attacker gets five guesses a quarter of an hour. Per account, like upload,
- * because the caller is already authenticated and the account is what the
- * guesses are against. Each one also costs two Argon2id runs at most — the
- * verify, and the hash on success — so this bounds that too.
- */
-export function passwordChangeRateLimit(): RateLimit {
-  return limitFromEnv(
-    "rl:pwchange",
-    "RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS",
-    "RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS",
-    5,
-    15 * 60,
-  );
-}
-
-/**
- * Re-entering the current password to confirm an action — ending sessions
- * today — counted **per session** (`src/lib/auth/reauth.ts`, PROGRESS D143).
- *
- * The question is the one `passwordChangeRateLimit` meters, "is this the
- * password?", asked from a session somebody may have stolen. Per session
+ * The question is "is this the password?", asked from a session somebody may
+ * have stolen. It used to have a limit of its own for the password change,
+ * per account (`RATE_LIMIT_PASSWORD_CHANGE_*`, retired by D144): the change
+ * now asks through the same re-entry as everything else. Per session
  * rather than per account because of what the answer is for: the owner
  * ending a stolen session re-enters the password *from their own session*,
  * and a budget the thief could spend from theirs would let the thief keep the

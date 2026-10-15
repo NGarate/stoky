@@ -278,7 +278,9 @@ describe("a batch", () => {
     // request, and a screen that mounted more than the limit would lose all of
     // them to the 400 above. Read from source: the link's options are not
     // observable from outside a rendered provider.
-    const client = readFileSync(join(import.meta.dir, "../../lib/trpc/client.tsx"), "utf8");
+    // The links live in their own module since the password change needed a
+    // second one (`src/lib/trpc/links.ts`, D144).
+    const client = readFileSync(join(import.meta.dir, "../../lib/trpc/links.ts"), "utf8");
 
     expect(client).toContain('from "@/lib/trpc/batch"');
     expect(client).toMatch(/httpBatchStreamLink\(\{[^]*?maxItems: MAX_TRPC_BATCH_SIZE,[^]*?\}\)/);

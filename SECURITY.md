@@ -769,13 +769,32 @@ Verified against the files named in each row.
   *Seguridad y acceso* (`auth.changePassword`, security review 2026-10-12 — until then nothing
   changed a password once it was set, so a leaked one could not be rotated and
   one an admin chose stayed known to that admin). It asks for the current
-  password through the same `verifyPassword` as sign-in, metered (below); a
-  wrong one is `BAD_REQUEST`, never `UNAUTHORIZED`, because the offline queue
-  reads that as a session that has ended. The new password meets the policy,
-  identity rule included, and one transaction writes the hash and deletes
-  every session row, so every session the account had ends — the one that
-  asked included, and the form says so before it is submitted. Both outcomes
-  are logged (`auth.password.changed`, `auth.password.change.refused`).
+  password through `confirmCurrentPassword`, the re-entry every confirmation
+  uses, with its two budgets (D143, below); a wrong one is `BAD_REQUEST`,
+  never `UNAUTHORIZED`, because the offline queue reads that as a session
+  that has ended, and is logged as `auth.reauth.refused` with `via:
+  "password-change"`. The new password meets the policy, identity rule
+  included — checked after the current password, so it answers nobody who
+  has not proved they know it. **Every other session ends and this one stays
+  signed in under a new token** (ASVS 5.0.0 7.4.3, PROGRESS D144): Better
+  Auth's `changePassword` writes the hash, deletes every session row the
+  account has, and creates one for the device that asked, which keeps that
+  session's `authenticatedAt`, remembered-or-not and device; its cookie comes
+  back with the answer. The browser sends this one call without streaming
+  (`src/lib/trpc/links.ts`), because a streamed answer's headers leave before
+  the resolver sets the cookie — measured: with the stream, the device was
+  signed out by its own change. A copy of the old cookie is refused, its row
+  being gone. Nothing on the device is discarded, since the same person is
+  still there. A request that carried no cookie — a native client — is not
+  given a new session: every session ends, its own included, and the app asks
+  for the new password (D142). Logged as `auth.password.changed` and
+  `auth.session.ended` with `reason: "password-change"` and the count.
+  **Not one transaction**: Better Auth writes the hash, deletes the sessions
+  and creates the new one as separate statements, so a failure between the
+  first two would leave the new password beside sessions meant to end, and
+  the form would report a failure although the hash is already new; the
+  sessions are then ended from **Tus dispositivos**. The single transaction
+  it replaces could not split, and ended this device too.
 - **A household admin can set a member's password**, from **Personas del
   hogar** (`household.resetMemberPassword`, security review 2026-10-12). There
   is no email, so this is the way back from a forgotten password; until it
@@ -1514,9 +1533,7 @@ publishing an instance:
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
   `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
-  `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`,
-  `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS`,
-  `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
+  `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
   `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS` and
   `RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS`. Raising them raises the
   exposure; the browser suite raises the sign-in, known-device, registration,
@@ -1542,13 +1559,15 @@ before every line, which jq cannot parse, and `fromjson?` skips the lines that
 are not JSON. The events are
 `auth.signin.failed`, `auth.signin.throttled`, `auth.signin.succeeded`,
 `auth.unavailable`,
-`auth.session.ended`, `auth.password.changed`,
-`auth.password.change.refused`, `auth.password.reset`, `auth.reauth.refused`
-(a wrong current password re-entered to confirm an action, with the action as
-`via`; D143), `access.denied` and
+`auth.session.ended`, `auth.password.changed`, `auth.password.reset`,
+`auth.reauth.refused` (a wrong current password re-entered to confirm an
+action, with the action as `via` — `end-sessions` or `password-change`, which
+replaces the `auth.password.change.refused` event of earlier releases; D143,
+D144), `access.denied` and
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
-`reason` — `self` for a person ending their own, `admin` for an admin ending a
+`reason` — `self` for a person ending their own, `password-change` for the
+other sessions a password change ended (D144), `admin` for an admin ending a
 member's, `replaced` for a sign-in ending the session its browser presented
 (D139), `evicted` for a sign-in ending the account's least recently used
 session to stay within ten (D140) — the `userId` who asked, the
@@ -1967,9 +1986,11 @@ stored in `localStorage` under `stoky.reads.v1.<account>`.
 
 What removes them:
 
-- **Signing out** — **Cerrar sesión**, ending every session from this device,
-  or changing the password, all through `useEndSession` — clears the memory
-  cache, the queue, the saved reads and the shell before it leaves.
+- **Signing out** — **Cerrar sesión**, or ending a set of sessions that
+  includes this device's from **Tus dispositivos**, both through
+  `useEndSession` — clears the memory cache, the queue, the saved reads and
+  the shell before it leaves. Changing the password no longer does: it keeps
+  this device signed in, and what is stored is the same person's (D144).
 - **Reaching `/login` with the network up** — where an expired or ended
   session is sent — clears the previous account's saved reads, its shell and
   the memory cache (`ShellCacheGuard`). So does a different account signing

@@ -19,8 +19,8 @@ import { logSecurityEvent } from "@/lib/security-log";
  * ASVS 5.0.0 7.5.2 asks that ending sessions be possible, and 7.5.1 that a
  * sensitive change ask again for the factor that proves who is asking: a
  * session left open on a kitchen tablet is not the person. So an action that
- * ends sessions — and, later, one that changes how the account signs in —
- * calls this first.
+ * ends sessions or changes how the account signs in — the password itself
+ * (D144), and later its second factors — calls this first.
  *
  * **A confirmation, not an upgrade.** It answers yes for this one call; the
  * session is not marked as freshly authenticated and its token is not
@@ -55,7 +55,7 @@ export interface ReauthContext {
 }
 
 /** The action being confirmed, as `auth.reauth.refused` names it. */
-export type ReauthVia = "end-sessions";
+export type ReauthVia = "end-sessions" | "password-change";
 
 export const MISSING_SESSION_ID_MESSAGE =
   "This session cannot confirm an action. Sign in again.";

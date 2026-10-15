@@ -22,8 +22,9 @@ import type { JSX } from "react";
  * every action needs the server anyway.
  *
  * The password form moved here from the hub because it ends sessions too —
- * every one the account has, today this device's included — so it belongs
- * beside the list of what it would end. After the list, because the list is
+ * every one the account has but this device's, which carries on under a new
+ * token (D144) — so it belongs beside the list of what it would end, and the
+ * list is read again when it is done. After the list, because the list is
  * what the person who has lost a phone comes for.
  */
 export default function SecurityPage(): JSX.Element {

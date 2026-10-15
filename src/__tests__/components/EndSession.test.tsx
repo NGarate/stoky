@@ -13,11 +13,13 @@ import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
 /**
  * The three controls that end a session, in one file because they share a hook.
  *
- * `SignOutButton` ends this device's visit. `DeviceList` ends this device's
- * session, every other or every one, after the password, and
- * `ChangePasswordForm` ends every one as the consequence of a new password.
- * All three run the same purge
- * sequence — `useEndSession` — and that is also why their tests live together: the
+ * `SignOutButton` ends this device's visit, and `DeviceList` ends this
+ * device's session, every other or every one, after the password. Both run
+ * the same purge sequence — `useEndSession` — and that is also why their
+ * tests live together. `ChangePasswordForm` used to be the third: it ended
+ * every session, this one's included. Since D144 it keeps this device signed
+ * in and purges nothing, and its tests stay here to prove exactly that
+ * against the same spies. The
  * mocks below replace modules for the *whole process* (D50), so two files
  * mocking `@/lib/auth/actions` and the queue with different spies would each
  * be asserting against the other's. Measured: they did, and eighteen tests in
@@ -858,13 +860,16 @@ describe("where focus goes when the question appears", () => {
 });
 
 /**
- * Changing the password, which ends every session as a consequence.
+ * Changing the password, which ends every *other* session and keeps this one
+ * (PROGRESS D144).
  *
  * The server half is `integration/auth.flow.test.ts` ("Changing your own
- * password"). What only the form can get wrong is the same order as the revoke
- * control's — the server write first, and a refusal discards nothing — plus
- * saying *which* refusal it was: a wrong current password told as "try again"
- * sends somebody round the form retyping the wrong thing.
+ * password"), and the cookie arriving is `e2e/password-change.spec.ts`. What
+ * only the form can get wrong is what it does here: nothing is purged and
+ * nobody is signed out — the queue and the saved reads are the same person's,
+ * who is still here — and *which* refusal it was is said: a wrong current
+ * password told as "try again" sends somebody round the form retyping the
+ * wrong thing.
  */
 
 /** A refusal shaped the way tRPC delivers one to the browser. */
@@ -891,14 +896,16 @@ async function changePassword(
 }
 
 describe("changing the password", () => {
-  it("says before the fact that this device is signed out too", () => {
+  it("says before the fact that this device stays signed in", () => {
     renderWithIntl(<ChangePasswordForm />);
 
     // Attached to the button, so it is heard with the button's name rather
-    // than discovered from the redirect.
+    // than discovered afterwards.
     expect(
       screen.getByRole("button", { name: "Cambiar la contraseña" }),
-    ).toHaveAccessibleDescription(/también en este/);
+    ).toHaveAccessibleDescription(
+      "Se cerrarán las sesiones de tus otros dispositivos; este sigue abierto.",
+    );
   });
 
   it("attaches help to every field", () => {
@@ -930,16 +937,65 @@ describe("changing the password", () => {
     expect(steps).toEqual([]);
   });
 
-  it("changes it on the server before discarding anything local, then signs out", async () => {
+  it("changes it on the server and discards nothing here", async () => {
+    // The old form signed out after a change: the queue, the saved reads and
+    // the cached shell went, and the person was sent to /login. The session
+    // is kept now, so any of those would be throwing away the same person's
+    // shopping for nothing.
     renderWithIntl(<ChangePasswordForm />);
 
     await changePassword();
 
     expect(changeInputs).toEqual([{ currentPassword: CURRENT, newPassword: NEXT }]);
-    expect(steps).toEqual(["changePassword", "purgeQueue", "purgeShell", "signOut"]);
+    expect(steps).toEqual(["changePassword"]);
+    expect(purgeAll).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(signOutAction).not.toHaveBeenCalled();
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
   });
 
-  it("names a wrong current password, and leaves the person signed in", async () => {
+  it("says it is done, in place, and empties the fields", async () => {
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    const status = await screen.findByText("Contraseña cambiada");
+    expect(status.closest('[role="status"]')).toHaveTextContent(
+      "Se han cerrado las sesiones de tus otros dispositivos",
+    );
+    expect(screen.queryByTestId("form-error-summary")).toBeAbsent();
+    for (const label of [
+      "Contraseña actual",
+      "Contraseña nueva",
+      "Repite la contraseña nueva",
+    ]) {
+      expect(screen.getByLabelText(label)).toHaveValue("");
+    }
+  });
+
+  it("has the devices list read again, since the other sessions are gone", async () => {
+    renderWithIntl(<ChangePasswordForm />);
+
+    await changePassword();
+
+    expect(invalidated).toBe(1);
+  });
+
+  it("does not send waiting changes first, because nothing is lost", async () => {
+    // The old form flushed the queue before changing, and refused to change
+    // when it could not: the sign-out after it would have deleted them. With
+    // the session kept, they go when they would have gone anyway.
+    pending = [op("a"), op("b")];
+    renderWithIntl(<ChangePasswordForm />);
+
+    expect(screen.queryByText(/se enviarán antes de cambiarla/i)).toBeAbsent();
+    await changePassword();
+
+    expect(steps).toEqual(["changePassword"]);
+    expect(flush).not.toHaveBeenCalled();
+  });
+
+  it("names a wrong current password, and leaves the fields as typed", async () => {
     changeRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
     renderWithIntl(<ChangePasswordForm />);
 
@@ -952,9 +1008,9 @@ describe("changing the password", () => {
       "aria-invalid",
       "true",
     );
-    expect(steps).toEqual(["changePassword"]);
-    expect(purgeAll).not.toHaveBeenCalled();
-    expect(signOutAction).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Contraseña nueva")).toHaveValue(NEXT);
+    expect(screen.queryByText("Contraseña cambiada")).toBeAbsent();
+    expect(invalidated).toBe(0);
     expect(screen.getByRole("button", { name: "Cambiar la contraseña" })).not.toBeDisabled();
   });
 
@@ -983,7 +1039,7 @@ describe("changing the password", () => {
   });
 
   it("says to wait when the limit is spent", async () => {
-    changeRefusal = trpcRefusal("TOO_MANY_REQUESTS", "Too many password changes.");
+    changeRefusal = trpcRefusal("TOO_MANY_REQUESTS", "Too many attempts at the password.");
     renderWithIntl(<ChangePasswordForm />);
 
     await changePassword();
@@ -993,48 +1049,12 @@ describe("changing the password", () => {
     );
   });
 
-  it("sends unsent changes first, and says it will", async () => {
-    pending = [op("a"), op("b")];
-    renderWithIntl(<ChangePasswordForm />);
-
-    expect(screen.getByText(/se enviarán antes de cambiarla/i)).toBeInTheDocument();
-    await changePassword();
-
-    expect(steps.slice(0, 2)).toEqual(["flush", "changePassword"]);
-  });
-
-  it("changes nothing when they cannot all be sent", async () => {
-    pending = [op("a"), op("b")];
-    unsentAfterFlush = 2;
-    renderWithIntl(<ChangePasswordForm />);
-
-    await changePassword();
-
-    expect(steps).toEqual(["flush"]);
-    expect(screen.getByTestId("form-error-summary")).toHaveTextContent(
-      "La contraseña sigue igual",
-    );
-  });
-
-  it("does not say it failed when only signing out here did", async () => {
-    // The password was changed and every session ended. "Not changed" would
-    // send the person back to type the old one, which no longer works.
-    signOutFails = true;
-    renderWithIntl(<ChangePasswordForm />);
-
-    await changePassword();
-
-    const summary = screen.getByTestId("form-error-summary");
-    expect(summary).toHaveTextContent("La contraseña ya está cambiada");
-    expect(summary).not.toHaveTextContent("No se ha cambiado");
-  });
-
   it("carries the English copy too", async () => {
     renderWithIntl(<ChangePasswordForm />, { locale: "en" });
 
     expect(
       screen.getByRole("button", { name: "Change the password" }),
-    ).toHaveAccessibleDescription(/this one included/);
+    ).toHaveAccessibleDescription(/this one stays signed in/);
     expect(screen.getByLabelText("Repeat the new password")).toBeInTheDocument();
   });
 });

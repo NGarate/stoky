@@ -897,8 +897,7 @@
     "newPasswordHint": "At least {min} characters. It cannot contain your name or email address.",
     "confirm": "Repeat the new password",
     "confirmHint": "Type it again, in case of a typo: there is no email recovery.",
-    "endsSessions": "Changing it signs you out on every device, this one included. Then sign in with the new one.",
-    "pending": "{count, plural, one {# change not sent yet} other {# changes not sent yet}}. They will be sent before the change.",
+    "endsSessions": "Your other devices will be signed out; this one stays signed in.",
     "submit": "Change the password",
     "working": "Changing the password…",
     "refusedTitle": "The password was not changed",
@@ -910,9 +909,8 @@
     "identity": "The new password contains your name or email address. Choose one that does not include them.",
     "tooMany": "Too many attempts. Wait a few minutes and try again.",
     "failed": "It could not be changed. Try again.",
-    "failedUnsent": "Not everything could be sent. The password is unchanged and your changes are still here. Try again in a few seconds.",
-    "changedTitle": "The password has been changed",
-    "failedAfter": "But this device has not finished signing out. Reload the page and sign in with the new one."
+    "changedTitle": "Password changed",
+    "changedDetail": "Your other devices have been signed out. Sign in on them with the new password."
   },
   "offline": {
     "nothingSavedTitle": "Nothing saved here yet",

@@ -10,24 +10,19 @@ import {
 import { snackbarDurationSchema } from "@/lib/validations/preferences";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
-  WRONG_CURRENT_PASSWORD_MESSAGE,
   passwordProblems,
 } from "@/lib/validations/password";
 import {
   clientAddress,
-  passwordChangeRateLimit,
   rateLimitIdentifier,
   registerRateLimit,
 } from "@/lib/rate-limit";
-import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
-import {
-  createCredentialUser,
-  readPasswordHash,
-  setPasswordAndEndSessions,
-} from "@/lib/auth/credentials";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import { endSessions } from "@/lib/auth/end-sessions";
 import { deviceLabel } from "@/lib/auth/device-label";
-import { confirmCurrentPassword } from "@/lib/auth/reauth";
+import { changeOwnPassword } from "@/lib/auth/password-change";
+import { MISSING_SESSION_ID_MESSAGE, confirmCurrentPassword } from "@/lib/auth/reauth";
 import {
   capFor,
   deadlineKind,
@@ -473,8 +468,9 @@ export const authRouter = createTRPCRouter({
     }),
 
   /**
-   * A signed-in person replaces their own password, and every session the
-   * account has ends — this one included.
+   * A signed-in person replaces their own password: every other session the
+   * account has ends, and this one carries on under a new token (ASVS 5.0.0
+   * 7.4.3, PROGRESS D144).
    *
    * Until this existed nothing changed a password once it was set (security
    * review, 2026-10-12): a password an admin chose in `household.addMember`
@@ -486,39 +482,42 @@ export const authRouter = createTRPCRouter({
    * `listSessions` gives: an account with no household still has a
    * password. The order of the steps is the point of them:
    *
-   * 1. **The limit, first.** The next step answers "is this the password?",
-   *    and a stolen session asking it in a loop is the attack; counted before
-   *    Argon2id runs, like sign-in.
-   * 2. **The current password**, through the same `verifyPassword` sign-in
-   *    uses. Wrong is BAD_REQUEST, never UNAUTHORIZED: the offline queue and
-   *    the screens read UNAUTHORIZED as a session that has ended, and this
-   *    person is still signed in. It is logged here because the refusal
-   *    middleware records only UNAUTHORIZED, FORBIDDEN and TOO_MANY_REQUESTS.
-   * 3. **The identity rule**, against the account's own address and name,
+   * 1. **The current password, through `confirmCurrentPassword`** — the same
+   *    two budgets, counted before Argon2id, and the same `BAD_REQUEST` and
+   *    `auth.reauth.refused` line as every other re-entry, with `via:
+   *    "password-change"`. A stolen session asking "is this the password?"
+   *    in a loop is the attack, and it spends that session's budget, not the
+   *    owner's.
+   * 2. **The identity rule**, against the account's own address and name,
    *    which the input does not carry — so the schema cannot apply it
    *    (`withIdentityRule`). After the check above, so it answers nobody who
    *    has not proved they know the password.
-   * 4. **One transaction** sets the hash and deletes every session row
-   *    (`setPasswordAndEndSessions`). Two could leave a new password beside
-   *    sessions that were meant to end; one cannot. The caller's own session
-   *    goes with the rest, and the screen signs out and asks for the new
-   *    password.
+   * 3. **Better Auth writes it** (`changeOwnPassword`,
+   *    `src/lib/auth/password-change.ts`): the hash, every session deleted,
+   *    and a new one for this device whose cookie goes out with this answer.
+   *    The browser sends this one procedure through a link that does not
+   *    stream (`src/lib/trpc/links.ts`), because a streamed answer's headers
+   *    leave before the resolver has set the cookie. A request with no
+   *    cookie — a native client — is not given a new session, and its own
+   *    ends here with the rest (D142).
    *
-   * **Ending this session too is deliberate**, for now: the person who
-   * suspects their password leaked is the one who most needs every device
-   * asked again. The form says so before it is submitted.
+   * Logged as `auth.password.changed` and as `auth.session.ended` with
+   * `reason: "password-change"` and how many sessions went, this device's
+   * old token not counted when it was rotated.
    */
   changePassword: protectedProcedure
     .input(changePasswordSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const address = ctx.headers ? clientAddress(ctx.headers) : undefined;
+      const headers = ctx.headers;
+      // Better Auth finds the session in the request's headers; a context
+      // without them cannot reach it. Refused before anything is spent.
+      if (!headers) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: MISSING_SESSION_ID_MESSAGE });
+      }
+      const address = clientAddress(headers);
 
-      await enforceRateLimit(
-        passwordChangeRateLimit(),
-        userId,
-        "Too many password changes. Try again in a little while.",
-      );
+      await confirmCurrentPassword(ctx, input.currentPassword, "password-change");
 
       const account = await ctx.db.user.findUnique({
         where: { id: userId },
@@ -534,15 +533,6 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      const storedHash = await readPasswordHash(ctx.db, userId);
-      if (!(await verifyPassword(storedHash, input.currentPassword))) {
-        logSecurityEvent("auth.password.change.refused", { userId, address });
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: WRONG_CURRENT_PASSWORD_MESSAGE,
-        });
-      }
-
       const problems = passwordProblems(input.newPassword, {
         email: account.email,
         name: account.name,
@@ -554,18 +544,23 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      const passwordHash = await hashPassword(input.newPassword);
+      // Counted before, because Better Auth deletes them without saying how
+      // many: every row but the one asking, which a rotation replaces.
+      const others = await ctx.db.session.count({
+        where: { userId, id: { not: ctx.session.sessionId } },
+      });
 
-      // Zero only if the account was deleted since it was read above — the
-      // same truth as the check there.
-      if ((await setPasswordAndEndSessions(ctx.db, { userId }, passwordHash)) === 0) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "This account no longer exists",
-        });
-      }
+      const { rotated } = await changeOwnPassword(headers, input);
+      const ended = rotated ? others : await endSessions(ctx.db, { userId });
 
       logSecurityEvent("auth.password.changed", { userId, address });
+      logSecurityEvent("auth.session.ended", {
+        userId,
+        targetUserId: userId,
+        reason: "password-change",
+        count: ended,
+        address,
+      });
 
       return { success: true };
     }),

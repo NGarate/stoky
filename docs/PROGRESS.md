@@ -64,6 +64,7 @@ Rules for this log:
 | "feat(auth): let a person end their own sessions after re-entering the password" (D143) | ASVS 5.0.0 7.5.2: `auth.listSessions` lists the account's live sessions as browser, system and — through the new `Session.deviceId` joined to `ScreenChoice` — the screen the device opens on, with no token and no device id; `auth.endSessions` ends one, every other or every one after `confirmCurrentPassword` (`src/lib/auth/reauth.ts`), metered per session (5, refunded on success) and per account (20). Re-entry does not rotate the token, an ASVS 7.2.4 deviation the owner accepted. `integration/session.revocation.test.ts` (+15) signs every session in for real: each scope ends exactly its rows and leaves another account's; a wrong password ends nothing, is `BAD_REQUEST` and logged; the sixth wrong try is 429; a right answer is refunded; one session's spent budget leaves another able to end it; twenty wrong tries across four sessions stop a fifth; a right answer stays counted against the account; a screen another account chose on a shared device is not this one's; another account's id is `NOT_FOUND`; a context without a session id is refused; get-session never carries the device id. Each of nineteen deliberate breaks (the not-current filter, the verify, the per-session key, the account id in "one", the guard, the refund, a refund of the account budget too, the account budget, the account id in the screen join, the hook's device id, `returned: false`, the list's fields, expired rows, the screen join, `NOT_FOUND`, both log lines, `current`, `includedCurrent`) turns it red. `unit/end-sessions.test.ts` refuses `{ id: { not: undefined } }`; `tenant-scoped-ids`, `procedure-inputs`, `rate-limit`, `capabilities` (68) and `device-label` cover the rest. |
 | "feat(auth): show your devices in security settings" | **Seguridad y acceso** (`/settings/security`, linked first from the settings hub) shows **Tus dispositivos**: one `ItemRow` per session, named by the screen the device chose or its browser and system, this device's marked, with last use, sign-in, end and whether it is remembered, and the ten-session cap (D140) said under the list. **Cerrar esta sesión**, **Cerrar las demás** and **Cerrar todas** each ask for the password in `ReauthDialog` before `auth.endSessions` runs; an ending that includes this device goes through `useEndSession` (server first, then the purge, then the redirect), one that does not purges nothing and reads the list again. `auth.revokeMySessions` and `RevokeSessionsButton` are deleted (67 procedures). `components/DeviceList.test.tsx` (13) and `EndSession.test.tsx` (48 → 54: the old button's cases moved onto the list, plus "others", another device's row, this device's row, and this row's post-purge failure worded as one session) go red under each of seventeen breaks — "others" or "all" routed the wrong way, send-first that discards, the badge, the cap hint, the screen name, the session id, the re-read, the gone and wrong-password wording, the empty-password check, the refusal not unwrapped from `EndSessionError`, "Cerrar las demás" with nobody else. `e2e/session-revocation.spec.ts` signs a second browser in separately and ends it alone, then both, then refuses a wrong password; it reads each browser's state from `get-session`, because a signed-out `goto("/dashboard")` lands on the prerendered shell before `/login` and the URL check passed against a build whose "one" ended all. `e2e/request-guards.spec.ts` sends `auth.endSessions` with the right password. |
 | "refactor(auth): move the password form to security settings" | `ChangePasswordForm` moves from the settings hub to **Seguridad y acceso**, as a **Contraseña** section after **Tus dispositivos**: it ends sessions too, so it sits beside the list of what it would end, and the next commit changes what it ends. The hub row's description names the password. Behaviour is unchanged; `e2e/password-change.spec.ts` changes only its URL, and went red when the form was left off `/settings/security`. |
+| "feat(auth): keep this device signed in when its password changes" (D144) | ASVS 5.0.0 7.4.3: `auth.changePassword` confirms the current password through `confirmCurrentPassword` (the D143 budgets; `passwordChangeRateLimit` and `RATE_LIMIT_PASSWORD_CHANGE_*` are retired, and a wrong password is `auth.reauth.refused` `via: "password-change"`), then the identity rule, then Better Auth's `changePassword` with `revokeOtherSessions` (`src/lib/auth/password-change.ts`): every other session ends and this one is re-created under a new token that keeps `authenticatedAt`, `persistent` and the device. The browser sends the call by `httpLink` through a `splitLink` (`src/lib/trpc/links.ts`), and the form says it is done in place instead of signing out and purging. A request with no cookie (native) ends every session, its own too. `integration/auth.flow.test.ts` signs in through the route and drives real sessions: other browsers and a bearer session end and log `reason: "password-change"` with the count; the old row is gone and the new one keeps sign-in time, kind and device for a browser and a remembered session, and opens with a token signed as the cookie is; a wrong password changes nothing and never reaches Better Auth (no Argon2id hash), and is answered before the identity rule; one session's spent budget leaves another able to change it. `unit/password-change.test.ts` maps Better Auth's refusals, `unit/trpc-links.test.ts` measures which request each call makes, `components/EndSession.test.tsx` holds the form to no purge and no sign-out, and `e2e/password-change.spec.ts` shows this browser still signed in after a reload, under a new cookie that is still a browser session's (no expiry: Better Auth picks the `Max-Age` from the `dont_remember` cookie the request carried, which the database row cannot show), while another device and a copy of the old cookie are refused. Breaks that went red: the hook not inheriting, the identity rule before the verify, no re-entry, `revokeOtherSessions` off, rotating without a cookie, no `endSessions` for native, no ended line, the two refusal mappings, the split off (unit, and the e2e: "the rotated cookie did not arrive") or everything unstreamed, `dont_remember` withheld from Better Auth (e2e only: the cookie came back expiring), and the form's sign-out, reset, status and re-read. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -3030,3 +3031,46 @@ gone.
   `auth.reauth.refused` with the action as `via`, because the refusal
   middleware does not record `BAD_REQUEST`. The per-session counter's key
   is the session id, which is not a credential.
+
+**D144 — Changing your own password keeps this device signed in under a new
+token and ends every other session.** Until now it ended every session, this
+one's included, and the form signed the device out and purged its queue, its
+saved reads and its cached shell — the person who just proved they hold the
+password had to type the new one straight away, and lost any unsent changes
+the form could not send first. ASVS 5.0.0 7.4.3 asks for the option to end
+the other sessions after a credential change; the device that made the change
+is not one of them.
+
+- **Better Auth does the write.** Its `changePassword` with
+  `revokeOtherSessions` sets the hash, deletes every session row and creates
+  one for the request, whose cookie `nextCookies` puts on the tRPC answer.
+  The create hook already carried `authenticatedAt` and `persistent` over on a
+  re-create (D141) and reads the device from the request (D143); this is the
+  first endpoint that re-creates, and the first test of it. So the day's
+  limit still counts from the sign-in, and a remembered device stays
+  remembered.
+- **Our checks first.** The current password through `confirmCurrentPassword`
+  — the D143 re-entry and its two budgets, replacing the password change's
+  own per-account limit, which was one more budget a stolen session could
+  spend — then the identity rule, so it answers only someone who knows the
+  password. Better Auth checks the current password again (a second Argon2id
+  run) and hashes the new one before it checks, which is why it is called
+  only after both.
+- **Not streamed.** tRPC's streaming batch link writes the answer's headers
+  before any resolver finishes, so the new cookie never left and the device
+  kept presenting the deleted token: measured, the e2e device was signed out
+  by its own change. `auth.changePassword` goes by a plain `httpLink` through
+  a `splitLink` (`src/lib/trpc/links.ts`); every other call still streams.
+- **A request with no cookie keeps nothing.** A native client keeps no
+  cookies, so a rotated session would be a row nobody can present and its
+  bearer token would be the deleted one. It asks Better Auth for the hash
+  alone and ends every session itself, its own included — what D142 says a
+  password change does to a native session.
+- **What it costs.** Better Auth's three writes are not one transaction, as
+  `setPasswordAndEndSessions` was: a failure after the hash and before the
+  delete leaves the new password beside sessions meant to end, and the form
+  reports a failure although the hash is new. The sessions can be ended from
+  **Tus dispositivos**. `household.resetMemberPassword` keeps the single
+  transaction; it ends every session of somebody else, so nothing is
+  re-created. The log line `auth.password.change.refused` is gone: a wrong
+  password here is `auth.reauth.refused` with `via: "password-change"`.

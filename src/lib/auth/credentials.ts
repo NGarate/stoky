@@ -12,11 +12,14 @@ const CREDENTIAL_PROVIDER = "credential";
  * Where a password hash is stored, and the only code that knows.
  *
  * `password-hash.ts` owns how a password becomes a hash and how one is
- * checked; this module owns where the hash lives. Every caller that creates an
- * account with a password, reads a stored hash or sets a new one comes through
- * here: sign-in, registration, a person changing their own password, an admin
- * adding a member or setting a member's password, the demo seed and the test
- * factories.
+ * checked; this module owns where the hash lives. Every caller of ours that
+ * creates an account with a password, reads a stored hash or sets a new one
+ * comes through here: registration, the re-entered password
+ * (`src/lib/auth/reauth.ts`), an admin adding a member or setting a member's
+ * password, the demo seed and the test factories. Better Auth is the one other
+ * reader and writer, through its own contract with the row: it reads the hash
+ * at sign-in and writes it when a person changes their own password (PROGRESS
+ * D144), with our Argon2id either way (`password-hash.ts`).
  *
  * The hash lives in the `credential` Account row (`providerId` "credential",
  * `accountId` the user's id), which is where Better Auth reads it (PROGRESS

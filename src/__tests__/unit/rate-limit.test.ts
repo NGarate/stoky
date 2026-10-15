@@ -6,7 +6,6 @@ import {
   loginAccountRateLimit,
   loginDeviceRateLimit,
   loginRateLimit,
-  passwordChangeRateLimit,
   productLookupRateLimit,
   rateLimitIdentifier,
   reauthAccountRateLimit,
@@ -339,30 +338,6 @@ describe("the configured limits", () => {
     expect(addMemberRateLimit().attempts).toBe(20);
   });
 
-  it("meters changing a password at five per account per fifteen minutes", () => {
-    // The procedure answers "is this the current password?" before anything
-    // else, so this is the number of guesses a stolen session gets at the
-    // password behind it (security review, 2026-10-12) — sign-in's own
-    // per-address number.
-    delete process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
-    delete process.env.RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS;
-
-    expect(passwordChangeRateLimit()).toEqual({
-      prefix: "rl:pwchange",
-      attempts: 5,
-      windowSeconds: 900,
-    });
-  });
-
-  it("reads the password-change override, and refuses one that would disable it", () => {
-    process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = "2";
-    process.env.RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS = "60";
-    expect(passwordChangeRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
-
-    process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = "0";
-    expect(passwordChangeRateLimit().attempts).toBe(5);
-  });
-
   it("meters re-entering the password at five per session and twenty per account", () => {
     // D143: per session, so a stolen session cannot spend the owner's way to
     // end it; per account as the backstop ten sessions would otherwise
@@ -410,12 +385,6 @@ describe("the configured limits", () => {
     expect(loginDeviceRateLimit().prefix).not.toBe(loginAccountRateLimit().prefix);
     const others = [loginRateLimit(), loginAccountRateLimit(), registerRateLimit(), uploadRateLimit()];
     expect(others.map((limit) => limit.prefix)).not.toContain(addMemberRateLimit().prefix);
-    // Nor does changing a password: sign-in clears the account's sign-in
-    // counter on success, and sharing it would let a stolen session's
-    // guesses be wiped by the owner signing in somewhere else.
-    expect([...others, addMemberRateLimit()].map((limit) => limit.prefix)).not.toContain(
-      passwordChangeRateLimit().prefix,
-    );
   });
 
   it("meters sixty Open Food Facts lookups an hour per account", () => {
@@ -439,7 +408,6 @@ describe("the configured limits", () => {
       registerRateLimit(),
       uploadRateLimit(),
       addMemberRateLimit(),
-      passwordChangeRateLimit(),
     ]) {
       expect(other.prefix).not.toBe(lookup);
     }
@@ -456,7 +424,6 @@ describe("the configured limits", () => {
       registerRateLimit(),
       uploadRateLimit(),
       addMemberRateLimit(),
-      passwordChangeRateLimit(),
       productLookupRateLimit(),
     ].map((limit) => limit.prefix);
     expect(others).not.toContain(reauthRateLimit().prefix);
