@@ -835,8 +835,8 @@ Verified against the files named in each row.
   there — the account's counter cleared, the address refunded — ends the
   session the browser presented, as a sign-in does (Better Auth has already
   expired its cookie, so the row would otherwise outlive any copy of it), and
-  is logged `auth.signin.challenged`. The code is charged against the address
-  only, since it names no account; Better Auth counts wrong codes itself, five
+  is logged `auth.signin.challenged`. A sign-in's code is charged against the
+  address only, since it names no account; Better Auth counts wrong codes itself, five
   per challenge and ten in a row per account, which locks the account's
   second step for fifteen minutes: refused 429 with a `Retry-After` of the
   seconds left until the lock ends, which Better Auth's own refusal leaves
@@ -904,7 +904,12 @@ Verified against the files named in each row.
     re-entry budgets as every other confirmation (five per session and twenty
     per account a quarter of an hour, the session's refunded on a right
     password; D143). The route passes on `password` alone — no `issuer`, no
-    `method`. A wrong password is `auth.reauth.refused` with `via:
+    `method`. That first code, and any code a signed-in session sends, is
+    charged to the same two re-entry budgets, the session's given back when
+    it is right — never to sign-in's per-address budget, which nothing would
+    give it back to, so a household behind one address setting up its
+    authenticators would otherwise spend the attempts everyone there signs
+    in with. A wrong password is `auth.reauth.refused` with `via:
     "two-factor"`; turning it off is `auth.twofactor.disabled`, new codes are
     `auth.twofactor.codes-regenerated`, and turning it on is
     `auth.twofactor.enabled` at the first code. Turning it on (at that code)

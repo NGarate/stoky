@@ -85,7 +85,9 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  * then, the session the browser presented ends then, and the line says
  * `challenged`. The code that follows is a request of its own
  * (`secondStep`), charged per address — it names no account — and a sign-in
- * only when it carried the challenge and was answered with a session.
+ * only when it carried the challenge and was answered with a session. The
+ * same endpoint with a signed-in session is the enrolment check, charged
+ * against the re-entry budgets instead.
  *
  * **Changing two-step verification** (D148): turning it on, turning it off
  * and replacing the backup codes are answered only for a signed-in session,
@@ -282,7 +284,7 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   }
   const secondStepMethod = SECOND_STEPS[endpoint];
   if (secondStepMethod) {
-    return secondStep(incoming, body, handle, options, secondStepMethod);
+    return secondStep(incoming, body, handle, options, secondStepMethod, `${AUTH_BASE_PATH}${endpoint.slice(5)}`);
   }
   const change = ACCOUNT_CHANGES[endpoint];
   if (change) {
@@ -551,10 +553,19 @@ async function asksForSecondStep(response: Response): Promise<boolean> {
  * A second step: an authenticator code or a backup code, after a password
  * step that asked for one (D148).
  *
- * - **Charged per address only**, before the body is believed: the request
- *   names no account — only the challenge cookie does, and only Better Auth
- *   reads it — and Better Auth counts wrong codes itself, five per
- *   challenge and ten per account.
+ * - **A sign-in's code is charged per address only**, before the body is
+ *   believed: the request names no account — only the challenge cookie
+ *   does, and only Better Auth reads it — and Better Auth counts wrong codes
+ *   itself, five per challenge and ten per account.
+ * - **A signed-in session's code is not a sign-in**, and is not charged to
+ *   sign-in's address budget: it is the enrolment check, which Better Auth
+ *   answers from the session before any challenge, and nothing gives a
+ *   success there back to that budget, so every authenticator set up behind
+ *   one address would spend a sign-in attempt for everybody there for a
+ *   quarter of an hour. It is charged against the session's and the
+ *   account's re-entry budgets instead (`chargeReentry`, D143), as the
+ *   password that started the enrolment was, and a right code gives the
+ *   session's attempt back.
  * - **`code` and nothing else** reaches Better Auth.
  * - **A sign-in only when** the request carried the challenge cookie, did not
  *   already hold a session, and was answered with a session cookie. Then:
@@ -578,34 +589,50 @@ async function secondStep(
   handle: AuthEndpointHandler,
   options: AuthHandlerOptions,
   method: "totp" | "backup-code",
+  path: string,
 ): Promise<Response> {
   const limiter = options.limiter ?? valkeySignInLimiter;
   const sessions = options.sessions;
 
-  let charge: AddressCharge;
-  try {
-    charge = await chargeSignInAddress(incoming.headers, limiter);
-  } catch (error) {
-    if (error instanceof SignInRefusedError) return refusedSignIn(error);
-    throw error;
+  // Read first, because it decides the budget: Better Auth checks a code
+  // against the session a request carries before any challenge.
+  const previous = sessions ? await sessions.presented(incoming.headers) : null;
+  const address = clientAddress(incoming.headers);
+
+  let charge: AddressCharge | null = null;
+  let sessionWindow: number | null = null;
+  if (previous) {
+    const reentry = await chargeReentry(limiter, previous, address, path);
+    if (reentry instanceof Response) return reentry;
+    sessionWindow = reentry.sessionWindow;
+  } else {
+    try {
+      charge = await chargeSignInAddress(incoming.headers, limiter);
+    } catch (error) {
+      if (error instanceof SignInRefusedError) return refusedSignIn(error);
+      throw error;
+    }
   }
 
   const code = parseJsonObject(body)?.code;
   if (typeof code !== "string") {
-    logSecurityEvent("auth.twofactor.failed", { address: charge.address, code: "malformed" });
+    logSecurityEvent("auth.twofactor.failed", { address, code: "malformed" });
     return invalidRequest();
   }
 
   const names = options.twoFactorCookies ? await options.twoFactorCookies() : null;
   const carriedChallenge = names ? hasCookie(incoming.headers.get("cookie"), names.challenge) : false;
-  const previous = sessions ? await sessions.presented(incoming.headers) : null;
 
   const response = await handle(rebuild(incoming, JSON.stringify({ code })));
+
+  if (response.ok && previous && sessionWindow !== null) {
+    await limiter.refund(reauthRateLimit(), previous.id, sessionWindow);
+  }
 
   if (response.ok) {
     const setsSession = names ? setsCookie(response, names.session) : false;
     const issued = setsSession ? await issuedSession(response) : null;
-    if (issued && carriedChallenge && !previous) {
+    if (issued && carriedChallenge && !previous && charge) {
       await secondFactorSucceeded(
         charge,
         { userId: issued.userId, email: issued.email, deviceId: deviceIdFromHeaders(incoming.headers) },
@@ -616,14 +643,14 @@ async function secondStep(
         await tidyQuietly(sessions, { previous: null, userId: issued.userId, newToken: issued.token });
       }
     } else if (issued && previous && method === "totp") {
-      logSecurityEvent("auth.twofactor.enabled", { userId: previous.userId, address: charge.address });
+      logSecurityEvent("auth.twofactor.enabled", { userId: previous.userId, address });
     }
   } else {
     const refusal = await refusalCode(response);
     if (refusal === "ACCOUNT_TEMPORARILY_LOCKED" || refusal === "TOO_MANY_WRONG_CODES") {
-      logSecurityEvent("auth.twofactor.locked", { address: charge.address, code: refusal });
+      logSecurityEvent("auth.twofactor.locked", { address, code: refusal });
     } else if (refusal !== "TWO_FACTOR_UNREADABLE" && response.status >= 400 && response.status < 500) {
-      logSecurityEvent("auth.twofactor.failed", { address: charge.address, code: refusal ?? undefined });
+      logSecurityEvent("auth.twofactor.failed", { address, code: refusal ?? undefined });
     }
   }
 
@@ -671,32 +698,9 @@ async function accountChange(
   if (!presented) return codeResponse(401, "UNAUTHORIZED", "Sign in first");
   const address = clientAddress(incoming.headers);
 
-  let sessionWindow: number;
-  try {
-    const perSession = await limiter.consume(reauthRateLimit(), presented.id);
-    const perAccount = perSession.allowed
-      ? await limiter.consume(reauthAccountRateLimit(), presented.userId)
-      : perSession;
-    if (!perAccount.allowed) {
-      const seconds = Math.max(1, Math.ceil(perAccount.retryAfterSeconds));
-      logSecurityEvent("request.throttled", {
-        userId: presented.userId,
-        address,
-        path,
-        code: `retry-after=${seconds}`,
-      });
-      const refused = codeResponse(429, "REAUTH_RATE_LIMITED", "Too many attempts at the password");
-      refused.headers.set("retry-after", String(seconds));
-      return refused;
-    }
-    sessionWindow = perSession.window;
-  } catch (error) {
-    if (!(error instanceof RateLimitUnavailableError)) throw error;
-    console.error(
-      "[auth] refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
-    );
-    return codeResponse(503, "AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable");
-  }
+  const reentry = await chargeReentry(limiter, presented, address, path);
+  if (reentry instanceof Response) return reentry;
+  const { sessionWindow } = reentry;
 
   const password = parseJsonObject(body)?.password;
   if (typeof password !== "string") return invalidRequest("The request carries no password");
@@ -718,6 +722,48 @@ async function accountChange(
   }
 
   return guardResponse(incoming, response);
+}
+
+/**
+ * One attempt by a signed-in session, charged against both re-entry budgets
+ * before Better Auth checks anything (D143): per session (`reauthRateLimit`),
+ * so a stolen session cannot spend the owner's attempts, and per account
+ * (`reauthAccountRateLimit`), so ten sessions are not ten budgets. Answers
+ * the refusal — 429 `REAUTH_RATE_LIMITED` with `Retry-After`, or 503 when the
+ * limiter cannot be reached, failing closed — or the window the session's
+ * attempt landed in, for the refund a right answer earns.
+ */
+async function chargeReentry(
+  limiter: SignInLimiter,
+  presented: PresentedSession,
+  address: string,
+  path: string,
+): Promise<{ sessionWindow: number } | Response> {
+  try {
+    const perSession = await limiter.consume(reauthRateLimit(), presented.id);
+    const perAccount = perSession.allowed
+      ? await limiter.consume(reauthAccountRateLimit(), presented.userId)
+      : perSession;
+    if (!perAccount.allowed) {
+      const seconds = Math.max(1, Math.ceil(perAccount.retryAfterSeconds));
+      logSecurityEvent("request.throttled", {
+        userId: presented.userId,
+        address,
+        path,
+        code: `retry-after=${seconds}`,
+      });
+      const refused = codeResponse(429, "REAUTH_RATE_LIMITED", "Too many attempts at the password");
+      refused.headers.set("retry-after", String(seconds));
+      return refused;
+    }
+    return { sessionWindow: perSession.window };
+  } catch (error) {
+    if (!(error instanceof RateLimitUnavailableError)) throw error;
+    console.error(
+      "[auth] refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
+    );
+    return codeResponse(503, "AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable");
+  }
 }
 
 /**

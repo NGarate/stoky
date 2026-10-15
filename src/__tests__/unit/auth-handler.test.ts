@@ -4,6 +4,8 @@ import {
   RateLimitUnavailableError,
   loginRateLimit,
   passkeyOptionsRateLimit,
+  reauthAccountRateLimit,
+  reauthRateLimit,
   type RateLimit,
   type RateLimitResult,
 } from "@/lib/rate-limit";
@@ -879,6 +881,61 @@ describe("two-step verification", () => {
         userId: "user-1",
       });
       expect(written.map((line) => line.event)).not.toContain("auth.signin.succeeded");
+    });
+
+    it("charges a signed-in session's code to its re-entry budgets, never sign-in's address", async () => {
+      // The enrolment check is no sign-in: charged to the address and never
+      // given back, every authenticator set up behind one NAT spent an
+      // attempt everybody there signs in with.
+      const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
+      for (const [answer, refunded] of [
+        [signedInByCode, true],
+        [() => Response.json({ code: "INVALID_CODE" }, { status: 401 }), false],
+      ] as const) {
+        const { limiter, calls } = fakeLimiter();
+        await handleAuthRequest(
+          code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
+          { handler: fakeHandler(answer).handler, limiter, sessions, twoFactorCookies },
+        );
+
+        expect(calls.filter(([what]) => what === "consume")).toEqual([
+          ["consume", reauthRateLimit().prefix, "s-1"],
+          ["consume", reauthAccountRateLimit().prefix, "user-1"],
+        ]);
+        // A right code gives the session's attempt back, as a right password does.
+        expect(calls.filter(([what]) => what === "refund")).toEqual(
+          refunded ? [["refund", reauthRateLimit().prefix, "s-1", 7]] : [],
+        );
+      }
+    });
+
+    it("refuses a signed-in session's code 429 with Retry-After when its budget is spent, before Better Auth", async () => {
+      const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
+      const { handler, handle } = fakeHandler(signedInByCode);
+      const { limiter } = fakeLimiter({
+        [reauthAccountRateLimit().prefix]: { allowed: false, retryAfterSeconds: 42 },
+      });
+
+      const response = await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
+        { handler, limiter, sessions, twoFactorCookies },
+      );
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("42");
+      expect(handle).not.toHaveBeenCalled();
+    });
+
+    it("leaves sign-in's address budget alone when the address has none left and a session enrols", async () => {
+      const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
+      const { limiter } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 9 } });
+
+      const response = await handleAuthRequest(
+        code("/two-factor/verify-totp", { code: "123456" }, `${SESSION}=old.sig`),
+        { handler: fakeHandler(signedInByCode).handler, limiter, sessions, twoFactorCookies },
+      );
+
+      expect(response.status).toBe(200);
     });
 
     it("logs a refused code as failed, a locked account as locked, and an unreadable secret once", async () => {
