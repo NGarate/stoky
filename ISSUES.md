@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-16
 
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1 and TEST-9.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9 and TEST-10.** TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -53,6 +53,13 @@ the rest: LOC-2 and OFFLINE-1 alongside the fixes that found them, then
 SHOP-2, DB-1 and UPLOAD-1 — a race that is a defect rather than a weakness,
 and two gaps whose fixes need a schema change it did not take — and, from the
 final review of its branch, TEST-9, a test gap in the member password reset.
+
+The move to Better Auth (2026-10-15, `feat/better-auth-2026-10-15`) filed
+five defects of the library's, AUTH-2 to AUTH-6, and closed each on that
+branch before it could ship; `docs/SECURITY_REVIEW.md` (*The Better Auth
+migration*) maps every finding to its commit. It also filed TEST-10, a
+browser test that failed three of its full runs and was never caught
+failing with a trace.
 
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
@@ -135,6 +142,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DB-1 | The data model's invariants are held only by application code | 🟡 Open — deferred by the 2026-10-12 security review; needs a data audit first |
 | UPLOAD-1 | Receipt photographs have no per-household storage quota | 🟡 Open — deferred by the 2026-10-12 security review |
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
+| TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | 🟡 Open — cause not found; first step is a traced failing run |
 
 ---
 
@@ -1008,6 +1016,39 @@ go red with the `me.data.id !== member.id` check removed; and
 `resetRefusalOf` matching `RESET_OWN_PASSWORD_MESSAGE`, as it matches the
 identity message, and mapping it to `"failed"` or a sentence of its own,
 never `"tooEasy"`.
+
+---
+
+### 🟡 TEST-10: The service worker's offline spec failed three full runs on the Better Auth branch
+
+**File:** `e2e/service-worker.prod.spec.ts` ("signed in › serves a page with
+the network cut off")
+**Severity:** LOW — an intermittent browser test; nothing a person meets has
+been tied to it
+**Status:** OPEN — seen while building the Better Auth branch
+(`feat/better-auth-2026-10-15`), cause not found
+
+With the network cut off, `/inventory` is expected to come from the worker
+with the app's own navigation on it. Three full runs of `bun run test:e2e`
+failed there instead: `getByRole('navigation', { name: 'Navegación
+principal' })` was not found within 10 seconds. One run at the branch's
+15th commit ("list every address the instance answers at in STOKY_URLS")
+and two at its 18th ("tell an idle timeout from the session limit in the
+warning"); the 18th's parent passed the suite in each of its runs that
+session. Repeated on its own (`--repeat-each`) at both commits, the spec
+never failed, and the test passed in every one of the nineteen full runs
+from the 19th commit to the 27th. Retries are off locally, so a run that
+hits it fails.
+
+What is not known is whether it belongs to the branch. The test reads a
+signed-in shell through the shared session from `session.setup.ts`, and the
+branch changed how that session is kept, so that is where to look first;
+but no run was traced while failing (four traced runs passed), and no
+record says whether it ever failed before the branch.
+
+**The fix** starts with a failing run under `--trace=retain-on-failure`: the
+trace says whether the offline navigation got the worker's page, the
+browser's own "no internet" page, or a page that went to `/login`.
 
 ---
 
@@ -4117,6 +4158,9 @@ which is short:
   OFFLINE-1 has the most specified fix (a client-side age gate) and SHOP-2 the
   smallest (LOC-1's lock); DB-1 and UPLOAD-1 each need a schema change, and
   DB-1 a data audit before it.
+- **TEST-10** — an intermittent browser test, seen only on the Better Auth
+  branch. Re-run before investigating, and keep the trace of the run that
+  fails: that is the one missing piece of evidence.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the three manual passes, T7, and
   Phase 8's done-when — the owner repeating their pass. The Phase 7 review

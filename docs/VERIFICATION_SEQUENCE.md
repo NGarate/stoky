@@ -1,6 +1,6 @@
 # Stoky Verification Sequence
 
-Updated: 2026-10-11
+Updated: 2026-10-16
 
 Use this as the source of truth for local and CI-style validation.
 
@@ -165,6 +165,20 @@ a pre-commit hook it did not write.
   browser deps, missing fixture data, or time constraints
 
 ## Current validation notes
+
+**2026-10-15, a long agent branch: the browser suite once, before the push.**
+On `feat/better-auth-2026-10-15` the owner decided that the browser suite is
+too slow to run for every commit that changes something visible. From its
+28th commit on, each commit ran `bun run lint`, `bun run typecheck`, the
+unit, component and integration tests its change touched, and `bun run
+build` when it touched dependencies, the route tree, the proxy or start-up;
+`bun run verify:ci` and the whole `bun run test:e2e` run once, on the
+finished branch, before it is pushed. A commit that changes something a
+spec asserts still changes the spec in the same commit; it just does not
+run it. The price is that a commit in the middle of such a branch is not
+proven to pass the browser suite on its own, only the branch's head is, so
+a revert of one of those commits wants the suite run again. `STATUS.md`
+says what was measured that way and what was not.
 
 Last measured 2026-08-19 at `70386ea`, before the move to bun, so each gate is
 recorded under the command that ran it at the time. See `docs/STATUS.md` for the

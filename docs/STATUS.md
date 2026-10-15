@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-12
+Updated: 2026-10-16
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,59 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-10-16 the Better Auth branch, before its full run:**
+`feat/better-auth-2026-10-15` replaces next-auth with Better Auth in 35
+commits on top of the security branch, and
+`docs/SECURITY_REVIEW.md` (*The Better Auth migration*) maps every finding
+to the commit that answered it. How far it is measured, said plainly,
+because two stages were measured differently:
+
+- **The first 27 commits**, through "let an owner end every session in the
+  household", each ran `bun run verify:ci`, and all but six the whole
+  browser suite too, as each commit's message records (the six — the 5th,
+  10th, 12th, 13th, 16th and 17th — render nothing, and say so). At the
+  27th: `verify:ci` exit 0 in
+  144 seconds — lint 0 warnings, 96 contrast checks, 1,660 unit tests in 126
+  files, 989 component tests in 79, 779 integration tests in 51, the build
+  generating 37 static pages — and `bun run test:e2e` **202 passed in 3.6
+  minutes**. Across those commits' full runs the service worker's offline
+  spec failed three times and passed nineteen in a row after them
+  (`ISSUES.md` TEST-10).
+- **The last eight**, two-step verification and passkeys, ran lint,
+  typecheck, the tests each change touched, and the build when it touched
+  dependencies or the route tree, by the owner's decision of 2026-10-15: the
+  browser suite is too slow to run per commit, so it runs once, in full,
+  with `verify:ci`, on the finished branch before it is pushed. That run
+  comes after this paragraph was written, so its numbers are in the pull
+  request and not here; the gate table below still holds the security
+  branch's. **Until it has run, three browser tests have never run** — the
+  two in `two-factor.spec.ts` and the one in `passkeys.spec.ts` — and the
+  whole suite has never run with `STOKY_URLS` listing `localhost` first.
+- **Measured on the branch head itself, 2026-10-16** (host Bun 1.4.3):
+  `bun run lint` 0 warnings and 0 errors over 558 files and 101 rules;
+  `bun run typecheck` clean; `bun audit --audit-level moderate` no
+  vulnerabilities in 598 packages. The production image,
+  `git archive HEAD | docker build --target production -`, builds with no
+  secret in its build environment — the Dockerfile names none, and Better
+  Auth is built on first use, not at import — in 1 minute 36 with only its
+  system-package layers cached: 569 MB, runs as `bun` (uid 1000),
+  `bun --version` 1.4.3, no `prisma/seed.ts`, `next build` generating 37
+  static pages and listing 8 Partial Prerender routes. **The release bundle, smoked** from `deploy/`
+  with that image on a throwaway Compose project (Traefik on loopback
+  ports, removed afterwards): an alpha.3-style `.env` holding
+  `NEXTAUTH_SECRET` came out of `install.sh` with the line renamed
+  `STOKY_SECRET` and its value unchanged; all four services healthy, with
+  no `[auth]` or `[config]` line in the app's log; `/api/health` 200; the
+  first registration 200. A sign-in through Traefik at `https://DOMAIN` set
+  `__Secure-stoky.session_token` (`HttpOnly`, `Secure`, `SameSite=Lax`, no
+  `Max-Age`), with no `set-auth-token` header and no `token` in the body,
+  and `get-session` answered the account with `persistent: false`; with
+  the box ticked the cookie carried `Max-Age=7776000`. The same sign-in
+  from an unlisted origin got 403 `INVALID_ORIGIN`. The passkey sign-in
+  options answered 200 there, an https domain being where the plugin is
+  registered, while `/two-factor/get-totp-uri`, `/sign-up/email` and
+  `/list-sessions` answered 404.
 
 **2026-10-12 the security branch, finished:** `fix/security-hardening-2026-10-12`
 carries the 2026-10-12 review's fixes, and fixes for 19 of the 20 defects its
@@ -369,7 +422,7 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 errors, 0 warnings — 493 files, 101 rules (2026-10-12, security branch head) |
+| Lint | `bun run lint` | ✅ 0 errors, 0 warnings — 558 files, 101 rules (2026-10-16, Better Auth branch head; 493 files at the security branch head) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 118 links against 35 routes, none broken (2026-10-12, security branch head) |
@@ -380,8 +433,8 @@ binary you happen to be holding.
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head; the Better Auth branch's specs, the `passkeys` project among them, are measured with the branch), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 563 packages (2026-10-12, security branch head) |
+| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head; on the Better Auth branch 202 pass in 3.6 minutes at its 27th commit, and its finished head, with `two-factor.spec.ts` and the `passkeys` project, is measured by the run before its push — *Gate status* above), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 598 packages (2026-10-16, Better Auth branch head; 563 at the security branch head, 2026-10-12) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the

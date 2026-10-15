@@ -2,7 +2,9 @@
 
 Reviewed: 2026-08-26, at `8bb2547`. Reviewed again 2026-10-12, at `e9d62eb`:
 [*The 2026-10-12 review*](#the-2026-10-12-review), near the end, records that
-review, what became of each finding, and what it accepted.
+review, what became of each finding, and what it accepted. The move from
+next-auth to Better Auth on 2026-10-15 is recorded after it, in
+[*The Better Auth migration*](#the-better-auth-migration-2026-10-15).
 
 Phase 7's deliverable (`REDESIGN_PLAN.md` §9). Its *done when* is that each of
 the eight scope items has **either a passing test or a written finding with an
@@ -1248,7 +1250,10 @@ Valkey `noeviction`, counting only failed sign-ins, comparing `Origin` with
 lists each accepted risk with its reasoning and what would change it: the
 nineteen the remediation plan accepted, and two the final review added (an
 anonymous client can still rotate the log out, and TEST-9's untested guard).
-None lets one household read or change another's data.
+None lets one household read or change another's data. The Better Auth
+migration (below) closed one of the nineteen, per-session sign-out (PROGRESS
+D135, D143), which leaves twenty accepted here; what the migration accepted
+of its own is listed with it.
 
 ### Owner actions
 
@@ -1272,6 +1277,222 @@ owner's; `docs/STATUS.md` records which are still pending, as measured.
   Valkey (a verifier registered `a@b.co` there, and agents may not write to
   it); and, after the squash merge, running `bun scripts/github-settings.ts
   check` and the new workflows once, the first `rescan.yml` among them.
+
+---
+
+## The Better Auth migration (2026-10-15)
+
+Done on branch `feat/better-auth-2026-10-15`, stacked on the 2026-10-12
+review's branch: next-auth 5.0.0-beta.32 replaced by Better Auth 1.7.7, with
+sessions as database rows, two-step verification, passkeys and per-device
+session control (PROGRESS D134–D151). Its findings came from four places,
+and each was checked against the code, or measured, before a commit
+answered it:
+
+- **The spike** (branch `spike/better-auth-2026-10-15`, not for merging),
+  which ran Better Auth beside next-auth against a production build on a
+  scratch database. It found the schema it refuses, the native client's
+  403, the bearer header past `HttpOnly`, single-use TOTP missing, the
+  backup codes' storage and the missing session limits.
+- **Better Auth 1.7.7's own source**, read for the swap: the environment
+  variables it obeys over its options, the endpoints it mounts, how it
+  defaults `rememberMe` and never clears `dont_remember`, and what
+  `/two-factor/get-totp-uri` and `disableSession` do.
+- **Three independent reviews of the migration plan** (*plan review* below).
+  Every claim in them was checked against the code and the installed
+  package before the plan changed for it; those that did not hold were
+  rejected in the plan, not here.
+- **The owner's answers of 2026-10-15** to the plan's eleven open questions
+  (below).
+
+As with the 2026-10-12 review, this reads code and runs suites and probes —
+here against the real auth route, a software WebAuthn authenticator and the
+release bundle — and is not a penetration test of a deployed instance.
+
+Commits are named by hash and subject, as in the 2026-10-12 record and for
+the same reason (D132): the squash merge replaces them, the pull request
+keeps them, and `git fetch origin pull/<number>/head` makes them resolve
+again. This record's own commit is not named (D113).
+`unit/ledger-shas.test.ts` checks that every hash between the markers below
+is a commit of this branch while the branch exists.
+
+<!-- branch-commits feat/better-auth-2026-10-15 since f8090fe -->
+
+### What the migration found, and which commit answered it
+
+#### Two-step verification
+
+| # | Finding | Found by | Answered by |
+|---|---|---|---|
+| 1 | One TOTP code accepted as often as it is sent inside its window (ASVS 5.0.0 6.5.1; `ISSUES.md` AUTH-5) | spike | `1b0f250` add TOTP two-step verification with single-use codes (D148): a before-hook claims the code's time step in the `UPDATE` that checks it |
+| 2 | A time-of-check gap: the hook's clock and Better Auth's can straddle a step boundary and let a code through unclaimed | plan review | `1b0f250`: a code matching no step is replaced with one no step produces, so Better Auth refuses it and counts it; a test holds the row locked while two requests with one code reach the claim, and one gets in |
+| 3 | Backup codes of about 60 bits, kept encrypted with the signing secret (6.5.2; AUTH-6) | spike | `4df6c3b` store two-factor backup codes as hashes (D149): 120 bits, SHA-256. Enrolment opened only after it, in `6cb7597` set up two-step verification in settings, so no commit hands out a weak code |
+| 4 | An authenticator whose secret no longer decrypts — the signing secret was rotated — would fail every code from then on, with nothing to say why | plan review | `1b0f250`: `TWO_FACTOR_UNREADABLE`, not counted, logged `auth.twofactor.unreadable`; `ab5fd7e` ask for the authenticator code when signing in says so; the way back is a hashed backup code (`4df6c3b`) or an admin (#8) |
+| 5 | `/two-factor/get-totp-uri` hands the decrypted secret to whoever holds the session, with no password | plan review | Never allowlisted: `6cb7597` opens `enable`, `disable` and `generate-backup-codes` and not it, and `integration/auth.surface.test.ts` tries it |
+| 6 | `disableSession` on a backup code spends the code without creating a session; `trustDevice` skips the code on that browser for a month | plan review | `1b0f250`: both verify steps forward `code` alone |
+| 7 | A challenge in progress outlives a password reset, a removal and every "end these sessions" — whoever holds it has the password | plan review | `1b0f250`: `endSessions` deletes the account's challenges, and a password change does too |
+| 8 | A lost authenticator with no backup code left is recoverable only by the operator's SQL | owner question | `ec337af` let an admin remove a member's two-step verification (D150), after the admin's own password, ending all of the member's sessions |
+| 9 | A challenged password step leaves its charge standing, and the code step has no account to charge | plan review | `1b0f250`: the budget settles at the password step; the code is charged per address, and counts as a sign-in only with the challenge cookie and a session in the answer |
+
+#### Session lifetime and count
+
+| # | Finding | Found by | Answered by |
+|---|---|---|---|
+| 10 | No idle timeout under a day and no absolute lifetime for a session that was not remembered | spike | `6d72999` replace next-auth with Better Auth (D135): fifteen idle minutes, a day from the password at most |
+| 11 | Background polling would keep a session alive: any read that slides the row defeats the idle limit | plan review | `6d72999`: only the keep-alive's `auth.session` slides a browser session; a database hook drops `expiresAt` from every other update to one |
+| 12 | Better Auth re-creates the session at a password change and at 2FA on or off, resetting `createdAt` — the cap would restart and the kind be lost | plan review | `6d72999`: `authenticatedAt` is the cap's clock and is inherited; `07ff646` inherits the kind; `5a72c10` keep this device signed in when its password changes tests both kinds and the device |
+| 13 | Better Auth reads an omitted `rememberMe` as true, and never clears `dont_remember`, so a ticked box after an unticked sign-in was ignored | Better Auth's source, plan review | `07ff646` keep a person signed in when they ask to (D141): only a literal `true` counts, and a ticked sign-in expires the stale cookie |
+| 14 | A sign-in leaves the session the browser presented alive, and expired rows forever (ASVS 5.0.0 7.2.4) | plan | `0454989` tidy a person's stale sessions at sign-in (D139) |
+| 15 | No limit on concurrent sessions (7.1.2) | owner question | `48d45b6` cap each account at ten concurrent sessions (D140) |
+| 16 | The warning before a session ends offered "Seguir conectado" when nothing could extend the deadline (WCAG 2.2.6) | plan | `6a4c1f1` tell an idle timeout from the session limit in the warning |
+| 17 | Prisma reads `{ id: { not: undefined } }` as no condition, so "end the other sessions" without a session id ends every one | plan review | `86c2392` let a person end their own sessions after re-entering the password: the session id is required and `endSessions` refuses the filter; `0454989` builds the tidy's `OR` without the clause |
+
+#### Tokens and native clients
+
+| # | Finding | Found by | Answered by |
+|---|---|---|---|
+| 18 | The bearer plugin's `set-auth-token` on every answer that sets the session cookie, readable by script: a long-lived credential past `HttpOnly` | spike | `6d72999`: the route drops it, and its `Access-Control-Expose-Headers` entry, from any answer to a request that carried a cookie; `f010959` sign native clients in with bearer tokens (D142) keeps that, with signed tokens only |
+| 19 | Native clients refused 403 on sign-in and every bearer POST: the proxy wrote a device cookie into requests that carried none | spike | `5688e51` never mint a device id for an auth API or bearer request (AUTH-4) |
+| 20 | The session token in JSON answers, and `/list-sessions` answering every session's token | spike, Better Auth's source | `6d72999`: `token` and `session.token` dropped from every body, `/list-sessions` closed; `86c2392`'s own list names its columns |
+| 21 | The user agent alone cannot tell a household's devices apart in a session list | plan review | `86c2392`: `Session.deviceId`, never returned, joined to the screen the device chose; `f8e8ff8` show your devices in security settings |
+
+#### Configuration and the endpoint surface
+
+| # | Finding | Found by | Answered by |
+|---|---|---|---|
+| 22 | Better Auth refuses to serve while `User` has a required column it never writes (`passwordHash`; AUTH-2) | spike | `835d08f` route every password hash through one credentials module; `b570f51` move password hashes into a credential Account row (D134) |
+| 23 | `BETTER_AUTH_SECRET(S)` and `AUTH_SECRET` used over the options' secret; `BETTER_AUTH_TRUSTED_ORIGINS` and `BETTER_AUTH_TELEMETRY` obeyed whatever the options say (AUTH-3) | Better Auth's source, plan review | `6d72999`: the secret named as both `secret` and `secrets`; `57f5ae3` refuse to start on settings Better Auth would misread (D136) |
+| 24 | `betterAuth()` starts its initialisation and schema check at import, and `next build` runs with no secret | plan | `6d72999`: built on first use; the production image builds from the tracked files with no secret (measured in `docs/STATUS.md`) |
+| 25 | About forty endpoints mounted, and whatever a later version adds | plan | `6d72999`: a method-and-path allowlist, 404 before Better Auth, each POST rebuilt from the keys its endpoint needs, a sign-in charged before its JSON is believed; seventeen answer at the end of the branch |
+| 26 | Environment names that libraries read on their own (`NEXTAUTH_*`, `AUTH_*`, `BETTER_AUTH_*`) | owner question | `3069482` read the signing secret from STOKY_SECRET (D137); `6fd9ab6` list every address the instance answers at in STOKY_URLS (D138) |
+| 27 | One trusted origin: a plain-HTTP LAN install reached at several addresses gets 403 | plan | `6fd9ab6`: every listed origin is trusted; an https first entry beside non-loopback plain HTTP is refused at start-up, since its `Secure` cookie would loop the others back to the login page |
+
+#### Passkeys
+
+| # | Finding | Found by | Answered by |
+|---|---|---|---|
+| 28 | A relying party is one host, and accepting several origins would let a signature made for one address pass at another | plan | `b692fdd` sign in with passkeys on the server (D151): `rpID` and `origin` from the first `STOKY_URLS` entry only; `0472d47` manage passkeys in settings says which address works; `55d5b05` offer passkey sign-in on the login page offers it there only |
+| 29 | Better Auth's `freshAge` counts from the row's creation, which a re-create resets and a remembered row's age defeats: no stand-in for a re-entered password | plan | `6d72999` (`freshAge` 0); `b692fdd`: a single-use step-up bound to the session, written by `auth.confirmPassword` |
+| 30 | User verification only "preferred" at sign-in, and checked nowhere: a key without a PIN is one factor | Better Auth's source | `b692fdd`: `required`, and both ceremonies refuse an answer without the flag |
+| 31 | `Permissions-Policy` denied `publickey-credentials-create`, so no browser could register one | the server half of passkeys, reading the headers | `0472d47`: both passkey features `(self)` |
+
+#### Re-entering the password
+
+| # | Finding | Found by | Answered by |
+|---|---|---|---|
+| 32 | A rotated cookie never reaches the browser: tRPC's streaming link sends the headers before the mutation sets it — measured, the device was signed out by its own password change | plan review | `5a72c10`: `auth.changePassword` goes through a link that does not stream |
+| 33 | A stolen session could spend the re-entry budget the owner needs to end it | plan review | `86c2392`: five per session, refunded on a right password, and twenty per account |
+| 34 | `household.revokeMemberSessions` accepted the caller's own id, ending an admin's own sessions with no password | building the admin's screen | `6304f23` let an admin end a member's sessions (D145) |
+| 35 | Removing a member left their sessions alive (ASVS 5.0.0 7.4.2) | plan | `304efb3` end a member's sessions when they are removed (D146) |
+| 36 | No way to sign a whole household out after a compromise (7.4.5) | plan | `77d8811` let an owner end every session in the household (D147), behind the owner's password |
+
+#### Commits no finding named
+
+Preparation the swap rested on: `68846e7` own the session type the app
+reads, `231ccde` take sign-in throttling out of the credentials provider,
+`f9b90a6` record each successful sign-in (ASVS 5.0.0 16.3.1), `4adfb27` put
+the browser's auth calls behind one module, `2c91b88` render the login form
+from a server page, `c1c1fc5` add a Checkbox primitive and `3a46dd8` add the
+session and verification tables. After it: `771bb29` drop the
+sessions-valid-from column and `1e67210` move the password form to security
+settings.
+
+<!-- /branch-commits -->
+
+### The owner's decisions of 2026-10-15
+
+The plan's eleven open questions, answered by the owner, and recorded in
+PROGRESS where each was built:
+
+- **The kitchen's shared account may enrol** two-step verification and
+  passkeys (D148, D151); the add dialog still advises against a passkey on a
+  device other people use.
+- **A household admin may remove a member's two-step verification**, after
+  the admin's own password (D150).
+- **Ten sessions per account**, the least recently used ended by the
+  eleventh sign-in (D140).
+- **"Mantener la sesión iniciada" unticked by default**, with a hint to tick
+  it on home devices used every day, the kitchen screen included (D141).
+- **No password for an admin ending a member's sessions** (D145); the
+  owner's household-wide end asks for it (D147).
+- **No two-step verification on native clients yet** (D142).
+- **TOTP's ±1-step window** kept, an ASVS 5.0.0 6.5.5 deviation (D148), and
+  **re-entry without token rotation**, a 7.2.4 deviation (D143).
+- **Better Auth's versioned secrets not adopted**: the condition was "only
+  if trivial", and keeping old enrolments readable needs a second variable,
+  operator-chosen version numbers and every retired value kept until each
+  enrolment is redone. Rotation's consequences are documented instead; the
+  stored secrets already carry the `$ba$1$` envelope, so adopting versions
+  later is additive.
+- **`uqr` 0.1.3** draws the QR code in the browser (D148).
+- **`STOKY_SECRET` and `STOKY_URLS`** replace `NEXTAUTH_SECRET` and
+  `NEXTAUTH_URL`; the old names are read, with a warning, until a later
+  release (D137, D138).
+
+### What the migration accepted
+
+`SECURITY.md`, *Authentication*, states each of these where it applies, with
+the reason; none lets one household read or change another's data.
+
+- A TOTP code is good for its step and the one either side, up to ninety
+  seconds (ASVS 5.0.0 6.5.5); single use is what stops a replay inside it.
+- Re-entering the password confirms one action and does not rotate the
+  session token (7.2.4).
+- A remembered session asks for the password once a year, against NIST SP
+  800-63B-4's thirty days for a password alone; a browser session meets
+  AAL2's figures.
+- A second factor is each person's choice, not required (6.3.3).
+- An account with two-step verification signs in from a browser only.
+- Whoever holds an admin's session can sign the household's non-owners out
+  without a password; they can sign straight back in.
+- Rotating `STOKY_SECRET` signs everybody out, changes every account tag in
+  the security log and makes every authenticator unreadable; passwords,
+  passkeys and backup codes survive it.
+- A password change is three statements of Better Auth's, not one
+  transaction.
+- "Least recently used" is as coarse as a day for remembered sessions,
+  because no row is written on every request.
+- A plain-HTTP LAN install, or one at an IP address, has no passkeys
+  (added to D84's entry in *What the 2026-10-12 review accepted*).
+
+### What an operator meets on upgrading
+
+- **Everybody signs in once**, and **each kitchen tablet should be signed in
+  with "Mantener la sesión iniciada" ticked**, or it asks for the password
+  after fifteen idle minutes
+  ([Install](INSTALL.md#upgrade-and-rollback)).
+- **`NEXTAUTH_SECRET` becomes `STOKY_SECRET`**: the new `install.sh` renames
+  the line in place and keeps its value, and the old name is read with a
+  `[config]` warning until it is renamed. **`NEXTAUTH_URL` becomes
+  `STOKY_URLS`**, a list; the bundle sets it from `DOMAIN`
+  ([Install](INSTALL.md#2-configure-env),
+  [Upgrade](INSTALL.md#upgrade-and-rollback)).
+- **Rolling back to v0.1.0-alpha.3 needs the pre-upgrade dump**: the
+  password hashes move to a new table
+  ([Install](INSTALL.md#upgrade-and-rollback)).
+- **Rotating the secret voids every authenticator enrolment**
+  ([Install](INSTALL.md#rotating-stoky_secret)); a lost one is recovered with
+  a backup code, by an admin, or for a sole owner by the operator
+  ([Install](INSTALL.md#a-lost-authenticator)).
+- **Passkeys need https on a domain name, and work only at the first
+  `STOKY_URLS` address**; changing that address orphans every passkey
+  ([Install](INSTALL.md#2-configure-env)).
+
+### Open for the owner
+
+None blocks the merge.
+
+- **Compose no longer refuses an empty secret** (`${NEXTAUTH_SECRET:?}` is
+  gone): the line passes the value through so the legacy name and its
+  warning work, and the app refuses an empty secret at start-up instead.
+  Acceptable?
+- **Which release stops reading `NEXTAUTH_SECRET` and `NEXTAUTH_URL`.** The
+  documents say "a later release", without a date.
+- **Should removing a member's two-step verification also remove their
+  passkeys?** It does not (D150, D151): they are another way in, with their
+  own removal.
+- **The bundle lists only `https://DOMAIN`**, the one host Traefik routes;
+  more addresses there would need Traefik routing as well as `STOKY_URLS`.
 
 ---
 

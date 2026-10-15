@@ -2427,15 +2427,12 @@ own.
   temporary one that a stranger can renew every fifteen minutes against a
   browser that has never signed in to the account (see *Rate limiting* above
   for the known-device budget that keeps it off the rest).
-- No email verification, no two-factor authentication,
-  and no self-service password reset: there is no email to send a link to. A
-  forgotten password is set again by a household admin; an owner's by another
-  owner or, for a sole owner, by the operator in the database.
-- No way to end one other device's session by itself. Signing out ends this
-  device's session row, so a copy of its cookie is refused too (PROGRESS
-  D135); ending a session elsewhere still means ending all of the account's
-  (*Authentication* above). Sessions are rows now, so listing them and ending
-  one is a screen to build, not a design to find.
+- No email verification and no self-service password reset: there is no
+  email to send a link to. A forgotten password is set again by a household
+  admin; an owner's by another owner or, for a sole owner, by the operator in
+  the database. (Two-step verification and passkeys exist since 2026-10-15,
+  PROGRESS D148 and D151, and ending one other device's session since D143:
+  *Authentication* above.)
 - No secret scanning or SAST of the source in CI. `ci.yml` and the weekly
   `rescan.yml` are the only workflows; Trivy scans images, and zizmor the
   workflows, not the source. Secret scanning, push protection and CodeQL are
