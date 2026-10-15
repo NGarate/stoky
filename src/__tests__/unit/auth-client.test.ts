@@ -12,6 +12,7 @@ import {
   turnOffTwoFactor,
   secondStepResultFrom,
   signInResultFrom,
+  signInWithPasskey,
   signInWithPassword,
   verifyBackupCode,
   verifyTotp,
@@ -472,6 +473,130 @@ describe("passkeys", () => {
       );
       expect((refusal as AccountChangeRefusedError).code, code).toBe(expected);
     }
+  });
+});
+
+describe("signing in with a passkey", () => {
+  function answeringInTurn(...answers: [number, unknown, Record<string, string>?][]) {
+    let call = 0;
+    return mock(async (_url: string, _init: RequestInit) => {
+      const [status, body, headers] = answers[Math.min(call++, answers.length - 1)];
+      return Response.json(body, { status, headers });
+    });
+  }
+  const OPTIONS = { challenge: "c", rpId: "localhost", userVerification: "required" };
+  const ANSWER = {
+    id: "cred",
+    rawId: "cred",
+    response: { clientDataJSON: "x", authenticatorData: "y", signature: "z" },
+    type: "public-key",
+    clientExtensionResults: {},
+  };
+
+  it("asks for a challenge, the browser for an answer, then the server to check it", async () => {
+    const fetcher = answeringInTurn([200, OPTIONS], [200, { session: {}, user: {} }]);
+    const get = mock(async (_options: unknown) => ANSWER);
+
+    const result = await signInWithPasskey(
+      { rememberMe: false },
+      { fetcher: fetcher as unknown as typeof fetch, get },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(get.mock.calls[0][0]).toEqual(OPTIONS);
+    const [optionsUrl, optionsInit] = fetcher.mock.calls[0];
+    expect(optionsUrl).toBe("/api/auth/passkey/generate-authenticate-options");
+    expect(optionsInit.method).toBe("GET");
+    expect(optionsInit.cache).toBe("no-store");
+    const [verifyUrl, verifyInit] = fetcher.mock.calls[1];
+    expect(verifyUrl).toBe("/api/auth/passkey/verify-authentication");
+    expect(verifyInit.method).toBe("POST");
+    // The answer without its extension results, and the box: nothing else
+    // reaches the route, which forwards nothing else either.
+    expect(JSON.parse(String(verifyInit.body))).toEqual({
+      response: {
+        id: "cred",
+        rawId: "cred",
+        response: { clientDataJSON: "x", authenticatorData: "y", signature: "z" },
+        type: "public-key",
+      },
+      rememberMe: false,
+    });
+  });
+
+  it("sends the ticked box as a literal true", async () => {
+    const fetcher = answeringInTurn([200, OPTIONS], [200, {}]);
+    await signInWithPasskey(
+      { rememberMe: true },
+      { fetcher: fetcher as unknown as typeof fetch, get: async () => ANSWER },
+    );
+
+    expect(JSON.parse(String(fetcher.mock.calls[1][1].body)).rememberMe).toBe(true);
+  });
+
+  it("asks the browser for nothing when the challenge is refused, and says how long to wait", async () => {
+    const fetcher = answeringInTurn([429, { code: "RATE_LIMITED" }, { "retry-after": "120" }]);
+    const get = mock(async () => ANSWER);
+
+    const result = await signInWithPasskey(
+      { rememberMe: false },
+      { fetcher: fetcher as unknown as typeof fetch, get },
+    );
+
+    expect(result).toEqual({ ok: false, code: "rate_limited", retryAfterSeconds: 120 });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("tells a dismissed prompt from a browser that failed, and sends nothing after either", async () => {
+    const dismissed = Object.assign(new Error("The operation either timed out or was not allowed."), {
+      code: "ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY",
+      cause: Object.assign(new Error("denied"), { name: "NotAllowedError" }),
+    });
+    for (const [thrown, expected] of [
+      [dismissed, "passkey_cancelled"],
+      [new Error("SecurityError: the RP ID is invalid"), "passkey_failed"],
+    ] as const) {
+      const fetcher = answeringInTurn([200, OPTIONS]);
+      const result = await signInWithPasskey(
+        { rememberMe: false },
+        {
+          fetcher: fetcher as unknown as typeof fetch,
+          get: async () => {
+            throw thrown;
+          },
+        },
+      );
+      expect(result).toEqual({ ok: false, code: expected });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("words the server's refusal of the answer, and the form has a sentence for each", () => {
+    const cases = [
+      [400, "PASSKEY_NOT_FOUND", "passkey_not_found", "passkeyNotFound"],
+      [401, "USER_VERIFICATION_REQUIRED", "passkey_not_verified", "passkeyNotVerified"],
+      [400, "AUTHENTICATION_FAILED", "passkey_failed", "passkeyFailed"],
+      [400, "CHALLENGE_NOT_FOUND", "passkey_failed", "passkeyFailed"],
+      [403, "INVALID_ORIGIN", "auth_unavailable", "authUnavailable"],
+      [400, "SOMETHING_NEW", "unknown", "loginError"],
+    ] as const;
+    return Promise.all(
+      cases.map(async ([status, code, expected, key]) => {
+        const result = await signInWithPasskey(
+          { rememberMe: false },
+          {
+            fetcher: answeringInTurn([200, OPTIONS], [status, { code }]) as unknown as typeof fetch,
+            get: async () => ANSWER,
+          },
+        );
+        expect(result, code).toEqual({ ok: false, code: expected });
+        expect(getAuthErrorKey(undefined, "login", expected), code).toBe(key);
+      }),
+    );
+  });
+
+  it("words a dismissed prompt as the person's no, not as a failure", () => {
+    expect(getAuthErrorKey(undefined, "login", "passkey_cancelled")).toBe("passkeyCancelled");
   });
 });
 

@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
-import { signInWithPassword, verifyBackupCode, verifyTotp } from "@/lib/auth/client";
+import { useWebAuthnSupport } from "@/components/session/webauthn-support";
+import {
+  signInWithPasskey,
+  signInWithPassword,
+  verifyBackupCode,
+  verifyTotp,
+} from "@/lib/auth/client";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import type { FormEvent, JSX } from "react";
 import type { AuthErrorKey } from "@/lib/auth/error-messages";
@@ -17,9 +23,9 @@ import type { AuthErrorKey } from "@/lib/auth/error-messages";
  * The sign-in form: the whole of `/login` but for the shell guard beside it.
  *
  * It was the page itself, as `RegisterForm` was, until the page needed to be a
- * server component: the server is what will know whether this host can offer
- * a passkey, and a client component cannot ask it before it renders. The form
- * is unchanged by the move.
+ * server component: the server is what knows whether this host can offer a
+ * passkey (`passkeyOffered`), and a client component cannot ask it before it
+ * renders.
  *
  * **"Mantener la sesión iniciada" starts unticked** (D141): a browser session
  * — fifteen idle minutes, a day at most — is the default anybody gets without
@@ -45,14 +51,33 @@ import type { AuthErrorKey } from "@/lib/auth/error-messages";
  *   address still filled in and the box as it was ticked, as "Volver" does.
  * - An authenticator secret the server can no longer read keeps the form on
  *   the step, and the sentence points at the backup-code button beside it.
+ *
+ * **"Iniciar sesión con una llave de acceso"** (D151) sits after the submit,
+ * as the other way in rather than the first: every account has a password,
+ * few have a passkey. It is offered only where one can work, which two
+ * parties decide:
+ *
+ * - the server (`passkeyOffered`): the page was served at the first
+ *   `STOKY_URLS` address, the only one a passkey belongs to
+ *   (`passkeyOfferedAt`). Anywhere else nothing is said — a LAN address
+ *   signs in with the password, and a sentence about passkeys on every
+ *   sign-in there would be noise about a feature it cannot have;
+ * - the browser (`useWebAuthnSupport`): a secure context with WebAuthn. At
+ *   the right address in a browser that cannot, one muted sentence says so,
+ *   because the person may well have a passkey and wonder where it went.
+ *
+ * A `type="button"` inside the form, so Enter in the password field still
+ * submits the password. It reads the same "Mantener la sesión iniciada" box,
+ * and never leads to the code step: the passkey is already the second thing.
  */
 type Step = "password" | "totp" | "backup";
 
-export function LoginForm(): JSX.Element {
+export function LoginForm({ passkeyOffered = false }: { passkeyOffered?: boolean }): JSX.Element {
   const t = useTranslations("auth");
   const router = useRouter();
   const [errorKey, setErrorKey] = useState<AuthErrorKey | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAskingPasskey, setIsAskingPasskey] = useState(false);
   const [isNavigating, startTransition] = useTransition();
   const [step, setStep] = useState<Step>("password");
   // Kept so that coming back from a code step does not ask for it again.
@@ -64,8 +89,10 @@ export function LoginForm(): JSX.Element {
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const passwordField = useRef<HTMLInputElement>(null);
   const leftPassword = useRef(false);
+  const form = useRef<HTMLFormElement>(null);
+  const webAuthn = useWebAuthnSupport();
 
-  const isBusy = isSubmitting || isNavigating;
+  const isBusy = isSubmitting || isAskingPasskey || isNavigating;
 
   useEffect(() => {
     if (step !== "password") {
@@ -76,6 +103,16 @@ export function LoginForm(): JSX.Element {
       passwordField.current?.focus();
     }
   }, [step]);
+
+  function goHome(): void {
+    startTransition(() => {
+      // `/`, not a screen: it is where this device's screen choice is
+      // honoured (`src/app/page.tsx`, Journey 8). Naming `/dashboard` here
+      // walked the kitchen tablet past the kitchen and never asked anyone.
+      router.replace("/");
+      router.refresh();
+    });
+  }
 
   function goTo(next: Step): void {
     setErrorKey(null);
@@ -129,14 +166,7 @@ export function LoginForm(): JSX.Element {
       const signedIn =
         step === "password" ? await submitPassword(formData) : await submitCode(formData);
       if (!signedIn) return;
-
-      startTransition(() => {
-        // `/`, not a screen: it is where this device's screen choice is
-        // honoured (`src/app/page.tsx`, Journey 8). Naming `/dashboard` here
-        // walked the kitchen tablet past the kitchen and never asked anyone.
-        router.replace("/");
-        router.refresh();
-      });
+      goHome();
     } catch (error: unknown) {
       setErrorKey(
         getAuthErrorKey(
@@ -147,6 +177,22 @@ export function LoginForm(): JSX.Element {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  /** The passkey button: the browser's prompt, then the server's check. */
+  function signInWithAPasskey(): void {
+    setErrorKey(null);
+    setIsAskingPasskey(true);
+    // The same box the password reads, as a person ticked it.
+    const rememberMe =
+      form.current !== null && new FormData(form.current).get("rememberMe") === "on";
+    signInWithPasskey({ rememberMe })
+      .then((result) => {
+        if (result.ok) goHome();
+        else setErrorKey(getAuthErrorKey(undefined, "login", result.code));
+      })
+      .catch(() => setErrorKey("loginError"))
+      .finally(() => setIsAskingPasskey(false));
   }
 
   return (
@@ -209,7 +255,7 @@ export function LoginForm(): JSX.Element {
                   put the password in the URL and therefore in history and
                   server logs. The JS path calls preventDefault and never
                   reaches it. */}
-              <form className="space-y-5" method="post" onSubmit={handleSubmit}>
+              <form className="space-y-5" method="post" onSubmit={handleSubmit} ref={form}>
                 {step === "password" ? (
                   <>
                     <div className="space-y-2">
@@ -351,13 +397,31 @@ export function LoginForm(): JSX.Element {
 
                 <Button className="w-full" disabled={isBusy} type="submit">
                   {step === "password"
-                    ? isBusy
+                    ? isSubmitting || isNavigating
                       ? t("loggingIn")
                       : t("login")
                     : isBusy
                       ? t("twoFactorVerifying")
                       : t("twoFactorVerify")}
                 </Button>
+
+                {step === "password" && passkeyOffered ? (
+                  webAuthn === "ready" ? (
+                    <Button
+                      className="w-full"
+                      disabled={isBusy}
+                      onClick={signInWithAPasskey}
+                      type="button"
+                      variant="outline"
+                    >
+                      {isAskingPasskey ? t("passkeySigningIn") : t("passkeySignIn")}
+                    </Button>
+                  ) : webAuthn === "pending" ? null : (
+                    <p className="text-sm text-muted-foreground">
+                      {t("passkeyUnavailableInsecure")}
+                    </p>
+                  )
+                ) : null}
 
                 {/* Back to the password, not out of the page: a person who
                     cannot reach their authenticator or their codes may want

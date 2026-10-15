@@ -1,5 +1,8 @@
+import { headers } from "next/headers";
+import { connection } from "next/server";
 import { LoginForm } from "@/components/session/LoginForm";
 import { ShellCacheGuard } from "@/components/session/ShellCacheGuard";
+import { passkeyOfferedAt } from "@/lib/auth/passkeys";
 import type { JSX } from "react";
 
 /**
@@ -7,13 +10,22 @@ import type { JSX } from "react";
  *
  * A server component rendering a client form, as `/register` is, so that the
  * server can hand the form what only it knows — whether a passkey can be
- * offered at the host the page was served from — without a round trip after
- * the first paint. It reads no runtime input yet, so unlike `/register` it
- * neither calls `connection()` nor opts out of the shell: there is nothing for
- * a prerender to bake in. The first commit that reads the request here must
- * add both.
+ * offered at the host the page was served from (`passkeyOfferedAt`, D151) —
+ * without a round trip after the first paint.
+ *
+ * `connection()` first, and no shell, for `/register`'s reason: both inputs
+ * belong to the request rather than the build. The `Host` header is the
+ * request's, and `STOKY_URLS` is the running container's environment, not
+ * the one `next build` saw — a prerender would bake in "no passkeys" for an
+ * install that has them, or the reverse.
  */
-export default function LoginPage(): JSX.Element {
+export const instant = false;
+
+export default async function LoginPage(): Promise<JSX.Element> {
+  await connection();
+
+  const passkeyOffered = passkeyOfferedAt((await headers()).get("host"));
+
   return (
     <>
       {/* Most sessions do not end at a sign-out control. An idle expiry, the
@@ -23,7 +35,7 @@ export default function LoginPage(): JSX.Element {
           itself (`useEndSession`); this is the cleanup every other ending
           gets. */}
       <ShellCacheGuard userId={null} />
-      <LoginForm />
+      <LoginForm passkeyOffered={passkeyOffered} />
     </>
   );
 }

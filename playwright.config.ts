@@ -22,6 +22,47 @@ const PORT = process.env.PLAYWRIGHT_PORT ?? "3100";
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 
 /**
+ * The same server, named `localhost`: the one address passkeys can be tested
+ * at (PROGRESS D151).
+ *
+ * A passkey belongs to a relying party named by a host, and **WebAuthn does
+ * not take an IP address as that name** (docs/TEST_SETUP.md), so at 127.0.0.1
+ * the server registers no passkey plugin at all
+ * (`src/lib/auth/passkeys.ts`) and the browser could not use one if it did.
+ * `localhost` is a name, and a secure context over plain http. So the
+ * server lists it first in `STOKY_URLS` (below), making it the canonical
+ * address and the relying party, and lists `BASE_URL` second, which keeps
+ * 127.0.0.1 a trusted origin for everything else in the suite. Only the
+ * canonical entry decides anything else — the cookie's `Secure` flag — and
+ * both are plain http, so the rest of the suite sees the server it always
+ * did.
+ *
+ * Only the `passkeys` project goes to this address, with Chromium told that
+ * `localhost` is 127.0.0.1: the IPv6-first resolution `BASE_URL`'s comment
+ * describes (STATUS trap 8) would otherwise come back for the one project
+ * that cannot avoid the name. The suite as a whole stays on 127.0.0.1.
+ */
+const PASSKEY_URL = `http://localhost:${PORT}`;
+
+/**
+ * Whether the server this run talks to is the one `webServer` starts, which
+ * is the only one known to list `PASSKEY_URL` first. A `PLAYWRIGHT_BASE_URL`
+ * naming anything else — another port, another machine — is a server whose
+ * `STOKY_URLS` this file does not set, so the passkeys project is left out
+ * rather than reported failing against a configuration it never had.
+ */
+const PASSKEYS_TESTABLE = (() => {
+  const base = new URL(BASE_URL);
+  return base.port === PORT && ["127.0.0.1", "localhost"].includes(base.hostname);
+})();
+
+/**
+ * The specs that sign in with a passkey, run by the `passkeys` project and
+ * by no other.
+ */
+const PASSKEY_SPECS = ["**/passkeys.spec.ts"];
+
+/**
  * The suites that sweep viewports and themes internally.
  *
  * Each of these already loops over three viewport tiers, and `accessibility`
@@ -228,8 +269,31 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: PASSKEY_SPECS,
       dependencies: ["setup"],
     },
+    /**
+     * Chromium at `localhost`, for the passkey specs alone (`PASSKEY_URL`).
+     * Chromium because its DevTools protocol has a virtual authenticator, the
+     * only way a browser here can hold a passkey; and one engine because
+     * whether a server accepts a passkey has one engine's answer. Its spec
+     * registers its own account, so it needs the seeded database and not the
+     * shared session.
+     */
+    ...(PASSKEYS_TESTABLE
+      ? [
+          {
+            name: "passkeys",
+            testMatch: PASSKEY_SPECS,
+            use: {
+              ...devices["Desktop Chrome"],
+              baseURL: PASSKEY_URL,
+              launchOptions: { args: ["--host-resolver-rules=MAP localhost 127.0.0.1"] },
+            },
+            dependencies: ["seed"],
+          },
+        ]
+      : []),
     {
       // WebKit at a real phone viewport: the layout specs only.
       name: "Mobile Safari",
@@ -240,14 +304,14 @@ export default defineConfig({
     {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
-      testIgnore: CHROMIUM_ONLY,
+      testIgnore: [...CHROMIUM_ONLY, ...PASSKEY_SPECS],
       grep: /@smoke/,
       dependencies: ["setup"],
     },
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
-      testIgnore: CHROMIUM_ONLY,
+      testIgnore: [...CHROMIUM_ONLY, ...PASSKEY_SPECS],
       grep: /@smoke/,
       dependencies: ["setup"],
     },
@@ -303,11 +367,15 @@ export default defineConfig({
       // value. Not a secret in any meaningful sense: it signs sessions for a
       // server that lives five minutes.
       STOKY_SECRET: "playwright-suite-secret-not-a-real-one-0001",
-      // Must list the address the tests use, first: Better Auth accepts a
-      // sign-in from a cookie-bearing browser only at a listed origin, and
-      // marks the cookie Secure only when the first is https
-      // (src/lib/auth/public-url.ts).
-      STOKY_URLS: BASE_URL,
+      // Must list every address the tests use: Better Auth accepts a sign-in
+      // from a cookie-bearing browser only at a listed origin
+      // (src/lib/auth/public-url.ts). `localhost` first, as the canonical
+      // address passkeys belong to (`PASSKEY_URL`); 127.0.0.1, where the rest
+      // of the suite runs, second. The first entry also decides the cookie's
+      // Secure flag, and both are plain http, so that is unchanged.
+      // A server the passkeys project is not run against keeps the one entry.
+      STOKY_URLS:
+        PASSKEYS_TESTABLE && PASSKEY_URL !== BASE_URL ? `${PASSKEY_URL},${BASE_URL}` : BASE_URL,
       // The auth rate limiter (ISSUES.md CRITICAL-4) counts per IP, and every
       // browser project reaches the dev server without a proxy in front of it,
       // so the whole matrix shares one bucket. At the shipped limits — 5

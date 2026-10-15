@@ -1,5 +1,5 @@
 import "../setup/matchers";
-import { describe, it, expect, afterEach, mock } from "bun:test";
+import { describe, it, expect, afterAll, afterEach, beforeEach, mock } from "bun:test";
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,7 +9,12 @@ import { resolve } from "../setup/tailwind";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { registerSchema } from "@/lib/validations/auth";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
-import type { PasswordCredentials, SecondStepResult, SignInResult } from "@/lib/auth/client";
+import type {
+  PasskeySignInResult,
+  PasswordCredentials,
+  SecondStepResult,
+  SignInResult,
+} from "@/lib/auth/client";
 
 /**
  * ISSUES.md I18N-8 — the two pages an unauthenticated visitor can reach, in
@@ -40,6 +45,12 @@ const secondStepResults: SecondStepResult[] = [];
 /** Every second step, in order: which kind of code and what was typed. */
 const secondStepCalls: { kind: "totp" | "backup"; code: string }[] = [];
 
+/** What the next passkey sign-in answers. Each test that changes it puts it back. */
+let passkeyResult: PasskeySignInResult = { ok: true };
+
+/** What every passkey sign-in was called with, in order. */
+const passkeyCalls: { rememberMe: boolean }[] = [];
+
 /**
  * The browser's one auth module, replaced **completely** (D50): the real
  * module is spread in, so `readSessionExpiry` and anything added later stay
@@ -61,6 +72,10 @@ mock.module("@/lib/auth/client", () => ({
   verifyBackupCode: async (code: string) => {
     secondStepCalls.push({ kind: "backup", code });
     return secondStepResults.shift() ?? { ok: true };
+  },
+  signInWithPasskey: async (choice: { rememberMe: boolean }) => {
+    passkeyCalls.push(choice);
+    return passkeyResult;
   },
 }));
 
@@ -117,9 +132,10 @@ function renderWithIntl(ui: ReactElement, options?: { locale?: TestLocale }) {
 }
 
 /**
- * What `/register` did on its way to choosing a screen, in order: `connection`
- * when it declared itself request-bound, `count` when it asked how many
- * accounts exist. Cleared by each test that reads it.
+ * What a page did on its way to rendering, in order: `connection` when it
+ * declared itself request-bound, `count` when `/register` asked how many
+ * accounts exist, `headers` when `/login` read the request's host. Cleared by
+ * each test that reads it.
  */
 const pageSteps: string[] = [];
 
@@ -136,6 +152,23 @@ mock.module("next/server", () => ({
   ...realServer,
   connection: async () => {
     pageSteps.push("connection");
+  },
+}));
+
+/** The `Host` the next `/login` request carries. Reset by each test that changes it. */
+let requestHost: string | null = "localhost:3000";
+
+/**
+ * `headers()` throws outside a request scope too. The real module is spread
+ * in (D50): `cookies` and `draftMode` stay real for any other suite in the
+ * process, and only the request's headers answer from `requestHost`.
+ */
+const realHeaders = await import("next/headers");
+mock.module("next/headers", () => ({
+  ...realHeaders,
+  headers: async () => {
+    pageSteps.push("headers");
+    return new Headers(requestHost === null ? {} : { host: requestHost });
   },
 }));
 
@@ -220,14 +253,15 @@ describe("the login page around the form", () => {
   // The page became a server component that renders `LoginForm`, and the
   // device's cleanup moved with it into the page. Every other test here drives
   // the form; this one is what notices the cleanup left behind.
-  it("empties the previous account's queries on arrival", () => {
+  it("empties the previous account's queries on arrival", async () => {
     const client = new QueryClient();
     const key = [["inventory", "getStockOverview"], { type: "query" }];
     client.setQueryData(key, { items: ["the previous account's milk"] });
+    const page = await LoginPage();
 
     renderWithIntlOnly(
       <QueryClientProvider client={client}>
-        <LoginPage />
+        {page}
       </QueryClientProvider>,
       { locale: "es" },
     );
@@ -1043,6 +1077,157 @@ describe("the second step of a sign-in", () => {
       await userEvent.click(screen.getByRole("button", { name: WORDS[locale].verify }));
 
       expect(await screen.findByText(words)).toBeInTheDocument();
+    });
+  }
+});
+
+/**
+ * "Iniciar sesión con una llave de acceso" (D151): offered where a passkey can
+ * work — the server says the page was served at the canonical address, the
+ * browser says it has WebAuthn in a secure context — and nowhere else.
+ */
+describe("the passkey offer on the login page", () => {
+  const CANONICAL = "https://casa.example";
+  const WORDS = {
+    signIn: "Iniciar sesión con una llave de acceso",
+    unavailable:
+      "Este navegador no puede usar llaves de acceso en esta página. Entra con tu contraseña.",
+    remember: "Mantener la sesión iniciada",
+  } as const;
+
+  // What `browserAt` changes, as it was: every component file shares one
+  // window, as `PasskeyManager.test.tsx` says for the same reason.
+  const STARTING_PROPERTIES = (["isSecureContext", "PublicKeyCredential"] as const).map(
+    (key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const,
+  );
+  const previousUrls = process.env.STOKY_URLS;
+
+  /** The browser's secure-context flag, and whether WebAuthn exists. */
+  function browser({ secure = true, webauthn = true } = {}): void {
+    Object.defineProperty(window, "isSecureContext", { value: secure, configurable: true });
+    Object.defineProperty(window, "PublicKeyCredential", {
+      value: webauthn ? function PublicKeyCredential() {} : undefined,
+      configurable: true,
+    });
+  }
+
+  beforeEach(() => {
+    process.env.STOKY_URLS = CANONICAL;
+    requestHost = "casa.example";
+    pageSteps.length = 0;
+    passkeyCalls.length = 0;
+    passkeyResult = { ok: true };
+    replaced.length = 0;
+    browser();
+  });
+
+  afterEach(() => {
+    requestHost = "localhost:3000";
+    passkeyResult = { ok: true };
+  });
+
+  afterAll(() => {
+    if (previousUrls === undefined) delete process.env.STOKY_URLS;
+    else process.env.STOKY_URLS = previousUrls;
+    for (const [key, descriptor] of STARTING_PROPERTIES) {
+      if (descriptor) Object.defineProperty(window, key, descriptor);
+      else delete (window as unknown as Record<string, unknown>)[key];
+    }
+  });
+
+  async function renderPage(): Promise<void> {
+    renderWithIntl(await LoginPage(), { locale: "es" });
+  }
+
+  it("is offered at the canonical address, after the submit, as a button that submits nothing", async () => {
+    await renderPage();
+
+    const passkey = screen.getByRole("button", { name: WORDS.signIn });
+    const submit = screen.getByRole("button", { name: "Iniciar sesión" });
+    // A button, so Enter in the password field still sends the password.
+    expect(passkey.getAttribute("type")).toBe("button");
+    // After it: the other way in, not the first.
+    expect(submit.compareDocumentPosition(passkey) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText(WORDS.unavailable)).toBeNull();
+  });
+
+  it("declares the page request-bound before it reads the host", async () => {
+    await renderPage();
+
+    // A prerender would otherwise have read `next build`'s environment and
+    // no request at all, and baked "no passkeys" into every install.
+    expect(pageSteps).toEqual(["connection", "headers"]);
+  });
+
+  it("says nothing about passkeys at any other address", async () => {
+    for (const host of ["192.168.1.10:3000", "casa.example:8443", null]) {
+      cleanup();
+      requestHost = host;
+      await renderPage();
+
+      expect(screen.queryByRole("button", { name: WORDS.signIn }), String(host)).toBeNull();
+      expect(screen.queryByText(WORDS.unavailable), String(host)).toBeNull();
+    }
+  });
+
+  it("says why not, instead of the button, on a page that is not a secure context", () => {
+    // WebAuthn present but the page insecure: the browser would refuse the
+    // ceremony, so the flag alone must not be enough.
+    browser({ secure: false, webauthn: true });
+    renderWithIntl(<LoginForm passkeyOffered />, { locale: "es" });
+
+    expect(screen.queryByRole("button", { name: WORDS.signIn })).toBeNull();
+    expect(screen.getByText(WORDS.unavailable)).toBeInTheDocument();
+  });
+
+  it("says why not in a browser without WebAuthn", () => {
+    browser({ secure: true, webauthn: false });
+    renderWithIntl(<LoginForm passkeyOffered />, { locale: "es" });
+
+    expect(screen.queryByRole("button", { name: WORDS.signIn })).toBeNull();
+    expect(screen.getByText(WORDS.unavailable)).toBeInTheDocument();
+  });
+
+  it("is named in English for an English reader", () => {
+    renderWithIntl(<LoginForm passkeyOffered />, { locale: "en" });
+
+    expect(screen.getByRole("button", { name: "Sign in with a passkey" })).toBeInTheDocument();
+  });
+
+  for (const tick of [false, true]) {
+    it(`signs in with the box ${tick ? "ticked" : "left alone"}, then goes to the landing decision`, async () => {
+      renderWithIntl(<LoginForm passkeyOffered />, { locale: "es" });
+      if (tick) await userEvent.click(screen.getByRole("checkbox", { name: WORDS.remember }));
+      await userEvent.click(screen.getByRole("button", { name: WORDS.signIn }));
+
+      await waitFor(() => expect(replaced).toEqual(["/"]));
+      expect(passkeyCalls).toEqual([{ rememberMe: tick }]);
+    });
+  }
+
+  for (const [code, words] of [
+    [
+      "passkey_cancelled",
+      "No se ha usado ninguna llave de acceso: se ha cancelado la petición, o este dispositivo no tiene ninguna para Stoky en esta dirección. Vuelve a intentarlo o entra con tu contraseña.",
+    ],
+    [
+      "passkey_not_found",
+      "Esta llave de acceso no está registrada en Stoky en esta dirección, o se ha quitado. Entra con tu contraseña.",
+    ],
+    [
+      "passkey_failed",
+      "No se ha podido entrar con la llave de acceso. Vuelve a intentarlo o entra con tu contraseña.",
+    ],
+  ] as const) {
+    it(`stays on the form and says why when refused: ${code}`, async () => {
+      passkeyResult = { ok: false, code };
+      renderWithIntl(<LoginForm passkeyOffered />, { locale: "es" });
+      await userEvent.click(screen.getByRole("button", { name: WORDS.signIn }));
+
+      expect(await screen.findByText(words)).toBeInTheDocument();
+      expect(replaced).toEqual([]);
+      // Usable again: the person may try once more or type the password.
+      expect(screen.getByRole("button", { name: WORDS.signIn })).toBeEnabled();
     });
   }
 });

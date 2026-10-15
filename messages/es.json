@@ -59,6 +59,10 @@
     "passkeyFailed": "No se ha podido entrar con la llave de acceso. Vuelve a intentarlo o entra con tu contraseña.",
     "passkeyNotFound": "Esta llave de acceso no está registrada en Stoky en esta dirección, o se ha quitado. Entra con tu contraseña.",
     "passkeyNotVerified": "La llave de acceso no ha comprobado que eres tú: el dispositivo debe pedirte la huella, la cara o su PIN. Actívalo en el dispositivo o entra con tu contraseña.",
+    "passkeySignIn": "Iniciar sesión con una llave de acceso",
+    "passkeySigningIn": "Esperando a la llave de acceso…",
+    "passkeyUnavailableInsecure": "Este navegador no puede usar llaves de acceso en esta página. Entra con tu contraseña.",
+    "passkeyCancelled": "No se ha usado ninguna llave de acceso: se ha cancelado la petición, o este dispositivo no tiene ninguna para Stoky en esta dirección. Vuelve a intentarlo o entra con tu contraseña.",
     "stepUpRequired": "Por seguridad, vuelve a escribir tu contraseña antes de cambiar tus llaves de acceso."
   },
   "navigation": {

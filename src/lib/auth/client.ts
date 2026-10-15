@@ -14,12 +14,13 @@ import type { DeadlineKind } from "@/lib/auth/session-policy";
  * endpoints (`src/server/http/auth-handler.ts`) and the three a sign-in needs
  * — the password, then an authenticator code or a backup code — are called
  * from here, which a client library would only wrap; so are the three that
- * change two-step verification from the settings screen, and the four that
- * list, add, rename and remove passkeys. Browser-only by construction: no
- * server import, nothing that reads a secret. The one import from the server
- * side is a type, erased at build, so the server's refusal codes and the ones
- * named here cannot drift apart. `src/__tests__/unit/auth-dynamic.test.ts`
- * keeps this the only browser code that calls the auth API.
+ * change two-step verification from the settings screen, the four that
+ * list, add, rename and remove passkeys, and the two a passkey sign-in is.
+ * Browser-only by construction: no server import, nothing that reads a
+ * secret. The one import from the server side is a type, erased at build, so
+ * the server's refusal codes and the ones named here cannot drift apart.
+ * `src/__tests__/unit/auth-dynamic.test.ts` keeps this the only browser code
+ * that calls the auth API.
  */
 
 /**
@@ -543,6 +544,113 @@ export async function renamePasskey(
  */
 export async function removePasskey(id: string, fetcher: typeof fetch = fetch): Promise<void> {
   await passkeyRequest("delete-passkey", { method: "POST", body: { id } }, fetcher);
+}
+
+/**
+ * Why a passkey sign-in was refused (D151), in words the login form
+ * translates (`getAuthErrorKey`):
+ *
+ * - `passkey_cancelled` — the browser's prompt was dismissed or timed out,
+ *   or it found no passkey for this address to offer. Never reaches the
+ *   server; the person said no, or had nothing to say yes with.
+ * - `passkey_not_found` — the server does not know the passkey: removed, or
+ *   made for another address. Trying again cannot help.
+ * - `passkey_not_verified` — the authenticator did not check who was holding
+ *   it (no fingerprint, face or PIN), which Stoky requires.
+ * - `passkey_failed` — the challenge lapsed, the signature did not verify, or
+ *   the browser failed in a way that is not a refusal: worth one more try.
+ * - the route's own `rate_limited` and `auth_unavailable`, and `unknown`.
+ */
+export type PasskeySignInRefusalCode =
+  | "passkey_cancelled"
+  | "passkey_not_found"
+  | "passkey_not_verified"
+  | "passkey_failed"
+  | SignInRefusal
+  | "unknown";
+
+export type PasskeySignInResult =
+  | { ok: true }
+  | { ok: false; code: PasskeySignInRefusalCode; retryAfterSeconds?: number };
+
+/** A passkey sign-in's codes, in ours — Better Auth's, the policy plugin's and the route's. */
+const PASSKEY_SIGN_IN_CODES: Record<string, PasskeySignInRefusalCode> = {
+  PASSKEY_NOT_FOUND: "passkey_not_found",
+  USER_VERIFICATION_REQUIRED: "passkey_not_verified",
+  AUTHENTICATION_FAILED: "passkey_failed",
+  CHALLENGE_NOT_FOUND: "passkey_failed",
+  AUTH_CANCELLED: "passkey_failed",
+  RATE_LIMITED: "rate_limited",
+  AUTH_UNAVAILABLE: "auth_unavailable",
+  INVALID_ORIGIN: "auth_unavailable",
+  MISSING_OR_NULL_ORIGIN: "auth_unavailable",
+};
+
+/**
+ * Asks the browser for a passkey answering the server's challenge. Loaded on
+ * the click, like `CreateCredential`'s: nobody who signs in with a password
+ * downloads it.
+ */
+export type GetCredential = (optionsJSON: unknown) => Promise<unknown>;
+
+const getWithBrowser: GetCredential = async (optionsJSON) => {
+  const { startAuthentication } = await import("@simplewebauthn/browser");
+  return startAuthentication({
+    optionsJSON: optionsJSON as Parameters<typeof startAuthentication>[0]["optionsJSON"],
+  });
+};
+
+/**
+ * Signs in with a passkey (D151), in the three steps an authentication is:
+ * the server's challenge, the browser's prompt, and the server's check of the
+ * answer. No address and no password: the passkey names the account. Never
+ * navigates, and never asks for an authenticator code — the passkey is
+ * already the second thing.
+ *
+ * `rememberMe` is the login form's box, read by the server as a literal
+ * `true` or nothing, as the password's is (D141).
+ *
+ * A result rather than a throw, like `signInWithPassword`: the form words a
+ * refusal in its status region. Throws only when a request itself could not
+ * be made.
+ */
+export async function signInWithPasskey(
+  { rememberMe }: { rememberMe: boolean },
+  { fetcher = fetch, get = getWithBrowser }: { fetcher?: typeof fetch; get?: GetCredential } = {},
+): Promise<PasskeySignInResult> {
+  const optionsResponse = await fetcher("/api/auth/passkey/generate-authenticate-options", {
+    method: "GET",
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const options: unknown = await optionsResponse.json().catch(() => null);
+  if (!optionsResponse.ok) {
+    return refusalOf(options, optionsResponse.headers.get("retry-after"), PASSKEY_SIGN_IN_CODES);
+  }
+
+  let answer: unknown;
+  try {
+    answer = await get(options);
+  } catch (error) {
+    return {
+      ok: false,
+      code: browserRefusalOf(error) === "cancelled" ? "passkey_cancelled" : "passkey_failed",
+    };
+  }
+
+  // Without `clientExtensionResults`, as for a registration: the route
+  // forwards `response` and nothing else of it.
+  const { clientExtensionResults: _extensions, ...response } = (answer ?? {}) as Record<string, unknown>;
+  const verified = await fetcher("/api/auth/passkey/verify-authentication", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ response, rememberMe: rememberMe === true }),
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (verified.ok) return { ok: true };
+  const body: unknown = await verified.json().catch(() => null);
+  return refusalOf(body, verified.headers.get("retry-after"), PASSKEY_SIGN_IN_CODES);
 }
 
 /**

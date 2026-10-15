@@ -12,6 +12,7 @@ import { useSnackbar } from "@/components/ui/snackbar";
 import { SectionState } from "@/components/household/RouteState";
 import { ReauthDialog } from "@/components/session/ReauthDialog";
 import { useSessionName } from "@/components/session/session-name";
+import { useWebAuthnSupport } from "@/components/session/webauthn-support";
 import {
   AccountChangeRefusedError,
   addPasskey,
@@ -35,25 +36,7 @@ const PASSKEYS_KEY = ["auth-api", "passkeys"] as const;
 /** Longest name a passkey is given here; a row title, not a description. */
 const MAX_NAME_LENGTH = 64;
 
-/** What this browser, on this page, can do with WebAuthn. */
-type BrowserSupport = "pending" | "insecure" | "unsupported" | "ready";
-
 const noSubscription = () => () => {};
-
-/**
- * Read once on the client and never on the server, where there is no
- * browser: `pending` there, so the server renders no button and no excuse
- * that the browser would then contradict.
- */
-function browserSupport(): BrowserSupport {
-  if (!window.isSecureContext) return "insecure";
-  if (typeof window.PublicKeyCredential !== "function") return "unsupported";
-  return "ready";
-}
-
-function useBrowserSupport(): BrowserSupport {
-  return useSyncExternalStore(noSubscription, browserSupport, () => "pending" as const);
-}
 
 function usePageOrigin(): string | null {
   return useSyncExternalStore(
@@ -124,7 +107,7 @@ function Passkeys({ origin }: { origin: string }): JSX.Element {
     // promise never settles, which would leave the dialog waiting for ever.
     networkMode: "always",
   });
-  const support = useBrowserSupport();
+  const support = useWebAuthnSupport();
   const pageOrigin = usePageOrigin();
 
   const passkeys = useQuery({

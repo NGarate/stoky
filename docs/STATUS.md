@@ -380,7 +380,7 @@ binary you happen to be holding.
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head; the Better Auth branch's specs, the `passkeys` project among them, are measured with the branch), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
 | Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 563 packages (2026-10-12, security branch head) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
@@ -684,7 +684,8 @@ independent axes together.
 
 | Project | Runs | Why |
 |---|---|---|
-| chromium | Everything | The reference engine |
+| chromium | Everything but `passkeys.spec.ts` | The reference engine |
+| passkeys | `passkeys.spec.ts` | Chromium at `localhost`, the only address a passkey can belong to — WebAuthn takes no IP address as a relying party. The server lists `STOKY_URLS=http://localhost:3100,http://127.0.0.1:3100`: `localhost` canonical, 127.0.0.1 still trusted for every other project, both plain http so the cookie is unchanged (D151) |
 | Mobile Safari | `dynamic-routes`, `location-picker` | WebKit at a phone width — the combination where this project's layout defects have actually appeared (UI-5, UI-6) |
 | firefox | `@smoke` — 4 tests | Register, sign in, write, read Spanish |
 | webkit | `@smoke` — 4 tests | As above |
@@ -949,8 +950,10 @@ https or `localhost` and never at an IP address; proven by
 `integration/passkeys.test.ts` with a software authenticator. *Seguridad y
 acceso* lists, adds, renames and removes them, and says why where adding
 cannot work (another listed address, an install without https on a domain
-name, a browser without WebAuthn); the login page's offer is still to come, so
-nobody signs in with one yet. Sessions are database rows: fifteen idle minutes, slid only by the
+name, a browser without WebAuthn); the login page offers a passkey sign-in
+at that address, in a browser that can, honouring the remember-me box
+(`e2e/passkeys.spec.ts` adds one in settings through Chromium's virtual
+authenticator, signs out and signs back in with it). Sessions are database rows: fifteen idle minutes, slid only by the
 keep-alive, a day at most, and deleted to end them — or, with "Mantener la
 sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
 since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
@@ -1136,7 +1139,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
 | better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
-| @better-auth/passkey, @simplewebauthn/browser | 1.7.7 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
+| @better-auth/passkey, @simplewebauthn/browser | 1.7.7 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey or signs in with one (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
 | uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |

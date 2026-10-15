@@ -131,6 +131,7 @@ describe("getAuthErrorKey", () => {
       "passkeyFailed",
       "passkeyNotFound",
       "passkeyNotVerified",
+      "passkeyCancelled",
       "stepUpRequired",
     ]) {
       expect(catalogues.es[key], `es ${key}`).toBeTruthy();

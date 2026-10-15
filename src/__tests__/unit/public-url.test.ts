@@ -43,8 +43,8 @@ describe("what one entry is", () => {
   });
 
   it("is fine over http to this machine, where CI and the browser suite serve", () => {
-    // ci.yml and ci-in-image.sh use localhost, playwright.config.ts and the
-    // RUNTIME-1 reproduction 127.0.0.1 (D86). Browsers treat all of these as
+    // ci.yml and ci-in-image.sh use localhost, the RUNTIME-1 reproduction
+    // 127.0.0.1 (D86), and playwright.config.ts both, localhost first. Browsers treat all of these as
     // potentially trustworthy, so nothing leaves the machine.
     for (const url of [
       "http://localhost:3000",

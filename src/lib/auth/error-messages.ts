@@ -21,6 +21,7 @@ export type AuthErrorKey =
   | "passkeyFailed"
   | "passkeyNotFound"
   | "passkeyNotVerified"
+  | "passkeyCancelled"
   | "stepUpRequired";
 
 /**
@@ -82,6 +83,14 @@ const CODE_KEYS: Record<string, AuthErrorKey> = {
   authentication_failed: "passkeyFailed",
   challenge_not_found: "passkeyFailed",
   auth_cancelled: "passkeyFailed",
+  // The sign-in module's names for the same (`PasskeySignInRefusalCode`,
+  // `src/lib/auth/client.ts`), and one of its own: a prompt the person
+  // dismissed, or one that found no passkey for this address, never reached
+  // the server, and "it did not work" would be the wrong thing to say about a
+  // "no".
+  passkey_not_verified: "passkeyNotVerified",
+  passkey_failed: "passkeyFailed",
+  passkey_cancelled: "passkeyCancelled",
   // Adding or removing a passkey without the password re-entered first, or
   // after the five minutes it stands for (`src/lib/auth/step-up.ts`).
   step_up_required: "stepUpRequired",
