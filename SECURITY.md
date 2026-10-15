@@ -840,7 +840,21 @@ Verified against the files named in each row.
   per challenge and ten in a row per account, which locks the account's
   second step for fifteen minutes: refused 429 with a `Retry-After` of the
   seconds left until the lock ends, which Better Auth's own refusal leaves
-  out and the policy plugin adds. The code step is a sign-in only when it
+  out and the policy plugin adds. That lock forgets its count when it ends,
+  and a right password opens a new challenge for nothing, so on their own
+  those limits let somebody who has the password guess ten codes every
+  quarter of an hour, about 960 a day, for ever — even odds of getting past
+  the second factor in about eight months. So every authenticator code of a
+  sign-in is also charged to its account's budget for the day
+  (`twoFactorCodeRateLimit`, twenty a day, `RATE_LIMIT_TWO_FACTOR_CODE_*`),
+  before it is compared; a right code gives its attempt back, and nothing
+  else clears it, a right password included. Past it every code, the right
+  one too, is refused 429 `TOO_MANY_WRONG_CODES` with `Retry-After` until
+  the day's window ends, and logged `auth.twofactor.locked`; a recovery code
+  still signs in. The bound is twenty guesses a day per account — with the
+  ±1 step, about 2% a year — at the cost that a guesser who has the
+  password can keep the owner's authenticator out for the rest of the day,
+  which says the password needs changing. The code step is a sign-in only when it
   carried the challenge cookie and was answered with a session: then the
   address is refunded, the browser becomes a known device, the account is
   tidied and held to ten sessions as above, and `auth.signin.succeeded` says
@@ -1843,8 +1857,10 @@ publishing an instance:
   `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
   `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS`,
   `RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS`,
-  `RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS` and
-  `RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS`. Raising them raises the
+  `RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS`,
+  `RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS`,
+  `RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS` and
+  `RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS`. Raising them raises the
   exposure; the browser suite raises the sign-in, known-device, registration,
   add-member and product-lookup attempts (`playwright.config.ts` says why for
   each), and a

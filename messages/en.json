@@ -43,6 +43,7 @@
     "twoFactorInvalidCode": "The code is not right, or it has already been used. Enter the one your authenticator app shows now.",
     "twoFactorExpired": "The code check has expired or had too many tries. Enter your password again.",
     "twoFactorLocked": "Too many wrong codes for this account. Wait 15 minutes and try again.",
+    "twoFactorCodesSpent": "Too many wrong codes for this account today. Use a recovery code, or try again tomorrow.",
     "twoFactorUnreadable": "This server cannot check your authenticator app's code. Use a recovery code, or ask whoever runs the household for help.",
     "twoFactorTitle": "Two-step verification",
     "totpLabel": "Verification code",

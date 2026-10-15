@@ -177,6 +177,7 @@ describe("secondStepResultFrom", () => {
       ["TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE", "two_factor_expired"],
       ["ACCOUNT_TEMPORARILY_LOCKED", "two_factor_locked"],
       // The TOTP guard's own (`policy-plugin.ts`).
+      ["TOO_MANY_WRONG_CODES", "two_factor_codes_spent"],
       ["TWO_FACTOR_UNREADABLE", "two_factor_unreadable"],
       ["RATE_LIMITED", "rate_limited"],
       ["AUTH_UNAVAILABLE", "auth_unavailable"],
@@ -212,6 +213,7 @@ describe("secondStepResultFrom", () => {
     expect(words("invalid_backup_code")).toBe("backupCodeInvalid");
     expect(words("two_factor_expired")).toBe("twoFactorExpired");
     expect(words("two_factor_locked")).toBe("twoFactorLocked");
+    expect(words("two_factor_codes_spent")).toBe("twoFactorCodesSpent");
     expect(words("two_factor_unreadable")).toBe("twoFactorUnreadable");
   });
 });

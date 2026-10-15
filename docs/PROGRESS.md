@@ -3255,7 +3255,16 @@ stores nothing that would say a code was used (ISSUES AUTH-5).
   per account. Its lock is answered 429 `ACCOUNT_TEMPORARILY_LOCKED` with no
   `Retry-After`, so an after-hook of `stokyPolicy` adds one, the seconds
   left until the row's `lockedUntil` (fifteen minutes when it cannot be
-  read). It is a sign-in only when it carried the challenge cookie,
+  read). Those limits alone do not bound a guesser who has the password:
+  the lock forgets its count when it ends and each new challenge is free,
+  so ten codes a quarter of an hour, about 960 a day, for ever. Every code of
+  a sign-in is therefore charged first to its account's budget for the day
+  (`twoFactorCodeRateLimit`, twenty a day; a right code given back, nothing
+  else, a right password included, clearing it) and refused 429
+  `TOO_MANY_WRONG_CODES` once that is spent, the right code too, until the
+  window ends; recovery codes are not counted. About 2% a year for a
+  guesser, against an owner kept to recovery codes for the rest of a day.
+  It is a sign-in only when it carried the challenge cookie,
   presented no session, and was answered with a session cookie; then the
   address is refunded, the browser remembered, and the account tidied and
   capped (D139, D140) — never from a session hook, as D140 says.

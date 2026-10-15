@@ -7,7 +7,15 @@ import { symmetricDecrypt } from "better-auth/crypto";
 import { hashBackupCode } from "@/lib/auth/backup-codes";
 import { STEP_UP_REQUIRED, hasStepUp } from "@/lib/auth/step-up";
 import { REMEMBER_HEADER } from "@/lib/auth/session-policy";
-import { clientAddress } from "@/lib/rate-limit";
+import {
+  RateLimitUnavailableError,
+  clientAddress,
+  consumeRateLimit,
+  refundRateLimit,
+  twoFactorCodeRateLimit,
+  type RateLimitResult,
+} from "@/lib/rate-limit";
+import type { SignInLimiter } from "@/lib/auth/sign-in-policy";
 import { logSecurityEvent } from "@/lib/security-log";
 
 /**
@@ -41,6 +49,15 @@ import { logSecurityEvent } from "@/lib/security-log";
  *    Better Auth reads its own clock, and a request that crosses a step
  *    between this check and its own would let through a code for a step this
  *    guard never claimed.
+ *
+ * **A day's wrong codes are bounded per account** (PROGRESS D148). Better
+ * Auth locks the second step for fifteen minutes after ten wrong codes and
+ * forgets them when the lock ends, and a password holder opens a new
+ * challenge for nothing, so its limits alone bound a guesser to about 960
+ * codes a day, for ever. A sign-in's code is charged to
+ * `twoFactorCodeRateLimit` (twenty a day) before it is compared, and a code
+ * that is claimed gives its attempt back; past the budget every code is
+ * refused `TOO_MANY_WRONG_CODES` until the window ends.
  *
  * **A backup code is compared as its hash** (PROGRESS D149, ASVS 5.0.0
  * 6.5.2). The codes are stored as `sha256:<hex>` (`src/lib/auth/backup-codes.ts`)
@@ -256,6 +273,51 @@ export interface PolicyPluginOptions {
    * step-up is found and spent.
    */
   db: Pick<PrismaClient, "$executeRaw" | "verification">;
+  /**
+   * Where the wrong codes of a sign-in's second step are counted per account
+   * (`twoFactorCodeRateLimit`); Valkey unless a test passes its own.
+   */
+  limiter?: Pick<SignInLimiter, "consume" | "refund">;
+}
+
+const valkeyCodeLimiter: Pick<SignInLimiter, "consume" | "refund"> = {
+  consume: consumeRateLimit,
+  refund: refundRateLimit,
+};
+
+/**
+ * One code of a sign-in's second step, charged to its account's daily
+ * budget before it is looked at (`twoFactorCodeRateLimit`). Refused 429
+ * `TOO_MANY_WRONG_CODES`, with `Retry-After`, once the budget is spent —
+ * the right code included, or the budget would bound nothing — and 503
+ * when the limiter cannot be reached, failing closed like every limit on a
+ * credential.
+ */
+async function chargeCode(
+  limiter: Pick<SignInLimiter, "consume" | "refund">,
+  userId: string,
+): Promise<RateLimitResult> {
+  let charge: RateLimitResult;
+  try {
+    charge = await limiter.consume(twoFactorCodeRateLimit(), userId);
+  } catch (error) {
+    if (!(error instanceof RateLimitUnavailableError)) throw error;
+    console.error(
+      "[auth] refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
+    );
+    throw new APIError("SERVICE_UNAVAILABLE", {
+      code: "AUTH_UNAVAILABLE",
+      message: "Sign-in is temporarily unavailable",
+    });
+  }
+  if (!charge.allowed) {
+    throw new APIError(
+      "TOO_MANY_REQUESTS",
+      { code: "TOO_MANY_WRONG_CODES", message: "Too many wrong codes for this account" },
+      { "retry-after": String(Math.max(1, Math.ceil(charge.retryAfterSeconds))) },
+    );
+  }
+  return charge;
 }
 
 /** The passkey endpoints that need a step-up, and whether each spends it. */
@@ -313,7 +375,7 @@ function removeSetCookie(headers: Headers | undefined, name: string): void {
   for (const line of kept) headers.append("set-cookie", line);
 }
 
-export function stokyPolicy({ db }: PolicyPluginOptions) {
+export function stokyPolicy({ db, limiter = valkeyCodeLimiter }: PolicyPluginOptions) {
   return {
     id: "stoky-policy",
     hooks: {
@@ -400,6 +462,14 @@ export function stokyPolicy({ db }: PolicyPluginOptions) {
               });
             }
 
+            // A sign-in's code is charged to the account's daily budget
+            // before it is looked at, and given back only if it is claimed:
+            // wrong and replayed codes stay counted. Not while Better Auth's
+            // own lock holds, which refuses those itself, uncounted.
+            const locked =
+              row.lockedUntil != null && new Date(row.lockedUntil).getTime() > Date.now();
+            const charge = owner.signIn && !locked ? await chargeCode(limiter, owner.userId) : null;
+
             const step = matchingStep(secret, code, totpClock.now());
             if (step === null) {
               return { context: { body: { ...ctx.body, code: NO_MATCH_CODE } } };
@@ -415,6 +485,7 @@ export function stokyPolicy({ db }: PolicyPluginOptions) {
               logSecurityEvent("auth.twofactor.replayed", { userId: owner.userId, address });
               throw new APIError("UNAUTHORIZED", { code: "INVALID_CODE", message: "Invalid code" });
             }
+            if (charge) await limiter.refund(twoFactorCodeRateLimit(), owner.userId, charge.window);
           }),
         },
       ],

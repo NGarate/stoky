@@ -100,6 +100,8 @@ describe("getAuthErrorKey", () => {
     expect(words("INVALID_TWO_FACTOR_COOKIE")).toBe("twoFactorExpired");
     expect(words("TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE")).toBe("twoFactorExpired");
     expect(words("ACCOUNT_TEMPORARILY_LOCKED")).toBe("twoFactorLocked");
+    // The account's day of codes, not the fifteen minutes: waiting will not help.
+    expect(words("TOO_MANY_WRONG_CODES")).toBe("twoFactorCodesSpent");
     expect(words("TWO_FACTOR_UNREADABLE")).toBe("twoFactorUnreadable");
   });
 
@@ -127,6 +129,7 @@ describe("getAuthErrorKey", () => {
       "backupCodeInvalid",
       "twoFactorExpired",
       "twoFactorLocked",
+      "twoFactorCodesSpent",
       "twoFactorUnreadable",
       "passkeyFailed",
       "passkeyNotFound",

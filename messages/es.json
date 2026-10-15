@@ -43,6 +43,7 @@
     "twoFactorInvalidCode": "El código no es correcto o ya se ha usado. Escribe el que muestra ahora tu aplicación de autenticación.",
     "twoFactorExpired": "La comprobación del código ha caducado o se ha intentado demasiadas veces. Vuelve a escribir tu contraseña.",
     "twoFactorLocked": "Demasiados códigos incorrectos con esta cuenta. Espera 15 minutos y vuelve a intentarlo.",
+    "twoFactorCodesSpent": "Demasiados códigos incorrectos con esta cuenta hoy. Usa un código de recuperación o vuelve a intentarlo mañana.",
     "twoFactorUnreadable": "No se puede comprobar el código de tu aplicación en este servidor. Usa un código de recuperación o pide ayuda a quien administra el hogar.",
     "twoFactorTitle": "Verificación en dos pasos",
     "totpLabel": "Código de verificación",

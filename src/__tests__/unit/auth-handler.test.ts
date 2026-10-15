@@ -887,6 +887,7 @@ describe("two-step verification", () => {
         [401, "INVALID_BACKUP_CODE", "auth.twofactor.failed"],
         [400, "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE", "auth.twofactor.failed"],
         [429, "ACCOUNT_TEMPORARILY_LOCKED", "auth.twofactor.locked"],
+        [429, "TOO_MANY_WRONG_CODES", "auth.twofactor.locked"],
         [401, "TWO_FACTOR_UNREADABLE", null],
       ] as const;
       for (const [status, refusal, event] of cases) {

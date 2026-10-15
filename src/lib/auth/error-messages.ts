@@ -17,6 +17,7 @@ export type AuthErrorKey =
   | "backupCodeInvalid"
   | "twoFactorExpired"
   | "twoFactorLocked"
+  | "twoFactorCodesSpent"
   | "twoFactorUnreadable"
   | "passkeyFailed"
   | "passkeyNotFound"
@@ -68,6 +69,11 @@ const CODE_KEYS: Record<string, AuthErrorKey> = {
   // Better Auth's lockout, per account, across challenges: fifteen minutes.
   account_temporarily_locked: "twoFactorLocked",
   two_factor_locked: "twoFactorLocked",
+  // The account's day of wrong authenticator codes is spent (D148,
+  // `twoFactorCodeRateLimit`): waiting fifteen minutes will not help, a
+  // backup code will.
+  too_many_wrong_codes: "twoFactorCodesSpent",
+  two_factor_codes_spent: "twoFactorCodesSpent",
   // `STOKY_SECRET` changed and the stored secret no longer decrypts: no
   // authenticator code will ever work, but a backup code, stored as a hash,
   // still does (D149), so the sentence offers one before the operator.

@@ -566,7 +566,9 @@ async function asksForSecondStep(response: Response): Promise<boolean> {
  *   re-creates the session, two-step verification has just been turned on,
  *   and the line says so.
  * - **A refusal** is `auth.twofactor.failed` with Better Auth's code, or
- *   `locked`. An unreadable secret or a replayed code was already written by
+ *   `locked` — Better Auth's fifteen-minute lock, or the account's day of
+ *   wrong codes spent (`TOO_MANY_WRONG_CODES`, the policy plugin's). An
+ *   unreadable secret or a replayed code was already written by
  *   the guard that refused it (`src/lib/auth/policy-plugin.ts`); a replay is
  *   also a failed code, and is written as one too.
  */
@@ -618,7 +620,7 @@ async function secondStep(
     }
   } else {
     const refusal = await refusalCode(response);
-    if (refusal === "ACCOUNT_TEMPORARILY_LOCKED") {
+    if (refusal === "ACCOUNT_TEMPORARILY_LOCKED" || refusal === "TOO_MANY_WRONG_CODES") {
       logSecurityEvent("auth.twofactor.locked", { address: charge.address, code: refusal });
     } else if (refusal !== "TWO_FACTOR_UNREADABLE" && response.status >= 400 && response.status < 500) {
       logSecurityEvent("auth.twofactor.failed", { address: charge.address, code: refusal ?? undefined });

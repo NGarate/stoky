@@ -409,6 +409,63 @@ describe("wrong codes", () => {
   });
 });
 
+describe("a day's wrong codes (D148)", () => {
+  const ATTEMPTS = "RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS";
+  afterEach(() => {
+    delete process.env[ATTEMPTS];
+  });
+
+  it("stop the authenticator for the account, the right code and new challenges included, and not a backup code", async () => {
+    // Better Auth's own limits forget wrong codes when its lock ends, and the
+    // password that opens each challenge is refunded: alone they let a
+    // password holder guess ten codes every quarter of an hour, for ever.
+    process.env[ATTEMPTS] = "3";
+    const ana = await enrolled("daily");
+
+    let jar = await challenge(ana);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect((await secondStep("totp", jar, { code: wrongCode(ana) })).code).toBe("INVALID_CODE");
+    }
+    // A right password and a new challenge clear nothing.
+    jar = await challenge(ana);
+    expect((await secondStep("totp", jar, { code: wrongCode(ana) })).code).toBe("INVALID_CODE");
+
+    let refused: Awaited<ReturnType<typeof secondStep>> | undefined;
+    const { events } = await eventsDuring(async () => {
+      refused = await secondStep("totp", await challenge(ana), { code: code(ana, 1) });
+    });
+    expect(refused?.status).toBe(429);
+    expect(refused?.code).toBe("TOO_MANY_WRONG_CODES");
+    const seconds = Number(refused?.retryAfter);
+    expect(seconds).toBeGreaterThan(0);
+    expect(seconds).toBeLessThanOrEqual(24 * 60 * 60);
+    expect(await signedInAs(refused?.jar ?? "")).toBeNull();
+    // The right code was refused before it was claimed.
+    expect((await twoFactorRow(ana.id)).lastTotpCounter).toBeLessThan(totpStep(Date.now()) + 1);
+    expect(events.find((line) => line.event === "auth.twofactor.locked")).toMatchObject({
+      code: "TOO_MANY_WRONG_CODES",
+    });
+
+    const backup = await secondStep("backup-code", await challenge(ana), { code: ana.backupCodes[0] });
+    expect(backup.status).toBe(200);
+    expect(await signedInAs(backup.jar)).toBe(ana.id);
+  });
+
+  it("are not spent by a right code, which gives its attempt back", async () => {
+    process.env[ATTEMPTS] = "2";
+    const ana = await enrolled("daily-right");
+    const jar = await challenge(ana);
+
+    expect((await secondStep("totp", jar, { code: wrongCode(ana) })).code).toBe("INVALID_CODE");
+    expect((await secondStep("totp", jar, { code: code(ana, 1) })).status).toBe(200);
+    // Counted, the right code would have been the second of two, and this
+    // the third.
+    const after = await secondStep("totp", await challenge(ana), { code: wrongCode(ana) });
+    expect(after.status).toBe(401);
+    expect(after.code).toBe("INVALID_CODE");
+  });
+});
+
 describe("a locked second step", () => {
   it("says when it may try again, from the lock's own end, for either kind of code", async () => {
     // Better Auth refuses a locked account's code 429 with no Retry-After;

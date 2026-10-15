@@ -65,6 +65,7 @@ export type SecondStepRefusalCode =
   | "invalid_backup_code"
   | "two_factor_expired"
   | "two_factor_locked"
+  | "two_factor_codes_spent"
   | "two_factor_unreadable"
   | SignInRefusal
   | "unknown";
@@ -119,6 +120,7 @@ const SECOND_STEP_CODES: Record<string, SecondStepRefusalCode> = {
   INVALID_TWO_FACTOR_COOKIE: "two_factor_expired",
   TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: "two_factor_expired",
   ACCOUNT_TEMPORARILY_LOCKED: "two_factor_locked",
+  TOO_MANY_WRONG_CODES: "two_factor_codes_spent",
   TWO_FACTOR_UNREADABLE: "two_factor_unreadable",
   RATE_LIMITED: "rate_limited",
   AUTH_UNAVAILABLE: "auth_unavailable",

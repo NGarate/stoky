@@ -12,6 +12,7 @@ import {
   reauthAccountRateLimit,
   reauthRateLimit,
   registerRateLimit,
+  twoFactorCodeRateLimit,
   uploadRateLimit,
 } from "@/lib/rate-limit";
 
@@ -275,6 +276,29 @@ describe("the configured limits", () => {
 
   it("keeps the two limits on separate counters", () => {
     expect(loginRateLimit().prefix).not.toBe(registerRateLimit().prefix);
+  });
+
+  it("bounds a sign-in's wrong authenticator codes at twenty per account a day, apart from every other", () => {
+    // D148: Better Auth's own limits forget wrong codes when its fifteen
+    // minutes' lock ends, and a password holder opens challenges for free,
+    // so without this a day was about 960 guesses at six digits.
+    delete process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS;
+    delete process.env.RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS;
+
+    expect(twoFactorCodeRateLimit()).toEqual({
+      prefix: "rl:2fa-code",
+      attempts: 20,
+      windowSeconds: 86_400,
+    });
+    for (const other of [loginRateLimit(), loginAccountRateLimit(), registerRateLimit()]) {
+      expect(twoFactorCodeRateLimit().prefix).not.toBe(other.prefix);
+    }
+
+    process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS = "0";
+    expect(twoFactorCodeRateLimit().attempts).toBe(20);
+    process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS = "4";
+    expect(twoFactorCodeRateLimit().attempts).toBe(4);
+    delete process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS;
   });
 
   it("bounds a distributed guess at ten attempts per account", () => {

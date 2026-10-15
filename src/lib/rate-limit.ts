@@ -140,6 +140,36 @@ export function registerRateLimit(): RateLimit {
 }
 
 /**
+ * Authenticator codes refused at a sign-in's second step, **per account,
+ * over a day** (D148).
+ *
+ * Better Auth's own limits are five wrong codes a challenge and ten in a row
+ * an account, then a fifteen-minute lock — and the lock clears the count
+ * when it ends, while the password step that opens each new challenge costs
+ * whoever knows the password nothing (a right password is refunded). So a
+ * password holder had ten guesses at six digits every quarter of an hour,
+ * about 960 a day, for ever: even odds of getting past the second factor in
+ * about eight months, with nobody having to notice. Nothing clears this
+ * counter but its window — not a right password, not a new challenge.
+ *
+ * Twenty: twice Better Auth's lock, so somebody who mistypes their way into
+ * that lock still has ten more tries the same day. Against a guesser, with
+ * the ±1 step window, it is 20 × 3/10⁶ a day, about 2% a year. A right code
+ * gives its own attempt back. Past it the authenticator is refused until the
+ * window ends; a backup code and a passkey still sign in. Keyed on the
+ * account id, which is already opaque.
+ */
+export function twoFactorCodeRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:2fa-code",
+    "RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS",
+    "RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS",
+    20,
+    24 * 60 * 60,
+  );
+}
+
+/**
  * Receipt uploads, per account.
  *
  * OWASP ASVS V11.1.4 asks for anti-automation on expensive operations, and
