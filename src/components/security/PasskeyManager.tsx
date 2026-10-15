@@ -24,6 +24,8 @@ import {
 import { deviceLabel } from "@/lib/auth/device-label";
 import { formatDateTime } from "@/lib/dates";
 import { api } from "@/lib/trpc/client";
+// The route refuses a longer one (`passkeyNameSchema`); one number for both.
+import { MAX_PASSKEY_NAME_LENGTH } from "@/lib/validations/auth";
 import type { FormEvent, JSX, RefObject } from "react";
 
 /**
@@ -32,9 +34,6 @@ import type { FormEvent, JSX, RefObject } from "react";
  * credentials read from a cache would offer to remove ones already gone.
  */
 const PASSKEYS_KEY = ["auth-api", "passkeys"] as const;
-
-/** Longest name a passkey is given here; a row title, not a description. */
-const MAX_NAME_LENGTH = 64;
 
 const noSubscription = () => () => {};
 
@@ -399,7 +398,7 @@ function RenameDialog({
           autoComplete="off"
           defaultValue={target?.passkey.name ?? ""}
           id={`${fieldId}-name`}
-          maxLength={MAX_NAME_LENGTH}
+          maxLength={MAX_PASSKEY_NAME_LENGTH}
           name="name"
           ref={field}
           required

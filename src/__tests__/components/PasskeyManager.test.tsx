@@ -7,6 +7,7 @@ import { createContext } from "react";
 import { renderWithIntl } from "../utils/render";
 import es from "../../../messages/es.json";
 import type { PasskeySummary } from "@/lib/auth/client";
+import { MAX_PASSKEY_NAME_LENGTH } from "@/lib/validations/auth";
 
 /**
  * **Llaves de acceso** on `/settings/security` (PROGRESS D151): the list, and
@@ -331,6 +332,24 @@ describe("renaming one", () => {
     await user.click(within(dialog).getByRole("button", { name: t.passkeysRenameSave }));
 
     await waitFor(() => expect(steps).toEqual([["rename", KEY.id, "Llave del llavero"]]));
+  });
+
+  it("bounds the field at the length the server accepts", async () => {
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: t.passkeysRenameNamed.replace("{name}", t.passkeysUnnamed),
+      }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    // The route refuses a longer name with a 400 the dialog could only call
+    // unknown; the field must stop the typing first.
+    expect(within(dialog).getByLabelText(t.passkeysNameLabel)).toHaveAttribute(
+      "maxLength",
+      String(MAX_PASSKEY_NAME_LENGTH),
+    );
   });
 
   it("refuses an empty name", async () => {
