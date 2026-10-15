@@ -37,12 +37,11 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // matrix has no column for "how long you need to read a message". It is
     // nobody's household data.
     setSnackbarDuration: "protectedProcedure",
-    // An account with no household still has sessions, and needing one to end
-    // them would put the control out of reach of the account that has least
-    // else. `protectedProcedure` for the same reason as the row above.
-    revokeMySessions: "protectedProcedure",
-    // Listing and ending one's own sessions (D143): the same tier as the row
-    // above, for the same reason. What keeps a stolen session from ending the
+    // Listing and ending one's own sessions (D143). An account with no
+    // household still has sessions, and needing one to end them would put the
+    // control out of reach of the account that has least else, so
+    // `protectedProcedure` for the same reason as the row above. What keeps a
+    // stolen session from ending the
     // owner's is the current password inside `endSessions` and its two
     // budgets, which a tier cannot express; the list carries no token.
     listSessions: "protectedProcedure",

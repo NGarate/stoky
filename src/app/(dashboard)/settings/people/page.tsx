@@ -166,7 +166,7 @@ export default function PeoplePage(): JSX.Element {
   });
 
   const resetPassword = api.household.resetMemberPassword.useMutation({
-    // `always`, for `RevokeSessionsButton`'s reason: offline, an `online`
+    // `always`, for `DeviceList`'s reason: offline, an `online`
     // mutation pauses, its promise never settles, and the dialog would sit on
     // "Cambiando…" with nothing saying why.
     networkMode: "always",

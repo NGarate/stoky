@@ -77,7 +77,11 @@ function rowComponents(): Set<string> {
       if (rows.has(file.name)) continue;
       const rendersRow = [...rows].some((row) => file.text.includes(`<${row}`));
       // `as="div"` opts the row out of list semantics, and so does its wrapper.
-      if (rendersRow && !file.text.includes('as="div"')) rows.add(file.name);
+      // A component that draws its rows inside its own `<ul>` is a list, not
+      // a row — `DeviceList` is one — and it is checked as a drawer below.
+      if (rendersRow && !file.text.includes('as="div"') && !/<ul[\s>]/.test(file.text)) {
+        rows.add(file.name);
+      }
     }
   }
   return rows;

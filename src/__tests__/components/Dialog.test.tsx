@@ -189,3 +189,71 @@ describe("Dialog footer", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("when the action removed whatever opened it", () => {
+  /** A list whose rows each open a confirmation that removes that row. */
+  function Rows(): React.JSX.Element {
+    const [rows, setRows] = useState(["Semanal", "Fiesta"]);
+    const [removing, setRemoving] = useState<string | null>(null);
+    const opener = useRef<HTMLButtonElement | null>(null);
+    const list = useRef<HTMLUListElement>(null);
+    return (
+      <>
+        <ul aria-label="Listas" ref={list} tabIndex={-1}>
+          {rows.map((name) => (
+            <li key={name}>
+              <button
+                onClick={(event) => {
+                  opener.current = event.currentTarget;
+                  setRemoving(name);
+                }}
+                type="button"
+              >
+                Eliminar {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <ConfirmDialog
+          confirmLabel="Sí, eliminar"
+          fallbackFocus={list}
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            setRows((all) => all.filter((name) => name !== removing));
+            setRemoving(null);
+          }}
+          open={removing !== null}
+          returnFocus={opener}
+          title="¿Eliminar?"
+        />
+      </>
+    );
+  }
+
+  it("gives focus to the fallback, not to <body>", async () => {
+    // A detached button takes no focus: without the fallback a keyboard or
+    // screen-reader user was left on <body> after removing something.
+    renderWithIntl(<Rows />, { locale: "es" });
+    await userEvent.click(screen.getByRole("button", { name: "Eliminar Semanal" }));
+    await screen.findByRole("dialog");
+
+    await userEvent.click(screen.getByRole("button", { name: "Sí, eliminar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("list", { name: "Listas" })).toHaveFocus();
+    });
+    expect(screen.queryByRole("button", { name: "Eliminar Semanal" })).toBeAbsent();
+  });
+
+  it("still gives it back to the opener when the opener is still there", async () => {
+    renderWithIntl(<Rows />, { locale: "es" });
+    await userEvent.click(screen.getByRole("button", { name: "Eliminar Fiesta" }));
+    await screen.findByRole("dialog");
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Eliminar Fiesta" })).toHaveFocus();
+    });
+  });
+});

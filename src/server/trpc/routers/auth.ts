@@ -351,39 +351,6 @@ export const authRouter = createTRPCRouter({
     }),
 
   /**
-   * End every session this account has, including the one asking.
-   *
-   * Deletes the rows (`endSessions`), so every device holding one of them is
-   * signed out on its next request: the session is read from its row every
-   * time.
-   *
-   * **Including the one asking**, which is what "everywhere" has to mean: a
-   * person who thinks a session is loose cannot be asked to guess which one.
-   * The screen says so before the button is pressed.
-   *
-   * `protectedProcedure`, not `householdProcedure`: an account with no
-   * household still has sessions, and needing a household to end them would
-   * put the control out of reach of exactly the account that has least else.
-   *
-   * `z.void()`, because it takes nothing and should accept nothing — see
-   * `logout` below.
-   */
-  revokeMySessions: protectedProcedure.input(z.void()).mutation(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-    const count = await endSessions(ctx.db, { userId });
-
-    logSecurityEvent("auth.session.ended", {
-      userId,
-      targetUserId: userId,
-      reason: "self",
-      count,
-      address: ctx.headers ? clientAddress(ctx.headers) : undefined,
-    });
-
-    return { success: true };
-  }),
-
-  /**
    * This account's live sessions, one per signed-in browser or app — what a
    * person needs to see before ending one (ASVS 5.0.0 7.5.2, PROGRESS D143).
    *
@@ -400,8 +367,12 @@ export const authRouter = createTRPCRouter({
    * `createdAt`, which Better Auth resets when it re-creates a session.
    * `lastUsedAt` is `updatedAt`, as coarse as the writes that move it (D140).
    *
-   * `protectedProcedure`, for the reason `revokeMySessions` gives. A query,
-   * so it takes no input.
+   * `protectedProcedure`, not `householdProcedure`: an account with no
+   * household still has sessions, and needing a household to see or end them
+   * would put the control out of reach of exactly the account that has least
+   * else. A query, so it takes no input.
+   *
+   * `/settings/security` shows it as **Tus dispositivos** (`DeviceList`).
    */
   listSessions: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -508,11 +479,11 @@ export const authRouter = createTRPCRouter({
    * Until this existed nothing changed a password once it was set (security
    * review, 2026-10-12): a password an admin chose in `household.addMember`
    * stayed known to that admin for good, and a leaked one could not be
-   * rotated — `revokeMySessions` ended the sessions and whoever held the
-   * password signed straight back in.
+   * rotated — ending the sessions left whoever held the password free to
+   * sign straight back in.
    *
    * `protectedProcedure`, not `householdProcedure`, for the reason
-   * `revokeMySessions` gives: an account with no household still has a
+   * `listSessions` gives: an account with no household still has a
    * password. The order of the steps is the point of them:
    *
    * 1. **The limit, first.** The next step answers "is this the password?",
@@ -616,14 +587,15 @@ export const authRouter = createTRPCRouter({
    * deleted, so a copy of the cookie taken before is refused too. The other
    * devices' sessions end when they sit idle for fifteen minutes, a day after
    * their sign-in (`src/lib/auth/session-policy.ts`), or when somebody ends
-   * the account's sessions — `revokeMySessions` or `endSessions` above, or an
-   * admin from the members panel.
+   * the account's sessions — `endSessions` above, or an admin from the
+   * members panel.
    *
-   * **`z.void()` on the three mutations that take nothing** — this,
-   * `revokeMySessions` and `shopping.generateFromLowStock`. With no parser
-   * tRPC hands the resolver whatever body arrived, a multipart form included,
-   * so the one check every other procedure has on what reaches it was absent
-   * from the three a cross-site form could most easily trigger. `z.void()`
+   * **`z.void()` on the mutations that take nothing** — this and
+   * `shopping.generateFromLowStock`, and `revokeMySessions` until
+   * `endSessions` replaced it. With no parser tRPC hands the resolver
+   * whatever body arrived, a multipart form included, so the one check every
+   * other procedure has on what reaches it was absent from the three a
+   * cross-site form could most easily trigger. `z.void()`
    * refuses anything but `undefined`, which is what the client sends;
    * `z.object({})` would not, because a `FormData` is an object and passes.
    * `src/__tests__/unit/procedure-inputs.test.ts` holds every mutation to it.

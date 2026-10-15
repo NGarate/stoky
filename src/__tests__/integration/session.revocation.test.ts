@@ -58,6 +58,10 @@ async function accountWithCaller(role: HouseholdRole, label: string, inHousehold
   };
 }
 
+/** Every session the account has, the way the settings screen ends them. */
+const endAll = (account: Account) =>
+  account.caller.auth.endSessions({ currentPassword: PASSWORD, scope: "all" });
+
 const signedIn = async (account: Account) =>
   (await readSession(account.browser, { refresh: false })) !== null;
 const rows = (id: string) => prisma.session.count({ where: { userId: id } });
@@ -106,7 +110,7 @@ describe("what ending a session does", () => {
     const account = await accountWithCaller("MEMBER", "Refused");
     expect(await signedIn(account)).toBe(true);
 
-    await account.caller.auth.revokeMySessions();
+    await endAll(account);
 
     expect(await rows(account.id)).toBe(0);
     expect(await signedIn(account)).toBe(false);
@@ -118,7 +122,7 @@ describe("what ending a session does", () => {
     const mine = await accountWithCaller("MEMBER", "Mine");
     const theirs = await accountWithCaller("MEMBER", "Theirs");
 
-    await mine.caller.auth.revokeMySessions();
+    await endAll(mine);
 
     expect(await signedIn(theirs)).toBe(true);
     expect(await rows(theirs.id)).toBe(1);
@@ -127,7 +131,7 @@ describe("what ending a session does", () => {
   it("lets the account sign in again afterwards", async () => {
     // Revocation is not a lockout: a fresh sign-in is a fresh row.
     const account = await accountWithCaller("MEMBER", "ComesBack");
-    await account.caller.auth.revokeMySessions();
+    await endAll(account);
 
     const email = (await prisma.user.findUniqueOrThrow({ where: { id: account.id } })).email;
     const again = await signInWith({ email, password: PASSWORD });
@@ -139,7 +143,7 @@ describe("what ending a session does", () => {
   it("is recorded, with who asked and how many sessions went", async () => {
     const account = await accountWithCaller("MEMBER", "Recorded");
 
-    const events = await eventsDuring(() => account.caller.auth.revokeMySessions());
+    const events = await eventsDuring(() => endAll(account));
 
     const ended = events.filter((event) => event.event === "auth.session.ended");
     expect(ended).toHaveLength(1);
@@ -156,7 +160,7 @@ describe("who may end whose sessions", () => {
   it("lets an account end its own", async () => {
     const own = await accountWithCaller("KITCHEN", "Own");
 
-    await own.caller.auth.revokeMySessions();
+    await endAll(own);
 
     expect(await signedIn(own)).toBe(false);
   });

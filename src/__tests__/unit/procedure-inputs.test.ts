@@ -7,10 +7,11 @@ import { MAX_PASSWORD_LENGTH } from "@/lib/validations/password";
  *
  * A procedure with no `.input()` has no parser, and tRPC then hands the
  * resolver whatever body arrived — a multipart form from another page
- * included. Three mutations were like that (`auth.revokeMySessions`,
- * `auth.logout`, `shopping.generateFromLowStock`), and they were exactly the
- * ones a cross-site form could trigger, because there was no input for the
- * form to fail. A mutation that takes nothing says so with `z.void()`.
+ * included. Three mutations were like that (`auth.revokeMySessions`, since
+ * replaced by `auth.endSessions`, `auth.logout` and
+ * `shopping.generateFromLowStock`), and they were exactly the ones a
+ * cross-site form could trigger, because there was no input for the form to
+ * fail. A mutation that takes nothing says so with `z.void()`.
  *
  * The walk is over the router as it runs, so a mutation added tomorrow without
  * an input is named here rather than found by the next audit. Queries are not
@@ -37,7 +38,7 @@ describe("mutation inputs", () => {
   it("finds the mutations to check", () => {
     // A walk that found nothing would pass every assertion below.
     expect(mutations.length).toBeGreaterThan(30);
-    expect(mutations).toContain("auth.revokeMySessions");
+    expect(mutations).toContain("auth.logout");
   });
 
   it("every mutation declares an input parser", () => {
@@ -47,7 +48,7 @@ describe("mutation inputs", () => {
     expect(without).toEqual([]);
   });
 
-  it.each(["auth.revokeMySessions", "auth.logout", "shopping.generateFromLowStock"])(
+  it.each(["auth.logout", "shopping.generateFromLowStock"])(
     "%s accepts nothing but no input",
     (path) => {
       const schema = (procedures[path] as ProcedureDef)._def.inputs[0] as {

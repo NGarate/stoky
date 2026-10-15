@@ -87,7 +87,7 @@ export function ChangePasswordForm(): JSX.Element {
   const tOffline = useTranslations("offline");
   const fieldId = useId();
   const change = api.auth.changePassword.useMutation({
-    // `always`, for `RevokeSessionsButton`'s reason: offline, an `online`
+    // `always`, for `DeviceList`'s reason: offline, an `online`
     // mutation pauses, its promise never settles, and this form would sit on
     // "Cambiando…" with every control disabled.
     networkMode: "always",

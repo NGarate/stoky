@@ -192,6 +192,8 @@ const DYNAMIC_PREFIXES: Record<string, string> = {
   "receipts.steps.": "src/components/receipt/ReceiptStatus.tsx",
   // The people page: t(`role${role}`) and t(`role${role}Hint`).
   "household.role": "src/app/(dashboard)/settings/people/page.tsx",
+  // The devices list: t(`screen${session.screen}`).
+  "security.screen": "src/components/session/DeviceList.tsx",
   // The stock history: t(`op${entry.operationType}`).
   "products.history.op": "src/app/(dashboard)/products/[id]/history/page.tsx",
 };

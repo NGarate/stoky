@@ -889,15 +889,16 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **68 procedures** — a count
-that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68: it reached 64
+`shopping`) merged in `src/server/trpc/router.ts`, **67 procedures** — a count
+that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68 → 67: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
 2026-08-31 while this file went on saying 62 until 2026-10-12, 64 with
 `auth.changePassword` on 2026-10-12, 65 with
 `household.resetMemberPassword` the same day, 66 with `auth.session` at the
-Better Auth switch on 2026-10-15, and 68 with `auth.listSessions` and
-`auth.endSessions` the same day) as phases closed
+Better Auth switch on 2026-10-15, 68 with `auth.listSessions` and
+`auth.endSessions` the same day, and 67 when `auth.revokeMySessions`, which
+they replace, was deleted with its button) as phases closed
 and the export router arrived. Asserting the count structurally did not stop
 the drift, because nothing compared it with this sentence; since 2026-10-12
 `capabilities.test.ts` does, and fails when the two disagree. 10 Zod
@@ -939,7 +940,10 @@ part is enforced by `check:links` in CI rather than by audit; the manual version
 missed a dead route three times running, twice from routes linked on every row
 of a table. The five newest pages are Phase 5's: `/kitchen`, `/shopping` as
 Screen A (the list manager moved to `/shopping/lists`), `/settings/people`,
-and `/settings/unsaved`.
+and `/settings/unsaved`. `/settings/security` (2026-10-15, D143) lists a
+person's sessions and ends them; `e2e/session-revocation.spec.ts` drives it
+with two browsers, and `page-titles`, `a11y-structure`, `accessibility` and
+`a11y-aaa` cover it like every other private route.
 
 **Design system — one, and it is in CSS.** 37 tokens under `@theme` in
 `src/app/globals.css` — this line said 26 while line 39 of this same file said
@@ -963,7 +967,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 68 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 67 procedures assigned. Membership and role
 are read from the database on every call rather than from the session, so a
 demotion takes effect on the next request rather than whenever the session
 happens to end. `src/__tests__/unit/capabilities.test.ts` checks the assignment

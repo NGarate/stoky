@@ -5,17 +5,19 @@ import { test, expect } from "@playwright/test";
  * server — `src/server/http/trpc-handler.ts`.
  *
  * The unit test drives the handler with a stand-in router. This drives the
- * production build with a real session at the one procedure the guard exists
- * for: `auth.revokeMySessions` took no input, so before the guard a form on a
- * sibling subdomain could sign a household out of every device by posting to
- * it. (It now declares `z.void()` as well, which a form fails; the 415 below
- * is the handler's, before the body is read.)
+ * production build with a real session at the procedure the guard was
+ * written for: `auth.revokeMySessions` took no input, so before the guard a
+ * form on a sibling subdomain could sign a household out of every device by
+ * posting to it. Its successor, `auth.endSessions`, asks for the password —
+ * so the requests below carry the right one, and the only thing between a
+ * forged request and every session ending is the handler. (A form's 415 is
+ * the handler's too, before the body is read.)
  *
  * **The last request is the control.** The refused requests are the same
  * request with one header changed, so the test finishes by sending it with
- * `same-origin` and showing that it does revoke. Without that, a 403 and a
- * session still alive afterwards are equally well explained by a request that
- * never named a working procedure at all.
+ * `same-origin` and showing that it does end the session. Without that, a 403
+ * and a session still alive afterwards are equally well explained by a
+ * request that never named a working procedure, or a wrong password.
  *
  * **Its own account, registered here**, for the reason
  * `session-revocation.spec.ts` gives: revoking the shared demo session would
@@ -28,7 +30,9 @@ import { test, expect } from "@playwright/test";
  */
 
 const PASSWORD = "E2EGuards123!";
-const REVOKE = "/api/trpc/auth.revokeMySessions";
+const END_ALL = "/api/trpc/auth.endSessions";
+/** Every session, with the right password: superjson's envelope, as the client sends it. */
+const END_ALL_BODY = JSON.stringify({ json: { currentPassword: PASSWORD, scope: "all" } });
 
 function freshEmail(): string {
   const worker = test.info().parallelIndex;
@@ -60,33 +64,39 @@ test("a cross-site or form-encoded call is refused and the session survives it",
   // ----------------------------------------------------------------- when --
   // `page.request` carries this context's session cookie, as a forged
   // request from a sibling subdomain would under SameSite=Lax.
-  const crossSite = await page.request.post(REVOKE, {
+  const crossSite = await page.request.post(END_ALL, {
     headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" },
-    data: "{}",
+    data: END_ALL_BODY,
   });
   expect(crossSite.status(), "a call another site sent reached tRPC").toBe(403);
 
   // What an HTML form posts, with no Fetch Metadata to refuse it on.
-  const form = await page.request.post(REVOKE, { multipart: { anything: "1" } });
+  const form = await page.request.post(END_ALL, {
+    multipart: { currentPassword: PASSWORD, scope: "all" },
+  });
   expect(form.status(), "a form-encoded call reached tRPC").toBe(415);
 
   // ----------------------------------------------------------------- then --
-  await page.goto("/dashboard");
-  await expect(
-    page,
-    "the session was revoked by a request the endpoint should have refused",
-  ).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+  // Asked of the server rather than read off the address bar: a signed-out
+  // `goto("/dashboard")` lands on the prerendered shell before it goes to
+  // `/login`, so the URL alone would pass either way.
+  const session = await page.request.get("/api/auth/get-session");
+  expect(
+    await session.json(),
+    "the session was ended by a request the endpoint should have refused",
+  ).not.toBeNull();
 
   // -------------------------------------------------------------- control --
-  const sameOrigin = await page.request.post(REVOKE, {
+  const sameOrigin = await page.request.post(END_ALL, {
     headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
-    data: "{}",
+    data: END_ALL_BODY,
   });
   expect(sameOrigin.status()).toBe(200);
+  expect(await (await page.request.get("/api/auth/get-session")).json()).toBeNull();
   await page.goto("/dashboard");
   await expect(
     page,
-    "the same request from this origin did not revoke, so the refusals above " +
+    "the same request from this origin did not end the session, so the refusals above " +
       "prove nothing about the guard",
   ).toHaveURL(/\/login/, { timeout: 30_000 });
 });

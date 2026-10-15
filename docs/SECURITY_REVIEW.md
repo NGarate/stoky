@@ -412,6 +412,11 @@ change a role and remove a member, `household.revokeMemberSessions` ends a
 member's sessions and `auth.revokeMySessions` an account's own; both stamp
 `sessionsValidFrom`, which the `jwt` callback checks where the token is
 re-issued. "I have lost the tablet" is answered from `/settings/people`.
+Since 2026-10-15 (D135, D143) both delete session rows instead, and an
+account's own sessions are listed and ended one at a time, every other or
+all together from **Tus dispositivos** at `/settings/security`, after the
+password — `auth.listSessions` and `auth.endSessions`, which replaced
+`auth.revokeMySessions` and its button.
 
 **And the mitigation had no test.** Replacing that query with the token's own
 values — an obvious optimisation, one fewer database round trip per request —

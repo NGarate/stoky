@@ -13,9 +13,10 @@ import type { FailedOp, QueuedOp } from "@/lib/offline/queue";
 /**
  * The three controls that end a session, in one file because they share a hook.
  *
- * `SignOutButton` ends this device's visit. `RevokeSessionsButton` ends every
- * session the account has, this one included, and `ChangePasswordForm` does
- * the same as the consequence of a new password. All three run the same purge
+ * `SignOutButton` ends this device's visit. `DeviceList` ends this device's
+ * session, every other or every one, after the password, and
+ * `ChangePasswordForm` ends every one as the consequence of a new password.
+ * All three run the same purge
  * sequence — `useEndSession` — and that is also why their tests live together: the
  * mocks below replace modules for the *whole process* (D50), so two files
  * mocking `@/lib/auth/actions` and the queue with different spies would each
@@ -73,8 +74,10 @@ const flush = mock(async () => {
 let pending: QueuedOp[] = [];
 /** Changes the server refused, waiting for a person. `purgeAll` takes these too. */
 let failedOps: FailedOp[] = [];
-/** Whether the server accepts the revocation, per test. */
-let serverRefuses = false;
+/** What `auth.endSessions` answers, per test: null accepts. */
+let endRefusal: unknown = null;
+/** What each `auth.endSessions` call was sent. */
+let endInputs: unknown[] = [];
 /** What `auth.changePassword` answers, per test: null accepts. */
 let changeRefusal: unknown = null;
 /** What each password change was sent. */
@@ -125,15 +128,52 @@ mock.module("@/lib/offline/queue-context", () => ({
  * reason as `@/lib/sw/register`: `offline-persist.test.tsx` tests it for real.
  * `forgetPersistedReads` runs against the stubbed browser and is harmless.
  */
+/** The account's sessions, as `auth.listSessions` answers them: this one and a phone. */
+const DEVICES = [
+  {
+    id: "s-here",
+    device: { browser: "Firefox", os: "Linux" },
+    screen: null,
+    signedInAt: new Date("2026-10-15T08:00:00.000Z"),
+    lastUsedAt: new Date("2026-10-15T09:00:00.000Z"),
+    expiresAt: new Date("2026-10-15T09:15:00.000Z"),
+    remembered: false,
+    current: true,
+  },
+  {
+    id: "s-phone",
+    device: { browser: "Chrome", os: "Android" },
+    screen: null,
+    signedInAt: new Date("2026-10-14T08:00:00.000Z"),
+    lastUsedAt: new Date("2026-10-14T21:00:00.000Z"),
+    expiresAt: new Date("2026-10-15T08:00:00.000Z"),
+    remembered: false,
+    current: false,
+  },
+];
+/** What the list was asked to read again. */
+let invalidated = 0;
+
 mock.module("@/lib/trpc/client", () => ({
   api: {
+    useUtils: () => ({
+      auth: { listSessions: { invalidate: async () => void invalidated++ } },
+    }),
     auth: {
-      revokeMySessions: {
+      listSessions: {
+        useQuery: () => ({ data: DEVICES, error: null, fetchStatus: "idle", refetch: async () => {} }),
+      },
+      endSessions: {
         useMutation: () => ({
-          mutateAsync: async () => {
-            steps.push("revoke");
-            if (serverRefuses) throw new Error("refused");
-            return { revokedAt: new Date("2026-08-28T00:00:00.000Z") };
+          mutateAsync: async (input: { scope: string; sessionId?: string }) => {
+            steps.push("endSessions");
+            endInputs.push(input);
+            if (endRefusal !== null) throw endRefusal;
+            return {
+              ended: input.scope === "one" ? 1 : 2,
+              includedCurrent:
+                input.scope === "all" || (input.scope === "one" && input.sessionId === "s-here"),
+            };
           },
         }),
       },
@@ -152,9 +192,8 @@ mock.module("@/lib/trpc/client", () => ({
 }));
 
 const { SignOutButton } = await import("@/components/session/SignOutButton");
-const { RevokeSessionsButton } = await import(
-  "@/components/session/RevokeSessionsButton"
-);
+const { DeviceList } = await import("@/components/session/DeviceList");
+const { SnackbarProvider } = await import("@/components/ui/snackbar");
 const { ChangePasswordForm } = await import("@/components/session/ChangePasswordForm");
 const {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -188,7 +227,9 @@ beforeEach(() => {
     { items: [{ name: "the leaving account's milk" }] },
   );
   queriesAtSignOut = null;
-  serverRefuses = false;
+  endRefusal = null;
+  endInputs = [];
+  invalidated = 0;
   changeRefusal = null;
   changeInputs = [];
   signOutFails = false;
@@ -288,12 +329,11 @@ describe("with unsent changes", () => {
   });
 
   it("draws the same on the control that ends every session", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
-    const confirm = await openRevokeConfirm();
+    renderDevices();
+    const confirm = await openEnd("Cerrar todas");
 
     expect(
-      within(confirm).getByRole("button", { name: "Cerrarlas todas y descartarlos" })
-        .className,
+      within(confirm).getByRole("button", { name: "Cerrar y descartarlos" }).className,
     ).toContain("bg-destructive");
   });
 
@@ -352,15 +392,18 @@ describe("with changes the server refused", () => {
   });
 
   it("says the same on the control that ends every session", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
+    renderDevices();
 
-    const confirm = await openRevokeConfirm();
+    const confirm = await openEnd("Cerrar todas");
 
-    expect(confirm).not.toHaveTextContent(/no hay nada sin enviar/i);
     expect(confirm).toHaveTextContent(/hay 3 cambios que el servidor no aceptó/i);
+    // Sending first cannot help them, so leaving is drawn as what it does.
     expect(
-      within(confirm).getByRole("button", { name: "Cerrarlas todas y descartarlos" }),
-    ).toBeInTheDocument();
+      within(confirm).getByRole("button", { name: "Cerrar todas" }).className,
+    ).toContain("bg-destructive");
+    expect(
+      within(confirm).getByRole("link", { name: "Ver los cambios sin guardar" }),
+    ).toHaveAttribute("href", "/settings/unsaved");
   });
 
   it("carries the English copy too", async () => {
@@ -383,34 +426,52 @@ describe("on a shared device", () => {
 });
 
 /**
- * Ending every session, from the account's own settings.
+ * Ending sessions from the devices list, `/settings/security` (D143).
  *
  * The server half is `integration/session.revocation.test.ts`, which proves a
- * token issued before the line stops working. What only the client can get
- * wrong is *order*, in both directions:
+ * cookie stops being read once its row is deleted. What only the client can
+ * get wrong is *order* and *reach*:
  *
- * - the server write must happen before anything local is discarded, because
- *   the purge is irreversible and the redirect that follows shows the sign-in
- *   screen — which reads as success even when nothing was revoked;
- * - a refusal must leave everything standing, so the person is still signed in,
- *   still holding their unsent changes, and told why.
+ * - when this device is among the sessions ended, the server write must
+ *   happen before anything local is discarded, because the purge is
+ *   irreversible and the redirect that follows shows the sign-in screen —
+ *   which reads as success even when nothing was ended;
+ * - when it is not, nothing local may be discarded at all: ending the phone
+ *   left on a train must not sign this tablet out or empty its queue;
+ * - a refusal must leave everything standing, so the person is still signed
+ *   in, still holding their unsent changes, and told why.
  */
 
-/** Open the confirmation, which every test below needs first. */
-async function openRevokeConfirm(): Promise<HTMLElement> {
-  await userEvent.click(
-    screen.getByRole("button", { name: "Cerrar la sesión en todos los dispositivos" }),
+function renderDevices(options?: { locale?: TestLocale }) {
+  return renderWithIntl(
+    <SnackbarProvider>
+      <DeviceList />
+    </SnackbarProvider>,
+    options,
   );
-  return screen.getByRole("group", {
-    name: "¿Cerrar la sesión en todos los dispositivos?",
-  });
 }
 
-describe("ending every session: asking first", () => {
-  it("revokes nothing when the control is merely opened", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
+/** Open the dialog from one of the list's controls. */
+async function openEnd(name: string | RegExp): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole("button", { name }));
+  return screen.getByRole("dialog");
+}
 
-    await openRevokeConfirm();
+/** Type the password into the open dialog and press one of its buttons. */
+async function confirmWith(
+  dialog: HTMLElement,
+  button: string,
+  password = "cocina despensa nevera",
+): Promise<void> {
+  await userEvent.type(within(dialog).getByLabelText("Tu contraseña"), password);
+  await userEvent.click(within(dialog).getByRole("button", { name: button }));
+}
+
+describe("ending sessions: asking first", () => {
+  it("ends nothing when the dialog is merely opened", async () => {
+    renderDevices();
+
+    await openEnd("Cerrar todas");
 
     expect(steps).toEqual([]);
   });
@@ -419,116 +480,164 @@ describe("ending every session: asking first", () => {
     // The redirect would otherwise be the first time anyone learned it, and a
     // control that ends the session you are looking at without warning reads
     // as a crash rather than as the thing you asked for.
-    renderWithIntl(<RevokeSessionsButton />);
+    renderDevices();
 
-    expect(await openRevokeConfirm()).toHaveTextContent("Se cerrará también aquí");
+    expect(await openEnd("Cerrar todas")).toHaveTextContent("también en este");
   });
 
-  it("puts the control back when the answer is no", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
+  it("puts everything back when the answer is no", async () => {
+    renderDevices();
 
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(within(confirm).getByRole("button", { name: "Seguir aquí" }));
+    const dialog = await openEnd("Cerrar todas");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
 
     expect(steps).toEqual([]);
-    expect(
-      screen.getByRole("button", { name: "Cerrar la sesión en todos los dispositivos" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeAbsent();
   });
 });
 
-describe("ending every session: the order the work happens in", () => {
-  it("revokes on the server before discarding anything local", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
+describe("ending sessions: the order the work happens in", () => {
+  it("ends every session on the server before discarding anything local", async () => {
+    renderDevices();
 
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Sí, cerrarlas todas" }),
+    await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
+
+    expect(steps).toEqual(["endSessions", "purgeQueue", "purgeShell", "signOut"]);
+    expect(endInputs).toEqual([{ currentPassword: "cocina despensa nevera", scope: "all" }]);
+  });
+
+  it("leaves the same way when the session ended is this one", async () => {
+    renderDevices();
+
+    await confirmWith(
+      await openEnd(/^Cerrar esta sesión: Firefox en Linux$/),
+      "Cerrar esta sesión",
     );
 
-    expect(steps).toEqual(["revoke", "purgeQueue", "purgeShell", "signOut"]);
+    expect(steps).toEqual(["endSessions", "purgeQueue", "purgeShell", "signOut"]);
+    expect(endInputs).toEqual([
+      { currentPassword: "cocina despensa nevera", scope: "one", sessionId: "s-here" },
+    ]);
   });
 
-  it("sends unsent writes before revoking, when asked to", async () => {
-    pending = [op("a"), op("b")];
-    renderWithIntl(<RevokeSessionsButton />);
+  it("purges nothing when ending the others, and reads the list again", async () => {
+    // This device stays signed in, so its queue, its saved reads and its
+    // cached shell are still its own.
+    renderDevices();
 
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Enviar y cerrarlas todas" }),
+    await confirmWith(await openEnd("Cerrar las demás"), "Cerrar las demás");
+
+    expect(steps).toEqual(["endSessions"]);
+    expect(endInputs).toEqual([{ currentPassword: "cocina despensa nevera", scope: "others" }]);
+    expect(purgeAll).not.toHaveBeenCalled();
+    expect(signOutAction).not.toHaveBeenCalled();
+    expect(invalidated).toBe(1);
+    expect(screen.queryByRole("dialog")).toBeAbsent();
+  });
+
+  it("purges nothing when ending another device's one", async () => {
+    renderDevices();
+
+    await confirmWith(
+      await openEnd(/^Cerrar esta sesión: Chrome en Android$/),
+      "Cerrar esta sesión",
     );
 
-    expect(steps.slice(0, 2)).toEqual(["flush", "revoke"]);
-  });
-
-  it("counts the unsent writes and offers to discard them instead", async () => {
-    pending = [op("a"), op("b")];
-    renderWithIntl(<RevokeSessionsButton />);
-
-    const confirm = await openRevokeConfirm();
-
-    expect(confirm).toHaveTextContent("Quedan 2 cambios sin enviar");
-    expect(
-      within(confirm).getByRole("button", { name: "Cerrarlas todas y descartarlos" }),
-    ).toBeInTheDocument();
-  });
-});
-
-describe("ending every session: when the server refuses", () => {
-  beforeEach(() => {
-    serverRefuses = true;
-  });
-
-  it("discards nothing and does not sign out", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
-
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Sí, cerrarlas todas" }),
-    );
-
-    expect(steps).toEqual(["revoke"]);
+    expect(steps).toEqual(["endSessions"]);
+    expect(endInputs).toEqual([
+      { currentPassword: "cocina despensa nevera", scope: "one", sessionId: "s-phone" },
+    ]);
     expect(purgeAll).not.toHaveBeenCalled();
     expect(signOutAction).not.toHaveBeenCalled();
   });
 
-  it("says so, where a screen reader is told", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
+  it("sends unsent writes before ending, when asked to", async () => {
+    pending = [op("a"), op("b")];
+    renderDevices();
 
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Sí, cerrarlas todas" }),
-    );
+    await confirmWith(await openEnd("Cerrar todas"), "Enviar y cerrar");
 
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("No se han podido cerrar");
-    expect(alert).toHaveTextContent("Sigues dentro");
+    expect(steps.slice(0, 2)).toEqual(["flush", "endSessions"]);
   });
 
-  it("leaves the control usable, so it can be tried again", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
+  it("counts the unsent writes and offers to discard them instead", async () => {
+    pending = [op("a"), op("b")];
+    renderDevices();
 
-    const confirm = await openRevokeConfirm();
-    const commit = within(confirm).getByRole("button", { name: "Sí, cerrarlas todas" });
-    await userEvent.click(commit);
+    const dialog = await openEnd("Cerrar todas");
 
-    expect(commit).not.toBeDisabled();
+    expect(dialog).toHaveTextContent("Quedan 2 cambios sin enviar");
+    expect(
+      within(dialog).getByRole("button", { name: "Cerrar y descartarlos" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not mention unsent writes when ending only the others", async () => {
+    // They stay on this device, which stays signed in.
+    pending = [op("a"), op("b")];
+    renderDevices();
+
+    const dialog = await openEnd("Cerrar las demás");
+
+    expect(dialog).not.toHaveTextContent("sin enviar");
+    expect(within(dialog).getByRole("button", { name: "Cerrar las demás" })).toBeInTheDocument();
   });
 });
 
-describe("ending every session: both catalogues", () => {
+describe("ending sessions: when the server refuses", () => {
+  beforeEach(() => {
+    endRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
+  });
+
+  it("discards nothing and does not sign out", async () => {
+    renderDevices();
+
+    await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
+
+    expect(steps).toEqual(["endSessions"]);
+    expect(purgeAll).not.toHaveBeenCalled();
+    expect(signOutAction).not.toHaveBeenCalled();
+  });
+
+  it("says which refusal it was, where a screen reader is told", async () => {
+    renderDevices();
+
+    await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("La contraseña no es correcta");
+    expect(screen.getByLabelText("Tu contraseña")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("says a spent budget as one, not as a wrong password", async () => {
+    endRefusal = trpcRefusal("TOO_MANY_REQUESTS", "Too many attempts");
+    renderDevices();
+
+    await confirmWith(await openEnd("Cerrar las demás"), "Cerrar las demás");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Demasiados intentos");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("leaves the dialog usable, so it can be tried again", async () => {
+    renderDevices();
+
+    const dialog = await openEnd("Cerrar todas");
+    await confirmWith(dialog, "Cerrar todas");
+
+    expect(within(dialog).getByRole("button", { name: "Cerrar todas" })).not.toBeDisabled();
+  });
+});
+
+describe("ending sessions: both catalogues", () => {
   it("carries the English copy too", async () => {
     // I18N-8's shape: a Spanish string hardcoded into the markup looks correct
     // in the Spanish render and is invisible until somebody switches.
-    renderWithIntl(<RevokeSessionsButton />, { locale: "en" });
+    renderDevices({ locale: "en" });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Sign out on every device" }),
-    );
+    const dialog = await openEnd("Sign out all");
 
-    expect(
-      screen.getByRole("group", { name: "Sign out on every device?" }),
-    ).toHaveTextContent("This device included");
+    expect(dialog).toHaveAccessibleName("Sign out every session?");
+    expect(dialog).toHaveTextContent("this one too");
   });
 });
 
@@ -586,12 +695,9 @@ describe("when sending first does not empty the queue", () => {
     expect(send).not.toBeDisabled();
   });
 
-  it("refuses the same way from the revoke control, and revokes nothing", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Enviar y cerrarlas todas" }),
-    );
+  it("refuses the same way from the devices list, and ends nothing", async () => {
+    renderDevices();
+    await confirmWith(await openEnd("Cerrar todas"), "Enviar y cerrar");
 
     expect(steps).toEqual(["flush"]);
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -634,17 +740,28 @@ describe("when signing out fails after the purge", () => {
     expect(screen.getByRole("button", { name: "Seguir aquí" })).not.toBeDisabled();
   });
 
-  it("tells the revoke control that the sessions *were* ended", async () => {
+  it("tells the devices list that the sessions *were* ended", async () => {
     // The opposite fact from a server refusal, and the one that matters most on
     // this control: saying "you are still signed in everywhere" here would tell
     // somebody their lost phone still has access when it does not.
-    renderWithIntl(<RevokeSessionsButton />);
-    const confirm = await openRevokeConfirm();
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Sí, cerrarlas todas" }),
+    renderDevices();
+    await confirmWith(await openEnd("Cerrar todas"), "Cerrar todas");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Se han cerrado las sesiones");
+  });
+
+  it("says only this session was ended, when that is the one asked for", async () => {
+    // "The sessions were ended" here would tell somebody their other devices
+    // were signed out too, when every one of them is still live.
+    renderDevices();
+    await confirmWith(
+      await openEnd(/^Cerrar esta sesión: Firefox en Linux$/),
+      "Cerrar esta sesión",
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Se han cerrado tus sesiones");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Se ha cerrado la sesión en el servidor");
+    expect(alert).not.toHaveTextContent("las sesiones");
   });
 });
 
@@ -723,11 +840,11 @@ describe("where focus goes when the question appears", () => {
    * place mid-page, and a screen reader is told nothing — the panel that just
    * asked whether to end every session is one nobody announced.
    */
-  it("moves to the panel that is now asking, on the revoke control", async () => {
-    renderWithIntl(<RevokeSessionsButton />);
-    const confirm = await openRevokeConfirm();
+  it("moves to the dialog that is now asking, on the devices list", async () => {
+    renderDevices();
+    const dialog = await openEnd("Cerrar todas");
 
-    expect(document.activeElement).toBe(confirm);
+    expect(document.activeElement).toBe(dialog);
   });
 
   it("moves to the panel on the sign-out control too", async () => {

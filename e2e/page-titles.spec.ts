@@ -45,6 +45,7 @@ test.describe("page titles, signed in", () => {
     ["/shopping/no-such-list", es.shopping.listPageTitle],
     ["/settings", es.settings.hub.title],
     ["/settings/screen", es.start.settingsTitle],
+    ["/settings/security", es.security.title],
     ["/settings/unsaved", es.offline.unsavedTitle],
   ];
 

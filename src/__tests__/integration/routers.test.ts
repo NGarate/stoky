@@ -7,7 +7,6 @@ import { createCredentialUser } from "@/lib/auth/credentials";
 import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { signInWith, freshTestAddress } from "../utils/authorize";
-import { openTestSession } from "../utils/test-helpers";
 import { loginRateLimit } from "@/lib/rate-limit";
 import type { HouseholdRole } from "@prisma/client";
 
@@ -516,31 +515,27 @@ describe("tRPC Router Integration Tests", () => {
       });
     });
 
-    describe("revokeMySessions", () => {
+    describe("logout's input", () => {
       // It takes nothing, so it accepts nothing. Before `z.void()` it had no
       // parser and ran on whatever arrived — a cross-site form's body
-      // included — and signed the account out everywhere. The walk in
+      // included — as did the mutation that ended every session, which
+      // `auth.endSessions` replaced. The walk in
       // `unit/procedure-inputs.test.ts` holds every mutation to having one;
-      // this shows the refusal happens before the write.
-      it("refuses an input, and writes nothing", async () => {
+      // this shows the refusal happens on the running router.
+      it("refuses an input", async () => {
         const { user } = await createTestUserWithoutHousehold(
-          "revoke-input@example.com",
-          "Revoke Input User"
+          "logout-input@example.com",
+          "Logout Input User"
         );
         const { caller } = await createTestContext(user.id);
-        // A live session, so "writes nothing" means a row that survives.
-        await openTestSession(user.id);
         const form = new FormData();
         form.set("anything", "1");
 
         // The cast is the point: the type already says no, the runtime must too.
-        const revoke = caller.auth.revokeMySessions as (
-          input: unknown
-        ) => Promise<unknown>;
-        await expectCode(revoke({}), "BAD_REQUEST");
-        await expectCode(revoke(form), "BAD_REQUEST");
-
-        expect(await prisma.session.count({ where: { userId: user.id } })).toBe(1);
+        const logout = caller.auth.logout as (input: unknown) => Promise<unknown>;
+        await expectCode(logout({}), "BAD_REQUEST");
+        await expectCode(logout(form), "BAD_REQUEST");
+        expect(await logout(undefined)).toEqual({ success: true });
       });
     });
   });

@@ -8,7 +8,6 @@ import { PreferencesCluster } from "@/components/ui/PreferencesCluster";
 import { SnackbarDurationControl } from "@/components/ui/SnackbarDurationControl";
 import { ExportButton } from "@/components/settings/ExportButton";
 import { SignOutButton } from "@/components/session/SignOutButton";
-import { RevokeSessionsButton } from "@/components/session/RevokeSessionsButton";
 import { ChangePasswordForm } from "@/components/session/ChangePasswordForm";
 import type { JSX } from "react";
 
@@ -47,6 +46,7 @@ export default function SettingsPage(): JSX.Element {
   const tOffline = useTranslations("offline");
   const tStart = useTranslations("start");
   const tPassword = useTranslations("password");
+  const tSecurity = useTranslations("security");
 
   return (
     <PageShell width="form">
@@ -57,6 +57,13 @@ export default function SettingsPage(): JSX.Element {
           button's text-sm, rendered smaller than the sentence under it, and
           five h2s were spent on what is a list of places to go. */}
       <ul className="space-y-3">
+        {/* First, because it is the one somebody arrives in a hurry for: a
+            phone lost, a device they do not recognise. */}
+        <ItemRow
+          description={tSecurity("hubDescription")}
+          href="/settings/security"
+          title={tSecurity("title")}
+        />
         <ItemRow
           description={t("locationsDescription")}
           href="/settings/locations"
@@ -91,26 +98,17 @@ export default function SettingsPage(): JSX.Element {
         <ExportButton />
       </section>
 
-      {/* The two actions that end the visit, cheapest first — and both
-          first-class, because on a shared device they are the controls that
-          matter most.
-
-          Two sections rather than one, so the expensive one is never a mis-tap
-          away from the routine one: signing out ends this device's visit, and
-          the second makes every device this account is signed in on ask for a
-          password again. Their copy carries that distinction; neither restates
-          the other's. */}
+      {/* The action that ends the visit — first-class, because on a shared
+          device it is the control that matters most. Ending the account's
+          other sessions, one or all of them, is "Seguridad y acceso" above:
+          it asks for the password and lists what it would end, so it is a
+          screen rather than a button beside this one. */}
       <section className="mt-8 rounded border border-border bg-card p-4">
         <SignOutButton />
       </section>
 
-      <section className="mt-4 rounded border border-border bg-card p-4">
-        <RevokeSessionsButton />
-      </section>
-
-      {/* Beside the session controls because it is one: changing the password
-          ends every session the account has, this one included, and the
-          person who suspects a leak needs both in the same place. A form
+      {/* Beside sign-out because it ends sessions too: changing the password
+          ends every session the account has, this one included. A form
           rather than a link to a screen of its own, because it is three
           fields and a button. */}
       <Section

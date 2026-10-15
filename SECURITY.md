@@ -471,22 +471,23 @@ Verified against the files named in each row.
   which a plain HTML form sends with no CORS preflight: a compromised sibling
   could post a form to `auth.revokeMySessions`, which took no input, and sign
   the household out of every device. Procedures with an input refuse a form
-  body at validation; the three that took none did not.
-- **Every mutation declares an input**, and the three that take nothing —
-  `auth.revokeMySessions`, `auth.logout`, `shopping.generateFromLowStock` —
-  declare `z.void()`, so a form body that got past the rule below would now
-  fail validation there too, with 400 and nothing written. `z.void()` and not
+  body at validation; the three that took none did not. (`auth.endSessions`
+  replaced it on 2026-10-15, and asks for the password.)
+- **Every mutation declares an input**, and the two that take nothing —
+  `auth.logout` and `shopping.generateFromLowStock`, and
+  `auth.revokeMySessions` until `auth.endSessions` replaced it — declare
+  `z.void()`, so a form body that got past the rule below would now fail
+  validation there too, with 400 and nothing written. `z.void()` and not
   `z.object({})`, which a `FormData` satisfies. It does not refuse every JSON
   body: superjson reads only a body's `json` field, so `{}` or any object
-  without one arrives as no input — the same-origin control in
-  `e2e/request-guards.spec.ts` posts `{}` and revokes. The application's own
-  call sends `{"json":null,"meta":{"values":["undefined"]}}`, which superjson
-  reads back as `undefined`; a bare `{"json":null}` is `null`, and `z.void()`
-  now refuses it with 400.
+  without one arrives as no input. The application's own call sends
+  `{"json":null,"meta":{"values":["undefined"]}}`, which superjson reads back
+  as `undefined`; a bare `{"json":null}` is `null`, and `z.void()` now
+  refuses it with 400.
   `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
   names any mutation without an input parser; `integration/routers.test.ts`
-  shows `revokeMySessions` refusing an object and a `FormData` before its
-  write. The nine queries that take no input do not declare one: they write
+  shows `auth.logout` refusing an object and a `FormData` on the running
+  router. The nine queries that take no input do not declare one: they write
   nothing.
 - **A POST whose content type is not `application/json` is refused with 415**
   before its body is read. Both of the application's links send JSON, and a
@@ -556,9 +557,10 @@ Verified against the files named in each row.
   Next's own `Origin` check.
 - `src/__tests__/unit/trpc-handler.test.ts` shows tRPC alone running a
   mutation sent as a form, then the handler refusing it; `e2e/request-guards.spec.ts`
-  sends a cross-site and a form-encoded `auth.revokeMySessions` with a real
-  session against the production build, shows the session alive afterwards,
-  and then sends the same request as `same-origin` to show it does revoke.
+  sends a cross-site and a form-encoded `auth.endSessions` — every session,
+  with the right password — with a real session against the production
+  build, shows the session alive afterwards, and then sends the same request
+  as `same-origin` to show it does end it.
 
 ### Authentication — `src/lib/auth/instance.ts`, `src/server/http/auth-handler.ts`, `src/server/trpc/routers/auth.ts`
 
@@ -665,7 +667,7 @@ Verified against the files named in each row.
   the guidance is re-authentication at least every thirty days; a remembered
   session asks once a year. Accepted by the owner on 2026-10-15 for the
   compensating controls: every session is a row that can be ended at once — by
-  signing out, by **Cerrar la sesión en todos los dispositivos**, by an admin,
+  signing out, from **Tus dispositivos** in **Seguridad y acceso**, by an admin,
   by a password change — the account holds ten at most (below), and the box
   is off unless somebody ticks it. A browser session meets AAL2's figures
   (fifteen idle minutes, a day in all).
@@ -673,10 +675,10 @@ Verified against the files named in each row.
   to delete the row and expire the cookies, so a copy of the cookie taken
   before the sign-out is refused too. The other devices' sessions end when
   idle for fifteen minutes, a day after their sign-in, or when somebody ends
-  the account's sessions — **Cerrar la sesión en todos los dispositivos** in
-  Configuración (`auth.revokeMySessions`), or an admin from **Personas del
-  hogar** — which delete the rows and log `auth.session.ended` with the
-  `reason` (`self`, `admin`), who asked and how many sessions went.
+  the account's sessions — from **Tus dispositivos** in Configuración ›
+  **Seguridad y acceso** (`auth.endSessions`, below), or an admin from
+  **Personas del hogar** — which delete the rows and log `auth.session.ended`
+  with the `reason` (`self`, `admin`), who asked and how many sessions went.
 - **A person can list their sessions and end one, every other or every one,
   after re-entering the current password** (ASVS 5.0.0 7.5.2, PROGRESS
   D143). `auth.listSessions` answers each live row as the browser and system
@@ -709,6 +711,15 @@ Verified against the files named in each row.
   — and the call is tRPC, whose response headers are on their way before a
   resolver could set a rotated cookie. The same holds for every later
   re-entry (`confirmCurrentPassword`, `src/lib/auth/reauth.ts`).
+  The screen is **Tus dispositivos** at `/settings/security`
+  (`src/components/session/DeviceList.tsx`): a row per session, this
+  device's marked, each with **Cerrar esta sesión**, then **Cerrar las
+  demás** and **Cerrar todas**; every one asks for the password first
+  (`ReauthDialog`). An ending that includes this device runs the sign-out
+  sequence after the server has answered — the queue, the saved reads and
+  the cached shell go, then the redirect — and one that does not purges
+  nothing. The screen also says the account holds ten sessions at most and
+  which one an eleventh sign-in ends.
 - **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
   PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
   the old row alive, so after the sign-in succeeds the auth route deletes the
@@ -1933,7 +1944,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 68 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 67 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
@@ -1977,7 +1988,7 @@ What removes them:
 What does not:
 
 - **Ending a session ends its row, not the device's copy.** Expiry, the
-  day's ceiling, **Cerrar la sesión en todos los dispositivos** and an
+  day's ceiling, **Cerrar todas** in **Tus dispositivos** and an
   admin in **Personas del hogar** all work on the server. A device that is not
   online never hears of it: opened offline, or when a navigation takes longer
   than the service worker's 2.5 seconds, the cached shell renders and the
@@ -2114,10 +2125,11 @@ full in the section named.
   closes the first after the first account; the second is admin-only and
   metered, and a uniform answer would hide real errors from the household's
   own admins.
-- ~~**No per-session sign-out.**~~ Closed by PROGRESS D135 (2026-10-15):
-  sessions are database rows, and signing out deletes this device's, so a
-  copied cookie is refused at once. A person cannot yet see or end one other
-  device's session by itself, only all of them.
+- ~~**No per-session sign-out.**~~ Closed by PROGRESS D135 and D143
+  (2026-10-15): sessions are database rows, and signing out deletes this
+  device's, so a copied cookie is refused at once; **Tus dispositivos**
+  (`/settings/security`) lists every session and ends one, every other or
+  every one, after the password.
 - **IPv6 clients share the bridge gateway's budget by default.** IPv6 on
   Traefik's network is an opt-in, because enabling it breaks older Docker
   engines, hosts without IPv6 and existing networks; /64 grouping applies once
