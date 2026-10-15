@@ -1,12 +1,18 @@
+import { authEnvironmentProblems, ignoredAuthVariableWarnings } from "@/lib/auth/environment";
 import { publicUrlWarning } from "@/lib/auth/public-url";
 import { assertKnownRegistrationMode } from "@/lib/auth/registration";
 import { assertUsableSecret } from "@/lib/auth/secret";
 
 /**
  * Logs, without stopping anything, a configuration this application tolerates
- * but should not be left in: today, a public URL that is missing or plain HTTP
- * to another machine (`src/lib/auth/public-url.ts`, which says why it is a
- * warning and not a refusal).
+ * but should not be left in:
+ *
+ * - a public URL that is plain HTTP to another machine
+ *   (`src/lib/auth/public-url.ts`, which says why it is a warning and not a
+ *   refusal);
+ * - a variable Better Auth or next-auth would have read and this application
+ *   ignores — `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL`,
+ *   `AUTH_URL` (`src/lib/auth/environment.ts`).
  *
  * Called before `refuseToStartMisconfigured`, so an operator whose instance
  * refuses to start reads this too, in the same log.
@@ -17,12 +23,21 @@ export function warnAboutRiskyConfiguration(
 ): void {
   const warning = publicUrlWarning(env);
   if (warning) warn(warning);
+  for (const ignored of ignoredAuthVariableWarnings(env)) warn(ignored);
 }
 
 /**
  * Ends the process if the configuration is one this application refuses: a
- * session signing key anybody could have, or a `STOKY_REGISTRATION` it does
- * not know.
+ * session signing key anybody could have, a `STOKY_REGISTRATION` it does not
+ * know, or an environment the auth API would refuse to be built in — no
+ * `NEXTAUTH_URL` in production, one that is not a URL, or a Better Auth
+ * variable that would override its options (`src/lib/auth/environment.ts`).
+ *
+ * The last used to be found only by the first sign-in, which answered 503
+ * while `/api/health` said the instance was healthy (PROGRESS D136). Unlike
+ * the secret and the registration mode it is refused in development too,
+ * because there the auth API would refuse it just the same: a dev server that
+ * stops with the reason is quicker to read than one whose sign-in fails.
  *
  * Called from `src/instrumentation.ts` as the Node server starts; see there for
  * why it is called at start rather than on first import of `@/lib/auth`.
@@ -41,7 +56,9 @@ export function warnAboutRiskyConfiguration(
  * `process.exit` does not exist on the Edge and Next warns at build time about
  * any instrumentation code that could reach it there.
  */
-export function refuseToStartMisconfigured(): void {
+export function refuseToStartMisconfigured(
+  env: Record<string, string | undefined> = process.env,
+): void {
   let refused = false;
 
   for (const check of [assertUsableSecret, assertKnownRegistrationMode]) {
@@ -51,6 +68,11 @@ export function refuseToStartMisconfigured(): void {
       console.error(error instanceof Error ? error.message : error);
       refused = true;
     }
+  }
+
+  for (const problem of authEnvironmentProblems(env)) {
+    console.error(`[auth] refusing to start: ${problem}`);
+    refused = true;
   }
 
   if (refused) process.exit(1);

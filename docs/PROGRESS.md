@@ -53,6 +53,7 @@ Rules for this log:
 | "feat(db): add the session and verification tables" | `20261015130000_auth_session_tables` creates Better Auth's `Session` (one row per signed-in browser or app, cascading from `User` like `Account`, with our `authenticatedAt` as the absolute limit's clock) and `Verification`, and adds `emailVerified` and `image` to `User`. Empty until the switch: next-auth neither reads nor writes them. `indexes.test.ts` asserts a unique index on `Session(token)` and indexes on `Session(userId)`, `Session(expiresAt)` and `Verification(identifier)`; a plain index on the token turns it red. `auth-tables.test.ts` deletes an account and finds its sessions gone and another's kept; `ON DELETE SET NULL` turns it red. `bun run verify:ci` green on the commit. |
 | "feat(auth)!: replace next-auth with Better Auth" (D135; supersedes D125, amends D31) | Better Auth 1.7.7, sessions in the `Session` table, behind `src/server/http/auth-handler.ts` (five allowlisted endpoints, the body bound, Fetch Metadata, JSON only, our limits, the token kept out of bodies). `integration/auth.surface.test.ts` tries every endpoint the instance mounts with a signed-in cookie and finds only the five answer and no row changed; allowlisting `/change-password` turns it red. `integration/session.policy.test.ts` signs in for real: fifteen idle minutes, slid by `auth.session` and by nothing else, a day's cap, a deleted row refused at once; sliding inside `readSession`, dropping the clamp or enabling the cookie cache each turns it red. Ten wrong passwords write ten security lines and no Better Auth line. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(db): drop the sessions-valid-from column" | `20261015131000_drop_sessions_valid_from` drops `User.sessionsValidFrom`, the revocation line next-auth needed and nothing has read since the switch: ending a session is deleting its row (D135). `migration.credential-account.test.ts` migrates a database where an account still has the line set and finds the column gone; leaving the migration out turns it red. `bun run verify:ci` green on the commit. |
+| "feat(auth): refuse to start on settings Better Auth would misread" (D136) | `refuseToStartMisconfigured` exits on production without `NEXTAUTH_URL`, a `NEXTAUTH_URL` that is not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set and `BETTER_AUTH_TELEMETRY` on, each named on its own `[auth] refusing to start:` line; `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL` are each warned about as ignored. `unit/auth-environment.test.ts` runs the instrumentation hook as a production server for each: removing the start-up call, or any one check, turns it red; so does dropping the warning or letting the value into it. `bun run verify:ci` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2646,7 +2647,7 @@ and the swap moves no data: the hashes were already in its `Account` row
   route answers 503 and logs `auth.unavailable` — when production has no
   `NEXTAUTH_URL`, when `BETTER_AUTH_TRUSTED_ORIGINS` is set, or when
   `BETTER_AUTH_TELEMETRY` is on: each is an environment variable Better Auth
-  obeys over its options.
+  obeys over its options. *D136 (2026-10-15) refuses the same at start-up.*
 - **One key, named twice.** `NEXTAUTH_SECRET` is both `secret` and
   `secrets: [{version: 1}]`, so `BETTER_AUTH_SECRET(S)` and `AUTH_SECRET` are
   never read. Outside production, with none set, a per-process random key.
@@ -2672,3 +2673,35 @@ Everybody signs in once after upgrading; passwords are kept. Nothing reads
 `sessionsValidFrom` after the switch, and the next migration
 (`20261015131000_drop_sessions_valid_from`) drops it, so rolling back needs
 the pre-upgrade dump, as D134's move already did.
+
+**D136 — The settings Better Auth would misread stop the server at start-up.**
+D135 refused them only when the instance was first built, so the first
+sign-in answered 503 while `/api/health` — which never builds it — reported
+the instance healthy: the outage the secret guard was moved to start-up to
+end (2026-10-06). `refuseToStartMisconfigured` now also exits on every
+problem `authEnvironmentProblems` (`src/lib/auth/environment.ts`) finds:
+production with no `NEXTAUTH_URL`, a `NEXTAUTH_URL` that is not a URL,
+`BETTER_AUTH_TRUSTED_ORIGINS` set, `BETTER_AUTH_TELEMETRY` on. All of them in
+one log, like the other refusals. Unlike the secret and the registration mode
+these are refused in development too, because there the auth API refuses them
+just the same. `getAuth()` keeps the same check, for anything that builds the
+instance outside a Next server. The module imports nothing of Better Auth's,
+so the start-up check loads none of it.
+
+The variables an option already overrides are **ignored and said to be**: one
+`[auth] warning:` line per variable set, naming what is read instead and never
+the value — `BETTER_AUTH_SECRET`, `BETTER_AUTH_SECRETS` and `AUTH_SECRET`
+(`NEXTAUTH_SECRET` is read), `BETTER_AUTH_URL` (`NEXTAUTH_URL` is). `AUTH_URL`
+is warned about as well, beyond the plan: next-auth read it ahead of
+`NEXTAUTH_URL`, so an install upgraded from next-auth that set only it would
+otherwise stop at "`NEXTAUTH_URL` is not set" with no word about the line
+that used to work. An empty value counts as unset, because Compose passes
+`""` for `${X:-}`. A warning rather than a refusal because none of them can
+change what the instance does (`unit/auth-secret.test.ts` reads back the key
+it signs with); the line is for the operator who believes one is in use.
+
+The start-up warnings about a URL that is missing or not a URL are gone: the
+refusal names them on its own line, and the warning said sign-in would answer
+503 from a server that now never starts. Source deployments with no
+`NEXTAUTH_URL` stop at boot from this release; the bundle has always set it.
+Closes ISSUES AUTH-3.

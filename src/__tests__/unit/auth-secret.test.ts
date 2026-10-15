@@ -86,10 +86,13 @@ describe("when it refuses", () => {
 
   /** Runs `body` with the environment of a production Node server. */
   async function asProductionServer(secret: string | undefined, body: () => Promise<void>) {
-    const keys = ["NODE_ENV", "NEXTAUTH_SECRET", "NEXT_PHASE", "NEXT_RUNTIME"];
+    const keys = ["NODE_ENV", "NEXTAUTH_SECRET", "NEXTAUTH_URL", "NEXT_PHASE", "NEXT_RUNTIME"];
     const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
     env.NODE_ENV = "production";
     env.NEXT_RUNTIME = "nodejs";
+    // Production refuses to start without one (D136); set, so the secret is
+    // the only thing these cases change.
+    env.NEXTAUTH_URL = "https://stoky.example.com";
     delete env.NEXT_PHASE;
     if (secret === undefined) delete env.NEXTAUTH_SECRET;
     else env.NEXTAUTH_SECRET = secret;

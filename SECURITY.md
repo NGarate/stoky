@@ -521,7 +521,10 @@ Verified against the files named in each row.
   origin — `NEXTAUTH_URL`'s, plus, outside production only, each
   `DEV_ALLOWED_ORIGIN` host as `http://<host>:<PORT or 3000>` and
   `https://<host>` — with 403 `INVALID_ORIGIN`, or `MISSING_OR_NULL_ORIGIN`
-  when there is none. A POST with no cookie — a native client — needs none.
+  when there is none. Nothing else can join that list: Better Auth would add
+  `BETTER_AUTH_TRUSTED_ORIGINS` to it whatever the configuration says, so the
+  server refuses to start while that variable is set (PROGRESS D136). A POST
+  with no cookie — a native client — needs none.
   Better Auth switches this check off when `NODE_ENV` is `test`; the
   configuration sets `disableOriginCheck: false`, so the suites run what
   production runs, and `integration/auth.surface.test.ts` and
@@ -638,12 +641,12 @@ Verified against the files named in each row.
   `https://${DOMAIN}`, so its session cookie is `__Secure-stoky.session_token`
   and `Secure`; `unit/public-url.test.ts` builds the instance with an https, a
   LAN http and a loopback URL and reads the cookie's name and flag back. In
-  production a missing `NEXTAUTH_URL` is not guessed: the auth API answers 503
-  `AUTH_UNAVAILABLE` and logs `auth.unavailable` until it is set (a later
-  commit refuses it at start-up). An `http://` URL for another machine — where
+  production a missing `NEXTAUTH_URL` is not guessed: the server refuses to
+  start, as it does for a `NEXTAUTH_URL` that is not a URL (PROGRESS D136,
+  `src/lib/auth/environment.ts`). An `http://` URL for another machine — where
   an operator ends up after publishing the app port on a LAN — is allowed, and
   `src/lib/auth/public-url.ts` logs one `[auth] warning:` line at start-up for
-  it, as for a missing URL or one that is not an http(s) URL at all. The
+  it, as for a URL that is neither http nor https. The
   plain-http one names the consequences — passwords and session cookies in
   cleartext, no barcode camera, no offline support — and the way to TLS. **A
   warning, not a refusal**: refusing would reverse D84 and stop every
@@ -1534,7 +1537,11 @@ reading it is looking at a container that will not start.
   `BETTER_AUTH_SECRETS`, then `BETTER_AUTH_SECRET`, then `AUTH_SECRET`; with
   `secrets` named it never reads the first, and with `secret` named the other
   two never fill its legacy fallback. Those variables are therefore ignored,
-  not refused. The same bug was found under next-auth on 2026-10-12, where
+  not refused, and the server says so: each one that is set gets an
+  `[auth] warning: … is set and ignored` line at start-up naming the variable
+  read instead, never its value (PROGRESS D136; `BETTER_AUTH_URL` and
+  next-auth's `AUTH_URL` likewise, since `NEXTAUTH_URL` is what is read).
+  The same bug was found under next-auth on 2026-10-12, where
   `AUTH_SECRET` won over `NEXTAUTH_SECRET` while the guard and `/api/health`
   read only the latter: a valid `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme`
   started, answered healthy, and signed every session with `changeme`.
@@ -2077,8 +2084,9 @@ What an instance contacts on its own, as released:
 - **Nothing else, and no telemetry.** Stoky reports nothing to the project or
   to anybody else: there is no analytics, no error tracking and no update
   check. Better Auth's telemetry is off in its configuration, and a
-  `BETTER_AUTH_TELEMETRY` that would turn it back on makes the auth API
-  refuse to serve rather than send (`src/lib/auth/instance.ts`). The OCR model is part of the image (`TESSDATA_PATH`). Fonts come from
+  `BETTER_AUTH_TELEMETRY` that would turn it back on stops the server at
+  start-up rather than send (`src/lib/auth/environment.ts`, PROGRESS D136).
+  The OCR model is part of the image (`TESSDATA_PATH`). Fonts come from
   the instance itself (`font-src 'self'`). The image sets
   `NEXT_TELEMETRY_DISABLED=1`. PostgreSQL and Valkey sit only on the
   `internal: true` network, which has no route out.
@@ -2219,7 +2227,8 @@ release. The bundled automatic certificate flow needs a hostname and inbound
 TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
 Plain HTTP to another machine is tolerated for testing, not supported: it sends
 every password and session cookie in cleartext, and the app logs a warning at
-start-up when `NEXTAUTH_URL` is such an address or is not set. For TLS without a
+start-up when `NEXTAUTH_URL` is such an address (and does not start when it is
+not set). For TLS without a
 public hostname, use your own proxy — setting `NEXTAUTH_URL` to its https
 address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
 `tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).

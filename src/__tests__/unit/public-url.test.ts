@@ -11,7 +11,9 @@ import { warnAboutRiskyConfiguration } from "@/lib/auth/startup";
  * request's headers for it. An instance that sends every password and session
  * cookie in cleartext says so at start-up (security review, 2026-10-12), and
  * warns rather than refuses: D84 keeps plain-http LAN installs working on
- * purpose.
+ * purpose. A URL that is missing in production, or is not a URL, is not
+ * warned about here: the server refuses to start on it (D136,
+ * `unit/auth-environment.test.ts`).
  */
 
 const production = (urls: Record<string, string | undefined>) => ({
@@ -79,11 +81,9 @@ describe("what the configured URL means", () => {
 });
 
 describe("the warning", () => {
-  it("is given for every configuration that is not https or loopback, in production", () => {
+  it("is given for every URL that is neither https nor loopback, in production", () => {
     for (const urls of [
-      {},
       { NEXTAUTH_URL: "http://192.168.1.10:3000" },
-      { NEXTAUTH_URL: "stoky.example.com" },
       { NEXTAUTH_URL: "ftp://stoky.example.com" },
     ]) {
       expect(publicUrlWarning(production(urls))).toStartWith("[auth] warning:");
@@ -110,10 +110,12 @@ describe("the warning", () => {
     expect(warning).toMatch(/X-Forwarded-For/);
   });
 
-  it("when missing, says that nobody can sign in until it is set", () => {
-    const warning = publicUrlWarning(production({}))!;
-    expect(warning).toMatch(/NEXTAUTH_URL is not set/);
-    expect(warning).toMatch(/refuses every request \(503\)/);
+  it("is not given when the URL is missing or not a URL, which start-up refuses instead", () => {
+    // The refusal names the variable on a line of its own; a warning beside
+    // it, saying sign-in answers 503, would describe a server that never
+    // starts.
+    expect(publicUrlWarning(production({}))).toBeNull();
+    expect(publicUrlWarning(production({ NEXTAUTH_URL: "stoky.example.com" }))).toBeNull();
   });
 
   it("never repeats credentials written into the URL", () => {

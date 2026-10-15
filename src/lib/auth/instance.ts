@@ -4,6 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { isAPIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@/lib/prisma";
+import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { classifyPublicUrl, publicUrl } from "@/lib/auth/public-url";
 import { nextExpiry } from "@/lib/auth/session-policy";
@@ -36,50 +37,6 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/pass
  *   `Session.ipAddress` stays null.
  * - **Our Argon2id**, so the hashes written before the swap verify unchanged.
  */
-
-/** A variable Better Auth reads in preference to the options it is given. */
-function truthy(value: string | undefined): boolean {
-  return !!value && value !== "0" && value.toLowerCase() !== "false";
-}
-
-/**
- * Refuses an environment in which Better Auth would not do what the options
- * below say. Thrown from `getAuth()`, so the auth route answers 503 and logs
- * `auth.unavailable` instead of serving the wrong policy (PROGRESS D135; a
- * later commit refuses the same at start-up):
- *
- * - **Production without `NEXTAUTH_URL`.** The URL decides the trusted origin
- *   and whether the cookie is `Secure`; guessing it from a request is the
- *   downgrade `src/lib/auth/public-url.ts` describes.
- * - **A `NEXTAUTH_URL` that is not a URL**, which Better Auth would throw on
- *   with a message about itself rather than about the variable.
- * - **`BETTER_AUTH_TRUSTED_ORIGINS` set.** Better Auth appends it to the
- *   trusted origins whatever the options say, so an origin nobody reviewed
- *   could send a signed-in browser's POSTs.
- * - **`BETTER_AUTH_TELEMETRY` truthy**, which turns telemetry on whatever
- *   `telemetry.enabled` says.
- */
-export function assertAuthEnvironment(
-  env: Record<string, string | undefined> = process.env,
-): void {
-  const state = classifyPublicUrl(env);
-  if (state.kind === "missing" && env.NODE_ENV === "production") {
-    throw new Error("[auth] unavailable: NEXTAUTH_URL is not set. Set it to the https address people use.");
-  }
-  if (state.kind === "unparsable") {
-    throw new Error("[auth] unavailable: NEXTAUTH_URL is not a URL. Set it to the https address people use.");
-  }
-  if (env.BETTER_AUTH_TRUSTED_ORIGINS) {
-    throw new Error(
-      "[auth] unavailable: BETTER_AUTH_TRUSTED_ORIGINS is set. Better Auth would trust those origins whatever this application configures; remove it.",
-    );
-  }
-  if (truthy(env.BETTER_AUTH_TELEMETRY)) {
-    throw new Error(
-      "[auth] unavailable: BETTER_AUTH_TELEMETRY is on. This instance sends nothing anywhere; remove it.",
-    );
-  }
-}
 
 let generatedSecret: string | undefined;
 
@@ -277,7 +234,12 @@ export type StokyAuth = ReturnType<typeof build>;
 
 let instance: StokyAuth | undefined;
 
-/** The instance, built on first call after `assertAuthEnvironment` passes. */
+/**
+ * The instance, built on first call after `assertAuthEnvironment` passes
+ * (`src/lib/auth/environment.ts`). Start-up has already refused the same
+ * environment under a Next server; this is the second line, for anything that
+ * builds it elsewhere.
+ */
 export function getAuth(): StokyAuth {
   if (!instance) {
     assertAuthEnvironment();

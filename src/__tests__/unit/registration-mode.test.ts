@@ -158,7 +158,14 @@ describe("refusing to start", () => {
 
   it("stops the server from the instrumentation hook, and names both problems at once", async () => {
     const env = process.env as Record<string, string | undefined>;
-    const keys = ["NODE_ENV", "NEXTAUTH_SECRET", "NEXT_PHASE", "NEXT_RUNTIME", REGISTRATION_ENV];
+    const keys = [
+      "NODE_ENV",
+      "NEXTAUTH_SECRET",
+      "NEXTAUTH_URL",
+      "NEXT_PHASE",
+      "NEXT_RUNTIME",
+      REGISTRATION_ENV,
+    ];
     const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
     const { register } = await import("@/instrumentation");
     const exit = spyOn(process, "exit").mockImplementation(((code?: number) => {
@@ -171,6 +178,9 @@ describe("refusing to start", () => {
       env.NEXT_RUNTIME = "nodejs";
       delete env.NEXT_PHASE;
       env.NEXTAUTH_SECRET = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
+      // Production refuses to start without one (D136), which would be a
+      // third line below.
+      env.NEXTAUTH_URL = "https://stoky.example.com";
 
       env[REGISTRATION_ENV] = "Open";
       await expect(register()).rejects.toThrow("exit 1");

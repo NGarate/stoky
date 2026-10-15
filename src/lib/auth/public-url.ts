@@ -13,12 +13,12 @@
  *   URL's origin, plus `DEV_ALLOWED_ORIGIN`'s hosts outside production.
  * - **The links it builds**, of which there are none today.
  *
- * So a missing URL in production is refused rather than guessed: the auth API
- * answers 503 until it is set (`assertAuthEnvironment`), because the guess it
- * would otherwise make — the request's own headers — is the one that issued a
- * session cookie without `Secure` behind a TLS proxy that does not send
- * `X-Forwarded-Proto` (security review, 2026-10-12; OWASP ASVS 4.0.3 V3.4.1,
- * V9.1.1).
+ * So a missing URL in production is refused rather than guessed: the server
+ * refuses to start until it is set (`src/lib/auth/environment.ts`, PROGRESS
+ * D136), because the guess Better Auth would otherwise make — the request's
+ * own headers — is the one that issued a session cookie without `Secure`
+ * behind a TLS proxy that does not send `X-Forwarded-Proto` (security review,
+ * 2026-10-12; OWASP ASVS 4.0.3 V3.4.1, V9.1.1).
  *
  * **Plain http to another machine is a warning, never a refusal.** D84
  * (`docs/PROGRESS.md`) keeps a plain-http LAN install working on purpose, and
@@ -111,6 +111,10 @@ const TLS_ROUTE =
 /**
  * The warning for this configuration, in words an operator can act on, or
  * null. Production only: development and the suites use whatever is to hand.
+ *
+ * Nothing for a URL that is missing or not a URL: the server refuses to start
+ * on those, with a line of its own (`authEnvironmentProblems`), and a warning
+ * beside it would only say the same thing twice.
  */
 export function publicUrlWarning(
   env: Record<string, string | undefined>,
@@ -121,11 +125,9 @@ export function publicUrlWarning(
   switch (state.kind) {
     case "https":
     case "loopback-http":
-      return null;
     case "missing":
-      return `[auth] warning: NEXTAUTH_URL is not set, so the sign-in API refuses every request (503) until it is. It must be the address people use: the auth API accepts a sign-in only from that origin, and marks the session cookie Secure only when it is https. ${TLS_ROUTE}`;
     case "unparsable":
-      return "[auth] warning: NEXTAUTH_URL is not a URL (a missing https:// is the usual cause), so nobody can sign in. Set it to the https address people use.";
+      return null;
     case "other-scheme":
       return `[auth] warning: NEXTAUTH_URL is a ${state.protocol} URL; it must be https, or http only for this machine. The session cookie is not marked Secure. ${TLS_ROUTE}`;
     case "insecure-http":

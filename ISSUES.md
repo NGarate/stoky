@@ -94,6 +94,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
 | AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right; next-auth itself replaced 2026-10-15 (D135) |
 | AUTH-2 | Better Auth refuses to serve with a required column it never writes | ✅ Resolved 2026-10-15 by D134 — the hash moved to `Account` and `User.passwordHash` went before the switch |
+| AUTH-3 | Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options | ✅ Resolved 2026-10-15 by D135 and D136 — the secrets are named in the options, the other two stop the server at start-up |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
@@ -3535,6 +3536,41 @@ and keeps a password in the `credential` row of `Account`.
 (`20261015120000_credential_accounts`), so the swap (D135) found a schema
 Better Auth accepts and carried no data move. `credentials.ts` is still the
 one module that reads or writes the hash.
+
+### ✅ AUTH-3: Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options
+
+**Files:** `src/lib/auth/environment.ts`, `src/lib/auth/instance.ts`, `src/lib/auth/startup.ts`
+**Severity:** HIGH for the migration — a forged session, or an origin nobody reviewed, with every check green
+**Status:** RESOLVED 2026-10-15 by PROGRESS D135 (the swap) and D136 (start-up).
+
+Found reading Better Auth 1.7.7 for the swap. It reads environment variables
+of its own, and three of them change what the instance does whatever its
+options say:
+
+- **`BETTER_AUTH_SECRETS`** is used whenever `secrets` is not given, and
+  `BETTER_AUTH_SECRET` or `AUTH_SECRET` whenever `secret` is empty
+  (`context/create-context.mjs`). The start-up guard reads only
+  `NEXTAUTH_SECRET`, so a real one beside `AUTH_SECRET=changeme` would pass
+  the guard and `/api/health` and sign every session with `changeme` — the
+  bug found under next-auth on 2026-10-12, in a new place.
+- **`BETTER_AUTH_TRUSTED_ORIGINS`** is appended to the trusted origins after
+  the configured ones (`context/helpers.mjs`), so a value left in an
+  environment file adds an origin allowed to send a signed-in browser's
+  POSTs.
+- **`BETTER_AUTH_TELEMETRY`** turns telemetry on whatever
+  `telemetry.enabled` says.
+
+**How it closed.** The swap (D135) names both `secret` and `secrets` from
+`NEXTAUTH_SECRET`, so the secret variables are never read;
+`unit/auth-secret.test.ts` sets all three to something else and reads back
+the key the instance signs with. No option overrides the other two, so the
+swap refused them when the instance was built, which answered 503 at the
+first sign-in while `/api/health` said the instance was healthy. D136 moves
+that refusal to start-up: the process exits with an `[auth] refusing to
+start:` line naming the variable (`unit/auth-environment.test.ts`). The
+ignored ones — the three secrets, `BETTER_AUTH_URL` and next-auth's
+`AUTH_URL` — are each named in an `[auth] warning:` line at start-up, so an
+operator does not go on believing one is in use.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
