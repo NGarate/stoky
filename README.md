@@ -243,8 +243,8 @@ directly to `master`, in small focused commits, with no feature branch and no
 pull request. Unattended and semi-attended agent work is the exception: it goes
 on a `<type>/<topic>-<YYYY-MM-DD>` branch with a pull request, squash-merged once
 the owner has reviewed it. [`CLAUDE.md`](CLAUDE.md) (Git Workflow) owns the rule.
-Either way `master` must be green at every commit — run the checks before
-committing, not after.
+Either way `master` must be green at every commit — check each commit before
+making it, and the whole branch before pushing it.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -256,8 +256,11 @@ fix(inventory): correct stock quantity aggregation query
 Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`, `shopping`,
 `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
 
-Before every commit: `bun run verify:ci` must pass, new behaviour needs
-tests, and user-facing strings go in `messages/es.json` first.
+Before every commit: lint, typecheck and the tests the change affects must
+pass, new behaviour needs tests, and user-facing strings go in
+`messages/es.json` first. Before every push: `bun run verify:ci` and
+`bun run test:e2e`, whole. [`docs/VERIFICATION_SEQUENCE.md`](docs/VERIFICATION_SEQUENCE.md)
+has the commands.
 
 **Tests must be able to fail.** An assertion that holds regardless of the code
 is not a test — this repository has been burned by that before, see the note in

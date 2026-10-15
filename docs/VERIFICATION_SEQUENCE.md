@@ -20,6 +20,48 @@ is `bunx --bun playwright test`, and the E2E directory declares ES modules so
 Bun retains its TypeScript loader (see `TEST_SETUP.md`).
 The `node` command in the Bun image is a compatibility symlink to Bun itself.
 
+## When to run what
+
+**Each commit is checked narrowly; each push is checked fully.** Running every
+suite to learn whether one case broke costs minutes per commit and tells you
+nothing the affected files would not — the browser suite alone takes about ten.
+The full run still happens, once, where it decides something: before the work
+leaves the machine.
+
+Before a commit:
+
+```bash
+bun run lint
+bun run typecheck                    # whole project: a changed signature breaks callers you did not touch
+bun test <unit files>
+bun test --preload ./src/__tests__/setup/register-dom.ts <component files>
+bash scripts/test-integration-local.sh <integration files>
+```
+
+- **Only the test files the change affects** — the ones next to what changed,
+  and the ones a search finds using the changed modules, procedures, routes or
+  message keys.
+- `bun run build`, `check:react`, `check:links` and `check:contrast` only when
+  the change touches what each one checks: the route tree, configuration or
+  dependencies; components; links; colour tokens.
+- **No browser suite**, even for a change that renders. A spec the change
+  makes wrong (a string, a label, a route) is updated in the same commit, and
+  is run before the push with all the others.
+- A mutation check runs the one test file that should go red, not a suite.
+
+Before a push:
+
+```bash
+bun run verify:ci
+bun run test:e2e
+```
+
+Both whole, both once. A failure is fixed in the commit that introduced it,
+while the branch is still unpushed (`git commit --fixup=<sha>`, then
+`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`), and the two are run
+again on the result. Something that fails once and passes three isolated
+reruns is reported as flaky, never retried until it happens to pass.
+
 ## Command ladder
 
 ### 1. Fast local gate
@@ -66,10 +108,15 @@ bun run verify:ci
 This runs the fast gate plus `bun run test:integration` (which brings up its own
 database and cache) and `bun run build`.
 
-### 3. Critical-path browser smoke
+### 3. Browser suite
 
-Run when a slice changes visible flows in auth, inventory, receipts, shopping,
-or prices:
+Before a push, whole (see "When to run what"):
+
+```bash
+bun run test:e2e
+```
+
+One spec at a time, when diagnosing a failure the whole run found:
 
 ```bash
 bun run test:e2e -- e2e/critical-paths.spec.ts
