@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { lineHeightRatio, minimumHeight, resolve } from "../setup/tailwind";
 
@@ -90,6 +91,51 @@ describe("target size, resolved from the real stylesheet", () => {
     const height = await minimumHeight(className);
 
     expect(height, `resolved to ${height}px from: ${className}`).toBeGreaterThanOrEqual(
+      FLOOR,
+    );
+  });
+
+  /**
+   * The checkbox's target is its input, stretched over the label it sits in.
+   *
+   * So the question is asked of the input, and answered by the label only when
+   * the input really does cover it: positioned absolutely, pinned on every
+   * side, full height, inside a label that is its containing block. Anything
+   * else is measured as the input alone — which is how `sr-only`, the version
+   * that looks identical, comes out at 1px instead of passing on the strength
+   * of a label nobody can hit. A clip counts against it too: `sr-only` added
+   * beside the stretching classes loses its height and width to them in the
+   * cascade, but its `clip-path` still cuts the hit area to nothing.
+   */
+  test(`a checkbox's input covers at least ${FLOOR}px in both directions`, async () => {
+    render(<Checkbox label="Sí" />);
+    const input = screen.getByRole("checkbox");
+    const own = await resolve(input.className);
+
+    const covers =
+      own.declarations.get("position") === "absolute" &&
+      own.pixels.get("inset") === 0 &&
+      own.declarations.get("height") === "100%" &&
+      own.declarations.get("width") === "100%" &&
+      !own.declarations.has("clip-path") &&
+      !own.declarations.has("clip");
+
+    const label = input.closest("label");
+    const container = label ? await resolve(label.className) : undefined;
+    const anchored = container?.declarations.get("position") === "relative";
+
+    const height =
+      covers && anchored && label
+        ? await minimumHeight(label.className)
+        : await minimumHeight(input.className);
+    const width =
+      covers && anchored ? container?.pixels.get("min-width") : own.pixels.get("width");
+
+    expect(height, `resolved to ${height}px from: ${input.className}`).toBeGreaterThanOrEqual(
+      FLOOR,
+    );
+    // A two-letter label is the width case, as it is for RadioOption.
+    expect(width, `resolved to ${width}px wide from: ${input.className}`).toBeGreaterThanOrEqual(
       FLOOR,
     );
   });
