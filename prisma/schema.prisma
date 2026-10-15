@@ -14,6 +14,14 @@ model User {
   /// The ways this person signs in. Today only the `credential` row, which
   /// holds the password hash where Better Auth reads it; see `Account`.
   accounts      Account[]
+  /// The sessions this person is signed in with, one row each; see `Session`.
+  sessions      Session[]
+  /// Better Auth's. Nothing here sends mail, so no address is ever verified
+  /// and this stays false; registration and sign-in never consult it.
+  emailVerified Boolean    @default(false)
+  /// Better Auth's, for a provider's profile picture. Always null: there are
+  /// no social providers.
+  image         String?
   /// The language this person reads. Beats the `locale` cookie; see src/i18n/request.ts.
   locale        String     @default("es")
   /// How long a confirmation stays on screen: "default" | "long" | "forever".
@@ -84,6 +92,64 @@ model Account {
 
   @@unique([providerId, accountId])
   @@index([userId])
+}
+
+/// One signed-in browser or app, in the shape Better Auth reads.
+///
+/// A row per session is what lets a single session be ended — this one, a
+/// lost phone, every one but this — where a signed token can only be refused
+/// wholesale. The cookie carries `token`, signed; Better Auth looks the row up
+/// by it on every read, and a row that is gone or past `expiresAt` is a
+/// signed-out request whatever the cookie says.
+///
+/// Created ahead of the switch to Better Auth and empty until it: next-auth
+/// neither reads nor writes it.
+///
+/// **Cascades from User**, like `Account`: a session that outlives its account
+/// is a way in to nothing, but ASVS 7.4.2 asks for it to go with the account,
+/// and Better Auth's adapter never deletes these rows itself.
+model Session {
+  id              String   @id @default(cuid())
+  /// The bearer secret. Unique because it is the lookup key.
+  token           String   @unique
+  /// The only lifetime that counts: a row past it is refused on every path.
+  expiresAt       DateTime
+  /// Reset by Better Auth each time it re-creates a session (a password
+  /// change, enabling two-step verification), so it is not when the person
+  /// signed in; `authenticatedAt` is.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  /// When this person last proved who they are on this session: set at
+  /// sign-in, carried across Better Auth's re-creates. The absolute session
+  /// ceiling is measured from here, not from `createdAt`.
+  authenticatedAt DateTime @default(now())
+  /// Better Auth's. Its address tracking is to be switched off, so this
+  /// stays null.
+  ipAddress       String?
+  userAgent       String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  // So expired rows can be found and deleted without reading the table.
+  @@index([expiresAt])
+}
+
+/// Better Auth's short-lived one-off values: an identifier, a value, an
+/// expiry — a two-step sign-in in progress, for one. Empty until the switch,
+/// like `Session`.
+///
+/// No foreign key: an identifier is whatever the feature that wrote it chose,
+/// not always a user id, and a row is useless past `expiresAt` anyway.
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Household {
@@ -323,8 +389,8 @@ enum LandingScreen {
 /// standing rule that there are no cascades. A deleted account leaves rows
 /// keyed on a user id that no longer exists; nothing reads them, they are two
 /// short strings each, and a cascade is kept for the auth tables alone
-/// (`Account`), where a row left behind is a credential rather than a
-/// preference.
+/// (`Account`, `Session`), where a row left behind is a credential rather than
+/// a preference.
 model ScreenChoice {
   userId    String
   deviceId  String

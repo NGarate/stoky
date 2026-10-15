@@ -30,10 +30,13 @@ function columnsOf(definition: string): string {
     .join(",");
 }
 
-function hasIndex(table: string, columns: string[]): boolean {
+function hasIndex(table: string, columns: string[], options: { unique?: boolean } = {}): boolean {
   const wanted = columns.join(",");
   return indexes.some(
-    (row) => row.tablename === table && columnsOf(row.indexdef) === wanted,
+    (row) =>
+      row.tablename === table &&
+      columnsOf(row.indexdef) === wanted &&
+      (!options.unique || row.indexdef.startsWith("CREATE UNIQUE INDEX")),
   );
 }
 
@@ -102,6 +105,33 @@ describe("the household scoping", () => {
       expect(hasIndex(table, [column])).toBe(true);
     });
   }
+});
+
+describe("the auth tables", () => {
+  // Better Auth reads these on every authenticated request, so they are the
+  // hottest lookups in the application once it signs people in.
+
+  it("finds a session by its token, and never two", () => {
+    // The cookie carries the token; the row is looked up by it on every read.
+    // Unique as well as indexed: two rows answering one token would be one
+    // cookie signing in as whichever the planner found first.
+    expect(hasIndex("Session", ["token"], { unique: true })).toBe(true);
+  });
+
+  it("finds a person's sessions", () => {
+    // The device list, ending every session but this one, and the cap on how
+    // many a person may hold all start from the user.
+    expect(hasIndex("Session", ["userId"])).toBe(true);
+  });
+
+  it("finds the expired sessions", () => {
+    expect(hasIndex("Session", ["expiresAt"])).toBe(true);
+  });
+
+  it("finds a pending verification by what it verifies", () => {
+    // A two-step sign-in in progress is looked up by its identifier.
+    expect(hasIndex("Verification", ["identifier"])).toBe(true);
+  });
 });
 
 describe("every foreign key", () => {

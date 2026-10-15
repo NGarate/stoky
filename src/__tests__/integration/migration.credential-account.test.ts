@@ -69,10 +69,15 @@ beforeAll(async () => {
   await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${isolated.name}" WITH (FORCE)`);
   await prisma.$executeRawUnsafe(`CREATE DATABASE "${isolated.name}"`);
 
-  // `prisma/` as it stood the release before: every migration up to this one.
+  // `prisma/` as it stood the release before: every migration up to this one,
+  // and none after it. Leaving a later one in would apply it first and this
+  // one out of order, against a schema no install ever had.
   cpSync(join(ROOT, "prisma"), join(before, "prisma"), {
     recursive: true,
-    filter: (source) => !source.includes(MIGRATION),
+    filter: (source) => {
+      const migration = /migrations[\\/](\d{14}_[^\\/]+)/.exec(source)?.[1];
+      return migration === undefined || migration < MIGRATION;
+    },
   });
   migrate(join(before, "prisma", "schema.prisma"), isolated.url);
 
