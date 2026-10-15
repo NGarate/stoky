@@ -21,6 +21,11 @@ import { findCredentialByEmail } from "@/lib/auth/credentials";
  * first from a copy of `prisma/` without this migration, then from `prisma/`
  * itself, the way `prisma migrate deploy` meets an upgraded install — and
  * dropped afterwards.
+ *
+ * The upgrade it migrates through also carries
+ * `20261015131000_drop_sessions_valid_from`, so the same populated database
+ * checks that one too: one account arrives with its sessions-ended line set,
+ * the way an account whose sessions were ended under next-auth does.
  */
 
 const ROOT = join(import.meta.dir, "../../..");
@@ -91,6 +96,10 @@ beforeAll(async () => {
       INSERT INTO "User" (id, email, name, "passwordHash", "updatedAt")
       VALUES (${person.id}, ${person.email}, 'Antes', ${oldHash}, now())`;
   }
+  // An account whose sessions were ended under next-auth: the column the
+  // later migration drops is not empty on a real install.
+  await db.$executeRaw`
+    UPDATE "User" SET "sessionsValidFrom" = now() WHERE id = ${people[0].id}`;
 
   migrate(join(ROOT, "prisma", "schema.prisma"), isolated.url);
 }, 120_000);
@@ -140,5 +149,19 @@ describe("moving the password hashes into credential Account rows", () => {
     await db.user.delete({ where: { id: people[1].id } });
 
     expect(await db.account.count({ where: { userId: people[1].id } })).toBe(0);
+  });
+});
+
+describe("dropping the sessions-valid-from line", () => {
+  it("removes the column from User, where an account still had it set", async () => {
+    const columns = await db.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+       WHERE table_schema = current_schema() AND table_name = 'User'`;
+    const names = columns.map((c) => c.column_name);
+
+    // Read beside a column that stays, so a query that found no columns at
+    // all could not pass for one that found this one gone.
+    expect(names).toContain("email");
+    expect(names).not.toContain("sessionsValidFrom");
   });
 });

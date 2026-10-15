@@ -32,22 +32,6 @@ model User {
   household     Household? @relation(fields: [householdId], references: [id])
   householdId   String?
   role          HouseholdRole @default(MEMBER)
-  /// Sessions issued before this moment are refused — the whole of session
-  /// revocation, in one column.
-  ///
-  /// The session is a JWT with no server-side record, so there is nothing to
-  /// delete. What there is instead is a line in time: `src/lib/auth.ts`'s `jwt`
-  /// callback compares the token's `iat` against this and returns null when the
-  /// token is older, which makes Auth.js clear the cookie.
-  ///
-  /// **Coarse on purpose.** Per-session revocation would need a row per session
-  /// and a write on every renewal — every five minutes per active account,
-  /// which is the cost `session.updateAge` was tuned to avoid. This answers
-  /// both things asked of it, "end my sessions" and "end theirs", and is a
-  /// strict subset of the finer version if that is ever wanted.
-  ///
-  /// Null means never revoked, which is every account until somebody asks.
-  sessionsValidFrom DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 

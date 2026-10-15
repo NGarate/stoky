@@ -52,6 +52,7 @@ Rules for this log:
 | "feat(ui): add a Checkbox primitive" | `src/components/ui/checkbox.tsx` is `RadioOption`'s stretched input for a yes/no choice, ready for the remember-me box: named by its label, described by its hint, `name=on` in a plain form, its drawn tick following `:checked`. `target-size.test.tsx` measures the input itself and credits it with the label's 48px only when it really covers the label; an `sr-only` input, alone or beside the stretching classes, turns it red. `bun run verify:ci` green on the commit. |
 | "feat(db): add the session and verification tables" | `20261015130000_auth_session_tables` creates Better Auth's `Session` (one row per signed-in browser or app, cascading from `User` like `Account`, with our `authenticatedAt` as the absolute limit's clock) and `Verification`, and adds `emailVerified` and `image` to `User`. Empty until the switch: next-auth neither reads nor writes them. `indexes.test.ts` asserts a unique index on `Session(token)` and indexes on `Session(userId)`, `Session(expiresAt)` and `Verification(identifier)`; a plain index on the token turns it red. `auth-tables.test.ts` deletes an account and finds its sessions gone and another's kept; `ON DELETE SET NULL` turns it red. `bun run verify:ci` green on the commit. |
 | "feat(auth)!: replace next-auth with Better Auth" (D135; supersedes D125, amends D31) | Better Auth 1.7.7, sessions in the `Session` table, behind `src/server/http/auth-handler.ts` (five allowlisted endpoints, the body bound, Fetch Metadata, JSON only, our limits, the token kept out of bodies). `integration/auth.surface.test.ts` tries every endpoint the instance mounts with a signed-in cookie and finds only the five answer and no row changed; allowlisting `/change-password` turns it red. `integration/session.policy.test.ts` signs in for real: fifteen idle minutes, slid by `auth.session` and by nothing else, a day's cap, a deleted row refused at once; sliding inside `readSession`, dropping the clamp or enabling the cookie cache each turns it red. Ten wrong passwords write ten security lines and no Better Auth line. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
+| "feat(db): drop the sessions-valid-from column" | `20261015131000_drop_sessions_valid_from` drops `User.sessionsValidFrom`, the revocation line next-auth needed and nothing has read since the switch: ending a session is deleting its row (D135). `migration.credential-account.test.ts` migrates a database where an account still has the line set and finds the column gone; leaving the migration out turns it red. `bun run verify:ci` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2667,6 +2668,7 @@ and the swap moves no data: the hashes were already in its `Account` row
 - **`AppSession.sessionId` is required**, for the same reason as the
   helper's refusal.
 
-Everybody signs in once after upgrading; passwords are kept. Rolling back to
-the previous image needs nothing more: it ignores the new tables, and
-`sessionsValidFrom` is still there until its own commit drops it.
+Everybody signs in once after upgrading; passwords are kept. Nothing reads
+`sessionsValidFrom` after the switch, and the next migration
+(`20261015131000_drop_sessions_valid_from`) drops it, so rolling back needs
+the pre-upgrade dump, as D134's move already did.
