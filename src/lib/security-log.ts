@@ -56,7 +56,8 @@ export type SecurityEvent =
   // Sessions somebody ended on purpose, with the `reason`: the account's own
   // holder ending all of theirs (`self`), a password change ending every
   // other one (`password-change`), an admin ending a member's
-  // (`admin`), a sign-in ending the session its browser presented
+  // (`admin`), an admin removing a member from the household (`removed`),
+  // a sign-in ending the session its browser presented
   // (`replaced`), or a sign-in that would be the account's eleventh session
   // ending its least recently used one (`evicted`; both in
   // `src/lib/auth/sign-in-tidy.ts`). `userId` did it,
@@ -111,8 +112,8 @@ export interface SecurityDetails {
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
    * it, which has no procedure to have thrown it. On `auth.session.ended` it
-   * is why: `"self"`, `"password-change"`, `"admin"`, `"replaced"` or
-   * `"evicted"`.
+   * is why: `"self"`, `"password-change"`, `"admin"`, `"removed"`,
+   * `"replaced"` or `"evicted"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */

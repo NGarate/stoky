@@ -351,15 +351,28 @@ export const householdRouter = createTRPCRouter({
    * `PRECONDITION_FAILED` from `householdProcedure`, because it re-reads the
    * household too.
    *
-   * **This is the nearest thing to session revocation this application has**,
-   * and it is not a substitute for it: it ends a member's access to *this
-   * household*, not their session. Removing somebody does not sign them out
-   * anywhere else, and there is nowhere else. See §10.
+   * **And it signs them out everywhere** (ASVS 5.0.0 7.4.2, PROGRESS D146).
+   * Every session the member has is deleted in the same transaction that
+   * takes their household away (`endSessions`), so the phone in their pocket
+   * and the kitchen tablet they left signed in are signed out together, and
+   * neither the household nor the sessions can go without the other. Losing
+   * the household alone already refused every household request; what a
+   * session left alive still reached was the account itself — its password,
+   * its devices list, a new household of its own (`household.create`) — on
+   * a device the household may no longer control, such as the kitchen
+   * tablet. The account stays, so the person can sign in
+   * again, to an account with no household.
+   *
+   * Removing yourself, which an owner beside another owner may do, ends your
+   * own sessions too, this one included: you no longer belong anywhere, and
+   * nothing about that needs a session. Logged as `auth.session.ended` with
+   * `reason: "removed"`, after the transaction has committed, so a refused
+   * removal writes no line.
    */
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
-      await withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
+      const removed = await withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
         const member = await memberOfHousehold(tx, input.userId, ctx.householdId);
 
         assertMayActOnOwner(ctx.role, member.role);
@@ -369,6 +382,17 @@ export const householdRouter = createTRPCRouter({
           where: { id: member.id },
           data: { householdId: null },
         });
+
+        return { id: member.id, ended: await endSessions(tx, { userId: member.id }) };
+      });
+
+      logSecurityEvent("auth.session.ended", {
+        userId: ctx.session.user.id,
+        targetUserId: removed.id,
+        householdId: ctx.householdId,
+        reason: "removed",
+        count: removed.ended,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
 
       return { success: true };
@@ -440,9 +464,10 @@ export const householdRouter = createTRPCRouter({
    * Logged as `auth.session.ended` with `reason: "admin"`, who asked, whose,
    * and how many. Answers only the count.
    *
-   * Removing a member ends their access to this household; this ends their
-   * sessions. They are different acts and the screen offers both, because
-   * "they left" and "their phone was stolen" are different problems.
+   * Removing a member ends their access to this household and every session
+   * they have (D146); this ends sessions and leaves them in the household.
+   * They are different acts and the screen offers both, because "they left"
+   * and "their phone was stolen" are different problems.
    */
   endMemberSessions: adminProcedure
     .input(endMemberSessionsSchema)

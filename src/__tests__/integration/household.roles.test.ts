@@ -29,9 +29,11 @@ import {
  * 3. **The household keeps an owner.** The invariant §10 named as the design
  *    question to settle first, because it is the one that bites late.
  *
- * The last test is the reason this is worth building before session revocation
- * exists: a removal takes effect on the very next request, because
- * `householdProcedure` re-reads the household rather than trusting the token.
+ * The last tests hold the second line of defence: a removal takes effect on
+ * the very next request, because `householdProcedure` re-reads the household
+ * rather than trusting the token. Removal also ends the member's sessions
+ * (PROGRESS D146, `household.members.test.ts`); these callers carry a session
+ * that is never read back, so they prove the re-read on its own.
  */
 
 const PREFIX = "Roles ";
@@ -221,9 +223,10 @@ describe("the household keeps an owner", () => {
 
 describe("when it takes effect", () => {
   it("bites on the removed member's very next request", async () => {
-    // The reason this is worth having before session revocation exists.
-    // `householdProcedure` re-reads the household rather than trusting the
-    // token, so removal ends access without anything ending the session.
+    // Removal also deletes the member's sessions (D146), but this caller's
+    // session is a mock that nothing reads back, so what refuses it here is
+    // `householdProcedure` re-reading the household rather than trusting the
+    // token — the guard that holds even for a session not yet ended.
     const { caller: owner } = await member("OWNER", "Owner");
     const target = await member("MEMBER", "Target");
 

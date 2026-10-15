@@ -839,7 +839,7 @@
     "roleFailed": "The role could not be changed. Try again.",
     "removeButton": "Remove from the household",
     "removeConfirmTitle": "Remove {name} from the household?",
-    "removeConfirmBody": "Their account is not deleted: they stop belonging to this household and lose access on their next request, without having to sign out.",
+    "removeConfirmBody": "Their account is not deleted: they stop belonging to this household and are signed out on every device.",
     "removeConfirm": "Yes, remove them",
     "removeCancel": "Cancel",
     "removeDone": "{name} no longer belongs to this household.",

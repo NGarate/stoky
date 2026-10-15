@@ -1233,4 +1233,18 @@ describe("a member's sessions, from the people page", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Sesiones de Ana" })).toBeInTheDocument();
   });
+
+  it("says before a removal that it signs the member out on every device", async () => {
+    // ASVS 5.0.0 7.4.2, D146: removing somebody now ends their sessions too,
+    // and the question is the last place the admin can learn that.
+    renderPeople();
+    const ana = rowOf("Ana");
+    if (!ana) throw new Error("Ana is not listed");
+
+    await userEvent.click(within(ana).getByRole("button", { name: "Quitar del hogar" }));
+
+    expect(
+      screen.getByRole("group", { name: "¿Quitar a Ana del hogar?" }),
+    ).toHaveTextContent("se cierran sus sesiones en todos sus dispositivos");
+  });
 });

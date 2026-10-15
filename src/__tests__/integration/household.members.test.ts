@@ -70,6 +70,25 @@ async function codeOf(call: Promise<unknown>): Promise<string> {
   }
 }
 
+/** The security events written while `run` ran, parsed. */
+async function eventsDuring(run: () => Promise<unknown>) {
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  let lines: string[];
+  try {
+    await run();
+  } finally {
+    lines = warn.mock.calls.map((call) => String(call[0]));
+    warn.mockRestore();
+  }
+  return lines.flatMap((line) => {
+    try {
+      return [JSON.parse(line) as Record<string, string>];
+    } catch {
+      return [];
+    }
+  });
+}
+
 beforeAll(async () => {
   const household = await prisma.household.create({ data: { name: "People A" } });
   const other = await prisma.household.create({ data: { name: "People B" } });
@@ -368,25 +387,6 @@ describe("setting a member's password", () => {
     throw new Error("expected a refusal, and the call succeeded");
   }
 
-  /** The security events written while `run` ran, parsed. */
-  async function eventsDuring(run: () => Promise<unknown>) {
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
-    let lines: string[];
-    try {
-      await run();
-    } finally {
-      lines = warn.mock.calls.map((call) => String(call[0]));
-      warn.mockRestore();
-    }
-    return lines.flatMap((line) => {
-      try {
-        return [JSON.parse(line) as Record<string, string>];
-      } catch {
-        return [];
-      }
-    });
-  }
-
   it("sets the password, so the new one signs in, the old one does not, and old sessions end", async () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-admin");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-target");
@@ -615,5 +615,87 @@ describe("setting a member's password", () => {
       expect(retryAfterSeconds([refusal])).toBeGreaterThan(0);
       expect(await stored(member.id)).toEqual(before);
     });
+  });
+});
+
+/**
+ * Removing somebody from the household signs them out everywhere (ASVS 5.0.0
+ * 7.4.2, PROGRESS D146). Before, it took the household away and left every
+ * session alive: the account itself — its password, a new household of its
+ * own — stayed reachable from whatever device the person had been signed in
+ * on. Cookies from real sign-ins through the route, read back through
+ * `readSession`, because a row deleted is only half of a session ended; the
+ * cookie being refused is the other.
+ */
+describe("removing a member", () => {
+  const PASSWORD = "TestPassword123!";
+
+  async function browser(email: string) {
+    const signedIn = await signInWith({ email, password: PASSWORD });
+    expect(signedIn.status).toBe(200);
+    return new Headers({ cookie: signedIn.cookieHeader });
+  }
+
+  it("signs them out on every device, leaves everyone else signed in, and says who did it", async () => {
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "remove-admin");
+    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "remove-target");
+    const bystander = await makeUser(HOUSEHOLD.id, "MEMBER", "remove-bystander");
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+    try {
+      const phone = await browser(member.email);
+      const tablet = await browser(member.email);
+      const stays = await browser(bystander.email);
+
+      // The control: the cookies are good before, so the refusal after is
+      // the removal's doing and not the cookies' shape.
+      expect(await readSession(phone, { refresh: false })).not.toBeNull();
+      expect(await readSession(tablet, { refresh: false })).not.toBeNull();
+
+      const events = await eventsDuring(() =>
+        api.household.removeMember({ userId: member.id }),
+      );
+
+      expect(await prisma.session.count({ where: { userId: member.id } })).toBe(0);
+      expect(await readSession(phone, { refresh: false })).toBeNull();
+      expect(await readSession(tablet, { refresh: false })).toBeNull();
+      expect(await readSession(stays, { refresh: false })).not.toBeNull();
+
+      const ended = events.filter((e) => e.event === "auth.session.ended");
+      expect(ended).toHaveLength(1);
+      expect(ended[0]?.reason).toBe("removed");
+      expect(ended[0]?.userId).toBe(admin.id);
+      expect(ended[0]?.targetUserId).toBe(member.id);
+      expect(ended[0]?.householdId).toBe(HOUSEHOLD.id);
+      expect(ended[0]?.count).toBe("2");
+
+      // The account stays: the person can sign in again, to no household.
+      const again = await signInWith({ email: member.email, password: PASSWORD });
+      expect(again.status).toBe(200);
+      expect(
+        (await prisma.user.findUniqueOrThrow({ where: { id: member.id } })).householdId,
+      ).toBeNull();
+    } finally {
+      // Out of the household, so `afterAll` no longer finds the account.
+      await prisma.user.deleteMany({ where: { id: member.id } });
+    }
+  });
+
+  it("ends nothing and writes no line when the removal is refused", async () => {
+    // Only an owner may remove an owner. The sessions go with the household
+    // or not at all: a refused removal must not have signed anybody out.
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "remove-admin-owner");
+    const owner = await makeUser(HOUSEHOLD.id, "OWNER", "remove-owner-target");
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+    const signedIn = await browser(owner.email);
+
+    let code = "no error";
+    const events = await eventsDuring(async () => {
+      code = await codeOf(api.household.removeMember({ userId: owner.id }));
+    });
+
+    expect(code).toBe("FORBIDDEN");
+    expect(await readSession(signedIn, { refresh: false })).not.toBeNull();
+    expect(await prisma.session.count({ where: { userId: owner.id } })).toBe(1);
+    expect(events.filter((e) => e.event === "auth.session.ended")).toHaveLength(0);
   });
 });

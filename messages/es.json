@@ -839,7 +839,7 @@
     "roleFailed": "No se ha podido cambiar el rol. Inténtalo otra vez.",
     "removeButton": "Quitar del hogar",
     "removeConfirmTitle": "¿Quitar a {name} del hogar?",
-    "removeConfirmBody": "Su cuenta no se borra: deja de pertenecer a este hogar y pierde el acceso en su siguiente petición, sin necesidad de que cierre sesión.",
+    "removeConfirmBody": "Su cuenta no se borra: deja de pertenecer a este hogar y se cierran sus sesiones en todos sus dispositivos.",
     "removeConfirm": "Sí, quitar del hogar",
     "removeCancel": "Cancelar",
     "removeDone": "{name} ya no pertenece a este hogar.",

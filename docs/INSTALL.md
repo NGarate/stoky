@@ -490,9 +490,11 @@ IPv4; try another one.
 
 Stoky cannot delete an account. Removing a person from **Personas del hogar**
 takes them out of the household and keeps their account: name, address,
-password hash and language. When somebody asks to be erased, delete the account
-in the database. Run these in the installation directory, replacing the address
-with the person's:
+password hash and language. From the release after v0.1.0-alpha.3 it also
+signs them out on every device at once; on v0.1.0-alpha.3 their browsers stay
+signed in, with every request for household data refused. When somebody asks
+to be erased, delete the account in the database. Run these in the
+installation directory, replacing the address with the person's:
 
 1. Look at the account:
 
