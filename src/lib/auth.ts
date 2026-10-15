@@ -9,6 +9,7 @@ import { logSecurityEvent } from "@/lib/security-log";
 import { accountTag } from "@/lib/account-tag";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { verifyPassword } from "@/lib/auth/password-hash";
+import { findCredentialByEmail } from "@/lib/auth/credentials";
 import {
   deviceFingerprint,
   deviceIdFromRequest,
@@ -351,9 +352,8 @@ export const authConfig: NextAuthConfig = {
           throw error;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email },
-        });
+        const credential = await findCredentialByEmail(prisma, parsed.data.email);
+        const user = credential?.user;
 
         // Argon2id runs whether or not the account exists. Skipping it for a
         // missing account answered "no such address" in a few milliseconds
@@ -363,7 +363,7 @@ export const authConfig: NextAuthConfig = {
         // account, `verifyPassword` checks against a dummy hash made with the
         // same parameters as every stored one.
         const isValid = await verifyPassword(
-          user?.passwordHash,
+          credential?.passwordHash,
           parsed.data.password,
         );
 

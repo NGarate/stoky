@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test"
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
-import * as argon2 from "argon2";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import type { Session } from "next-auth";
 import { TRPCError } from "@trpc/server";
 import { signInWith, freshTestAddress } from "../utils/authorize";
@@ -89,26 +90,18 @@ async function createTestUserWithHousehold(
   name: string,
   householdName: string
 ) {
-  const passwordHash = await argon2.hash("TestPassword123!", {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-  });
+  const passwordHash = await hashPassword("TestPassword123!");
 
   const household = await prisma.household.create({
     data: { name: householdName },
   });
   testData.households.push(household.id);
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name,
-      passwordHash,
-      householdId: household.id,
-      role: "OWNER",
-    },
-  });
+  const user = await createCredentialUser(
+    prisma,
+    { email, name, householdId: household.id, role: "OWNER" },
+    passwordHash,
+  );
 
   testData.users.push(user.id);
   return { user, householdId: household.id };
@@ -116,20 +109,9 @@ async function createTestUserWithHousehold(
 
 // Helper to create a test user without household
 async function createTestUserWithoutHousehold(email: string, name: string) {
-  const passwordHash = await argon2.hash("TestPassword123!", {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-  });
+  const passwordHash = await hashPassword("TestPassword123!");
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name,
-      passwordHash,
-      role: "MEMBER",
-    },
-  });
+  const user = await createCredentialUser(prisma, { email, name, role: "MEMBER" }, passwordHash);
 
   testData.users.push(user.id);
   return { user };

@@ -16,6 +16,11 @@ import {
   registerRateLimit,
 } from "@/lib/rate-limit";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import {
+  createCredentialUser,
+  readPasswordHash,
+  setPasswordAndEndSessions,
+} from "@/lib/auth/credentials";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   REGISTRATION_CLOSED_MESSAGE,
@@ -164,20 +169,28 @@ export const authRouter = createTRPCRouter({
           throw registrationClosed();
         }
 
-        // The household as a nested write of the account, so the two commit or
-        // roll back together with this transaction. They used to be two writes
-        // with no transaction: an account create that failed — the duplicate
-        // above, raced — left a household nobody belonged to and nothing could
-        // reach.
-        return tx.user.create({
-          data: {
+        // The household first and the account second, both on `tx`, so the
+        // two commit or roll back together with this transaction. They used to
+        // be two writes with no transaction: an account create that failed —
+        // the duplicate above, raced — left a household nobody belonged to and
+        // nothing could reach. The account takes the household's id as a
+        // scalar rather than as a nested write because `createCredentialUser`
+        // is the one way an account with a password is made, and the unchecked
+        // input it takes is the form every caller can use.
+        const household = householdName
+          ? await tx.household.create({ data: { name: householdName } })
+          : null;
+
+        return createCredentialUser(
+          tx,
+          {
             email,
             name,
-            passwordHash,
-            role: householdName ? "OWNER" : "MEMBER",
-            ...(householdName ? { household: { create: { name: householdName } } } : {}),
+            role: household ? "OWNER" : "MEMBER",
+            householdId: household?.id,
           },
-        });
+          passwordHash,
+        );
       });
 
       return {
@@ -347,7 +360,7 @@ export const authRouter = createTRPCRouter({
 
       const account = await ctx.db.user.findUnique({
         where: { id: userId },
-        select: { email: true, name: true, passwordHash: true },
+        select: { email: true, name: true },
       });
 
       // A session whose account is gone has nothing to change; UNAUTHORIZED is
@@ -359,7 +372,8 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      if (!(await verifyPassword(account.passwordHash, input.currentPassword))) {
+      const storedHash = await readPasswordHash(ctx.db, userId);
+      if (!(await verifyPassword(storedHash, input.currentPassword))) {
         logSecurityEvent("auth.password.change.refused", { userId, address });
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -380,10 +394,14 @@ export const authRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.newPassword);
 
-      await ctx.db.user.update({
-        where: { id: userId },
-        data: { passwordHash, sessionsValidFrom: new Date() },
-      });
+      // Zero only if the account was deleted since it was read above — the
+      // same truth as the check there.
+      if ((await setPasswordAndEndSessions(ctx.db, { userId }, passwordHash)) === 0) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "This account no longer exists",
+        });
+      }
 
       logSecurityEvent("auth.password.changed", { userId, address });
 

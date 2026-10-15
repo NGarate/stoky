@@ -4,6 +4,8 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import type { HouseholdRole } from "@prisma/client";
 import type { Session } from "next-auth";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
@@ -44,19 +46,16 @@ async function makeUser(
   role: HouseholdRole,
   label: string,
 ) {
-  return prisma.user.create({
-    data: {
+  return createCredentialUser(
+    prisma,
+    {
       email: `people-${label}-${Date.now()}-${Math.round(performance.now())}@example.com`,
       name: `People ${label}`,
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId,
       role,
     },
-  });
+    await hashPassword("TestPassword123!"),
+  );
 }
 
 async function codeOf(call: Promise<unknown>): Promise<string> {

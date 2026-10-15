@@ -3,6 +3,7 @@ import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { enforceRateLimit } from "../throttle";
 import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser, setPasswordAndEndSessions } from "@/lib/auth/credentials";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -290,18 +291,19 @@ export const householdRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.password);
 
-      const user = await ctx.db.user.create({
-        data: {
+      const user = await createCredentialUser(
+        ctx.db,
+        {
           name: input.name,
           email: input.email,
-          passwordHash,
           householdId: ctx.householdId,
           role: input.role,
         },
-        select: { id: true, name: true, email: true, role: true },
-      });
+        passwordHash,
+      );
 
-      return user;
+      // Named fields, never the row: it carries the hash.
+      return { id: user.id, name: user.name, email: user.email, role: user.role };
     }),
   /**
    * Change what an existing member may do.
@@ -473,10 +475,11 @@ export const householdRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.newPassword);
 
-      const { count } = await ctx.db.user.updateMany({
-        where: { id: member.id, householdId: ctx.householdId, role: member.role },
-        data: { passwordHash, sessionsValidFrom: new Date() },
-      });
+      const count = await setPasswordAndEndSessions(
+        ctx.db,
+        { userId: member.id, guard: { householdId: ctx.householdId, role: member.role } },
+        passwordHash,
+      );
 
       if (count === 0) {
         throw new TRPCError({

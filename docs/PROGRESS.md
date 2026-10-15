@@ -2428,7 +2428,13 @@ must not mean its least safe value. `first-user` counts accounts inside a
 transaction holding an advisory lock, since a count followed by a create admits
 two simultaneous claimants; the household became a nested write of the account
 in the same transaction, which also ends the orphan households a failed
-registration used to leave. The claim window on a fresh install — whoever
+registration used to leave. *2026-10-15:* the household is now created first
+and the account second, both on the same transaction and under the same lock,
+because every account with a password is now made by
+`src/lib/auth/credentials.ts`, which takes the household as a scalar id; a
+failed account create still rolls the household back, so the no-orphan
+guarantee holds (`registration.test.ts` goes red with the household created
+outside the transaction). The claim window on a fresh install — whoever
 registers first owns it — is accepted and documented rather than closed with a
 setup token, which would be a bootstrap flow out of proportion for an alpha.
 

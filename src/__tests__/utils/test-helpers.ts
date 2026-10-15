@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import type { User, Household, HouseholdRole, Product, StockEntry, StorageLocation } from "@prisma/client";
 
 /**
@@ -50,15 +51,16 @@ export interface TestLocationData {
 export async function createTestUser(data: TestUserData): Promise<User> {
   const passwordHash = await hashPassword(data.password ?? "TestPassword123!");
 
-  return prisma.user.create({
-    data: {
+  return createCredentialUser(
+    prisma,
+    {
       email: data.email,
       name: data.name,
-      passwordHash,
       householdId: data.householdId,
       role: data.role || "MEMBER",
     },
-  });
+    passwordHash,
+  );
 }
 
 /**

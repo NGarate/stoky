@@ -532,7 +532,9 @@ Verified against the files named in each row.
   adding a member or setting a member's password, and for a person changing
   their own password, and verifies for sign-in and for that change. A test
   pins the parameters and that the dummy hash for unknown addresses was made
-  with the same ones.
+  with the same ones. Where the hash is stored is known to one module,
+  `src/lib/auth/credentials.ts`, which every account create, hash read and
+  hash write goes through.
 - Auth.js v5 with the credentials provider; sessions are encrypted JWTs with
   no server-side record. **Fifteen minutes is the idle timeout, not the
   lifetime**: every read of the session re-issues the token with a fresh
@@ -1520,9 +1522,10 @@ through `household.addMember`, which the setting does not govern.
 - **The first-user count cannot race.** The account is created in a
   transaction that holds a PostgreSQL advisory lock
   (`pg_advisory_xact_lock`) and counts again under it, so two people claiming a
-  fresh instance at once cannot both see zero. The household is a nested write
-  of the account in the same transaction; before this, a registration that
-  failed after its household was written left a household nobody belonged to.
+  fresh instance at once cannot both see zero. The household is written first
+  and the account second, in the same transaction, so a failed account create
+  rolls the household back; before this, a registration that failed after its
+  household was written left a household nobody belonged to.
 - **`/register` says so before anyone types.** The page is a server component
   that asks the same rule after `connection()`, so the answer is the running
   container's and not the build's, and renders a page saying registration is
