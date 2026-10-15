@@ -92,6 +92,72 @@ describe("a device that already has one", () => {
   });
 });
 
+describe("a request that renders nothing", () => {
+  // Under Better Auth a request carrying any cookie is treated as a browser's
+  // and refused without an Origin, which a native client never sends (the
+  // spike measured 403 MISSING_OR_NULL_ORIGIN). A device id injected here
+  // would be that cookie. And iOS's URLSession stores and replays whatever a
+  // response sets, so a Set-Cookie on a bearer call would quietly make a
+  // token client a cookie client.
+
+  it("mints nothing for the auth API", () => {
+    const response = proxy(
+      new NextRequest("https://example.test/api/auth/sign-in/email", {
+        method: "POST",
+      }),
+    );
+
+    expect(forwardedCookie(response)).not.toContain(DEVICE_ID_COOKIE);
+    expect(setCookie(response)).not.toContain(DEVICE_ID_COOKIE);
+  });
+
+  it("mints nothing for a bearer request, whatever the scheme's case", () => {
+    for (const scheme of ["Bearer", "bearer"]) {
+      const response = proxy(
+        new NextRequest("https://example.test/api/trpc/inventory.list", {
+          headers: { authorization: `${scheme} abc.def` },
+        }),
+      );
+
+      expect(forwardedCookie(response)).not.toContain(DEVICE_ID_COOKIE);
+      expect(setCookie(response)).not.toContain(DEVICE_ID_COOKIE);
+    }
+  });
+
+  it("still forwards an id the browser did send to the auth API", () => {
+    // The sign-in it posts is charged to this device's own budget only if
+    // the route can read the id the login page minted.
+    const request = new NextRequest(
+      "https://example.test/api/auth/sign-in/email",
+      { method: "POST" },
+    );
+    request.cookies.set(DEVICE_ID_COOKIE, KNOWN);
+    const response = proxy(request);
+
+    expect(forwardedCookie(response)).toContain(`${DEVICE_ID_COOKIE}=${KNOWN}`);
+    expect(setCookie(response)).not.toContain(DEVICE_ID_COOKIE);
+  });
+
+  it("still mints for the login page, and for paths that only look alike", () => {
+    // The page is where a browser gets its id before it ever posts; and the
+    // prefix keeps its slash, so a sibling such as /api/authors is a render
+    // like any other. A non-bearer Authorization does not count either.
+    for (const request of [
+      new NextRequest("https://example.test/login"),
+      new NextRequest("https://example.test/api/authors"),
+      new NextRequest("https://example.test/login", {
+        headers: { authorization: "Basic dTpw" },
+      }),
+    ]) {
+      const response = proxy(request);
+      const value = /stoky_device=([^;]+)/.exec(forwardedCookie(response))?.[1];
+
+      expect(isDeviceId(value)).toBe(true);
+      expect(setCookie(response)).toContain(`${DEVICE_ID_COOKIE}=${value}`);
+    }
+  });
+});
+
 describe("what it did not stop doing", () => {
   it("still mints a per-request CSP nonce", () => {
     // The device id shares this function with the nonce, and the nonce is what
@@ -107,6 +173,18 @@ describe("what it did not stop doing", () => {
     expect(nonceOf(first)).not.toBe(nonceOf(second));
     expect(first.headers.get("content-security-policy")).toContain(
       `'nonce-${nonceOf(first)}'`,
+    );
+  });
+
+  it("still sets the policy on the requests it mints nothing for", () => {
+    // The matcher did not change, so the auth API and bearer calls keep
+    // their CSP; only the cookie is skipped.
+    const response = proxy(
+      new NextRequest("https://example.test/api/auth/get-session"),
+    );
+
+    expect(response.headers.get("content-security-policy")).toContain(
+      "default-src",
     );
   });
 });

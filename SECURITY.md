@@ -1060,6 +1060,19 @@ authentication only from known devices":
   so a distributed guess is still bounded at ten per window.
   `src/lib/auth/known-devices.ts`; the integration suite proves each case and
   the twenty-device cap.
+- The id is minted by the proxy when a page is rendered, never for the auth
+  API or for a request carrying `Authorization: Bearer` (`src/proxy.ts`). So
+  **a client that never rendered a page — a native app, a script — has no
+  id and is charged to the shared account budget**, as a browser with a
+  cleared cookie jar is. For its first sign-in that is the same outcome as
+  before, when the id it was handed on the spot had never been recorded
+  either. It is not the same for the next one: a client that kept cookies
+  used to have that minted id recorded by its successful sign-in, and so
+  signed in on a budget of its own afterwards; now it stays on the shared
+  one, and a stranger filling that budget can keep it from signing in again
+  (not from using a session it already holds). That is accepted: not
+  handing it an id keeps a cookie the client never sent off requests that
+  are judged by whether they carry a cookie.
 - The set is deliberately not under `rl:login:`. Without a proxy the per-IP
   counter is `rl:login:<whatever X-Forwarded-For says>`, and a forged header
   naming the set would plant a string at its key and, failing closed, stop

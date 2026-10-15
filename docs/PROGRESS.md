@@ -47,6 +47,7 @@ Rules for this log:
 | "refactor(auth): own the session type the app reads" | `AppSession` (`src/lib/auth/session.ts`) replaces next-auth's `Session` in the tRPC context, the HTTP handler and 18 integration tests. `auth-dynamic.test.ts` fails when any file outside `src/lib/auth*`, `src/types` and the two tests of next-auth's own configuration imports from `next-auth`; re-adding the import to `trpc.ts` turns it red. `bun run verify:ci` green on the commit. |
 | "refactor(auth): take sign-in throttling out of the credentials provider" | The per-address, per-account and known-device budgets live in `src/lib/auth/sign-in-policy.ts`, which takes `Headers` and knows nothing of next-auth. `sign-in-policy.test.ts` drives it with a scripted limiter; hardcoding the refusal's `retryAfterSeconds` to 0 turns it red. `integration/rate-limit.test.ts` passes unchanged through `authorize`, and dropping the settle call there turns nine of its cases red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(auth): record each successful sign-in" | ASVS 5.0.0 16.3.1: `signInSucceeded(charge, userId, method)` writes `auth.signin.succeeded` with the user, the factor, the account tag and the client address, after the charge has settled. `integration/security-log.test.ts` signs in through `authorize` and finds exactly one such line; removing the log call turns it red. `bun run verify:ci` green on the commit. |
+| "refactor(auth): never mint a device id for an auth API or bearer request" (D110 amended) | `src/proxy.ts` leaves `stoky_device` alone under `/api/auth/` and on `Authorization: Bearer` requests, so a native client is never handed a cookie it did not send; one that keeps cookies no longer earns a known-device budget from an auth-API sign-in. `proxy-device.test.ts` covers both, an id still forwarded to the auth API, and `/login`, `/api/authors` and a `Basic` header still minted; removing the skip turns two cases red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2224,6 +2225,18 @@ fingerprint a page could hand to somebody else. And `/start` is **three submit
 buttons and a server action** rather than a component, because it is the first
 screen somebody meets after signing in and a question that works before
 hydration is a question that always works.
+*Amended 2026-10-15:* not on every request any more. The proxy mints nothing
+under `/api/auth/` and nothing for a request carrying `Authorization: Bearer`;
+a valid id the client did send is still forwarded. Neither renders a screen,
+and a just-minted id was never one a sign-in had recorded, so a first sign-in
+is charged as before. A client that keeps cookies but never renders a page
+loses something: its sign-in used to record the minted id, giving its later
+ones a budget of their own, and now they stay on the shared account budget
+(SECURITY.md, known devices). What the minted cookie did there was harm: Better
+Auth reads any cookie as a browser and then demands an Origin a native client
+never sends (the spike measured 403 `MISSING_OR_NULL_ORIGIN`), and URLSession
+would store and replay a `Set-Cookie` on a bearer response. A browser renders
+`/login` before it posts, so it has its id by then.
 
 The enum offers all three screens rather than the two §5.1 names. `DESIGN_AUDIT`
 A5.4 leaves "whether three entry points is the right number" explicitly open and
