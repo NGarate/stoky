@@ -27,10 +27,11 @@ import {
  *
  * It takes `Headers` and an unparsed address and knows nothing about the
  * library that verifies the password. That is the point of it being here
- * rather than inside the credentials provider: the per-address, per-account
- * and known-device budgets are this application's policy, and the code that
- * enforces them should not have to move when the code that checks a password
- * hash does.
+ * rather than inside that library: the per-address, per-account and
+ * known-device budgets are this application's policy, and the code that
+ * enforces them did not have to move when next-auth was replaced by Better
+ * Auth (PROGRESS D135). The auth route (`src/server/http/auth-handler.ts`)
+ * charges and settles; Better Auth only checks the password.
  *
  * The order is the policy:
  *

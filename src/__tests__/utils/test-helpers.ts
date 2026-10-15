@@ -279,7 +279,28 @@ export function createMockSession(user: User & { household?: Household | null })
       role: user.role,
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    // A fresh id that names no row: a procedure that filters on "this
+    // session" then matches nothing rather than, through an undefined id,
+    // everything.
+    sessionId: crypto.randomUUID(),
   };
+}
+
+/**
+ * A live session row for `userId`, as a sign-in leaves one: what a test needs
+ * when it asks whether something ended a session, or carefully did not. Not a
+ * session anyone can use — no cookie carries its token — so it is only ever
+ * evidence. `integration/session.policy.test.ts` signs in for real when the
+ * cookie matters.
+ */
+export function openTestSession(userId: string, expiresInMs = 15 * 60 * 1000) {
+  return prisma.session.create({
+    data: {
+      token: crypto.randomUUID(),
+      userId,
+      expiresAt: new Date(Date.now() + expiresInMs),
+    },
+  });
 }
 
 /**

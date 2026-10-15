@@ -17,7 +17,6 @@ import {
   loginAccountRateLimit,
   resetRateLimit,
 } from "@/lib/rate-limit";
-import { RateLimitedSignin } from "@/lib/auth";
 import { freshTestAddress, signInWith } from "../utils/authorize";
 import {
   createTestUser,
@@ -341,7 +340,7 @@ describe("what is not an incident", () => {
 });
 
 /**
- * The address a sign-in tried, through `authorize` rather than the writer
+ * The address a sign-in tried, through the auth route rather than the writer
  * (security review, 2026-10-12).
  *
  * The unit suite proves `securityLine` drops an `email` key; it cannot prove
@@ -357,7 +356,7 @@ describe("a refused sign-in", () => {
   }
 
   it("names the account by its tag, not by the address", async () => {
-    expect(await signInWith({ email: ownerEmail, password: WRONG })).toBeNull();
+    expect((await signInWith({ email: ownerEmail, password: WRONG })).status).toBe(401);
 
     const failed = lines.find((line) => line.event === "auth.signin.failed");
     expect(failed).toBeDefined();
@@ -373,7 +372,7 @@ describe("a refused sign-in", () => {
     // database has never held, written into the log in full.
     const stranger = generateTestEmail("seclog-nobody");
 
-    expect(await signInWith({ email: stranger, password: WRONG })).toBeNull();
+    expect((await signInWith({ email: stranger, password: WRONG })).status).toBe(401);
 
     const failed = lines.find((line) => line.event === "auth.signin.failed");
     expect(failed?.account).toBe(accountTag(stranger));
@@ -388,10 +387,10 @@ describe("a refused sign-in", () => {
     const stranger = generateTestEmail("seclog-throttled");
 
     try {
-      expect(await signInWith({ email: stranger, password: WRONG })).toBeNull();
-      await expect(
-        signInWith({ email: stranger, password: WRONG }),
-      ).rejects.toBeInstanceOf(RateLimitedSignin);
+      expect((await signInWith({ email: stranger, password: WRONG })).status).toBe(401);
+      const refused = await signInWith({ email: stranger, password: WRONG });
+      expect(refused.status).toBe(429);
+      expect(refused.code).toBe("ACCOUNT_RATE_LIMITED");
     } finally {
       if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
       else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
@@ -407,7 +406,7 @@ describe("a refused sign-in", () => {
 });
 
 /**
- * ASVS 5.0.0 16.3.1, through `authorize`: a successful sign-in is logged, with
+ * ASVS 5.0.0 16.3.1, through the auth route: a successful sign-in is logged, with
  * the factor it used. The unit suite proves `signInSucceeded` writes the line;
  * this proves the sign-in path calls it, once, and with the account it
  * actually signed in.
@@ -419,7 +418,7 @@ describe("an accepted sign-in", () => {
       { email: ownerEmail, password: "TestPassword123!" },
       { address },
     );
-    expect(user).not.toBeNull();
+    expect(user.status).toBe(200);
 
     const succeeded = lines.filter((line) => line.event === "auth.signin.succeeded");
     expect(succeeded).toHaveLength(1);
@@ -435,10 +434,46 @@ describe("an accepted sign-in", () => {
 
   it("is not recorded for a refused one", async () => {
     expect(
-      await signInWith({ email: ownerEmail, password: "no es la contraseña" }),
-    ).toBeNull();
+      (await signInWith({ email: ownerEmail, password: "no es la contraseña" })).status,
+    ).toBe(401);
 
     expect(lines.some((line) => line.event === "auth.signin.succeeded")).toBe(false);
     await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
+  });
+});
+
+/**
+ * What a run of wrong passwords costs the log: one line each, ours, and
+ * nothing from the library. At its default level Better Auth writes a
+ * warning for every wrong password, and several lines per refused sign-in is
+ * how an unauthenticated client came to multiply what it could write to the
+ * log (security review, 2026-10-12). The logger's `error` level in
+ * `src/lib/auth/instance.ts` is what keeps it to the one.
+ */
+const WRONG_TEN = "tampoco es esta contraseña";
+
+describe("ten wrong passwords", () => {
+  it("write ten lines of the security log and nothing else", async () => {
+    const original = process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+    process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = "20";
+    const errors = spyOn(console, "error").mockImplementation(() => {});
+    const logs = spyOn(console, "log").mockImplementation(() => {});
+    let library: string[];
+    try {
+      for (let i = 0; i < 10; i++) {
+        expect((await signInWith({ email: ownerEmail, password: WRONG_TEN })).status).toBe(401);
+      }
+    } finally {
+      library = [...errors.mock.calls, ...logs.mock.calls].map((call) => call.map(String).join(" "));
+      errors.mockRestore();
+      logs.mockRestore();
+      if (original === undefined) delete process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
+      else process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS = original;
+      await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
+    }
+
+    expect(lines.filter((line) => line.event === "auth.signin.failed")).toHaveLength(10);
+    expect(lines).toHaveLength(10);
+    expect(library).toEqual([]);
   });
 });

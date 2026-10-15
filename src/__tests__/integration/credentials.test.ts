@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
-import { storedPasswordHash } from "../utils/test-helpers";
+import { openTestSession, storedPasswordHash } from "../utils/test-helpers";
 import {
   createCredentialUser,
   findCredentialByEmail,
@@ -101,6 +101,7 @@ describe("setPasswordAndEndSessions", () => {
       { email: `${RUN}.guarded@example.com`, name: "Miembro", householdId, role: "MEMBER" },
       original,
     );
+    await openTestSession(member.id);
     // Promoted after the caller checked it, while the new hash was being made.
     await prisma.user.update({ where: { id: member.id }, data: { role: "OWNER" } });
 
@@ -111,11 +112,7 @@ describe("setPasswordAndEndSessions", () => {
     );
 
     expect(written).toBe(0);
-    const after = await prisma.user.findUniqueOrThrow({
-      where: { id: member.id },
-      select: { sessionsValidFrom: true },
-    });
-    expect(after.sessionsValidFrom).toBeNull();
+    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(1);
     expect(await readPasswordHash(prisma, member.id)).toBe(original);
   });
 
@@ -125,7 +122,8 @@ describe("setPasswordAndEndSessions", () => {
       { email: `${RUN}.reset@example.com`, name: "Miembro", householdId, role: "MEMBER" },
       await hashPassword(PASSWORD),
     );
-    const before = Date.now();
+    await openTestSession(member.id);
+    await openTestSession(member.id);
 
     const written = await setPasswordAndEndSessions(
       prisma,
@@ -134,11 +132,7 @@ describe("setPasswordAndEndSessions", () => {
     );
 
     expect(written).toBe(1);
-    const after = await prisma.user.findUniqueOrThrow({
-      where: { id: member.id },
-      select: { sessionsValidFrom: true },
-    });
-    expect(after.sessionsValidFrom?.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(await prisma.session.count({ where: { userId: member.id } })).toBe(0);
     const credential = await findCredentialByEmail(prisma, `${RUN}.reset@example.com`);
     expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(true);
   });

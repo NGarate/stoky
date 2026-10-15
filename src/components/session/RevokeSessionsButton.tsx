@@ -22,9 +22,8 @@ import type { JSX } from "react";
  * admin is asleep. `auth.revokeMySessions` has existed since the admin panel
  * landed and nothing called it.
  *
- * **It signs you out here too, and says so.** Revocation is a line, not a list:
- * `sessionsValidFrom` refuses every token issued before now, and the token
- * rendering this screen is one of them. A control that quietly ended the
+ * **It signs you out here too, and says so.** Every session row the account
+ * has is deleted, and the one rendering this screen is among them. A control that quietly ended the
  * session you are using would read as a crash, so the confirmation states it
  * before the fact rather than the redirect implying it after.
  *

@@ -1,16 +1,27 @@
 import { describe, expect, it } from "bun:test";
 import { getAuthErrorKey } from "@/lib/auth/error-messages";
-import { AccountRateLimitedSignin, RateLimitedSignin } from "@/lib/auth";
+import { SignInRefusedError } from "@/lib/auth/sign-in-policy";
 import { registerSchema } from "@/lib/validations/auth";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/lib/auth/registration";
 
 describe("getAuthErrorKey", () => {
-  it("maps credentials provider errors to invalid credentials", () => {
-    expect(getAuthErrorKey("CredentialsSignin", "login")).toBe(
+  it("maps a wrong address or password to invalid credentials", () => {
+    expect(getAuthErrorKey("Invalid email or password", "login")).toBe(
       "invalidCredentials",
     );
-    expect(getAuthErrorKey("Invalid credentials", "login")).toBe(
+    expect(getAuthErrorKey(undefined, "login", "INVALID_EMAIL_OR_PASSWORD")).toBe(
       "invalidCredentials",
+    );
+    // Too long to check is still "wrong": naming the rule would help a guesser.
+    expect(getAuthErrorKey(undefined, "login", "PASSWORD_TOO_LONG")).toBe(
+      "invalidCredentials",
+    );
+  });
+
+  it("calls an untrusted origin unavailable, which is the instance's doing", () => {
+    expect(getAuthErrorKey(undefined, "login", "INVALID_ORIGIN")).toBe("authUnavailable");
+    expect(getAuthErrorKey(undefined, "login", "MISSING_OR_NULL_ORIGIN")).toBe(
+      "authUnavailable",
     );
   });
 
@@ -61,19 +72,19 @@ describe("getAuthErrorKey", () => {
   });
 
   it("tells an account refusal from an address refusal", () => {
-    // The codes are read off the classes `authorize` throws, so renaming one
-    // cannot leave this passing against a code the server no longer sends.
+    // The codes are read off the class the sign-in policy throws, so renaming
+    // one cannot leave this passing against a code the server no longer sends.
     // "From this connection" is right for the address limit and wrong for the
     // account's: another network cannot help, and the person may be the one
     // somebody else is locking out.
     expect(
-      getAuthErrorKey("CredentialsSignin", "login", new RateLimitedSignin().code),
+      getAuthErrorKey(undefined, "login", new SignInRefusedError("rate_limited", 1).code),
     ).toBe("tooManyAttempts");
     expect(
       getAuthErrorKey(
-        "CredentialsSignin",
+        undefined,
         "login",
-        new AccountRateLimitedSignin().code,
+        new SignInRefusedError("account_rate_limited", 1).code.toUpperCase(),
       ),
     ).toBe("accountTooManyAttempts");
   });

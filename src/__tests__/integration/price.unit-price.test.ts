@@ -29,6 +29,7 @@ async function caller() {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }

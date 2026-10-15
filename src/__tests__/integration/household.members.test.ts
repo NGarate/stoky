@@ -11,9 +11,9 @@ import type { AppSession } from "@/lib/auth/session";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 import { RESET_OWN_PASSWORD_MESSAGE } from "@/lib/validations/household";
-import { authConfig } from "@/lib/auth";
+import { readSession } from "@/lib/auth";
 import { signInWith } from "../utils/authorize";
-import { storedPasswordHash } from "../utils/test-helpers";
+import { openTestSession, storedPasswordHash } from "../utils/test-helpers";
 
 /**
  * Making the KITCHEN role reachable.
@@ -38,6 +38,7 @@ async function callerFor(userId: string, householdId: string) {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -337,10 +338,10 @@ describe("listing who is in the household", () => {
  * 2026-10-12. There is no email in this application, so before this a member
  * who forgot their password was locked out for good.
  *
- * Through the router, with real Argon2id, a real Valkey and the `jwt`
- * callback that actually refuses a session, the same way the change of one's
- * own password is tested in `auth.flow.test.ts`: a timestamp written is not a
- * session ended. Every test makes its own admin, so none spends another's
+ * Through the router, with real Argon2id, a real Valkey and a session read
+ * with the cookie a real sign-in set, the same way the change of one's own
+ * password is tested in `auth.flow.test.ts`: a row deleted is only half of a
+ * session ended; the cookie being refused is the other. Every test makes its own admin, so none spends another's
  * budget, and the accounts it acts on, so none sees another's password.
  */
 describe("setting a member's password", () => {
@@ -350,9 +351,10 @@ describe("setting a member's password", () => {
   const stored = async (id: string) => ({
     ...(await prisma.user.findUniqueOrThrow({
       where: { id },
-      select: { sessionsValidFrom: true, householdId: true },
+      select: { householdId: true },
     })),
     passwordHash: await storedPasswordHash(id),
+    sessions: await prisma.session.count({ where: { userId: id } }),
   });
 
   async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
@@ -363,15 +365,6 @@ describe("setting a member's password", () => {
       throw error;
     }
     throw new Error("expected a refusal, and the call succeeded");
-  }
-
-  /** The configured `jwt` callback, which is where a session is refused. */
-  function jwtCallback() {
-    const callback = authConfig.callbacks?.jwt;
-    if (typeof callback !== "function") {
-      throw new Error("authConfig exposes no jwt callback");
-    }
-    return callback;
   }
 
   /** The security events written while `run` ran, parsed. */
@@ -397,12 +390,12 @@ describe("setting a member's password", () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-admin");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
-    const signedIn = Math.floor((Date.now() - 60_000) / 1000);
-    const token = { sub: member.id, iat: signedIn, authTime: signedIn };
+    const signedIn = await signInWith({ email: member.email, password: OLD });
+    const cookie = new Headers({ cookie: signedIn.cookieHeader });
 
-    // The control: the same token is accepted before, so the refusal after is
-    // the reset's doing and not the token's shape.
-    expect(await jwtCallback()({ token: { ...token } } as never)).not.toBeNull();
+    // The control: the same cookie is accepted before, so the refusal after is
+    // the reset's doing and not the cookie's shape.
+    expect(await readSession(cookie, { refresh: false })).not.toBeNull();
 
     let result: unknown;
     const events = await eventsDuring(async () => {
@@ -415,12 +408,12 @@ describe("setting a member's password", () => {
     expect(JSON.stringify(result)).not.toContain("argon2");
     const after = await stored(member.id);
     expect(after.passwordHash).toStartWith("$argon2id$");
-    expect(await signInWith({ email: member.email, password: NEW })).not.toBeNull();
-    expect(await signInWith({ email: member.email, password: OLD })).toBeNull();
-
     // Whoever knew the old password may hold a session opened with it.
-    expect(after.sessionsValidFrom).not.toBeNull();
-    expect(await jwtCallback()({ token: { ...token } } as never)).toBeNull();
+    expect(after.sessions).toBe(0);
+    expect(await readSession(cookie, { refresh: false })).toBeNull();
+
+    expect((await signInWith({ email: member.email, password: NEW })).status).toBe(200);
+    expect((await signInWith({ email: member.email, password: OLD })).status).toBe(401);
 
     // Who did it, to whom — and neither password.
     const reset = events.filter((e) => e.event === "auth.password.reset");
@@ -521,6 +514,8 @@ describe("setting a member's password", () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-race");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-race-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
+    // A session the reset would end, so "ends nothing" can be seen.
+    await openTestSession(member.id);
     const before = await stored(member.id);
 
     const realHash = argon2.hash;
@@ -542,7 +537,7 @@ describe("setting a member's password", () => {
     expect(refusal.code).toBe("CONFLICT");
     const after = await stored(member.id);
     expect(after.passwordHash).toBe(before.passwordHash);
-    expect(after.sessionsValidFrom).toBeNull();
+    expect(after.sessions).toBe(1);
   });
 
   it("writes nothing to a member made an owner while the password was hashed", async () => {
@@ -552,6 +547,8 @@ describe("setting a member's password", () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-race-role");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-race-role-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
+    // A session the reset would end, so "ends nothing" can be seen.
+    await openTestSession(member.id);
     const before = await stored(member.id);
 
     const realHash = argon2.hash;
@@ -573,7 +570,7 @@ describe("setting a member's password", () => {
     expect(refusal.code).toBe("CONFLICT");
     const after = await stored(member.id);
     expect(after.passwordHash).toBe(before.passwordHash);
-    expect(after.sessionsValidFrom).toBeNull();
+    expect(after.sessions).toBe(1);
   });
 
   describe("how often", () => {

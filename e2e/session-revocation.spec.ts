@@ -4,11 +4,11 @@ import { test, expect } from "@playwright/test";
  * Ending every session, through the browser, against the real server.
  *
  * Three pieces of this already have tests and none of them touches the other
- * two. `integration/session.revocation.test.ts` drives the `jwt` callback
- * directly and proves it returns `null` for a token issued before the line.
+ * two. `integration/session.revocation.test.ts` signs in through the auth route
+ * and proves a cookie stops being read once its rows are deleted.
  * `components/EndSession.test.tsx` proves the control's ordering with the
  * server mocked. Nothing proved the chain: that pressing the button in a real
- * browser reaches `auth.revokeMySessions`, writes `sessionsValidFrom`, and
+ * browser reaches `auth.revokeMySessions`, deletes the account's sessions, and
  * makes an already-issued cookie stop working.
  *
  * **The control case is the point.** A test that only pressed the button and

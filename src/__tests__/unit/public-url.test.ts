@@ -1,16 +1,17 @@
 import { describe, it, expect, spyOn } from "bun:test";
-import { classifyPublicUrl, publicUrlWarning } from "@/lib/auth/public-url";
+import { join } from "node:path";
+import { classifyPublicUrl, publicUrl, publicUrlWarning } from "@/lib/auth/public-url";
 import { warnAboutRiskyConfiguration } from "@/lib/auth/startup";
 
 /**
  * The public URL, and saying so at start-up when it is missing or plain HTTP.
  *
- * Auth.js marks the session cookie `Secure` only when `AUTH_URL ??
- * NEXTAUTH_URL` — or, with neither set, the request's own URL — is https.
- * Until this, an instance that sent every password and session cookie in
- * cleartext started without a line in its log saying so (security review,
- * 2026-10-12). It warns rather than refuses: D84 keeps plain-http LAN installs
- * working on purpose.
+ * The session cookie is `Secure` exactly when `NEXTAUTH_URL` is https: Better
+ * Auth is built with it (`src/lib/auth/instance.ts`) and never consults a
+ * request's headers for it. An instance that sends every password and session
+ * cookie in cleartext says so at start-up (security review, 2026-10-12), and
+ * warns rather than refuses: D84 keeps plain-http LAN installs working on
+ * purpose.
  */
 
 const production = (urls: Record<string, string | undefined>) => ({
@@ -55,23 +56,20 @@ describe("what the configured URL means", () => {
     }
   });
 
-  it("is missing when neither variable is set, or the one next-auth reads is empty", () => {
+  it("is missing when NEXTAUTH_URL is unset or empty", () => {
     expect(classifyPublicUrl({})).toEqual({ kind: "missing" });
     expect(classifyPublicUrl({ NEXTAUTH_URL: "" })).toEqual({ kind: "missing" });
-    // next-auth reads `AUTH_URL ?? NEXTAUTH_URL`: an empty AUTH_URL hides the
-    // other, there as here.
-    expect(classifyPublicUrl({ AUTH_URL: "", NEXTAUTH_URL: "https://stoky.example.com" })).toEqual({
-      kind: "missing",
-    });
   });
 
-  it("reads AUTH_URL before NEXTAUTH_URL, as next-auth does", () => {
+  it("reads nothing but NEXTAUTH_URL", () => {
+    // next-auth read `AUTH_URL ?? NEXTAUTH_URL`. Nothing reads AUTH_URL now,
+    // and a stray one must not decide the cookie.
     expect(
       classifyPublicUrl({
         AUTH_URL: "http://192.168.1.10:3000",
         NEXTAUTH_URL: "https://stoky.example.com",
       }),
-    ).toEqual({ kind: "insecure-http", variable: "AUTH_URL", origin: "http://192.168.1.10:3000" });
+    ).toEqual({ kind: "https", origin: "https://stoky.example.com" });
   });
 
   it("tells an unparsable value and another scheme apart from https", () => {
@@ -109,13 +107,13 @@ describe("the warning", () => {
     expect(warning).toMatch(/not marked Secure/);
     expect(warning).toMatch(/password and session cookie across the network in cleartext/);
     expect(warning).toMatch(/barcode camera and offline support are unavailable/);
-    expect(warning).toMatch(/X-Forwarded-Proto/);
+    expect(warning).toMatch(/X-Forwarded-For/);
   });
 
-  it("when missing, says what decides the address instead", () => {
+  it("when missing, says that nobody can sign in until it is set", () => {
     const warning = publicUrlWarning(production({}))!;
-    expect(warning).toMatch(/neither AUTH_URL nor NEXTAUTH_URL is set/);
-    expect(warning).toMatch(/X-Forwarded-Proto: https/);
+    expect(warning).toMatch(/NEXTAUTH_URL is not set/);
+    expect(warning).toMatch(/refuses every request \(503\)/);
   });
 
   it("never repeats credentials written into the URL", () => {
@@ -127,6 +125,52 @@ describe("the warning", () => {
     expect(warning).not.toContain("s3cret");
     expect(warning).not.toContain("admin");
     expect(warning).toContain("http://192.168.1.10:3000");
+  });
+});
+
+describe("the URL Better Auth is built with", () => {
+  it("is NEXTAUTH_URL, or the dev server's own address outside production", () => {
+    expect(publicUrl({ NEXTAUTH_URL: "https://stoky.example.com" })).toBe(
+      "https://stoky.example.com",
+    );
+    expect(publicUrl({ NODE_ENV: "development" })).toBe("http://localhost:3000");
+    // Never guessed in production: the auth API refuses instead.
+    expect(publicUrl({ NODE_ENV: "production" })).toBeNull();
+  });
+
+  /**
+   * The session cookie's name in a fresh process built with `url`. A fresh
+   * process, because the instance is built once per process.
+   */
+  function sessionCookieName(url: string): string {
+    const base: Record<string, string | undefined> = { ...process.env };
+    delete base.NEXT_PHASE;
+    const script = `const { getAuth } = await import("@/lib/auth/instance");
+      const ctx = await getAuth().$context;
+      console.log(JSON.stringify(ctx.authCookies.sessionToken));
+      process.exit(0);`;
+    const child = Bun.spawnSync([process.execPath, "-e", script], {
+      cwd: join(import.meta.dir, "../../.."),
+      env: {
+        ...base,
+        NODE_ENV: "production",
+        NEXTAUTH_SECRET: "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=",
+        NEXTAUTH_URL: url,
+      },
+    });
+    if (child.exitCode !== 0) throw new Error(child.stderr.toString());
+    const cookie = JSON.parse(child.stdout.toString().trim().split("\n").at(-1)!) as {
+      name: string;
+      attributes: { secure: boolean };
+    };
+    expect(cookie.attributes.secure).toBe(cookie.name.startsWith("__Secure-"));
+    return cookie.name;
+  }
+
+  it("marks the session cookie Secure exactly when the URL is https", () => {
+    expect(sessionCookieName("https://stoky.example.com")).toBe("__Secure-stoky.session_token");
+    expect(sessionCookieName("http://192.168.1.10:3000")).toBe("stoky.session_token");
+    expect(sessionCookieName("http://127.0.0.1:3100")).toBe("stoky.session_token");
   });
 });
 

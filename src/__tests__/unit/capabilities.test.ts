@@ -23,9 +23,13 @@ const EXPECTED: Record<string, Record<string, string>> = {
   "auth.ts": {
     // `login` used to be here: a second credential-verification procedure the
     // interface never called and the CRITICAL-4 limiter never covered. Removed
-    // rather than limited — Auth.js already owns that path.
+    // rather than limited — the auth API owns that path.
     register: "publicProcedure",
     me: "protectedProcedure",
+    // The keep-alive's question, "when does this session end?". Public,
+    // because "no session" is an answer (null) rather than a refusal, and it
+    // reads or moves nothing but the caller's own session row.
+    session: "publicProcedure",
     logout: "protectedProcedure",
     // An account setting, so `protectedProcedure` and deliberately not
     // `householdProcedure`: an account with no household still sees

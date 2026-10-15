@@ -1,17 +1,16 @@
 import type { AnyTRPCRouter, inferRouterContext } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { AppSession } from "@/lib/auth/session";
-import { clientAddress } from "@/lib/rate-limit";
-import { logSecurityEvent } from "@/lib/security-log";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 import { MAX_TRPC_BODY_BYTES, initWithBody, readBodyWithin } from "./body-limit";
+import { refuseCrossSite, refuseNonJson } from "./request-guards";
 
 /**
  * The tRPC HTTP endpoint, built from its parts so it can be run without Next.
  *
  * `src/app/api/trpc/[trpc]/route.ts` only wires the application's router,
- * Auth.js and the context into this. Everything the endpoint decides about a
+ * the session read and the context into this. Everything the endpoint decides about a
  * request — and the guards that decide before tRPC sees one — lives here,
  * where a unit test can reach it with a plain `Request`, a small router and a
  * stubbed session: no Next server, no Postgres, no Valkey. Written inside the
@@ -38,7 +37,7 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
     // Who sent it and in what form, before anything else: both are headers,
     // so refusing on them costs nothing, and a request that should not be here
     // has its body neither read nor held.
-    const refused = refuseCrossSite(incoming) ?? refuseNonJson(incoming);
+    const refused = refuseCrossSite(incoming, "/api/trpc") ?? refuseNonJson(incoming);
     if (refused) return refused;
 
     // Then the body, before the session or anything else costs a thing:
@@ -67,10 +66,9 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
       /**
        * `Retry-After` on a throttled response — RFC 9110 §10.2.3.
        *
-       * **Not on the sign-in path**, which never produces a 429 at all:
-       * Auth.js answers a refused credentials callback with a redirect to
-       * `/login?error=…`, and §10.2.3 is about a status this can attach to.
-       * That path says it in words instead.
+       * Sign-in is not here: it is the auth route
+       * (`src/server/http/auth-handler.ts`), which answers a spent budget with
+       * its own 429 and `Retry-After` from the same limiter.
        */
       responseMeta: ({ errors }) => {
         const seconds = retryAfterSeconds(errors);
@@ -108,74 +106,4 @@ export function createTrpcHandler<TRouter extends AnyTRPCRouter>({
 function withNoStore(response: Response): Response {
   response.headers.set("cache-control", "no-store");
   return response;
-}
-
-/**
- * The `Sec-Fetch-Site` values a browser sends for a request this application
- * made itself (`same-origin`), or one the person started by typing or a
- * bookmark (`none`). `same-site` is the one that matters: SameSite=Lax sends
- * the session cookie with it, because a sibling subdomain is the same *site*.
- */
-const OWN_FETCH_SITES = new Set(["same-origin", "none"]);
-
-/**
- * 403 for a request a browser says another site sent — the Fetch Metadata
- * check of the OWASP CSRF Cheat Sheet.
- *
- * **A request with no `Sec-Fetch-Site` passes.** Every current browser engine
- * sends it — Safari was the last, in 16.4 — but only to an HTTPS origin or
- * localhost: on a plain-HTTP LAN install no browser sends it, and this check
- * does nothing there. What else sends none is curl, Playwright's `request`
- * fixture, a native client and an older browser, none of which a forging page
- * can make another person's browser be. Those requests are left to the
- * defences they always had: the session cookie's SameSite=Lax and the
- * JSON-only rule below, which is what protects a plain-HTTP install.
- *
- * **`Origin` is not compared with `NEXTAUTH_URL`.** A plain-HTTP LAN install
- * is reached as an address the configured URL does not name, and a strict
- * comparison would lock it out on upgrade for no gain over this header.
- */
-function refuseCrossSite(req: Request): Response | null {
-  const site = req.headers.get("sec-fetch-site");
-  if (site === null || OWN_FETCH_SITES.has(site.trim().toLowerCase())) return null;
-
-  logSecurityEvent("access.denied", {
-    reason: "cross-site",
-    code: "FORBIDDEN",
-    // Both caller-supplied: bounded, so a refusal cannot be a long line.
-    fetchSite: site.slice(0, 32),
-    path: new URL(req.url).pathname.replace(/^\/api\/trpc\/?/, "").slice(0, 200),
-    address: clientAddress(req.headers),
-  });
-  return refusal(403, "Cross-site requests are refused");
-}
-
-/**
- * 415 for a body that is not `application/json`.
- *
- * tRPC itself also accepts `multipart/form-data` and
- * `application/octet-stream` on POST, and runs a mutation with whatever they
- * carry. Nothing in this application sends either — both links send JSON, and
- * a receipt photograph travels base64'd inside it — while a plain HTML form
- * can send multipart with no CORS preflight. A mutation that takes no input
- * therefore ran on a form post from any page that could get the cookie sent:
- * a sibling subdomain, which SameSite=Lax does not stop. `application/json` is
- * not a type a form can send, so a page on another origin cannot send it
- * without a preflight this application never answers.
- */
-function refuseNonJson(req: Request): Response | null {
-  if (req.method === "GET" || req.method === "HEAD") return null;
-
-  const type = req.headers.get("content-type");
-  const mediaType = type?.split(";")[0].trim().toLowerCase();
-  if (mediaType === "application/json") return null;
-
-  return refusal(415, "Only application/json is accepted");
-}
-
-function refusal(status: number, message: string): Response {
-  return new Response(message, {
-    status,
-    headers: { "content-type": "text/plain; charset=utf-8" },
-  });
 }

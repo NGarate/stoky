@@ -23,7 +23,7 @@ import {
  *
  * What Valkey does with a counter — counting, expiring, refunding into the
  * right window — is proven against a real one in
- * `integration/rate-limit.test.ts`, through the credentials provider. What is
+ * `integration/rate-limit.test.ts`, through the auth route. What is
  * here is the policy's own arithmetic: which budget an attempt is charged to,
  * what a refusal carries, and what a settled charge gives back. A fake
  * limiter is the only way to make it answer "refused, 0 seconds left", which

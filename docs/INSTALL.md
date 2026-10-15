@@ -185,8 +185,15 @@ v0.1.0-alpha.3's files have no such setting, and adding the line to its `.env`
 changes nothing: registration there stays open to anyone (see Requirements).
 
 Use hex for the database password: it is inserted into a connection URL without
-percent-encoding. Do not reuse the development `.env.example`. Rotating `NEXTAUTH_SECRET` invalidates existing sessions. The bundle derives
-`DATABASE_URL`, `VALKEY_URL` and `NEXTAUTH_URL` itself, so you do not edit them.
+percent-encoding. Do not reuse the development `.env.example`. Rotating
+`NEXTAUTH_SECRET` signs everybody out and changes every account tag in the
+security log. The bundle derives `DATABASE_URL`, `VALKEY_URL` and
+`NEXTAUTH_URL` itself, so you do not edit them. Outside the bundle,
+`NEXTAUTH_URL` is required in production and must be the address people type:
+from the release after v0.1.0-alpha.3 sign-in is accepted from a signed-in
+browser only at that address, the session cookie is `Secure` only when it is
+https, and with it unset the sign-in API answers every request with "service
+unavailable".
 Keep `.env` private and out of version control.
 
 **Prefer a dedicated subdomain for `DOMAIN`.** Stoky sends HSTS for two years
@@ -331,29 +338,38 @@ SET password = :'hash',
 WHERE "providerId" = 'credential'
   AND "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'))
   AND "accountId" = "userId";
-UPDATE "User"
-SET "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
-    "updatedAt" = now() AT TIME ZONE 'UTC'
-WHERE email = lower(:'email');
+DELETE FROM "Session"
+WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
 COMMIT;
 SQL
 unset STOKY_HASH
 ```
 
-`psql` must answer `UPDATE 1` to both updates; `UPDATE 0` means no account has
-that address. From the release after v0.1.0-alpha.3 the hash is kept in the
+`psql` must answer `UPDATE 1` to the update, and `DELETE` with the number of
+sessions it ended, which may be 0; `UPDATE 0` means no account has that
+address. From the release after v0.1.0-alpha.3 the hash is kept in the
 account's `credential` row of the `Account` table, which is where sign-in reads
-it. On v0.1.0-alpha.3 it is still a column of `User`: there, leave out the
-first update and add `"passwordHash" = :'hash',` to the second. The other way
-round fails safely, with `column "passwordHash" does not exist` and nothing
-changed.
+it, and each session is a row of `Session`. On v0.1.0-alpha.3 the hash is
+still a column of `User` and there are no session rows: there, replace both
+statements with
+
+```sql
+UPDATE "User"
+SET "passwordHash" = :'hash',
+    "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
+    "updatedAt" = now() AT TIME ZONE 'UTC'
+WHERE email = lower(:'email');
+```
+
+The other way round fails safely, with `relation "Session" does not exist` or
+`column "passwordHash" does not exist` and nothing changed.
 The password is read without echo and passed on standard input, so it stays out
 of your shell history and the process list; `IFS=` keeps any leading or
 trailing space in it, which a plain `read` would drop and sign-in would not. The hash is made by the
-application's own Argon2id library with its own parameters. Both updates run
-in one transaction, so the new password never stands without the second one,
-which sets `sessionsValidFrom` and so ends every session the account had, as a
-reset from the application does. This path skips the application's password rules: choose at
+application's own Argon2id library with its own parameters. Both statements
+run in one transaction, so the new password never stands without the second
+one, which deletes every session the account had, as a reset from the
+application does. This path skips the application's password rules: choose at
 least 12 characters that do not contain your name or address.
 
 ## Somebody keeps being told to wait
@@ -516,9 +532,11 @@ with the person's:
    offline replay records go together or not at all. From the release after
    v0.1.0-alpha.3 the account's password hash, in its `credential` row of the
    `Account` table, goes with it too: the database deletes that row along with
-   the account, so the statement does not name it. A browser still signed in
-   to the account keeps its cookie, but every request it makes for household
-   data is refused. It can still record a start screen; see what stays, below.
+   the account, so the statement does not name it, and so do its sessions: a
+   browser signed in to it is signed out on its next request. On
+   v0.1.0-alpha.3 a browser still signed in keeps its cookie, but every
+   request it makes for household data is refused; it can still record a
+   start screen, see what stays, below.
 3. The receipts the person uploaded belong to the household and stay, with
    their photographs on the `uploads` volume. To remove those photographs too,
    put the `id` from step 1 in place of `the-id`:
@@ -559,10 +577,10 @@ What stays after these steps:
 - **The receipts' text.** The whole-ticket OCR text can include a masked card
   number, a loyalty number or the cashier's name. It is the household's
   purchase history and stays with each receipt.
-- **A start screen chosen afterwards.** A browser still signed in when the
-  account was deleted stays signed in until it goes fifteen minutes unused, or
-  for at most thirty days after it signed in (from the release after
-  v0.1.0-alpha.3; on v0.1.0-alpha.3, for as long as it keeps being used). Choosing a start screen there
+- **A start screen chosen afterwards**, on v0.1.0-alpha.3 only. There a
+  browser still signed in when the account was deleted stays signed in for as
+  long as it keeps being used; from the release after it, the account's
+  sessions are deleted with it. Choosing a start screen there
   records one under the old `id`, because that does not ask the database
   whether the account still exists. If the person may have done that, remove
   it with the `id` from step 1 in place of `the-id`:
@@ -646,9 +664,14 @@ docker compose exec -T db pg_restore -U stoky -d stoky \
   --exit-on-error --no-owner < database.dump
 docker compose run --rm --no-deps -T --entrypoint tar app \
   -C /app/uploads -xzf - < uploads.tar.gz
+docker compose exec -T db psql -U stoky -d stoky -c 'DELETE FROM "Session";'
 docker compose up -d --wait --wait-timeout 180
 ```
 
+The `DELETE` ends every session the backup carried, from the release after
+v0.1.0-alpha.3 (before it there is no `Session` table, and the line answers
+`relation "Session" does not exist`; skip it). A restored instance is a new
+place to sign in to, and a cookie lifted from the old one must not open it.
 Sign in and check inventory and a receipt image. Restoring over existing data is
 not covered by these commands. Never delete the original volumes to test a backup.
 
@@ -716,13 +739,16 @@ it is absent. The new release's `install.sh` adds every missing setting to
 the Compose and Traefik files: against the previous release's copies it stops
 before it reaches `.env`.
 
-**Everybody signs in once after upgrading** from a release before sessions
-had a thirty-day limit. A session from the old release has no record of when
-it started, so the new one refuses it the next time it is read rather than
-guess, and each device has to sign in again; changes a phone queued offline
-are kept, as they are whenever a session ends. From then on a session ends thirty
-days after sign-in however much it is used, or after fifteen minutes unused —
-*Authentication* in [SECURITY.md](../SECURITY.md) says why.
+**Everybody signs in once after upgrading** to the release after
+v0.1.0-alpha.3. Sessions move from a signed token in the browser to a row in
+the database, and a token from the old release names no row, so each device
+is asked to sign in again the first time it is used; passwords are kept, and
+changes a phone queued offline are kept, as they are whenever a session ends.
+From then on a session ends after fifteen minutes unused, a day after
+sign-in however much it is used, or when somebody ends it — *Authentication*
+in [SECURITY.md](../SECURITY.md) says why. Set `NEXTAUTH_URL` to the address
+people use before upgrading a deployment that is not the bundle; the bundle
+sets it from `DOMAIN`.
 
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
@@ -818,7 +844,8 @@ migration again.
 | App is unhealthy | `docker compose logs --tail=100 app db cache`; migrations, database connectivity and Valkey |
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
-| Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
+| Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed. From the release after v0.1.0-alpha.3, also `docker compose logs app | grep '\[auth\]'`: a line starting `[auth] unavailable:` names a setting to fix (`NEXTAUTH_URL` unset in production, `BETTER_AUTH_TRUSTED_ORIGINS` set, `BETTER_AUTH_TELEMETRY` on) |
+| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | From the release after v0.1.0-alpha.3: the browser is at an address other than `NEXTAUTH_URL`, or a proxy strips `Origin`. Sign in at the address `NEXTAUTH_URL` names, or set it to the one people use; in development, add the host to `DEV_ALLOWED_ORIGIN` |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |

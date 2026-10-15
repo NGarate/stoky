@@ -60,7 +60,11 @@ for end-to-end type inference. This is an enforced constraint, not a stage.
   are the deliberate exception: the landing/start screens and anything that must
   work without JavaScript, which reach the server through Server Actions
   (`src/lib/landing/choose.ts`, `src/lib/auth/actions.ts`, the locale cookie) —
-  the one sanctioned surface beside tRPC, for no-JS flows only. There is no
+  the one sanctioned surface beside tRPC, for no-JS flows only. The third is
+  the auth API (`/api/auth/*`, Better Auth behind
+  `src/server/http/auth-handler.ts`), for authentication ceremonies only —
+  signing in and out — and the browser reaches it through
+  `src/lib/auth/client.ts` and nothing else. There is no
   server-side tRPC caller; do not reintroduce one, or move a dashboard page to
   SSR, without revisiting the offline design (`REDESIGN_PLAN.md` §5).
 - **Server state is TanStack Query's. Local UI state is React's. A `zustand`

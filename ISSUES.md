@@ -92,7 +92,8 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
-| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right |
+| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right; next-auth itself replaced 2026-10-15 (D135) |
+| AUTH-2 | Better Auth refuses to serve with a required column it never writes | ✅ Resolved 2026-10-15 by D134 — the hash moved to `Account` and `User.passwordHash` went before the switch |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
@@ -3040,6 +3041,12 @@ afterAll(async () => {
 **Files:** the standalone artefact as served; `playwright.config.ts:267`, `Dockerfile`'s production `CMD`
 **Severity:** MEDIUM — the page renders correctly; what is lost is the log, and a Node default is now being relied on
 **Status:** PARTLY CLOSED — measured 2026-08-26, re-measured the same day.
+**2026-10-15:** next-auth, whose CSRF mint inside a session read was the
+`crypto` half's trigger, was replaced by Better Auth (PROGRESS D135). `auth()`
+still awaits `connection()` before reading the session, because a session read
+is request data whichever library makes it, and `auth-dynamic.test.ts` still
+holds that ordering. Not re-measured on the standalone artefact at that
+commit; the `AbortError` half does not involve authentication.
 **This entry described two causes as one.** The `crypto.getRandomValues()` half
 is fixed (`d0e7566`); the `AbortError` half is untouched and is the larger
 number. Both measurements are at the end, and one of them contradicts the table
@@ -3503,6 +3510,31 @@ Verified: typecheck, lint, verify:local, `auth.flow` + `capabilities` +
 
 **What this is not.** It is not an argument for or against JWT sessions. Auth.js
 gives no choice here: credentials sign-in always produces a JWT.
+
+**2026-10-15 — closed for good.** next-auth was replaced by Better Auth
+(PROGRESS D135), whose sessions are rows in a `Session` table: the database
+strategy this entry found unreachable with credentials is now the only one.
+The configuration this entry guarded is gone with the library; nothing picks a
+strategy by the presence of an adapter any more.
+
+### ✅ AUTH-2: Better Auth refuses to serve with a required column it never writes
+
+**Files:** `prisma/schema.prisma` (`User`, `Account`), `src/lib/auth/credentials.ts`
+**Severity:** HIGH for the migration — sign-in would not have worked at all
+**Status:** RESOLVED 2026-10-15 by PROGRESS D134, before the switch it would have broken.
+
+Found by the Better Auth spike (`spike/better-auth-2026-10-15`, `1c8156b`):
+Better Auth checks the Prisma data model against the schema it expects when it
+starts, and a column on `User` that is required, has no default and is not one
+of its fields — `passwordHash` — is a mismatch it refuses to serve with. It
+would never write that column either: it creates users through its own adapter
+and keeps a password in the `credential` row of `Account`.
+
+**How it closed.** D134 moved every hash into that `Account` row and dropped
+`User.passwordHash` while next-auth was still the thing signing people in
+(`20261015120000_credential_accounts`), so the swap (D135) found a schema
+Better Auth accepts and carried no data move. `credentials.ts` is still the
+one module that reads or writes the hash.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 

@@ -1,16 +1,18 @@
 /**
  * Refusing to start with a signing key anybody can read.
  *
- * `NEXTAUTH_SECRET` signs the session JWT — `authConfig` in `@/lib/auth` passes
- * it to Auth.js explicitly, because left to itself Auth.js prefers
- * `AUTH_SECRET` and would sign with a value this guard never saw. Auth.js
- * never inspects the key, so before this guard nothing in the application
- * looked at what it was — and `.env.example` ships a placeholder,
+ * `NEXTAUTH_SECRET` signs the session cookie and keys the account tags in the
+ * security log. `src/lib/auth/instance.ts` hands it to Better Auth as both
+ * `secret` and the single entry of `secrets`, because left to itself Better
+ * Auth prefers `BETTER_AUTH_SECRETS`, then `BETTER_AUTH_SECRET`, then
+ * `AUTH_SECRET` — values this guard never sees. Better Auth only warns about a
+ * short key, so before this guard nothing in the application looked at what
+ * it was — and `.env.example` ships a placeholder,
  * `your-secret-key-here-change-in-production`, which is **published in this
- * repository**. A deployment that copies the file and does not change that line
- * is signing sessions with a key that is in a public git history: anyone can
- * forge a cookie for any account, and nothing about the running system looks
- * wrong.
+ * repository**. A deployment that copies the file and does not change that
+ * line is signing sessions with a key that is in a public git history: anyone
+ * can forge a cookie for any account, and nothing about the running system
+ * looks wrong.
  *
  * That is the same shape as the other configuration defects found today — a
  * value two places have to agree about, which nothing checks — except that this
@@ -18,7 +20,8 @@
  *
  * **Production only.** Development and the test suites use whatever is to hand,
  * and refusing to start there would trade a real risk nobody faces for a daily
- * obstacle everybody does.
+ * obstacle everybody does. With none set there, the instance signs with a
+ * random key per process and says so.
  */
 
 /** The placeholder in `.env.example`. Kept in one place so both can be checked. */

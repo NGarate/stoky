@@ -4,6 +4,7 @@ import { enforceRateLimit } from "../throttle";
 import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { createCredentialUser, setPasswordAndEndSessions } from "@/lib/auth/credentials";
+import { endSessions } from "@/lib/auth/end-sessions";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -374,9 +375,10 @@ export const householdRouter = createTRPCRouter({
    *
    * The other half of what §10 asked for, and the reason the admin panel
    * exists: "the kitchen tablet has walked out of the house" needs an answer
-   * that is not "wait fifteen minutes and hope nobody touches it" — an active
-   * session slides forward on every read, for up to the thirty days of
-   * `MAX_SESSION_AGE_S` in `src/lib/auth.ts`.
+   * that is not "wait fifteen minutes and hope nobody touches it" — a session
+   * in use lasts up to a day (`src/lib/auth/session-policy.ts`). Deleting the
+   * rows (`endSessions`) signs every one of their devices out on its next
+   * request.
    *
    * The same two guards as the rest of member management: the member must be
    * **this** household's, and only an owner may act on an owner. There is no
@@ -395,9 +397,15 @@ export const householdRouter = createTRPCRouter({
 
       assertMayActOnOwner(ctx.role, member.role);
 
-      await ctx.db.user.update({
-        where: { id: member.id },
-        data: { sessionsValidFrom: new Date() },
+      const count = await endSessions(ctx.db, { userId: member.id });
+
+      logSecurityEvent("auth.session.ended", {
+        userId: ctx.session.user.id,
+        targetUserId: member.id,
+        householdId: ctx.householdId,
+        reason: "admin",
+        count,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
 
       return { success: true };
@@ -432,8 +440,8 @@ export const householdRouter = createTRPCRouter({
    *    which is the escalation the guard exists to refuse.
    * 5. **The identity rule**, against the member's own name and address,
    *    which the input does not carry.
-   * 6. **One write** sets the hash and `sessionsValidFrom`, so the new
-   *    password and the end of the old sessions land together. A password
+   * 6. **One transaction** sets the hash and deletes every session row, so
+   *    the new password and the end of the old sessions land together. A password
    *    reset because somebody else may know the old one is half a fix if a
    *    session opened with it survives.
    *

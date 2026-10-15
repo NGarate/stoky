@@ -297,9 +297,9 @@ export default defineConfig({
       // value. Not a secret in any meaningful sense: it signs sessions for a
       // server that lives five minutes.
       NEXTAUTH_SECRET: "playwright-suite-secret-not-a-real-one-0001",
-      // Must match the address the tests use, or Auth.js compares it against
-      // the Host header and refuses — the comparison e2e/auth.prod.spec.ts
-      // exists to keep working.
+      // Must match the address the tests use: Better Auth accepts a sign-in
+      // from a cookie-bearing browser only at this origin, and marks the
+      // cookie Secure only when it is https (src/lib/auth/public-url.ts).
       NEXTAUTH_URL: BASE_URL,
       // The auth rate limiter (ISSUES.md CRITICAL-4) counts per IP, and every
       // browser project reaches the dev server without a proxy in front of it,

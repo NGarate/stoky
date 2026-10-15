@@ -72,6 +72,7 @@ async function caller() {
   const session = {
     user: { id: userId, email: "r@example.com", name: "R", householdId, role: "OWNER" },
     expires: new Date(Date.now() + 3600_000).toISOString(),
+    sessionId: crypto.randomUUID(),
   } as unknown as AppSession;
   return router.createCaller(await createTRPCContext({ session }));
 }

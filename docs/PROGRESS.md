@@ -39,7 +39,7 @@ Rules for this log:
 
 ## Done
 
-### Better Auth, before the switch (2026-10-15, `feat/better-auth-2026-10-15`)
+### Better Auth replaces next-auth (2026-10-15, `feat/better-auth-2026-10-15`)
 
 | Change | Evidence |
 |---|---|
@@ -51,6 +51,7 @@ Rules for this log:
 | "refactor(auth): put the browser's auth calls behind one module" | `src/lib/auth/client.ts` is the only browser caller of the auth library: `signInWithPassword` answers `{ok}` or `{ok: false, code}` in a vocabulary the forms translate, and `readSessionExpiry` reads the keep-alive's expiry. The login and registration forms and `SessionKeepAlive` call it; `auth-pages.test.tsx` mocks it completely, the real module spread in (D50). `auth-client.test.ts` checks the translation (dropping the code passthrough turns three cases red), and `auth-dynamic.test.ts` fails when any other file imports or mocks `next-auth/react`. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(ui): add a Checkbox primitive" | `src/components/ui/checkbox.tsx` is `RadioOption`'s stretched input for a yes/no choice, ready for the remember-me box: named by its label, described by its hint, `name=on` in a plain form, its drawn tick following `:checked`. `target-size.test.tsx` measures the input itself and credits it with the label's 48px only when it really covers the label; an `sr-only` input, alone or beside the stretching classes, turns it red. `bun run verify:ci` green on the commit. |
 | "feat(db): add the session and verification tables" | `20261015130000_auth_session_tables` creates Better Auth's `Session` (one row per signed-in browser or app, cascading from `User` like `Account`, with our `authenticatedAt` as the absolute limit's clock) and `Verification`, and adds `emailVerified` and `image` to `User`. Empty until the switch: next-auth neither reads nor writes them. `indexes.test.ts` asserts a unique index on `Session(token)` and indexes on `Session(userId)`, `Session(expiresAt)` and `Verification(identifier)`; a plain index on the token turns it red. `auth-tables.test.ts` deletes an account and finds its sessions gone and another's kept; `ON DELETE SET NULL` turns it red. `bun run verify:ci` green on the commit. |
+| "feat(auth)!: replace next-auth with Better Auth" (D135; supersedes D125, amends D31) | Better Auth 1.7.7, sessions in the `Session` table, behind `src/server/http/auth-handler.ts` (five allowlisted endpoints, the body bound, Fetch Metadata, JSON only, our limits, the token kept out of bodies). `integration/auth.surface.test.ts` tries every endpoint the instance mounts with a signed-in cookie and finds only the five answer and no row changed; allowlisting `/change-password` turns it red. `integration/session.policy.test.ts` signs in for real: fifteen idle minutes, slid by `auth.session` and by nothing else, a day's cap, a deleted row refused at once; sliding inside `readSession`, dropping the clamp or enabling the cookie cache each turns it red. Ten wrong passwords write ten security lines and no Better Auth line. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -1368,7 +1369,10 @@ at `authorize`, which had no coverage below the browser until then; that
 immediately caught a second thing, which is that
 `authConfig.providers[0].authorize` is Auth.js's placeholder `() => null` and the
 configured function lives in `options`. Three sign-in tests passed against a stub
-for one run.
+for one run. *Amended by D135 (2026-10-15):* the one credential path is now the
+auth route, `POST /api/auth/sign-in/email`, and the tests that drove
+`authorize` sign in through the route module itself
+(`src/__tests__/utils/authorize.ts`), so they reach no library internals.
 
 **D32 — TEST-3 was fixed rather than left filed, on D22's reasoning.**
 D6 says file, do not fix in passing. TEST-3 — one E2E journey writing the stock
@@ -2487,6 +2491,9 @@ bounds a distributed guess; INSTALL.md gives operators the command that clears
 an account's counter.
 
 **D125 — A session ends thirty days after sign-in, however active.**
+*Superseded by D135 (2026-10-15): sessions are database rows, a browser
+session ends after fifteen idle minutes or a day from the sign-in, and signing
+out deletes the row.*
 The 2026-10-12 security review found that the fifteen-minute `maxAge` is an
 idle timeout and nothing else: with the JWT strategy Auth.js re-issues the
 token, with a fresh `iat` and expiry, on every read of the session, so a
@@ -2613,3 +2620,53 @@ Better Auth's adapter never deletes these rows itself. The later auth tables
 (sessions, verifications, second factors, passkeys) take the same exception
 for the same reason. The migration is one way: returning to a release before
 it needs the database dump taken before upgrading (`INSTALL.md`).
+
+**D135 — Better Auth replaces next-auth; sessions live in the database.**
+next-auth 5 was a beta whose credentials provider can only sign a JWT, so a
+session could not be ended except by a line in time (`sessionsValidFrom`),
+signing out left a copied token valid, and a second factor or a passkey would
+have meant building them beside it. Better Auth 1.7.7 keeps a row per session,
+and the swap moves no data: the hashes were already in its `Account` row
+(D134). What it is configured to be, each part decided rather than defaulted:
+
+- **Our policy wraps it, in our route.** `src/server/http/auth-handler.ts`,
+  built like `trpc-handler.ts` with Better Auth's handler injected, answers
+  five endpoints and 404s the rest (an allowlist, not `disabledPaths`, so an
+  endpoint a later version adds is closed); bounds the body; refuses
+  cross-site and non-JSON POSTs; rebuilds a sign-in body to the address, the
+  password and `rememberMe: false`; charges `sign-in-policy.ts`'s budgets
+  before the JSON is believed; and strips the token from every JSON answer.
+  Better Auth's hooks were not used for the policy: there is no per-request
+  state to carry a charge from a before-hook to an after-hook, and an injected
+  handler is testable without a database.
+- **Built lazily, never at import** (`getAuth()` in
+  `src/lib/auth/instance.ts`), because `betterAuth()` starts its schema check
+  when called and `next build` has no secret or database. It throws — and the
+  route answers 503 and logs `auth.unavailable` — when production has no
+  `NEXTAUTH_URL`, when `BETTER_AUTH_TRUSTED_ORIGINS` is set, or when
+  `BETTER_AUTH_TELEMETRY` is on: each is an environment variable Better Auth
+  obeys over its options.
+- **One key, named twice.** `NEXTAUTH_SECRET` is both `secret` and
+  `secrets: [{version: 1}]`, so `BETTER_AUTH_SECRET(S)` and `AUTH_SECRET` are
+  never read. Outside production, with none set, a per-process random key.
+- **Every session is a browser session for now**: no `Max-Age` on the cookie,
+  fifteen idle minutes on the row, a day from `authenticatedAt` at most
+  (`session-policy.ts`). Only `auth.session`, which the keep-alive calls on
+  real activity, slides it; reads never do, so background polling does not
+  keep an unattended session alive. A database hook sets the expiry at
+  creation and drops `expiresAt` from every update Better Auth makes. This
+  replaces D125's thirty days, which fitted a token that could not be ended;
+  a remembered session for the kitchen tablet is a later, separate decision.
+- **Revocation is deletion**, through one helper (`end-sessions.ts`), which
+  refuses a filter with an undefined value because Prisma reads one as no
+  condition. `auth.session.ended` replaces `auth.session.revoked`.
+- **The cookie cache is off**, so a deleted row is refused on the next read;
+  IP tracking is off; telemetry is off; Better Auth's limiter is off; its
+  log is one line per message at level `error`, which leaves a refused
+  sign-in to the security log alone.
+- **`AppSession.sessionId` is required**, for the same reason as the
+  helper's refusal.
+
+Everybody signs in once after upgrading; passwords are kept. Rolling back to
+the previous image needs nothing more: it ignores the new tables, and
+`sessionsValidFrom` is still there until its own commit drops it.

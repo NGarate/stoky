@@ -10,12 +10,13 @@ import { DEMO_EMAIL, DEMO_PASSWORD, SESSION_FILE } from "./session";
  * the whole sign-in journey including a refusal — but those tests are about
  * login, and they run signed out.
  *
- * The session is a JWT with a 15 minute `maxAge` and no rolling refresh
- * (`src/lib/auth.ts`), so the cookie saved here goes stale 15 minutes after this
- * runs. That is the second reason the 10 minute `globalTimeout` in
- * `playwright.config.ts` is a ceiling and not an estimate: a run that outlasts
- * the budget would also start failing as "signed out" and report it as an
- * application defect.
+ * The session is a browser session: its row ends fifteen minutes after it was
+ * last slid, and only the keep-alive's `auth.session` slides it
+ * (`src/lib/auth/session-policy.ts`), which a test rarely waits long enough to
+ * trigger. So the cookie saved here goes stale about 15 minutes after this
+ * runs. That is the second reason the `globalTimeout` in `playwright.config.ts`
+ * is a ceiling and not an estimate: a run that outlasts it would also start
+ * failing as "signed out" and report it as an application defect.
  */
 setup("sign in", async ({ page }) => {
   await page.goto("/login");

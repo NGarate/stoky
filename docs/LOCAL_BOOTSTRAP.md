@@ -200,6 +200,13 @@ address goes in `.env`, and `next dev` must be restarted to read it:
 DEV_ALLOWED_ORIGIN=192.168.1.20
 ```
 
+Signing in from that device needs the address there too, whatever
+`next.config.ts` allows: each `DEV_ALLOWED_ORIGIN` host is a trusted origin
+for sign-in as `http://<host>:<PORT or 3000>` and `https://<host>`, and Better
+Auth refuses a sign-in from a browser that holds a cookie at any other origin
+(403 `INVALID_ORIGIN`, which the form words as "service unavailable"). Never
+read in production.
+
 Useful for layout on a real screen. The camera says it needs `https://`, and it
 is right.
 
@@ -213,7 +220,8 @@ Next creates a certificate with `mkcert` and, the first time, **installs a
 local certificate authority into this machine's trust store** (it may ask for
 your password). Only this machine trusts it, so a phone does not: use row 4
 for a phone. Set `NEXTAUTH_URL="https://localhost:3000"` in `.env` while you
-use it, so Auth.js builds its callback URLs with the right scheme. *Not run
+use it, so sign-in is accepted from that origin and the session cookie is
+`Secure`. *Not run
 while writing this section* (2026-10-10), because it changes the system trust
 store. The flag is from `node_modules/next/dist/docs/01-app/03-api-reference/06-cli/next.md`.
 
@@ -250,7 +258,9 @@ while the certificate is issued.
   reset`**, which deletes every serve rule on the machine, not just this one.
 - `DEV_ALLOWED_ORIGIN` takes a comma-separated list. Add the tailnet IP
   (`tailscale ip -4`) as well if you also open `http://100.x.y.z:3000`
-  directly. That plain-HTTP route behaves like row 2.
+  directly. That plain-HTTP route behaves like row 2, except that sign-in
+  there does not stick: with an `https://` `NEXTAUTH_URL` the session cookie
+  is `Secure`, and a browser drops a `Secure` cookie set over http.
 
 Verified on 2026-10-10: on this project's development machine, `tailscale serve
 status` reports `https://<machine>.ts.net (tailnet only) |-- / proxy

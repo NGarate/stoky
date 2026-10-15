@@ -32,7 +32,7 @@ there is no external service holding your data.
 ## Tech stack
 
 Next.js 16 (App Router) · TypeScript 5 strict · tRPC 11 · Prisma 6 ·
-PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Auth.js v5 (Argon2id) ·
+PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Better Auth 1.7 (Argon2id) ·
 Tailwind CSS 4 · TanStack Query v5 · next-intl v4 ·
 Tesseract.js · Bun.Image
 
@@ -175,15 +175,16 @@ src/
   app/
     (auth)/                   login, register
     (dashboard)/              inventory, products, receipts, shopping, prices, settings
-    api/trpc/[trpc]/          tRPC route: wires the router and Auth.js into server/http
+    api/trpc/[trpc]/          tRPC route: wires the router and the session read into server/http
+    api/auth/[...all]/        auth API route: wires Better Auth into server/http
   server/
-    http/                     the tRPC HTTP handler and the API routes' body bound, testable without Next
+    http/                     the tRPC and auth API handlers and their guards, testable without Next
     trpc/routers/             one router per domain
     services/                 ocr, receiptParser, productMatcher, openFoodFacts
   lib/
     validations/              Zod schemas shared by client and server
-    auth.ts                   Auth.js configuration (the config is this file)
-    auth/                     Error-message mapping only
+    auth.ts                   auth() and readSession: the session as the app reads it
+    auth/                     the Better Auth instance, session policy, sign-in limits, browser calls
   components/
     ui/                       shadcn/ui primitives
     <domain>/                 inventory, receipt, price, shopping, barcode, ...

@@ -19,10 +19,11 @@ import type { JSX } from "react";
  * Two behaviours, and they are deliberately different:
  *
  * - **Activity refreshes silently.** A pointer or a key, throttled to once
- *   every four minutes, asks the server for the session; Auth.js re-issues the
- *   token, with a fresh expiry, on every read. Someone who is using
- *   the application never sees this component at all, which is the point — a
- *   warning that fires while you are typing is a nuisance, not an
+ *   every four minutes, asks `auth.session`, which moves the session's expiry
+ *   fifteen minutes on. It is the only thing that does: a background read is
+ *   not somebody at the screen (`src/lib/auth/session-policy.ts`). Someone who
+ *   is using the application never sees this component at all, which is the
+ *   point — a warning that fires while you are typing is a nuisance, not an
  *   accessibility feature.
  * - **Inactivity warns, out loud.** Two minutes before expiry a live region
  *   announces how long is left and offers to stay signed in. It is
@@ -39,13 +40,12 @@ const WARN_BEFORE_MS = 2 * 60 * 1000;
  * The shortest gap between two silent refreshes.
  *
  * Continuous use costs at most one extra request every four minutes, which
- * keeps an active session well inside its fifteen idle minutes. Every read
- * re-issues the token (`src/lib/auth.ts`, the `session` settings), so a
- * shorter throttle would only spend requests moving the expiry a little
- * further each time.
+ * keeps an active session well inside its fifteen idle minutes; a shorter
+ * throttle would only spend requests moving the expiry a little further each
+ * time.
  *
- * Nothing here can move the thirty-day limit (`MAX_SESSION_AGE_S`): the
- * server refuses the token at that point however recently it was refreshed.
+ * Nothing here can move the day's limit from the sign-in (`BROWSER_CAP_S`,
+ * `src/lib/auth/session-policy.ts`): `auth.session` never slides past it.
  */
 const REFRESH_THROTTLE_MS = 4 * 60 * 1000;
 
@@ -127,7 +127,7 @@ export function SessionKeepAlive({
    *
    * A shell restored from the service worker's cache carries a stale
    * `session.expires`, rendered as a prop by the dashboard layout. Offline,
-   * `/api/auth/session` is passed through and fails, so the session cannot be
+   * `auth.session` is passed through and fails, so the session cannot be
    * refreshed — and greeting someone with a countdown they can do nothing
    * about is an interruption with no action attached, which is the failure
    * §7 rule 3 is about.

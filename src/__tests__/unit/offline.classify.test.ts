@@ -82,7 +82,7 @@ describe("classifyMutationError", () => {
   }
 
   it("calls 401 auth, not permanent", () => {
-    // The most consequential row. The JWT lasts fifteen minutes and slides only
+    // The most consequential row. A session lasts fifteen idle minutes and slides only
     // on activity; a phone in aeroplane mode makes no requests. Reconnect after
     // a twenty-minute shop is a 401 by construction, and a rule that drops
     // permanent 4xx would discard the entire shop at that moment.

@@ -21,6 +21,8 @@ import {
   readPasswordHash,
   setPasswordAndEndSessions,
 } from "@/lib/auth/credentials";
+import { endSessions } from "@/lib/auth/end-sessions";
+import { nextExpiry, shouldSlide } from "@/lib/auth/session-policy";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   REGISTRATION_CLOSED_MESSAGE,
@@ -44,15 +46,16 @@ function registrationClosed(): TRPCError {
 /**
  * Accounts, as far as tRPC is concerned.
  *
- * **Signing in is not here.** It is the credentials provider in
- * `src/lib/auth.ts`, and it used to be here too — an `auth.login` procedure on
- * the public router, unmetered and unused by the interface, which was a second
- * way to verify a password with none of the protections the real one has. It
- * was removed; `src/__tests__/utils/authorize.ts` drives the real path instead.
+ * **Signing in is not here.** It is the auth API (`/api/auth/sign-in/email`,
+ * `src/server/http/auth-handler.ts`), and it used to be here too — an
+ * `auth.login` procedure on the public router, unmetered and unused by the
+ * interface, which was a second way to verify a password with none of the
+ * protections the real one has. It was removed;
+ * `src/__tests__/utils/authorize.ts` drives the real path instead.
  *
- * So what is left is the parts Auth.js has no opinion about: creating an
- * account, reading the current one, changing its password, ending its
- * sessions, and a `logout` that exists for shape.
+ * So what is left is the parts Better Auth is not asked to do: creating an
+ * account, reading the current one and its session's expiry, changing its
+ * password, ending its sessions, and a `logout` that exists for shape.
  */
 export const authRouter = createTRPCRouter({
   /**
@@ -204,7 +207,7 @@ export const authRouter = createTRPCRouter({
     }),
 
   /**
-   * The signed-in account, read from the database rather than from the token.
+   * The signed-in account, read from the database rather than from the session.
    *
    * **Nothing calls it today**, which is worth knowing before relying on it.
    * The screens read what they need from the session, and the freshness
@@ -248,6 +251,43 @@ export const authRouter = createTRPCRouter({
     }),
 
   /**
+   * This session's expiry, moved forward when activity is worth it — the
+   * keep-alive's one call (`readSessionExpiry`, `src/lib/auth/client.ts`).
+   *
+   * **The only thing that slides a browser session.** Its row ends fifteen
+   * minutes after it was last slid, and a day after the sign-in however often
+   * (`src/lib/auth/session-policy.ts`). Reading the session does not move it —
+   * not a page render, not a tRPC call — because a dashboard left open polls,
+   * and polling is not somebody at the screen. The keep-alive asks only when a
+   * pointer or a key moves.
+   *
+   * `publicProcedure`, because "no session" is an answer (`null`) rather than
+   * a refusal: the keep-alive reads it as signed out, and an UNAUTHORIZED would
+   * be logged as a refused request every time a tab outlived its session.
+   *
+   * The write is conditioned on the row still being live, so a session that
+   * ended between the read and the write is not brought back.
+   */
+  session: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.session) return null;
+
+    const now = new Date();
+    const row = await ctx.db.session.findUnique({
+      where: { id: ctx.session.sessionId },
+      select: { expiresAt: true, authenticatedAt: true },
+    });
+    if (!row || row.expiresAt <= now) return null;
+    if (!shouldSlide(row.expiresAt, now)) return { expires: row.expiresAt.toISOString() };
+
+    const expires = nextExpiry({ authenticatedAt: row.authenticatedAt, now });
+    const { count } = await ctx.db.session.updateMany({
+      where: { id: ctx.session.sessionId, expiresAt: { gt: now } },
+      data: { expiresAt: expires },
+    });
+    return count === 0 ? null : { expires: expires.toISOString() };
+  }),
+
+  /**
    * How long a confirmation stays on screen, recorded against the account.
    *
    * It was in `localStorage`, which made a WCAG 2.2.1 adjustment a property of
@@ -281,10 +321,9 @@ export const authRouter = createTRPCRouter({
   /**
    * End every session this account has, including the one asking.
    *
-   * There is no server-side session record, so this does not delete anything —
-   * it moves a line in time. `User.sessionsValidFrom` becomes now, and
-   * `src/lib/auth.ts`'s `jwt` callback refuses every token issued before it,
-   * which makes Auth.js clear the cookie on the next session read.
+   * Deletes the rows (`endSessions`), so every device holding one of them is
+   * signed out on its next request: the session is read from its row every
+   * time.
    *
    * **Including the one asking**, which is what "everywhere" has to mean: a
    * person who thinks a session is loose cannot be asked to guess which one.
@@ -298,12 +337,15 @@ export const authRouter = createTRPCRouter({
    * `logout` below.
    */
   revokeMySessions: protectedProcedure.input(z.void()).mutation(async ({ ctx }) => {
-    // `updateMany`, so a session whose account has since been deleted records
-    // nothing rather than throwing P2025 — the same reasoning as
-    // `setSnackbarDuration` above.
-    await ctx.db.user.updateMany({
-      where: { id: ctx.session.user.id },
-      data: { sessionsValidFrom: new Date() },
+    const userId = ctx.session.user.id;
+    const count = await endSessions(ctx.db, { userId });
+
+    logSecurityEvent("auth.session.ended", {
+      userId,
+      targetUserId: userId,
+      reason: "self",
+      count,
+      address: ctx.headers ? clientAddress(ctx.headers) : undefined,
     });
 
     return { success: true };
@@ -335,16 +377,15 @@ export const authRouter = createTRPCRouter({
    *    which the input does not carry — so the schema cannot apply it
    *    (`withIdentityRule`). After the check above, so it answers nobody who
    *    has not proved they know the password.
-   * 4. **One update** sets the hash and `sessionsValidFrom`. Two writes could
-   *    leave a new password beside sessions that were meant to end; one
-   *    cannot. The `jwt` callback in `src/lib/auth.ts` then refuses every
-   *    token issued before now, the caller's own among them, and the screen
-   *    signs out and asks for the new password.
+   * 4. **One transaction** sets the hash and deletes every session row
+   *    (`setPasswordAndEndSessions`). Two could leave a new password beside
+   *    sessions that were meant to end; one cannot. The caller's own session
+   *    goes with the rest, and the screen signs out and asks for the new
+   *    password.
    *
-   * **Ending this session too is deliberate.** Re-issuing it would have to
-   * happen in Auth.js's own route, and the person who suspects their password
-   * leaked is the one who most needs every device asked again. The form says
-   * so before it is submitted.
+   * **Ending this session too is deliberate**, for now: the person who
+   * suspects their password leaked is the one who most needs every device
+   * asked again. The form says so before it is submitted.
    */
   changePassword: protectedProcedure
     .input(changePasswordSchema)
@@ -411,9 +452,8 @@ export const authRouter = createTRPCRouter({
   /**
    * Does nothing, on purpose, and is not how anybody signs out.
    *
-   * The session is a JWT with no server-side record, so there is nothing here
-   * to invalidate. Ending a session is `signOutAction` in
-   * `src/lib/auth/actions.ts` — a server action, so it can clear the cookie —
+   * Ending a session is `signOutAction` in `src/lib/auth/actions.ts` — a
+   * server action, so it can clear the cookie as it deletes the row —
    * called by `SignOutButton`, which first purges the offline queue and tells
    * the service worker to forget the cached shell. Those two are the reason
    * signing out is a component's job rather than an endpoint's.
@@ -422,13 +462,12 @@ export const authRouter = createTRPCRouter({
    * paragraph instead of concluding that signing out is unimplemented, which is
    * what its previous silence invited.
    *
-   * **Signing out clears this device's cookie and nothing else.** A copy of
-   * the token taken before it stays valid: it slides on every read, so it ends
-   * only after fifteen minutes unused (`maxAge` in `src/lib/auth.ts`), thirty
-   * days after the sign-in that minted it (`MAX_SESSION_AGE_S`), or when
-   * somebody ends the account's sessions — `revokeMySessions` above, or an
-   * admin from the members panel. That last one is the answer to a token that
-   * may have leaked; a plain sign-out is not.
+   * **Signing out ends this device's session and nothing else**: its row is
+   * deleted, so a copy of the cookie taken before is refused too. The other
+   * devices' sessions end when they sit idle for fifteen minutes, a day after
+   * their sign-in (`src/lib/auth/session-policy.ts`), or when somebody ends
+   * the account's sessions — `revokeMySessions` above, or an admin from the
+   * members panel.
    *
    * **`z.void()` on the three mutations that take nothing** — this,
    * `revokeMySessions` and `shopping.generateFromLowStock`. With no parser

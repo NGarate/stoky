@@ -53,14 +53,15 @@ export type SecurityEvent =
   // their refusals to their way in.
   | "auth.signin.succeeded"
   | "auth.unavailable"
-  // A session refused by the `jwt` callback, with the `reason`: issued before
-  // the account's revocation line (`sessions-valid-from`), or signed in more
-  // than thirty days ago or at an unrecorded time, i.e. before the limit
-  // existed (`absolute-lifetime`). Worth a line of its own rather
-  // than folding into `access.denied`: it is the only event here that
-  // somebody *asked for*, and an operator reading a household's log should be
-  // able to tell "they revoked their sessions" from "somebody was refused".
-  | "auth.session.revoked"
+  // Sessions somebody ended on purpose, with the `reason`: the account's own
+  // holder ending all of theirs (`self`), or an admin ending a member's
+  // (`admin`). `userId` did it, `targetUserId` is whose they were, `count` is
+  // how many rows went. Worth a line of its own rather than folding into
+  // `access.denied`: it is the only event here that somebody *asked for*, and
+  // an operator reading a household's log should be able to tell "they ended
+  // their sessions" from "somebody was refused". A session that simply runs
+  // out writes nothing; its row is deleted when next read.
+  | "auth.session.ended"
   // A signed-in person changed their own password, which also ended every
   // session the account had. The credential change ASVS V7 asks to be able
   // to reconstruct — "who changed it, and when" — with no password in it.
@@ -101,9 +102,8 @@ export interface SecurityDetails {
    * lookup that missed: another household's id and an id nobody has are
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
-   * it, which has no procedure to have thrown it. On `auth.session.revoked`
-   * it is which rule refused: `"sessions-valid-from"` or
-   * `"absolute-lifetime"`.
+   * it, which has no procedure to have thrown it. On `auth.session.ended` it
+   * is who asked: `"self"` or `"admin"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */
@@ -117,6 +117,8 @@ export interface SecurityDetails {
   targetUserId?: string;
   /** The factor a successful sign-in used (`auth.signin.succeeded`). */
   method?: SignInMethod;
+  /** How many things an action affected: sessions, for `auth.session.ended`. */
+  count?: number;
 }
 
 /**

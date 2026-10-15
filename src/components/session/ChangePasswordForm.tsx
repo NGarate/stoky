@@ -64,7 +64,7 @@ function serverProblem(error: unknown): Problem {
  * leaked one could not be rotated (security review, 2026-10-12).
  *
  * **A success signs this device out, through `useEndSession`.** The procedure
- * moves `sessionsValidFrom`, so the token rendering this form is already
+ * deletes every session row, so the cookie rendering this form is already
  * refused; leaving through the same sequence as the two sign-out controls
  * purges the queue, the persisted reads and the cached shell before the
  * redirect rather than leaving the next read to discover it. The form says so

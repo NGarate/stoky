@@ -12,8 +12,9 @@ import { join } from "node:path";
 /**
  * The signing key, and refusing to start without a real one.
  *
- * `NEXTAUTH_SECRET` signs the session JWT. Auth.js never inspects it, so
- * until this nothing in the application had ever looked at what it was — while
+ * `NEXTAUTH_SECRET` signs the session cookie. Better Auth only warns about a
+ * weak one, so until this nothing in the application had ever looked at what
+ * it was — while
  * `.env.example` ships a placeholder that is published in this repository. An
  * instance deployed with that value signs sessions with a key anybody can
  * read, and nothing about it looks wrong from outside.
@@ -144,38 +145,59 @@ describe("when it refuses", () => {
 
 describe("the key that actually signs sessions", () => {
   /**
-   * Imports `@/lib/auth` in a fresh process with `env` and reports the secret
-   * Auth.js ended up with.
+   * Builds the Better Auth instance in a fresh process with `env` and reports
+   * the secret it ended up signing with — `$context.secret`, what signs the
+   * cookie, not what the file wrote.
    *
-   * A fresh process because the value is read when the module loads, and
-   * every other file in this suite shares one module cache in which it loaded
-   * long ago. `NextAuth(authConfig)` runs next-auth's `setEnvDefaults` on the
-   * config object at load, so `authConfig.secret` afterwards is the resolved
-   * key — the one that signs and decrypts — not just what the file wrote.
+   * A fresh process because the instance is built once per process, and
+   * every other file in this suite shares one.
    */
   function resolvedSecret(env: Record<string, string>) {
     const base: Record<string, string | undefined> = { ...process.env };
     for (const key of Object.keys(base)) {
-      if (/^(NEXT)?AUTH_SECRET/.test(key)) delete base[key];
+      if (/^(NEXTAUTH_SECRET|AUTH_SECRET|BETTER_AUTH_)/.test(key)) delete base[key];
     }
     delete base.NEXT_PHASE;
-    const script = `const { authConfig } = await import("@/lib/auth");
-      console.log(JSON.stringify({ secret: authConfig.secret }));`;
+    const script = `const { getAuth } = await import("@/lib/auth/instance");
+      const ctx = await getAuth().$context;
+      console.log(JSON.stringify({ secret: ctx.secret }));
+      process.exit(0);`;
     const child = Bun.spawnSync([process.execPath, "-e", script], {
       cwd: join(import.meta.dir, "../../.."),
-      env: { ...base, NODE_ENV: "production", NEXT_RUNTIME: "nodejs", ...env },
+      env: { ...base, NEXT_RUNTIME: "nodejs", NEXTAUTH_URL: "https://stoky.example.com", ...env },
     });
     if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-    return (JSON.parse(child.stdout.toString()) as { secret: unknown }).secret;
+    const last = child.stdout.toString().trim().split("\n").at(-1)!;
+    return { secret: (JSON.parse(last) as { secret: unknown }).secret, stderr: child.stderr.toString() };
   }
 
-  it("is the NEXTAUTH_SECRET the guard checked, even when AUTH_SECRET is set", () => {
-    // next-auth resolves `config.secret ??= AUTH_SECRET ?? NEXTAUTH_SECRET`,
-    // and the guard reads only NEXTAUTH_SECRET. Without an explicit `secret`
-    // in authConfig this started — the guard passed on REAL — and signed every
-    // session with "changeme". `AUTH_SECRET` is what the Auth.js v5 docs and
-    // `npx auth secret` write, so it is the likely stray.
-    expect(resolvedSecret({ NEXTAUTH_SECRET: REAL, AUTH_SECRET: "changeme" })).toBe(REAL);
+  it("is the NEXTAUTH_SECRET the guard checked, whatever Better Auth's own variables say", () => {
+    // Better Auth prefers BETTER_AUTH_SECRETS, then BETTER_AUTH_SECRET, then
+    // AUTH_SECRET, and the guard reads only NEXTAUTH_SECRET. Without an
+    // explicit `secret` and `secrets` this started — the guard passed on
+    // REAL — and signed every session with "changeme".
+    expect(
+      resolvedSecret({
+        NODE_ENV: "production",
+        NEXTAUTH_SECRET: REAL,
+        BETTER_AUTH_SECRETS: "1:changeme-changeme-changeme-changeme",
+        BETTER_AUTH_SECRET: "changeme",
+        AUTH_SECRET: "changeme",
+      }).secret,
+    ).toBe(REAL);
+  });
+
+  it("is a key of this process's own outside production, when none is set", () => {
+    // Empty rather than absent: Bun fills an absent variable from `.env`, and
+    // an empty one is what Compose passes for an unset `${X:-}`.
+    const first = resolvedSecret({ NODE_ENV: "development", NEXTAUTH_SECRET: "" });
+    const second = resolvedSecret({ NODE_ENV: "development", NEXTAUTH_SECRET: "" });
+
+    expect(typeof first.secret).toBe("string");
+    expect(String(first.secret).length).toBeGreaterThanOrEqual(MIN_SECRET_LENGTH);
+    // A restart is a new key: it signs nobody in with yesterday's cookie.
+    expect(first.secret).not.toBe(second.secret);
+    expect(first.stderr).toContain("NEXTAUTH_SECRET is not set");
   });
 });
 

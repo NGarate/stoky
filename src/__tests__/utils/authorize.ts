@@ -1,26 +1,20 @@
-import { authConfig } from "@/lib/auth";
+import { POST } from "@/app/api/auth/[...all]/route";
 import { DEVICE_ID_COOKIE } from "@/lib/device";
+import { DEVELOPMENT_URL } from "@/lib/auth/public-url";
 
 /**
- * Drives the credentials provider's `authorize` the way Auth.js does.
+ * Signs in through the real auth route, the way a browser does.
  *
- * This is the application's only credential-verification path. It used not to
- * be: `auth.login` was a second one, mounted on the public tRPC router,
- * unmetered and unused by the interface, and it was where every credential
- * test pointed. Removing it left the real path with no coverage at all, so the
- * tests were moved here rather than deleted.
+ * This is the application's only credential-verification path: the route
+ * module (`src/app/api/auth/[...all]/route.ts`), its limits and Better Auth
+ * behind it, with Postgres and Valkey. Nothing here reaches into a library's
+ * internals, so what passes here is what a person's sign-in does.
  *
- * Each call takes its own address, because `authorize` counts a rate-limit
+ * Each call takes its own address, because the route counts a rate-limit
  * attempt before it looks at anything (ISSUES.md CRITICAL-4) — sharing one
  * address across tests would make the sixth test in a file fail for reasons
  * that have nothing to do with what it asserts.
  */
-
-type AuthorizeResult = Awaited<ReturnType<NonNullable<AuthorizeFn>>>;
-type AuthorizeFn = (
-  credentials: Record<string, unknown>,
-  request: Request,
-) => Promise<unknown>;
 
 let addressCounter = 0;
 
@@ -30,52 +24,93 @@ export function freshTestAddress(): string {
   return `198.51.100.${addressCounter % 250}-${process.pid}-${addressCounter}`;
 }
 
-/**
- * The configured `authorize`, from `options`.
- *
- * Auth.js normalises a provider and puts a trivial `authorize: () => null` on
- * the resulting object, keeping the configured function in `options`; at
- * runtime it merges `options` over the provider, so the real one runs. Reading
- * `providers[0].authorize` therefore gets the stub, and a test written against
- * it passes or fails for reasons that have nothing to do with the application
- * — which is exactly what happened here before the guard below was added.
- */
-function configuredAuthorize(): AuthorizeFn {
-  const provider = authConfig.providers[0] as unknown as {
-    authorize?: AuthorizeFn;
-    options?: { authorize?: AuthorizeFn };
-  };
-  const fn = provider.options?.authorize ?? provider.authorize;
-
-  if (typeof fn !== "function") {
-    throw new Error("The credentials provider exposes no authorize function");
-  }
-  if (fn.length < 2) {
-    // The real one takes (credentials, request); the stub takes none. Without
-    // this, an Auth.js upgrade that moves the function silently turns every
-    // sign-in test into an assertion about a function that returns null.
-    throw new Error(
-      "Resolved Auth.js's placeholder authorize rather than the configured one",
-    );
-  }
-  return fn;
+/** Where the instance thinks it lives, which is what a browser's `Origin` says. */
+export function testOrigin(): string {
+  return new URL(process.env.NEXTAUTH_URL || DEVELOPMENT_URL).origin;
 }
 
-/**
- * `deviceId` is sent as the `stoky_device` cookie, the way a browser that has
- * been here before sends it; leave it out for a browser that has not.
- */
+export interface SignInOutcome {
+  status: number;
+  /** The `code` of a refusal's JSON body, when it has one. */
+  code: string | undefined;
+  /** The `Retry-After` header, as sent. */
+  retryAfter: string | null;
+  /** Every `Set-Cookie` line of the answer. */
+  setCookie: string[];
+  /**
+   * The cookies the answer set, as the `Cookie` header a browser would send
+   * next: `name=value` pairs, the expired ones left out. Empty when none.
+   */
+  cookieHeader: string;
+  /** The account signed in as, on a success. */
+  userId: string | undefined;
+  /** The user Better Auth answered a success with. */
+  user: Record<string, unknown> | undefined;
+  /** The answer's JSON body, or null. */
+  body: Record<string, unknown> | null;
+}
+
+export interface SignInOptions {
+  address?: string;
+  /** Sent as the `stoky_device` cookie, as a browser that has been here does. */
+  deviceId?: string;
+  /** `Origin`; defaults to the instance's own whenever a cookie is sent. */
+  origin?: string;
+  /** Sent as `Sec-Fetch-Site`, as a browser on https does. */
+  fetchSite?: string;
+  /** Sent in place of the JSON credentials, for a body that is not one. */
+  rawBody?: string;
+}
+
+/** The cookies a `Set-Cookie` list leaves a browser holding, as a `Cookie` header. */
+export function cookieHeaderFrom(setCookie: string[]): string {
+  return setCookie
+    .filter((line) => !/;\s*max-age=0\b/i.test(line) && !/expires=thu, 01 jan 1970/i.test(line))
+    .map((line) => line.split(";")[0].trim())
+    .filter((pair) => pair.includes("=") && !pair.endsWith("="))
+    .join("; ");
+}
+
 export async function signInWith(
   credentials: { email: string; password: string },
-  options: { address?: string; deviceId?: string } = {},
-): Promise<AuthorizeResult> {
-  const headers: Record<string, string> = {
+  options: SignInOptions = {},
+): Promise<SignInOutcome> {
+  const headers = new Headers({
+    "content-type": "application/json",
     "x-forwarded-for": options.address ?? freshTestAddress(),
-  };
-  if (options.deviceId) headers.cookie = `${DEVICE_ID_COOKIE}=${options.deviceId}`;
-  const request = new Request("http://localhost/api/auth/callback/credentials", {
-    headers,
   });
+  if (options.deviceId) headers.set("cookie", `${DEVICE_ID_COOKIE}=${options.deviceId}`);
+  const origin = options.origin ?? (options.deviceId ? testOrigin() : undefined);
+  if (origin) headers.set("origin", origin);
+  if (options.fetchSite) headers.set("sec-fetch-site", options.fetchSite);
 
-  return (await configuredAuthorize()(credentials, request)) as AuthorizeResult;
+  const response = await POST(
+    new Request(`${testOrigin()}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers,
+      body: options.rawBody ?? JSON.stringify(credentials),
+    }),
+  );
+
+  let body: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = await response.json();
+    if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
+  } catch {
+    body = null;
+  }
+  const setCookie = response.headers.getSetCookie();
+  const user =
+    body?.user && typeof body.user === "object" ? (body.user as Record<string, unknown>) : undefined;
+
+  return {
+    status: response.status,
+    code: typeof body?.code === "string" ? body.code : undefined,
+    retryAfter: response.headers.get("retry-after"),
+    setCookie,
+    cookieHeader: cookieHeaderFrom(setCookie),
+    userId: typeof user?.id === "string" ? user.id : undefined,
+    user,
+    body,
+  };
 }

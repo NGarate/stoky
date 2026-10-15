@@ -28,7 +28,7 @@ import {
   isPasswordIdentityRefusal,
   isWrongCurrentPasswordRefusal,
 } from "@/lib/validations/password";
-import { authConfig } from "@/lib/auth";
+import { readSession } from "@/lib/auth";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 
 /**
@@ -163,8 +163,10 @@ describe("Authentication Flow Integration Tests", () => {
       });
       expect(result.user.email).toBe(lower);
 
-      expect(await signInWith({ email: lower, password })).not.toBeNull();
-      expect(await signInWith({ email: typed, password })).not.toBeNull();
+      // The second through the route's trim and lower-casing, the spaces and
+      // the capitals as the person typed them.
+      expect((await signInWith({ email: lower, password })).status).toBe(200);
+      expect((await signInWith({ email: typed, password })).status).toBe(200);
 
       await expect(
         caller.auth.register({ email: lower, name: "Second", password }),
@@ -276,7 +278,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
   });
 
-  describe("Sign-in, through Auth.js", () => {
+  describe("Sign-in, through the auth API", () => {
     // Repointed from `auth.login`, a second credential endpoint on the public
     // tRPC router that nothing in the interface called and that the CRITICAL-4
     // limiter never covered. It has been removed; this is the path the login
@@ -291,8 +293,9 @@ describe("Authentication Flow Integration Tests", () => {
 
       const result = await signInWith({ email, password });
 
-      expect(result).not.toBeNull();
-      expect((result as { email: string }).email).toBe(email);
+      expect(result.status).toBe(200);
+      expect(result.user?.email).toBe(email);
+      expect(result.cookieHeader).toContain("stoky.session_token=");
     });
 
     it("should refuse an invalid password", async () => {
@@ -304,7 +307,9 @@ describe("Authentication Flow Integration Tests", () => {
 
       const result = await signInWith({ email, password: "WrongPassword123!" });
 
-      expect(result).toBeNull();
+      expect(result.status).toBe(401);
+      expect(result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+      expect(result.setCookie).toEqual([]);
     });
 
     it("should refuse a non-existent email the same way", async () => {
@@ -315,7 +320,8 @@ describe("Authentication Flow Integration Tests", () => {
 
       // Indistinguishable from a wrong password, which is what stops an
       // attacker enumerating which addresses have accounts.
-      expect(result).toBeNull();
+      expect(result.status).toBe(401);
+      expect(result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
     });
 
     it("takes as long for a non-existent email as for a wrong password", async () => {
@@ -350,7 +356,10 @@ describe("Authentication Flow Integration Tests", () => {
     it("should refuse empty credentials", async () => {
       const result = await signInWith({ email: "", password: "" });
 
-      expect(result).toBeNull();
+      // Answered by the route, charged and never handed to Better Auth.
+      expect(result.status).toBe(400);
+      expect(result.code).toBe("INVALID_REQUEST");
+      expect(result.setCookie).toEqual([]);
     });
   });
 
@@ -641,9 +650,9 @@ describe("Authentication Flow Integration Tests", () => {
    * chose stayed the admin's.
    *
    * Through the router, with real Argon2id and a real Valkey, and the old
-   * session checked through the `jwt` callback that actually refuses it — the
-   * same way `session.revocation.test.ts` does, because a timestamp written is
-   * not a session ended.
+   * session checked by reading it with the cookie a real sign-in set — the
+   * same way `session.revocation.test.ts` does, because a row deleted is only
+   * half of a session ended; the cookie being refused is the other.
    */
   describe("Changing your own password", () => {
     const OLD = "cocina despensa nevera";
@@ -660,11 +669,8 @@ describe("Authentication Flow Integration Tests", () => {
     }
 
     const stored = async (id: string) => ({
-      ...(await prisma.user.findUniqueOrThrow({
-        where: { id },
-        select: { sessionsValidFrom: true },
-      })),
       passwordHash: await storedPasswordHash(id),
+      sessions: await prisma.session.count({ where: { userId: id } }),
     });
 
     async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
@@ -675,15 +681,6 @@ describe("Authentication Flow Integration Tests", () => {
         throw error;
       }
       throw new Error("expected a refusal, and the call succeeded");
-    }
-
-    /** The configured `jwt` callback, which is where a session is refused. */
-    function jwtCallback() {
-      const callback = authConfig.callbacks?.jwt;
-      if (typeof callback !== "function") {
-        throw new Error("authConfig exposes no jwt callback");
-      }
-      return callback;
     }
 
     /** The security events written while `run` ran, parsed. */
@@ -725,8 +722,7 @@ describe("Authentication Flow Integration Tests", () => {
       expect(refusal?.code).toBe("BAD_REQUEST");
       expect(isWrongCurrentPasswordRefusal(refusal?.message)).toBe(true);
       expect(await stored(user.id)).toEqual(before);
-      expect(before.sessionsValidFrom).toBeNull();
-      expect(await signInWith({ email: user.email, password: OLD })).not.toBeNull();
+      expect((await signInWith({ email: user.email, password: OLD })).status).toBe(200);
 
       // Recorded, because the refusal middleware does not see a BAD_REQUEST,
       // and this is the line that says a session is guessing at a password.
@@ -748,8 +744,8 @@ describe("Authentication Flow Integration Tests", () => {
       expect(await argon2.verify(after.passwordHash, NEW)).toBe(true);
       expect(await argon2.verify(after.passwordHash, OLD)).toBe(false);
 
-      expect(await signInWith({ email: user.email, password: NEW })).not.toBeNull();
-      expect(await signInWith({ email: user.email, password: OLD })).toBeNull();
+      expect((await signInWith({ email: user.email, password: NEW })).status).toBe(200);
+      expect((await signInWith({ email: user.email, password: OLD })).status).toBe(401);
 
       const changed = events.filter((e) => e.event === "auth.password.changed");
       expect(changed).toHaveLength(1);
@@ -763,17 +759,17 @@ describe("Authentication Flow Integration Tests", () => {
       // The point of changing a leaked password: whoever used it has a
       // session too, and a new password beside a live session is half a fix.
       const { user, api } = await accountWithCaller("ends-sessions");
-      const signedIn = Math.floor((Date.now() - 60_000) / 1000);
-      const token = { sub: user.id, iat: signedIn, authTime: signedIn };
+      const elsewhere = await signInWith({ email: user.email, password: OLD });
+      const cookie = new Headers({ cookie: elsewhere.cookieHeader });
 
-      // The control: the same token is accepted before the change, so the
-      // refusal below is the change's doing and not the token's shape.
-      expect(await jwtCallback()({ token: { ...token } } as never)).not.toBeNull();
+      // The control: the same cookie is accepted before the change, so the
+      // refusal below is the change's doing and not the cookie's shape.
+      expect(await readSession(cookie, { refresh: false })).not.toBeNull();
 
       await api.auth.changePassword({ currentPassword: OLD, newPassword: NEW });
 
-      expect((await stored(user.id)).sessionsValidFrom).not.toBeNull();
-      expect(await jwtCallback()({ token: { ...token } } as never)).toBeNull();
+      expect((await stored(user.id)).sessions).toBe(0);
+      expect(await readSession(cookie, { refresh: false })).toBeNull();
     });
 
     it("refuses a new password built from the person's own address, and changes nothing", async () => {

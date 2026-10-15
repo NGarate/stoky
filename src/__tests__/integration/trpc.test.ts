@@ -14,6 +14,7 @@ describe("tRPC Infrastructure", () => {
           role: "MEMBER",
         },
         expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+        sessionId: crypto.randomUUID(),
       };
 
       const ctx = await createTRPCContext({ session: mockSession });
@@ -38,6 +39,7 @@ describe("tRPC Infrastructure", () => {
           role: "MEMBER",
         },
         expires: new Date().toISOString(),
+        sessionId: crypto.randomUUID(),
       };
 
       const ctx = await createTRPCContext({ session: minimalSession });

@@ -377,6 +377,13 @@ The new file cleans up after itself; the product side is finding 16.
 
 ## 6. Session handling
 
+> **Superseded 2026-10-15** (PROGRESS D135). next-auth and its JWT were
+> replaced by Better Auth, with a `Session` row per session: signing out,
+> ending sessions and setting a password delete rows, a browser session ends
+> after fifteen idle minutes or a day from sign-in, and the cookie is
+> refused the moment its row is gone. What follows is the review as it was
+> written, against the JWT; `SECURITY.md`, *Authentication*, is current.
+
 **Verified:** JWT with a 15-minute `maxAge`, the role read fresh per request,
 sign-out purges the queue and the cached shell and asks before discarding unsent
 changes, and an idle session warns before it ends.
@@ -1089,13 +1096,13 @@ and *owner* to [Owner actions](#owner-actions).
 | 3 | Anyone who knows an address can keep its owner out of sign-in | 2, medium | `f95f282` give known devices their own sign-in budget (D124). A browser that has never signed in: accepted |
 | 4 | The identity password rule was documented and never applied; the screens stated a minimum of 8 | 1, low | `3d1c6a6` state the twelve-character password minimum; `65ad102` refuse a password built from the person's own email or name |
 | 5 | `register` and `addMember` reveal whether an address has an account | 2, low | Accepted; `first-user` closes the first after the first account |
-| 6 | `AUTH_SECRET` overrides the `NEXTAUTH_SECRET` the startup guard checks | 1, low | `1db505d` sign sessions with the secret the startup guard checked |
-| 7 | No absolute session lifetime; signing out does not invalidate a copied token | 1, low | `eed8b82` end every session thirty days after sign-in (D125). Per-session sign-out: accepted |
-| 8 | Cross-site requests rest on `SameSite=Lax` alone: tRPC takes multipart bodies, and input-less mutations take any input | 3, low | `5ebbd85` refuse cross-site and non-JSON requests to tRPC; `9068524` declare void inputs on the mutations that took none. A `__Host-` cookie prefix: rejected (Auth.js already sends `__Secure-` without `Domain`) |
+| 6 | `AUTH_SECRET` overrides the `NEXTAUTH_SECRET` the startup guard checks | 1, low | `1db505d` sign sessions with the secret the startup guard checked. Since the switch to Better Auth (2026-10-15, D135) the same holds by naming the key as both `secret` and `secrets`, so `BETTER_AUTH_SECRET(S)` and `AUTH_SECRET` are ignored |
+| 7 | No absolute session lifetime; signing out does not invalidate a copied token | 1, low | `eed8b82` end every session thirty days after sign-in (D125). Per-session sign-out: accepted. Both superseded 2026-10-15 (D135): a day from sign-in for a browser session, and signing out deletes the session's row, so a copied cookie is refused |
+| 8 | Cross-site requests rest on `SameSite=Lax` alone: tRPC takes multipart bodies, and input-less mutations take any input | 3, low | `5ebbd85` refuse cross-site and non-JSON requests to tRPC; `9068524` declare void inputs on the mutations that took none. A `__Host-` cookie prefix: rejected (Auth.js already sends `__Secure-` without `Domain`; so does Better Auth since 2026-10-15). The auth API applies the same two refusals since then, and checks `Origin` against `NEXTAUTH_URL` (D135) |
 | 9 | `addMember` runs a 64 MiB Argon2id hash per call, unmetered | 1, medium | `cb4db92` meter adding members, which hashes a password; `8d04349` say a too-common password is the problem on the add-member form (final review) |
 | 10 | IPv6 clients share the bridge gateway's address; once IPv6 is on, one client rotates through its /64 | 1, medium | `a653ab1` rate-limit IPv6 clients by their /64 prefix. The shared default: accepted |
 | 11 | The security log holds every tried email in plaintext | 1, low | `511c193` log an account tag instead of the email a sign-in tried |
-| 12 | A missing or plain-HTTP `NEXTAUTH_URL` goes unnoticed | 1, low | `6acd907` warn at startup when the public URL is missing or plain HTTP. Plain-HTTP LAN installs: accepted (D84) |
+| 12 | A missing or plain-HTTP `NEXTAUTH_URL` goes unnoticed | 1, low | `6acd907` warn at startup when the public URL is missing or plain HTTP. Plain-HTTP LAN installs: accepted (D84). Since 2026-10-15 (D135) Better Auth decides `Secure` from `NEXTAUTH_URL` alone, never from a request, and a production instance without it refuses sign-in (503) instead of guessing |
 | 13 | Saved offline reads outlive a session that ends without the sign-out button | 1, low | `0f92a3a` forget the previous account's saved reads when its session ends. Up to 24 hours on a device left offline: accepted |
 | 14 | The native iOS client's sign-in is undocumented | 1, disputed | No change: nothing here consumes it, and #8 keeps clients without Fetch Metadata working |
 

@@ -1,4 +1,5 @@
 import type { HouseholdRole, Prisma, PrismaClient, User } from "@prisma/client";
+import { endSessions } from "./end-sessions";
 
 /**
  * The `providerId` of the Account row that holds a password hash. Better Auth's
@@ -151,12 +152,14 @@ export interface PasswordTarget {
  * transaction, and returns how many accounts it wrote (0 or 1).
  *
  * One transaction so a new password can never stand beside sessions that were
- * meant to end. 0 means the account is gone or no longer matches `guard`; the
- * caller decides what that means to the person asking.
+ * meant to end: the session rows are deleted with the hash written
+ * (`endSessions`). 0 means the account is gone or no longer matches `guard`;
+ * the caller decides what that means to the person asking.
  *
  * The User write goes first and is the guard: its `where` carries the guard,
- * and the row lock it takes holds the account still until the hash is written,
- * so a promotion or a move between households cannot slip in between the check
+ * and the row lock it takes — the write is to `updatedAt`, which changes
+ * nothing anyone reads — holds the account still until the hash is written, so
+ * a promotion or a move between households cannot slip in between the check
  * and the credential write.
  */
 export function setPasswordAndEndSessions(
@@ -167,7 +170,7 @@ export function setPasswordAndEndSessions(
   const write = async (tx: Prisma.TransactionClient): Promise<number> => {
     const { count } = await tx.user.updateMany({
       where: { id: target.userId, ...target.guard },
-      data: { sessionsValidFrom: new Date() },
+      data: { updatedAt: new Date() },
     });
     if (count === 0) return 0;
 
@@ -179,6 +182,7 @@ export function setPasswordAndEndSessions(
       },
       data: { password: passwordHash },
     });
+    await endSessions(tx, { userId: target.userId });
     return count;
   };
   return "$transaction" in db ? db.$transaction(write) : write(db);

@@ -8,7 +8,7 @@ import { getAuthErrorKey } from "@/lib/auth/error-messages";
 import { SignInRefusedError } from "@/lib/auth/sign-in-policy";
 
 /**
- * The browser's auth module, which turns the library's answers into ours.
+ * The browser's auth module, which turns the auth API's answers into ours.
  *
  * Its whole value is the translation: the forms read `SignInResult` and
  * nothing else, so a refusal the module flattens is a refusal no form can
@@ -16,57 +16,60 @@ import { SignInRefusedError } from "@/lib/auth/sign-in-policy";
  * the password was very likely right.
  */
 
-/** next-auth's answer to a credentials sign-in, as `signIn` resolves it. */
-function nextAuthAnswer(error: string | undefined, code: string | undefined) {
-  return { error, code, status: 200, ok: true, url: error ? null : "http://localhost/" };
-}
-
 describe("signInResultFrom", () => {
-  it("passes a rate-limit code through rather than calling it a wrong password", () => {
-    expect(signInResultFrom(nextAuthAnswer("CredentialsSignin", "rate_limited"))).toEqual({
+  it("reads a 200 as signed in", () => {
+    expect(signInResultFrom(200, { user: { id: "u" } }, null)).toEqual({ ok: true });
+  });
+
+  it("calls Better Auth's refusal a wrong address or password", () => {
+    expect(signInResultFrom(401, { code: "INVALID_EMAIL_OR_PASSWORD" }, null)).toEqual({
       ok: false,
-      code: "rate_limited",
+      code: "invalid_credentials",
+    });
+    // Too long to check is still "wrong": naming the rule would help a guesser.
+    expect(signInResultFrom(400, { code: "PASSWORD_TOO_LONG" }, null)).toEqual({
+      ok: false,
+      code: "invalid_credentials",
     });
   });
 
-  it("passes every code the server refuses with, read off the server's own class", () => {
+  it("passes every code the route refuses with, read off the server's own class", () => {
     // From SignInRefusedError rather than written out, so a renamed server
-    // code cannot leave this passing against a code nothing sends.
+    // code cannot leave this passing against a code nothing sends. The route
+    // sends it upper-cased (`auth-handler.ts`).
     for (const code of ["rate_limited", "account_rate_limited", "auth_unavailable"] as const) {
-      const sent = new SignInRefusedError(code, null).code;
-      expect(signInResultFrom(nextAuthAnswer("CredentialsSignin", sent))).toEqual({
+      const sent = new SignInRefusedError(code, null).code.toUpperCase();
+      expect(signInResultFrom(429, { code: sent }, null)).toMatchObject({ ok: false, code });
+    }
+  });
+
+  it("carries Retry-After, when it is a number of seconds", () => {
+    expect(signInResultFrom(429, { code: "RATE_LIMITED" }, "437")).toEqual({
+      ok: false,
+      code: "rate_limited",
+      retryAfterSeconds: 437,
+    });
+    expect(
+      signInResultFrom(429, { code: "RATE_LIMITED" }, "Wed, 21 Oct 2026 07:28:00 GMT"),
+    ).toEqual({ ok: false, code: "rate_limited" });
+  });
+
+  it("calls an origin the instance does not trust unavailable, not a wrong password", () => {
+    for (const code of ["INVALID_ORIGIN", "MISSING_OR_NULL_ORIGIN"]) {
+      expect(signInResultFrom(403, { code }, null)).toEqual({
         ok: false,
-        code,
+        code: "auth_unavailable",
       });
     }
   });
 
-  it("calls a plain refusal a wrong address or password", () => {
-    // `credentials` is next-auth's default code for CredentialsSignin.
-    expect(signInResultFrom(nextAuthAnswer("CredentialsSignin", "credentials"))).toEqual({
-      ok: false,
-      code: "invalid_credentials",
-    });
-  });
-
   it("does not pass through a code the forms have no words for", () => {
-    // The code arrives in a query string; an unknown one is a plain refusal.
-    expect(signInResultFrom(nextAuthAnswer("CredentialsSignin", "made_up"))).toEqual({
-      ok: false,
-      code: "invalid_credentials",
-    });
-    expect(signInResultFrom(nextAuthAnswer("Configuration", undefined))).toEqual({
+    expect(signInResultFrom(400, { code: "made_up" }, null)).toEqual({
       ok: false,
       code: "unknown",
     });
-  });
-
-  it("treats no answer at all as a failure, never as a sign-in", () => {
-    expect(signInResultFrom(undefined)).toEqual({ ok: false, code: "unknown" });
-  });
-
-  it("reads an answer with no error as signed in", () => {
-    expect(signInResultFrom(nextAuthAnswer(undefined, undefined))).toEqual({ ok: true });
+    expect(signInResultFrom(500, null, null)).toEqual({ ok: false, code: "unknown" });
+    expect(signInResultFrom(404, "Not Found", null)).toEqual({ ok: false, code: "unknown" });
   });
 
   it("hands the forms codes they have words for", () => {
@@ -81,55 +84,70 @@ describe("signInResultFrom", () => {
 });
 
 describe("signInWithPassword", () => {
-  it("asks for the credentials provider without a redirect", async () => {
-    const signIn = mock(async () => nextAuthAnswer(undefined, undefined));
+  function answering(status: number, body: unknown, headers: Record<string, string> = {}) {
+    return mock(async (_url: string, _init: RequestInit) =>
+      Response.json(body, { status, headers }),
+    );
+  }
 
-    const result = await signInWithPassword({ email: "a@b.es", password: "secreta123" }, signIn);
+  it("posts JSON to the auth API, never from a cache", async () => {
+    const fetcher = answering(200, { user: { id: "u" } });
 
-    // `redirect: false` is what keeps the decision of where to go with the
-    // form, which sends a signed-in person to `/` and its screen choice.
-    expect(signIn).toHaveBeenCalledWith("credentials", {
-      email: "a@b.es",
-      password: "secreta123",
-      redirect: false,
-    });
+    const result = await signInWithPassword(
+      { email: "a@b.es", password: "secreta123" },
+      fetcher as unknown as typeof fetch,
+    );
+
     expect(result).toEqual({ ok: true });
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/auth/sign-in/email");
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("content-type")).toBe("application/json");
+    expect(JSON.parse(String(init.body))).toEqual({ email: "a@b.es", password: "secreta123" });
+    expect(init.cache).toBe("no-store");
   });
 
-  it("returns the translated refusal", async () => {
-    const signIn = mock(async () => nextAuthAnswer("CredentialsSignin", "account_rate_limited"));
+  it("returns the translated refusal with its wait", async () => {
+    const fetcher = answering(429, { code: "ACCOUNT_RATE_LIMITED" }, { "retry-after": "812" });
 
-    expect(await signInWithPassword({ email: "a@b.es", password: "x" }, signIn)).toEqual({
-      ok: false,
-      code: "account_rate_limited",
-    });
+    expect(
+      await signInWithPassword({ email: "a@b.es", password: "x" }, fetcher as unknown as typeof fetch),
+    ).toEqual({ ok: false, code: "account_rate_limited", retryAfterSeconds: 812 });
   });
 });
 
 describe("readSessionExpiry", () => {
-  function answering(body: unknown) {
-    return mock(async () => ({ json: async () => body }) as unknown as Response);
+  function answering(body: unknown, status = 200) {
+    return mock(async (_url: string, _init: RequestInit) => Response.json(body, { status }));
   }
 
-  it("reads the expiry the server re-issued, never from a cache", async () => {
-    const fetcher = answering({ expires: "2026-10-15T12:00:00.000Z", user: { id: "u" } });
+  it("reads the expiry auth.session answered, never from a cache", async () => {
+    const fetcher = answering({
+      result: { data: { json: { expires: "2026-10-15T12:00:00.000Z" } } },
+    });
 
     expect(await readSessionExpiry(fetcher as unknown as typeof fetch)).toEqual({
       expires: "2026-10-15T12:00:00.000Z",
     });
-    expect(fetcher).toHaveBeenCalledWith("/api/auth/session", { cache: "no-store" });
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/trpc/auth.session");
+    expect(init.cache).toBe("no-store");
   });
 
   it("answers null when there is no session", async () => {
-    expect(await readSessionExpiry(answering(null) as unknown as typeof fetch)).toBeNull();
-    expect(await readSessionExpiry(answering({}) as unknown as typeof fetch)).toBeNull();
+    expect(
+      await readSessionExpiry(answering({ result: { data: { json: null } } }) as unknown as typeof fetch),
+    ).toBeNull();
   });
 
-  it("lets a failed request throw, so the caller can tell it from a signed-out answer", async () => {
+  it("throws on a failed request, so the caller can tell it from a signed-out answer", async () => {
     const failing = mock(async () => {
       throw new Error("offline");
     });
-
     await expect(readSessionExpiry(failing as unknown as typeof fetch)).rejects.toThrow("offline");
+
+    await expect(
+      readSessionExpiry(answering({ error: {} }, 500) as unknown as typeof fetch),
+    ).rejects.toThrow("500");
   });
 });

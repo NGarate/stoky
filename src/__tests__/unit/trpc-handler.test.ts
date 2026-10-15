@@ -29,6 +29,7 @@ import {
 const SIGNED_IN: AppSession = {
   user: { id: "user-1", email: "u@example.com", name: "U", role: "MEMBER" },
   expires: "2099-01-01T00:00:00.000Z",
+  sessionId: "session-under-test",
 };
 
 /** How many times `touch` has run in the current test. */

@@ -13,11 +13,11 @@ import {
  * What a live session stops being able to do, and how quickly —
  * `docs/SECURITY_REVIEW.md` finding 8.
  *
- * The session is a JWT with a 15-minute `maxAge` and **no server-side record**,
- * so there is nothing to revoke. The review says so and calls it a feature
- * decision rather than a defect. What it also says, as the reason the exposure
- * is smaller than it sounds, is that *the role is read fresh per request* —
- * and nothing tested that.
+ * When the review was written the session was a JWT with **no server-side
+ * record**, so there was nothing to revoke; it is a database row now (PROGRESS
+ * D135), and ending one deletes it. What the review also says, as the reason
+ * the exposure is smaller than it sounds, is that *the role is read fresh per
+ * request* — and that still holds, and still needed a test.
  *
  * It matters more than a coverage gap. `householdProcedure` re-reads
  * `householdId` and `role` from the database on every call and ignores what the
@@ -68,6 +68,7 @@ async function callerWithClaims(claims: {
         role: claims.role,
       },
       expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+      sessionId: crypto.randomUUID(),
     },
   });
   return appRouter.createCaller(ctx);

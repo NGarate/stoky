@@ -15,33 +15,36 @@ export type AuthErrorKey =
   | "registrationClosed";
 
 /**
- * Auth.js flattens every sign-in failure to "CredentialsSignin" so a login
- * form cannot leak whether the address or the password was wrong. The one
- * thing it does pass through is a `CredentialsSignin` subclass's `code`, which
- * is why the rate-limit refusals are modelled as subclasses in `@/lib/auth`.
+ * Refusal codes, read before any message so a refusal is worded by what it
+ * is. A rate-limited attempt is the case that matters: worded as a wrong
+ * password it is the worst possible sentence, since the password was very
+ * likely right.
  *
- * Matched before the message markers below, because a rate-limited attempt
- * also arrives carrying "credentials" and would otherwise be reported as a
- * wrong password — which is the worst possible wording for it, since the
- * password was very likely right.
+ * Two vocabularies reach here, both looked up in lower case: the sign-in
+ * module's (`SignInRefusalCode`, `src/lib/auth/client.ts`), which the forms
+ * pass, and the auth API's own upper-case codes — Better Auth's and the
+ * route's (`src/server/http/auth-handler.ts`) — for any caller that hands one
+ * over as it came.
  */
 const CODE_KEYS: Record<string, AuthErrorKey> = {
-  // The sign-in module's name for a plain wrong address or password
-  // (`SignInRefusalCode`, `src/lib/auth/client.ts`), which the forms now pass
-  // here as a code rather than as next-auth's message.
   invalid_credentials: "invalidCredentials",
   rate_limited: "tooManyAttempts",
   // The account's counter, not the address's: a different network cannot
   // help, and the person may be the one someone else is locking out.
   account_rate_limited: "accountTooManyAttempts",
   auth_unavailable: "authUnavailable",
+  // Better Auth's wrong address or password, and its refusal of a password
+  // too long to check: both are "wrong", and saying "too long" would describe
+  // the rule to a guesser.
+  invalid_email_or_password: "invalidCredentials",
+  password_too_long: "invalidCredentials",
+  // An origin the instance does not trust is its configuration, not the
+  // person's input; "unavailable" is the only true thing to tell them.
+  invalid_origin: "authUnavailable",
+  missing_or_null_origin: "authUnavailable",
 };
 
-const INVALID_CREDENTIALS_MARKERS = [
-  "credentialssignin",
-  "invalid credentials",
-  "credentials",
-];
+const INVALID_CREDENTIALS_MARKERS = ["invalid credentials", "invalid email or password"];
 
 const EMAIL_EXISTS_MARKERS = [
   "already registered",
@@ -73,8 +76,8 @@ export function getAuthErrorKey(
   const normalizedMessage = message?.trim().toLowerCase() ?? "";
 
   if (normalizedMessage.includes("too many")) {
-    // The registration path is tRPC rather than Auth.js, so it carries a
-    // message rather than a code.
+    // The registration path is tRPC rather than the auth API, so it carries
+    // a message rather than a code.
     return "tooManyAttempts";
   }
 

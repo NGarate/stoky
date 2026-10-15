@@ -91,6 +91,7 @@ async function caller(account: { userId: string; householdId: string }) {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    sessionId: crypto.randomUUID(),
   };
   return testRouter.createCaller(await createTRPCContext({ session }));
 }

@@ -235,7 +235,10 @@ For GitHub Actions, use:
 ```yaml
 - name: Run tests
   env:
-    NEXTAUTH_SECRET: test-secret
+    # 32 characters or more, the length production requires; the URL is the
+    # one Better Auth is built with and the origin the sign-in helper sends.
+    NEXTAUTH_SECRET: integration-suite-secret-not-a-real-one
+    NEXTAUTH_URL: http://localhost:3000
   run: |
     bun run test:integration
 ```

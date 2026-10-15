@@ -889,7 +889,7 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **65 procedures** — a count
+`shopping`) merged in `src/server/trpc/router.ts`, **66 procedures** — a count
 that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
@@ -922,9 +922,14 @@ they show as done, and drain one at a time on reconnect. A refused consumption
 is not a failure but a question — see *Reconciliation* below. Proven by
 `e2e/offline-shop.spec.ts`, which is the phase's done-when.
 
-**Auth — working.** Real forms wired to Auth.js `signIn()` with Argon2id
-hashing, error mapping and i18n. Rate-limited per IP in Valkey since Phase 3 —
-5 sign-ins per 15 minutes, 3 registrations per hour (CRITICAL-4 closed).
+**Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
+post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
+error mapping and i18n; the route in front of Better Auth
+(`src/server/http/auth-handler.ts`) answers five endpoints and applies the
+limits. Sessions are database rows: fifteen idle minutes, slid only by the
+keep-alive, a day at most, and deleted to end them. Rate-limited in Valkey
+since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
+registrations per hour (CRITICAL-4 closed); Better Auth's own limiter is off.
 
 **Frontend — 27 pages, and no route is linked that does not exist.** That last
 part is enforced by `check:links` in CI rather than by audit; the manual version
@@ -955,10 +960,10 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 65 procedures assigned. Membership and role
-are read from the database on every call rather than from the JWT, so a
-demotion takes effect on the next request rather than whenever the 15-minute
-token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
+`src/server/trpc/trpc.ts`, and all 66 procedures assigned. Membership and role
+are read from the database on every call rather than from the session, so a
+demotion takes effect on the next request rather than whenever the session
+happens to end. `src/__tests__/unit/capabilities.test.ts` checks the assignment
 of every procedure against the matrix; the integration suite proves the
 refusals by calling the router as a kitchen account.
 
@@ -1102,7 +1107,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | react | 19.2.8 |
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
-| next-auth | 5.0.0-beta.32 |
+| better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
@@ -1225,7 +1230,9 @@ Setting `NEXTAUTH_URL` correctly does **not** help — verified against a build
 whose value matched the server's own address exactly.
 
 Nothing caught it because `next dev` does not apply the check and every suite
-ran against `next dev`. `trustHost: true` is now set, with the trade written
+ran against `next dev`. (Auth.js was replaced by Better Auth on 2026-10-15,
+D135; the spec now asserts Better Auth's `get-session` answers on the
+production build, and that it refuses a foreign origin.) `trustHost: true` is now set, with the trade written
 down (Traefik's `Host(...)` rule is what makes trusting the header safe here),
 and `e2e/auth.prod.spec.ts` guards it in the one config that serves the
 standalone artefact. Verified to fail without the fix.
@@ -1392,7 +1399,12 @@ Two things that sequence surfaced, both operational rather than defects:
   request — ~1500 in a browser-suite run, and **pre-dating the fix**: the same
   21-test subset raised 250 on master and 253 after. No response changes and no
   gate fails, which is what makes it expensive — with no error tracking (bullet
-  above), the logs are what this project has.
+  above), the logs are what this project has. **2026-10-15:** Auth.js is gone
+  (D135), and with it the CSRF mint that tripped the prerender; `auth()` still
+  awaits `connection()` first, because reading a session is request data
+  whichever library reads it, and `auth-dynamic.test.ts` still holds the
+  ordering. Not re-measured on the standalone artefact at that commit; the
+  `AbortError` half does not involve authentication.
 
 ---
 
