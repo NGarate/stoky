@@ -133,7 +133,7 @@ describe("which endpoints answer", () => {
   it("answers 503 when the instance refuses its environment", async () => {
     const response = await handleAuthRequest(new Request(`${BASE}/get-session`), {
       handler: () => {
-        throw new Error("[auth] unavailable: NEXTAUTH_URL is not set.");
+        throw new Error("[auth] unavailable: STOKY_URLS is not set.");
       },
     });
 

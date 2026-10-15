@@ -55,6 +55,7 @@ Rules for this log:
 | "feat(db): drop the sessions-valid-from column" | `20261015131000_drop_sessions_valid_from` drops `User.sessionsValidFrom`, the revocation line next-auth needed and nothing has read since the switch: ending a session is deleting its row (D135). `migration.credential-account.test.ts` migrates a database where an account still has the line set and finds the column gone; leaving the migration out turns it red. `bun run verify:ci` green on the commit. |
 | "feat(auth): refuse to start on settings Better Auth would misread" (D136) | `refuseToStartMisconfigured` exits on production without `NEXTAUTH_URL`, a `NEXTAUTH_URL` that is not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set and `BETTER_AUTH_TELEMETRY` on, each named on its own `[auth] refusing to start:` line; `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL` are each warned about as ignored. `unit/auth-environment.test.ts` runs the instrumentation hook as a production server for each: removing the start-up call, or any one check, turns it red; so does dropping the warning or letting the value into it. `bun run verify:ci` green on the commit. |
 | "feat(auth): read the signing secret from STOKY_SECRET" (D137) | The signing key is `STOKY_SECRET`; `NEXTAUTH_SECRET` is still read when it is unset, with one `[config]` deprecation line at start-up (`src/lib/env-names.ts`). `install.sh` renames the line keeping its value, and the bundle's Compose file passes both names through. `unit/env-names.test.ts`, `unit/auth-secret.test.ts` (the key Better Auth signs with, in a fresh process), `unit/auth-environment.test.ts` (the hook, once), `integration/health.test.ts`, `unit/install-script.test.ts` and `unit/security-log.test.ts` pin the rule; preferring the legacy name, dropping the rename step or the start-up warning each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
+| "feat(auth): list every address the instance answers at in STOKY_URLS" (D138) | `STOKY_URLS` is a comma-separated list: the first entry is Better Auth's `baseURL` and alone decides `Secure`; every entry's origin is trusted for sign-in, and in production nothing else is. Production refuses no entry, an entry that is not a bare origin, and an https first entry beside LAN http; `NEXTAUTH_URL` is read as a list of one with a deprecation line. `unit/public-url.test.ts` (the list, the cookie in a fresh process), `unit/auth-environment.test.ts` (the hook) and `integration/auth.origins.test.ts` (a production instance with two entries signs in at both and refuses an unlisted origin and a `DEV_ALLOWED_ORIGIN` host) pin it; trusting only the first entry, dropping the mixed-scheme check or reading `DEV_ALLOWED_ORIGIN` in production each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -1892,6 +1893,8 @@ plain-http LAN install would get. Alternatives rejected: dropping the directive
 entirely weakens the Traefik deployment it exists for; stripping it only in the
 suite hides a real defect. `x-forwarded-proto === "https"` (or the URL's own
 scheme) is what actually distinguishes the two deployments.
+*D138 (2026-10-15): a plain-HTTP LAN install reached at several addresses
+lists them all in `STOKY_URLS`, so a sign-in is accepted at each.*
 
 **D85 — The ordinary suite blocks service workers; the worker's own specs opt
 in.** With the production build the worker registers everywhere, and its
@@ -2707,7 +2710,8 @@ The start-up warnings about a URL that is missing or not a URL are gone: the
 refusal names them on its own line, and the warning said sign-in would answer
 503 from a server that now never starts. Source deployments with no
 `NEXTAUTH_URL` stop at boot from this release; the bundle has always set it.
-Closes ISSUES AUTH-3.
+Closes ISSUES AUTH-3. *D138 (2026-10-15) replaces the URL with the
+`STOKY_URLS` list and widens these refusals to each of its entries.*
 
 **D137 — Environment variables take the `STOKY_` prefix; `NEXTAUTH_SECRET` is
 now `STOKY_SECRET`.** Owner's answer of 2026-10-15. `NEXTAUTH_*`, `AUTH_*` and
@@ -2745,3 +2749,41 @@ changes meaning: one URL becomes several. The old name stops being read in a
 later release, not yet chosen. Historical records — closed ISSUES entries,
 earlier decisions here, SECURITY_REVIEW rows, STATUS measurement history,
 `docs/releases` — keep the names they were written with.
+
+**D138 — `STOKY_URLS` lists every address; the first is canonical.** Owner's
+answer of 2026-10-15; amends D84. `NEXTAUTH_URL` named one URL, and Better
+Auth trusted its origin alone for a cookie-bearing sign-in, so a plain-HTTP
+LAN install reached both as `http://stoky.lan:3000` and as
+`http://192.168.1.10:3000` answered 403 `INVALID_ORIGIN` at whichever one it
+did not name. `STOKY_URLS` is a comma-separated list of the URLs people type
+(`src/lib/auth/public-url.ts`):
+
+- **The first entry is canonical**: Better Auth's `baseURL`, the one thing
+  that decides whether the session cookie is `Secure`, and later the passkey
+  relying party. One cookie decision per instance, made once at build, never
+  from a request's headers — the property D136 protects.
+- **Every entry's origin is trusted** for the auth API. In production nothing
+  else is: `DEV_ALLOWED_ORIGIN` adds its hosts outside production only.
+- **Refused in production** (start-up, D136): no entry; an entry that is
+  empty, not a URL, another scheme, or carrying a path, query, fragment or
+  credentials (only an origin is compared, so anything more is a
+  misunderstanding — next-auth once documented `NEXTAUTH_URL` ending in
+  `/api/auth`); and an https first entry beside plain HTTP to another machine,
+  where the browser drops the `Secure` cookie and sign-in loops. Loopback http
+  beside it is accepted, since Chromium and Firefox keep a `Secure` cookie on
+  localhost. Outside production these are warnings, except a first entry
+  that is not an http(s) URL, which Better Auth cannot be built from.
+- **Warned about in production**: each entry that is plain HTTP to another
+  machine (D84 keeps those working, as before), and an https entry listed
+  after a plain-HTTP first one, whose cookie is then not `Secure` either —
+  beyond the plan, because the list is what made that configuration possible.
+- **Messages name an entry by position and print only its origin**, never
+  the text as written, which can hold a `user:password@`.
+
+`NEXTAUTH_URL` is read through D137's rule, as a list of one. The bundle sets
+`STOKY_URLS` to `https://${DOMAIN}` and nothing more, because Traefik routes
+only `DOMAIN`: a second entry would be trusted for sign-in and never reach the
+instance. Every listed origin can send a cookie-bearing sign-in, which is why
+INSTALL says to list only addresses that reach this instance. Why after D137:
+it reuses the rename helper, and since D135 no library reads `NEXTAUTH_URL`
+or `AUTH_URL` itself.

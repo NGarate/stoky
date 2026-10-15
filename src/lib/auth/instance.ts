@@ -6,7 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@/lib/prisma";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
-import { classifyPublicUrl, publicUrl } from "@/lib/auth/public-url";
+import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
 import { configuredSecret } from "@/lib/auth/secret";
 import { nextExpiry } from "@/lib/auth/session-policy";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
@@ -73,28 +73,6 @@ export function resolveSecret(env: Record<string, string | undefined> = process.
 }
 
 /**
- * The origins a signed-in browser may POST to the auth API from: the public
- * URL's, and outside production each `DEV_ALLOWED_ORIGIN` host at the dev
- * server's port over http and behind `tailscale serve` over https — the two
- * ways `docs/LOCAL_BOOTSTRAP.md` reaches a development server from a phone.
- */
-export function trustedOrigins(
-  baseURL: string,
-  env: Record<string, string | undefined> = process.env,
-): string[] {
-  const origins = [new URL(baseURL).origin];
-  if (env.NODE_ENV === "production") return origins;
-
-  const port = env.PORT || "3000";
-  for (const host of (env.DEV_ALLOWED_ORIGIN ?? "").split(",")) {
-    const name = host.trim();
-    if (!name) continue;
-    origins.push(`http://${name}:${port}`, `https://${name}`);
-  }
-  return origins;
-}
-
-/**
  * One line per message, and never the arguments: Better Auth passes request
  * details and error objects there, and a stack per refused request is what
  * made an unauthenticated client's log volume a finding (security review,
@@ -126,7 +104,9 @@ function logEndpointError(error: unknown): void {
 }
 
 function build(env: Record<string, string | undefined>) {
-  const baseURL = publicUrl(env) as string;
+  // The first `STOKY_URLS` entry (D138). Never null here: production without
+  // one, or a first entry with no origin, is refused before `build` runs.
+  const baseURL = canonicalUrl(env) as string;
   const secret = resolveSecret(env);
 
   return betterAuth({
@@ -174,12 +154,16 @@ function build(env: Record<string, string | undefined>) {
     telemetry: { enabled: false },
     logger: { level: "error", log: logLine },
     onAPIError: { onError: logEndpointError },
-    trustedOrigins: trustedOrigins(baseURL, env),
+    // Every `STOKY_URLS` entry's origin, and outside production the
+    // `DEV_ALLOWED_ORIGIN` hosts (`src/lib/auth/public-url.ts`).
+    trustedOrigins: trustedAuthOrigins(env),
     advanced: {
       // Better Auth skips its origin check when NODE_ENV is "test"; stated,
       // so the suites run the check production runs.
       disableOriginCheck: false,
-      useSecureCookies: classifyPublicUrl({ NEXTAUTH_URL: baseURL }).kind === "https",
+      // The first entry alone decides, which is why an https first entry
+      // beside plain HTTP to another machine is refused (`public-url.ts`).
+      useSecureCookies: new URL(baseURL).protocol === "https:",
       cookiePrefix: "stoky",
       ipAddress: { disableIpTracking: true },
     },

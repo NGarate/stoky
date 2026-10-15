@@ -23,19 +23,20 @@
  * stranger it was meant to keep out (`src/lib/auth/registration.ts`).
  *
  * So does an environment the auth API would refuse to be built in — no
- * `NEXTAUTH_URL` in production, one that is not a URL, a Better Auth variable
- * that would override its options (`src/lib/auth/environment.ts`, D136) —
- * which used to be found by the first sign-in, answered 503 while
- * `/api/health` said the instance was healthy.
+ * `STOKY_URLS` in production, an entry that is not an origin, an https first
+ * entry beside plain HTTP, a Better Auth variable that would override its
+ * options (`src/lib/auth/environment.ts`, D136, D138) — which used to be
+ * found by the first sign-in, answered 503 while `/api/health` said the
+ * instance was healthy.
  *
- * A public URL that is plain HTTP to another machine is warned about first
+ * An address that is plain HTTP to another machine is warned about first
  * and does not stop it: plain-http LAN installs work on purpose (D84), but
  * nobody running one should learn from a packet capture that passwords cross
  * their network in cleartext (`src/lib/auth/public-url.ts`). Nor does a
  * variable that is set and ignored, which is named in a warning of its own,
  * nor one still set under its name from before the `STOKY_` rename — the
- * deprecated `NEXTAUTH_SECRET` is read, and said to be, once, here
- * (`src/lib/env-names.ts`, D137).
+ * deprecated `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are read, and said to be,
+ * once, here (`src/lib/env-names.ts`, D137, D138).
  *
  * It also fails the receipts a previous process left half-read, in
  * development as well as production; see

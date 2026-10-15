@@ -512,15 +512,16 @@ Verified against the files named in each row.
   `http://172.17.0.1` — and all three sent `same-origin` to the same `fetch`
   on `http://localhost`. There the JSON-only rule, with Lax, is the whole
   defence — and it is the one that refuses the form.
-- **On tRPC, `Origin` is deliberately not compared with `NEXTAUTH_URL`**: a
-  plain-HTTP LAN install is reached at an address that URL does not name, and
-  a strict comparison would lock it out.
+- **On tRPC, `Origin` is deliberately not compared with `STOKY_URLS`**: tRPC
+  stays on Fetch Metadata, and a strict comparison would lock out an address
+  somebody forgot to list for no gain over that header.
 - **The auth API (`/api/auth/*`) applies the same Fetch Metadata and JSON-only
   rules, and compares `Origin` too** (PROGRESS D135). Better Auth refuses a
   POST that carries a cookie unless its `Origin` (or `Referer`) is a trusted
-  origin — `NEXTAUTH_URL`'s, plus, outside production only, each
-  `DEV_ALLOWED_ORIGIN` host as `http://<host>:<PORT or 3000>` and
-  `https://<host>` — with 403 `INVALID_ORIGIN`, or `MISSING_OR_NULL_ORIGIN`
+  origin — the origin of every entry in `STOKY_URLS` (PROGRESS D138), plus,
+  outside production only, each `DEV_ALLOWED_ORIGIN` host as
+  `http://<host>:<PORT or 3000>` and `https://<host>`; production never reads
+  `DEV_ALLOWED_ORIGIN` for this — with 403 `INVALID_ORIGIN`, or `MISSING_OR_NULL_ORIGIN`
   when there is none. Nothing else can join that list: Better Auth would add
   `BETTER_AUTH_TRUSTED_ORIGINS` to it whatever the configuration says, so the
   server refuses to start while that variable is set (PROGRESS D136). A POST
@@ -530,8 +531,14 @@ Verified against the files named in each row.
   production runs, and `integration/auth.surface.test.ts` and
   `e2e/auth.prod.spec.ts` send a foreign origin and see 403. A sign-in is the
   one request that sets a session, which is why this check is here and not on
-  tRPC. A plain-HTTP LAN install reached at an address `NEXTAUTH_URL` does not
-  name is refused here: sign in at the address it names.
+  tRPC. A plain-HTTP LAN install reached both by name and by address lists
+  both; before D138 one URL named one of them, and the other answered 403.
+  Every listed origin can send a cookie-bearing sign-in, so the list holds
+  only addresses that reach this instance; the bundle lists only
+  `https://${DOMAIN}`, the one host Traefik routes.
+  `integration/auth.origins.test.ts` signs in, under a production instance
+  with two entries, at both, and is refused from an unlisted origin and from
+  a `DEV_ALLOWED_ORIGIN` host.
 - **The consequence:** a browser front-end on another origin cannot call
   these APIs. None exists. Server Actions are outside these routes and carry
   Next's own `Origin` check.
@@ -633,21 +640,33 @@ Verified against the files named in each row.
   the person to change it, and nothing makes the person do so. The owner of a
   single-owner household has nobody above them: their way back is the
   operator, through [the installation guide](docs/INSTALL.md#a-forgotten-password).
-- **The session cookie is `Secure` only when the public URL is https**, and
-  the server says so when it is not. Better Auth is built once, from
-  `NEXTAUTH_URL`, and decides then: `useSecureCookies` is set exactly when that
-  URL is https (`src/lib/auth/instance.ts`), never from a request's `Host` or
-  `X-Forwarded-Proto`. The release bundle sets `NEXTAUTH_URL` to
+- **The session cookie is `Secure` only when the canonical address is
+  https**, and the server says so when it is not. `STOKY_URLS` lists the
+  addresses the instance is reached at; the first is canonical (PROGRESS
+  D138). Better Auth is built once, from it, and decides then:
+  `useSecureCookies` is set exactly when the first entry is https
+  (`src/lib/auth/instance.ts`), never from a request's `Host` or
+  `X-Forwarded-Proto`. The release bundle sets `STOKY_URLS` to
   `https://${DOMAIN}`, so its session cookie is `__Secure-stoky.session_token`
   and `Secure`; `unit/public-url.test.ts` builds the instance with an https, a
-  LAN http and a loopback URL and reads the cookie's name and flag back. In
-  production a missing `NEXTAUTH_URL` is not guessed: the server refuses to
-  start, as it does for a `NEXTAUTH_URL` that is not a URL (PROGRESS D136,
-  `src/lib/auth/environment.ts`). An `http://` URL for another machine — where
-  an operator ends up after publishing the app port on a LAN — is allowed, and
-  `src/lib/auth/public-url.ts` logs one `[auth] warning:` line at start-up for
-  it, as for a URL that is neither http nor https. The
-  plain-http one names the consequences — passwords and session cookies in
+  LAN http and a loopback first entry, and with lists in both orders, and
+  reads the cookie's name and flag back. Because one entry decides for all, an
+  https first entry beside plain HTTP to another machine is refused in
+  production: the cookie would be `Secure`, and the browser would drop it at
+  the plain-HTTP address — a sign-in loop. `http://localhost` beside it is
+  accepted, because Chromium and Firefox keep a `Secure` cookie on localhost.
+  An https address listed after a plain-HTTP first entry gets a cookie that is
+  not `Secure` either, and the server warns about it. In production a missing
+  `STOKY_URLS` is not guessed: the server refuses to start, as it does for an
+  entry that is not a bare `http(s)` origin — a path, a query, a fragment or
+  credentials (PROGRESS D136, `src/lib/auth/environment.ts`). Messages name
+  an entry by its position and print only its origin, never the text as
+  written, which may carry a password. The deprecated `NEXTAUTH_URL` is read,
+  as a list of one, when `STOKY_URLS` is unset (D137). An `http://` address for
+  another machine — where an operator ends up after publishing the app port
+  on a LAN — is allowed, and `src/lib/auth/public-url.ts` logs one
+  `[auth] warning:` line at start-up for each. It
+  names the consequences — passwords and session cookies in
   cleartext, no barcode camera, no offline support — and the way to TLS. **A
   warning, not a refusal**: refusing would reverse D84 and stop every
   plain-http LAN install on upgrade, and forcing `Secure` would make sign-in
@@ -1543,7 +1562,7 @@ reading it is looking at a container that will not start.
   not refused, and the server says so: each one that is set gets an
   `[auth] warning: … is set and ignored` line at start-up naming the variable
   read instead, never its value (PROGRESS D136; `BETTER_AUTH_URL` and
-  next-auth's `AUTH_URL` likewise, since `NEXTAUTH_URL` is what is read).
+  next-auth's `AUTH_URL` likewise, since `STOKY_URLS` is what is read).
   The guard, `/api/health`, the account tag and the instance all read the key
   through one function (`configuredSecret`), so they cannot disagree about
   which variable it came from.
@@ -2248,9 +2267,9 @@ release. The bundled automatic certificate flow needs a hostname and inbound
 TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
 Plain HTTP to another machine is tolerated for testing, not supported: it sends
 every password and session cookie in cleartext, and the app logs a warning at
-start-up when `NEXTAUTH_URL` is such an address (and does not start when it is
-not set). For TLS without a
-public hostname, use your own proxy — setting `NEXTAUTH_URL` to its https
+start-up for each `STOKY_URLS` entry that is such an address (and does not
+start when it is not set). For TLS without a
+public hostname, use your own proxy — listing its https address in `STOKY_URLS`
 address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
 `tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).
 An instance open to the internet needs a per-address connection cap in front

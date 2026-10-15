@@ -42,8 +42,18 @@ export const SECRET_VARIABLE: RenamedVariable = {
   legacy: "NEXTAUTH_SECRET",
 };
 
+/**
+ * The addresses the instance is reached at, the first canonical (D138). One
+ * URL under its old name; a list under its new one, and the old value is a
+ * list of one.
+ */
+export const URLS_VARIABLE: RenamedVariable = {
+  current: "STOKY_URLS",
+  legacy: "NEXTAUTH_URL",
+};
+
 /** Every rename, for the start-up warnings. */
-export const RENAMED: readonly RenamedVariable[] = [SECRET_VARIABLE];
+export const RENAMED: readonly RenamedVariable[] = [SECRET_VARIABLE, URLS_VARIABLE];
 
 /** A value read through a rename, and which name it came from. */
 export interface RenamedValue {

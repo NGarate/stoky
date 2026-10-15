@@ -1,6 +1,6 @@
 import { POST } from "@/app/api/auth/[...all]/route";
 import { DEVICE_ID_COOKIE } from "@/lib/device";
-import { DEVELOPMENT_URL } from "@/lib/auth/public-url";
+import { DEVELOPMENT_URL, canonicalUrl } from "@/lib/auth/public-url";
 
 /**
  * Signs in through the real auth route, the way a browser does.
@@ -24,9 +24,12 @@ export function freshTestAddress(): string {
   return `198.51.100.${addressCounter % 250}-${process.pid}-${addressCounter}`;
 }
 
-/** Where the instance thinks it lives, which is what a browser's `Origin` says. */
+/**
+ * Where the instance thinks it lives — the first `STOKY_URLS` entry — which is
+ * what a browser's `Origin` says.
+ */
 export function testOrigin(): string {
-  return new URL(process.env.NEXTAUTH_URL || DEVELOPMENT_URL).origin;
+  return canonicalUrl(process.env) ?? DEVELOPMENT_URL;
 }
 
 export interface SignInOutcome {

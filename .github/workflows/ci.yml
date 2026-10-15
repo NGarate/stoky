@@ -170,7 +170,7 @@ jobs:
       DATABASE_URL: postgresql://stoky:stoky_ci@localhost:5432/stoky_test?schema=public
       VALKEY_URL: redis://localhost:6379
       STOKY_SECRET: ci-only-not-a-real-secret
-      NEXTAUTH_URL: http://localhost:3000
+      STOKY_URLS: http://localhost:3000
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -281,7 +281,7 @@ jobs:
       E2E_DATABASE_URL: postgresql://stoky:stoky_ci@postgres:5432/stoky?schema=public
       E2E_VALKEY_URL: redis://cache:6379
       STOKY_SECRET: ci-only-not-a-real-secret
-      # No NEXTAUTH_URL here: playwright.config.ts sets it on the server it
+      # No STOKY_URLS here: playwright.config.ts sets it on the server it
       # starts, derived from the same base URL the tests use, so the two can
       # never disagree about the address.
       # Kept beside the image tag it has to agree with.

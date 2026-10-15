@@ -204,8 +204,14 @@ Signing in from that device needs the address there too, whatever
 `next.config.ts` allows: each `DEV_ALLOWED_ORIGIN` host is a trusted origin
 for sign-in as `http://<host>:<PORT or 3000>` and `https://<host>`, and Better
 Auth refuses a sign-in from a browser that holds a cookie at any other origin
-(403 `INVALID_ORIGIN`, which the form words as "service unavailable"). Never
-read in production.
+(403 `INVALID_ORIGIN`, which the form words as "service unavailable").
+`DEV_ALLOWED_ORIGIN` is for the development server only and is never read in
+production; a production build served this way (row 5) trusts only the
+addresses in `STOKY_URLS`, so list both there, this machine's first:
+
+```bash
+STOKY_URLS="http://localhost:3000,http://192.168.1.20:3000"
+```
 
 Useful for layout on a real screen. The camera says it needs `https://`, and it
 is right.
@@ -219,7 +225,7 @@ bun run dev --experimental-https
 Next creates a certificate with `mkcert` and, the first time, **installs a
 local certificate authority into this machine's trust store** (it may ask for
 your password). Only this machine trusts it, so a phone does not: use row 4
-for a phone. Set `NEXTAUTH_URL="https://localhost:3000"` in `.env` while you
+for a phone. Set `STOKY_URLS="https://localhost:3000"` in `.env` while you
 use it, so sign-in is accepted from that origin and the session cookie is
 `Secure`. *Not run
 while writing this section* (2026-10-10), because it changes the system trust
@@ -241,7 +247,7 @@ tailscale status --json | jq -r '.Self.DNSName'      # e.g. my-machine.tail1234.
 
 # .env — then restart `bun run dev`, which reads it at start-up
 DEV_ALLOWED_ORIGIN=my-machine.tail1234.ts.net
-NEXTAUTH_URL="https://my-machine.tail1234.ts.net"
+STOKY_URLS="https://my-machine.tail1234.ts.net,http://localhost:3000"
 
 bun run dev                         # terminal 1
 tailscale serve --bg 3000           # once; persists across reboots
@@ -259,8 +265,12 @@ while the certificate is issued.
 - `DEV_ALLOWED_ORIGIN` takes a comma-separated list. Add the tailnet IP
   (`tailscale ip -4`) as well if you also open `http://100.x.y.z:3000`
   directly. That plain-HTTP route behaves like row 2, except that sign-in
-  there does not stick: with an `https://` `NEXTAUTH_URL` the session cookie
-  is `Secure`, and a browser drops a `Secure` cookie set over http.
+  there does not stick: with an `https://` first `STOKY_URLS` entry the
+  session cookie is `Secure`, and a browser drops a `Secure` cookie set over
+  http. Listing `http://100.x.y.z:3000` in `STOKY_URLS` beside the https name
+  is warned about by the development server and refused by a production
+  build for that reason; `http://localhost:3000` beside it is fine, because
+  browsers keep a `Secure` cookie on localhost.
 
 Verified on 2026-10-10: on this project's development machine, `tailscale serve
 status` reports `https://<machine>.ts.net (tailnet only) |-- / proxy
@@ -282,10 +292,11 @@ rather than the bundle the image ships, so it can hide a tracing defect.
 `STOKY_SECRET` must not be the example value, because production refuses to
 start on it. An `.env` copied before the rename still says `NEXTAUTH_SECRET`;
 that is read, with a `[config] … is deprecated` line at start-up, until the key
-is renamed (PROGRESS D137). Served through row 2, with `NEXTAUTH_URL` set to the LAN address,
-it starts with an `[auth] warning:` line saying the URL is plain HTTP to
-another machine; that is the truth about row 2, not a fault (`SECURITY.md`,
-*Authentication*).
+is renamed (PROGRESS D137); so does `NEXTAUTH_URL`, read as the only
+`STOKY_URLS` entry (D138). Served through row 2, with the LAN address listed in
+`STOKY_URLS`, it starts with an `[auth] warning:` line saying that address is
+plain HTTP to another machine; that is the truth about row 2, not a fault
+(`SECURITY.md`, *Authentication*).
 
 Served through row 4, this is the one setup where a phone can **install** the
 app. On Android, Chrome's menu shows **Install app**. On iOS, use Safari's

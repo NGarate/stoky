@@ -190,19 +190,33 @@ session secret signs everybody out and changes every account tag in the
 security log. From the release after v0.1.0-alpha.3 the secret is called
 `STOKY_SECRET`; the old name, `NEXTAUTH_SECRET`, is still read when
 `STOKY_SECRET` is unset, with a `[config]` warning at start-up, until a later
-release stops reading it (see [Upgrade and rollback](#upgrade-and-rollback)). The bundle derives `DATABASE_URL`, `VALKEY_URL` and
-`NEXTAUTH_URL` itself, so you do not edit them. Outside the bundle,
-`NEXTAUTH_URL` is required in production and must be the address people type:
-from the release after v0.1.0-alpha.3 sign-in is accepted from a signed-in
-browser only at that address, the session cookie is `Secure` only when it is
-https, and with it unset, or set to something that is not a URL, the app
-does not start; `docker compose logs app` ends with a line starting
-`[auth] refusing to start:` that names it. The same release also refuses to
+release stops reading it (see [Upgrade and rollback](#upgrade-and-rollback)).
+
+The bundle derives `DATABASE_URL`, `VALKEY_URL` and the instance's address
+itself, so you do not edit them; the address is `https://` and `DOMAIN`, the
+one host Traefik routes. Outside the bundle — a source install, or one behind
+your own proxy — set `STOKY_URLS` (from the release after v0.1.0-alpha.3; it
+was `NEXTAUTH_URL`) to every address people type, comma-separated, the
+canonical one first, for example
+`STOKY_URLS="http://stoky.lan:3000,http://192.168.1.10:3000"`. List only
+addresses that reach this instance: every one is trusted to sign a browser in.
+The first is canonical: the session cookie is `Secure` only when it is https.
+In
+production the app does not start without `STOKY_URLS`, with an entry that is
+not a bare `http(s)://host[:port]` address (a path such as `/api/auth`, a query
+or a `user:password@` counts as not bare), or with an https first entry beside
+plain-HTTP addresses on the network: the cookie would be `Secure`, the browser
+drops a `Secure` cookie over plain HTTP, and signing in at those addresses
+would loop back to the login page. Serve every address over https, or every
+one over http. `http://localhost` beside an https first entry is accepted,
+because browsers keep a `Secure` cookie on localhost. `docker compose logs app`
+ends with a line starting `[auth] refusing to start:` that names the entry by
+its position, never its full text. The same release also refuses to
 start while `BETTER_AUTH_TRUSTED_ORIGINS` is set or `BETTER_AUTH_TELEMETRY` is
 on, because Better Auth, which signs people in, would obey those over its
 configuration. It ignores `BETTER_AUTH_SECRET`, `BETTER_AUTH_SECRETS`,
 `AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL`, logging an `[auth] warning:`
-line for each one set: `STOKY_SECRET` and `NEXTAUTH_URL` are what it reads.
+line for each one set: `STOKY_SECRET` and `STOKY_URLS` are what it reads.
 Keep `.env` private and out of version control.
 
 **Prefer a dedicated subdomain for `DOMAIN`.** Stoky sends HSTS for two years
@@ -755,7 +769,7 @@ is asked to sign in again the first time it is used; passwords are kept, and
 changes a phone queued offline are kept, as they are whenever a session ends.
 From then on a session ends after fifteen minutes unused, a day after
 sign-in however much it is used, or when somebody ends it — *Authentication*
-in [SECURITY.md](../SECURITY.md) says why. Set `NEXTAUTH_URL` to the address
+in [SECURITY.md](../SECURITY.md) says why. Set `STOKY_URLS` to the addresses
 people use before upgrading a deployment that is not the bundle; the bundle
 sets it from `DOMAIN`.
 
@@ -772,6 +786,14 @@ is ignored. A later release stops reading the old name. The Compose file no
 longer refuses an empty secret itself: the app does, at start-up, with a line
 naming `STOKY_SECRET`, and `docker compose up --wait` reports the container
 unhealthy.
+
+**`NEXTAUTH_URL` is now `STOKY_URLS`**, a list, from the same release. Bundle
+installs have nothing to do: the Compose file sets it from `DOMAIN`, and
+`.env` never held it. A deployment that is not the bundle renames the line;
+its one URL is a list of one. Until then the app reads `NEXTAUTH_URL`, logging
+`[config] NEXTAUTH_URL is deprecated` once at start-up. An old value with a
+path, such as `https://stoky.example.com/api/auth`, is refused in production:
+keep only the scheme, host and port.
 
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
@@ -868,9 +890,9 @@ migration again.
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
-| App exits with `[auth] refusing to start:` | From the release after v0.1.0-alpha.3: the line names the setting to fix — `STOKY_SECRET` unset, the example value or too short, `NEXTAUTH_URL` unset or not a URL, `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
-| Log says `[config] NEXTAUTH_SECRET is deprecated` | From the release after v0.1.0-alpha.3: rename the key to `STOKY_SECRET` in `.env`, keeping the value, then `docker compose up -d --wait`. See [Upgrade and rollback](#upgrade-and-rollback) |
-| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | From the release after v0.1.0-alpha.3: the browser is at an address other than `NEXTAUTH_URL`, or a proxy strips `Origin`. Sign in at the address `NEXTAUTH_URL` names, or set it to the one people use; in development, add the host to `DEV_ALLOWED_ORIGIN` |
+| App exits with `[auth] refusing to start:` | From the release after v0.1.0-alpha.3: the line names the setting to fix — `STOKY_SECRET` unset, the example value or too short; `STOKY_URLS` unset, an entry that is not a bare address, or an https first entry beside plain-HTTP network addresses; `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
+| Log says `[config] NEXTAUTH_SECRET is deprecated` or `[config] NEXTAUTH_URL is deprecated` | From the release after v0.1.0-alpha.3: rename the key to `STOKY_SECRET` or `STOKY_URLS` in `.env`, keeping the value, then `docker compose up -d --wait`. See [Upgrade and rollback](#upgrade-and-rollback) |
+| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | From the release after v0.1.0-alpha.3: the browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the one host Traefik routes. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |

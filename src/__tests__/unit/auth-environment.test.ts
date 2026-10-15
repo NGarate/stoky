@@ -2,20 +2,21 @@ import { describe, expect, it, spyOn } from "bun:test";
 import {
   assertAuthEnvironment,
   authEnvironmentProblems,
+  authEnvironmentWarnings,
   ignoredAuthVariableWarnings,
 } from "@/lib/auth/environment";
-import { trustedOrigins } from "@/lib/auth/instance";
 import { PLACEHOLDER_SECRET } from "@/lib/auth/secret";
 import * as receiptRecovery from "@/server/services/receipt-recovery";
 
 /**
- * The environment the Better Auth instance refuses to be built in, and the
- * origins it trusts (PROGRESS D135, D136).
+ * The environment the Better Auth instance refuses to be built in (PROGRESS
+ * D135, D136, D138). The origins it trusts are `unit/public-url.test.ts`'s.
  *
  * Better Auth obeys `BETTER_AUTH_TRUSTED_ORIGINS` and `BETTER_AUTH_TELEMETRY`
- * over whatever its options say, so those are refused rather than ignored; and
- * a production instance with no `NEXTAUTH_URL` would guess its address from
- * each request. The server refuses to start on any of them (D136), and the
+ * over whatever its options say, so those are refused rather than ignored; a
+ * production instance with no `STOKY_URLS` would guess its address from each
+ * request; and one whose first entry is https beside plain HTTP to another
+ * machine would loop every sign-in at that address. The server refuses to start on any of them (D136), and the
  * route, for anything that builds the instance elsewhere, answers 503
  * (`unit/auth-handler.test.ts`). The variables an option already overrides
  * are only warned about.
@@ -23,7 +24,7 @@ import * as receiptRecovery from "@/server/services/receipt-recovery";
 
 const production = (env: Record<string, string | undefined> = {}) => ({
   NODE_ENV: "production",
-  NEXTAUTH_URL: "https://stoky.example.com",
+  STOKY_URLS: "https://stoky.example.com",
   ...env,
 });
 
@@ -32,15 +33,35 @@ describe("assertAuthEnvironment", () => {
     expect(() => assertAuthEnvironment(production())).not.toThrow();
   });
 
-  it("refuses production with no NEXTAUTH_URL, and allows development without one", () => {
-    expect(() => assertAuthEnvironment(production({ NEXTAUTH_URL: "" }))).toThrow(/NEXTAUTH_URL/);
+  it("refuses production with no STOKY_URLS, and allows development without one", () => {
+    expect(() => assertAuthEnvironment(production({ STOKY_URLS: "" }))).toThrow(
+      /STOKY_URLS is not set/,
+    );
     expect(() => assertAuthEnvironment({ NODE_ENV: "development" })).not.toThrow();
   });
 
-  it("refuses a NEXTAUTH_URL that is not a URL, anywhere", () => {
+  it("refuses a first entry that is not a URL, anywhere", () => {
     expect(() =>
-      assertAuthEnvironment({ NODE_ENV: "development", NEXTAUTH_URL: "stoky.example.com" }),
-    ).toThrow(/not a URL/);
+      assertAuthEnvironment({ NODE_ENV: "development", STOKY_URLS: "stoky.example.com" }),
+    ).toThrow(/STOKY_URLS is not a URL/);
+  });
+
+  it("refuses an https first entry beside LAN http in production, and warns elsewhere", () => {
+    const urls = { STOKY_URLS: "https://stoky.example.com, http://192.168.1.10:3000" };
+    expect(() => assertAuthEnvironment(production(urls))).toThrow(/sign-in|login page/);
+    expect(authEnvironmentWarnings(production(urls))).toEqual([]);
+    const development = { NODE_ENV: "development", ...urls };
+    expect(() => assertAuthEnvironment(development)).not.toThrow();
+    expect(authEnvironmentWarnings(development)).toEqual([
+      expect.stringMatching(/^\[auth\] warning: STOKY_URLS starts with an https address/),
+    ]);
+  });
+
+  it("refuses an entry that is not an origin in production, and warns elsewhere", () => {
+    const urls = { STOKY_URLS: "https://stoky.example.com/api/auth" };
+    expect(() => assertAuthEnvironment(production(urls))).toThrow(/path, query, fragment/);
+    expect(() => assertAuthEnvironment({ NODE_ENV: "development", ...urls })).not.toThrow();
+    expect(authEnvironmentWarnings({ NODE_ENV: "development", ...urls })).toHaveLength(1);
   });
 
   it("refuses origins Better Auth would trust behind the configuration's back", () => {
@@ -66,13 +87,13 @@ describe("authEnvironmentProblems", () => {
     expect(
       authEnvironmentProblems(
         production({
-          NEXTAUTH_URL: "",
+          STOKY_URLS: "",
           BETTER_AUTH_TRUSTED_ORIGINS: "https://evil.example",
           BETTER_AUTH_TELEMETRY: "1",
         }),
       ),
     ).toEqual([
-      expect.stringMatching(/^NEXTAUTH_URL is not set/),
+      expect.stringMatching(/^STOKY_URLS is not set/),
       expect.stringMatching(/^BETTER_AUTH_TRUSTED_ORIGINS is set/),
       expect.stringMatching(/^BETTER_AUTH_TELEMETRY is on/),
     ]);
@@ -95,8 +116,8 @@ describe("ignoredAuthVariableWarnings", () => {
       expect.stringMatching(/^\[auth\] warning: BETTER_AUTH_SECRET is set and ignored; .* STOKY_SECRET\b/),
       expect.stringMatching(/^\[auth\] warning: BETTER_AUTH_SECRETS is set and ignored; .* STOKY_SECRET\b/),
       expect.stringMatching(/^\[auth\] warning: AUTH_SECRET is set and ignored; .* STOKY_SECRET\b/),
-      expect.stringMatching(/^\[auth\] warning: BETTER_AUTH_URL is set and ignored; .* NEXTAUTH_URL\b/),
-      expect.stringMatching(/^\[auth\] warning: AUTH_URL is set and ignored; .* NEXTAUTH_URL\b/),
+      expect.stringMatching(/^\[auth\] warning: BETTER_AUTH_URL is set and ignored; .* STOKY_URLS\b/),
+      expect.stringMatching(/^\[auth\] warning: AUTH_URL is set and ignored; .* STOKY_URLS\b/),
     ]);
     // Two of them are keys: the log outlives the file they came from.
     expect(warnings.join("\n")).not.toContain("changeme");
@@ -141,6 +162,7 @@ describe("at start-up", () => {
       "NEXT_RUNTIME",
       "STOKY_SECRET",
       "NEXTAUTH_SECRET",
+      "STOKY_URLS",
       "NEXTAUTH_URL",
       ...cleared,
       ...Object.keys(overrides),
@@ -158,7 +180,8 @@ describe("at start-up", () => {
       env.NEXT_RUNTIME = "nodejs";
       env.STOKY_SECRET = REAL;
       delete env.NEXTAUTH_SECRET;
-      env.NEXTAUTH_URL = "https://stoky.example.com";
+      env.STOKY_URLS = "https://stoky.example.com";
+      delete env.NEXTAUTH_URL;
       for (const key of cleared) delete env[key];
       Object.assign(env, overrides);
 
@@ -193,13 +216,45 @@ describe("at start-up", () => {
     expect(await start({})).toEqual({ exited: null, errors: [], warnings: [] });
   });
 
-  it("stops production without NEXTAUTH_URL, instead of answering 503 at the first sign-in", async () => {
-    // Before this, `/api/health` said such an instance was healthy while
+  it("stops production with neither STOKY_URLS nor NEXTAUTH_URL, naming STOKY_URLS", async () => {
+    // Before D136, `/api/health` said such an instance was healthy while
     // every sign-in failed.
-    const { exited, errors } = await start({ NEXTAUTH_URL: "" });
+    const { exited, errors } = await start({ STOKY_URLS: "", NEXTAUTH_URL: "" });
     expect(exited).toBe("exit 1");
     expect(errors).toEqual([
-      expect.stringMatching(/^\[auth\] refusing to start: NEXTAUTH_URL is not set/),
+      expect.stringMatching(/^\[auth\] refusing to start: STOKY_URLS is not set/),
+    ]);
+  });
+
+  it("stops production on an https first entry beside plain HTTP to a LAN address", async () => {
+    // The cookie would be Secure, and dropped at the second address: a
+    // sign-in loop there, found by whoever tries it first.
+    const { exited, errors } = await start({
+      STOKY_URLS: "https://stoky.example.com,http://192.168.1.10:3000",
+    });
+    expect(exited).toBe("exit 1");
+    expect(errors).toEqual([
+      expect.stringMatching(
+        /^\[auth\] refusing to start: STOKY_URLS starts with an https address but also lists http:\/\/192\.168\.1\.10:3000/,
+      ),
+    ]);
+  });
+
+  it("starts with loopback http beside an https first entry", async () => {
+    expect(await start({ STOKY_URLS: "https://stoky.example.com, http://localhost:3000" })).toEqual(
+      { exited: null, errors: [], warnings: [] },
+    );
+  });
+
+  it("starts on NEXTAUTH_URL alone, and says to rename it exactly once", async () => {
+    const { exited, errors, warnings } = await start({
+      STOKY_URLS: "",
+      NEXTAUTH_URL: "https://stoky.example.com",
+    });
+    expect(exited).toBeNull();
+    expect(errors).toEqual([]);
+    expect(warnings).toEqual([
+      "[config] NEXTAUTH_URL is deprecated; rename it to STOKY_URLS. It is still read for now.",
     ]);
   });
 
@@ -240,7 +295,7 @@ describe("the signing key's old name, at start-up", () => {
   const REAL = "kPqR7vN2xL9mT4wY6zA8bC1dE3fG5hJ0kL2mN4pQ6rS=";
 
   async function startWith(secrets: { STOKY_SECRET?: string; NEXTAUTH_SECRET?: string }) {
-    const keys = ["NODE_ENV", "NEXT_RUNTIME", "NEXT_PHASE", "NEXTAUTH_URL", "STOKY_REGISTRATION", "STOKY_SECRET", "NEXTAUTH_SECRET"];
+    const keys = ["NODE_ENV", "NEXT_RUNTIME", "NEXT_PHASE", "STOKY_URLS", "NEXTAUTH_URL", "STOKY_REGISTRATION", "STOKY_SECRET", "NEXTAUTH_SECRET"];
     const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
     const exit = spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new Error(`exit ${code}`);
@@ -251,8 +306,8 @@ describe("the signing key's old name, at start-up", () => {
     try {
       env.NODE_ENV = "production";
       env.NEXT_RUNTIME = "nodejs";
-      env.NEXTAUTH_URL = "https://stoky.example.com";
-      for (const key of ["NEXT_PHASE", "STOKY_REGISTRATION", "STOKY_SECRET", "NEXTAUTH_SECRET"]) delete env[key];
+      env.STOKY_URLS = "https://stoky.example.com";
+      for (const key of ["NEXT_PHASE", "NEXTAUTH_URL", "STOKY_REGISTRATION", "STOKY_SECRET", "NEXTAUTH_SECRET"]) delete env[key];
       Object.assign(env, secrets);
       const { register } = await import("@/instrumentation");
       let exited: string | null = null;
@@ -319,33 +374,6 @@ describe("the signing key's old name, at start-up", () => {
     expect(exited).toBeNull();
     expect(warnings).toEqual([
       "[config] STOKY_SECRET and NEXTAUTH_SECRET are both set; STOKY_SECRET is used and NEXTAUTH_SECRET is ignored. Remove it.",
-    ]);
-  });
-});
-
-describe("trustedOrigins", () => {
-  it("is the public URL's origin alone in production, whatever DEV_ALLOWED_ORIGIN says", () => {
-    expect(
-      trustedOrigins("https://stoky.example.com/some/path", {
-        NODE_ENV: "production",
-        DEV_ALLOWED_ORIGIN: "192.168.1.20",
-      }),
-    ).toEqual(["https://stoky.example.com"]);
-  });
-
-  it("adds each development host over http at the dev port and over https", () => {
-    expect(
-      trustedOrigins("http://localhost:3000", {
-        NODE_ENV: "development",
-        PORT: "3100",
-        DEV_ALLOWED_ORIGIN: " my-machine.ts.net , 100.64.0.1,",
-      }),
-    ).toEqual([
-      "http://localhost:3000",
-      "http://my-machine.ts.net:3100",
-      "https://my-machine.ts.net",
-      "http://100.64.0.1:3100",
-      "https://100.64.0.1",
     ]);
   });
 });

@@ -29,12 +29,12 @@ const OWN_FETCH_SITES = new Set(["same-origin", "none"]);
  * defences they always had: the session cookie's SameSite=Lax and the
  * JSON-only rule below, which is what protects a plain-HTTP install.
  *
- * **Here, `Origin` is not compared with `NEXTAUTH_URL`.** On tRPC a plain-HTTP
- * LAN install is reached as an address the configured URL does not name, and
- * a strict comparison would lock it out for no gain over this header. The
- * auth API does compare it — Better Auth refuses a cookie-bearing POST from an
- * origin it does not trust (`src/lib/auth/instance.ts`) — because a sign-in
- * is the one request that sets a session.
+ * **Here, `Origin` is not compared with `STOKY_URLS`.** tRPC stays on this
+ * header: a strict comparison would add nothing a browser does not already
+ * say here, and would lock out an address somebody forgot to list. The auth
+ * API does compare it — Better Auth refuses a cookie-bearing POST from an
+ * origin not in `STOKY_URLS` (`src/lib/auth/public-url.ts`, D138) — because a
+ * sign-in is the one request that sets a session.
  *
  * `basePath` is cut from the logged path, so the line names the procedure or
  * the auth endpoint rather than the route.

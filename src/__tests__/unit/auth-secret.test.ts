@@ -98,13 +98,14 @@ describe("when it refuses", () => {
 
   /** Runs `body` with the environment of a production Node server. */
   async function asProductionServer(secret: string | undefined, body: () => Promise<void>) {
-    const keys = ["NODE_ENV", "STOKY_SECRET", "NEXTAUTH_SECRET", "NEXTAUTH_URL", "NEXT_PHASE", "NEXT_RUNTIME"];
+    const keys = ["NODE_ENV", "STOKY_SECRET", "NEXTAUTH_SECRET", "STOKY_URLS", "NEXTAUTH_URL", "NEXT_PHASE", "NEXT_RUNTIME"];
     const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
     env.NODE_ENV = "production";
     env.NEXT_RUNTIME = "nodejs";
     // Production refuses to start without one (D136); set, so the secret is
     // the only thing these cases change.
-    env.NEXTAUTH_URL = "https://stoky.example.com";
+    env.STOKY_URLS = "https://stoky.example.com";
+    delete env.NEXTAUTH_URL;
     delete env.NEXT_PHASE;
     delete env.NEXTAUTH_SECRET;
     if (secret === undefined) delete env.STOKY_SECRET;
@@ -180,7 +181,14 @@ describe("the key that actually signs sessions", () => {
       process.exit(0);`;
     const child = Bun.spawnSync([process.execPath, "-e", script], {
       cwd: join(import.meta.dir, "../../.."),
-      env: { ...base, NEXT_RUNTIME: "nodejs", NEXTAUTH_URL: "https://stoky.example.com", ...env },
+      env: {
+        ...base,
+        NEXT_RUNTIME: "nodejs",
+        STOKY_URLS: "https://stoky.example.com",
+        // Empty rather than absent: Bun loads `.env` for a key that is absent.
+        NEXTAUTH_URL: "",
+        ...env,
+      },
     });
     if (child.exitCode !== 0) throw new Error(child.stderr.toString());
     const last = child.stdout.toString().trim().split("\n").at(-1)!;

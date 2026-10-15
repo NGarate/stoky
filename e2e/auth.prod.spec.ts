@@ -11,8 +11,8 @@ import { DEMO_EMAIL, DEMO_PASSWORD } from "./session";
  * `next dev`, which every other suite ran against, did not apply the check. So
  * the guard lives here, in the one config that serves the standalone artefact
  * the image runs, and it outlived the library: Better Auth builds its
- * configuration once, from `NEXTAUTH_URL`, and a production build is where a
- * mistake in that would show (PROGRESS D135).
+ * configuration once, from `STOKY_URLS`, and a production build is where a
+ * mistake in that would show (PROGRESS D135, D138).
  */
 
 test.describe("a production build's authentication", () => {

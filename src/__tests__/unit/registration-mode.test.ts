@@ -162,6 +162,7 @@ describe("refusing to start", () => {
       "NODE_ENV",
       "STOKY_SECRET",
       "NEXTAUTH_SECRET",
+      "STOKY_URLS",
       "NEXTAUTH_URL",
       "NEXT_PHASE",
       "NEXT_RUNTIME",
@@ -182,7 +183,8 @@ describe("refusing to start", () => {
       delete env.NEXTAUTH_SECRET;
       // Production refuses to start without one (D136), which would be a
       // third line below.
-      env.NEXTAUTH_URL = "https://stoky.example.com";
+      env.STOKY_URLS = "https://stoky.example.com";
+      delete env.NEXTAUTH_URL;
 
       env[REGISTRATION_ENV] = "Open";
       await expect(register()).rejects.toThrow("exit 1");

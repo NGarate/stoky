@@ -1,4 +1,4 @@
-import { classifyPublicUrl } from "@/lib/auth/public-url";
+import { publicUrlProblems } from "@/lib/auth/public-url";
 
 /**
  * The environment variables Better Auth would read behind this application's
@@ -17,14 +17,18 @@ import { classifyPublicUrl } from "@/lib/auth/public-url";
  *   `telemetry.enabled` says. This instance sends nothing anywhere
  *   (`SECURITY.md`, *Outbound*).
  *
- * Beside them, two settings of our own that Better Auth would otherwise fill
- * in by guessing:
+ * Beside them, the list of addresses of our own, which Better Auth would
+ * otherwise fill in by guessing (`src/lib/auth/public-url.ts`, D138):
  *
- * - **Production without `NEXTAUTH_URL`.** The URL decides the trusted origin
+ * - **Production without `STOKY_URLS`.** The list decides the trusted origins
  *   and whether the cookie is `Secure`; guessing it from a request is the
- *   downgrade `src/lib/auth/public-url.ts` describes.
- * - **A `NEXTAUTH_URL` that is not a URL**, which Better Auth would throw on
- *   with a message about itself rather than about the variable.
+ *   downgrade `public-url.ts` describes.
+ * - **An entry that is not an http(s) origin**, or **an https first entry
+ *   beside plain HTTP to another machine**, where sign-in would loop. These
+ *   are refused in production and warned about elsewhere
+ *   (`authEnvironmentWarnings`) — except a first entry that is not an http(s)
+ *   URL at all, refused everywhere, because Better Auth would throw on it with
+ *   a message about itself rather than about the variable.
  *
  * The variables an option already overrides are **ignored, and said to be**:
  * `BETTER_AUTH_SECRET`, `BETTER_AUTH_SECRETS` and `AUTH_SECRET` (the instance
@@ -32,8 +36,9 @@ import { classifyPublicUrl } from "@/lib/auth/public-url";
  * and next-auth's `AUTH_URL`, which next-auth read ahead of `NEXTAUTH_URL` and
  * nothing reads now. An operator who set one of them believes it does
  * something; a line in the start-up log says it does not. `NEXTAUTH_SECRET`
- * is not among them: it is the deprecated name of `STOKY_SECRET`, still read
- * when that is unset, and warned about by `src/lib/env-names.ts` (D137).
+ * and `NEXTAUTH_URL` are not among them: they are the deprecated names of
+ * `STOKY_SECRET` and `STOKY_URLS`, still read when those are unset, and
+ * warned about by `src/lib/env-names.ts` (D137, D138).
  *
  * Refused twice, deliberately: at start-up, where the process exits with the
  * reason as its last line (`src/lib/auth/startup.ts`), and again when the
@@ -62,16 +67,9 @@ function truthy(value: string | undefined): boolean {
 export function authEnvironmentProblems(env: Env = process.env): string[] {
   const problems: string[] = [];
 
-  const state = classifyPublicUrl(env);
-  if (state.kind === "missing" && env.NODE_ENV === "production") {
-    problems.push(
-      "NEXTAUTH_URL is not set. Set it to the https address people use: sign-in is accepted only from that origin, and the session cookie is marked Secure only when it is https.",
-    );
-  }
-  if (state.kind === "unparsable") {
-    problems.push(
-      "NEXTAUTH_URL is not a URL (a missing https:// is the usual cause). Set it to the https address people use.",
-    );
+  const production = env.NODE_ENV === "production";
+  for (const problem of publicUrlProblems(env)) {
+    if (production || problem.everywhere) problems.push(problem.message);
   }
   if (env.BETTER_AUTH_TRUSTED_ORIGINS) {
     problems.push(
@@ -97,13 +95,26 @@ export function assertAuthEnvironment(env: Env = process.env): void {
   if (problem) throw new Error(`[auth] unavailable: ${problem}`);
 }
 
+/**
+ * Outside production, the problems with `STOKY_URLS` that production refuses,
+ * as warnings: a developer's list is often half-edited, and the dev server
+ * still works at its first address. Empty in production, where they are
+ * refusals instead.
+ */
+export function authEnvironmentWarnings(env: Env = process.env): string[] {
+  if (env.NODE_ENV === "production") return [];
+  return publicUrlProblems(env)
+    .filter((problem) => !problem.everywhere)
+    .map((problem) => `[auth] warning: ${problem.message}`);
+}
+
 /** Each variable that is read by nobody, and what is read in its place. */
 const IGNORED: ReadonlyArray<readonly [name: string, instead: string]> = [
   ["BETTER_AUTH_SECRET", "STOKY_SECRET"],
   ["BETTER_AUTH_SECRETS", "STOKY_SECRET"],
   ["AUTH_SECRET", "STOKY_SECRET"],
-  ["BETTER_AUTH_URL", "NEXTAUTH_URL"],
-  ["AUTH_URL", "NEXTAUTH_URL"],
+  ["BETTER_AUTH_URL", "STOKY_URLS"],
+  ["AUTH_URL", "STOKY_URLS"],
 ];
 
 /**

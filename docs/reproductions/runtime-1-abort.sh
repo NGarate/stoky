@@ -102,7 +102,7 @@ measure() {
   PORT="$port" \
   HOSTNAME=127.0.0.1 \
   STOKY_SECRET="$SECRET" \
-  NEXTAUTH_URL="http://127.0.0.1:$port" \
+  STOKY_URLS="http://127.0.0.1:$port" \
     "$runtime" "$ARTEFACT" >"$log" 2>&1 &
   pid=$!
 

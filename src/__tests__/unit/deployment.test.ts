@@ -73,7 +73,7 @@ describe("the downloadable installation", () => {
     expect(template).toMatch(/^POSTGRES_PASSWORD=$/m);
     expect(template).toMatch(/^STOKY_SECRET=$/m);
     expect(template).not.toMatch(/NEXTAUTH_SECRET/);
-    expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|NEXTAUTH_URL)=/m);
+    expect(template).not.toMatch(/^(DATABASE_URL|VALKEY_URL|STOKY_URLS|NEXTAUTH_URL)=/m);
   });
 
   it("names every service image by exact version and digest", () => {
@@ -220,7 +220,10 @@ describe("the downloadable installation", () => {
     };
     const router = dynamic.http.routers.stoky;
     const host = traefik.environment!.DOMAIN;
-    expect(compose.services.app.environment!.NEXTAUTH_URL).toBe(`https://${host}`);
+    // One address, because Traefik routes only DOMAIN (D138): a second entry
+    // would be trusted for sign-in and never reach this instance.
+    expect(compose.services.app.environment!.STOKY_URLS).toBe(`https://${host}`);
+    expect(compose.services.app.environment!.NEXTAUTH_URL).toBeUndefined();
     expect(router.rule).toBe('Host(`{{ env "DOMAIN" }}`)');
     expect(router.entryPoints).toEqual(["websecure"]);
     expect(router.tls.certResolver).toBe("letsencrypt");
