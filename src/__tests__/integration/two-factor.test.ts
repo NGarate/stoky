@@ -182,6 +182,7 @@ async function secondStep(
     code: typeof parsed?.code === "string" ? parsed.code : undefined,
     body: parsed,
     setCookie,
+    retryAfter: response.headers.get("retry-after"),
     jar: mergeJar(jar, setCookie),
   };
 }
@@ -405,6 +406,30 @@ describe("wrong codes", () => {
     expect((await twoFactorRow(ana.id)).failedVerificationCount).toBe(5);
     // The guard's replacement is what Better Auth was given and refused.
     expect(NO_MATCH_CODE).not.toMatch(/^\d+$/);
+  });
+});
+
+describe("a locked second step", () => {
+  it("says when it may try again, from the lock's own end, for either kind of code", async () => {
+    // Better Auth refuses a locked account's code 429 with no Retry-After;
+    // every other spent budget here says how long.
+    const ana = await enrolled("locked");
+    await prisma.twoFactor.update({
+      where: { userId: ana.id },
+      data: { failedVerificationCount: 10, lockedUntil: new Date(Date.now() + 600_000) },
+    });
+
+    for (const [kind, body] of [
+      ["totp", { code: code(ana, 1) }],
+      ["backup-code", { code: ana.backupCodes[0] }],
+    ] as const) {
+      const answer = await secondStep(kind, await challenge(ana), body);
+      expect(answer.status, kind).toBe(429);
+      expect(answer.code, kind).toBe("ACCOUNT_TEMPORARILY_LOCKED");
+      const seconds = Number(answer.retryAfter);
+      expect(seconds, kind).toBeGreaterThan(590);
+      expect(seconds, kind).toBeLessThanOrEqual(600);
+    }
   });
 });
 

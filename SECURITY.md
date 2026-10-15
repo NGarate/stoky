@@ -838,7 +838,9 @@ Verified against the files named in each row.
   is logged `auth.signin.challenged`. The code is charged against the address
   only, since it names no account; Better Auth counts wrong codes itself, five
   per challenge and ten in a row per account, which locks the account's
-  second step for fifteen minutes. The code step is a sign-in only when it
+  second step for fifteen minutes: refused 429 with a `Retry-After` of the
+  seconds left until the lock ends, which Better Auth's own refusal leaves
+  out and the policy plugin adds. The code step is a sign-in only when it
   carried the challenge cookie and was answered with a session: then the
   address is refunded, the browser becomes a known device, the account is
   tidied and held to ten sessions as above, and `auth.signin.succeeded` says

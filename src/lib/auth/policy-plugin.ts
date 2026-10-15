@@ -130,6 +130,30 @@ interface TwoFactorRow {
   id: string;
   secret: string;
   verified?: boolean | null;
+  lockedUntil?: Date | string | null;
+}
+
+/**
+ * Better Auth's account lockout of the second step, which the instance does
+ * not change: ten wrong codes in a row lock it for this long.
+ */
+export const TWO_FACTOR_LOCK_S = 15 * 60;
+
+/**
+ * How long the second step of `ctx`'s account stays locked, in whole
+ * seconds: from the row's `lockedUntil`, or the whole lock when the row or
+ * its owner cannot be read.
+ */
+async function lockedFor(ctx: GuardContext): Promise<number> {
+  const owner = await codeOwner(ctx).catch(() => null);
+  const row = owner
+    ? await ctx.context.adapter
+        .findOne<TwoFactorRow>({ model: "twoFactor", where: [{ field: "userId", value: owner.userId }] })
+        .catch(() => null)
+    : null;
+  const until = row?.lockedUntil ? new Date(row.lockedUntil).getTime() : Number.NaN;
+  if (Number.isNaN(until)) return TWO_FACTOR_LOCK_S;
+  return Math.max(1, Math.ceil((until - Date.now()) / 1000));
 }
 
 /** The parts of Better Auth's context the guard reads; typed loosely on purpose. */
@@ -302,6 +326,25 @@ export function stokyPolicy({ db }: PolicyPluginOptions) {
             if (!session || ctx.headers?.get(REMEMBER_HEADER) !== "0") return;
             removeSetCookie(ctx.context.responseHeaders, ctx.context.authCookies.sessionToken.name);
             await setSessionCookie(raw as never, session, true);
+          }),
+        },
+        {
+          // A locked second step says until when. Better Auth refuses it 429
+          // ACCOUNT_TEMPORARILY_LOCKED with no Retry-After, and every other
+          // refusal of a spent budget here carries one (RFC 9110 §10.2.3).
+          matcher: (context: { path?: string }) =>
+            context.path === "/two-factor/verify-totp" ||
+            context.path === "/two-factor/verify-backup-code",
+          handler: createAuthMiddleware(async (raw) => {
+            const ctx = raw as unknown as GuardContext & {
+              context: { returned?: unknown };
+              setHeader: (name: string, value: string) => void;
+            };
+            const returned = ctx.context.returned;
+            if (!(returned instanceof APIError)) return;
+            const code = (returned.body as { code?: unknown } | undefined)?.code;
+            if (code !== "ACCOUNT_TEMPORARILY_LOCKED") return;
+            ctx.setHeader("retry-after", String(await lockedFor(ctx)));
           }),
         },
       ],

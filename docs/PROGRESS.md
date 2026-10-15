@@ -3252,7 +3252,10 @@ stores nothing that would say a code was used (ISSUES AUTH-5).
   refunds the address (`signInChallenged`), without `rememberDevice`. The
   code step names no account, so it is charged per address only
   (`chargeSignInAddress`); Better Auth counts wrong codes per challenge and
-  per account. It is a sign-in only when it carried the challenge cookie,
+  per account. Its lock is answered 429 `ACCOUNT_TEMPORARILY_LOCKED` with no
+  `Retry-After`, so an after-hook of `stokyPolicy` adds one, the seconds
+  left until the row's `lockedUntil` (fifteen minutes when it cannot be
+  read). It is a sign-in only when it carried the challenge cookie,
   presented no session, and was answered with a session cookie; then the
   address is refunded, the browser remembered, and the account tidied and
   capped (D139, D140) — never from a session hook, as D140 says.
