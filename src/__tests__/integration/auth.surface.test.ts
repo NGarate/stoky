@@ -15,7 +15,7 @@ import { createTestUser, generateTestEmail } from "../utils/test-helpers";
  * an endpoint a future Better Auth adds — or one nobody thought of — is
  * tried too, by every method, with a signed-in browser's cookie and its own
  * origin: everything it would need to act. Nothing may answer but the
- * ten, and no session, account, user or authenticator row may change.
+ * seventeen, and no session, account, user or authenticator row may change.
  */
 
 const PASSWORD = "cocina despensa nevera";
@@ -37,7 +37,7 @@ afterAll(async () => {
 });
 
 /**
- * The ten, written out rather than read from the handler: an endpoint added
+ * The seventeen, written out rather than read from the handler: an endpoint added
  * to its allowlist is exactly what this test must notice, and reading the
  * list would make it agree.
  */
@@ -50,6 +50,15 @@ const ANSWERED = new Set([
   "POST /two-factor/enable",
   "POST /two-factor/disable",
   "POST /two-factor/generate-backup-codes",
+  // Passkeys (D151): a sign-in, and adding, removing, renaming and listing
+  // one's own, the adding and removing after the password.
+  "GET /passkey/generate-authenticate-options",
+  "POST /passkey/verify-authentication",
+  "GET /passkey/generate-register-options",
+  "POST /passkey/verify-registration",
+  "POST /passkey/delete-passkey",
+  "POST /passkey/update-passkey",
+  "GET /passkey/list-user-passkeys",
   "POST /sign-out",
   "GET /get-session",
   "GET /ok",

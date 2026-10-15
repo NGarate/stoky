@@ -890,8 +890,8 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **70 procedures** — a count
-that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68 → 67 → 68 → 69 → 70: it reached 64
+`shopping`) merged in `src/server/trpc/router.ts`, **71 procedures** — a count
+that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68 → 67 → 68 → 69 → 70 → 71: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
 2026-08-31 while this file went on saying 62 until 2026-10-12, 64 with
@@ -902,8 +902,9 @@ Better Auth switch on 2026-10-15, 68 with `auth.listSessions` and
 they replace, was deleted with its button, and 68 when
 `household.memberSessions` and `household.endMemberSessions` replaced
 `household.revokeMemberSessions`, 69 with
-`household.endHouseholdSessions`, and 70 with
-`household.removeMemberTwoFactor`) as phases closed
+`household.endHouseholdSessions`, 70 with
+`household.removeMemberTwoFactor`, and 71 with `auth.confirmPassword`, the
+step-up before a passkey is added or removed) as phases closed
 and the export router arrived. Asserting the count structurally did not stop
 the drift, because nothing compared it with this sentence; since 2026-10-12
 `capabilities.test.ts` does, and fails when the two disagree. 10 Zod
@@ -933,15 +934,21 @@ is not a failure but a question — see *Reconciliation* below. Proven by
 **Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
 post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
 error mapping and i18n; the route in front of Better Auth
-(`src/server/http/auth-handler.ts`) answers ten endpoints and applies the
-limits. Two-step verification with an authenticator app is in, each code
+(`src/server/http/auth-handler.ts`) answers seventeen endpoints and applies
+the limits. Two-step verification with an authenticator app is in, each code
 usable once (D148), with backup codes stored as hashes (D149): the login form
 asks for the code, and every role, the kitchen's shared account included, sets
 it up from *Seguridad y acceso* with the password (`e2e/two-factor.spec.ts`
 enrols, signs in with a code and has the same code refused). A member who
 loses the authenticator with no backup code left gets it removed by a
 household admin, after the admin's own password, which ends all of the
-member's sessions (D150). Sessions are database rows: fifteen idle minutes, slid only by the
+member's sessions (D150). Passkeys work on the server (D151): a sign-in with
+user verification required and the remember-me box honoured, and adding or
+removing one after the password, at the first `STOKY_URLS` address only, on
+https or `localhost` and never at an IP address; proven by
+`integration/passkeys.test.ts` with a software authenticator. The settings
+screen and the login page's offer are still to come, so nobody can use them
+yet. Sessions are database rows: fifteen idle minutes, slid only by the
 keep-alive, a day at most, and deleted to end them — or, with "Mantener la
 sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
 since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
@@ -979,7 +986,7 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 70 procedures assigned. Membership and role
+`src/server/trpc/trpc.ts`, and all 71 procedures assigned. Membership and role
 are read from the database on every call rather than from the session, so a
 demotion takes effect on the next request rather than whenever the session
 happens to end. `src/__tests__/unit/capabilities.test.ts` checks the assignment

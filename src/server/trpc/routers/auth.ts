@@ -4,6 +4,7 @@ import { enforceRateLimit } from "../throttle";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import {
   changePasswordSchema,
+  confirmPasswordSchema,
   endSessionsSchema,
   registerSchema,
 } from "@/lib/validations/auth";
@@ -23,6 +24,7 @@ import { endSessions, endTwoFactorChallenges } from "@/lib/auth/end-sessions";
 import { liveSessionsOf } from "@/lib/auth/session-list";
 import { changeOwnPassword } from "@/lib/auth/password-change";
 import { MISSING_SESSION_ID_MESSAGE, confirmCurrentPassword } from "@/lib/auth/reauth";
+import { grantStepUp } from "@/lib/auth/step-up";
 import {
   capFor,
   deadlineKind,
@@ -528,6 +530,35 @@ export const authRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  /**
+   * The current password, re-entered to allow one change to how this account
+   * signs in that the auth API makes: adding a passkey, or removing one
+   * (ASVS 5.0.0 7.5.1, PROGRESS D151).
+   *
+   * Better Auth's passkey endpoints take a session and a WebAuthn ceremony,
+   * never a password, so the password is asked here — through
+   * `confirmCurrentPassword`, the same two budgets and the same refusal as
+   * every other re-entry, with `via: "step-up"` — and what it proves is left
+   * for the auth API as a step-up (`src/lib/auth/step-up.ts`): bound to this
+   * session, spent by the one change, lapsing in five minutes. The policy
+   * plugin refuses the change without one (`STEP_UP_REQUIRED`).
+   *
+   * `protectedProcedure`, like `changePassword`: every account may have
+   * passkeys, the kitchen's shared one included (the owner's decision of
+   * 2026-10-15). Answers when the step-up lapses. No token rotation, as for
+   * every re-entry (D143).
+   */
+  confirmPassword: protectedProcedure
+    .input(confirmPasswordSchema)
+    .mutation(async ({ ctx, input }) => {
+      await confirmCurrentPassword(ctx, input.currentPassword, "step-up");
+      const expiresAt = await grantStepUp(ctx.db, {
+        sessionId: ctx.session.sessionId,
+        userId: ctx.session.user.id,
+      });
+      return { expiresAt: expiresAt.toISOString() };
     }),
 
   /**

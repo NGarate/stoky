@@ -23,7 +23,9 @@ const NOW = new Date("2026-10-15T12:00:00Z");
 
 /**
  * A client that records the order of what the tidy asks of it. `count` is
- * what each delete reports; `beyond` is the ids the cap's query finds.
+ * what each delete reports; `beyond` is the ids the cap's query finds. The
+ * rows `endSessions` reads before it deletes are none, so it has no step-ups
+ * to end (that is `end-sessions.test.ts`).
  */
 function fakeDb(count = 1, beyond: string[] = []) {
   const calls: string[] = [];
@@ -31,7 +33,13 @@ function fakeDb(count = 1, beyond: string[] = []) {
     calls.push("deleteMany");
     return { count };
   });
-  const findMany = mock(async (_args: unknown) => {
+  const findMany = mock(async (args: { select?: { userId?: boolean } }) => {
+    // `endSessions` reads the rows it is about to end, for their step-ups
+    // (D151); the cap's own query selects ids alone.
+    if (args.select?.userId) {
+      calls.push("findMany ending");
+      return [];
+    }
     calls.push("findMany");
     return beyond.map((id) => ({ id }));
   });
@@ -171,6 +179,7 @@ describe("tidyAfterSignIn and the cap", () => {
     expect(calls).toEqual([
       "begin",
       'queryRaw SELECT id FROM "User" WHERE id = ? FOR UPDATE',
+      "findMany ending",
       "deleteMany",
       "findMany",
       "commit",

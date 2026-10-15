@@ -103,6 +103,20 @@ describe("getAuthErrorKey", () => {
     expect(words("TWO_FACTOR_UNREADABLE")).toBe("twoFactorUnreadable");
   });
 
+  it("words a refused passkey by what the person can do about it", () => {
+    // D151: Better Auth's codes, and the instance's own for an authenticator
+    // that did not verify the person. Unknown or unverified cannot be fixed
+    // by trying again; a lapsed challenge or a bad signature can.
+    const words = (code: string) => getAuthErrorKey(undefined, "login", code);
+    expect(words("PASSKEY_NOT_FOUND")).toBe("passkeyNotFound");
+    expect(words("USER_VERIFICATION_REQUIRED")).toBe("passkeyNotVerified");
+    expect(words("AUTHENTICATION_FAILED")).toBe("passkeyFailed");
+    expect(words("CHALLENGE_NOT_FOUND")).toBe("passkeyFailed");
+    expect(words("AUTH_CANCELLED")).toBe("passkeyFailed");
+    // The step-up a passkey change needs (`src/lib/auth/step-up.ts`).
+    expect(words("STEP_UP_REQUIRED")).toBe("stepUpRequired");
+  });
+
   it("has words in both languages for every key it can answer", async () => {
     const catalogues = {
       es: (await import("../../../messages/es.json")).default.auth as Record<string, string>,
@@ -114,6 +128,10 @@ describe("getAuthErrorKey", () => {
       "twoFactorExpired",
       "twoFactorLocked",
       "twoFactorUnreadable",
+      "passkeyFailed",
+      "passkeyNotFound",
+      "passkeyNotVerified",
+      "stepUpRequired",
     ]) {
       expect(catalogues.es[key], `es ${key}`).toBeTruthy();
       expect(catalogues.en[key], `en ${key}`).toBeTruthy();

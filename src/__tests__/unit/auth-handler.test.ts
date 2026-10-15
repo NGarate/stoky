@@ -3,6 +3,7 @@ import { DEVICE_ID_COOKIE, mintDeviceId } from "@/lib/device";
 import {
   RateLimitUnavailableError,
   loginRateLimit,
+  passkeyOptionsRateLimit,
   type RateLimit,
   type RateLimitResult,
 } from "@/lib/rate-limit";
@@ -89,11 +90,18 @@ afterEach(() => {
 });
 
 describe("which endpoints answer", () => {
-  it("is the ten this application uses", () => {
+  it("is the seventeen this application uses", () => {
     expect([...ALLOWED_AUTH_ENDPOINTS].sort()).toEqual([
       "GET /error",
       "GET /get-session",
       "GET /ok",
+      "GET /passkey/generate-authenticate-options",
+      "GET /passkey/generate-register-options",
+      "GET /passkey/list-user-passkeys",
+      "POST /passkey/delete-passkey",
+      "POST /passkey/update-passkey",
+      "POST /passkey/verify-authentication",
+      "POST /passkey/verify-registration",
       "POST /sign-in/email",
       "POST /sign-out",
       "POST /two-factor/disable",
@@ -120,6 +128,8 @@ describe("which endpoints answer", () => {
       post("/two-factor/verify-otp", "{}"),
       new Request(`${BASE}/list-sessions`),
       // The same endpoints by another method or spelling.
+      post("/passkey/generate-authenticate-options", "{}"),
+      new Request(`${BASE}/passkey/verify-authentication`),
       new Request(`${BASE}/sign-in/email`),
       post("/get-session", "{}"),
       post("/sign-in/email/", "{}"),
@@ -1100,5 +1110,330 @@ describe("a change to two-step verification", () => {
     });
 
     expect(events()).toEqual([]);
+  });
+});
+
+describe("passkeys (D151)", () => {
+  const DONT_REMEMBER = "stoky.dont_remember";
+  const SESSION = "stoky.session_token";
+  const dontRememberCookie = async () => ({ name: DONT_REMEMBER, secure: false });
+  const OPTIONS = passkeyOptionsRateLimit().prefix;
+
+  /** A WebAuthn answer, as the browser sends it; its content is Better Auth's to check. */
+  const assertion = { id: "cred-1", rawId: "cred-1", type: "public-key", response: { signature: "sig" } };
+
+  /** Better Auth's answer to a passkey that signed somebody in. */
+  const signedInByPasskey = () => {
+    const response = Response.json({
+      session: { id: "s-new", token: "raw-token" },
+      user: { id: "user-1", email: "ana@example.com" },
+    });
+    response.headers.append("set-cookie", `${SESSION}=raw-token.sig; Path=/; HttpOnly; SameSite=Lax`);
+    return response;
+  };
+
+  const events = () =>
+    securityLines.mock.calls.flatMap((call) => {
+      try {
+        return [JSON.parse(String(call[0])) as Record<string, string>];
+      } catch {
+        return [];
+      }
+    });
+
+  function recordingSessions(presented: { id: string; userId: string } | null) {
+    const asked: unknown[][] = [];
+    const sessions: SignInSessions = {
+      presented: async () => presented,
+      tidy: async (input) => {
+        asked.push(["tidy", input]);
+      },
+      end: async (previous, account) => {
+        asked.push(["end", previous, account]);
+      },
+    };
+    return { sessions, asked };
+  }
+
+  describe("the options of a sign-in", () => {
+    it("are charged per address against a budget of their own, and take no query", async () => {
+      const { handler, seen } = fakeHandler(() => Response.json({ challenge: "c" }));
+      const { limiter, calls } = fakeLimiter();
+
+      const response = await handleAuthRequest(
+        new Request(`${BASE}/passkey/generate-authenticate-options?context=x`, {
+          headers: { "x-forwarded-for": "203.0.113.9", "x-stoky-remember": "1" },
+        }),
+        { handler, limiter },
+      );
+
+      expect(response.status).toBe(200);
+      // Not sign-in's own: nothing could give an options call back to it.
+      expect(calls).toEqual([["consume", OPTIONS, "203.0.113.9"]]);
+      expect(new URL(seen[0].url).search).toBe("");
+      expect(seen[0].headers.get("x-stoky-remember")).toBeNull();
+    });
+
+    it("are refused 403 to another site, uncharged and without Better Auth", async () => {
+      // An <img> on a page a household member visits is sent from the
+      // household's own address: charged, thirty of them would keep everyone
+      // there from signing in with a passkey for a quarter of an hour.
+      for (const site of ["cross-site", "same-site"]) {
+        const { handler, handle } = fakeHandler(() => Response.json({ challenge: "c" }));
+        const { limiter, calls } = fakeLimiter();
+
+        const response = await handleAuthRequest(
+          new Request(`${BASE}/passkey/generate-authenticate-options`, {
+            headers: { "x-forwarded-for": "203.0.113.9", "sec-fetch-site": site, "sec-fetch-dest": "image" },
+          }),
+          { handler, limiter },
+        );
+
+        expect(response.status, site).toBe(403);
+        expect(calls, site).toEqual([]);
+        expect(handle, site).not.toHaveBeenCalled();
+      }
+    });
+
+    it("are answered to the page's own fetch, and to a client that sends no Fetch Metadata", async () => {
+      for (const headers of [{ "sec-fetch-site": "same-origin" }, {}] as Record<string, string>[]) {
+        const { handler } = fakeHandler(() => Response.json({ challenge: "c" }));
+        const response = await handleAuthRequest(
+          new Request(`${BASE}/passkey/generate-authenticate-options`, { headers }),
+          { handler, limiter: fakeLimiter().limiter },
+        );
+        expect(response.status, JSON.stringify(headers)).toBe(200);
+      }
+    });
+
+    it("are refused 429 with Retry-After when that budget is spent", async () => {
+      const { handler, handle } = fakeHandler();
+      const { limiter } = fakeLimiter({ [OPTIONS]: { allowed: false, retryAfterSeconds: 30 } });
+
+      const response = await handleAuthRequest(
+        new Request(`${BASE}/passkey/generate-authenticate-options`),
+        { handler, limiter },
+      );
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("30");
+      expect(handle).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("a sign-in", () => {
+    const signIn = (body: unknown, headers: Record<string, string> = {}) =>
+      post("/passkey/verify-authentication", JSON.stringify(body), headers);
+
+    it("reaches Better Auth with the answer alone, the box said in the route's header", async () => {
+      for (const [rememberMe, said] of [
+        [true, "1"],
+        [false, "0"],
+        ["true", "0"],
+        [undefined, "0"],
+      ] as const) {
+        const { handler, seen } = fakeHandler(signedInByPasskey);
+        await handleAuthRequest(
+          signIn({ response: assertion, rememberMe, createSession: true, callbackURL: "x" }, {
+            "x-stoky-remember": "1",
+          }),
+          { handler, limiter: fakeLimiter().limiter, dontRememberCookie },
+        );
+
+        const label = JSON.stringify(rememberMe);
+        expect(await seen[0].json(), label).toEqual({ response: assertion });
+        expect(seen[0].headers.get("x-stoky-remember"), label).toBe(said);
+      }
+    });
+
+    it("ticked, takes dont_remember out of the request and out of the browser", async () => {
+      const { handler, seen } = fakeHandler(signedInByPasskey);
+      const response = await handleAuthRequest(
+        signIn({ response: assertion, rememberMe: true }, {
+          cookie: `stoky_device=abc; ${DONT_REMEMBER}=true.sig`,
+        }),
+        { handler, limiter: fakeLimiter().limiter, dontRememberCookie },
+      );
+
+      expect(seen[0].headers.get("cookie")).toBe("stoky_device=abc");
+      expect(response.headers.getSetCookie()).toContain(
+        `${DONT_REMEMBER}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`,
+      );
+    });
+
+    it("is charged against sign-in's address budget, and refused 429 before Better Auth", async () => {
+      const { handler, handle } = fakeHandler(signedInByPasskey);
+      const { limiter, calls } = fakeLimiter({ [ADDRESS]: { allowed: false, retryAfterSeconds: 9 } });
+
+      const response = await handleAuthRequest(signIn({ response: assertion }), { handler, limiter });
+
+      expect(calls.filter(([what]) => what === "consume")).toEqual([
+        ["consume", ADDRESS, "203.0.113.9"],
+      ]);
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("9");
+      expect(handle).not.toHaveBeenCalled();
+    });
+
+    it("answers a body without an answer 400, charged, logged and without Better Auth", async () => {
+      const { handler, handle } = fakeHandler(signedInByPasskey);
+      const { limiter, calls } = fakeLimiter();
+
+      for (const body of ["{not json", JSON.stringify({}), JSON.stringify({ response: "x" }), JSON.stringify({ response: [] })]) {
+        const response = await handleAuthRequest(post("/passkey/verify-authentication", body), {
+          handler,
+          limiter,
+        });
+        expect(response.status, body).toBe(400);
+      }
+
+      expect(handle).not.toHaveBeenCalled();
+      expect(calls.filter(([what]) => what === "consume")).toHaveLength(4);
+      expect(events().filter((line) => line.event === "auth.passkey.signin-failed")).toHaveLength(4);
+    });
+
+    it("is a sign-in when Better Auth issues a session: refunded, remembered, tidied, logged", async () => {
+      const deviceId = mintDeviceId();
+      const { limiter, calls } = fakeLimiter();
+      const { sessions, asked } = recordingSessions({ id: "s-old", userId: "user-9" });
+
+      const response = await handleAuthRequest(
+        signIn({ response: assertion }, { cookie: `${DEVICE_ID_COOKIE}=${deviceId}; ${SESSION}=old` }),
+        { handler: fakeHandler(signedInByPasskey).handler, limiter, sessions },
+      );
+
+      expect(response.status).toBe(200);
+      expect(calls.filter(([what]) => what === "refund")).toEqual([
+        ["refund", ADDRESS, "203.0.113.9", 7],
+      ]);
+      expect(calls.filter(([what]) => what === "rememberDevice")).toEqual([
+        ["rememberDevice", expect.any(String), deviceId],
+      ]);
+      // The presented session ends, as at a password sign-in, and the new one never.
+      expect(asked).toEqual([
+        ["tidy", { previous: { id: "s-old", userId: "user-9" }, userId: "user-1", newToken: "raw-token" }],
+      ]);
+      expect(events().find((line) => line.event === "auth.signin.succeeded")).toMatchObject({
+        userId: "user-1",
+        method: "passkey",
+        address: "203.0.113.9",
+      });
+      expect(JSON.stringify(await response.json())).not.toContain("raw-token");
+      expect(securityLines.mock.calls.join("\n")).not.toContain("ana@example.com");
+    });
+
+    it("is logged as failed with Better Auth's code, refunds nothing and ends nothing", async () => {
+      const { limiter, calls } = fakeLimiter();
+      const { sessions, asked } = recordingSessions({ id: "s-old", userId: "user-9" });
+
+      const response = await handleAuthRequest(signIn({ response: assertion }), {
+        handler: fakeHandler(() =>
+          Response.json({ code: "USER_VERIFICATION_REQUIRED" }, { status: 401 }),
+        ).handler,
+        limiter,
+        sessions,
+      });
+
+      expect(response.status).toBe(401);
+      expect(calls.map(([what]) => what)).toEqual(["consume"]);
+      expect(asked).toEqual([]);
+      expect(events().find((line) => line.event === "auth.passkey.signin-failed")).toMatchObject({
+        code: "USER_VERIFICATION_REQUIRED",
+        address: "203.0.113.9",
+      });
+      expect(events().map((line) => line.event)).not.toContain("auth.signin.succeeded");
+    });
+  });
+
+  describe("a change to one's passkeys", () => {
+    it("reaches Better Auth with each endpoint's own keys, never createSession", async () => {
+      for (const [path, body, expected] of [
+        [
+          "/passkey/verify-registration",
+          { response: { id: "c" }, name: "Móvil", createSession: true, context: "x" },
+          { response: { id: "c" }, name: "Móvil" },
+        ],
+        ["/passkey/delete-passkey", { id: "pk-1", userId: "someone" }, { id: "pk-1" }],
+        ["/passkey/update-passkey", { id: "pk-1", name: "Portátil", extra: 1 }, { id: "pk-1", name: "Portátil" }],
+      ] as const) {
+        const { handler, seen } = fakeHandler(() => Response.json({ status: true }));
+        await handleAuthRequest(post(path, JSON.stringify(body)), { handler });
+        expect(await seen[0].json(), path).toEqual(expected);
+      }
+    });
+
+    it("answers a body that is not an object 400 without Better Auth", async () => {
+      const { handler, handle } = fakeHandler();
+      const response = await handleAuthRequest(post("/passkey/delete-passkey", "[1]"), { handler });
+      expect(response.status).toBe(400);
+      expect(handle).not.toHaveBeenCalled();
+    });
+
+    it("refuses a name too long, empty, not text or carrying control characters, 400 without Better Auth", async () => {
+      // Better Auth only trims a name, and the column has no bound: without
+      // this a session could store 64 KiB, or a right-to-left override, as a
+      // row title.
+      for (const path of ["/passkey/verify-registration", "/passkey/update-passkey"]) {
+        for (const name of ["x".repeat(65), "   ", 7, "‮evil", "a\u0000b"]) {
+          const { handler, handle } = fakeHandler(() => Response.json({ status: true }));
+          const response = await handleAuthRequest(
+            post(path, JSON.stringify({ id: "pk-1", response: { id: "c" }, name })),
+            { handler },
+          );
+          const label = `${path} ${JSON.stringify(name).slice(0, 20)}`;
+          expect(response.status, label).toBe(400);
+          expect(handle, label).not.toHaveBeenCalled();
+        }
+      }
+    });
+
+    it("forwards a name of exactly the limit, trimmed, and a registration with none", async () => {
+      const longest = "ñ".repeat(64);
+      for (const [path, body, expected] of [
+        ["/passkey/update-passkey", { id: "pk-1", name: `  ${longest} ` }, { id: "pk-1", name: longest }],
+        ["/passkey/verify-registration", { response: { id: "c" } }, { response: { id: "c" } }],
+      ] as const) {
+        const { handler, seen } = fakeHandler(() => Response.json({ status: true }));
+        const response = await handleAuthRequest(post(path, JSON.stringify(body)), { handler });
+        expect(response.status, path).toBe(200);
+        expect(await seen[0].json(), path).toEqual(expected);
+      }
+    });
+
+    it("logs an added and a removed passkey with whose it was, and a refusal not at all", async () => {
+      const { sessions } = recordingSessions({ id: "s-1", userId: "user-1" });
+      for (const path of ["/passkey/verify-registration", "/passkey/delete-passkey"]) {
+        await handleAuthRequest(post(path, JSON.stringify({ id: "pk-1", response: {} })), {
+          handler: fakeHandler(() => Response.json({ status: true })).handler,
+          sessions,
+        });
+        await handleAuthRequest(post(path, JSON.stringify({ id: "pk-1", response: {} })), {
+          handler: fakeHandler(() =>
+            Response.json({ code: "STEP_UP_REQUIRED" }, { status: 403 }),
+          ).handler,
+          sessions,
+        });
+      }
+
+      expect(
+        events()
+          .filter((line) => line.event.startsWith("auth.passkey."))
+          .map(({ event, userId }) => [event, userId]),
+      ).toEqual([
+        ["auth.passkey.added", "user-1"],
+        ["auth.passkey.removed", "user-1"],
+      ]);
+    });
+
+    it("forwards the registration options with the kind of authenticator and nothing else", async () => {
+      const { handler, seen } = fakeHandler();
+      await handleAuthRequest(
+        new Request(
+          `${BASE}/passkey/generate-register-options?authenticatorAttachment=platform&name=evil&context=x`,
+        ),
+        { handler },
+      );
+      expect(new URL(seen[0].url).search).toBe("?authenticatorAttachment=platform");
+    });
   });
 });

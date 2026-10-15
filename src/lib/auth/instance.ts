@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { isAPIError } from "better-auth/api";
+import { APIError, isAPIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins/bearer";
 import { twoFactor } from "better-auth/plugins/two-factor";
+import { passkey } from "@better-auth/passkey";
 import { prisma } from "@/lib/prisma";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
@@ -12,6 +13,7 @@ import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { canonicalUrl, trustedAuthOrigins } from "@/lib/auth/public-url";
 import { configuredSecret } from "@/lib/auth/secret";
 import { stokyPolicy } from "@/lib/auth/policy-plugin";
+import { passkeyRpHost, passkeyRpOrigin } from "@/lib/auth/passkeys";
 import { generateBackupCodes, storeBackupCodes } from "@/lib/auth/backup-codes";
 import {
   REMEMBERED_IDLE_S,
@@ -57,6 +59,9 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/pass
  *   tokens only (`requireSignature`), so the unsigned token the database holds
  *   is never a credential on its own. The route hands it out only to a
  *   request that carried no cookie (`src/server/http/auth-handler.ts`).
+ * - **Passkeys where WebAuthn can work** (D151): the first `STOKY_URLS`
+ *   entry, on https or at `localhost`, never an IP address
+ *   (`src/lib/auth/passkeys.ts`). Elsewhere the plugin is left out.
  */
 
 let generatedSecret: string | undefined;
@@ -123,6 +128,63 @@ function logEndpointError(error: unknown): void {
   logLine("error", `${name}: ${message}`);
 }
 
+/**
+ * What a passkey ceremony must have shown: that the person was verified — a
+ * fingerprint, a face, the device's PIN — not only present. Better Auth asks
+ * the browser for it as "preferred" when signing in and checks for none, so
+ * a passkey on a security key without a PIN, or an authenticator that
+ * skipped the check, would be a single factor anybody holding the device
+ * could use. Refused here, after the signature is verified and before
+ * anything is written (ASVS 5.0.0 6.6.x, PROGRESS D151).
+ */
+export const USER_VERIFICATION_REQUIRED = "USER_VERIFICATION_REQUIRED";
+
+function requireUserVerification(verified: boolean | undefined): void {
+  if (verified === true) return;
+  throw new APIError("UNAUTHORIZED", {
+    code: USER_VERIFICATION_REQUIRED,
+    message: "The passkey did not verify the person using it",
+  });
+}
+
+/**
+ * The passkey plugin, bound to the canonical address — or nothing where
+ * passkeys cannot work (`passkeysAvailable`).
+ *
+ * - `rpID` and `origin` are the first `STOKY_URLS` entry's alone, never the
+ *   list: a passkey is the relying party's, and a ceremony from any other
+ *   listed address is refused, so one registered at one name cannot be
+ *   replayed at another.
+ * - Registration asks for user verification as "required", and both
+ *   ceremonies check it was done (`requireUserVerification`).
+ * - The rest — who may register, the step-up, the session a sign-in gets —
+ *   is the policy plugin's and the route's (`src/lib/auth/policy-plugin.ts`,
+ *   `src/server/http/auth-handler.ts`).
+ */
+function passkeyPlugin(env: Record<string, string | undefined>) {
+  const rpID = passkeyRpHost(env);
+  const origin = passkeyRpOrigin(env);
+  if (!rpID || !origin) return [];
+  return [
+    passkey({
+      rpID,
+      rpName: "Stoky",
+      origin,
+      authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
+      registration: {
+        afterVerification: async ({ verification }) => {
+          requireUserVerification(verification.registrationInfo?.userVerified);
+        },
+      },
+      authentication: {
+        afterVerification: async ({ verification }) => {
+          requireUserVerification(verification.authenticationInfo?.userVerified);
+        },
+      },
+    }),
+  ];
+}
+
 function build(env: Record<string, string | undefined>) {
   // The first `STOKY_URLS` entry (D138). Never null here: production without
   // one, or a first entry with no origin, is refused before `build` runs.
@@ -165,6 +227,10 @@ function build(env: Record<string, string | undefined>) {
       // the create hook and is never refreshed.
       expiresIn: REMEMBERED_IDLE_S,
       updateAge: REMEMBERED_REFRESH_S,
+      // Off: Better Auth's "fresh session" check counts from the row's
+      // creation, which a re-create resets and a remembered row's age makes
+      // meaningless. Adding or removing a passkey asks for the password
+      // instead (the step-up, `src/lib/auth/step-up.ts`).
       freshAge: 0,
       // Off, so a deleted row is refused on the very next read.
       cookieCache: { enabled: false },
@@ -323,8 +389,12 @@ function build(env: Record<string, string | undefined>) {
         // back, and a rotation of the secret leaves them working.
         backupCodeOptions: { customBackupCodesGenerate: generateBackupCodes, storeBackupCodes },
       }),
-      // Ours: a TOTP code works once, and a typed backup code is compared as
-      // its hash (`src/lib/auth/policy-plugin.ts`).
+      // Passkeys (D151), where they can work; see `passkeyPlugin`.
+      ...passkeyPlugin(env),
+      // Ours: a TOTP code works once, a typed backup code is compared as its
+      // hash, a passkey is added or removed only after the password, and a
+      // passkey sign-in keeps the remember-me choice
+      // (`src/lib/auth/policy-plugin.ts`).
       stokyPolicy({ db: prisma }),
       // Last, as Better Auth asks: it copies every Set-Cookie into Next's
       // cookie store when an endpoint is called from a Server Action.

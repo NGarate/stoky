@@ -168,16 +168,22 @@ export interface AddressCharge {
  * Counts one attempt against the client's address, and nothing else.
  *
  * The first step of every sign-in, and the whole charge of a second step
- * (D148): an authenticator code arrives with no address typed and no account
- * named, only the challenge cookie, so there is no account to count it
- * against here — Better Auth counts wrong codes per challenge and per
- * account itself. Throws `SignInRefusedError` as `chargeSignInAttempt` does.
+ * (D148) and of a passkey sign-in (D151): an authenticator code or a passkey
+ * arrives with no address typed and no account named — only the challenge
+ * cookie, or a credential id only Better Auth looks up — so there is no
+ * account to count it against here. Better Auth counts wrong codes per
+ * challenge and per account itself; a passkey cannot be guessed. Throws
+ * `SignInRefusedError` as `chargeSignInAttempt` does.
+ *
+ * `addressLimit` is sign-in's own unless a step of a sign-in that is not an
+ * attempt at a credential needs a budget of its own (the passkey ceremony's
+ * options, `passkeyOptionsRateLimit`).
  */
 export async function chargeSignInAddress(
   headers: Headers,
   limiter: SignInLimiter = valkeySignInLimiter,
+  addressLimit: RateLimit = loginRateLimit(),
 ): Promise<AddressCharge> {
-  const addressLimit = loginRateLimit();
   // Counted against the /64 for an IPv6 client, logged with the address in
   // full: the bucket is what stops a client rotating through its own prefix,
   // and the address is what an operator needs to read.
@@ -392,16 +398,17 @@ export interface SecondFactorSignIn {
 }
 
 /**
- * An authenticator code or a backup code completed a sign-in (D148): the
- * address refunded the attempt it was charged, this browser remembered for
- * the account — now it has got in — and the sign-in recorded with the factor
- * that finished it. Written last, as `signInSucceeded` is, so a line never
- * describes a sign-in that did not complete.
+ * A sign-in charged to the address alone got in — an authenticator code or a
+ * backup code finishing one (D148), or a passkey (D151): the address refunded
+ * the attempt it was charged, this browser remembered for the account — now
+ * it has got in — and the sign-in recorded with the factor that proved it.
+ * Written last, as `signInSucceeded` is, so a line never describes a sign-in
+ * that did not complete.
  */
 export async function secondFactorSucceeded(
   charge: AddressCharge,
   { userId, email, deviceId }: SecondFactorSignIn,
-  method: Extract<SignInMethod, "totp" | "backup-code">,
+  method: Exclude<SignInMethod, "password">,
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<void> {
   await limiter.refund(charge.addressLimit, charge.addressIdentifier, charge.addressWindow);

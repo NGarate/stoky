@@ -151,13 +151,21 @@ export interface PasswordTarget {
 }
 
 /**
- * Sets a new password hash and ends every session the account has, in one
- * transaction, and returns how many accounts it wrote (0 or 1).
+ * Sets a new password hash, ends every session the account has and removes
+ * its passkeys, in one transaction, and returns how many accounts it wrote
+ * (0 or 1).
  *
  * One transaction so a new password can never stand beside sessions that were
  * meant to end: the session rows are deleted with the hash written
  * (`endSessions`). 0 means the account is gone or no longer matches `guard`;
  * the caller decides what that means to the person asking.
+ *
+ * **The passkeys go too** (D151). Anybody who knew the old password and held
+ * a session could have added one — the step-up asks for that password — and
+ * a passkey signs in without any password, so a reset meant to shut out
+ * whoever knew the old one would leave them a way back in. Nobody but the
+ * account can see its passkeys to judge which are whose, so all of them go;
+ * the person adds theirs again from Seguridad y acceso.
  *
  * The User write goes first and is the guard: its `where` carries the guard,
  * and the row lock it takes — the write is to `updatedAt`, which changes
@@ -185,6 +193,7 @@ export function setPasswordAndEndSessions(
       },
       data: { password: passwordHash },
     });
+    await tx.passkey.deleteMany({ where: { userId: target.userId } });
     await endSessions(tx, { userId: target.userId });
     return count;
   };

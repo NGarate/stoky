@@ -51,6 +51,10 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // stolen session from using it is the current password and the limit
     // inside the resolver, which a tier cannot express.
     changePassword: "protectedProcedure",
+    // The step-up before a passkey is added or removed (D151): the current
+    // password, for an account that may have no household. Every role may
+    // have passkeys, the kitchen's shared account included.
+    confirmPassword: "protectedProcedure",
   },
   // Reachable by an account with no household, which is the whole reason it
   // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the

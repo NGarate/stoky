@@ -2,8 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { hashBackupCode } from "@/lib/auth/backup-codes";
+import { STEP_UP_REQUIRED, hasStepUp } from "@/lib/auth/step-up";
+import { REMEMBER_HEADER } from "@/lib/auth/session-policy";
 import { clientAddress } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 
@@ -46,11 +49,32 @@ import { logSecurityEvent } from "@/lib/security-log";
  * Always hashed, whatever was typed: a stored hash sent as the code is hashed
  * again and matches nothing, so reading the column is not a way in.
  *
+ * **A passkey is added or removed only after the password** (PROGRESS D151,
+ * ASVS 5.0.0 7.5.1). Better Auth asks for a session alone, so a tablet left
+ * signed in could add its holder's passkey to somebody else's account. Asking
+ * for the registration options needs a step-up this session holds
+ * (`src/lib/auth/step-up.ts`); the registration and the removal spend it.
+ * Refused as `STEP_UP_REQUIRED` (403) otherwise. Every role may, the
+ * kitchen's shared account included (the owner's decision of 2026-10-15).
+ *
+ * **A registration never signs anybody in**: `createSession` is forced off.
+ * The person registering already has a session, and a second, made by a
+ * passkey nobody has used yet, would be one the route never tidied.
+ *
+ * **A passkey sign-in keeps the remember-me choice** (D141). Better Auth
+ * sets the session cookie with ninety days' `Max-Age` whatever was asked; the
+ * row is already a browser session (the create hook read `x-stoky-remember`),
+ * so for an unticked box the cookie is set again as a browser cookie, and the
+ * first `Set-Cookie` for it is taken out, so the answer carries one.
+ *
  * Coupled to Better Auth 1.7.7's internals: the `two_factor` cookie and the
  * challenge row it names, `secretConfig`, how a before-hook's returned body
- * is merged, and how a backup code is looked up (`includes` over the decoded
- * list, then a write conditional on the list read). The version is pinned
- * exactly, and `integration/two-factor.test.ts` fails if any of them moves.
+ * is merged (`defu`: a value given replaces, `undefined` does not), how a
+ * backup code is looked up (`includes` over the decoded list, then a write
+ * conditional on the list read), and how an after-hook's cookies are added to
+ * the endpoint's. The version is pinned exactly, and
+ * `integration/two-factor.test.ts` and `integration/passkeys.test.ts` fail if
+ * any of them moves.
  */
 
 /** Better Auth's defaults, which the instance does not change. */
@@ -152,8 +176,8 @@ interface PluginHooks {
  * context to the endpoint alone: every other before-hook is handed the
  * request as it came (`runBeforeHooks`, Better Auth 1.7.7). Read from there,
  * a native client's request has no session, so a check that found none and
- * stood aside let a bearer token turn an authenticator on without its first
- * code being claimed.
+ * stood aside let a bearer token add a passkey without the step-up, and turn
+ * an authenticator on without its first code being claimed.
  *
  * So the bearer plugin's own hook is run here first, and the session read
  * from the headers it would give the endpoint: the same token check, the same
@@ -203,15 +227,97 @@ async function codeOwner(ctx: GuardContext): Promise<{ userId: string; signIn: b
 }
 
 export interface PolicyPluginOptions {
-  /** Where `lastTotpCounter` is claimed: the application's client. */
-  db: Pick<PrismaClient, "$executeRaw">;
+  /**
+   * The application's client: where `lastTotpCounter` is claimed, and where a
+   * step-up is found and spent.
+   */
+  db: Pick<PrismaClient, "$executeRaw" | "verification">;
+}
+
+/** The passkey endpoints that need a step-up, and whether each spends it. */
+const STEP_UP_PATHS: Record<string, { spend: boolean }> = {
+  "/passkey/generate-register-options": { spend: false },
+  "/passkey/verify-registration": { spend: true },
+  "/passkey/delete-passkey": { spend: true },
+};
+
+/**
+ * Refuses the request unless the session it carries — a bearer token's
+ * included (`requestSession`) — holds a step-up, spent when `spend` says so.
+ * No session is refused here too, 401, rather than left to Better Auth: a
+ * check that stands aside whenever it finds no session is one that a
+ * session it cannot see walks past.
+ */
+async function requireStepUp(
+  raw: unknown,
+  db: PolicyPluginOptions["db"],
+  spend: boolean,
+): Promise<void> {
+  const session = await requestSession(raw);
+  if (!session?.session?.id || !session.user?.id) {
+    throw new APIError("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Sign in first" });
+  }
+  const held = await hasStepUp(db, { sessionId: session.session.id, userId: session.user.id, spend });
+  if (!held) {
+    throw new APIError("FORBIDDEN", {
+      code: STEP_UP_REQUIRED,
+      message: "Confirm your password before changing your passkeys",
+    });
+  }
+}
+
+/** The parts of an after-hook's context the passkey cookie re-set reads. */
+interface CookieContext {
+  headers?: Headers;
+  context: {
+    newSession: Parameters<typeof setSessionCookie>[1] | null;
+    authCookies: { sessionToken: { name: string } };
+    responseHeaders?: Headers;
+  };
+}
+
+/**
+ * Takes every `Set-Cookie` for `name` out of `headers`, keeping the rest in
+ * order: Better Auth's own `removeSetCookieEntries`, which it does not export.
+ */
+function removeSetCookie(headers: Headers | undefined, name: string): void {
+  if (!headers) return;
+  const existing = headers.getSetCookie();
+  const kept = existing.filter((line) => !line.startsWith(`${name}=`) && !line.startsWith(`${name}.`));
+  if (kept.length === existing.length) return;
+  headers.delete("set-cookie");
+  for (const line of kept) headers.append("set-cookie", line);
 }
 
 export function stokyPolicy({ db }: PolicyPluginOptions) {
   return {
     id: "stoky-policy",
     hooks: {
+      after: [
+        {
+          matcher: (context: { path?: string }) => context.path === "/passkey/verify-authentication",
+          handler: createAuthMiddleware(async (raw) => {
+            const ctx = raw as unknown as CookieContext;
+            const session = ctx.context.newSession;
+            if (!session || ctx.headers?.get(REMEMBER_HEADER) !== "0") return;
+            removeSetCookie(ctx.context.responseHeaders, ctx.context.authCookies.sessionToken.name);
+            await setSessionCookie(raw as never, session, true);
+          }),
+        },
+      ],
       before: [
+        ...Object.entries(STEP_UP_PATHS).map(([path, { spend }]) => ({
+          matcher: (context: { path?: string }) => context.path === path,
+          handler: createAuthMiddleware(async (raw) => {
+            await requireStepUp(raw, db, spend);
+            if (path === "/passkey/verify-registration") {
+              const body = (raw as { body?: Record<string, unknown> }).body;
+              // False rather than removed: a returned body is merged, and a
+              // key left out keeps the caller's value.
+              return { context: { body: { ...body, createSession: false } } };
+            }
+          }),
+        })),
         {
           matcher: (context: { path?: string }) => context.path === "/two-factor/verify-backup-code",
           handler: createAuthMiddleware(async (raw) => {

@@ -9,8 +9,8 @@ import { prisma } from "@/lib/prisma";
  * tokens still name it — the exception to the schema's no-cascades rule that
  * `Account` already makes (PROGRESS D134).
  *
- * The same holds for an authenticator secret (`TwoFactor`, PROGRESS D148): a
- * credential, which goes with its account.
+ * The same holds for an authenticator secret (`TwoFactor`, PROGRESS D148) and
+ * a passkey (`Passkey`, D151): credentials, which go with their account.
  *
  * Rows are written directly: what is under test is the foreign key, not who
  * writes the rows.
@@ -32,6 +32,12 @@ beforeAll(async () => {
       { token: `${RUN}-staying-phone`, userId: staying, expiresAt: inAnHour() },
     ],
   });
+  await prisma.passkey.createMany({
+    data: [
+      { userId: leaving, credentialID: `${RUN}-leaving-key`, publicKey: "pk", counter: 0, deviceType: "singleDevice", backedUp: false },
+      { userId: staying, credentialID: `${RUN}-staying-key`, publicKey: "pk", counter: 0, deviceType: "singleDevice", backedUp: false },
+    ],
+  });
   await prisma.twoFactor.createMany({
     data: [
       { userId: leaving, secret: `${RUN}-leaving-secret`, backupCodes: "[]" },
@@ -43,6 +49,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.session.deleteMany({ where: { token: { startsWith: RUN } } });
   await prisma.twoFactor.deleteMany({ where: { secret: { startsWith: RUN } } });
+  await prisma.passkey.deleteMany({ where: { credentialID: { startsWith: RUN } } });
   await prisma.user.deleteMany({ where: { email: { startsWith: RUN } } });
   await prisma.$disconnect();
 });
@@ -63,5 +70,14 @@ describe("an account's authenticator", () => {
 
     expect(await prisma.twoFactor.count({ where: { userId: leaving } })).toBe(0);
     expect(await prisma.twoFactor.count({ where: { userId: staying } })).toBe(1);
+  });
+});
+
+describe("an account's passkeys", () => {
+  it("go with the account when it is deleted, and nobody else's do", async () => {
+    expect(await prisma.user.count({ where: { id: leaving } })).toBe(0);
+
+    expect(await prisma.passkey.count({ where: { userId: leaving } })).toBe(0);
+    expect(await prisma.passkey.count({ where: { userId: staying } })).toBe(1);
   });
 });

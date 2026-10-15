@@ -73,6 +73,7 @@ Rules for this log:
 | "feat(auth): ask for the authenticator code when signing in" | The login form's second step, as its own state on `/login` rather than a page: `signInWithPassword` reads `twoFactorRedirect` as `{ ok: false, twoFactor: true }` (it was `ok`, which would have navigated with no session), and the new `verifyTotp` / `verifyBackupCode` in `src/lib/auth/client.ts` post `{ code }` and name each refusal (`SecondStepRefusalCode`). The form then asks for the authenticator code (`one-time-code`, numeric, six characters), with a button to a backup code and back and a **Volver** to the password; focus moves to the step's heading on entry. An expired challenge returns to the password with the reason and the address kept; an unreadable authenticator stays on the step and points at a backup code; a wrong backup code has its own sentence (`backupCodeInvalid`). Step 1 is unchanged, and the status region and the one submit button stay mounted across steps. `components/auth-pages.test.tsx` (+15, both languages), `unit/auth-client.test.ts` (+10), `unit/auth.error-messages.test.ts`. Breaks that went red: `twoFactor` ignored, an expired challenge kept on the step, the toggle stuck, no heading focus, no password focus on return, the fields unkeyed, an unreadable secret sent back to the password, the address dropped, **Volver** a submit, a backup code sent to the TOTP check, the autocomplete hint, a missing English sentence, the backup sentence shared, and the client's redirect, codes, path and body. |
 | "feat(auth): set up two-step verification in settings" | **Seguridad y acceso** gains **Verificación en dos pasos**, for every role, the kitchen's shared account included (the owner's decision of 2026-10-15): an `ok` "Activada" or `neutral` "Desactivada" badge; turning it on (`ReauthDialog`, then a QR code drawn in the browser with `uqr` 0.1.3, the key in fours, an `otpauth:` link, and the first code through `verify-totp`, which turns it on and is used up); the ten backup codes shown once, after that code and never before, kept only in the step's state, with a copy and a `.txt` made in the browser; new codes and turning it off, each with the password; and after any change a link to *Tus dispositivos* (ASVS 5.0.0 7.4.3). The route opens `POST /two-factor/enable`, `/disable` and `/generate-backup-codes` (ten endpoints): a signed-in session or 401; the D143 budgets per session and per account before Better Auth, 429 `REAUTH_RATE_LIMITED` with `Retry-After`, 503 without Valkey; `password` alone forwarded; the session's attempt refunded on a right password; `auth.reauth.refused` `via: "two-factor"`, and the new `auth.twofactor.disabled` and `auth.twofactor.codes-regenerated`. `get-totp-uri` stays closed. `auth.me` carries `twoFactorEnabled`; `src/lib/auth/client.ts` gains `startTotpEnrolment`, `turnOffTwoFactor`, `replaceBackupCodes` and `AccountChangeRefusedError`, which `reauthRefusalOf` reads. Tokens `--qr-dark`/`--qr-light`, dark on light in every theme, held to 7:1. ASVS 6.3.3 (a second factor for every account) is recorded in SECURITY.md as a deviation. `components/TotpSetup.test.tsx` (19), `unit/auth-handler.test.ts` (+10), `unit/auth-client.test.ts` (+8), `integration/two-factor.test.ts` (+6): the kitchen account enrols through the route; a wrong password logged and nothing set up; the sixth try from one session refused even with the right password; off keeps the browser signed in; new codes retire the old; no session, 401. New `e2e/two-factor.spec.ts` (chromium): enrol from the key the page shows, sign in with a code, the same code refused in a fresh browser. Breaks that went red: a role refusal in the route, the log dropped, the body passed through, no budget, `get-totp-uri` allowlisted, no refund, no account budget, failing open, the codes kept after saving or across a remount or shown before the first code, the section hidden by role, the QR unnamed, the dialog not reading the refusal, no link to the devices, and `--qr-dark` at 4.48:1. |
 | "feat(household): let an admin remove a member's two-step verification" (D150) | The way back from a lost authenticator with no backup code left, without the operator's SQL: `household.removeMemberTwoFactor` takes `{userId, currentPassword}` and refuses the caller's own id (`BAD_REQUEST`), then asks for the admin's own password (`confirmCurrentPassword`, `via: "member-two-factor"`) before looking the member up, then `memberOfHousehold` (`NOT_FOUND`) and `assertMayActOnOwner` (`FORBIDDEN`); one transaction clears `twoFactorEnabled` conditioned on the household, the role checked and that it is on (`CONFLICT` otherwise, nothing touched), deletes the `TwoFactor` row and ends every session and challenge the member has (`endSessions`); logged as the new `auth.twofactor.removed` and `auth.session.ended` `reason: "two-factor-removed"`. `household.members` carries `twoFactorEnabled`. **Personas del hogar**: each row says "Verificación en dos pasos: Activada/Desactivada", and rows that have it — never the caller's own, never an owner's to an admin — offer "Quitar la verificación en dos pasos" (`RemoveMemberTwoFactorDialog`, a `ReauthDialog` that says first that every session ends; `FORBIDDEN` and `CONFLICT` worded, the list read again). *Seguridad y acceso*'s explanation names the admin as the way back. 70 procedures. New `integration/household.two-factor-removal.test.ts` (6): members enrolled through `auth.api` and signed in for real lose the authenticator row, the cookie and a pending challenge, then sign in with the password alone; an owner removes another owner's; a wrong password is refused and logged, and is asked before a missing id is looked up; an admin on an owner is `FORBIDDEN`; another household's is `NOT_FOUND`, a member is refused, the caller's own is `BAD_REQUEST`; a member without it is `CONFLICT` and keeps their session; no line carries the code, the secret, a password or an email address. `components/EndSession.test.tsx` (+8) and `unit/procedure-inputs.test.ts` (+1). `e2e/two-factor.spec.ts` (+1, not run in this commit): an admin removes an enrolled member's and the member's browser is signed out and signs in with the password alone. Breaks that went red: `endSessions` skipped, no password, the member looked up first, no owner guard, `twoFactorEnabled` out of the write's guard, no self check, the row kept, reason `admin`, the event renamed, `via` `end-sessions`; on the page the button offered without it, on the own row or on an owner's to an admin, the meta always "Activada", `FORBIDDEN` unmapped, no refetch on `CONFLICT` or success, the dialog left open, no password sent. The household in the write's guard survives every test: it holds only against a member who leaves between the check and the write, the race `resetMemberPassword`'s identical guard answers. |
+| "feat(auth): sign in with passkeys on the server" (D151) | `@better-auth/passkey` 1.7.7 (exact), registered only where WebAuthn can work — the first `STOKY_URLS` entry https or `http://localhost`, never an IP (`src/lib/auth/passkeys.ts`: `passkeysAvailable`, `passkeyRpHost`, `passkeyRpOrigin`, `passkeyOfferedAt`) — with that entry's host as `rpID` and its origin as the only `origin`. User verification `required` and checked in both `afterVerification` hooks (`USER_VERIFICATION_REQUIRED`). New `Passkey` table (migration `20261015160000_passkeys`, cascades from `User`). The step-up: `auth.confirmPassword` (`via: "step-up"`) writes `stoky-step-up:<session id>` for five minutes (`src/lib/auth/step-up.ts`); the policy plugin requires it for the registration options and spends it at the registration and the removal (`403 STEP_UP_REQUIRED`), forces `createSession` off, and for an unticked box re-sets the session cookie without `Max-Age`, removing Better Auth's first one. The route opens seven passkey endpoints (seventeen in all): the sign-in charged per address and settled like the password's (refund, known device, tidy and cap, `auth.signin.succeeded` `method: "passkey"`, `auth.passkey.signin-failed`), the remember-me handling shared through `rememberChoice`; the options on a budget of their own (`passkeyOptionsRateLimit`, 30 per 15 min, a deviation explained in D151); each change's own body keys, `auth.passkey.added`/`removed` logged; the registration options' query cut to `authenticatorAttachment`. `endSessions` deletes the ended sessions' step-ups. New refusal words: `passkeyFailed`, `passkeyNotFound`, `passkeyNotVerified`, `stepUpRequired`. 71 procedures. New `integration/passkeys.test.ts` (17) with a software ES256 authenticator (`utils/webauthn.ts`), `unit/passkeys.test.ts` (12), `unit/auth-handler.test.ts` (+12), plus `end-sessions`, `rate-limit`, `auth.error-messages`, `procedure-inputs`, `capabilities`, `auth-tables`, `data-export` and `auth.surface`. Breaks that went red: no step-up check, a registration or removal that does not spend it, a step-up not bound to its session, no UV check at either ceremony, no cookie re-set, no deduplication, `createSession` passed to Better Auth, a kitchen refusal, every trusted origin as `origin`, no tidy, `endSessions` keeping step-ups, every box remembered, no password at `confirmPassword`, either log line dropped, the options on sign-in's budget, an IP host or LAN http allowed, the offer by hostname only, and the `RESTRICT` foreign key. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -3376,3 +3377,91 @@ ending all of the member's sessions (`household.removeMemberTwoFactor`).
   admin's password can strip a non-owner's second step. That is the trust
   `resetMemberPassword` already grants — the admin can set the very password
   this leaves standing alone — and the log records who did it to whom.
+
+**D151 — Passkeys, on the server: user verification required, a step-up
+before adding or removing one, the remember-me box honoured, bound to the
+first `STOKY_URLS` address, and only where WebAuthn can work.**
+`@better-auth/passkey` 1.7.7, exact, with `@simplewebauthn/server` 13.3.3
+under it; the plugin resolves its own zod 4.6.6, as Better Auth's core
+does, beside the application's zod 3, and `bun audit` is clean. Every
+role may have them, the kitchen's shared account included (the owner's
+decision of 2026-10-15). The settings screen (the next commit) and the login
+page's offer (the one after) are what make them usable.
+
+- **One relying party: the first `STOKY_URLS` entry** (D138). Its hostname
+  is the `rpID`, its origin the one `origin` a ceremony is accepted from.
+  Not the list: `@simplewebauthn/server` accepts any of several origins, and
+  a signature made for one listed address would then pass at another.
+  So a passkey works at the first address only; the others sign in with the
+  password, and **changing the first entry orphans every passkey** — people
+  sign in with the password and add a new one (SECURITY.md, INSTALL).
+- **Only where WebAuthn can work** (`src/lib/auth/passkeys.ts`): the first
+  entry https, or http at `localhost`, and never an IP literal, since a
+  relying party id must be a domain name. Elsewhere the plugin is not
+  registered and its paths answer 404 like any other; a plain-HTTP LAN
+  install has no passkeys. `passkeyOfferedAt(host)` — the request came to the
+  canonical host and port — is what the login page will ask before offering
+  one.
+- **User verification is required, and checked.** Registration asks for it
+  as `required`; both ceremonies refuse an answer without the UV flag
+  (`USER_VERIFICATION_REQUIRED`), in Better Auth's `afterVerification`,
+  after the signature and before anything is written. Better Auth asks only
+  for "preferred" at sign-in and checks nothing (`requireUserVerification:
+  false`), so a security key without a PIN would be one factor. With UV a
+  passkey is two, which is why a passkey sign-in is not asked for an
+  authenticator code (Better Auth's two-factor hook does not run on it).
+- **A step-up before adding or removing one** (ASVS 5.0.0 7.5.1). Better
+  Auth's endpoints take a session and a ceremony, never a password, and
+  `freshAge` is 0 (its freshness check counts from the row's creation, which
+  a re-create resets and a remembered row's age defeats). So the settings
+  page calls `auth.confirmPassword` first — `confirmCurrentPassword`, the
+  D143 budgets, `via: "step-up"` — which writes a `Verification` row
+  `stoky-step-up:<session id>`, value the account, five minutes
+  (`src/lib/auth/step-up.ts`). The policy plugin requires it before the
+  registration options, and spends it at the registration and the removal,
+  in the `deleteMany` that checks it, so of two requests one passes. Bound to
+  the session: the same account's tablet cannot spend the phone's.
+  `403 STEP_UP_REQUIRED` otherwise. `endSessions` deletes the step-ups of
+  the sessions it ends; one whose session Better Auth deleted itself is
+  usable by nobody, since the check reads that session, and lapses. Renaming
+  and listing need the session alone. No token rotation (D143's 7.2.4
+  deviation).
+- **A registration never signs anybody in**: the route forwards `response`
+  and `name` only, and the plugin forces `createSession` to `false` — false,
+  not removed, because a before-hook's body is merged with `defu`, which
+  keeps the caller's value for a key left `undefined`.
+- **A passkey sign-in is a sign-in** (`passkeySignIn` in the route): charged
+  per address against sign-in's budget and refunded when it gets in, the
+  device remembered for the account, the presented session ended and the
+  account tidied with the ten-session cap (D139, D140), and
+  `auth.signin.succeeded` with `method: "passkey"`. A refusal is
+  `auth.passkey.signin-failed` with Better Auth's code and stays counted.
+- **The remember-me box** (D141): `rememberMe === true` only, said in
+  `x-stoky-remember` for the create hook, `dont_remember` stripped and
+  expired for a ticked box — the password sign-in's code, now one helper
+  (`rememberChoice`). Better Auth's passkey endpoint sets the session cookie
+  with ninety days' `Max-Age` whatever was asked, so for an unticked box the
+  policy plugin's after-hook sets it again with `setSessionCookie(ctx, s,
+  true)` — no `Max-Age`, plus `dont_remember` — and first removes the earlier
+  `Set-Cookie` for it. **Measured: Better Auth does not deduplicate**; without
+  the removal the answer carried two session cookies, the first with
+  ninety days (the test pins exactly one).
+- **The options have a budget of their own**, a deviation from the plan,
+  which charged them to sign-in's: `passkeyOptionsRateLimit`, thirty a
+  quarter of an hour per address (`RATE_LIMIT_PASSKEY_OPTIONS_*`). They are
+  not a guess, but each writes a challenge row, so they are metered; and
+  nothing ties them to the sign-in that follows, so they could not be given
+  back — every passkey sign-in would have spent one of the address's five
+  for good, and a household behind one address would lock itself out,
+  passwords included, after five passkey sign-ins a quarter of an hour.
+- **Logged**: `auth.passkey.added` and `auth.passkey.removed` with whose it
+  was, never the credential, its public key or the signature. The `Passkey`
+  table (public key, credential id, counter, AAGUID, name) cascades from
+  `User` (D134) and is not in the JSON export.
+- **Rotating `STOKY_SECRET` leaves passkeys working**: nothing about them is
+  encrypted with it.
+- **Removing a member's two-step verification (D150) leaves their passkeys
+  alone**, as D150 said; the owner's follow-up question stands.
+- **Not done here**: `next.config.ts` still denies
+  `publickey-credentials-create`, which blocks registration in a browser;
+  the settings screen that first calls it lifts it.

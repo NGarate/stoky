@@ -55,7 +55,11 @@
     "twoFactorVerify": "Check the code",
     "twoFactorVerifying": "Checking…",
     "twoFactorBack": "Back",
-    "backupCodeInvalid": "The recovery code is not right, or it has already been used. Try another of the ones you saved."
+    "backupCodeInvalid": "The recovery code is not right, or it has already been used. Try another of the ones you saved.",
+    "passkeyFailed": "Signing in with the passkey did not work. Try again, or sign in with your password.",
+    "passkeyNotFound": "This passkey is not registered with Stoky at this address, or it has been removed. Sign in with your password.",
+    "passkeyNotVerified": "The passkey did not check that it was you: the device must ask for your fingerprint, face or PIN. Turn that on in the device, or sign in with your password.",
+    "stepUpRequired": "For your security, enter your password again before changing your passkeys."
   },
   "navigation": {
     "inventory": "Inventory",
@@ -886,7 +890,7 @@
     "endAllHouseholdNotOwner": "Only an owner may end every session in the household.",
     "resetButton": "Set a new password",
     "resetTitle": "A new password for {name}",
-    "resetBody": "For when they have forgotten theirs, or you think somebody else knows it. Every session they have ends, on every device, and they will sign in with the password you type here.",
+    "resetBody": "For when they have forgotten theirs, or you think somebody else knows it. Every session they have ends, on every device, their passkeys are removed, and they will sign in with the password you type here.",
     "resetPassword": "New password",
     "resetPasswordHint": "At least {min} characters, without their name or email address. Give it to them in person.",
     "resetSubmit": "Set the password",
@@ -897,7 +901,7 @@
     "resetFailedNotOwner": "Only an owner may set another owner's password.",
     "resetTooMany": "You have created accounts or set passwords too many times in the last hour. Wait a while and try again.",
     "resetFailed": "The password could not be changed. Try again.",
-    "resetDone": "{name}'s password is set and their sessions have ended. Give it to them and ask them to change it in Settings as soon as they sign in.",
+    "resetDone": "{name}'s password is set, their sessions have ended and their passkeys are removed. Give it to them and ask them to change it in Settings as soon as they sign in.",
     "twoFactorLabel": "Two-step verification",
     "twoFactorOn": "On",
     "twoFactorOff": "Off",

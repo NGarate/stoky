@@ -267,6 +267,30 @@ export function reauthAccountRateLimit(): RateLimit {
   );
 }
 
+/**
+ * Asking for the options of a passkey sign-in, counted **per address** (D151).
+ *
+ * The first half of the ceremony is not a guess at anything — the options are
+ * a random challenge, and the signature that answers it is counted against
+ * sign-in's own budget (`loginRateLimit`) and given back when it gets in — but
+ * every request writes a challenge row, so an unauthenticated client must not
+ * be able to write them without end. Not sign-in's budget, because the
+ * options cannot be given back: nothing ties them to the sign-in that follows,
+ * and a household behind one address signing in with passkeys five times a
+ * quarter of an hour would otherwise lock itself out, passwords included.
+ * Thirty is six ceremonies a person cannot finish for every one sign-in's
+ * budget allows.
+ */
+export function passkeyOptionsRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:passkey-options",
+    "RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS",
+    "RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS",
+    30,
+    15 * 60,
+  );
+}
+
 export interface RateLimitResult {
   allowed: boolean;
   /** Attempts left after this one. Zero once the limit is reached. */

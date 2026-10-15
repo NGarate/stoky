@@ -55,7 +55,11 @@
     "twoFactorVerify": "Comprobar el código",
     "twoFactorVerifying": "Comprobando…",
     "twoFactorBack": "Volver",
-    "backupCodeInvalid": "El código de recuperación no es correcto o ya se ha usado. Prueba con otro de los que guardaste."
+    "backupCodeInvalid": "El código de recuperación no es correcto o ya se ha usado. Prueba con otro de los que guardaste.",
+    "passkeyFailed": "No se ha podido entrar con la llave de acceso. Vuelve a intentarlo o entra con tu contraseña.",
+    "passkeyNotFound": "Esta llave de acceso no está registrada en Stoky en esta dirección, o se ha quitado. Entra con tu contraseña.",
+    "passkeyNotVerified": "La llave de acceso no ha comprobado que eres tú: el dispositivo debe pedirte la huella, la cara o su PIN. Actívalo en el dispositivo o entra con tu contraseña.",
+    "stepUpRequired": "Por seguridad, vuelve a escribir tu contraseña antes de cambiar tus llaves de acceso."
   },
   "navigation": {
     "inventory": "Inventario",
@@ -886,7 +890,7 @@
     "endAllHouseholdNotOwner": "Solo una persona propietaria puede cerrar todas las sesiones del hogar.",
     "resetButton": "Cambiar su contraseña",
     "resetTitle": "Nueva contraseña para {name}",
-    "resetBody": "Sirve si ha olvidado la suya o si crees que otra persona la conoce. Se cerrarán todas sus sesiones, en todos sus dispositivos, y tendrá que entrar con la contraseña que escribas aquí.",
+    "resetBody": "Sirve si ha olvidado la suya o si crees que otra persona la conoce. Se cerrarán todas sus sesiones, en todos sus dispositivos, se quitarán sus llaves de acceso y tendrá que entrar con la contraseña que escribas aquí.",
     "resetPassword": "Contraseña nueva",
     "resetPasswordHint": "Al menos {min} caracteres, sin su nombre ni su correo. Dásela en persona.",
     "resetSubmit": "Cambiar la contraseña",
@@ -897,7 +901,7 @@
     "resetFailedNotOwner": "Solo otra persona propietaria puede cambiar esta contraseña.",
     "resetTooMany": "Has creado cuentas o cambiado contraseñas demasiadas veces en la última hora. Espera un rato e inténtalo otra vez.",
     "resetFailed": "No se ha podido cambiar la contraseña. Inténtalo otra vez.",
-    "resetDone": "Contraseña de {name} cambiada y sus sesiones cerradas. Dásela y pídele que la cambie en Configuración en cuanto entre.",
+    "resetDone": "Contraseña de {name} cambiada, sus sesiones cerradas y sus llaves de acceso quitadas. Dásela y pídele que la cambie en Configuración en cuanto entre.",
     "twoFactorLabel": "Verificación en dos pasos",
     "twoFactorOn": "Activada",
     "twoFactorOff": "Desactivada",

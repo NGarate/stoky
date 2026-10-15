@@ -33,6 +33,7 @@ let member: Caller;
 let householdId: string;
 let productId: string;
 const AUTHENTICATOR_SECRET = "$ba$1$secreto-del-autenticador";
+const PASSKEY_PUBLIC_KEY = "pQECAyYgASFYIclave-publica-de-la-llave";
 
 beforeAll(async () => {
   const household = await createTestHousehold({ name: HOUSEHOLD });
@@ -52,6 +53,16 @@ beforeAll(async () => {
   });
 
   // An authenticator secret, which the export must not carry (D148).
+  await prisma.passkey.create({
+    data: {
+      userId: ownerUser.id,
+      credentialID: `${PASSKEY_PUBLIC_KEY}-${crypto.randomUUID()}`,
+      publicKey: PASSKEY_PUBLIC_KEY,
+      counter: 0,
+      deviceType: "multiDevice",
+      backedUp: true,
+    },
+  });
   await prisma.twoFactor.create({
     data: { userId: ownerUser.id, secret: AUTHENTICATOR_SECRET, backupCodes: AUTHENTICATOR_SECRET },
   });
@@ -164,6 +175,17 @@ describe("what must never be in the file", () => {
     expect(JSON.stringify(exported)).not.toContain(AUTHENTICATOR_SECRET);
     expect(
       keysOf(exported).filter((key) => /^(twoFactor|secret|backupCodes)$/i.test(key)),
+    ).toEqual([]);
+  });
+
+  it("carries no passkey", async () => {
+    // A credential like the others (D151): public, but the export is the
+    // household's data, not how its members sign in.
+    const exported = await owner.data.exportHousehold();
+
+    expect(JSON.stringify(exported)).not.toContain(PASSKEY_PUBLIC_KEY);
+    expect(
+      keysOf(exported).filter((key) => /^(passkeys?|publicKey|credentialID)$/i.test(key)),
     ).toEqual([]);
   });
 

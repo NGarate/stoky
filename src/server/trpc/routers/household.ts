@@ -597,10 +597,11 @@ export const householdRouter = createTRPCRouter({
    *    which is the escalation the guard exists to refuse.
    * 5. **The identity rule**, against the member's own name and address,
    *    which the input does not carry.
-   * 6. **One transaction** sets the hash and deletes every session row, so
-   *    the new password and the end of the old sessions land together. A password
-   *    reset because somebody else may know the old one is half a fix if a
-   *    session opened with it survives.
+   * 6. **One transaction** sets the hash, deletes every session row and
+   *    removes every passkey, so the new password and the end of the old ways
+   *    in land together. A password reset because somebody else may know the
+   *    old one is half a fix if a session opened with it survives, or a
+   *    passkey added with it (D151): a passkey signs in with no password.
    *
    * **The write repeats the guards in its `where`.** Argon2id takes about a
    * quarter of a second between the checks above and the write, and in that

@@ -17,7 +17,11 @@ export type AuthErrorKey =
   | "backupCodeInvalid"
   | "twoFactorExpired"
   | "twoFactorLocked"
-  | "twoFactorUnreadable";
+  | "twoFactorUnreadable"
+  | "passkeyFailed"
+  | "passkeyNotFound"
+  | "passkeyNotVerified"
+  | "stepUpRequired";
 
 /**
  * Refusal codes, read before any message so a refusal is worded by what it
@@ -67,6 +71,20 @@ const CODE_KEYS: Record<string, AuthErrorKey> = {
   // authenticator code will ever work, but a backup code, stored as a hash,
   // still does (D149), so the sentence offers one before the operator.
   two_factor_unreadable: "twoFactorUnreadable",
+  // A passkey sign-in (D151). A passkey the server does not know — removed,
+  // or registered at another address — is its own sentence, because trying
+  // again cannot help; so is an authenticator that did not check who was
+  // holding it (`USER_VERIFICATION_REQUIRED`, `src/lib/auth/instance.ts`),
+  // which the person can change on the device. A challenge that lapsed, or
+  // a signature that did not verify, is worth one more try.
+  passkey_not_found: "passkeyNotFound",
+  user_verification_required: "passkeyNotVerified",
+  authentication_failed: "passkeyFailed",
+  challenge_not_found: "passkeyFailed",
+  auth_cancelled: "passkeyFailed",
+  // Adding or removing a passkey without the password re-entered first, or
+  // after the five minutes it stands for (`src/lib/auth/step-up.ts`).
+  step_up_required: "stepUpRequired",
 };
 
 const INVALID_CREDENTIALS_MARKERS = ["invalid credentials", "invalid email or password"];

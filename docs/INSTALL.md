@@ -201,7 +201,14 @@ was `NEXTAUTH_URL`) to every address people type, comma-separated, the
 canonical one first, for example
 `STOKY_URLS="http://stoky.lan:3000,http://192.168.1.10:3000"`. List only
 addresses that reach this instance: every one is trusted to sign a browser in.
-The first is canonical: the session cookie is `Secure` only when it is https.
+The first is canonical: the session cookie is `Secure` only when it is https,
+and **passkeys work only at the first address**. A passkey is registered for
+that address's host and cannot be used or added at any other listed address,
+where people sign in with the password; changing the first entry later
+orphans every passkey, and each person signs in with the password and adds a
+new one. Passkeys need the first address to be https with a domain name (or
+`http://localhost`): at an IP address, or plain HTTP to another machine,
+browsers offer none and Stoky does not either.
 In
 production the app does not start without `STOKY_URLS`, with an entry that is
 not a bare `http(s)://host[:port]` address (a path such as `/api/auth`, a query
@@ -452,7 +459,8 @@ the only thing protecting the account.
 ## Rotating `STOKY_SECRET`
 
 `STOKY_SECRET` signs every session and encrypts every authenticator secret
-(not the backup codes, which are hashes), so replacing it is not only a new value. From the release after
+(not the backup codes, which are hashes, nor passkeys, which are public keys),
+so replacing it is not only a new value. From the release after
 v0.1.0-alpha.3, a new value:
 
 - **signs everybody out**, phones and the kitchen screen included: every
@@ -468,7 +476,7 @@ v0.1.0-alpha.3, a new value:
   gives them new codes. Somebody without a backup code needs
   [A lost authenticator](#a-lost-authenticator).
 
-Passwords and backup codes are not affected. Old values are not kept: Stoky reads one secret,
+Passwords, passkeys and backup codes are not affected. Old values are not kept: Stoky reads one secret,
 so there is no way to rotate without these consequences. Rotate when the
 secret may have leaked, not on a schedule. To do it, generate a new value with
 `openssl rand -hex 32`, replace `STOKY_SECRET` in `.env`, and run
@@ -639,7 +647,7 @@ installation directory, replacing the address with the person's:
    the account, so the statement does not name it, and so do its sessions: a
    browser signed in to it is signed out on its next request. Its
    authenticator secret and backup codes, if it set up two-step verification,
-   go the same way. A sign-in waiting for its code is a `Verification` row
+   go the same way, and so do its passkeys. A sign-in waiting for its code is a `Verification` row
    that names the deleted `id`; it expires within ten minutes and can no
    longer become a session. On
    v0.1.0-alpha.3 a browser still signed in keeps its cookie, but every

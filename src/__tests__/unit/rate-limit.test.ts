@@ -6,6 +6,7 @@ import {
   loginAccountRateLimit,
   loginDeviceRateLimit,
   loginRateLimit,
+  passkeyOptionsRateLimit,
   productLookupRateLimit,
   rateLimitIdentifier,
   reauthAccountRateLimit,
@@ -371,6 +372,27 @@ describe("the configured limits", () => {
     process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "-1";
     expect(reauthRateLimit().attempts).toBe(5);
     expect(reauthAccountRateLimit().attempts).toBe(20);
+  });
+
+  it("meters a passkey sign-in's options at thirty per address, apart from sign-in's", () => {
+    // D151: the options write a challenge row and cannot be given back, so
+    // they have their own budget; sharing sign-in's would make every passkey
+    // sign-in spend one of the address's five for good.
+    delete process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS;
+    delete process.env.RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS;
+
+    expect(passkeyOptionsRateLimit()).toEqual({
+      prefix: "rl:passkey-options",
+      attempts: 30,
+      windowSeconds: 900,
+    });
+    expect(passkeyOptionsRateLimit().prefix).not.toBe(loginRateLimit().prefix);
+
+    process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS = "3";
+    process.env.RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS = "60";
+    expect(passkeyOptionsRateLimit()).toMatchObject({ attempts: 3, windowSeconds: 60 });
+    process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS = "0";
+    expect(passkeyOptionsRateLimit().attempts).toBe(30);
   });
 
   it("counts the account separately from the address", () => {

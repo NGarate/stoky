@@ -27,8 +27,8 @@ import { MAX_SESSIONS_PER_ACCOUNT } from "@/lib/auth/session-policy";
  * costs another device its session.
  *
  * Called by the auth route after every sign-in that issued a session
- * (`src/server/http/auth-handler.ts`) — the password step now, and the
- * two-step and passkey sign-ins when they arrive. Never from a session-create
+ * (`src/server/http/auth-handler.ts`): a password, a two-step code or a
+ * passkey (D148, D151). Never from a session-create
  * hook: Better Auth creates a session it then deletes at the password step of
  * an account with two-step verification, and a hook would tidy on a password
  * alone.

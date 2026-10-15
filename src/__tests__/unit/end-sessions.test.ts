@@ -12,7 +12,7 @@ import { endSessions, type SessionDb } from "@/lib/auth/end-sessions";
  */
 
 /**
- * A client whose sessions belong to `owners`, whose household-wide `user`
+ * A client whose sessions (`s-1`, `s-2`, …) belong to `owners`, whose household-wide `user`
  * filter finds `members`, and whose `Verification` table holds `challenges`
  * (identifier → value).
  */
@@ -25,7 +25,9 @@ function fakeDb(
   } = {},
 ) {
   const deleteMany = mock(async (_args: unknown) => ({ count }));
-  const sessionFindMany = mock(async (_args: unknown) => owners.map((userId) => ({ userId })));
+  const sessionFindMany = mock(async (_args: unknown) =>
+    owners.map((userId, index) => ({ id: `s-${index + 1}`, userId })),
+  );
   const userFindMany = mock(async (_args: unknown) => members.map((id) => ({ id })));
   const verificationFindMany = mock(async (args: { where: { value: { in: string[] } } }) =>
     Object.entries(challenges)
@@ -161,6 +163,28 @@ describe("endSessions", () => {
       });
 
       await endSessions(db, { userId: "user-1" });
+
+      expect(verificationDeleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("with the step-ups the ended sessions held (D151)", () => {
+    it("deletes each ended session's confirmation, and no other session's", async () => {
+      const { db, verificationDeleteMany } = fakeDb(2, { owners: ["user-1", "user-1"] });
+
+      await endSessions(db, { userId: "user-1" }, { challenges: false });
+
+      // Found before the delete, so the ids are the rows that went.
+      expect(verificationDeleteMany).toHaveBeenCalledTimes(1);
+      expect(verificationDeleteMany.mock.calls[0][0]).toEqual({
+        where: { identifier: { in: ["stoky-step-up:s-1", "stoky-step-up:s-2"] } },
+      });
+    });
+
+    it("asks nothing more when no session matched", async () => {
+      const { db, verificationDeleteMany } = fakeDb(0);
+
+      await endSessions(db, { userId: "user-1" }, { challenges: false });
 
       expect(verificationDeleteMany).not.toHaveBeenCalled();
     });

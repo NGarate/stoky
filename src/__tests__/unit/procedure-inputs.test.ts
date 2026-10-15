@@ -101,4 +101,24 @@ describe("mutation inputs", () => {
     expect(ok({ userId: "", currentPassword: "x" })).toBe(false);
     expect(ok({ userId: "u".repeat(65), currentPassword: "x" })).toBe(false);
   });
+
+  it("auth.confirmPassword asks for the password and nothing else", () => {
+    // D151. The step-up before a passkey is added or removed: without the
+    // password a session somebody else holds could add their passkey to it.
+    const schema = (procedures["auth.confirmPassword"] as ProcedureDef)._def.inputs[0] as {
+      safeParse: (value: unknown) => { success: boolean; data?: unknown };
+    };
+    const ok = (value: unknown) => schema.safeParse(value).success;
+
+    expect(ok({ currentPassword: "x" })).toBe(true);
+    // The session is the context's, never the input's: an id sent here is
+    // not read, so it cannot name another session's step-up.
+    expect(schema.safeParse({ currentPassword: "x", sessionId: "s1" }).data).toEqual({
+      currentPassword: "x",
+    });
+
+    expect(ok({})).toBe(false);
+    expect(ok({ currentPassword: "" })).toBe(false);
+    expect(ok({ currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1) })).toBe(false);
+  });
 });

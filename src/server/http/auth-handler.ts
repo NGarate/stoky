@@ -1,6 +1,7 @@
 import {
   RateLimitUnavailableError,
   clientAddress,
+  passkeyOptionsRateLimit,
   reauthAccountRateLimit,
   reauthRateLimit,
 } from "@/lib/rate-limit";
@@ -20,6 +21,7 @@ import {
 import type { PresentedSession, SignInTidy } from "@/lib/auth/sign-in-tidy";
 import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { REMEMBER_HEADER } from "@/lib/auth/session-policy";
+import { passkeyNameSchema } from "@/lib/validations/auth";
 import { MAX_AUTH_BODY_BYTES, readBodyWithin } from "./body-limit";
 import { refuseCrossSite, refuseNonJson } from "./request-guards";
 
@@ -35,12 +37,14 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *
  * 1. **An allowlist of method and path.** Better Auth mounts dozens of
  *    endpoints — sign-up, password reset, account deletion, session listing —
- *    and this application uses ten. Anything else is 404 before Better Auth
+ *    and this application uses seventeen. Anything else is 404 before Better Auth
  *    sees it, so an endpoint a future version adds is closed until somebody
  *    decides otherwise. `disabledPaths` is not used: it is a denylist.
  * 2. **The body, bounded** (`readBodyWithin`, 64 KiB), before anything is
  *    parsed.
- * 3. **Fetch Metadata** on a POST (`refuseCrossSite`).
+ * 3. **Fetch Metadata** on every request (`refuseCrossSite`): a GET from
+ *    another site is refused too, before anything is charged, or a page
+ *    elsewhere could spend the passkey options' per-address budget.
  * 4. **JSON only** on a POST (`refuseNonJson`): Better Auth also takes a form
  *    post on sign-in, which a page on another origin can send without a
  *    preflight.
@@ -50,8 +54,9 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *    its `code` and nothing else, so no `trustDevice` (a cookie that skips the
  *    code for a month) and no `disableSession` (a backup code spent without
  *    a session to show for it); a change to two-step verification carries
- *    the password and nothing else, so no `issuer` and no `method`.
- *    `x-stoky-remember` is
+ *    the password and nothing else, so no `issuer` and no `method`; a passkey
+ *    registration carries no `createSession`, and a passkey sign-in its
+ *    WebAuthn answer alone. `x-stoky-remember` is
  *    this route's to set, so a copy a client sent is deleted from every
  *    request forwarded.
  * 6. **Our limits** (`src/lib/auth/sign-in-policy.ts`), charged before the
@@ -88,6 +93,15 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  * as every other re-entered password (D143) before Better Auth checks it.
  * Every role may do it, the kitchen's shared account included (the owner's
  * decision of 2026-10-15).
+ *
+ * **Passkeys** (D151), where they can work (`src/lib/auth/passkeys.ts`): a
+ * sign-in (`passkeySignIn`) is a sign-in like the password's — charged per
+ * address, the box honoured, tidied, recorded with `method: "passkey"` —
+ * except that it names no account until Better Auth has looked the passkey
+ * up. Adding and removing one is answered for a signed-in session that has
+ * just re-entered its password (the step-up, `src/lib/auth/step-up.ts`,
+ * which the policy plugin checks), and recorded. Every role may, the
+ * kitchen's shared account included.
  *
  * Every answer is `no-store`: a refusal served from a cache would refuse
  * somebody else.
@@ -161,11 +175,45 @@ export const ALLOWED_AUTH_ENDPOINTS: ReadonlySet<string> = new Set([
   "POST /two-factor/enable",
   "POST /two-factor/disable",
   "POST /two-factor/generate-backup-codes",
+  // Passkeys (D151), registered only where they can work; elsewhere these
+  // reach no endpoint and answer 404 all the same. Adding and removing one
+  // need the step-up the policy plugin checks; renaming and listing, the
+  // session alone.
+  "GET /passkey/generate-authenticate-options",
+  "POST /passkey/verify-authentication",
+  "GET /passkey/generate-register-options",
+  "POST /passkey/verify-registration",
+  "POST /passkey/delete-passkey",
+  "POST /passkey/update-passkey",
+  "GET /passkey/list-user-passkeys",
   "POST /sign-out",
   "GET /get-session",
   "GET /ok",
   "GET /error",
 ]);
+
+/**
+ * The passkey endpoints a signed-in person changes their own passkeys
+ * through: the body keys each may carry, and what the log calls a success.
+ */
+const PASSKEY_CHANGES: Record<
+  string,
+  { keys: readonly string[]; event: "auth.passkey.added" | "auth.passkey.removed" | null }
+> = {
+  "POST /passkey/verify-registration": { keys: ["response", "name"], event: "auth.passkey.added" },
+  "POST /passkey/delete-passkey": { keys: ["id"], event: "auth.passkey.removed" },
+  "POST /passkey/update-passkey": { keys: ["id", "name"], event: null },
+};
+
+/**
+ * The query each forwarded GET may carry; everything else is dropped. The
+ * registration options take the kind of authenticator wanted, and nothing
+ * else: no `name` to label somebody's credential, no `context` for a flow
+ * this application does not have.
+ */
+const KEPT_QUERY: Record<string, readonly string[]> = {
+  "GET /passkey/generate-register-options": ["authenticatorAttachment"],
+};
 
 /**
  * The changes to two-step verification, each confirmed with the password, as
@@ -209,6 +257,12 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
 
     const refused = refuseCrossSite(incoming, AUTH_BASE_PATH) ?? refuseNonJson(incoming);
     if (refused) return refused;
+  } else {
+    // A GET too: the passkey options spend a per-address budget, and an
+    // <img> on any page a household member visits would otherwise spend it
+    // from the household's own address.
+    const refused = refuseCrossSite(incoming, AUTH_BASE_PATH);
+    if (refused) return refused;
   }
 
   let handle: AuthEndpointHandler;
@@ -234,11 +288,24 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   if (change) {
     return accountChange(incoming, body, handle, options, change, `${AUTH_BASE_PATH}${endpoint.slice(5)}`);
   }
+  if (endpoint === "POST /passkey/verify-authentication") {
+    return passkeySignIn(incoming, body, handle, options);
+  }
+  if (endpoint === "GET /passkey/generate-authenticate-options") {
+    return passkeyOptions(incoming, handle, options);
+  }
+  const passkeyChange = PASSKEY_CHANGES[endpoint];
+  if (passkeyChange) {
+    return changePasskey(incoming, body, handle, options, passkeyChange);
+  }
   if (endpoint === "POST /sign-out") {
     // It takes nothing this application uses.
     return guardResponse(incoming, await handle(rebuild(incoming, "{}")));
   }
-  return guardResponse(incoming, await handle(withoutInternalHeaders(incoming)));
+  return guardResponse(
+    incoming,
+    await handle(withoutInternalHeaders(incoming, KEPT_QUERY[endpoint] ?? null)),
+  );
 }
 
 /**
@@ -286,22 +353,14 @@ async function signIn(
   }
 
   const previous = sessions ? await sessions.presented(incoming.headers) : null;
-
-  // Exactly `true`, nothing else: Better Auth reads a missing value as true.
-  const rememberMe = parsed?.rememberMe === true;
-  const dontRemember = rememberMe && options.dontRememberCookie
-    ? await options.dontRememberCookie()
-    : null;
+  const remember = await rememberChoice(parsed, options);
 
   const response = await handle(
-    rebuild(incoming, JSON.stringify({ email: attempt.email, password, rememberMe }), (headers) => {
-      headers.set(REMEMBER_HEADER, rememberMe ? "1" : "0");
-      if (dontRemember) {
-        const cookie = withoutCookie(headers.get("cookie"), dontRemember.name);
-        if (cookie) headers.set("cookie", cookie);
-        else headers.delete("cookie");
-      }
-    }),
+    rebuild(
+      incoming,
+      JSON.stringify({ email: attempt.email, password, rememberMe: remember.rememberMe }),
+      remember.adjust,
+    ),
   );
 
   if (response.ok) {
@@ -323,16 +382,58 @@ async function signIn(
     signInFailed(attempt);
   }
 
-  const answer = await guardResponse(incoming, response);
-  if (dontRemember && response.ok) {
-    answer.headers.append(
-      "set-cookie",
-      `${dontRemember.name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${
-        dontRemember.secure ? "; Secure" : ""
-      }`,
-    );
-  }
-  return answer;
+  return remember.finish(await guardResponse(incoming, response), response.ok);
+}
+
+/**
+ * The login form's box, read the one way every sign-in reads it (D141).
+ *
+ * - **`rememberMe` is true only when the body says exactly `true`**: Better
+ *   Auth reads a missing value as true, and an unticked box must not become a
+ *   ninety-day cookie.
+ * - **`adjust`** says which it was in `x-stoky-remember`, for the create
+ *   hook, and for a ticked box takes `dont_remember` out of the request
+ *   Better Auth reads — while it is there Better Auth treats every session as
+ *   not remembered.
+ * - **`finish`** clears `dont_remember` from the browser too, once the
+ *   sign-in got in. Not on a refusal, which changes nothing about the
+ *   browser. Better Auth clears that cookie only at a sign-out or a read that
+ *   finds the session gone, never at a ticked sign-in.
+ */
+async function rememberChoice(
+  parsed: Record<string, unknown> | null,
+  options: AuthHandlerOptions,
+): Promise<{
+  rememberMe: boolean;
+  adjust: (headers: Headers) => void;
+  finish: (answer: Response, ok: boolean) => Response;
+}> {
+  const rememberMe = parsed?.rememberMe === true;
+  const dontRemember = rememberMe && options.dontRememberCookie
+    ? await options.dontRememberCookie()
+    : null;
+  return {
+    rememberMe,
+    adjust: (headers) => {
+      headers.set(REMEMBER_HEADER, rememberMe ? "1" : "0");
+      if (dontRemember) {
+        const cookie = withoutCookie(headers.get("cookie"), dontRemember.name);
+        if (cookie) headers.set("cookie", cookie);
+        else headers.delete("cookie");
+      }
+    },
+    finish: (answer, ok) => {
+      if (dontRemember && ok) {
+        answer.headers.append(
+          "set-cookie",
+          `${dontRemember.name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${
+            dontRemember.secure ? "; Secure" : ""
+          }`,
+        );
+      }
+      return answer;
+    },
+  };
 }
 
 /**
@@ -352,17 +453,24 @@ function withoutCookie(header: string | null, name: string): string | null {
 /**
  * A GET as it came, less the headers only this route may set: a GET is
  * forwarded rather than rebuilt, and a client's own `x-stoky-remember` must
- * not reach Better Auth's hooks on any path.
+ * not reach Better Auth's hooks on any path. With `keptQuery`, the query
+ * keeps those parameters alone; without it, the query is passed as it came.
  *
  * Made from the URL, not as `new Request(incoming, { headers })`: Bun 1.4.3
  * keeps the original headers when the replacement is empty, so a request
  * whose only header was this one would keep it.
  */
-function withoutInternalHeaders(incoming: Request): Request {
-  if (!incoming.headers.has(REMEMBER_HEADER)) return incoming;
+function withoutInternalHeaders(incoming: Request, keptQuery: readonly string[] | null = null): Request {
+  const url = new URL(incoming.url);
+  if (keptQuery) {
+    // Collected first: deleting while iterating the params skips the next one.
+    const dropped = Array.from(url.searchParams.keys()).filter((key) => !keptQuery.includes(key));
+    for (const key of dropped) url.searchParams.delete(key);
+  }
+  if (!incoming.headers.has(REMEMBER_HEADER) && url.href === incoming.url) return incoming;
   const headers = new Headers(incoming.headers);
   headers.delete(REMEMBER_HEADER);
-  return new Request(incoming.url, { method: incoming.method, headers, signal: incoming.signal });
+  return new Request(url, { method: incoming.method, headers, signal: incoming.signal });
 }
 
 /** The JSON object a body holds, or null for anything else. */
@@ -607,6 +715,146 @@ async function accountChange(
     }
   }
 
+  return guardResponse(incoming, response);
+}
+
+/**
+ * The options of a passkey sign-in: a random challenge, and the signed
+ * cookie that names it, for the browser to answer with a passkey.
+ *
+ * Charged per address against a budget of its own
+ * (`passkeyOptionsRateLimit`): it is not a guess, but every one writes a
+ * challenge row, and nothing ties it to the sign-in that may follow, so it
+ * could not be given back from sign-in's budget. Takes no query.
+ */
+async function passkeyOptions(
+  incoming: Request,
+  handle: AuthEndpointHandler,
+  options: AuthHandlerOptions,
+): Promise<Response> {
+  const limiter = options.limiter ?? valkeySignInLimiter;
+  try {
+    await chargeSignInAddress(incoming.headers, limiter, passkeyOptionsRateLimit());
+  } catch (error) {
+    if (error instanceof SignInRefusedError) return refusedSignIn(error);
+    throw error;
+  }
+  return guardResponse(incoming, await handle(withoutInternalHeaders(incoming, [])));
+}
+
+/**
+ * A passkey sign-in: the browser's answer to the challenge (D151).
+ *
+ * - **Charged per address**, against sign-in's own budget, before the body
+ *   is believed: the request names no account — Better Auth finds it from the
+ *   passkey — and a passkey cannot be guessed, so the address is all there is
+ *   to count.
+ * - **The WebAuthn answer and nothing else** reaches Better Auth, with the
+ *   remember-me box read as a password sign-in reads it (`rememberChoice`):
+ *   the create hook takes the row's kind from `x-stoky-remember`, and the
+ *   policy plugin makes an unticked box's cookie a browser cookie.
+ * - **A session issued is a sign-in**: the address refunded, this browser
+ *   remembered for the account, the presented session ended with the
+ *   account's expired rows and any past ten (`sessions.tidy`), and
+ *   `auth.signin.succeeded` with `method: "passkey"`.
+ * - **A refusal** is `auth.passkey.signin-failed` with Better Auth's code —
+ *   an unknown passkey, a ceremony from another address, an authenticator
+ *   that did not verify the person — and stays counted.
+ */
+async function passkeySignIn(
+  incoming: Request,
+  body: Uint8Array<ArrayBuffer> | null,
+  handle: AuthEndpointHandler,
+  options: AuthHandlerOptions,
+): Promise<Response> {
+  const limiter = options.limiter ?? valkeySignInLimiter;
+  const sessions = options.sessions;
+
+  let charge: AddressCharge;
+  try {
+    charge = await chargeSignInAddress(incoming.headers, limiter);
+  } catch (error) {
+    if (error instanceof SignInRefusedError) return refusedSignIn(error);
+    throw error;
+  }
+
+  const parsed = parseJsonObject(body);
+  const answerToChallenge = parsed?.response;
+  if (!answerToChallenge || typeof answerToChallenge !== "object" || Array.isArray(answerToChallenge)) {
+    logSecurityEvent("auth.passkey.signin-failed", { address: charge.address, code: "malformed" });
+    return invalidRequest();
+  }
+
+  const previous = sessions ? await sessions.presented(incoming.headers) : null;
+  const remember = await rememberChoice(parsed, options);
+
+  const response = await handle(
+    rebuild(incoming, JSON.stringify({ response: answerToChallenge }), remember.adjust),
+  );
+
+  if (response.ok) {
+    const issued = await issuedSession(response);
+    if (issued) {
+      await secondFactorSucceeded(
+        charge,
+        { userId: issued.userId, email: issued.email, deviceId: deviceIdFromHeaders(incoming.headers) },
+        "passkey",
+        limiter,
+      );
+      if (issued.token && sessions) {
+        await tidyQuietly(sessions, { previous, userId: issued.userId, newToken: issued.token });
+      }
+    }
+  } else if (response.status >= 400 && response.status < 500) {
+    logSecurityEvent("auth.passkey.signin-failed", {
+      address: charge.address,
+      code: (await refusalCode(response)) ?? undefined,
+    });
+  }
+
+  return remember.finish(await guardResponse(incoming, response), response.ok);
+}
+
+/**
+ * A signed-in person adding, removing or renaming one of their passkeys
+ * (D151): the keys the endpoint takes and nothing else, so a registration
+ * never asks for a session of its own (`createSession`, which the policy
+ * plugin also forces off). A name, when there is one, is checked against
+ * `passkeyNameSchema` and forwarded trimmed, or the request is answered 400:
+ * Better Auth only trims it, and the column it lands in has no bound. The step-up a registration or a removal needs is
+ * checked by the policy plugin, inside Better Auth, where the session is
+ * read; a refusal there is `STEP_UP_REQUIRED`. A success is logged with whose
+ * passkey it was.
+ */
+async function changePasskey(
+  incoming: Request,
+  body: Uint8Array<ArrayBuffer> | null,
+  handle: AuthEndpointHandler,
+  options: AuthHandlerOptions,
+  change: (typeof PASSKEY_CHANGES)[string],
+): Promise<Response> {
+  const parsed = parseJsonObject(body);
+  if (!parsed) return invalidRequest("The request is not a passkey change");
+  const kept: Record<string, unknown> = {};
+  for (const key of change.keys) {
+    if (key in parsed) kept[key] = parsed[key];
+  }
+  if ("name" in kept) {
+    const name = passkeyNameSchema.safeParse(kept.name);
+    if (!name.success) return invalidRequest("The passkey name is not valid");
+    kept.name = name.data;
+  }
+
+  const presented =
+    change.event && options.sessions ? await options.sessions.presented(incoming.headers) : null;
+  const response = await handle(rebuild(incoming, JSON.stringify(kept)));
+
+  if (response.ok && change.event) {
+    logSecurityEvent(change.event, {
+      userId: presented?.userId,
+      address: clientAddress(incoming.headers),
+    });
+  }
   return guardResponse(incoming, response);
 }
 

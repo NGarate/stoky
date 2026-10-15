@@ -375,7 +375,22 @@ describe("setting a member's password", () => {
     })),
     passwordHash: await storedPasswordHash(id),
     sessions: await prisma.session.count({ where: { userId: id } }),
+    passkeys: await prisma.passkey.count({ where: { userId: id } }),
   });
+
+  /** A passkey row for `userId`, as a registration leaves one. */
+  const passkeyFor = (userId: string) =>
+    prisma.passkey.create({
+      data: {
+        userId,
+        name: "Móvil",
+        publicKey: "pk",
+        credentialID: crypto.randomUUID(),
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+      },
+    });
 
   async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
     try {
@@ -423,6 +438,23 @@ describe("setting a member's password", () => {
     expect(reset[0]?.targetUserId).toBe(member.id);
     expect(reset[0]?.householdId).toBe(HOUSEHOLD.id);
     expect(JSON.stringify(events)).not.toContain(NEW);
+  });
+
+  it("removes the member's passkeys, which whoever knew the old password could have added", async () => {
+    // A passkey signs in with no password at all, so a reset that left one
+    // standing would leave whoever it is meant to shut out a way back in.
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-passkeys-admin");
+    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-passkeys-target");
+    const bystander = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-passkeys-bystander");
+    await passkeyFor(member.id);
+    await passkeyFor(member.id);
+    await passkeyFor(bystander.id);
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+
+    await api.household.resetMemberPassword({ userId: member.id, newPassword: NEW });
+
+    expect((await stored(member.id)).passkeys).toBe(0);
+    expect((await stored(bystander.id)).passkeys).toBe(1);
   });
 
   it("refuses a member of another household with NOT_FOUND, and changes nothing", async () => {

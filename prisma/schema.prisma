@@ -23,6 +23,8 @@ model User {
   twoFactorEnabled Boolean  @default(false)
   /// The authenticator secret, once this person has started enrolling.
   twoFactor     TwoFactor?
+  /// The passkeys this person signs in with, one row each; see `Passkey`.
+  passkeys      Passkey[]
   /// Better Auth's. Nothing here sends mail, so no address is ever verified
   /// and this stays false; registration and sign-in never consult it.
   emailVerified Boolean    @default(false)
@@ -178,6 +180,45 @@ model TwoFactor {
   /// 6.5.1, single use). A code is accepted only for a step above it, claimed
   /// in the same UPDATE that checks it. Ours, not Better Auth's.
   lastTotpCounter         Int?
+}
+
+/// One passkey: a WebAuthn credential a person's device or password manager
+/// holds, in the shape Better Auth's passkey plugin reads (PROGRESS D151).
+///
+/// Nothing here is a secret. `publicKey` is the credential's public key (a
+/// COSE key, base64) and checks a signature only the device can make;
+/// `credentialID` is how the browser names it back, so it is unique and the
+/// sign-in looks it up. `counter` is the authenticator's signature counter,
+/// which a cloned credential would repeat. `aaguid` names the authenticator's
+/// make (a password manager, a security key model), never the device or the
+/// person; `name` is what the person called it.
+///
+/// **Bound to one host.** A passkey is registered for the canonical
+/// `STOKY_URLS` host (the relying party id) and works only there: changing
+/// that first entry orphans every row (SECURITY.md, *Authentication*).
+///
+/// **Cascades from User**, like `Account`, `Session` and `TwoFactor` (D134):
+/// a passkey is a credential, and ASVS 7.4.2 asks for an account's
+/// credentials to go with it. Better Auth's adapter never deletes it itself.
+model Passkey {
+  id           String    @id @default(cuid())
+  name         String?
+  publicKey    String
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialID String    @unique
+  counter      Int
+  /// "singleDevice" or "multiDevice": whether it can be synced to the
+  /// person's other devices.
+  deviceType   String
+  backedUp     Boolean
+  /// Comma-separated, as Better Auth writes them ("internal,hybrid"); empty
+  /// when the browser named none.
+  transports   String?
+  createdAt    DateTime? @default(now())
+  aaguid       String?
+
+  @@index([userId])
 }
 
 /// Better Auth's short-lived one-off values: an identifier, a value, an

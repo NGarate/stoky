@@ -13,8 +13,8 @@ import { URLS_VARIABLE, readRenamed } from "@/lib/env-names";
  *
  * - **The first entry is canonical.** It is Better Auth's `baseURL`, and it
  *   alone decides **whether the session cookie is `Secure`** and `__Secure-`
- *   prefixed: exactly when it is https. (The passkey relying party will be its
- *   host too, so a passkey works only there.)
+ *   prefixed: exactly when it is https. The passkey relying party is its host
+ *   too, so a passkey works only there (`src/lib/auth/passkeys.ts`, D151).
  * - **Every entry's origin is trusted** to send a cookie-bearing POST to the
  *   auth API. In production nothing else is; outside production each
  *   `DEV_ALLOWED_ORIGIN` host is added too, the two ways

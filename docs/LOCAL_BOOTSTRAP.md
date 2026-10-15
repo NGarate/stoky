@@ -161,15 +161,16 @@ platform's manifest. No test can tell offline that the two name the same image.
 Five ways to reach it, in the order you will need them. **What you can test
 depends on whether the origin is a secure context**: the barcode camera and the
 service worker exist only on `https://` or `localhost`, so a plain-HTTP LAN or
-tailnet address renders the app and nothing more.
+tailnet address renders the app and nothing more. Passkeys also need that,
+and work at one address only: the first `STOKY_URLS` entry (D151).
 
-| Way | URL | Camera | Service worker / install | Reachable from |
-|---|---|---|---|---|
-| 1. Local | `http://localhost:3000` | ✅ | ❌ dev tears it down | this machine |
-| 2. LAN, plain HTTP | `http://<lan-ip>:3000` | ❌ | ❌ | your network |
-| 3. Local TLS | `https://localhost:3000` | ✅ | ❌ dev tears it down | this machine |
-| 4. Tailscale + TLS | `https://<machine>.<tailnet>.ts.net` | ✅ | ❌ dev tears it down | your tailnet, a phone included |
-| 5. Production build | any of the above | ✅ | ✅ | as the row it is served through |
+| Way | URL | Camera | Service worker / install | Passkeys | Reachable from |
+|---|---|---|---|---|---|
+| 1. Local | `http://localhost:3000` | ✅ | ❌ dev tears it down | ✅ when it is the first `STOKY_URLS` entry | this machine |
+| 2. LAN, plain HTTP | `http://<lan-ip>:3000` | ❌ | ❌ | ❌ | your network |
+| 3. Local TLS | `https://localhost:3000` | ✅ | ❌ dev tears it down | ✅ when it is the first `STOKY_URLS` entry | this machine |
+| 4. Tailscale + TLS | `https://<machine>.<tailnet>.ts.net` | ✅ | ❌ dev tears it down | ✅ when it is the first `STOKY_URLS` entry | your tailnet, a phone included |
+| 5. Production build | any of the above | ✅ | ✅ | as the row it is served through | as the row it is served through |
 
 The service worker is **never** registered by `bun run dev`: development
 actively unregisters it (`src/lib/sw/register.ts`), because a worker left from
@@ -271,6 +272,12 @@ while the certificate is issued.
   is warned about by the development server and refused by a production
   build for that reason; `http://localhost:3000` beside it is fine, because
   browsers keep a `Secure` cookie on localhost.
+- **Passkeys work at the tailnet name only**, because it is the first
+  `STOKY_URLS` entry: a passkey belongs to that host. One added here does not
+  sign in at `http://localhost:3000`, and the other way round; to try
+  passkeys on this machine's own address, list `http://localhost:3000` first
+  instead, and add them again. Switching the first entry orphans the ones
+  already added.
 
 Verified on 2026-10-10: on this project's development machine, `tailscale serve
 status` reports `https://<machine>.ts.net (tailnet only) |-- / proxy

@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { STEP_UP_PREFIX } from "./step-up";
 
 /**
  * Ending sessions, which is deleting their rows, in one place.
@@ -20,7 +21,9 @@ export type SessionDb = PrismaClient | Prisma.TransactionClient;
 /**
  * Deletes every session matching `where` and returns how many it deleted,
  * with the two-step sign-ins in progress for the accounts it names
- * (`endTwoFactorChallenges`).
+ * (`endTwoFactorChallenges`) and the step-ups the ended sessions held
+ * (`src/lib/auth/step-up.ts`, D151) — a confirmation of the password belongs
+ * to its session and goes with it.
  *
  * **Refuses a filter with a missing value.** Prisma reads `{ userId:
  * undefined }` as "no condition", so a caller that lost its id on the way
@@ -44,9 +47,15 @@ export async function endSessions(
   if (entries.length === 0 || entries.some(([, value]) => missing(value))) {
     throw new Error("endSessions refuses a filter that would match every session");
   }
-  const accounts = challenges ? await accountsNamed(db, where) : [];
+  const ending = await db.session.findMany({ where, select: { id: true, userId: true } });
+  const accounts = challenges ? await accountsNamed(db, where, ending) : [];
   const { count } = await db.session.deleteMany({ where });
   await endTwoFactorChallenges(db, accounts);
+  if (ending.length > 0) {
+    await db.verification.deleteMany({
+      where: { identifier: { in: ending.map(({ id }) => `${STEP_UP_PREFIX}${id}`) } },
+    });
+  }
   return count;
 }
 
@@ -71,13 +80,12 @@ export interface EndSessionsOptions {
  * challenge has no session: Better Auth deletes the one the password step
  * made, so "end Ana's sessions" would otherwise leave Ana's challenge alone.
  */
-async function accountsNamed(db: SessionDb, where: Prisma.SessionWhereInput): Promise<string[]> {
+async function accountsNamed(
+  db: SessionDb,
+  where: Prisma.SessionWhereInput,
+  sessions: { userId: string }[],
+): Promise<string[]> {
   const found = new Set<string>();
-  const sessions = await db.session.findMany({
-    where,
-    select: { userId: true },
-    distinct: ["userId"],
-  });
   for (const { userId } of sessions) found.add(userId);
 
   const user: Prisma.UserWhereInput = {};

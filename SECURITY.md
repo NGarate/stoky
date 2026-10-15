@@ -517,7 +517,10 @@ Verified against the files named in each row.
   stays on Fetch Metadata, and a strict comparison would lock out an address
   somebody forgot to list for no gain over that header.
 - **The auth API (`/api/auth/*`) applies the same Fetch Metadata and JSON-only
-  rules, and compares `Origin` too** (PROGRESS D135). Better Auth refuses a
+  rules, and compares `Origin` too** (PROGRESS D135). Fetch Metadata covers
+  its GETs as well, before anything is charged: the passkey options spend a
+  per-address budget (D151), and an `<img>` on a page a household member
+  visits would otherwise spend it from the household's address. Better Auth refuses a
   POST that carries a cookie unless its `Origin` (or `Referer`) is a trusted
   origin — the origin of every entry in `STOKY_URLS` (PROGRESS D138), plus,
   outside production only, each `DEV_ALLOWED_ORIGIN` host as
@@ -947,10 +950,81 @@ Verified against the files named in each row.
     second step; the log records who did it to whom.
   - **Not for native clients yet**: an account with two-step verification
     signs in from a browser (D142).
-- **Only ten endpoints of the auth API answer**: `POST /sign-in/email`,
+- **Passkeys** (PROGRESS D151, `@better-auth/passkey` 1.7.7 with
+  `@simplewebauthn/server`), where WebAuthn can work:
+  - **Only at the first `STOKY_URLS` address.** A passkey belongs to a
+    relying party named by a host, and here that is the canonical entry's
+    (`src/lib/auth/passkeys.ts`): its hostname is the `rpID` and its origin
+    the only `origin` a ceremony is accepted from — never the list, so a
+    signature made for one listed address is refused at another. A passkey
+    therefore cannot be used or registered at any other listed address (they
+    sign in with the password), and **changing the first entry orphans every
+    passkey**: people sign in with the password and add a new one.
+  - **Only in a secure context, never at an IP address.** Browsers expose
+    WebAuthn to https and to http on `localhost`, and a relying party id must
+    be a domain name, so the plugin is registered only when the first entry
+    is https, or http at `localhost`, with a host that is not an IP literal.
+    Elsewhere — a plain-HTTP LAN install, `https://192.168.1.10` — there are
+    no passkeys and their endpoints answer 404.
+  - **The person must be verified, not only present** (ASVS 5.0.0 6.6.x):
+    registration asks the authenticator for user verification as
+    `required`, and both ceremonies refuse an answer without the UV flag
+    (`USER_VERIFICATION_REQUIRED`), after the signature is checked and before
+    anything is written. Better Auth itself asks for it only as "preferred"
+    at sign-in and checks for none, so a security key without a PIN would
+    otherwise be a single factor anybody holding it could use. That is why a
+    passkey sign-in is not asked for an authenticator code: it is two
+    factors already, the device and the fingerprint, face or PIN.
+  - **Added or removed only after the password** (ASVS 5.0.0 7.5.1): the
+    settings page first calls `auth.confirmPassword` (`confirmCurrentPassword`,
+    the D143 budgets, `via: "step-up"`), which leaves a step-up — a
+    `Verification` row `stoky-step-up:<session id>`, five minutes,
+    `src/lib/auth/step-up.ts`. Asking for the registration options needs one;
+    the registration and the removal spend it, in the statement that checks
+    it, so it confirms one change. It is bound to the session that asked: the
+    same account's tablet cannot spend the phone's. Without it the answer is
+    `403 STEP_UP_REQUIRED`, and with no session at all `401`. A native
+    client's bearer token is held to it as a cookie is: the check reads the
+    session the endpoint will be served as (`requestSession`), not the one
+    Better Auth shows a hook before the bearer plugin has turned the token
+    into a cookie, which for a token was none — and a check that stood aside
+    on none let a stolen token add a passkey with no password at all. It
+    goes with its session when `endSessions` ends
+    the session. Renaming one and listing one's own need the session alone.
+    No token rotation, as for every re-entry (the 7.2.4 deviation above).
+  - **A registration never signs anybody in**: the route forwards only the
+    WebAuthn answer and a name, and the policy plugin forces Better Auth's
+    `createSession` off as well.
+  - **A passkey sign-in is a sign-in like the password's**: charged per
+    address against sign-in's budget and given back when it gets in, the
+    remember-me box honoured (an unticked box is a browser session with a
+    cookie without `Max-Age`; the policy plugin sets Better Auth's ninety-day
+    cookie again as a browser cookie and takes the first `Set-Cookie` out, so
+    the answer carries one), the presented session ended, the account's
+    expired rows and any past ten ended, and `auth.signin.succeeded` with
+    `method: "passkey"`. A refusal is `auth.passkey.signin-failed` with
+    Better Auth's code. The options that start it are charged per address on
+    a budget of their own, thirty a quarter of an hour
+    (`RATE_LIMIT_PASSKEY_OPTIONS_*`): they are not a guess, but each writes a
+    challenge row, and they cannot be given back from sign-in's five — a
+    household signing in with passkeys behind one address would otherwise
+    lock itself out.
+  - **Every role may have them**, the kitchen's shared account included (the
+    owner's decision of 2026-10-15); the settings page advises against adding
+    one on a device other people use. Removing a member's two-step
+    verification (D150) leaves their passkeys alone. Rotating `STOKY_SECRET`
+    leaves them working: nothing about them is encrypted with it.
+  - **Logged**: `auth.passkey.added` and `auth.passkey.removed` with whose it
+    was, never the credential or its public key.
+- **Only seventeen endpoints of the auth API answer**: `POST /sign-in/email`,
   `POST /two-factor/verify-totp`, `POST /two-factor/verify-backup-code`,
   `POST /two-factor/enable`, `POST /two-factor/disable`,
   `POST /two-factor/generate-backup-codes`,
+  `GET /passkey/generate-authenticate-options`,
+  `POST /passkey/verify-authentication`,
+  `GET /passkey/generate-register-options`,
+  `POST /passkey/verify-registration`, `POST /passkey/delete-passkey`,
+  `POST /passkey/update-passkey`, `GET /passkey/list-user-passkeys`,
   `POST /sign-out`, `GET /get-session`, `GET /ok` and `GET /error`. Every other
   path Better Auth mounts — sign-up, password reset, account deletion, session
   listing, about forty in all — is 404 before Better Auth sees it, so one a
@@ -959,7 +1033,13 @@ Verified against the files named in each row.
   and tries each by GET and POST with a signed-in cookie and its own origin,
   and finds no row changed. A sign-in is rebuilt before Better Auth gets it —
   the address trimmed and lower-cased, the password, `rememberMe` as a
-  boolean and nothing else — so no `callbackURL` or other option reaches it.
+  boolean and nothing else — so no `callbackURL` or other option reaches it;
+  every other POST carries only the keys its endpoint needs, and the
+  registration options GET only `authenticatorAttachment`. A passkey's name,
+  which Better Auth only trims into an unbounded column, is held to 64
+  characters with no control or text-direction characters
+  (`passkeyNameSchema`, the settings field's own limit), or the request is
+  answered 400.
 - The address is validated with a Zod schema before the database is touched,
   and an unknown email and a wrong password get the same 401
   `INVALID_EMAIL_OR_PASSWORD`, after the same Argon2id cost.
@@ -1001,9 +1081,15 @@ Verified against the files named in each row.
   an owner — an admin who could set an owner's password could sign in as that
   owner — and nobody may use it on themselves, because their own password
   changes through the current one. The new password meets the policy, the
-  identity rule checked against the member, and one transaction sets the hash
-  and deletes the member's session rows, so whoever used the old password is
-  signed out too. The
+  identity rule checked against the member, and one transaction sets the hash,
+  deletes the member's session rows and removes their passkeys (D151), so
+  whoever used the old password is signed out too and keeps no passkey they
+  added with it — the step-up that adding one asks for is that password, and
+  a passkey signs in without any. The admin cannot see a member's passkeys to
+  tell whose they are, so all of them go, and the member adds theirs again.
+  Ending a member's sessions, or the whole household's, leaves passkeys
+  alone: neither changes a password, which already lets whoever knows it
+  back in, and the way to shut such a person out is this reset. The
   write repeats the household and role in its `where`, so a member who leaves
   or is made an owner during the quarter-second hash is not written to. It
   shares `addMember`'s limit (below) and is logged as `auth.password.reset`,
@@ -1732,8 +1818,10 @@ publishing an instance:
   `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
   `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
-  `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS` and
-  `RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS`. Raising them raises the
+  `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS`,
+  `RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS`,
+  `RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS` and
+  `RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS`. Raising them raises the
   exposure; the browser suite raises the sign-in, known-device, registration,
   add-member and product-lookup attempts (`playwright.config.ts` says why for
   each), and a
@@ -1766,11 +1854,16 @@ account's second step), `auth.twofactor.unreadable` (the stored secret no
 longer decrypts), `auth.twofactor.enabled`, `auth.twofactor.disabled`,
 `auth.twofactor.codes-regenerated`, `auth.twofactor.removed` (an admin took
 a member's off, with the member as `targetUserId`; D150),
+`auth.passkey.added` and `auth.passkey.removed` (a passkey added or removed
+by its account's holder, after the password; D151),
+`auth.passkey.signin-failed` (a passkey sign-in refused, with Better Auth's
+refusal as `code`; D151),
 `auth.reauth.refused` (a wrong current password re-entered to confirm an
 action, with the action as `via` — `end-sessions`, `password-change`, which
 replaces the `auth.password.change.refused` event of earlier releases,
-`household-end-all`, `two-factor`, or `member-two-factor`; D143, D144, D147,
-D148, D150), `access.denied` and
+`household-end-all`, `two-factor`, `member-two-factor`, or `step-up` before
+a passkey is added or removed; D143, D144, D147, D148, D150, D151),
+`access.denied` and
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
 `reason` — `self` for a person ending their own, `password-change` for the
@@ -1790,8 +1883,8 @@ its row is deleted when next read.
 
 A sign-in that gets in is recorded as well, as ASVS 5.0.0 **16.3.1** asks:
 `auth.signin.succeeded` carries the `userId` it signed in as, the factor in
-`method` (`password`, `totp` or `backup-code`; `passkey` is reserved for
-the method still to come), and the same `account` tag and `address` a
+`method` (`password`, `totp`, `backup-code` or `passkey`, D151), and the
+same `account` tag and `address` a
 failure carries, so one filter follows an account from its refusals to the
 sign-in that ended them — the line that tells a member who mistyped twenty
 times from somebody who guessed right on the twenty-first. Like every other
@@ -2174,7 +2267,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 70 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 71 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a
@@ -2441,6 +2534,8 @@ is stored, logged or sent.
 | Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
 | Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
+| Each passkey a person adds (D151): the account id, the credential's id and public key, its signature counter, whether it can sync to the person's other devices and is backed up, the transports the browser named, when it was added, the name the person gave it, and its AAGUID — the make of authenticator or password manager, never the device or the person | PostgreSQL `Passkey` | Until the person removes it, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
+| A confirmed password, for five minutes after it is re-entered before a passkey is added or removed (D151): the session's id and the account id | PostgreSQL `Verification` (`stoky-step-up:…`) | Until the change spends it, its session ends, or it lapses |
 | Each account's authenticator, once two-step verification is set up (D148): the account id, the TOTP secret, encrypted with `STOKY_SECRET`, the unused backup codes as SHA-256 hashes (D149), whether the first code has been accepted, the count of wrong codes in a row and the lockout's end, and the last time step a code was accepted for | PostgreSQL `TwoFactor` | Until two-step verification is removed, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
 | Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
@@ -2476,7 +2571,8 @@ stores; its products, each with its stock movements and price records; its
 receipts, each with the photograph's path and each line's text; and its
 shopping lists. It leaves out:
 
-- password hashes, always;
+- password hashes, always, and every other way a member signs in: the
+  authenticator secret and backup codes, and passkeys;
 - receipt photographs, which it gives only as paths, and each receipt's
   whole-ticket OCR text (`rawOcrText`). The file says so in its `notes`;
 - who uploaded a receipt and who made a stock movement;
@@ -2594,8 +2690,9 @@ the command:
   then turning two-step verification off and on again, which needs only the
   password, or the operator removing it.
 
-Passwords and backup codes are unaffected: backup codes are stored as
-hashes, which no secret goes into (D149). **Better Auth's versioned secrets are not
+Passwords, passkeys and backup codes are unaffected: backup codes are
+stored as hashes, which no secret goes into (D149), and a passkey is a public
+key (D151). **Better Auth's versioned secrets are not
 adopted** beyond the single version-1 entry the instance is given (PROGRESS
 D135, D148): keeping old enrolments readable through a rotation would need a
 second variable holding every retired value until each enrolment was redone,

@@ -21,8 +21,9 @@ import { logSecurityEvent } from "@/lib/security-log";
  * session left open on a kitchen tablet is not the person. So an action that
  * ends sessions or changes how the account signs in — the password itself
  * (D144), an owner ending every session in the household (D147), an admin
- * removing a member's two-step verification (D150), and later passkeys —
- * calls this first.
+ * removing a member's two-step verification (D150), a passkey added or
+ * removed (D151, through `auth.confirmPassword`'s step-up) — calls this
+ * first.
  *
  * **A confirmation, not an upgrade.** It answers yes for this one call; the
  * session is not marked as freshly authenticated and its token is not
@@ -61,7 +62,8 @@ export type ReauthVia =
   | "end-sessions"
   | "password-change"
   | "household-end-all"
-  | "member-two-factor";
+  | "member-two-factor"
+  | "step-up";
 
 export const MISSING_SESSION_ID_MESSAGE =
   "This session cannot confirm an action. Sign in again.";

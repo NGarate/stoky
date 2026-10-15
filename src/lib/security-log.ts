@@ -79,6 +79,16 @@ export type SecurityEvent =
   | "auth.twofactor.replayed"
   | "auth.twofactor.locked"
   | "auth.twofactor.unreadable"
+  // Passkeys (D151), never with the credential, its public key or the
+  // signature: `added` when a registration is accepted and `removed` when one
+  // is deleted, both by the account's holder after their password (the
+  // step-up); `signin-failed` when a passkey sign-in is refused, with Better
+  // Auth's refusal as `code` — an unknown passkey, a ceremony from another
+  // address, or an authenticator that did not verify the person. A passkey
+  // sign-in that gets in is `auth.signin.succeeded`, `method: "passkey"`.
+  | "auth.passkey.added"
+  | "auth.passkey.removed"
+  | "auth.passkey.signin-failed"
   | "auth.unavailable"
   // Sessions somebody ended on purpose, with the `reason`: the account's own
   // holder ending all of theirs (`self`), a password change ending every
@@ -112,8 +122,9 @@ export type SecurityEvent =
   // The current password re-entered to confirm an action was wrong
   // (`src/lib/auth/reauth.ts`, and the auth route for two-step
   // verification). `via` names the action — `end-sessions`,
-  // `password-change`, `household-end-all`, `two-factor`, `member-two-factor`
-  // — so a grep tells a typo before
+  // `password-change`, `household-end-all`, `two-factor`, `member-two-factor`,
+  // `step-up` (before a passkey is added or removed, D151) — so a grep tells
+  // a typo before
   // ending a session from a stolen session guessing. BAD_REQUEST, which the
   // refusal middleware in `trpc.ts` does not record, so written here.
   | "auth.reauth.refused"
