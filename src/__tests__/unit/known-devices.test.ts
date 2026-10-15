@@ -1,6 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { DEVICE_ID_COOKIE, mintDeviceId } from "@/lib/device";
-import { deviceFingerprint, deviceIdFromRequest } from "@/lib/auth/known-devices";
+import {
+  deviceFingerprint,
+  deviceIdFromHeaders,
+  deviceIdFromRequest,
+} from "@/lib/auth/known-devices";
 
 /**
  * Reading the device off the sign-in request, without a cache.
@@ -45,6 +49,22 @@ describe("deviceIdFromRequest", () => {
     for (const value of ["", "not-a-uuid", "*", `${mintDeviceId()}x`]) {
       expect(deviceIdFromRequest(requestWith(`${DEVICE_ID_COOKIE}=${value}`))).toBeUndefined();
     }
+  });
+});
+
+describe("deviceIdFromHeaders", () => {
+  it("reads the device from bare headers, as the sign-in policy hands them over", () => {
+    // The policy is given `Headers`, not a `Request`: whatever verifies the
+    // password decides what request object exists, and the budget must not
+    // depend on it.
+    const id = mintDeviceId();
+    expect(
+      deviceIdFromHeaders(new Headers({ cookie: `NEXT_LOCALE=es; ${DEVICE_ID_COOKIE}=${id}` })),
+    ).toBe(id);
+    expect(deviceIdFromHeaders(new Headers())).toBeUndefined();
+    expect(
+      deviceIdFromHeaders(new Headers({ cookie: `${DEVICE_ID_COOKIE}=not-a-uuid` })),
+    ).toBeUndefined();
   });
 });
 

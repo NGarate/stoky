@@ -68,16 +68,16 @@ export function deviceFingerprint(deviceId: string): string {
 }
 
 /**
- * The `stoky_device` id the request carries, if it carries a well-formed one.
+ * The `stoky_device` id these headers carry, if they carry a well-formed one.
  *
- * Read from the request Auth.js hands to `authorize` rather than through
- * `cookies()` from `next/headers`: that request is the one being decided, it
- * is what the tests can construct, and Auth.js copies the browser's headers
- * onto it (`@auth/core/lib/actions/callback`). A malformed value is treated as
+ * Read from the `Cookie` header of the request being decided rather than
+ * through `cookies()` from `next/headers`: that request is the one the
+ * sign-in policy is deciding, it is what the tests can construct, and it does
+ * not tie the policy to a Next request scope. A malformed value is treated as
  * no device, the same way `@/lib/device` treats it.
  */
-export function deviceIdFromRequest(request: Request): string | undefined {
-  const header = request.headers.get("cookie");
+export function deviceIdFromHeaders(headers: Headers): string | undefined {
+  const header = headers.get("cookie");
   if (!header) return undefined;
 
   for (const part of header.split(";")) {
@@ -88,6 +88,11 @@ export function deviceIdFromRequest(request: Request): string | undefined {
     return isDeviceId(value) ? value : undefined;
   }
   return undefined;
+}
+
+/** `deviceIdFromHeaders` for a whole request. */
+export function deviceIdFromRequest(request: Request): string | undefined {
+  return deviceIdFromHeaders(request.headers);
 }
 
 /**

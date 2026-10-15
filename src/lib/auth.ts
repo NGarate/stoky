@@ -6,30 +6,17 @@ import type { HouseholdRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import { logSecurityEvent } from "@/lib/security-log";
-import { accountTag } from "@/lib/account-tag";
 import { assertUsableSecret } from "@/lib/auth/secret";
 import { verifyPassword } from "@/lib/auth/password-hash";
 import { findCredentialByEmail } from "@/lib/auth/credentials";
 import type { AppSession } from "@/lib/auth/session";
 import {
-  deviceFingerprint,
-  deviceIdFromRequest,
-  isKnownDevice,
-  rememberDevice,
-} from "@/lib/auth/known-devices";
-import {
-  RateLimitUnavailableError,
-  accountIdentifier,
-  clientAddress,
-  consumeRateLimit,
-  loginAccountRateLimit,
-  loginDeviceRateLimit,
-  loginRateLimit,
-  rateLimitIdentifier,
-  refundRateLimit,
-  resetRateLimit,
-  type RateLimit,
-} from "@/lib/rate-limit";
+  SignInRefusedError,
+  chargeSignInAttempt,
+  signInFailed,
+  signInSucceeded,
+  type SignInAttempt,
+} from "@/lib/auth/sign-in-policy";
 
 /**
  * Sign-in refused because the address has run out of attempts.
@@ -65,6 +52,22 @@ export class AccountRateLimitedSignin extends RateLimitedSignin {
 /** Sign-in refused because the rate limiter could not reach Valkey. */
 export class AuthUnavailableSignin extends CredentialsSignin {
   code = "auth_unavailable";
+}
+
+/**
+ * The policy's refusal, as the next-auth class whose `code` says the same
+ * thing to the browser. `retryAfterSeconds` has nowhere to go: Auth.js
+ * answers a refused sign-in with a redirect and carries only the code.
+ */
+function refusalFor(error: SignInRefusedError): CredentialsSignin {
+  switch (error.code) {
+    case "rate_limited":
+      return new RateLimitedSignin();
+    case "account_rate_limited":
+      return new AccountRateLimitedSignin();
+    case "auth_unavailable":
+      return new AuthUnavailableSignin();
+  }
 }
 
 /**
@@ -230,179 +233,48 @@ export const authConfig: NextAuthConfig = {
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials, request) => {
-        const limit = loginRateLimit();
-        // Counted against the /64 for an IPv6 client, logged with the
-        // address in full: the bucket is what stops a client rotating through
-        // its own prefix, and the address is what an operator needs to read.
-        const identifier = rateLimitIdentifier(request.headers);
-        const address = clientAddress(request.headers);
-
-        // Counted before the credentials are looked at, not after. A limit
-        // that only counts attempts it has already spent ~250ms of Argon2id
-        // on is also a way to make the server do that work on demand.
-        let addressWindow: number;
+        // The budgets are `@/lib/auth/sign-in-policy`'s, charged before the
+        // credentials are believed and settled once the password has been
+        // checked. What stays here is the part that is next-auth's: the
+        // refusal classes its browser client understands, and the user
+        // object it signs.
+        let attempt: SignInAttempt;
         try {
-          const { allowed, retryAfterSeconds, window } = await consumeRateLimit(
-            limit,
-            identifier,
-          );
-          addressWindow = window;
-          if (!allowed) {
-            logSecurityEvent("auth.signin.throttled", {
-              address,
-              code: `retry-after=${retryAfterSeconds}`,
-            });
-            throw new RateLimitedSignin();
-          }
+          attempt = await chargeSignInAttempt(request.headers, credentials.email);
         } catch (error) {
-          if (error instanceof RateLimitUnavailableError) {
-            // Fails closed. See `src/lib/rate-limit.ts` for why, and for what
-            // it costs when Valkey is down.
-            // Both: the structured line so the event is greppable alongside
-            // the refusals, and the prose so an operator reading the container
-            // output is told what to check rather than left with a code.
-            logSecurityEvent("auth.unavailable", { address });
-            console.error(
-              "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
-              error.cause,
-            );
-            throw new AuthUnavailableSignin();
-          }
+          if (error instanceof SignInRefusedError) throw refusalFor(error);
           throw error;
         }
+        if (attempt.outcome === "malformed") return null;
 
-        const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) {
-          logSecurityEvent("auth.signin.failed", {
-            address,
-            code: "malformed",
-          });
+        // Bounded, not policed, and after the charge: the account has been
+        // counted, so a password that does not parse is one more failed
+        // attempt on it rather than a free one. What the bound stops is an
+        // unauthenticated caller handing Argon2id a few megabytes to verify.
+        const password = loginSchema.shape.password.safeParse(credentials.password);
+        if (!password.success) {
+          signInFailed(attempt);
           return null;
         }
 
-        /**
-         * The second limit, and the one NIST SP 800-63B §5.2.2 actually asks
-         * for: consecutive failed attempts *on a single account*.
-         *
-         * The per-IP limit above does not do that. An attacker with a hundred
-         * addresses gets five attempts from each — five hundred against one
-         * password. With both in force, a hundred addresses buy ten.
-         *
-         * Counted on the submitted address whether or not an account exists,
-         * so a difference in behaviour cannot be used to learn which addresses
-         * are registered. Counted before Argon2id, for the same reason as the
-         * limit above.
-         *
-         * **Except from a browser this account has signed in from before.**
-         * A full account counter refuses the right password too, so anyone
-         * who knows the address could keep spending it and keep the member
-         * out (security review, 2026-10-12). A known device is counted on a
-         * budget of its own instead — the OWASP device-cookie pattern — and
-         * a stranger's guesses never touch it. Whether the device is known is
-         * asked for registered and unregistered addresses alike, so this adds
-         * no way to tell them apart; and a device id nobody has recorded is
-         * counted on the shared budget exactly as before, so minting cookies
-         * buys nothing. See `@/lib/auth/known-devices`.
-         */
-        const account = accountIdentifier(parsed.data.email);
-        const deviceId = deviceIdFromRequest(request);
-        let charged: {
-          kind: "device" | "account";
-          limit: RateLimit;
-          identifier: string;
-        };
-
-        try {
-          charged =
-            deviceId && (await isKnownDevice(account, deviceId))
-              ? {
-                  kind: "device",
-                  limit: loginDeviceRateLimit(),
-                  identifier: `${account}:${deviceFingerprint(deviceId)}`,
-                }
-              : {
-                  kind: "account",
-                  limit: loginAccountRateLimit(),
-                  identifier: account,
-                };
-
-          const { allowed, retryAfterSeconds } = await consumeRateLimit(
-            charged.limit,
-            charged.identifier,
-          );
-          if (!allowed) {
-            logSecurityEvent("auth.signin.throttled", {
-              address,
-              account: accountTag(parsed.data.email),
-              code: `${charged.kind} retry-after=${retryAfterSeconds}`,
-            });
-            throw new AccountRateLimitedSignin();
-          }
-        } catch (error) {
-          if (error instanceof RateLimitUnavailableError) {
-            // Both: the structured line so the event is greppable alongside
-            // the refusals, and the prose so an operator reading the container
-            // output is told what to check rather than left with a code.
-            logSecurityEvent("auth.unavailable", { address });
-            console.error(
-              "[auth] sign-in refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
-              error.cause,
-            );
-            throw new AuthUnavailableSignin();
-          }
-          throw error;
-        }
-
-        const credential = await findCredentialByEmail(prisma, parsed.data.email);
+        const credential = await findCredentialByEmail(prisma, attempt.email);
         const user = credential?.user;
 
         // Argon2id runs whether or not the account exists. Skipping it for a
         // missing account answered "no such address" in a few milliseconds
         // and "wrong password" in a quarter of a second, so a stopwatch told
         // anyone which addresses are registered — the very thing the flattened
-        // message and the identical log lines below refuse to say. With no
+        // message and the identical log lines refuse to say. With no
         // account, `verifyPassword` checks against a dummy hash made with the
         // same parameters as every stored one.
-        const isValid = await verifyPassword(
-          credential?.passwordHash,
-          parsed.data.password,
-        );
+        const isValid = await verifyPassword(credential?.passwordHash, password.data);
 
-        // One event, the same fields, for both failures. The distinction
-        // between "no such account" and "wrong password" is exactly what the
-        // flattened error message refuses to tell the browser, and writing it
-        // into the log would put it back — the log is readable by anyone who
-        // can read the container's output.
         if (!user || !isValid) {
-          logSecurityEvent("auth.signin.failed", {
-            address,
-            account: accountTag(parsed.data.email),
-          });
+          signInFailed(attempt);
           return null;
         }
 
-        // For the reason D30 gives: the specification counts attempts rather
-        // than failures, and a household signing in from three devices is
-        // three attempts before anybody has mistyped anything.
-        //
-        // **The two counters are not treated alike.** The account's counter —
-        // or this device's, whichever the attempt was charged to — is
-        // cleared: only its own password gets here. Only that one: a known
-        // device signing in leaves the shared counter as it found it, so the
-        // owner signing in on their phone does not hand whoever is filling
-        // it a fresh budget. The address's counter is
-        // refunded by this one attempt and no more, because clearing it let
-        // anybody with an account of their own wipe the failures beside it —
-        // four guesses at other people's passwords, one good sign-in to their
-        // own, repeat, and the per-address limit never filled. Refunded to
-        // the window it was counted in, so a success that lands after that
-        // window ended cannot take an attempt off the next one.
-        await refundRateLimit(limit, identifier, addressWindow);
-        await resetRateLimit(charged.limit, charged.identifier);
-
-        // Only after the password has been accepted, which is what makes a
-        // recorded device worth a budget of its own.
-        if (deviceId) await rememberDevice(account, deviceId);
+        await signInSucceeded(attempt);
 
         return {
           id: user.id,
