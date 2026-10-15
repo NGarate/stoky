@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { isAPIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
+import { bearer } from "better-auth/plugins/bearer";
 import { prisma } from "@/lib/prisma";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
@@ -47,6 +48,11 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/validations/pass
  * - **No telemetry, no IP addresses.** Nothing leaves the instance, and
  *   `Session.ipAddress` stays null.
  * - **Our Argon2id**, so the hashes written before the swap verify unchanged.
+ * - **A native client signs in with a bearer token** (D142): the session
+ *   cookie's signed value, sent back as `Authorization: Bearer`. Signed
+ *   tokens only (`requireSignature`), so the unsigned token the database holds
+ *   is never a credential on its own. The route hands it out only to a
+ *   request that carried no cookie (`src/server/http/auth-handler.ts`).
  */
 
 let generatedSecret: string | undefined;
@@ -274,9 +280,18 @@ function build(env: Record<string, string | undefined>) {
         },
       },
     },
-    // Last, as Better Auth asks: it copies every Set-Cookie into Next's
-    // cookie store when an endpoint is called from a Server Action.
-    plugins: [nextCookies()],
+    plugins: [
+      // `Authorization: Bearer <token>.<signature>` read as the session
+      // cookie, on every endpoint and on `getSession` from tRPC; and the
+      // cookie's value copied into `set-auth-token` whenever an answer sets
+      // it. A token without its signature is refused rather than signed here
+      // on the caller's behalf: the database holds tokens unsigned, so
+      // without this a read of the `Session` table would be a credential.
+      bearer({ requireSignature: true }),
+      // Last, as Better Auth asks: it copies every Set-Cookie into Next's
+      // cookie store when an endpoint is called from a Server Action.
+      nextCookies(),
+    ],
   });
 }
 

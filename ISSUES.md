@@ -95,6 +95,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right; next-auth itself replaced 2026-10-15 (D135) |
 | AUTH-2 | Better Auth refuses to serve with a required column it never writes | ✅ Resolved 2026-10-15 by D134 — the hash moved to `Account` and `User.passwordHash` went before the switch |
 | AUTH-3 | Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options | ✅ Resolved 2026-10-15 by D135 and D136 — the secrets are named in the options, the other two stop the server at start-up |
+| AUTH-4 | `set-auth-token` exposed to cookie clients; native 403 from an injected cookie | ✅ Resolved 2026-10-15 — the proxy stops injecting `stoky_device` on the auth API and bearer calls, and the route withholds the header from any request that carried a cookie (D142) |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
@@ -3571,6 +3572,38 @@ start:` line naming the variable (`unit/auth-environment.test.ts`). The
 ignored ones — the three secrets, `BETTER_AUTH_URL` and next-auth's
 `AUTH_URL` — are each named in an `[auth] warning:` line at start-up, so an
 operator does not go on believing one is in use.
+
+### ✅ AUTH-4: `set-auth-token` exposed to cookie clients; native 403 from an injected cookie
+
+**Files:** `src/server/http/auth-handler.ts`, `src/proxy.ts`, `src/lib/auth/instance.ts`
+**Severity:** HIGH for the migration — the first defeats `HttpOnly`, the second locks the native client out
+**Status:** RESOLVED 2026-10-15 by "refactor(auth): never mint a device id for an auth API or bearer request" and PROGRESS D142.
+
+Both were found by the Better Auth spike (`spike/better-auth-2026-10-15`),
+with the bearer plugin on:
+
+- **The bearer plugin hands the session token to scripts.** Its after-hook
+  copies the session cookie's signed value into a `set-auth-token` header,
+  and adds that header to `Access-Control-Expose-Headers`, on every answer
+  that sets the cookie. That includes a browser's sign-in and a remembered
+  session's refresh. Any script on the page could then read the value the
+  cookie's `HttpOnly` exists to hide, and replay it from anywhere as
+  `Authorization: Bearer`.
+- **A native client was refused with 403 `MISSING_OR_NULL_ORIGIN`** on
+  sign-in and on every bearer POST. `src/proxy.ts` minted `stoky_device` for
+  every request and wrote it into the request's own `Cookie` header, so
+  Better Auth saw a cookie on a request that had sent none and asked it for
+  an `Origin`, which a native client has no reason to send.
+
+**How it closed.** The proxy no longer mints the device id under
+`/api/auth/` or for a request carrying `Authorization: Bearer`
+(`unit/proxy-device.test.ts`), so a native request reaches Better Auth with
+no cookie and no `Origin` check applies. The auth route drops
+`set-auth-token`, and its entry in `Access-Control-Expose-Headers`, from any
+answer to a request that carried a cookie, which a browser always does here;
+the bodies never carry the token. `integration/bearer.test.ts` signs in with
+and without a cookie through the real route: only the cookie-less request
+gets the header, and removing the strip turns it red.
 
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 

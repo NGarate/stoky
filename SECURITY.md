@@ -539,6 +539,18 @@ Verified against the files named in each row.
   `integration/auth.origins.test.ts` signs in, under a production instance
   with two entries, at both, and is refused from an unlisted origin and from
   a `DEV_ALLOWED_ORIGIN` host.
+- **A bearer token is no way round these rules** (PROGRESS D142). A native
+  client sends `Authorization: Bearer` and no cookie, no `Origin` and no
+  Fetch Metadata, so both APIs let it through as they let curl through. A
+  page on another origin cannot send that header: `Authorization` is not a
+  header a cross-origin request may carry without a preflight, which nothing
+  here answers. Nor can it read the token: `set-auth-token` is withheld from
+  every answer to a request that carried a cookie, so a page's script cannot
+  turn the browser's `HttpOnly` session into a header it could copy.
+  `integration/bearer.test.ts` signs in without a cookie or `Origin`, uses the
+  token on `get-session` and on a tRPC query, and is refused with an unsigned
+  or foreign-signed one; `unit/trpc-handler.test.ts` shows a bearer call with
+  no Fetch Metadata passing and a cross-site one carrying the cookie refused.
 - **The consequence:** a browser front-end on another origin cannot call
   these APIs. None exists. Server Actions are outside these routes and carry
   Next's own `Origin` check.
@@ -570,9 +582,44 @@ Verified against the files named in each row.
   they end with the browser — except a remembered session's token, below,
   which has ninety days; behind https they are `__Secure-` prefixed and
   `Secure` (below). The token is never in a response body: the auth route
-  strips `token` and `session.token` from every JSON answer, and a bearer
-  `set-auth-token` header from any answer to a request that carried a cookie
-  (`src/server/http/auth-handler.ts`).
+  strips `token` and `session.token` from every JSON answer, and the bearer
+  plugin's `set-auth-token` header, with its `Access-Control-Expose-Headers`
+  entry, from any answer to a request that carried a cookie
+  (`src/server/http/auth-handler.ts`). A browser always carries one there:
+  the page that signs in was rendered, which gave it `stoky_device`.
+- **A native client signs in with a bearer token** (PROGRESS D142). The iOS
+  app is written against this contract:
+  1. It keeps no cookies (`httpShouldSetCookies = false`): the token is handed
+     only to a request that carried none.
+  2. It signs in with `POST /api/auth/sign-in/email`, `Content-Type:
+     application/json` and `{"email", "password", "rememberMe": true}`. It
+     needs no `Origin`, since Better Auth asks for one only beside a cookie.
+     `rememberMe` must be the literal `true`; anything else is a browser
+     session, ended by fifteen idle minutes.
+  3. It reads the `set-auth-token` response header, `<token>.<signature>`
+     (possibly percent-encoded), and keeps it in the Keychain. It is not in the
+     body.
+  4. It sends `Authorization: Bearer <that value>` on every request, tRPC and
+     the auth API alike. Better Auth reads it as the session cookie
+     (`bearer({ requireSignature: true })`).
+  5. It signs out with `POST /api/auth/sign-out`, the header,
+     `Content-Type: application/json` and `{}`. That deletes the row.
+
+  A 401 from tRPC, or `null` from `get-session`, means the session has
+  ended, and the client asks for the password again. A token with a wrong or
+  missing signature reads the same.
+  Only the signed value is accepted, because the `Session` table holds tokens
+  unsigned: a copy of the table is not a set of credentials. The signature is
+  an HMAC with `STOKY_SECRET`, so rotating the secret ends every native
+  session too. The token does not change while the session lives; the row
+  slides as a remembered browser's does, at most daily on a tRPC read and
+  never past a year. A native sign-in is charged, tidied (D139) and counted
+  toward the ten sessions (D140) like any other. A password change, or an
+  admin setting the password, ends it with the rest. **Not supported yet:**
+  an account with two-step verification on a native client — deferred by
+  the owner on 2026-10-15 — so such an account signs in on the web only. The
+  proxy never mints `stoky_device` for a bearer request, so a native client
+  is never handed a cookie it did not ask for (`src/proxy.ts`).
 - **Fifteen minutes is a browser session's idle timeout, and only activity
   moves it.** The row is created fifteen minutes out, and only `auth.session` — which the
   keep-alive calls when a pointer or a key moves, at most every four minutes —
@@ -670,8 +717,8 @@ Verified against the files named in each row.
   `integration/auth.surface.test.ts` reads the list off the running instance
   and tries each by GET and POST with a signed-in cookie and its own origin,
   and finds no row changed. A sign-in is rebuilt before Better Auth gets it —
-  the address trimmed and lower-cased, the password, `rememberMe: false` and
-  nothing else — so no `callbackURL` or other option reaches it.
+  the address trimmed and lower-cased, the password, `rememberMe` as a
+  boolean and nothing else — so no `callbackURL` or other option reaches it.
 - The address is validated with a Zod schema before the database is touched,
   and an unknown email and a wrong password get the same 401
   `INVALID_EMAIL_OR_PASSWORD`, after the same Argon2id cost.

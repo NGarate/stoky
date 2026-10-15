@@ -51,6 +51,8 @@ export interface SignInOutcome {
   user: Record<string, unknown> | undefined;
   /** The answer's JSON body, or null. */
   body: Record<string, unknown> | null;
+  /** Every header of the answer, for what the fields above do not name. */
+  headers: Headers;
 }
 
 export interface SignInOptions {
@@ -68,6 +70,8 @@ export interface SignInOptions {
   fetchSite?: string;
   /** Sent in place of the JSON credentials, for a body that is not one. */
   rawBody?: string;
+  /** Sent as `Authorization`, as a native client holding a session does. */
+  authorization?: string;
 }
 
 /** The cookies a `Set-Cookie` list leaves a browser holding, as a `Cookie` header. */
@@ -96,6 +100,7 @@ export async function signInWith(
   const origin = options.origin ?? (cookies.length ? testOrigin() : undefined);
   if (origin) headers.set("origin", origin);
   if (options.fetchSite) headers.set("sec-fetch-site", options.fetchSite);
+  if (options.authorization) headers.set("authorization", options.authorization);
 
   const response = await POST(
     new Request(`${testOrigin()}/api/auth/sign-in/email`, {
@@ -125,5 +130,6 @@ export async function signInWith(
     userId: typeof user?.id === "string" ? user.id : undefined,
     user,
     body,
+    headers: response.headers,
   };
 }

@@ -1104,7 +1104,7 @@ and *owner* to [Owner actions](#owner-actions).
 | 11 | The security log holds every tried email in plaintext | 1, low | `511c193` log an account tag instead of the email a sign-in tried |
 | 12 | A missing or plain-HTTP `NEXTAUTH_URL` goes unnoticed | 1, low | `6acd907` warn at startup when the public URL is missing or plain HTTP. Plain-HTTP LAN installs: accepted (D84). Since 2026-10-15 (D135) Better Auth decides `Secure` from `NEXTAUTH_URL` alone, never from a request, and a production instance without it refuses sign-in (503) instead of guessing |
 | 13 | Saved offline reads outlive a session that ends without the sign-out button | 1, low | `0f92a3a` forget the previous account's saved reads when its session ends. Up to 24 hours on a device left offline: accepted |
-| 14 | The native iOS client's sign-in is undocumented | 1, disputed | No change: nothing here consumes it, and #8 keeps clients without Fetch Metadata working |
+| 14 | The native iOS client's sign-in is undocumented | 1, disputed | No change: nothing here consumes it, and #8 keeps clients without Fetch Metadata working. Since the switch to Better Auth (2026-10-15, D142) there is a native sign-in to document, and SECURITY.md *Authentication* states its contract: no cookies, a signed bearer token from `set-auth-token`, sent as `Authorization: Bearer`, never handed to a request that carried a cookie |
 
 #### Authorisation and data
 

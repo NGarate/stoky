@@ -43,7 +43,8 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *    JSON is believed, so a body that does not parse is still an attempt.
  * 7. **Better Auth.**
  * 8. **The response, guarded:** the session token is the cookie's value, and
- *    no script on the page needs it in a body or a header.
+ *    no script on the page needs it in a body or a header. A native client,
+ *    which sends no cookie, gets it in `set-auth-token` (D142).
  *
  * **Remember-me** (D141): the box is `rememberMe`, true only when the body
  * says exactly `true` — Better Auth reads a missing value as true, and an
@@ -360,10 +361,21 @@ function rebuild(
  *
  * The token is the cookie's value and the cookie is `HttpOnly`; Better Auth
  * also returns it in the sign-in body (`token`) and the session body
- * (`session.token`), and a bearer plugin would add a `set-auth-token` header.
- * Any of them hands a script on the page what `HttpOnly` exists to keep from
- * it. The header is dropped whenever the request carried a cookie — a
- * browser; a client that sends none has no `HttpOnly` to defeat.
+ * (`session.token`), and the bearer plugin adds a `set-auth-token` header —
+ * the signed value — to every answer that sets the cookie, a refresh
+ * included, and names it in `Access-Control-Expose-Headers`. Any of them
+ * hands a script on the page what `HttpOnly` exists to keep from it.
+ *
+ * - **The bodies lose the token always.** It is the unsigned one, which no
+ *   endpoint accepts (`requireSignature`), and nothing needs it.
+ * - **The header is dropped whenever the request carried a cookie**, with its
+ *   entry in the expose list. A browser always carries one here — the page
+ *   that sends a sign-in was rendered, which gave it `stoky_device`
+ *   (`src/proxy.ts`) — while a native client keeps no cookies at all (D142):
+ *   for it the header is the only way the token arrives, and it has no
+ *   `HttpOnly` to defeat. A script that leaves the cookies out of its own
+ *   request is answered no session to copy: it would have to sign in with the
+ *   password, which it would then already have.
  */
 async function guardResponse(incoming: Request, response: Response): Promise<Response> {
   const headers = new Headers(response.headers);

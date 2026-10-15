@@ -390,6 +390,37 @@ describe("who sent the request, and in what form", () => {
       expect(consoleWarn).not.toHaveBeenCalled();
     });
   }
+
+  it("runs a native client's bearer call, which carries no Fetch Metadata and no cookie", async () => {
+    // What the iOS app sends (D142): the session in Authorization, nothing a
+    // browser adds. The session itself is the stub's; what is pinned here is
+    // that nothing in front of the procedure turns the request away.
+    let sessionLookups = 0;
+    const response = await handlerFor(SIGNED_IN, () => sessionLookups++)(
+      touch({ "content-type": "application/json", authorization: "Bearer token.signature" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(touches).toBe(1);
+    expect(sessionLookups).toBe(1);
+  });
+
+  it("refuses a cross-site request that carries the session cookie with 403", async () => {
+    // The case the bearer path must not open: a browser's cookie, sent by a
+    // page on another site.
+    let sessionLookups = 0;
+    const response = await handlerFor(SIGNED_IN, () => sessionLookups++)(
+      touch({
+        "content-type": "application/json",
+        cookie: "stoky.session_token=token.signature",
+        "sec-fetch-site": "cross-site",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(touches).toBe(0);
+    expect(sessionLookups).toBe(0);
+  });
 });
 
 describe("every response", () => {

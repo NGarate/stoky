@@ -60,6 +60,7 @@ Rules for this log:
 | "feat(auth): cap each account at ten concurrent sessions" (D140) | ASVS 5.0.0 7.1.2: `MAX_SESSIONS_PER_ACCOUNT` is ten, and the sign-in that would make the eleventh ends the least recently used session — oldest `updatedAt`, never the one just issued — logging `auth.session.ended` `reason: "evicted"` (`capSessions`, `src/lib/auth/sign-in-tidy.ts`). It runs after the tidy, in the same transaction, which holds the account's `User` row `FOR UPDATE`. `integration/session.cap.test.ts`: an eleventh sign-in ends the least recently used row, not the oldest, and its cookie stops working; a re-sign-in at ten ends only the presented row and evicts nothing; three sign-ins at once on top of nine leave ten. Ordering by `createdAt`, capping before the tidy, dropping the cap, an off-by-one, or counting the new session each turn it red; the lock and the order are pinned in `unit/sign-in-tidy.test.ts`. `bun run verify:ci` green on the commit. |
 | "feat(auth): keep a person signed in when they ask to" (D141) | The login form's "Mantener la sesión iniciada" box, unticked by default, makes a remembered session: `Session.persistent` (migration `20261015140000_persistent_sessions`), a ninety-day cookie, ninety idle days slid at most daily by a tRPC read, a year from `authenticatedAt` at most. The route passes `rememberMe` only for a literal `true`, sets `x-stoky-remember` after deleting the client's copy on every request, and on a ticked sign-in strips and expires `dont_remember`. `integration/session.policy.test.ts` signs in ticked, omitted and in a jar an unticked sign-in left, slides a day-old row, refuses one a year and a second on though used the day before, and checks the keep-alive never shortens one; `unit/auth-handler.test.ts` the coercion, the header and the cookie; `components/auth-pages.test.tsx` the box; `e2e/remember-me.spec.ts` what a real browser keeps. |
 | "feat(auth): tell an idle timeout from the session limit in the warning" | WCAG 2.2.6: in the day's last fifteen minutes the expiry is the limit from the sign-in and "Seguir conectado" cannot move it. `deadlineKind` (`src/lib/auth/session-policy.ts`) says which deadline an expiry is, with a second's slack; `AppSession.expiresKind` and `auth.session`'s `kind` carry it, and `SessionKeepAlive` names the limit and drops the button for `"cap"`. `SessionKeepAlive.test.tsx` (ignoring the kind turns three red), `session-policy.test.ts` (the boundary at ±1 s) and `session.policy.test.ts` (both answers of `auth.session` and the render's read). SECURITY.md no longer says nothing warns before the day runs out. `bun run verify:ci` green; `bun run test:e2e` 194 passed on six of eight runs, the other two being the service-worker offline test (flaky since commit 15's measurement) and a Firefox navigation timeout. |
+| "feat(auth): sign native clients in with bearer tokens" (D142) | Better Auth's `bearer({ requireSignature: true })` plugin: a client that keeps no cookies signs in at `/sign-in/email` with `rememberMe: true`, reads `<token>.<signature>` from `set-auth-token`, and sends it as `Authorization: Bearer` to tRPC and the auth API; the contract is in SECURITY.md *Authentication*. The route withholds `set-auth-token` and its expose entry from any request that carried a cookie, and the body never has the token. `integration/bearer.test.ts`: a cookie-less, Origin-less sign-in gets the signed token in the header alone; any cookie gets none; the token opens `get-session` and a tRPC query; unsigned and foreign-signed tokens are refused (with a control signed by the instance's own key); sign-out deletes the row; a remembered bearer row slides to the year and no further, a browser-kind one is never moved; a re-sign-in ends the presented bearer session. Removing the plugin, the strip, the body strip, the signature requirement, the update hook's drop, the year's clamp, the sign-out's header or the presented read each turns it red. `unit/trpc-handler.test.ts`: a bearer call with no Fetch Metadata passes, a cross-site one with the cookie is 403. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2934,3 +2935,43 @@ tick it on home devices used every day, the kitchen screen included.
   upgrade are browser sessions and have to be signed in again with the box
   ticked (INSTALL); a forgotten KITCHEN password is reset by an admin from
   **Personas del hogar**.
+
+**D142 — A native client signs in with a signed bearer token, and only a
+cookie-less request is handed one.** The iOS app (`../stoky-ios`) cannot use
+an `HttpOnly` cookie in any useful way and must not have to pretend to be a
+browser, so Better Auth's bearer plugin is on: the token is the session
+cookie's own signed value, carried in `Authorization: Bearer`, and Better Auth
+reads it as that cookie on every endpoint and on tRPC's `getSession`. It is
+the same row, so everything a session is — the tidy (D139), the ten-session
+cap (D140), the remembered lifetime (D141), revocation by deleting the row —
+applies unchanged.
+
+- **Signed only** (`requireSignature: true`). Without it the plugin signs a
+  bare token on the caller's behalf, and the `Session` table holds bare
+  tokens: a read of the table, a backup or a log line with one, would be a
+  credential. With it only the instance's HMAC opens a session, and a bad or
+  forged signature reads as no session — 401 on tRPC, which the client treats
+  as a sign-in to ask for.
+- **The header is for clients without cookies.** The plugin copies the
+  cookie's value into `set-auth-token`, and names it in
+  `Access-Control-Expose-Headers`, on every answer that sets the cookie — a
+  refresh included. Readable by a script, that would undo `HttpOnly`. The
+  route drops both whenever the request carried a cookie, which a browser's
+  always does here because rendering the login page gave it `stoky_device`;
+  a native client keeps none. (The spike found this, and the proxy's injected
+  `stoky_device` that made Better Auth demand an `Origin` from a client with
+  no cookies; ISSUES AUTH-4.)
+- **`rememberMe: true`, literally.** The route's coercion (D141) applies, so
+  a native client must send the literal `true` to get the ninety-day row; any
+  other value is a fifteen-minute browser session, which only `auth.session`
+  slides.
+- **Two-step verification on a native client is deferred** (owner,
+  2026-10-15). Its second step is a cookie the browser carries between two
+  requests; until the app has an equivalent, an account that turns two-step
+  verification on signs in on the web only.
+- **A password change or reset ends the bearer session** with every other —
+  it is a row like the rest. The app then asks for the password.
+- **What it costs.** Rotating `STOKY_SECRET` ends every native session along
+  with the browsers'. The contract is written in SECURITY.md
+  *Authentication*; ISSUES AUTH-4 and the 2026-10-12 review's #14 point
+  there.
