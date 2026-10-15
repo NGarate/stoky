@@ -946,9 +946,11 @@ member's sessions (D150). Passkeys work on the server (D151): a sign-in with
 user verification required and the remember-me box honoured, and adding or
 removing one after the password, at the first `STOKY_URLS` address only, on
 https or `localhost` and never at an IP address; proven by
-`integration/passkeys.test.ts` with a software authenticator. The settings
-screen and the login page's offer are still to come, so nobody can use them
-yet. Sessions are database rows: fifteen idle minutes, slid only by the
+`integration/passkeys.test.ts` with a software authenticator. *Seguridad y
+acceso* lists, adds, renames and removes them, and says why where adding
+cannot work (another listed address, an install without https on a domain
+name, a browser without WebAuthn); the login page's offer is still to come, so
+nobody signs in with one yet. Sessions are database rows: fifteen idle minutes, slid only by the
 keep-alive, a day at most, and deleted to end them — or, with "Mantener la
 sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
 since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
@@ -1134,6 +1136,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
 | better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
+| @better-auth/passkey, @simplewebauthn/browser | 1.7.7 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
 | uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |

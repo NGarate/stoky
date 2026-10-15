@@ -908,7 +908,10 @@ payment, usb, serial, hid, midi, display-capture, screen-wake-lock,
 xr-spatial-tracking, the three motion sensors, publickey-credentials-create,
 otp-credentials, idle-detection, local-fonts and compute-pressure.
 `publickey-credentials-get` is left unset for passkey sign-in, and
-`fullscreen` and `picture-in-picture` are left alone. Each token was kept
+`fullscreen` and `picture-in-picture` are left alone. (Since 2026-10-15 the
+passkey settings screen, PROGRESS D151, needs `publickey-credentials-create`:
+it left the deny list, and both passkey features are now written out as
+`(self)`, so eighteen are denied.) Each token was kept
 only if the browser recognises it, because an unknown one is ignored, with an
 "Unrecognized feature" error on every page, and a deny list copied from a
 generic recommendation can carry tokens of features that were renamed or

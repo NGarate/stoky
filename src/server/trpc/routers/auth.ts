@@ -25,6 +25,7 @@ import { liveSessionsOf } from "@/lib/auth/session-list";
 import { changeOwnPassword } from "@/lib/auth/password-change";
 import { MISSING_SESSION_ID_MESSAGE, confirmCurrentPassword } from "@/lib/auth/reauth";
 import { grantStepUp } from "@/lib/auth/step-up";
+import { passkeyRpOrigin } from "@/lib/auth/passkeys";
 import {
   capFor,
   deadlineKind,
@@ -255,6 +256,12 @@ export const authRouter = createTRPCRouter({
         // the row like the rest, so turning it on in another tab shows here
         // on the next read.
         twoFactorEnabled: user.twoFactorEnabled,
+        // The one origin a passkey works at (D151), or null when this install
+        // cannot have them (`src/lib/auth/passkeys.ts`). The security screen
+        // compares it with the page's own, so somebody at a second listed
+        // address is told where to go rather than shown a button that fails.
+        // Configuration, not a secret: it is the first `STOKY_URLS` entry.
+        passkeyOrigin: passkeyRpOrigin(),
       };
     }),
 

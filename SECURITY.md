@@ -326,8 +326,10 @@ Verified against the files named in each row.
   `Referrer-Policy: same-origin` (below),
   `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
   sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
-  `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
-  denies, by name, nineteen powerful features Stoky does not use —
+  `Permissions-Policy` that allows `camera=(self)` for the barcode scanner,
+  `publickey-credentials-create=(self)` and `publickey-credentials-get=(self)`
+  for passkeys (PROGRESS D151), and
+  denies, by name, eighteen powerful features Stoky does not use —
   microphone, geolocation, payment, USB, serial, HID, MIDI, screen capture,
   wake lock, the motion sensors and the rest (the list is in
   `next.config.ts`). It is a deny list, not a default: the header has no
@@ -336,9 +338,12 @@ Verified against the files named in each row.
   `interest-cohort`, the token of the retired FLoC, while its successor
   `browsing-topics` went undenied — and this line claimed the rest were
   denied (`docs/SECURITY_REVIEW.md` §8).
-  `publickey-credentials-get` is left unset because passkey sign-in would
-  need it, and `bluetooth` because the suite's Chromium (151) does not
-  recognise the token. `e2e/security-headers.spec.ts` pins the value and
+  `publickey-credentials-create` was on that list until 2026-10-15, when the
+  settings screen began adding passkeys: denied, every registration fails
+  with a `NotAllowedError` that reads like the person cancelling. Both
+  passkey grants are `(self)`, their default, written out so the next edit of
+  the list sees them; no frame is granted either. `bluetooth` is left unset
+  because the suite's Chromium (151) does not recognise the token. `e2e/security-headers.spec.ts` pins the value and
   fails on any token that Chromium does not recognise.
 - **`Cross-Origin-Opener-Policy: same-origin` and
   `Cross-Origin-Resource-Policy: same-origin`**, on every route, since
@@ -965,7 +970,8 @@ Verified against the files named in each row.
     be a domain name, so the plugin is registered only when the first entry
     is https, or http at `localhost`, with a host that is not an IP literal.
     Elsewhere — a plain-HTTP LAN install, `https://192.168.1.10` — there are
-    no passkeys and their endpoints answer 404.
+    no passkeys and their endpoints answer 404, and the settings screen says
+    the install cannot have them rather than showing an empty list.
   - **The person must be verified, not only present** (ASVS 5.0.0 6.6.x):
     registration asks the authenticator for user verification as
     `required`, and both ceremonies refuse an answer without the UV flag
@@ -1009,8 +1015,23 @@ Verified against the files named in each row.
     challenge row, and they cannot be given back from sign-in's five — a
     household signing in with passkeys behind one address would otherwise
     lock itself out.
+  - **Managed from Seguridad y acceso** (*Llaves de acceso*,
+    `src/components/security/PasskeyManager.tsx`): the list shows a name,
+    when it was added and whether the authenticator syncs it — never the
+    public key, credential id or counter the endpoint answers, which
+    `listPasskeys` drops. Adding and removing go through the password dialog
+    and `auth.confirmPassword`; renaming needs the session alone. Where adding
+    cannot work the screen says why instead of offering a button that fails:
+    `auth.me` carries `passkeyOrigin` (the first `STOKY_URLS` origin, or null
+    when the install cannot have them), and a page at any other origin is
+    told the address that works; then an insecure context, then a browser
+    without WebAuthn. The list and removal work at every listed address, so a
+    lost phone's passkey can be removed from wherever the person is.
+    `@simplewebauthn/browser` (13.3.0, exact, the version
+    `@better-auth/passkey` already resolved) is loaded on the click, not with
+    the page.
   - **Every role may have them**, the kitchen's shared account included (the
-    owner's decision of 2026-10-15); the settings page advises against adding
+    owner's decision of 2026-10-15); the add dialog advises against adding
     one on a device other people use. Removing a member's two-step
     verification (D150) leaves their passkeys alone. Rotating `STOKY_SECRET`
     leaves them working: nothing about them is encrypted with it.
@@ -2498,7 +2519,9 @@ full in the section named.
   Encrypting `localStorage` would not resist a local attacker.
 - **Plain-HTTP LAN installations stay supported** (D84): the server warns at
   start-up instead of refusing, and the weaker guarantees are documented under
-  *Authentication* and *Cross-site requests*.
+  *Authentication* and *Cross-site requests*. They have no passkeys (D151):
+  browsers offer WebAuthn only to https or `localhost`, and the security
+  screen says so in place of the button.
 - **Trivy does not inventory the Bun binary**, so a Bun advisory is invisible to
   the image scans. The version is tracked through `.bun-version` and
   Dependabot's `docker` updates, and each update reads Bun's security notes.
@@ -2787,7 +2810,8 @@ TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
 Plain HTTP to another machine is tolerated for testing, not supported: it sends
 every password and session cookie in cleartext, and the app logs a warning at
 start-up for each `STOKY_URLS` entry that is such an address (and does not
-start when it is not set). For TLS without a
+start when it is not set). Nor does it have passkeys, which need the first
+entry to be https with a domain name. For TLS without a
 public hostname, use your own proxy — listing its https address in `STOKY_URLS`
 address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
 `tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).

@@ -56,15 +56,24 @@ const securityHeaders = [
   // is absent: Chromium 151 does not recognise it (measured), and Web
   // Bluetooth asks the person per device anyway.
   //
-  // Left unset on purpose: `publickey-credentials-get`, which passkey sign-in
-  // would need, and `fullscreen` / `picture-in-picture`, which nothing uses
-  // and nothing gains by denying. A feature that comes to
+  // `publickey-credentials-create=(self)` and `publickey-credentials-get=(self)`
+  // are the passkeys' grants (PROGRESS D151): adding one in
+  // /settings/security calls `navigator.credentials.create`, signing in with
+  // one calls `.get`. Both default to 'self' already, so they are written out
+  // to say so — `create` was on the deny list until the settings screen
+  // needed it, and every registration failed with a NotAllowedError that
+  // reads like the person cancelling. Still never a frame's: `(self)`, not `*`.
+  //
+  // Left unset on purpose: `fullscreen` / `picture-in-picture`, which nothing
+  // uses and nothing gains by denying. A feature that comes to
   // need one of the denied ones — a wake lock for /kitchen, say — takes it
   // off this list in the same change.
   {
     key: "Permissions-Policy",
     value: [
       "camera=(self)",
+      "publickey-credentials-create=(self)",
+      "publickey-credentials-get=(self)",
       "microphone=()",
       "geolocation=()",
       "browsing-topics=()",
@@ -79,7 +88,6 @@ const securityHeaders = [
       "accelerometer=()",
       "gyroscope=()",
       "magnetometer=()",
-      "publickey-credentials-create=()",
       "otp-credentials=()",
       "idle-detection=()",
       "local-fonts=()",

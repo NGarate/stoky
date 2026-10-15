@@ -32,11 +32,12 @@ const STATIC_HEADERS: Record<string, string> = {
   // Written out rather than imported from the config, so a token dropped from
   // or added to the deny list there is a difference here.
   "permissions-policy":
-    "camera=(self), microphone=(), geolocation=(), browsing-topics=(), " +
+    "camera=(self), publickey-credentials-create=(self), publickey-credentials-get=(self), " +
+    "microphone=(), geolocation=(), browsing-topics=(), " +
     "payment=(), usb=(), serial=(), hid=(), midi=(), " +
     "display-capture=(), screen-wake-lock=(), xr-spatial-tracking=(), " +
     "accelerometer=(), gyroscope=(), magnetometer=(), " +
-    "publickey-credentials-create=(), otp-credentials=(), idle-detection=(), " +
+    "otp-credentials=(), idle-detection=(), " +
     "local-fonts=(), compute-pressure=()",
   "strict-transport-security": "max-age=63072000; includeSubDomains",
   "x-permitted-cross-domain-policies": "none",

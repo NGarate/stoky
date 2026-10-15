@@ -487,6 +487,9 @@ describe("tRPC Router Integration Tests", () => {
         expect(result.household).toBeDefined();
         // `/settings/security` reads it to say whether the second step is on.
         expect(result.twoFactorEnabled).toBe(false);
+        // The security screen compares it with the page's origin (D151): the
+        // suite runs at http://localhost:3000, where passkeys can work.
+        expect(result.passkeyOrigin).toBe("http://localhost:3000");
       });
 
       it("should throw when not authenticated", async () => {

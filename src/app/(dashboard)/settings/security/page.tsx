@@ -6,6 +6,7 @@ import { Section } from "@/components/ui/section";
 import { DeviceList } from "@/components/session/DeviceList";
 import { ChangePasswordForm } from "@/components/session/ChangePasswordForm";
 import { TwoFactorSettings } from "@/components/security/TwoFactorSettings";
+import { PasskeyManager } from "@/components/security/PasskeyManager";
 import type { JSX } from "react";
 
 /**
@@ -32,6 +33,11 @@ import type { JSX } from "react";
  * once, and every change to it ends with a pointer back up to the devices
  * list (ASVS 5.0.0 7.4.3), which is why that section's heading has an id.
  * Shown to every role, the kitchen's shared account included.
+ *
+ * Passkeys after it (D151): another way in, added or removed with the
+ * password like the second step, and the section that most often has to say
+ * why it cannot be used here — at a second address, or on an install that
+ * cannot have them. Every role, too.
  */
 export default function SecurityPage(): JSX.Element {
   const t = useTranslations("security");
@@ -56,6 +62,10 @@ export default function SecurityPage(): JSX.Element {
 
       <Section className="mt-8" title={tTwoFactor("twoFactorTitle")}>
         <TwoFactorSettings />
+      </Section>
+
+      <Section className="mt-8" title={t("passkeysTitle")}>
+        <PasskeyManager />
       </Section>
     </PageShell>
   );

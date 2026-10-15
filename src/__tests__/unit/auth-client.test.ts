@@ -1,7 +1,12 @@
 import { describe, expect, it, mock } from "bun:test";
 import {
   AccountChangeRefusedError,
+  addPasskey,
+  browserRefusalOf,
+  listPasskeys,
   readSessionExpiry,
+  removePasskey,
+  renamePasskey,
   replaceBackupCodes,
   startTotpEnrolment,
   turnOffTwoFactor,
@@ -315,6 +320,157 @@ describe("changing two-step verification", () => {
         (error: unknown) => error,
       );
       expect(refusal, JSON.stringify(body)).toBeInstanceOf(AccountChangeRefusedError);
+    }
+  });
+});
+
+describe("passkeys", () => {
+  /** A fetch that answers each call in turn, and records them. */
+  function answeringInTurn(...answers: [number, unknown][]) {
+    let call = 0;
+    return mock(async (_url: string, _init: RequestInit) => {
+      const [status, body] = answers[Math.min(call++, answers.length - 1)];
+      return Response.json(body, { status });
+    });
+  }
+  const ROW = {
+    id: "pk-1",
+    name: "Chrome en Android",
+    userId: "u-1",
+    publicKey: "pAEC…",
+    credentialID: "cred-1",
+    counter: 0,
+    deviceType: "multiDevice",
+    backedUp: true,
+    transports: "internal,hybrid",
+    aaguid: "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+    createdAt: "2026-10-15T09:00:00.000Z",
+  };
+
+  it("lists the passkeys with what the screen shows, and nothing it does not", async () => {
+    const older = { ...ROW, id: "pk-0", name: "  ", backedUp: false, createdAt: "2026-10-14T09:00:00.000Z" };
+    const fetcher = answeringInTurn([200, [ROW, older]]);
+
+    const listed = await listPasskeys(fetcher as unknown as typeof fetch);
+
+    // No public key, credential id or counter: none of it means anything to
+    // a person, so none of it is kept. Oldest first; a blank name is none.
+    expect(listed).toEqual([
+      { id: "pk-0", name: null, createdAt: older.createdAt, synced: false },
+      { id: "pk-1", name: "Chrome en Android", createdAt: ROW.createdAt, synced: true },
+    ]);
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/auth/passkey/list-user-passkeys");
+    expect(init.method).toBe("GET");
+    expect(init.cache).toBe("no-store");
+  });
+
+  it("adds one in three steps: the options, the browser, the check", async () => {
+    const options = { challenge: "c", rp: { id: "stoky.example" }, user: { id: "u" } };
+    const fetcher = answeringInTurn([200, options], [200, { id: "pk-2" }]);
+    const create = mock(async (_options: unknown) => ({
+      id: "cred",
+      rawId: "cred",
+      response: { clientDataJSON: "x", attestationObject: "y" },
+      type: "public-key",
+      clientExtensionResults: { credProps: { rk: true } },
+    }));
+
+    await addPasskey("Firefox en Linux", { fetcher: fetcher as unknown as typeof fetch, create });
+
+    expect(create.mock.calls[0][0]).toEqual(options);
+    const [optionsUrl, optionsInit] = fetcher.mock.calls[0];
+    expect(optionsUrl).toBe("/api/auth/passkey/generate-register-options");
+    expect(optionsInit.method).toBe("GET");
+    const [verifyUrl, verifyInit] = fetcher.mock.calls[1];
+    expect(verifyUrl).toBe("/api/auth/passkey/verify-registration");
+    expect(verifyInit.method).toBe("POST");
+    // The answer and the name, as the route forwards them, and nothing else.
+    expect(JSON.parse(String(verifyInit.body))).toEqual({
+      response: {
+        id: "cred",
+        rawId: "cred",
+        response: { clientDataJSON: "x", attestationObject: "y" },
+        type: "public-key",
+      },
+      name: "Firefox en Linux",
+    });
+  });
+
+  it("asks the browser for nothing when the options are refused", async () => {
+    const fetcher = answeringInTurn([403, { code: "STEP_UP_REQUIRED" }]);
+    const create = mock(async () => ({}));
+
+    const refusal = await addPasskey(null, { fetcher: fetcher as unknown as typeof fetch, create }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect((refusal as AccountChangeRefusedError).code).toBe("step_up_required");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("words the browser's refusal, and sends nothing after it", async () => {
+    const fetcher = answeringInTurn([200, { challenge: "c" }]);
+    const cancelled = Object.assign(new Error("The operation either timed out or was not allowed."), {
+      code: "ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY",
+      cause: Object.assign(new Error("denied"), { name: "NotAllowedError" }),
+    });
+    const refusal = await addPasskey(null, {
+      fetcher: fetcher as unknown as typeof fetch,
+      create: async () => {
+        throw cancelled;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect((refusal as AccountChangeRefusedError).code).toBe("cancelled");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the browser's errors as the screen words them", () => {
+    expect(browserRefusalOf({ code: "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED" })).toBe("already_registered");
+    expect(browserRefusalOf({ code: "ERROR_AUTHENTICATOR_MISSING_USER_VERIFICATION_SUPPORT" })).toBe(
+      "not_verified",
+    );
+    expect(browserRefusalOf({ code: "ERROR_CEREMONY_ABORTED" })).toBe("cancelled");
+    expect(browserRefusalOf({ name: "NotAllowedError" })).toBe("cancelled");
+    expect(browserRefusalOf(new Error("anything else"))).toBe("unknown");
+  });
+
+  it("renames and removes by id, posting only what each endpoint takes", async () => {
+    const renamed = answeringInTurn([200, { passkey: ROW }]);
+    await renamePasskey("pk-1", "Llavero", renamed as unknown as typeof fetch);
+    expect(renamed.mock.calls[0][0]).toBe("/api/auth/passkey/update-passkey");
+    expect(JSON.parse(String(renamed.mock.calls[0][1].body))).toEqual({ id: "pk-1", name: "Llavero" });
+
+    const removed = answeringInTurn([200, { status: true }]);
+    await removePasskey("pk-1", removed as unknown as typeof fetch);
+    expect(removed.mock.calls[0][0]).toBe("/api/auth/passkey/delete-passkey");
+    expect(JSON.parse(String(removed.mock.calls[0][1].body))).toEqual({ id: "pk-1" });
+  });
+
+  it("throws each endpoint's refusal, worded", async () => {
+    const cases = [
+      [403, "STEP_UP_REQUIRED", "step_up_required"],
+      [401, "USER_VERIFICATION_REQUIRED", "not_verified"],
+      [400, "PREVIOUSLY_REGISTERED", "already_registered"],
+      [404, "PASSKEY_NOT_FOUND", "passkey_gone"],
+      [401, "YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY", "passkey_gone"],
+      [401, "UNAUTHORIZED", "signed_out"],
+      [400, "FAILED_TO_VERIFY_REGISTRATION", "unknown"],
+    ] as const;
+    for (const [status, code, expected] of cases) {
+      const refusal = await removePasskey(
+        "pk-1",
+        answeringInTurn([status, { code }]) as unknown as typeof fetch,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect((refusal as AccountChangeRefusedError).code, code).toBe(expected);
     }
   });
 });

@@ -14,7 +14,8 @@ import type { DeadlineKind } from "@/lib/auth/session-policy";
  * endpoints (`src/server/http/auth-handler.ts`) and the three a sign-in needs
  * — the password, then an authenticator code or a backup code — are called
  * from here, which a client library would only wrap; so are the three that
- * change two-step verification from the settings screen. Browser-only by construction: no
+ * change two-step verification from the settings screen, and the four that
+ * list, add, rename and remove passkeys. Browser-only by construction: no
  * server import, nothing that reads a secret. The one import from the server
  * side is a type, erased at build, so the server's refusal codes and the ones
  * named here cannot drift apart. `src/__tests__/unit/auth-dynamic.test.ts`
@@ -252,6 +253,18 @@ async function secondStep(
  * - `already_enabled` / `not_enabled` — another tab or device changed it
  *   first, so the screen is out of date;
  * - `auth_unavailable`, and `unknown` for anything else.
+ *
+ * A change to the passkeys (D151) adds its own:
+ *
+ * - `step_up_required` — the password confirmed for it has lapsed or been
+ *   spent (`auth.confirmPassword`, five minutes, one change);
+ * - `cancelled` — the browser's prompt was dismissed, or timed out: the
+ *   person said no, or never answered;
+ * - `already_registered` — this authenticator already holds a passkey for
+ *   the account;
+ * - `not_verified` — the authenticator cannot check who is holding it
+ *   (no fingerprint, face or PIN), which Stoky requires;
+ * - `passkey_gone` — the passkey is not this account's, or no longer exists.
  */
 export type AccountChangeRefusalCode =
   | "wrong_password"
@@ -259,6 +272,11 @@ export type AccountChangeRefusalCode =
   | "signed_out"
   | "already_enabled"
   | "not_enabled"
+  | "step_up_required"
+  | "cancelled"
+  | "already_registered"
+  | "not_verified"
+  | "passkey_gone"
   | "auth_unavailable"
   | "unknown";
 
@@ -362,6 +380,169 @@ export async function replaceBackupCodes(
   return backupCodesOf(
     await accountChange("/api/auth/two-factor/generate-backup-codes", password, fetcher),
   );
+}
+
+/**
+ * The passkey endpoints' codes, in ours: the policy plugin's
+ * (`STEP_UP_REQUIRED`, `USER_VERIFICATION_REQUIRED`), Better Auth's, and the
+ * route's. A registration that fails verification, or whose challenge has
+ * gone, is `unknown`: the screen's words for it are "it did not work, try
+ * again", which is all either means to the person.
+ */
+const PASSKEY_CODES: Record<string, AccountChangeRefusalCode> = {
+  STEP_UP_REQUIRED: "step_up_required",
+  USER_VERIFICATION_REQUIRED: "not_verified",
+  PREVIOUSLY_REGISTERED: "already_registered",
+  PASSKEY_NOT_FOUND: "passkey_gone",
+  YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY: "passkey_gone",
+  UNAUTHORIZED: "signed_out",
+  AUTH_UNAVAILABLE: "auth_unavailable",
+  INVALID_ORIGIN: "auth_unavailable",
+  MISSING_OR_NULL_ORIGIN: "auth_unavailable",
+};
+
+/**
+ * One of this account's passkeys, as the settings screen shows it — and
+ * nothing more. The endpoint answers the whole row (public key, credential
+ * id, counter); none of it means anything to a person, so none of it is
+ * kept.
+ *
+ * `synced` is the authenticator's own backup flag: a passkey in a password
+ * manager or a phone's keychain reaches the person's other devices; one in a
+ * security key or a single device's chip does not.
+ */
+export interface PasskeySummary {
+  id: string;
+  name: string | null;
+  createdAt: string;
+  synced: boolean;
+}
+
+/** A request to a passkey endpoint; the answer's body, or the refusal thrown. */
+async function passkeyRequest(
+  path: string,
+  init: { method: "GET" } | { method: "POST"; body: Record<string, unknown> },
+  fetcher: typeof fetch,
+): Promise<unknown> {
+  const response = await fetcher(`/api/auth/passkey/${path}`, {
+    method: init.method,
+    ...(init.method === "POST"
+      ? { headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) }
+      : {}),
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const refusal = refusalOf(body, response.headers.get("retry-after"), PASSKEY_CODES);
+    throw new AccountChangeRefusedError(refusal.code, refusal.retryAfterSeconds);
+  }
+  return body;
+}
+
+/** This account's passkeys, oldest first. Throws `AccountChangeRefusedError`. */
+export async function listPasskeys(fetcher: typeof fetch = fetch): Promise<PasskeySummary[]> {
+  const body = await passkeyRequest("list-user-passkeys", { method: "GET" }, fetcher);
+  if (!Array.isArray(body)) throw new AccountChangeRefusedError("unknown");
+  return body
+    .filter(
+      (row): row is { id: string; name?: unknown; createdAt: string; backedUp?: unknown } =>
+        typeof row === "object" &&
+        row !== null &&
+        typeof (row as { id?: unknown }).id === "string" &&
+        typeof (row as { createdAt?: unknown }).createdAt === "string",
+    )
+    .map((row) => ({
+      id: row.id,
+      name: typeof row.name === "string" && row.name.trim() !== "" ? row.name : null,
+      createdAt: row.createdAt,
+      synced: row.backedUp === true,
+    }))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/**
+ * Asks the browser to make a credential from the server's options, and
+ * answers what it made. `@simplewebauthn/browser` is loaded here, on the
+ * click, not with the page: nobody who never adds a passkey downloads it.
+ */
+export type CreateCredential = (optionsJSON: unknown) => Promise<unknown>;
+
+const createWithBrowser: CreateCredential = async (optionsJSON) => {
+  const { startRegistration } = await import("@simplewebauthn/browser");
+  return startRegistration({
+    optionsJSON: optionsJSON as Parameters<typeof startRegistration>[0]["optionsJSON"],
+  });
+};
+
+/**
+ * The browser's refusal to make a credential, in ours. `@simplewebauthn/browser`
+ * wraps the DOM error in a `WebAuthnError` with a `code`, and passes a
+ * `NotAllowedError` — which browsers raise for a dismissed prompt, a timeout
+ * and a policy refusal alike — through as its `cause`.
+ */
+export function browserRefusalOf(error: unknown): AccountChangeRefusalCode {
+  const code = (error as { code?: unknown } | null)?.code;
+  const name =
+    (error as { cause?: { name?: unknown } } | null)?.cause?.name ??
+    (error as { name?: unknown } | null)?.name;
+  if (code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED" || name === "InvalidStateError") {
+    return "already_registered";
+  }
+  if (code === "ERROR_AUTHENTICATOR_MISSING_USER_VERIFICATION_SUPPORT") return "not_verified";
+  if (code === "ERROR_CEREMONY_ABORTED" || name === "NotAllowedError" || name === "AbortError") {
+    return "cancelled";
+  }
+  return "unknown";
+}
+
+/**
+ * Adds a passkey on this device (D151), in the three steps a registration
+ * is: the server's options (a challenge, and the account's existing
+ * credentials so the same authenticator is not enrolled twice), the
+ * browser's prompt, and the server's check of what it made.
+ *
+ * Needs a step-up first — `auth.confirmPassword`, the password re-entered —
+ * which the options ask for and the check spends, whatever it decides: a
+ * refusal here means asking for the password again. Throws
+ * `AccountChangeRefusedError`.
+ */
+export async function addPasskey(
+  name: string | null,
+  { fetcher = fetch, create = createWithBrowser }: { fetcher?: typeof fetch; create?: CreateCredential } = {},
+): Promise<void> {
+  const options = await passkeyRequest("generate-register-options", { method: "GET" }, fetcher);
+  let made: unknown;
+  try {
+    made = await create(options);
+  } catch (error) {
+    throw new AccountChangeRefusedError(browserRefusalOf(error));
+  }
+  // Without `clientExtensionResults`, as Better Auth's own client sends it:
+  // the route forwards `response` and `name` and nothing else.
+  const { clientExtensionResults: _extensions, ...response } = (made ?? {}) as Record<string, unknown>;
+  await passkeyRequest(
+    "verify-registration",
+    { method: "POST", body: name ? { response, name } : { response } },
+    fetcher,
+  );
+}
+
+/** Renames one of this account's passkeys. Needs the session only. */
+export async function renamePasskey(
+  id: string,
+  name: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await passkeyRequest("update-passkey", { method: "POST", body: { id, name } }, fetcher);
+}
+
+/**
+ * Removes one of this account's passkeys. Needs a step-up first, like adding
+ * one, and spends it.
+ */
+export async function removePasskey(id: string, fetcher: typeof fetch = fetch): Promise<void> {
+  await passkeyRequest("delete-passkey", { method: "POST", body: { id } }, fetcher);
 }
 
 /**
