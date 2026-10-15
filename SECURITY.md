@@ -1310,7 +1310,8 @@ Docker collects. With `jq` installed on the host, `docker compose logs
 lists the refusals: `--no-log-prefix` drops the `app-1  | ` Compose puts
 before every line, which jq cannot parse, and `fromjson?` skips the lines that
 are not JSON. The events are
-`auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
+`auth.signin.failed`, `auth.signin.throttled`, `auth.signin.succeeded`,
+`auth.unavailable`,
 `auth.session.revoked`, `auth.password.changed`,
 `auth.password.change.refused`, `auth.password.reset`, `access.denied` and
 `request.throttled`. `auth.session.revoked` carries a `reason`:
@@ -1318,6 +1319,16 @@ are not JSON. The events are
 one signed in more than thirty days ago or carrying no sign-in time at all —
 which is every session left from before the limit, so expect these lines from
 every device that was signed in when that upgrade was installed.
+
+A sign-in that gets in is recorded as well, as ASVS 5.0.0 **16.3.1** asks:
+`auth.signin.succeeded` carries the `userId` it signed in as, the factor in
+`method` (`password` today; `totp`, `backup-code` and `passkey` are reserved
+for the methods still to come), and the same `account` tag and `address` a
+failure carries, so one filter follows an account from its refusals to the
+sign-in that ended them — the line that tells a member who mistyped twenty
+times from somebody who guessed right on the twenty-first. Like every other
+line it holds no address that was typed, no token and no password, and it is
+written only once the sign-in has completed.
 
 - **The release bundle rotates them; Docker alone does not.** Docker's default
   `json-file` driver has no size limit, and every throttled refusal writes a

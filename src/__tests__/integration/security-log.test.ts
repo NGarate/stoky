@@ -18,7 +18,7 @@ import {
   resetRateLimit,
 } from "@/lib/rate-limit";
 import { RateLimitedSignin } from "@/lib/auth";
-import { signInWith } from "../utils/authorize";
+import { freshTestAddress, signInWith } from "../utils/authorize";
 import {
   createTestUser,
   createTestHousehold,
@@ -403,5 +403,42 @@ describe("a refused sign-in", () => {
     expect(throttled?.account).toBe(accountTag(stranger));
     expect(throttled).not.toHaveProperty("email");
     expect(written()).not.toContain(stranger.split("@")[0]);
+  });
+});
+
+/**
+ * ASVS 5.0.0 16.3.1, through `authorize`: a successful sign-in is logged, with
+ * the factor it used. The unit suite proves `signInSucceeded` writes the line;
+ * this proves the sign-in path calls it, once, and with the account it
+ * actually signed in.
+ */
+describe("an accepted sign-in", () => {
+  it("is recorded once, with the factor, the user and the account's tag", async () => {
+    const address = freshTestAddress();
+    const user = await signInWith(
+      { email: ownerEmail, password: "TestPassword123!" },
+      { address },
+    );
+    expect(user).not.toBeNull();
+
+    const succeeded = lines.filter((line) => line.event === "auth.signin.succeeded");
+    expect(succeeded).toHaveLength(1);
+    expect(succeeded[0]).toMatchObject({
+      method: "password",
+      userId: ownerId,
+      account: accountTag(ownerEmail),
+      address,
+    });
+    expect(succeeded[0]).not.toHaveProperty("email");
+    expect(JSON.stringify(succeeded)).not.toContain(ownerEmail.split("@")[0]);
+  });
+
+  it("is not recorded for a refused one", async () => {
+    expect(
+      await signInWith({ email: ownerEmail, password: "no es la contraseña" }),
+    ).toBeNull();
+
+    expect(lines.some((line) => line.event === "auth.signin.succeeded")).toBe(false);
+    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(ownerEmail));
   });
 });

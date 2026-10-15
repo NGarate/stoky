@@ -170,6 +170,37 @@ describe("the address a sign-in tried", () => {
   });
 });
 
+describe("a sign-in that got in", () => {
+  // ASVS 5.0.0 16.3.1: successes are logged with the factor used. The
+  // success path is the one holding a live session token and the address
+  // that was typed, so it is the one most tempted to pass them along.
+  it("names the user, the factor, the tag and the client — and nothing else", () => {
+    const smuggled = {
+      userId: "user-1",
+      method: "password",
+      account: "2829b95a295aaf0a",
+      address: "203.0.113.7",
+      email: "vecina.del.quinto@example.org",
+      token: "sesion-viva-abc123",
+    } as unknown as SecurityDetails;
+
+    const line = securityLine("auth.signin.succeeded", smuggled, AT);
+    const parsed = JSON.parse(line);
+
+    expect(parsed).not.toHaveProperty("email");
+    expect(parsed).not.toHaveProperty("token");
+    expect(line).not.toContain("vecina");
+    expect(line).not.toContain("sesion-viva");
+    expect(parsed).toMatchObject({
+      event: "auth.signin.succeeded",
+      userId: "user-1",
+      method: "password",
+      account: "2829b95a295aaf0a",
+      address: "203.0.113.7",
+    });
+  });
+});
+
 describe("how long a value can be", () => {
   it("is bounded, so one request cannot write megabytes", () => {
     // A line is written for requests that were refused, from callers nobody

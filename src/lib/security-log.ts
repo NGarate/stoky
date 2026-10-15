@@ -10,6 +10,13 @@
  * my instance?" — had no answer anywhere, and the first evidence of a break-in
  * would have been the data changing.
  *
+ * **A success is an event too.** ASVS 5.0.0 **16.3.1** asks for every
+ * authentication attempt, successful or not, and the factor it used. Without
+ * the successes the failures cannot be read: twenty refused sign-ins on an
+ * account followed by silence is a typo-prone member or a guesser who got
+ * in, and only the line that says somebody *did* sign in, from where and how,
+ * tells the two apart (`auth.signin.succeeded`).
+ *
  * **One line of JSON per event, on stderr** (`console.warn`, below). Not a
  * file, not a table: the deployment is Docker, so stderr is already collected
  * and reachable with `docker compose logs` — and rotated only because the
@@ -39,6 +46,12 @@
 export type SecurityEvent =
   | "auth.signin.failed"
   | "auth.signin.throttled"
+  // A sign-in that got in — ASVS 5.0.0 16.3.1, which asks for successful
+  // authentications as well as failed ones, and for the factor used:
+  // `method`, with the `userId` it signed in as and the same `account` tag
+  // and `address` a failure carries, so one jq filter follows a person from
+  // their refusals to their way in.
+  | "auth.signin.succeeded"
   | "auth.unavailable"
   // A session refused by the `jwt` callback, with the `reason`: issued before
   // the account's revocation line (`sessions-valid-from`), or signed in more
@@ -64,6 +77,13 @@ export type SecurityEvent =
   | "auth.password.reset"
   | "access.denied"
   | "request.throttled";
+
+/**
+ * How a sign-in proved who it was: the factor `auth.signin.succeeded` names.
+ * A closed list for the same reason the events are one: a grep for
+ * `"method":"passkey"` has to find every passkey sign-in.
+ */
+export type SignInMethod = "password" | "totp" | "backup-code" | "passkey";
 
 export interface SecurityDetails {
   /** The account the request was made by, when there was one. */
@@ -95,6 +115,8 @@ export interface SecurityDetails {
   account?: string;
   /** The account an action was done *to*, when that is not `userId`. */
   targetUserId?: string;
+  /** The factor a successful sign-in used (`auth.signin.succeeded`). */
+  method?: SignInMethod;
 }
 
 /**

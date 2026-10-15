@@ -103,6 +103,7 @@ afterEach(() => {
 const ADDRESS = loginRateLimit().prefix;
 const ACCOUNT = loginAccountRateLimit().prefix;
 const DEVICE = loginDeviceRateLimit().prefix;
+const USER = "user-ana-0001";
 
 describe("a refusal's Retry-After", () => {
   it("is the limiter's figure for a spent address", async () => {
@@ -202,7 +203,7 @@ describe("settling a charge", () => {
     const charged = await charge(limiter);
     calls.length = 0;
 
-    await signInSucceeded(charged, limiter);
+    await signInSucceeded(charged, USER, "password", limiter);
 
     expect(calls).toEqual([
       ["refund", ADDRESS, "203.0.113.9", 1_234_567],
@@ -215,6 +216,8 @@ describe("settling a charge", () => {
     const withDevice = fakeLimiter();
     await signInSucceeded(
       await charge(withDevice.limiter, { cookie: `${DEVICE_ID_COOKIE}=${device}` }),
+      USER,
+      "password",
       withDevice.limiter,
     );
     expect(withDevice.calls.at(-1)).toEqual([
@@ -224,8 +227,58 @@ describe("settling a charge", () => {
     ]);
 
     const without = fakeLimiter();
-    await signInSucceeded(await charge(without.limiter), without.limiter);
+    await signInSucceeded(await charge(without.limiter), USER, "password", without.limiter);
     expect(without.calls.some(([name]) => name === "rememberDevice")).toBe(false);
+  });
+
+  it("records who got in, how, and from where — never the address typed", async () => {
+    // ASVS 5.0.0 16.3.1: a successful authentication is logged with the
+    // factor it used. The same tag and address a failure carries, so one
+    // filter follows an account from its refusals to its way in.
+    const { limiter } = fakeLimiter();
+    const charged = await charge(limiter);
+    warn.mockClear();
+
+    await signInSucceeded(charged, USER, "password", limiter);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = JSON.parse(String(warn.mock.calls[0]?.[0]));
+    const { ts: _ts, ...rest } = line;
+    expect(rest).toEqual({
+      event: "auth.signin.succeeded",
+      userId: USER,
+      method: "password",
+      account: charged.accountTag,
+      address: "203.0.113.9",
+    });
+    expect(JSON.stringify(line)).not.toContain("example.com");
+  });
+
+  it("names the factor it was given", async () => {
+    const { limiter } = fakeLimiter();
+    const charged = await charge(limiter);
+    warn.mockClear();
+
+    await signInSucceeded(charged, USER, "passkey", limiter);
+
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0])).method).toBe("passkey");
+  });
+
+  it("records nothing when settling the charge fails", async () => {
+    // The sign-in does not complete when the cache does not answer, and a
+    // success line for a session nobody received is a false audit entry.
+    const { limiter } = fakeLimiter();
+    const charged = await charge(limiter);
+    limiter.refund = async () => {
+      throw new RateLimitUnavailableError(new Error("valkey down"));
+    };
+    warn.mockClear();
+
+    await expect(signInSucceeded(charged, USER, "password", limiter)).rejects.toThrow();
+
+    expect(
+      warn.mock.calls.some(([first]: unknown[]) => String(first).includes("auth.signin.succeeded")),
+    ).toBe(false);
   });
 
   it("gives nothing back for a failure", async () => {

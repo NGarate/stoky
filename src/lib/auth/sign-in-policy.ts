@@ -1,5 +1,5 @@
 import { accountTag } from "@/lib/account-tag";
-import { logSecurityEvent } from "@/lib/security-log";
+import { logSecurityEvent, type SignInMethod } from "@/lib/security-log";
 import { loginSchema } from "@/lib/validations/auth";
 import {
   deviceFingerprint,
@@ -305,14 +305,29 @@ export async function settleSignIn(
 }
 
 /**
- * The password was accepted: settle the charge, and remember this browser for
+ * The password was accepted: settle the charge, remember this browser for
  * the account — only now, which is what makes a recorded device worth a
- * budget of its own.
+ * budget of its own — and record that `userId` got in.
+ *
+ * The line is written last, once the cache has answered: if settling throws,
+ * the sign-in does not complete, and a success line for a sign-in nobody
+ * received would be the one false entry an audit log must not have. It
+ * carries the tag and the address from the charge, never the address that
+ * was typed (ASVS 5.0.0 16.3.1 for the event, `@/lib/account-tag` for why
+ * the tag).
  */
 export async function signInSucceeded(
   charge: SignInCharge,
+  userId: string,
+  method: SignInMethod = "password",
   limiter: SignInLimiter = valkeySignInLimiter,
 ): Promise<void> {
   await settleSignIn(charge, limiter);
   if (charge.deviceId) await limiter.rememberDevice(charge.account, charge.deviceId);
+  logSecurityEvent("auth.signin.succeeded", {
+    userId,
+    method,
+    account: charge.accountTag,
+    address: charge.address,
+  });
 }

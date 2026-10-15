@@ -274,7 +274,7 @@ export const authConfig: NextAuthConfig = {
           return null;
         }
 
-        await signInSucceeded(attempt);
+        await signInSucceeded(attempt, user.id);
 
         return {
           id: user.id,
