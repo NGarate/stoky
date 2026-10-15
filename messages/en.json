@@ -1034,7 +1034,7 @@
   },
   "security": {
     "title": "Security and access",
-    "hubDescription": "See which devices you are signed in on, and sign out of any you do not recognise.",
+    "hubDescription": "See which devices you are signed in on, sign out of any you do not recognise, and change your password.",
     "intro": "This is where you are signed in. If you do not recognise a device, sign it out.",
     "backToSettings": "Back to settings",
     "devicesTitle": "Your devices",

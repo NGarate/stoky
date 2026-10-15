@@ -1034,7 +1034,7 @@
   },
   "security": {
     "title": "Seguridad y acceso",
-    "hubDescription": "Mira en qué dispositivos tienes la sesión iniciada y cierra la de los que no reconozcas.",
+    "hubDescription": "Mira en qué dispositivos tienes la sesión iniciada, cierra la de los que no reconozcas y cambia tu contraseña.",
     "intro": "Aquí ves dónde tienes la sesión iniciada. Si no reconoces un dispositivo, cierra su sesión.",
     "backToSettings": "Volver a configuración",
     "devicesTitle": "Tus dispositivos",

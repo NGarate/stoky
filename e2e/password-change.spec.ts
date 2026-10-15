@@ -7,7 +7,7 @@ import { test, expect, type Page } from "@playwright/test";
  * password changes nothing, a right one replaces the hash, and a token issued
  * before the change is refused. `components/EndSession.test.tsx` proves the
  * form's order with the server mocked. Neither proves the chain a person
- * actually depends on: that the form on `/settings` reaches
+ * actually depends on: that the form on `/settings/security` reaches
  * `auth.changePassword`, that the session ends, and that **the old password no
  * longer signs in while the new one does** — the whole point of rotating a
  * password somebody else may know.
@@ -70,7 +70,7 @@ test.describe("changing your own password", () => {
     await expect(page).toHaveURL(/\/start/, { timeout: 30_000 });
 
     // ----------------------------------------------------------------- when --
-    await page.goto("/settings");
+    await page.goto("/settings/security");
     await page.getByLabel("Contraseña actual").fill(OLD_PASSWORD);
     await page.getByLabel("Contraseña nueva", { exact: true }).fill(NEW_PASSWORD);
     await page.getByLabel("Repite la contraseña nueva").fill(NEW_PASSWORD);

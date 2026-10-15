@@ -57,7 +57,7 @@ function serverProblem(error: unknown): Problem {
 }
 
 /**
- * A signed-in person changing their own password, on `/settings`.
+ * A signed-in person changing their own password, on `/settings/security`.
  *
  * Until `auth.changePassword` existed, nothing changed a password once it was
  * set: the one an admin chose for a member stayed known to that admin, and a

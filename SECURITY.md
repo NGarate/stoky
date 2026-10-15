@@ -765,8 +765,8 @@ Verified against the files named in each row.
 - The address is validated with a Zod schema before the database is touched,
   and an unknown email and a wrong password get the same 401
   `INVALID_EMAIL_OR_PASSWORD`, after the same Argon2id cost.
-- **A signed-in person can change their own password**, from Settings
-  (`auth.changePassword`, security review 2026-10-12 — until then nothing
+- **A signed-in person can change their own password**, from Settings →
+  *Seguridad y acceso* (`auth.changePassword`, security review 2026-10-12 — until then nothing
   changed a password once it was set, so a leaked one could not be rotated and
   one an admin chose stayed known to that admin). It asks for the current
   password through the same `verifyPassword` as sign-in, metered (below); a
@@ -2074,8 +2074,8 @@ own.
   receipt photographs until they are removed by the command given there.
   Nothing deletes a household (ASVS 4.0.3 V8.3.2, security review 2026-10-12).
 - No invitations: with registration closed, an admin sets a new person's first
-  password and hands it over. The person can change it from Settings once
-  signed in; nothing makes them.
+  password and hands it over. The person can change it from Settings →
+  *Seguridad y acceso* once signed in; nothing makes them.
 - No permanent account lockout — but the per-account sign-in limit is a
   temporary one that a stranger can renew every fifteen minutes against a
   browser that has never signed in to the account (see *Rate limiting* above
