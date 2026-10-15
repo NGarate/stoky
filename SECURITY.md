@@ -863,10 +863,36 @@ Verified against the files named in each row.
     minute and a half. The window is Better Auth's, kept for phones whose
     clocks drift; single use, above, is what stops a code being reused within
     it.
-  - **Only the second step is reachable over HTTP for now.** Enrolment,
-    disabling and backup-code generation open with the settings screen, and
-    `POST /two-factor/get-totp-uri` never does: it hands the decrypted secret
-    back to whoever holds the session.
+  - **Optional, for every role**, set up from Settings → *Seguridad y
+    acceso* → *Verificación en dos pasos*. The kitchen's shared account may
+    turn it on too (the owner's decision of 2026-10-15); a household that does
+    needs the authenticator, or a backup code, wherever that account signs
+    in. Nothing requires it, which is a deviation from ASVS 5.0.0 6.3.3
+    (more than one factor for every account, at L2): a household instance's
+    accounts are its members, and whether to carry a second factor is each
+    one's choice.
+  - **Setting it up takes the password, three times over.** `POST
+    /two-factor/enable` (the new authenticator's `otpauth:` address and the
+    backup codes, once; nothing is on until the first code from the app is
+    accepted at `verify-totp`, which also uses that code up), `/disable` and
+    `/generate-backup-codes` are answered only for a signed-in session, with
+    its password, charged before Better Auth checks it against the same two
+    re-entry budgets as every other confirmation (five per session and twenty
+    per account a quarter of an hour, the session's refunded on a right
+    password; D143). The route passes on `password` alone — no `issuer`, no
+    `method`. A wrong password is `auth.reauth.refused` with `via:
+    "two-factor"`; turning it off is `auth.twofactor.disabled`, new codes are
+    `auth.twofactor.codes-regenerated`, and turning it on is
+    `auth.twofactor.enabled` at the first code. Turning it on (at that code)
+    and off re-creates the session Better Auth was asked from, which keeps
+    its sign-in time, kind and device; new codes leave it as it is. After
+    every change the screen reads the devices list again and points to *Tus
+    dispositivos* to end any other session (ASVS 5.0.0 7.4.3). The QR code is drawn in the browser
+    (`uqr`), never fetched: the address holds the secret. The backup codes
+    are shown once, kept in the screen's state and nowhere else, offered as a
+    copy and as a text file made in the browser, and cannot be shown again.
+    `POST /two-factor/get-totp-uri` never opens: it hands the decrypted
+    secret back to whoever holds the session, password or not.
   - **A challenge ends with the account's sessions.** Whoever holds one has
     the password, so a password set by an admin or changed by its owner, a
     removal from the household and every "end these sessions" also delete
@@ -897,8 +923,10 @@ Verified against the files named in each row.
     [the installation guide](docs/INSTALL.md#a-lost-authenticator).
   - **Not for native clients yet**: an account with two-step verification
     signs in from a browser (D142).
-- **Only seven endpoints of the auth API answer**: `POST /sign-in/email`,
+- **Only ten endpoints of the auth API answer**: `POST /sign-in/email`,
   `POST /two-factor/verify-totp`, `POST /two-factor/verify-backup-code`,
+  `POST /two-factor/enable`, `POST /two-factor/disable`,
+  `POST /two-factor/generate-backup-codes`,
   `POST /sign-out`, `GET /get-session`, `GET /ok` and `GET /error`. Every other
   path Better Auth mounts — sign-up, password reset, account deletion, session
   listing, about forty in all — is 404 before Better Auth sees it, so one a
@@ -1711,11 +1739,12 @@ verification, before the code; D148), `auth.twofactor.failed` (a code
 refused, with Better Auth's refusal as `code`), `auth.twofactor.replayed` (a
 right code sent again), `auth.twofactor.locked` (wrong codes have locked the
 account's second step), `auth.twofactor.unreadable` (the stored secret no
-longer decrypts), `auth.twofactor.enabled`,
+longer decrypts), `auth.twofactor.enabled`, `auth.twofactor.disabled`,
+`auth.twofactor.codes-regenerated`,
 `auth.reauth.refused` (a wrong current password re-entered to confirm an
 action, with the action as `via` — `end-sessions`, `password-change`, which
-replaces the `auth.password.change.refused` event of earlier releases, or
-`household-end-all`; D143, D144, D147), `access.denied` and
+replaces the `auth.password.change.refused` event of earlier releases,
+`household-end-all`, or `two-factor`; D143, D144, D147, D148), `access.denied` and
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
 `reason` — `self` for a person ending their own, `password-change` for the

@@ -1,4 +1,9 @@
-import { clientAddress } from "@/lib/rate-limit";
+import {
+  RateLimitUnavailableError,
+  clientAddress,
+  reauthAccountRateLimit,
+  reauthRateLimit,
+} from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   SignInRefusedError,
@@ -30,7 +35,7 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *
  * 1. **An allowlist of method and path.** Better Auth mounts dozens of
  *    endpoints — sign-up, password reset, account deletion, session listing —
- *    and this application uses seven. Anything else is 404 before Better Auth
+ *    and this application uses ten. Anything else is 404 before Better Auth
  *    sees it, so an endpoint a future version adds is closed until somebody
  *    decides otherwise. `disabledPaths` is not used: it is a denylist.
  * 2. **The body, bounded** (`readBodyWithin`, 64 KiB), before anything is
@@ -44,7 +49,9 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *    no `callbackURL` — that Better Auth would act on; a second step carries
  *    its `code` and nothing else, so no `trustDevice` (a cookie that skips the
  *    code for a month) and no `disableSession` (a backup code spent without
- *    a session to show for it). `x-stoky-remember` is
+ *    a session to show for it); a change to two-step verification carries
+ *    the password and nothing else, so no `issuer` and no `method`.
+ *    `x-stoky-remember` is
  *    this route's to set, so a copy a client sent is deleted from every
  *    request forwarded.
  * 6. **Our limits** (`src/lib/auth/sign-in-policy.ts`), charged before the
@@ -74,6 +81,13 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  * `challenged`. The code that follows is a request of its own
  * (`secondStep`), charged per address — it names no account — and a sign-in
  * only when it carried the challenge and was answered with a session.
+ *
+ * **Changing two-step verification** (D148): turning it on, turning it off
+ * and replacing the backup codes are answered only for a signed-in session,
+ * with the password (`accountChange`), charged against the same two budgets
+ * as every other re-entered password (D143) before Better Auth checks it.
+ * Every role may do it, the kitchen's shared account included (the owner's
+ * decision of 2026-10-15).
  *
  * Every answer is `no-store`: a refusal served from a cache would refuse
  * somebody else.
@@ -137,17 +151,31 @@ export const AUTH_BASE_PATH = "/api/auth";
  */
 export const ALLOWED_AUTH_ENDPOINTS: ReadonlySet<string> = new Set([
   "POST /sign-in/email",
-  // The second step of a sign-in, and nothing else of two-step verification
-  // yet (D148): enrolment opens with the settings screen, never
-  // `/two-factor/get-totp-uri` (it hands the secret back to anyone holding
-  // the session).
+  // The second step of a sign-in (D148); the same `verify-totp` is also the
+  // first code from a new authenticator, which turns it on.
   "POST /two-factor/verify-totp",
   "POST /two-factor/verify-backup-code",
+  // Setting it up from `/settings/security`, each with the password
+  // (`accountChange`). Never `/two-factor/get-totp-uri`: it hands the
+  // decrypted secret back to anyone holding the session, password or not.
+  "POST /two-factor/enable",
+  "POST /two-factor/disable",
+  "POST /two-factor/generate-backup-codes",
   "POST /sign-out",
   "GET /get-session",
   "GET /ok",
   "GET /error",
 ]);
+
+/**
+ * The changes to two-step verification, each confirmed with the password, as
+ * `accountChange` records them.
+ */
+const ACCOUNT_CHANGES: Record<string, "enable" | "disable" | "replace-codes"> = {
+  "POST /two-factor/enable": "enable",
+  "POST /two-factor/disable": "disable",
+  "POST /two-factor/generate-backup-codes": "replace-codes",
+};
 
 /** The factor each second-step endpoint proves, as the log names it. */
 const SECOND_STEPS: Record<string, "totp" | "backup-code"> = {
@@ -201,6 +229,10 @@ async function answer(incoming: Request, options: AuthHandlerOptions): Promise<R
   const secondStepMethod = SECOND_STEPS[endpoint];
   if (secondStepMethod) {
     return secondStep(incoming, body, handle, options, secondStepMethod);
+  }
+  const change = ACCOUNT_CHANGES[endpoint];
+  if (change) {
+    return accountChange(incoming, body, handle, options, change, `${AUTH_BASE_PATH}${endpoint.slice(5)}`);
   }
   if (endpoint === "POST /sign-out") {
     // It takes nothing this application uses.
@@ -488,6 +520,96 @@ async function secondStep(
   return guardResponse(incoming, response);
 }
 
+/**
+ * A change to two-step verification: turning it on, turning it off, or a new
+ * set of backup codes (D148, D149). Better Auth asks for the password on all
+ * three; this is what happens around that.
+ *
+ * - **A signed-in session, or nothing.** Read before anything is charged: the
+ *   budgets are the session's and its account's, and with no session Better
+ *   Auth would refuse before looking at the password anyway.
+ * - **Both re-entry budgets, before the password is believed** (D143): per
+ *   session (`reauthRateLimit`), so a stolen session cannot spend the owner's
+ *   attempts, and per account (`reauthAccountRateLimit`), so ten sessions are
+ *   not ten budgets. Fails closed, like every limit on a password.
+ * - **The password and nothing else** reaches Better Auth: no `issuer` to
+ *   rename the entry in somebody's app, no `method` to pick a kind of code
+ *   this instance does not send.
+ * - **A right password gives the session's attempt back**, to the window that
+ *   counted it, as `confirmCurrentPassword` does; the account's stays counted.
+ * - **The log:** a wrong password is `auth.reauth.refused`, `via:
+ *   "two-factor"`; turning it off is `auth.twofactor.disabled`; new codes are
+ *   `auth.twofactor.codes-regenerated`. Turning it on is not written here:
+ *   it is on only once the first code is accepted, and `secondStep` writes
+ *   `auth.twofactor.enabled` then.
+ *
+ * No role is refused: every account may protect itself with a second factor,
+ * the kitchen's shared one included (the owner's decision of 2026-10-15). A
+ * shared account that loses its authenticator has its backup codes, or an
+ * admin.
+ */
+async function accountChange(
+  incoming: Request,
+  body: Uint8Array<ArrayBuffer> | null,
+  handle: AuthEndpointHandler,
+  options: AuthHandlerOptions,
+  change: "enable" | "disable" | "replace-codes",
+  path: string,
+): Promise<Response> {
+  const limiter = options.limiter ?? valkeySignInLimiter;
+  const presented = options.sessions ? await options.sessions.presented(incoming.headers) : null;
+  if (!presented) return codeResponse(401, "UNAUTHORIZED", "Sign in first");
+  const address = clientAddress(incoming.headers);
+
+  let sessionWindow: number;
+  try {
+    const perSession = await limiter.consume(reauthRateLimit(), presented.id);
+    const perAccount = perSession.allowed
+      ? await limiter.consume(reauthAccountRateLimit(), presented.userId)
+      : perSession;
+    if (!perAccount.allowed) {
+      const seconds = Math.max(1, Math.ceil(perAccount.retryAfterSeconds));
+      logSecurityEvent("request.throttled", {
+        userId: presented.userId,
+        address,
+        path,
+        code: `retry-after=${seconds}`,
+      });
+      const refused = codeResponse(429, "REAUTH_RATE_LIMITED", "Too many attempts at the password");
+      refused.headers.set("retry-after", String(seconds));
+      return refused;
+    }
+    sessionWindow = perSession.window;
+  } catch (error) {
+    if (!(error instanceof RateLimitUnavailableError)) throw error;
+    console.error(
+      "[auth] refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
+    );
+    return codeResponse(503, "AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable");
+  }
+
+  const password = parseJsonObject(body)?.password;
+  if (typeof password !== "string") return invalidRequest("The request carries no password");
+
+  const response = await handle(rebuild(incoming, JSON.stringify({ password })));
+
+  if (response.ok) {
+    await limiter.refund(reauthRateLimit(), presented.id, sessionWindow);
+    if (change === "disable") {
+      logSecurityEvent("auth.twofactor.disabled", { userId: presented.userId, address });
+    } else if (change === "replace-codes") {
+      logSecurityEvent("auth.twofactor.codes-regenerated", { userId: presented.userId, address });
+    }
+  } else {
+    const refusal = await refusalCode(response);
+    if (refusal === "INVALID_PASSWORD" || refusal === "PASSWORD_TOO_LONG") {
+      logSecurityEvent("auth.reauth.refused", { userId: presented.userId, via: "two-factor", address });
+    }
+  }
+
+  return guardResponse(incoming, response);
+}
+
 /** Whether a `Cookie` header holds a non-empty cookie called `name`. */
 function hasCookie(header: string | null, name: string): boolean {
   if (!header) return false;
@@ -616,8 +738,8 @@ function refusedSignIn(error: SignInRefusedError): Response {
   return response;
 }
 
-function invalidRequest(): Response {
-  return codeResponse(400, "INVALID_REQUEST", "The request is not a sign-in");
+function invalidRequest(message = "The request is not a sign-in"): Response {
+  return codeResponse(400, "INVALID_REQUEST", message);
 }
 
 function codeResponse(status: number, code: string, message: string): Response {

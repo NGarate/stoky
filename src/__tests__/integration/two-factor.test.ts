@@ -23,10 +23,10 @@ import {
  * the real auth route, Better Auth's two-factor plugin, the replay guard
  * (`src/lib/auth/policy-plugin.ts`) and the rows.
  *
- * Enrolment has no HTTP endpoint yet (it opens with the settings screen), so
- * it goes through `getAuth().api` with a signed-in browser's cookie, as the
- * settings screen's server code will. Everything after it — the password
- * step, the code — is what a browser sends to `/api/auth/*`.
+ * Most tests enrol through `getAuth().api` with a signed-in browser's cookie,
+ * the shortest way to an account that has it; enrolling through the route, as
+ * the settings screen does, is the last describe's subject. Everything after
+ * it — the password step, the code — is what a browser sends to `/api/auth/*`.
  *
  * **Codes.** Every code here is made with the guard's own `hotp` from the
  * secret Better Auth stored, and every code Better Auth accepts proves the two
@@ -718,5 +718,157 @@ describe("backup codes (ASVS 5.0.0 6.5.2)", () => {
       data: (await twoFactorRow(ana.id)).secret,
     });
     expect(secret).toHaveLength(32);
+  });
+});
+
+/**
+ * Setting it up from `/settings/security`: the three endpoints the route opens
+ * for it (D148), each with the password, through the real route.
+ */
+describe("setting it up from the settings screen", () => {
+  /** A change endpoint through the route, as the settings screen sends it. */
+  async function change(path: string, jar: string, body: Record<string, unknown>) {
+    const response = await POST(
+      new Request(`${testOrigin()}/api/auth/two-factor/${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: jar,
+          origin: testOrigin(),
+          "x-forwarded-for": freshTestAddress(),
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+    const setCookie = response.headers.getSetCookie();
+    const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    return {
+      status: response.status,
+      code: typeof parsed?.code === "string" ? parsed.code : undefined,
+      body: parsed,
+      retryAfter: response.headers.get("retry-after"),
+      jar: mergeJar(jar, setCookie),
+    };
+  }
+
+  /** A signed-in browser for a fresh account of `role`. */
+  async function signedInBrowser(label: string, role: "KITCHEN" | "MEMBER" = "MEMBER") {
+    const household = await createTestHousehold({ name: `${MARKER} ${label}` });
+    const email = generateTestEmail(`${MARKER}-${label}`);
+    const user = await createTestUser({ email, name: `Two ${label}`, password: PASSWORD, householdId: household.id, role });
+    const signedIn = await signInWith({ email, password: PASSWORD });
+    expect(signedIn.status).toBe(200);
+    return { id: user.id, email, jar: signedIn.cookieHeader };
+  }
+
+  it("lets the kitchen's shared account turn it on, with the password and the first code", async () => {
+    const kitchen = await signedInBrowser("set-kitchen", "KITCHEN");
+
+    const enabled = await change("enable", kitchen.jar, { password: PASSWORD, issuer: "Otro" });
+    expect(enabled.status).toBe(200);
+    const uri = String(enabled.body?.totpURI);
+    // The issuer the body named is not passed on: the app's entry says Stoky.
+    expect(new URL(uri).searchParams.get("issuer")).toBe("Stoky");
+    expect(enabled.body?.backupCodes).toHaveLength(10);
+    // Nothing is on until the first code.
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: kitchen.id } })).twoFactorEnabled).toBe(false);
+
+    const secret = await symmetricDecrypt({
+      key: (await getAuth().$context).secretConfig,
+      data: (await twoFactorRow(kitchen.id)).secret,
+    });
+    let first: Awaited<ReturnType<typeof secondStep>> | undefined;
+    const log = await eventsDuring(async () => {
+      first = await secondStep("totp", enabled.jar, { code: code({ secret }) });
+    });
+
+    expect(first?.status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: kitchen.id } })).twoFactorEnabled).toBe(true);
+    // The browser that turned it on is still signed in, on its re-created session.
+    expect(await signedInAs(first?.jar ?? "")).toBe(kitchen.id);
+    expect(log.events.find((line) => line.event === "auth.twofactor.enabled")).toMatchObject({
+      userId: kitchen.id,
+    });
+    // The next sign-in asks for a code.
+    await challenge(kitchen);
+  });
+
+  it("logs a wrong password, and sets nothing up", async () => {
+    const ana = await signedInBrowser("set-wrong");
+
+    let refused: Awaited<ReturnType<typeof change>> | undefined;
+    const log = await eventsDuring(async () => {
+      refused = await change("enable", ana.jar, { password: "no es esta" });
+    });
+
+    expect(refused?.status).toBe(400);
+    expect(refused?.code).toBe("INVALID_PASSWORD");
+    expect(await prisma.twoFactor.count({ where: { userId: ana.id } })).toBe(0);
+    expect(log.events.find((line) => line.event === "auth.reauth.refused")).toMatchObject({
+      userId: ana.id,
+      via: "two-factor",
+    });
+    expect(log.raw).not.toContain("no es esta");
+  });
+
+  it("stops a session guessing the password after five tries, the right one included", async () => {
+    const ana = await signedInBrowser("set-budget");
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await change("disable", ana.jar, { password: `no ${attempt}` })).code).toBe("INVALID_PASSWORD");
+    }
+
+    const sixth = await change("disable", ana.jar, { password: PASSWORD });
+
+    expect(sixth.status).toBe(429);
+    expect(sixth.code).toBe("REAUTH_RATE_LIMITED");
+    expect(Number(sixth.retryAfter)).toBeGreaterThan(0);
+  });
+
+  it("turns it off with the password, and keeps the browser signed in", async () => {
+    const ana = await enrolled("set-off");
+
+    let off: Awaited<ReturnType<typeof change>> | undefined;
+    const log = await eventsDuring(async () => {
+      off = await change("disable", ana.jar, { password: PASSWORD });
+    });
+
+    expect(off?.status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: ana.id } })).twoFactorEnabled).toBe(false);
+    expect(await prisma.twoFactor.count({ where: { userId: ana.id } })).toBe(0);
+    expect(await signedInAs(off?.jar ?? "")).toBe(ana.id);
+    expect(log.events.find((line) => line.event === "auth.twofactor.disabled")).toMatchObject({
+      userId: ana.id,
+    });
+    // And the password alone signs in again.
+    expect((await passwordStep(ana)).body).not.toHaveProperty("twoFactorRedirect");
+  });
+
+  it("replaces the backup codes with the password, and the old ones stop working", async () => {
+    const ana = await enrolled("set-codes");
+
+    let replaced: Awaited<ReturnType<typeof change>> | undefined;
+    const log = await eventsDuring(async () => {
+      replaced = await change("generate-backup-codes", ana.jar, { password: PASSWORD });
+    });
+
+    expect(replaced?.status).toBe(200);
+    const codes = replaced?.body?.backupCodes as string[];
+    expect(codes).toHaveLength(10);
+    expect(codes).not.toContain(ana.backupCodes[0]);
+    expect(log.events.find((line) => line.event === "auth.twofactor.codes-regenerated")).toMatchObject({
+      userId: ana.id,
+    });
+    for (const shown of codes) expect(log.raw).not.toContain(shown);
+
+    const old = await secondStep("backup-code", await challenge(ana), { code: ana.backupCodes[0] });
+    expect(old.status).toBe(401);
+    const fresh = await secondStep("backup-code", await challenge(ana), { code: codes[0] });
+    expect(fresh.status).toBe(200);
+  });
+
+  it("refuses a browser that is not signed in, before any password", async () => {
+    const answer = await change("enable", "", { password: PASSWORD });
+
+    expect(answer.status).toBe(401);
   });
 });

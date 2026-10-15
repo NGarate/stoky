@@ -60,6 +60,9 @@ const CHROMIUM_ONLY = [
   // How long a server tells a browser to keep its session cookie, which also
   // registers an account per run.
   "**/remember-me.spec.ts",
+  // Whether a server takes an authenticator code, and takes it once: one
+  // engine's answer, and three browser contexts and a registration to ask.
+  "**/two-factor.spec.ts",
 ];
 
 /**

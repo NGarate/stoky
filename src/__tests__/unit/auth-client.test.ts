@@ -1,6 +1,10 @@
 import { describe, expect, it, mock } from "bun:test";
 import {
+  AccountChangeRefusedError,
   readSessionExpiry,
+  replaceBackupCodes,
+  startTotpEnrolment,
+  turnOffTwoFactor,
   secondStepResultFrom,
   signInResultFrom,
   signInWithPassword,
@@ -236,6 +240,82 @@ describe("verifyTotp and verifyBackupCode", () => {
       ok: false,
       code: "two_factor_expired",
     });
+  });
+});
+
+describe("changing two-step verification", () => {
+  function answering(status: number, body: unknown, headers: Record<string, string> = {}) {
+    return mock(async (_url: string, _init: RequestInit) => Response.json(body, { status, headers }));
+  }
+  const URI = "otpauth://totp/Stoky:ana%40example.com?secret=GEZDGNBV&issuer=Stoky&digits=6&period=30";
+  const CODES = ["AAAA-BBBB-CCCC-DDDD-EEEE-FFFF", "GGGG-HHHH-JJJJ-KKKK-MMMM-NNNN"];
+
+  for (const [name, call, path, answer] of [
+    ["startTotpEnrolment", startTotpEnrolment, "/api/auth/two-factor/enable", { method: "totp", totpURI: URI, backupCodes: CODES }],
+    ["turnOffTwoFactor", turnOffTwoFactor, "/api/auth/two-factor/disable", { status: true }],
+    ["replaceBackupCodes", replaceBackupCodes, "/api/auth/two-factor/generate-backup-codes", { status: true, backupCodes: CODES }],
+  ] as const) {
+    it(`${name} posts the password and nothing else, never from a cache`, async () => {
+      const fetcher = answering(200, answer);
+
+      await call("cocina despensa", fetcher as unknown as typeof fetch);
+
+      const [url, init] = fetcher.mock.calls[0];
+      expect(url).toBe(path);
+      expect(init.method).toBe("POST");
+      expect(new Headers(init.headers).get("content-type")).toBe("application/json");
+      expect(JSON.parse(String(init.body))).toEqual({ password: "cocina despensa" });
+      expect(init.cache).toBe("no-store");
+      expect(init.credentials).toBe("same-origin");
+    });
+
+    it(`${name} throws the refusal, worded, with its wait`, async () => {
+      const cases = [
+        [400, "INVALID_PASSWORD", "wrong_password"],
+        [400, "PASSWORD_TOO_LONG", "wrong_password"],
+        [429, "REAUTH_RATE_LIMITED", "too_many_attempts"],
+        [401, "UNAUTHORIZED", "signed_out"],
+        [400, "TOTP_ALREADY_ENABLED", "already_enabled"],
+        [400, "TWO_FACTOR_NOT_ENABLED", "not_enabled"],
+        [503, "AUTH_UNAVAILABLE", "auth_unavailable"],
+        [500, "SOMETHING_ELSE", "unknown"],
+      ] as const;
+      for (const [status, code, expected] of cases) {
+        const fetcher = answering(status, { code }, { "retry-after": "30" });
+        const refusal = await call("x", fetcher as unknown as typeof fetch).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(refusal, code).toBeInstanceOf(AccountChangeRefusedError);
+        expect((refusal as AccountChangeRefusedError).code, code).toBe(expected);
+        expect((refusal as AccountChangeRefusedError).retryAfterSeconds, code).toBe(30);
+      }
+    });
+  }
+
+  it("hands back the authenticator's address and the codes, once", async () => {
+    expect(
+      await startTotpEnrolment("x", answering(200, { method: "totp", totpURI: URI, backupCodes: CODES }) as unknown as typeof fetch),
+    ).toEqual({ totpUri: URI, backupCodes: CODES });
+    expect(
+      await replaceBackupCodes("x", answering(200, { status: true, backupCodes: CODES }) as unknown as typeof fetch),
+    ).toEqual(CODES);
+  });
+
+  it("refuses an answer that is not what it should be rather than show half of it", async () => {
+    for (const [call, body] of [
+      [startTotpEnrolment, { method: "otp" }],
+      [startTotpEnrolment, { totpURI: "https://example.com", backupCodes: CODES }],
+      [startTotpEnrolment, { totpURI: URI, backupCodes: [] }],
+      [replaceBackupCodes, { status: true }],
+      [replaceBackupCodes, { status: true, backupCodes: [1, 2] }],
+    ] as const) {
+      const refusal = await call("x", answering(200, body) as unknown as typeof fetch).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refusal, JSON.stringify(body)).toBeInstanceOf(AccountChangeRefusedError);
+    }
   });
 });
 

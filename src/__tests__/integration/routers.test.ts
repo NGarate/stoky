@@ -485,6 +485,8 @@ describe("tRPC Router Integration Tests", () => {
         expect(result.email).toBe("metest@example.com");
         expect(result.name).toBe("Me Test User");
         expect(result.household).toBeDefined();
+        // `/settings/security` reads it to say whether the second step is on.
+        expect(result.twoFactorEnabled).toBe(false);
       });
 
       it("should throw when not authenticated", async () => {

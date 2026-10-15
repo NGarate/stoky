@@ -5,6 +5,7 @@ import { PageHeader, PageShell } from "@/components/ui/page-header";
 import { Section } from "@/components/ui/section";
 import { DeviceList } from "@/components/session/DeviceList";
 import { ChangePasswordForm } from "@/components/session/ChangePasswordForm";
+import { TwoFactorSettings } from "@/components/security/TwoFactorSettings";
 import type { JSX } from "react";
 
 /**
@@ -26,10 +27,16 @@ import type { JSX } from "react";
  * token (D144) — so it belongs beside the list of what it would end, and the
  * list is read again when it is done. After the list, because the list is
  * what the person who has lost a phone comes for.
+ *
+ * Two-step verification comes last (D148): turning it on is a choice made
+ * once, and every change to it ends with a pointer back up to the devices
+ * list (ASVS 5.0.0 7.4.3), which is why that section's heading has an id.
+ * Shown to every role, the kitchen's shared account included.
  */
 export default function SecurityPage(): JSX.Element {
   const t = useTranslations("security");
   const tPassword = useTranslations("password");
+  const tTwoFactor = useTranslations("auth");
 
   return (
     <PageShell width="form">
@@ -39,12 +46,16 @@ export default function SecurityPage(): JSX.Element {
         title={t("title")}
       />
 
-      <Section title={t("devicesTitle")}>
+      <Section id="devices" title={t("devicesTitle")}>
         <DeviceList />
       </Section>
 
       <Section className="mt-8" title={tPassword("title")}>
         <ChangePasswordForm />
+      </Section>
+
+      <Section className="mt-8" title={tTwoFactor("twoFactorTitle")}>
+        <TwoFactorSettings />
       </Section>
     </PageShell>
   );

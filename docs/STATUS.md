@@ -711,6 +711,7 @@ answer: composed target size, and whether a fixed bar is painted over an option.
 | `offline-shop.spec.ts` | A shop composed in aeroplane mode, applied once | chromium |
 | `auth.prod.spec.ts` | The deployed artefact signs people in: `trustHost`, and the production CSP breaking nothing | chromium |
 | `service-worker.prod.spec.ts` | A real worker registers, precaches, and serves offline — the one file that opts back into `serviceWorkers` | chromium |
+| `two-factor.spec.ts` | Two-step verification set up in settings from the key the page shows, asked for at the next sign-in, and a code refused the second time | chromium |
 
 `globalTimeout` is **5 minutes locally and 9 in CI**, and since 2026-08-17 it
 covers the `next build` too, because the build runs inside Playwright's
@@ -931,10 +932,12 @@ is not a failure but a question — see *Reconciliation* below. Proven by
 **Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
 post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
 error mapping and i18n; the route in front of Better Auth
-(`src/server/http/auth-handler.ts`) answers seven endpoints and applies the
-limits. Two-step verification with an authenticator app is in on the server,
-each code usable once (D148); only its sign-in step is reachable, and nothing
-in the interface sets it up yet. Sessions are database rows: fifteen idle minutes, slid only by the
+(`src/server/http/auth-handler.ts`) answers ten endpoints and applies the
+limits. Two-step verification with an authenticator app is in, each code
+usable once (D148), with backup codes stored as hashes (D149): the login form
+asks for the code, and every role, the kitchen's shared account included, sets
+it up from *Seguridad y acceso* with the password (`e2e/two-factor.spec.ts`
+enrols, signs in with a code and has the same code refused). Sessions are database rows: fifteen idle minutes, slid only by the
 keep-alive, a day at most, and deleted to end them — or, with "Mantener la
 sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
 since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
@@ -1120,6 +1123,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
 | better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
+| uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |

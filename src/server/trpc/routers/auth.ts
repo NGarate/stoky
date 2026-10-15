@@ -217,15 +217,9 @@ export const authRouter = createTRPCRouter({
   /**
    * The signed-in account, read from the database rather than from the session.
    *
-   * **Nothing calls it today**, which is worth knowing before relying on it.
-   * The screens read what they need from the session, and the freshness
-   * argument this would otherwise make — that a role change takes effect on the
-   * next request rather than when the token is re-issued — is already handled
-   * where it matters, in `householdProcedure`, which re-reads membership on
-   * every request.
-   *
-   * Kept because it is the obvious shape of an endpoint a client will
-   * eventually want, and because it costs one query. Throws UNAUTHORIZED rather
+   * The screens that word themselves by role, the write queue, and the
+   * security screen's two-step verification read it; access control does not
+   * — `householdProcedure` re-reads membership on every request. Throws UNAUTHORIZED rather
    * than returning null when the row is gone: a session for a deleted account
    * is not a missing resource, it is a session that should end.
    */
@@ -255,6 +249,10 @@ export const authRouter = createTRPCRouter({
         snackbarDuration: user.snackbarDuration,
         role: user.role,
         household: user.household,
+        // For `/settings/security`, which says whether it is on. Read from
+        // the row like the rest, so turning it on in another tab shows here
+        // on the next read.
+        twoFactorEnabled: user.twoFactorEnabled,
       };
     }),
 

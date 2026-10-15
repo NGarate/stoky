@@ -15,7 +15,7 @@ import { createTestUser, generateTestEmail } from "../utils/test-helpers";
  * an endpoint a future Better Auth adds — or one nobody thought of — is
  * tried too, by every method, with a signed-in browser's cookie and its own
  * origin: everything it would need to act. Nothing may answer but the
- * seven, and no session, account, user or authenticator row may change.
+ * ten, and no session, account, user or authenticator row may change.
  */
 
 const PASSWORD = "cocina despensa nevera";
@@ -37,16 +37,19 @@ afterAll(async () => {
 });
 
 /**
- * The seven, written out rather than read from the handler: an endpoint added
+ * The ten, written out rather than read from the handler: an endpoint added
  * to its allowlist is exactly what this test must notice, and reading the
  * list would make it agree.
  */
 const ANSWERED = new Set([
   "POST /sign-in/email",
-  // The second step of a sign-in (D148); nothing else of two-step
-  // verification until the settings screen opens enrolment.
+  // The second step of a sign-in (D148), and setting it up from the
+  // settings screen, with the password. Never `get-totp-uri`.
   "POST /two-factor/verify-totp",
   "POST /two-factor/verify-backup-code",
+  "POST /two-factor/enable",
+  "POST /two-factor/disable",
+  "POST /two-factor/generate-backup-codes",
   "POST /sign-out",
   "GET /get-session",
   "GET /ok",

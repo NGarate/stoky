@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
+import { AccountChangeRefusedError } from "@/lib/auth/client";
 import {
   MAX_PASSWORD_LENGTH,
   isWrongCurrentPasswordRefusal,
@@ -29,8 +30,17 @@ export type ReauthRefusal = "missing" | "wrong" | "tooMany" | "failed";
  * A refusal wrapped by the sequence that ran the call (`EndSessionError`
  * carries the server's as its `cause`) is read through the wrapper, so a
  * caller can hand the dialog whatever its sequence threw.
+ *
+ * The auth API's refusals of a change to two-step verification
+ * (`AccountChangeRefusedError`, `src/lib/auth/client.ts`) are read the same
+ * way: its wrong password and its spent budget are these two.
  */
 export function reauthRefusalOf(error: unknown): Exclude<ReauthRefusal, "missing"> {
+  if (error instanceof AccountChangeRefusedError) {
+    if (error.code === "wrong_password") return "wrong";
+    if (error.code === "too_many_attempts") return "tooMany";
+    return "failed";
+  }
   const refusal =
     !(error instanceof TRPCClientError) && error instanceof Error && error.cause !== undefined
       ? error.cause

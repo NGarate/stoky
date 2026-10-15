@@ -13,7 +13,8 @@ import type { DeadlineKind } from "@/lib/auth/session-policy";
  * Plain `fetch`, not Better Auth's client: the auth API answers a handful of
  * endpoints (`src/server/http/auth-handler.ts`) and the three a sign-in needs
  * — the password, then an authenticator code or a backup code — are called
- * from here, which a client library would only wrap. Browser-only by construction: no
+ * from here, which a client library would only wrap; so are the three that
+ * change two-step verification from the settings screen. Browser-only by construction: no
  * server import, nothing that reads a secret. The one import from the server
  * side is a type, erased at build, so the server's refusal codes and the ones
  * named here cannot drift apart. `src/__tests__/unit/auth-dynamic.test.ts`
@@ -237,6 +238,130 @@ async function secondStep(
   });
   const body: unknown = await response.json().catch(() => null);
   return secondStepResultFrom(response.status, body, response.headers.get("retry-after"));
+}
+
+/**
+ * Why a change to two-step verification was refused (D148), in words the
+ * settings screen translates:
+ *
+ * - `wrong_password` — the password re-entered to confirm it was wrong (or
+ *   too long to be right, which says nothing more to a guesser);
+ * - `too_many_attempts` — the route's re-entry budget is spent, with
+ *   `retryAfterSeconds` when it said how long;
+ * - `signed_out` — the session is gone;
+ * - `already_enabled` / `not_enabled` — another tab or device changed it
+ *   first, so the screen is out of date;
+ * - `auth_unavailable`, and `unknown` for anything else.
+ */
+export type AccountChangeRefusalCode =
+  | "wrong_password"
+  | "too_many_attempts"
+  | "signed_out"
+  | "already_enabled"
+  | "not_enabled"
+  | "auth_unavailable"
+  | "unknown";
+
+const ACCOUNT_CHANGE_CODES: Record<string, AccountChangeRefusalCode> = {
+  INVALID_PASSWORD: "wrong_password",
+  PASSWORD_TOO_LONG: "wrong_password",
+  REAUTH_RATE_LIMITED: "too_many_attempts",
+  UNAUTHORIZED: "signed_out",
+  TOTP_ALREADY_ENABLED: "already_enabled",
+  TWO_FACTOR_NOT_ENABLED: "not_enabled",
+  AUTH_UNAVAILABLE: "auth_unavailable",
+  INVALID_ORIGIN: "auth_unavailable",
+  MISSING_OR_NULL_ORIGIN: "auth_unavailable",
+};
+
+/**
+ * A refused change to two-step verification. Thrown rather than returned,
+ * unlike a sign-in's refusals: every caller is a password dialog
+ * (`ReauthDialog`) whose `onSubmit` rejects with the reason, which the dialog
+ * words beside the field.
+ */
+export class AccountChangeRefusedError extends Error {
+  constructor(
+    readonly code: AccountChangeRefusalCode,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(`The change was refused: ${code}`);
+    this.name = "AccountChangeRefusedError";
+  }
+}
+
+/**
+ * What turning on two-step verification hands back, once: the `otpauth:`
+ * address the authenticator app reads (as a QR code, a link, or the key in
+ * it typed by hand), and the backup codes in the clear. Neither can be asked
+ * for again — the route never opens `get-totp-uri`, and the database holds
+ * the codes only as hashes (D149) — so the screen shows them and forgets them.
+ */
+export interface TotpEnrolment {
+  totpUri: string;
+  backupCodes: string[];
+}
+
+/** POSTs `{ password }` to a change endpoint; the answer's body, or the refusal thrown. */
+async function accountChange(path: string, password: string, fetcher: typeof fetch): Promise<unknown> {
+  const response = await fetcher(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password }),
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const refusal = refusalOf(body, response.headers.get("retry-after"), ACCOUNT_CHANGE_CODES);
+    throw new AccountChangeRefusedError(refusal.code, refusal.retryAfterSeconds);
+  }
+  return body;
+}
+
+/** The backup codes an answer carries, or a refusal: an answer without them is not one. */
+function backupCodesOf(body: unknown): string[] {
+  const codes = (body as { backupCodes?: unknown } | null)?.backupCodes;
+  if (!Array.isArray(codes) || codes.length === 0 || !codes.every((code) => typeof code === "string")) {
+    throw new AccountChangeRefusedError("unknown");
+  }
+  return codes as string[];
+}
+
+/**
+ * Starts turning on two-step verification: the password, then the new
+ * authenticator's address and the backup codes. Nothing is on yet — it is on
+ * when `verifyTotp` accepts the first code the new app shows, from this same
+ * session. Throws `AccountChangeRefusedError` when refused.
+ */
+export async function startTotpEnrolment(
+  password: string,
+  fetcher: typeof fetch = fetch,
+): Promise<TotpEnrolment> {
+  const body = await accountChange("/api/auth/two-factor/enable", password, fetcher);
+  const totpUri = (body as { totpURI?: unknown } | null)?.totpURI;
+  if (typeof totpUri !== "string" || !totpUri.startsWith("otpauth://totp/")) {
+    throw new AccountChangeRefusedError("unknown");
+  }
+  return { totpUri, backupCodes: backupCodesOf(body) };
+}
+
+/** Turns two-step verification off, with the password. */
+export async function turnOffTwoFactor(
+  password: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await accountChange("/api/auth/two-factor/disable", password, fetcher);
+}
+
+/** A new set of backup codes, with the password; the old set stops working. */
+export async function replaceBackupCodes(
+  password: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string[]> {
+  return backupCodesOf(
+    await accountChange("/api/auth/two-factor/generate-backup-codes", password, fetcher),
+  );
 }
 
 /**

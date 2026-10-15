@@ -89,13 +89,16 @@ afterEach(() => {
 });
 
 describe("which endpoints answer", () => {
-  it("is the seven this application uses", () => {
+  it("is the ten this application uses", () => {
     expect([...ALLOWED_AUTH_ENDPOINTS].sort()).toEqual([
       "GET /error",
       "GET /get-session",
       "GET /ok",
       "POST /sign-in/email",
       "POST /sign-out",
+      "POST /two-factor/disable",
+      "POST /two-factor/enable",
+      "POST /two-factor/generate-backup-codes",
       "POST /two-factor/verify-backup-code",
       "POST /two-factor/verify-totp",
     ]);
@@ -109,11 +112,12 @@ describe("which endpoints answer", () => {
       post("/sign-up/email", "{}"),
       post("/change-password", "{}"),
       post("/revoke-sessions", "{}"),
-      // Two-step verification beyond the second step of a sign-in.
-      post("/two-factor/enable", "{}"),
+      // Two-step verification's secret, handed back to the session (D148),
+      // and the rest of the plugin's paths, mounted over HTTP or not.
       post("/two-factor/get-totp-uri", "{}"),
-      post("/two-factor/generate-backup-codes", "{}"),
-      post("/two-factor/disable", "{}"),
+      post("/two-factor/view-backup-codes", "{}"),
+      post("/two-factor/send-otp", "{}"),
+      post("/two-factor/verify-otp", "{}"),
       new Request(`${BASE}/list-sessions`),
       // The same endpoints by another method or spelling.
       new Request(`${BASE}/sign-in/email`),
@@ -890,5 +894,211 @@ describe("two-step verification", () => {
         expect(twoFactor, refusal).toEqual(event ? [expect.objectContaining({ event, code: refusal })] : []);
       }
     });
+  });
+});
+
+describe("a change to two-step verification", () => {
+  const PATHS = [
+    "/two-factor/enable",
+    "/two-factor/disable",
+    "/two-factor/generate-backup-codes",
+  ] as const;
+  const REAUTH = "rl:reauth";
+  const REAUTH_ACCOUNT = "rl:reauth-acct";
+  const SESSION = { id: "s-kitchen", userId: "user-kitchen" };
+
+  /** Sessions that present `presented` and are never asked to end anything. */
+  function presenting(presented: { id: string; userId: string } | null): SignInSessions {
+    return {
+      presented: async () => presented,
+      tidy: async () => {
+        throw new Error("a change to two-step verification tidies nothing");
+      },
+      end: async () => {
+        throw new Error("a change to two-step verification ends nothing");
+      },
+    };
+  }
+
+  const events = () =>
+    securityLines.mock.calls.flatMap((call) => {
+      try {
+        return [JSON.parse(String(call[0])) as Record<string, string>];
+      } catch {
+        return [];
+      }
+    });
+
+  const change = (path: string, body: unknown = { password: "cocina despensa" }) =>
+    post(path, JSON.stringify(body), { cookie: "stoky.session_token=abc.sig" });
+
+  it("reaches Better Auth with the password and nothing else", async () => {
+    for (const path of PATHS) {
+      const { handler, seen } = fakeHandler(() => Response.json({ status: true }));
+
+      const response = await handleAuthRequest(
+        change(path, { password: "cocina despensa", issuer: "Otro", method: "otp", trustDevice: true }),
+        { handler, limiter: fakeLimiter().limiter, sessions: presenting(SESSION) },
+      );
+
+      expect(response.status, path).toBe(200);
+      expect(seen, path).toHaveLength(1);
+      expect(new URL(seen[0].url).pathname, path).toBe(`/api/auth${path}`);
+      expect(await seen[0].json(), path).toEqual({ password: "cocina despensa" });
+    }
+  });
+
+  it("is refused 401 without a session, uncharged and without Better Auth", async () => {
+    const { handler, handle } = fakeHandler();
+    const { limiter, calls } = fakeLimiter();
+
+    for (const path of PATHS) {
+      const response = await handleAuthRequest(change(path), {
+        handler,
+        limiter,
+        sessions: presenting(null),
+      });
+      expect(response.status, path).toBe(401);
+    }
+    expect(handle).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
+  it("charges the session's and the account's re-entry budgets before Better Auth", async () => {
+    const { limiter, calls } = fakeLimiter();
+    const { handler } = fakeHandler(() => {
+      // Charged by the time the password is looked at.
+      expect(calls.map(([what, prefix]) => `${what} ${prefix}`)).toEqual([
+        `consume ${REAUTH}`,
+        `consume ${REAUTH_ACCOUNT}`,
+      ]);
+      return Response.json({ code: "INVALID_PASSWORD" }, { status: 400 });
+    });
+
+    await handleAuthRequest(change("/two-factor/enable"), {
+      handler,
+      limiter,
+      sessions: presenting(SESSION),
+    });
+
+    expect(calls).toEqual([
+      ["consume", REAUTH, SESSION.id],
+      ["consume", REAUTH_ACCOUNT, SESSION.userId],
+    ]);
+  });
+
+  it("is refused 429 with Retry-After when either budget is spent", async () => {
+    for (const spent of [REAUTH, REAUTH_ACCOUNT]) {
+      const { handler, handle } = fakeHandler();
+      const { limiter } = fakeLimiter({ [spent]: { allowed: false, retryAfterSeconds: 42.2 } });
+
+      const response = await handleAuthRequest(change("/two-factor/disable"), {
+        handler,
+        limiter,
+        sessions: presenting(SESSION),
+      });
+
+      expect(response.status, spent).toBe(429);
+      expect(response.headers.get("retry-after"), spent).toBe("43");
+      expect(((await response.json()) as { code: string }).code, spent).toBe("REAUTH_RATE_LIMITED");
+      expect(handle, spent).not.toHaveBeenCalled();
+    }
+  });
+
+  it("is refused 503 when the limiter cannot be reached", async () => {
+    const { handler, handle } = fakeHandler();
+    const { limiter } = fakeLimiter({ [REAUTH]: new RateLimitUnavailableError(new Error("down")) });
+
+    const response = await handleAuthRequest(change("/two-factor/enable"), {
+      handler,
+      limiter,
+      sessions: presenting(SESSION),
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBeNull();
+    expect(handle).not.toHaveBeenCalled();
+  });
+
+  it("answers a body without a password 400, charged and without Better Auth", async () => {
+    const { handler, handle } = fakeHandler();
+    const { limiter, calls } = fakeLimiter();
+
+    const response = await handleAuthRequest(change("/two-factor/enable", { code: "123456" }), {
+      handler,
+      limiter,
+      sessions: presenting(SESSION),
+    });
+
+    expect(response.status).toBe(400);
+    expect(handle).not.toHaveBeenCalled();
+    expect(calls.map(([what]) => what)).toEqual(["consume", "consume"]);
+  });
+
+  it("gives the session's attempt back when the password was right, and only that one", async () => {
+    const { limiter, calls } = fakeLimiter();
+
+    await handleAuthRequest(change("/two-factor/generate-backup-codes"), {
+      handler: fakeHandler(() => Response.json({ status: true, backupCodes: ["A"] })).handler,
+      limiter,
+      sessions: presenting(SESSION),
+    });
+
+    expect(calls.filter(([what]) => what === "refund")).toEqual([["refund", REAUTH, SESSION.id, 7]]);
+  });
+
+  it("logs a wrong password as a refused re-entry, and gives nothing back", async () => {
+    for (const refusal of ["INVALID_PASSWORD", "PASSWORD_TOO_LONG"]) {
+      securityLines.mockClear();
+      const { limiter, calls } = fakeLimiter();
+
+      const response = await handleAuthRequest(change("/two-factor/enable"), {
+        handler: fakeHandler(() => Response.json({ code: refusal }, { status: 400 })).handler,
+        limiter,
+        sessions: presenting(SESSION),
+      });
+
+      expect(response.status, refusal).toBe(400);
+      expect(calls.map(([what]) => what), refusal).not.toContain("refund");
+      expect(events(), refusal).toEqual([
+        expect.objectContaining({
+          event: "auth.reauth.refused",
+          userId: SESSION.userId,
+          via: "two-factor",
+          address: "203.0.113.9",
+        }),
+      ]);
+    }
+  });
+
+  it("logs turning it off and new codes, and leaves turning it on to the first code", async () => {
+    const cases = [
+      ["/two-factor/disable", "auth.twofactor.disabled"],
+      ["/two-factor/generate-backup-codes", "auth.twofactor.codes-regenerated"],
+      ["/two-factor/enable", null],
+    ] as const;
+    for (const [path, event] of cases) {
+      securityLines.mockClear();
+
+      await handleAuthRequest(change(path), {
+        handler: fakeHandler(() => Response.json({ status: true })).handler,
+        limiter: fakeLimiter().limiter,
+        sessions: presenting(SESSION),
+      });
+
+      expect(events(), path).toEqual(
+        event ? [expect.objectContaining({ event, userId: SESSION.userId })] : [],
+      );
+    }
+  });
+
+  it("never logs a refusal that is not about the password as one", async () => {
+    await handleAuthRequest(change("/two-factor/enable"), {
+      handler: fakeHandler(() => Response.json({ code: "TOTP_ALREADY_ENABLED" }, { status: 400 })).handler,
+      limiter: fakeLimiter().limiter,
+      sessions: presenting(SESSION),
+    });
+
+    expect(events()).toEqual([]);
   });
 });

@@ -64,8 +64,13 @@ export type SecurityEvent =
   // (ASVS 5.0.0 6.5.1); `locked` when the account's wrong codes have locked
   // it for a while; `unreadable` when the stored secret no longer decrypts
   // because `STOKY_SECRET` changed — the person cannot get in with that
-  // authenticator, and the operator is the one who can tell them why.
+  // authenticator, and the operator is the one who can tell them why;
+  // `disabled` when the account's holder turns it off with the password, and
+  // `codes-regenerated` when they replace the backup codes, which ends the
+  // old set (both from `/settings/security`, `auth-handler.ts`).
   | "auth.twofactor.enabled"
+  | "auth.twofactor.disabled"
+  | "auth.twofactor.codes-regenerated"
   | "auth.twofactor.failed"
   | "auth.twofactor.replayed"
   | "auth.twofactor.locked"
@@ -100,8 +105,9 @@ export type SecurityEvent =
   // "who set my password?" when the answer is not "you".
   | "auth.password.reset"
   // The current password re-entered to confirm an action was wrong
-  // (`src/lib/auth/reauth.ts`). `via` names the action — `end-sessions`,
-  // `password-change`, `household-end-all` — so a grep tells a typo before
+  // (`src/lib/auth/reauth.ts`, and the auth route for two-step
+  // verification). `via` names the action — `end-sessions`,
+  // `password-change`, `household-end-all`, `two-factor` — so a grep tells a typo before
   // ending a session from a stolen session guessing. BAD_REQUEST, which the
   // refusal middleware in `trpc.ts` does not record, so written here.
   | "auth.reauth.refused"

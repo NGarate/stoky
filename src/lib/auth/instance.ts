@@ -312,9 +312,9 @@ function build(env: Record<string, string | undefined>) {
       // `/two-factor/verify-totp` or `/two-factor/verify-backup-code` turns
       // into a session. Its own limits stay on: five wrong codes end a
       // challenge, ten across challenges lock the account for fifteen
-      // minutes. The route answers only those two endpoints for now: the
-      // enrolment ones open when the settings screen does
-      // (`src/server/http/auth-handler.ts`).
+      // minutes. The route also answers enable, disable and new backup
+      // codes, each with the password, for `/settings/security`; never
+      // `get-totp-uri` (`src/server/http/auth-handler.ts`).
       twoFactor({
         issuer: "Stoky",
         // Backup codes of 120 bits, stored as SHA-256 hashes rather than
