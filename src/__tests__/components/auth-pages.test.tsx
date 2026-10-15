@@ -136,6 +136,7 @@ mock.module("@/lib/prisma", () => ({
 }));
 
 const { default: LoginPage } = await import("@/app/(auth)/login/page");
+const { LoginForm } = await import("@/components/session/LoginForm");
 const { default: RegisterPage } = await import("@/app/(auth)/register/page");
 const { RegisterForm } = await import("@/components/session/RegisterForm");
 const { RegistrationClosed } = await import("@/components/session/RegistrationClosed");
@@ -164,7 +165,7 @@ function headings(): string[] {
 
 describe("the login page", () => {
   it("heads the page in Spanish for a Spanish reader", () => {
-    renderWithIntl(<LoginPage />, { locale: "es" });
+    renderWithIntl(<LoginForm />, { locale: "es" });
 
     // Not `Login`, which is what it said. The catalogue key was already there
     // and already used by the submit button on the same page.
@@ -172,13 +173,13 @@ describe("the login page", () => {
   });
 
   it("heads the page in English for an English reader", () => {
-    renderWithIntl(<LoginPage />, { locale: "en" });
+    renderWithIntl(<LoginForm />, { locale: "en" });
 
     expect(headings()).toEqual(["Sign in", "Sign in"]);
   });
 
   it("says nothing in Spanish to an English reader", () => {
-    const { container } = renderWithIntl(<LoginPage />, { locale: "en" });
+    const { container } = renderWithIntl(<LoginForm />, { locale: "en" });
 
     for (const spanish of SPANISH_ONLY) {
       expect(container.textContent).not.toContain(spanish);
@@ -188,9 +189,30 @@ describe("the login page", () => {
   it("translates the panel beside the form, not only the form", () => {
     // The half a Spanish-only test cannot see: this block read correctly in
     // Spanish and was hardcoded, so it stayed Spanish in English.
-    const { container } = renderWithIntl(<LoginPage />, { locale: "en" });
+    const { container } = renderWithIntl(<LoginForm />, { locale: "en" });
 
     expect(container.textContent).toContain("A shared household");
+  });
+});
+
+describe("the login page around the form", () => {
+  // The page became a server component that renders `LoginForm`, and the
+  // device's cleanup moved with it into the page. Every other test here drives
+  // the form; this one is what notices the cleanup left behind.
+  it("empties the previous account's queries on arrival", () => {
+    const client = new QueryClient();
+    const key = [["inventory", "getStockOverview"], { type: "query" }];
+    client.setQueryData(key, { items: ["the previous account's milk"] });
+
+    renderWithIntlOnly(
+      <QueryClientProvider client={client}>
+        <LoginPage />
+      </QueryClientProvider>,
+      { locale: "es" },
+    );
+
+    expect(client.getQueryData<unknown>(key)).toBeUndefined();
+    expect(headings()).toEqual(["Iniciar sesión", "Iniciar sesión"]);
   });
 });
 
@@ -271,7 +293,7 @@ async function backgroundOf(classNames: string): Promise<string | undefined> {
 
 describe("the panel beside the form is a surface, not the action colour", () => {
   const pages = [
-    { name: "login", Page: LoginPage, asideTitle: "Hogar compartido" },
+    { name: "login", Page: LoginForm, asideTitle: "Hogar compartido" },
     { name: "register", Page: RegisterForm, asideTitle: "Primer hogar" },
   ] as const;
 
@@ -294,7 +316,7 @@ describe("neither page renders a raw key", () => {
   // so a typo ships as `auth.loginAsideTitle` on screen. Nothing else notices.
   for (const locale of ["es", "en"] as const) {
     it(`in ${locale}`, () => {
-      const { container } = renderWithIntl(<LoginPage />, { locale });
+      const { container } = renderWithIntl(<LoginForm />, { locale });
 
       expect(container.textContent).not.toContain("auth.");
     });
@@ -303,7 +325,7 @@ describe("neither page renders a raw key", () => {
 
 describe("how a failed sign-in reaches someone who cannot see the form", () => {
   for (const [name, Page] of [
-    ["login", LoginPage],
+    ["login", LoginForm],
     ["register", RegisterForm],
   ] as const) {
     it(`${name} carries its region before it has anything to say`, () => {
@@ -344,7 +366,7 @@ describe("where signing in leads", () => {
   // `/dashboard` walked past all three — a new account never saw `/start`.
   it("goes to the landing decision after a sign-in", async () => {
     replaced.length = 0;
-    renderWithIntl(<LoginPage />, { locale: "es" });
+    renderWithIntl(<LoginForm />, { locale: "es" });
 
     await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
     await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
@@ -374,7 +396,7 @@ describe("what a refused sign-in says", () => {
     // detail that most often explains a right-looking password.
     signInResult = { ok: false, code: "invalid_credentials" };
     try {
-      renderWithIntl(<LoginPage />, { locale: "es" });
+      renderWithIntl(<LoginForm />, { locale: "es" });
 
       await userEvent.type(screen.getByLabelText("Correo electrónico"), "a@b.es");
       await userEvent.type(screen.getByLabelText("Contraseña"), "secreta123");
@@ -418,7 +440,7 @@ describe("what a refused sign-in says when it has been tried too often", () => {
     it(`says what ran out for ${code}, in ${locale}`, async () => {
       signInResult = { ok: false, code };
       try {
-        renderWithIntl(<LoginPage />, { locale });
+        renderWithIntl(<LoginForm />, { locale });
 
         await userEvent.type(screen.getByLabelText(labels.email), "a@b.es");
         await userEvent.type(screen.getByLabelText(labels.password), "secreta123");
