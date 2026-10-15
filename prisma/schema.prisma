@@ -11,7 +11,9 @@ model User {
   id            String     @id @default(cuid())
   email         String     @unique
   name          String
-  passwordHash  String
+  /// The ways this person signs in. Today only the `credential` row, which
+  /// holds the password hash where Better Auth reads it; see `Account`.
+  accounts      Account[]
   /// The language this person reads. Beats the `locale` cookie; see src/i18n/request.ts.
   locale        String     @default("es")
   /// How long a confirmation stays on screen: "default" | "long" | "forever".
@@ -42,6 +44,46 @@ model User {
   updatedAt     DateTime   @updatedAt
 
   @@index([householdId])
+}
+
+/// A way to sign in to a `User`, in the shape Better Auth reads.
+///
+/// The password hash lives here, on the row whose `providerId` is
+/// `"credential"` and whose `accountId` is the user's own id: that is where
+/// Better Auth's email-and-password sign-in looks for it. It moved off `User`
+/// before the switch to Better Auth (PROGRESS D134), so the switch itself
+/// carries no data move. `src/lib/auth/credentials.ts` is the only code that
+/// reads or writes it.
+///
+/// The token columns are Better Auth's, for social providers this application
+/// does not use; they stay null and are kept so the shape is the one its
+/// adapter expects.
+///
+/// **Cascades from User**, an exception to the schema's rule that there are no
+/// cascades (see `ScreenChoice`). A credential that outlives its account is a
+/// password hash nobody can remove, and ASVS 7.4.2 asks for an account's
+/// credentials to go when it does. Better Auth's adapter never deletes these
+/// rows itself, so the database has to.
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  /// The Argon2id hash (`src/lib/auth/password-hash.ts`) on the `credential`
+  /// row; null on any other.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
 }
 
 model Household {
@@ -280,8 +322,9 @@ enum LandingScreen {
 /// No foreign key to User, matching `MutationReplay` above and the schema's
 /// standing rule that there are no cascades. A deleted account leaves rows
 /// keyed on a user id that no longer exists; nothing reads them, they are two
-/// short strings each, and the alternative is a cascade this schema does not
-/// have anywhere else.
+/// short strings each, and a cascade is kept for the auth tables alone
+/// (`Account`), where a row left behind is a credential rather than a
+/// preference.
 model ScreenChoice {
   userId    String
   deviceId  String
@@ -310,8 +353,9 @@ model ScreenChoice {
 /// copy of the household's data, which for a privacy-first application is the
 /// wrong thing to keep.
 ///
-/// No foreign key to User: the schema has no cascades, and a cascade would take
-/// a KEY SHARE lock on the user row on every replayable write.
+/// No foreign key to User: outside the auth tables the schema has no cascades,
+/// and a cascade would take a KEY SHARE lock on the user row on every
+/// replayable write.
 model MutationReplay {
   key         String
   userId      String

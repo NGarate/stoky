@@ -1,6 +1,5 @@
 import type { TRPCError } from "@trpc/server";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 
 import { appRouter } from "@/server/trpc/router";
@@ -73,11 +72,6 @@ beforeAll(async () => {
     data: {
       email: `overview-${stamp}@example.com`,
       name: "Overview",
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

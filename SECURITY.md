@@ -534,7 +534,9 @@ Verified against the files named in each row.
   pins the parameters and that the dummy hash for unknown addresses was made
   with the same ones. Where the hash is stored is known to one module,
   `src/lib/auth/credentials.ts`, which every account create, hash read and
-  hash write goes through.
+  hash write goes through. It is stored in the account's `credential` row of
+  the `Account` table, where Better Auth reads it, not on `User` (PROGRESS
+  D134); that row is deleted with its account.
 - Auth.js v5 with the credentials provider; sessions are encrypted JWTs with
   no server-side record. **Fifteen minutes is the idle timeout, not the
   lifetime**: every read of the session re-issues the token with a fresh
@@ -1522,10 +1524,12 @@ through `household.addMember`, which the setting does not govern.
 - **The first-user count cannot race.** The account is created in a
   transaction that holds a PostgreSQL advisory lock
   (`pg_advisory_xact_lock`) and counts again under it, so two people claiming a
-  fresh instance at once cannot both see zero. The household is written first
-  and the account second, in the same transaction, so a failed account create
-  rolls the household back; before this, a registration that failed after its
-  household was written left a household nobody belonged to.
+  fresh instance at once cannot both see zero. The household is written first,
+  then the account and then its credential `Account` row, which holds the
+  password hash, all in the same transaction, so a failure at any step rolls
+  back every earlier one; before this, a registration that failed after its
+  household was written left a household nobody belonged to, and a user row
+  without its credential could neither sign in nor be registered again.
 - **`/register` says so before anyone types.** The page is a server component
   that asks the same rule after `connection()`, so the answer is the running
   container's and not the build's, and renders a page saying registration is
@@ -1538,8 +1542,10 @@ through `household.addMember`, which the setting does not govern.
   (`src/__tests__/integration/registration.test.ts`): `closed` refuses
   everyone without touching the database; `first-user` admits exactly one;
   two simultaneous claims leave one account and one household; a registration
-  waits while the lock is held and is then refused. Removing the re-count,
-  the lock, the `closed` branch, or the nested household each turns a test red.
+  waits while the lock is held and is then refused; a credential row that
+  cannot be written leaves no user, account or household behind. Removing the
+  re-count, the lock, the `closed` branch, or the nested household each turns
+  a test red.
 
 What is still open:
 
@@ -1933,7 +1939,8 @@ is stored, logged or sent.
 
 | Data | Where | How long |
 |---|---|---|
-| Accounts: email address, name, Argon2id password hash, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| Accounts: email address, name, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |

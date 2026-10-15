@@ -13,6 +13,7 @@ import { retryAfterSeconds } from "@/server/trpc/throttle";
 import { RESET_OWN_PASSWORD_MESSAGE } from "@/lib/validations/household";
 import { authConfig } from "@/lib/auth";
 import { signInWith } from "../utils/authorize";
+import { storedPasswordHash } from "../utils/test-helpers";
 
 /**
  * Making the KITCHEN role reachable.
@@ -119,14 +120,12 @@ describe("creating a kitchen account", () => {
     const account = newAccount("KITCHEN");
 
     const created = await api.household.addMember(account);
-    const stored = await prisma.user.findUnique({ where: { id: created.id } });
+    const stored = await storedPasswordHash(created.id);
 
     // Argon2id, the same as registration. A row with an unusable hash would
     // look created and be a locked-out tablet.
-    expect(stored?.passwordHash).toStartWith("$argon2id$");
-    expect(
-      await argon2.verify(stored?.passwordHash ?? "", account.password),
-    ).toBe(true);
+    expect(stored).toStartWith("$argon2id$");
+    expect(await argon2.verify(stored, account.password)).toBe(true);
   });
 
   it("never returns the hash", async () => {
@@ -135,7 +134,7 @@ describe("creating a kitchen account", () => {
     const created = await api.household.addMember(newAccount("KITCHEN"));
 
     expect(JSON.stringify(created)).not.toContain("argon2");
-    expect(created).not.toHaveProperty("passwordHash");
+    expect(Object.keys(created).sort()).toEqual(["email", "id", "name", "role"]);
   });
 
   it("refuses a password built from the person's own name, and creates nothing", async () => {
@@ -348,11 +347,13 @@ describe("setting a member's password", () => {
   const OLD = "TestPassword123!";
   const NEW = "tarro de garbanzos azul";
 
-  const stored = (id: string) =>
-    prisma.user.findUniqueOrThrow({
+  const stored = async (id: string) => ({
+    ...(await prisma.user.findUniqueOrThrow({
       where: { id },
-      select: { passwordHash: true, sessionsValidFrom: true, householdId: true },
-    });
+      select: { sessionsValidFrom: true, householdId: true },
+    })),
+    passwordHash: await storedPasswordHash(id),
+  });
 
   async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
     try {

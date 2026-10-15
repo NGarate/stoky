@@ -39,6 +39,12 @@ Rules for this log:
 
 ## Done
 
+### Better Auth, before the switch (2026-10-15, `feat/better-auth-2026-10-15`)
+
+| Change | Evidence |
+|---|---|
+| "feat(db): move password hashes into a credential Account row" (D134) | `migration.credential-account.test.ts` migrates a populated database and signs its accounts in with their old passwords; a migration that writes another `providerId` turns it red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
+
 ### Stock recounts retain only supported details (2026-09-12)
 
 | Change | Evidence |
@@ -2564,3 +2570,27 @@ none, so nothing is exploitable or wrong today. Of the final review's 20
 defects it is the only one that is purely a missing test of new behaviour, and
 the branch was held for the other 19. It is filed with its two-part fix as
 `ISSUES.md` TEST-9 and listed among SECURITY.md's accepted gaps until then.
+
+**D134 — Passwords live in a credential Account row.** Better Auth, which
+replaces next-auth later on the `feat/better-auth-2026-10-15` branch, reads a
+password hash from the `Account` row whose `providerId` is `credential` and
+whose `accountId` is the user's own id. The hash moved there, and
+`User.passwordHash` was dropped, while next-auth was still the thing signing
+people in. So the switch carries no data move, and this move can be checked
+on its own: migration `20261015120000_credential_accounts` copies every hash
+unchanged (Argon2id strings carry their own parameters), and
+`integration/migration.credential-account.test.ts` migrates a database that
+has accounts in it and signs them in with their old passwords.
+`src/lib/auth/credentials.ts` stays the only code that reads or writes the
+hash. `createCredentialUser` writes the user and its credential row in one
+transaction, its own when handed the root client and the caller's otherwise.
+`setPasswordAndEndSessions` keeps its guarded `User` write first, as the
+guard and the row lock, and writes the hash only when that write matched.
+`Account` cascades from `User`. That is a recorded exception to the schema's
+rule that there are no cascades (the `ScreenChoice` comment): a credential
+that outlived its account would be a password hash nobody can reach to
+remove, ASVS 7.4.2 asks for an account's credentials to go with it, and
+Better Auth's adapter never deletes these rows itself. The later auth tables
+(sessions, verifications, second factors, passkeys) take the same exception
+for the same reason. The migration is one way: returning to a release before
+it needs the database dump taken before upgrading (`INSTALL.md`).

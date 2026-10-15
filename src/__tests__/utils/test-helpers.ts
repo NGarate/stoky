@@ -64,6 +64,23 @@ export async function createTestUser(data: TestUserData): Promise<User> {
 }
 
 /**
+ * The password hash stored for `userId`, read straight from its credential
+ * Account row — the row Better Auth reads — rather than through
+ * `src/lib/auth/credentials.ts`, so a test of that module is not checked by
+ * the module itself. Throws when the account has no credential row.
+ */
+export async function storedPasswordHash(userId: string): Promise<string> {
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { providerId_accountId: { providerId: "credential", accountId: userId } },
+    select: { userId: true, password: true },
+  });
+  if (account.userId !== userId || account.password === null) {
+    throw new Error(`the credential row of ${userId} holds no password of its own`);
+  }
+  return account.password;
+}
+
+/**
  * Creates a test household
  */
 export async function createTestHousehold(data: TestHouseholdData): Promise<Household> {

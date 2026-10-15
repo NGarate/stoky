@@ -212,8 +212,8 @@ export const shoppingRouter = createTRPCRouter({
    * Unlike `product.delete`, this one really does cascade — a shopping item has
    * no history worth keeping and nothing else references it. **The cascade is
    * performed here, because the database does not do it**: `ShoppingItem`'s
-   * foreign key is `ON DELETE RESTRICT`, and the schema has no cascades
-   * anywhere by design.
+   * foreign key is `ON DELETE RESTRICT`, and outside the auth tables the
+   * schema has no cascades, by design.
    *
    * That gap was not theoretical. `shoppingList.delete` on a list with anything
    * on it hit the constraint, and the translation turned it into `BAD_REQUEST`,

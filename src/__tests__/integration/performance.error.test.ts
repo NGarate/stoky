@@ -23,7 +23,6 @@ describe("Service Performance & Error Handling Tests", () => {
       data: {
         email: `test-${randomUUID()}@example.com`,
         name: "Test User",
-        passwordHash: "hashed_password",
       },
     });
     testUserId = user.id;

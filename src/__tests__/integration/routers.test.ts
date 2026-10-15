@@ -634,7 +634,6 @@ describe("tRPC Router Integration Tests", () => {
         data: {
           email: "product4b-member@example.com",
           name: "Product Member 4b",
-          passwordHash: "not-a-real-hash",
           householdId,
           role: "MEMBER",
         },

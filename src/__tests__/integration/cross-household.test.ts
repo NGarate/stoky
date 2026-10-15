@@ -3,7 +3,6 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
-import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 import { envelope } from "../utils/test-helpers";
 
@@ -72,11 +71,6 @@ async function makeHousehold(
     data: {
       email: `cross-${label}-${Date.now()}@example.com`,
       name: `Cross ${label}`,
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { prisma } from "@/lib/prisma";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import {
   REGISTRATION_CLOSED_MESSAGE,
   REGISTRATION_ENV,
@@ -250,7 +251,7 @@ describe("first-user", () => {
         }
 
         await tx.user.create({
-          data: { email: `${RUN}.holder@example.com`, name: "Holder", passwordHash: "x" },
+          data: { email: `${RUN}.holder@example.com`, name: "Holder" },
         });
         return { outcome };
       },
@@ -276,6 +277,13 @@ describe("open", () => {
 
     expect(await db.user.count()).toBe(3);
     expect(await db.household.count()).toBe(3);
+    // Each with the credential row its password lives in, keyed on its own id.
+    const users = await db.user.findMany({ select: { id: true } });
+    for (const { id } of users) {
+      expect(
+        await db.account.count({ where: { userId: id, accountId: id, providerId: "credential" } }),
+      ).toBe(1);
+    }
   });
 
   it("leaves no household behind when two registrations race for one address", async () => {
@@ -299,4 +307,60 @@ describe("open", () => {
       await db.household.count({ where: { members: { none: {} } } }),
     ).toBe(0);
   });
+
+  it("a failure after the user insert leaves no orphan user or account", async () => {
+    // The account is two rows now, the user and its credential Account, and
+    // the second can fail after the first is written. The household and the
+    // user must go with it: a user without a credential cannot sign in and
+    // holds its address against registering again.
+    env[REGISTRATION_ENV] = "open";
+    const caller = await callerOn(db);
+
+    await refuseCredentialRows(async () => {
+      await expect(caller.auth.register(account("orphan", `Huérfana ${RUN}`))).rejects.toThrow();
+    });
+
+    expect(await db.user.count()).toBe(0);
+    expect(await db.account.count()).toBe(0);
+    expect(await db.household.count()).toBe(0);
+  });
 });
+
+/**
+ * `household.addMember` and the test factories hand `createCredentialUser` the
+ * root client rather than a transaction, so the module opens its own. Checked
+ * here because this file owns a database where Account inserts can be made to
+ * fail without touching any other suite's.
+ */
+describe("an account made with the root client", () => {
+  it("is not left without its credential row when that insert fails", async () => {
+    await refuseCredentialRows(async () => {
+      await expect(
+        createCredentialUser(
+          db,
+          { email: `${RUN}.root@example.com`, name: "Raíz", role: "MEMBER" },
+          "$argon2id$not-checked-here",
+        ),
+      ).rejects.toThrow();
+    });
+
+    expect(await db.user.count()).toBe(0);
+    expect(await db.account.count()).toBe(0);
+  });
+});
+
+/** Runs `body` while this database refuses every new Account row. */
+async function refuseCredentialRows(body: () => Promise<void>): Promise<void> {
+  await db.$executeRawUnsafe(`
+    CREATE FUNCTION refuse_account_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'Account inserts are refused by this test'; END $$`);
+  await db.$executeRawUnsafe(`
+    CREATE TRIGGER refuse_account_insert BEFORE INSERT ON "Account"
+    FOR EACH ROW EXECUTE FUNCTION refuse_account_insert()`);
+  try {
+    await body();
+  } finally {
+    await db.$executeRawUnsafe(`DROP TRIGGER refuse_account_insert ON "Account"`);
+    await db.$executeRawUnsafe(`DROP FUNCTION refuse_account_insert()`);
+  }
+}

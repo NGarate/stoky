@@ -80,7 +80,7 @@ beforeAll(async () => {
   const h = await prisma.household.create({ data: { name: "Repro F Household" } });
   householdId = h.id;
   const u = await prisma.user.create({
-    data: { email: `repro-f-${Date.now()}@example.com`, name: "R", passwordHash: "x", householdId, role: "OWNER" },
+    data: { email: `repro-f-${Date.now()}@example.com`, name: "R", householdId, role: "OWNER" },
   });
   userId = u.id;
 });

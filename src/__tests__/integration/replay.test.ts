@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 import { createTRPCRouter, createTRPCContext, writeProcedure } from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
@@ -143,11 +142,6 @@ async function makeHousehold(label: string) {
     data: {
       email: `replay-${label}-${Date.now()}@example.com`,
       name: `Replay ${label}`,
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

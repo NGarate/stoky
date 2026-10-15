@@ -19,6 +19,7 @@ import {
   generateTestEmail,
   generateTestName,
   createMockSession,
+  storedPasswordHash,
 } from "../utils/test-helpers";
 import * as argon2 from "argon2";
 import { signInWith } from "../utils/authorize";
@@ -183,7 +184,7 @@ describe("Authentication Flow Integration Tests", () => {
       let thrown: unknown;
       try {
         await prisma.user.create({
-          data: { email: lower.toUpperCase(), name: "Twin", passwordHash: "x" },
+          data: { email: lower.toUpperCase(), name: "Twin" },
         });
       } catch (error) {
         thrown = error;
@@ -563,19 +564,14 @@ describe("Authentication Flow Integration Tests", () => {
         password,
       });
 
-      const dbUser = await prisma.user.findUnique({
+      const dbUser = await prisma.user.findUniqueOrThrow({
         where: { email },
       });
+      const passwordHash = await storedPasswordHash(dbUser.id);
 
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.passwordHash).not.toBe(password);
-      expect(dbUser?.passwordHash).toStartWith("$argon2id$");
-
-      // Verify the hash is valid
-      if (dbUser) {
-        const isValid = await argon2.verify(dbUser.passwordHash, password);
-        expect(isValid).toBe(true);
-      }
+      expect(passwordHash).not.toBe(password);
+      expect(passwordHash).toStartWith("$argon2id$");
+      expect(await argon2.verify(passwordHash, password)).toBe(true);
     });
 
     it("should reject weak passwords during registration", async () => {
@@ -663,11 +659,13 @@ describe("Authentication Flow Integration Tests", () => {
       return { user, api: appRouter.createCaller(ctx) };
     }
 
-    const stored = (id: string) =>
-      prisma.user.findUniqueOrThrow({
+    const stored = async (id: string) => ({
+      ...(await prisma.user.findUniqueOrThrow({
         where: { id },
-        select: { passwordHash: true, sessionsValidFrom: true },
-      });
+        select: { sessionsValidFrom: true },
+      })),
+      passwordHash: await storedPasswordHash(id),
+    });
 
     async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
       try {

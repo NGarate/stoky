@@ -324,22 +324,36 @@ STOKY_HASH=$(printf '%s' "$STOKY_NEW_PASSWORD" | docker compose run --rm --no-de
 unset STOKY_NEW_PASSWORD
 docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
   -v hash="$STOKY_HASH" -v email='you@example.com' <<'SQL'
+BEGIN;
+UPDATE "Account"
+SET password = :'hash',
+    "updatedAt" = now() AT TIME ZONE 'UTC'
+WHERE "providerId" = 'credential'
+  AND "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'))
+  AND "accountId" = "userId";
 UPDATE "User"
-SET "passwordHash" = :'hash',
-    "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
+SET "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
     "updatedAt" = now() AT TIME ZONE 'UTC'
 WHERE email = lower(:'email');
+COMMIT;
 SQL
 unset STOKY_HASH
 ```
 
-`psql` must answer `UPDATE 1`; `UPDATE 0` means no account has that address.
+`psql` must answer `UPDATE 1` to both updates; `UPDATE 0` means no account has
+that address. From the release after v0.1.0-alpha.3 the hash is kept in the
+account's `credential` row of the `Account` table, which is where sign-in reads
+it. On v0.1.0-alpha.3 it is still a column of `User`: there, leave out the
+first update and add `"passwordHash" = :'hash',` to the second. The other way
+round fails safely, with `column "passwordHash" does not exist` and nothing
+changed.
 The password is read without echo and passed on standard input, so it stays out
 of your shell history and the process list; `IFS=` keeps any leading or
 trailing space in it, which a plain `read` would drop and sign-in would not. The hash is made by the
-application's own Argon2id library with its own parameters, and setting
-`sessionsValidFrom` ends every session the account had, as a reset from the
-application does. This path skips the application's password rules: choose at
+application's own Argon2id library with its own parameters. Both updates run
+in one transaction, so the new password never stands without the second one,
+which sets `sessionsValidFrom` and so ends every session the account had, as a
+reset from the application does. This path skips the application's password rules: choose at
 least 12 characters that do not contain your name or address.
 
 ## Somebody keeps being told to wait
@@ -499,7 +513,10 @@ with the person's:
    was deleted: no account has that address, or it is the last owner of a
    household that still has other members. It is one statement, so it is one
    transaction: the account, the start screen it chose on each device and its
-   offline replay records go together or not at all. A browser still signed in
+   offline replay records go together or not at all. From the release after
+   v0.1.0-alpha.3 the account's password hash, in its `credential` row of the
+   `Account` table, goes with it too: the database deletes that row along with
+   the account, so the statement does not name it. A browser still signed in
    to the account keeps its cookie, but every request it makes for household
    data is refused. It can still record a start screen; see what stays, below.
 3. The receipts the person uploaded belong to the household and stay, with
@@ -669,6 +686,13 @@ installation with the previous image and configuration. A rollback takes the
 previous release's Compose file, not only its tag, and returning to the previous
 image is not by itself a guaranteed rollback.
 
+**Returning to v0.1.0-alpha.3 needs the pre-upgrade dump.** The release after
+it moves every password hash from a column of `User` into a new `Account`
+table and drops the column (`20261015120000_credential_accounts`). The
+v0.1.0-alpha.3 image reads that column, so started against an upgraded
+database it signs nobody in. Restore the backup taken before the upgrade into
+an empty installation of v0.1.0-alpha.3 instead, as above.
+
 PostgreSQL, Valkey and Traefik change only with a Stoky release. The Compose
 file names each of them by exact version and by digest
 (`postgres:16.15-alpine@sha256:…`), so `docker compose pull` fetches the build
@@ -755,6 +779,10 @@ previous release left it. Run these steps in the installation directory:
 
    `psql` must answer `UPDATE 1`. Renaming an account keeps everything it
    recorded and ends its sessions. Deleting it would take its data with it.
+   Prisma applies migrations in order and stops at the first that fails, so
+   this runs before the later `20261015120000_credential_accounts` has moved
+   the password hashes out of `User`; neither statement touches them, and they
+   stay as written.
 3. Clear the recorded failure:
 
    ```bash

@@ -302,7 +302,8 @@ export const householdRouter = createTRPCRouter({
         passwordHash,
       );
 
-      // Named fields, never the row: it carries the hash.
+      // Named fields, never the row: it is the whole `User`, and any column it
+      // grows would reach the browser by default.
       return { id: user.id, name: user.name, email: user.email, role: user.role };
     }),
   /**

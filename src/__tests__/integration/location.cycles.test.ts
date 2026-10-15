@@ -73,7 +73,6 @@ beforeAll(async () => {
       email: `location-cycles-${Date.now()}@example.com`,
       name: "Location cycles",
       // Never signed in with: the session above is built directly.
-      passwordHash: "not-a-hash",
       householdId: household.id,
       role: "OWNER",
     },

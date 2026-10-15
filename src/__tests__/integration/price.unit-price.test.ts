@@ -39,7 +39,6 @@ beforeAll(async () => {
     data: {
       email: `unit-price-${Date.now()}@example.com`,
       name: "Unit Price",
-      passwordHash: "not-used",
       householdId: household.id,
       role: "OWNER",
     },

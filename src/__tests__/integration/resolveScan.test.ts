@@ -12,7 +12,6 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
-import * as argon2 from "argon2";
 import type { Session } from "next-auth";
 import { TRPCError } from "@trpc/server";
 import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
@@ -74,11 +73,6 @@ beforeAll(async () => {
     data: {
       email: `resolvescan-${Date.now()}@example.com`,
       name: "Resolve scan",
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

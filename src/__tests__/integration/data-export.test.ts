@@ -121,6 +121,13 @@ afterAll(async () => {
   await prisma.household.deleteMany({ where: { id: { in: ids } } });
 });
 
+/** Every object key anywhere inside `value`, however deep. */
+function keysOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(keysOf);
+  if (value === null || typeof value !== "object" || value instanceof Date) return [];
+  return Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)]);
+}
+
 describe("what must never be in the file", () => {
   it("carries no password hash, anywhere", async () => {
     // The single most important assertion here. An export is a file somebody
@@ -128,10 +135,18 @@ describe("what must never be in the file", () => {
     // procedure uses explicit `select` clauses rather than `include` precisely
     // so that a new column cannot arrive in this file by default — this is the
     // test that notices if that discipline slips.
-    const dump = JSON.stringify(await owner.data.exportHousehold());
+    const exported = await owner.data.exportHousehold();
+    const dump = JSON.stringify(exported);
 
-    expect(dump).not.toContain("passwordHash");
+    // The hash lives in a related row (the credential Account), so the way it
+    // would arrive is a relation selected beside the members' columns. The
+    // value check catches it under any key; the key check catches the column
+    // even if a hash ever stopped looking like Argon2id. (`notes.passwords`,
+    // the sentence saying hashes are never exported, is not one of them.)
     expect(dump).not.toContain("$argon2");
+    expect(
+      keysOf(exported).filter((key) => /^(password|passwordHash|accounts)$/i.test(key)),
+    ).toEqual([]);
   });
 
   it("carries no whole-image OCR dump", async () => {

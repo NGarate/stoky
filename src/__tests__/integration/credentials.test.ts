@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import { storedPasswordHash } from "../utils/test-helpers";
 import {
   createCredentialUser,
   findCredentialByEmail,
@@ -10,9 +11,9 @@ import {
 
 /**
  * `src/lib/auth/credentials.ts` is the one module that knows where a password
- * hash is stored, so the move of that hash into Better Auth's credential
- * Account row changes it and nothing else. These tests are what that move has
- * to keep true: an account made through the module signs in through it, and a
+ * hash is stored: Better Auth's credential Account row (PROGRESS D134). These
+ * tests are what that has to keep true: an account made through the module
+ * signs in through it, its hash sits in the row Better Auth reads, and a
  * guarded password write lands on nobody who has stopped matching the guard.
  *
  * Each hash here is a real 64 MiB Argon2id run, so the file keeps them few.
@@ -55,6 +56,35 @@ describe("an account made through the credentials module", () => {
     expect(await verifyPassword(credential?.passwordHash, PASSWORD)).toBe(true);
     expect(await verifyPassword(credential?.passwordHash, NEW_PASSWORD)).toBe(false);
     expect(await readPasswordHash(prisma, created.id)).toBe(credential?.passwordHash ?? "");
+  });
+
+  it("keeps the hash in one credential Account row keyed on the user's own id", async () => {
+    const hash = await hashPassword(PASSWORD);
+    const created = await createCredentialUser(
+      prisma,
+      { email: `${RUN}.row@example.com`, name: "Fila", householdId, role: "MEMBER" },
+      hash,
+    );
+
+    const accounts = await prisma.account.findMany({ where: { userId: created.id } });
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({
+      providerId: "credential",
+      accountId: created.id,
+      password: hash,
+    });
+    expect(await storedPasswordHash(created.id)).toBe(hash);
+  });
+
+  it("finds no credential for an account that has no credential row", async () => {
+    // A user made some other way — a script, or a sign-in method added later —
+    // has nothing to check a password against, and must read as no account.
+    const bare = await prisma.user.create({
+      data: { email: `${RUN}.bare@example.com`, name: "Sin clave", householdId },
+    });
+
+    expect(await findCredentialByEmail(prisma, bare.email)).toBeNull();
+    expect(await readPasswordHash(prisma, bare.id)).toBeNull();
   });
 
   it("answers null for an address with no account, and for an id with none", async () => {
