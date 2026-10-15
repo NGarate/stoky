@@ -55,8 +55,10 @@ export type SecurityEvent =
   | "auth.unavailable"
   // Sessions somebody ended on purpose, with the `reason`: the account's own
   // holder ending all of theirs (`self`), an admin ending a member's
-  // (`admin`), or a sign-in ending the session its browser presented
-  // (`replaced`, `src/lib/auth/sign-in-tidy.ts`). `userId` did it,
+  // (`admin`), a sign-in ending the session its browser presented
+  // (`replaced`), or a sign-in that would be the account's eleventh session
+  // ending its least recently used one (`evicted`; both in
+  // `src/lib/auth/sign-in-tidy.ts`). `userId` did it,
   // `targetUserId` is whose they were, `count` is how many rows went. Worth a
   // line of its own rather than folding into `access.denied`: it is the only
   // event here that somebody *asked for*, and an operator reading a
@@ -105,7 +107,7 @@ export interface SecurityDetails {
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
    * it, which has no procedure to have thrown it. On `auth.session.ended` it
-   * is why: `"self"`, `"admin"` or `"replaced"`.
+   * is why: `"self"`, `"admin"`, `"replaced"` or `"evicted"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */

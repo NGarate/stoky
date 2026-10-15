@@ -43,8 +43,8 @@ import { refuseCrossSite, refuseNonJson } from "./request-guards";
  *    no script on the page needs it in a body or a header.
  *
  * A sign-in that gets in is followed by its tidy (`sessions.tidy`): the
- * session the browser presented ends, and the account's expired rows go
- * (`src/lib/auth/sign-in-tidy.ts`, D139).
+ * session the browser presented ends, the account's expired rows go (D139),
+ * and the account is held to ten sessions (D140) — `src/lib/auth/sign-in-tidy.ts`.
  *
  * Every answer is `no-store`: a refusal served from a cache would refuse
  * somebody else.
@@ -76,7 +76,7 @@ export interface SignInSessions {
    * answers the sign-in, so it is the session being replaced.
    */
   presented: (headers: Headers) => Promise<PresentedSession | null>;
-  /** Ends what a sign-in replaces (`tidyAfterSignIn`). */
+  /** Ends what a sign-in replaces, and what is past the cap (`tidyAfterSignIn`). */
   tidy: (input: SignInTidy) => Promise<unknown>;
 }
 

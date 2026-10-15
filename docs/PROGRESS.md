@@ -57,6 +57,7 @@ Rules for this log:
 | "feat(auth): read the signing secret from STOKY_SECRET" (D137) | The signing key is `STOKY_SECRET`; `NEXTAUTH_SECRET` is still read when it is unset, with one `[config]` deprecation line at start-up (`src/lib/env-names.ts`). `install.sh` renames the line keeping its value, and the bundle's Compose file passes both names through. `unit/env-names.test.ts`, `unit/auth-secret.test.ts` (the key Better Auth signs with, in a fresh process), `unit/auth-environment.test.ts` (the hook, once), `integration/health.test.ts`, `unit/install-script.test.ts` and `unit/security-log.test.ts` pin the rule; preferring the legacy name, dropping the rename step or the start-up warning each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(auth): list every address the instance answers at in STOKY_URLS" (D138) | `STOKY_URLS` is a comma-separated list: the first entry is Better Auth's `baseURL` and alone decides `Secure`; every entry's origin is trusted for sign-in, and in production nothing else is. Production refuses no entry, an entry that is not a bare origin, and an https first entry beside LAN http; `NEXTAUTH_URL` is read as a list of one with a deprecation line. `unit/public-url.test.ts` (the list, the cookie in a fresh process), `unit/auth-environment.test.ts` (the hook) and `integration/auth.origins.test.ts` (a production instance with two entries signs in at both and refuses an unlisted origin and a `DEV_ALLOWED_ORIGIN` host) pin it; trusting only the first entry, dropping the mixed-scheme check or reading `DEV_ALLOWED_ORIGIN` in production each turns them red. `bun run verify:ci` and `bun run test:e2e` green on the commit. |
 | "feat(auth): tidy a person's stale sessions at sign-in" (D139) | ASVS 5.0.0 7.2.4: after a sign-in succeeds the auth route ends the session the browser presented — whoever's it was — and the account's expired rows, never the one just issued (`src/lib/auth/sign-in-tidy.ts`), logging `auth.session.ended` `reason: "replaced"`. `integration/session.sign-in-tidy.test.ts` signs in twice with one cookie jar (one row left, the old cookie refused, the new row's clock fresh), across a shared tablet, from a second browser (both stay), with a wrong password (nothing ends) and after a row expires (gone); `unit/sign-in-tidy.test.ts` pins that no `{id: undefined}` reaches the `OR` (which Prisma 6.19 reads as matching nothing, so only the unit test sees it). Skipping the delete, deleting by account, dropping or widening the expired clause, or tidying before the password is checked each turns them red. `bun run verify:ci` green on the commit. |
+| "feat(auth): cap each account at ten concurrent sessions" (D140) | ASVS 5.0.0 7.1.2: `MAX_SESSIONS_PER_ACCOUNT` is ten, and the sign-in that would make the eleventh ends the least recently used session — oldest `updatedAt`, never the one just issued — logging `auth.session.ended` `reason: "evicted"` (`capSessions`, `src/lib/auth/sign-in-tidy.ts`). It runs after the tidy, in the same transaction, which holds the account's `User` row `FOR UPDATE`. `integration/session.cap.test.ts`: an eleventh sign-in ends the least recently used row, not the oldest, and its cookie stops working; a re-sign-in at ten ends only the presented row and evicts nothing; three sign-ins at once on top of nine leave ten. Ordering by `createdAt`, capping before the tidy, dropping the cap, an off-by-one, or counting the new session each turn it red; the lock and the order are pinned in `unit/sign-in-tidy.test.ts`. `bun run verify:ci` green on the commit. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -2830,3 +2831,41 @@ answer before the response guard strips it.
   Auth creates and then deletes a session at the password step of a two-step
   account. The two-step and passkey sign-ins (later commits) call the same
   helper; the session cap (a later commit) joins it there.
+
+**D140 — Ten sessions per account; the eleventh sign-in ends the least
+recently used.** ASVS 5.0.0 7.1.2 asks for a limit on concurrent sessions,
+and there was none: every sign-in from a new browser added a row that lived
+until it idled out. `MAX_SESSIONS_PER_ACCOUNT` (`src/lib/auth/session-policy.ts`)
+is ten, the owner's number (2026-10-15), above what a household's phones,
+laptops and kitchen screen add up to — so it bounds a leak, not ordinary use.
+`capSessions` (`src/lib/auth/sign-in-tidy.ts`) lists the account's sessions
+other than the one just issued, newest `updatedAt` first, skips nine, and ends
+the rest through `endSessions`, logging `auth.session.ended` with `reason:
+"evicted"` and the account as both `userId` and `targetUserId`.
+
+- **Least recently used, by `updatedAt`.** Not `createdAt`: the phone signed
+  in a week ago and used every day must outlive the laptop signed in on
+  Tuesday and closed. `updatedAt` moves only when a row is written, and today
+  that is the keep-alive's slide — at most every four minutes of activity,
+  and only once more than a minute has passed — so it trails real use by
+  about five minutes at most. No `lastSeen` column: a write per request is
+  what D135 removed, and five minutes is far finer than the choice needs.
+  Ties fall to `createdAt`, then the id, so the choice is deterministic.
+- **After the tidy, in one transaction.** The tidy (D139) runs first, so a
+  person signing in again in the same browser has already ended the session
+  it presented and never costs another device its session. Both run inside a
+  transaction that holds the account's `User` row `FOR UPDATE`
+  (`$queryRaw`, a tagged template, so the id is bound). Measured over four
+  runs with the lock removed: three sign-ins at once on top of nine still
+  left ten, because every sign-in's row exists before its own cap reads the
+  list and the last cap to read sees them all. The lock stays because two transactions deleting
+  overlapping rows lock them in no promised order and Postgres resolves that
+  by aborting one: a tidy that fails for no reason of its own. The log lines
+  are written after the commit, so none describes a rolled-back delete.
+- **From the route, never a session-create hook.** Better Auth creates and
+  then deletes a session at the password step of a two-step account, so a
+  hook would let a password alone end other sessions. The cap rides on every
+  call of the tidy, which the two-step and passkey sign-ins will make too.
+- **What it costs.** An account signed in on more than ten devices loses its
+  least-used one at each new sign-in, the kitchen screen included if that is
+  the one.

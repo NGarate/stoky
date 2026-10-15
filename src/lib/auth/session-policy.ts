@@ -1,5 +1,6 @@
 /**
- * How long a browser session lives, as arithmetic and nothing else.
+ * How long a browser session lives, and how many an account may hold, as
+ * arithmetic and nothing else.
  *
  * Every session is a row (`prisma/schema.prisma`, `Session`), and the row's
  * `expiresAt` is the only lifetime that counts: Better Auth refuses a row past
@@ -20,6 +21,16 @@
  *
  * Pure, so the arithmetic is tested without a clock or a database.
  */
+
+/**
+ * How many sessions one account may hold at once (PROGRESS D140, ASVS 5.0.0
+ * 7.1.2). The sign-in that would make the eleventh ends the least recently
+ * used one (`src/lib/auth/sign-in-tidy.ts`). Ten is above what a household's
+ * phones, laptops and kitchen screen add up to, so the limit bounds a leak —
+ * a session nobody signs out of, a cookie copied somewhere — rather than how
+ * the account is used.
+ */
+export const MAX_SESSIONS_PER_ACCOUNT = 10;
 
 /** Fifteen minutes without activity ends a browser session. */
 export const BROWSER_IDLE_S = 15 * 60;
