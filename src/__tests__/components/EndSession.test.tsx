@@ -1,7 +1,7 @@
 import "../setup/matchers";
 import { TRPCClientError } from "@trpc/client";
 import { describe, it, expect, afterEach, beforeEach, mock } from "bun:test";
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, type ReactElement } from "react";
@@ -157,10 +157,15 @@ const DEVICES = [
 /** What the list was asked to read again. */
 let invalidated = 0;
 
-/** The household on `/settings/people`: the admin signed in, and Ana. */
+/**
+ * The household on `/settings/people`: the admin signed in, Ana, Bea, who has
+ * no two-step verification, and Olga, an owner who has it.
+ */
 const MEMBERS = [
-  { id: "u-alba", name: "Alba", email: "alba@example.com", role: "ADMIN" },
-  { id: "u-ana", name: "Ana", email: "ana@example.com", role: "KITCHEN" },
+  { id: "u-olga", name: "Olga", email: "olga@example.com", role: "OWNER", twoFactorEnabled: true },
+  { id: "u-alba", name: "Alba", email: "alba@example.com", role: "ADMIN", twoFactorEnabled: true },
+  { id: "u-ana", name: "Ana", email: "ana@example.com", role: "KITCHEN", twoFactorEnabled: true },
+  { id: "u-bea", name: "Bea", email: "bea@example.com", role: "MEMBER", twoFactorEnabled: false },
 ];
 /** Ana's sessions, as `household.memberSessions` answers them. */
 const ANA_SESSIONS = [
@@ -195,6 +200,16 @@ let meRole = "ADMIN";
 let householdEndInputs: unknown[] = [];
 /** What `household.endHouseholdSessions` answers, per test: null accepts. */
 let householdEndRefusal: unknown = null;
+/** What each `household.removeMemberTwoFactor` call was sent. */
+let twoFactorRemovals: unknown[] = [];
+/** What `household.removeMemberTwoFactor` answers, per test: null accepts. */
+let twoFactorRemovalRefusal: unknown = null;
+/** How many times the people page asked for the member list again. */
+let membersInvalidated = 0;
+/** The member list as the next read answers it. */
+let members = MEMBERS;
+/** Whose two-step verification the next read of the list says is off. */
+let twoFactorOffOnRead: string[] = [];
 /** The people page's other mutations, which these tests never press. */
 const untouched = () => ({ mutate: () => {}, mutateAsync: async () => ({}), isPending: false });
 
@@ -202,11 +217,20 @@ mock.module("@/lib/trpc/client", () => ({
   api: {
     useUtils: () => ({
       auth: { listSessions: { invalidate: async () => void invalidated++ } },
-      household: { members: { invalidate: async () => {} } },
+      household: {
+        members: {
+          invalidate: async () => {
+            membersInvalidated++;
+            members = members.map((member) =>
+              twoFactorOffOnRead.includes(member.id) ? { ...member, twoFactorEnabled: false } : member,
+            );
+          },
+        },
+      },
     }),
     household: {
       members: {
-        useQuery: () => ({ data: MEMBERS, error: null, fetchStatus: "idle", isPending: false, refetch: async () => {} }),
+        useQuery: () => ({ data: members, error: null, fetchStatus: "idle", isPending: false, refetch: async () => {} }),
       },
       memberSessions: {
         useQuery: (input: unknown, options?: { enabled?: boolean }) => {
@@ -234,6 +258,15 @@ mock.module("@/lib/trpc/client", () => ({
             householdEndInputs.push(input);
             if (householdEndRefusal !== null) throw householdEndRefusal;
             return { ended: 4 };
+          },
+        }),
+      },
+      removeMemberTwoFactor: {
+        useMutation: () => ({
+          mutateAsync: async (input: unknown) => {
+            twoFactorRemovals.push(input);
+            if (twoFactorRemovalRefusal !== null) throw twoFactorRemovalRefusal;
+            return { ended: 2 };
           },
         }),
       },
@@ -325,6 +358,9 @@ beforeEach(() => {
   meRole = "ADMIN";
   householdEndInputs = [];
   householdEndRefusal = null;
+  twoFactorRemovals = [];
+  twoFactorRemovalRefusal = null;
+  membersInvalidated = 0;
 });
 
 afterEach(cleanup);
@@ -1364,5 +1400,147 @@ describe("every session in the household, from the people page", () => {
     await confirmWith(dialog, "Enviar y cerrar");
 
     expect(steps.slice(0, 2)).toEqual(["flush", "endHouseholdSessions"]);
+  });
+});
+
+/**
+ * **Quitar la verificación en dos pasos**, an admin's way back for a member
+ * who has lost their authenticator (D150).
+ *
+ * The server half — the admin's password, the household, owners on owners,
+ * the sessions ended — is `integration/household.two-factor-removal.test.ts`'s.
+ * What only the page can get wrong is who is offered it, that it asks for the
+ * password and says what it costs first, and how a refusal is worded.
+ */
+describe("a member's two-step verification, from the people page", () => {
+  function renderPeople() {
+    return renderWithIntl(
+      <SnackbarProvider>
+        <PeoplePage />
+      </SnackbarProvider>,
+      { locale: "es" },
+    );
+  }
+
+  const BUTTON = "Quitar la verificación en dos pasos";
+
+  function rowOf(name: string): HTMLElement {
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) => within(item).queryByText(name, { exact: true }));
+    if (!row) throw new Error(`${name} is not listed`);
+    return row;
+  }
+
+  async function openRemoval(name: string): Promise<HTMLElement> {
+    await userEvent.click(within(rowOf(name)).getByRole("button", { name: BUTTON }));
+    return screen.getByRole("dialog", { name: `¿Quitar la verificación en dos pasos de ${name}?` });
+  }
+
+  it("says on every row whether it is on, in words", () => {
+    renderPeople();
+
+    expect(rowOf("Ana")).toHaveTextContent("Verificación en dos pasosActivada");
+    expect(rowOf("Bea")).toHaveTextContent("Verificación en dos pasosDesactivada");
+  });
+
+  it("is offered to an admin only on another member's row that has it, and never on an owner's", () => {
+    meRole = "ADMIN";
+    renderPeople();
+
+    expect(within(rowOf("Ana")).getByRole("button", { name: BUTTON })).toBeInTheDocument();
+    // Nothing to remove.
+    expect(within(rowOf("Bea")).queryByRole("button", { name: BUTTON })).toBeNull();
+    // Your own is turned off from Seguridad y acceso.
+    expect(within(rowOf("Alba")).queryByRole("button", { name: BUTTON })).toBeNull();
+    // An owner's is another owner's to remove.
+    expect(within(rowOf("Olga")).queryByRole("button", { name: BUTTON })).toBeNull();
+  });
+
+  it("is offered to an owner on another owner's row", () => {
+    meRole = "OWNER";
+    renderPeople();
+
+    expect(within(rowOf("Olga")).getByRole("button", { name: BUTTON })).toBeInTheDocument();
+    expect(within(rowOf("Alba")).queryByRole("button", { name: BUTTON })).toBeNull();
+  });
+
+  it("says what it costs, asks for the password, and sends nothing on opening", async () => {
+    renderPeople();
+
+    const dialog = await openRemoval("Ana");
+
+    expect(dialog).toHaveTextContent("Se cerrarán todas sus sesiones y tendrá que configurarla de nuevo");
+    expect(within(dialog).getByLabelText("Tu contraseña")).toBeInTheDocument();
+    expect(twoFactorRemovals).toEqual([]);
+  });
+
+  it("removes it with the admin's password, says so, reads the list again and closes", async () => {
+    renderPeople();
+
+    await confirmWith(await openRemoval("Ana"), "Quitar la verificación");
+
+    expect(twoFactorRemovals).toEqual([{ userId: "u-ana", currentPassword: "cocina despensa nevera" }]);
+    expect(
+      await screen.findByText(
+        "Se ha quitado la verificación en dos pasos de Ana y se han cerrado sus sesiones. Pídele que la configure de nuevo en cuanto entre.",
+      ),
+    ).toBeInTheDocument();
+    expect(membersInvalidated).toBe(1);
+    expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(0);
+  });
+
+  it("leaves focus on the list of people, not on <body>, once the row no longer offers it", async () => {
+    // The re-read takes the button that opened the dialog off Ana's row
+    // before the dialog closes (WCAG 2.4.3).
+    twoFactorOffOnRead = ["u-ana"];
+    try {
+      renderPeople();
+
+      await confirmWith(await openRemoval("Ana"), "Quitar la verificación");
+
+      await waitFor(() => expect(screen.queryAllByRole("dialog", { hidden: true })).toHaveLength(0));
+      expect(within(rowOf("Ana")).queryByRole("button", { name: BUTTON })).toBeNull();
+      await waitFor(() => expect(document.activeElement?.tagName).toBe("UL"));
+    } finally {
+      twoFactorOffOnRead = [];
+      members = MEMBERS;
+    }
+  });
+
+  it("says a wrong password in the dialog, and stays open", async () => {
+    twoFactorRemovalRefusal = trpcRefusal("BAD_REQUEST", WRONG_CURRENT_PASSWORD_MESSAGE);
+    renderPeople();
+
+    const dialog = await openRemoval("Ana");
+    await confirmWith(dialog, "Quitar la verificación");
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("La contraseña no es correcta");
+    expect(membersInvalidated).toBe(0);
+  });
+
+  it("says an owner's is another owner's, when the role changed under the page", async () => {
+    twoFactorRemovalRefusal = trpcRefusal("FORBIDDEN", "Only an owner may change who owns this household");
+    renderPeople();
+
+    const dialog = await openRemoval("Ana");
+    await confirmWith(dialog, "Quitar la verificación");
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Solo otra persona propietaria puede quitar la verificación en dos pasos de una persona propietaria.",
+    );
+  });
+
+  it("says the member changed, and reads the list again", async () => {
+    twoFactorRemovalRefusal = trpcRefusal("CONFLICT", "This member has no two-step verification to remove");
+    renderPeople();
+
+    const dialog = await openRemoval("Ana");
+    await confirmWith(dialog, "Quitar la verificación");
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Esta persona ya no tiene la verificación en dos pasos activada",
+    );
+    expect(membersInvalidated).toBe(1);
   });
 });

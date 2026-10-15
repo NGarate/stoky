@@ -897,7 +897,17 @@
     "resetFailedNotOwner": "Solo otra persona propietaria puede cambiar esta contraseña.",
     "resetTooMany": "Has creado cuentas o cambiado contraseñas demasiadas veces en la última hora. Espera un rato e inténtalo otra vez.",
     "resetFailed": "No se ha podido cambiar la contraseña. Inténtalo otra vez.",
-    "resetDone": "Contraseña de {name} cambiada y sus sesiones cerradas. Dásela y pídele que la cambie en Configuración en cuanto entre."
+    "resetDone": "Contraseña de {name} cambiada y sus sesiones cerradas. Dásela y pídele que la cambie en Configuración en cuanto entre.",
+    "twoFactorLabel": "Verificación en dos pasos",
+    "twoFactorOn": "Activada",
+    "twoFactorOff": "Desactivada",
+    "removeTwoFactorButton": "Quitar la verificación en dos pasos",
+    "removeTwoFactorTitle": "¿Quitar la verificación en dos pasos de {name}?",
+    "removeTwoFactorBody": "Sirve si ha perdido el móvil con su aplicación de autenticación y no le quedan códigos de recuperación. Se cerrarán todas sus sesiones y tendrá que configurarla de nuevo; hasta entonces entrará solo con su contraseña. Escribe la tuya para confirmarlo.",
+    "removeTwoFactorAction": "Quitar la verificación",
+    "removeTwoFactorDone": "Se ha quitado la verificación en dos pasos de {name} y se han cerrado sus sesiones. Pídele que la configure de nuevo en cuanto entre.",
+    "removeTwoFactorNotOwner": "Solo otra persona propietaria puede quitar la verificación en dos pasos de una persona propietaria.",
+    "removeTwoFactorChanged": "Esta persona ya no tiene la verificación en dos pasos activada, o su cuenta ha cambiado. Hemos actualizado la lista."
   },
   "session": {
     "expiringIn": "Tu sesión se cerrará en {minutes} min por inactividad. Lo que no hayas guardado se perderá.",
@@ -1106,7 +1116,7 @@
     "statusOn": "Activada",
     "statusOff": "Desactivada",
     "explainOff": "Además de la contraseña, al entrar se te pedirá un código de una aplicación de autenticación del móvil. Así, quien sepa tu contraseña no podrá entrar sin tu móvil.",
-    "explainOn": "Al entrar se te pide un código de tu aplicación de autenticación. Si pierdes el móvil, entra con uno de tus códigos de recuperación.",
+    "explainOn": "Al entrar se te pide un código de tu aplicación de autenticación. Si pierdes el móvil, entra con uno de tus códigos de recuperación; si tampoco los tienes, pide a quien administra el hogar que te la quite.",
     "turnOn": "Activar la verificación en dos pasos",
     "turnOnTitle": "¿Activar la verificación en dos pasos?",
     "turnOnBody": "Después verás un código QR para añadir Stoky a tu aplicación de autenticación.",

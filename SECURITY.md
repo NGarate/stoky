@@ -919,8 +919,32 @@ Verified against the files named in each row.
     rotated — is refused as `TWO_FACTOR_UNREADABLE` before Better Auth counts
     an attempt, and logged `auth.twofactor.unreadable`: no code will ever
     work, and the operator is the one who can say why. The way back is a
-    backup code, or the operator's runbook in
+    backup code, or a household admin removing it (below), or — for a sole
+    owner without a backup code — the operator's runbook in
     [the installation guide](docs/INSTALL.md#a-lost-authenticator).
+  - **A household admin can remove a member's** (PROGRESS D150), for a lost
+    authenticator with no backup code left: "Quitar la verificación en dos
+    pasos" on **Personas del hogar** (`household.removeMemberTwoFactor`).
+    The admin's own current password first (`confirmCurrentPassword`, the
+    two D143 budgets; a wrong one is `BAD_REQUEST` and
+    `auth.reauth.refused` with `via: "member-two-factor"`), before the
+    member is looked up, so a session somebody else holds learns nothing
+    about ids; then the member must be this household's (`NOT_FOUND`), and
+    only an owner may act on an owner (`FORBIDDEN`) — so an owner's can be
+    removed only by another owner. Never the caller's own (`BAD_REQUEST`):
+    owners and admins turn theirs off from *Seguridad y acceso* like
+    anybody. One transaction clears `twoFactorEnabled` — conditioned on the
+    household, the role checked and that it is on, so a member who changed
+    in between or has none is `CONFLICT` and nothing is touched — deletes
+    the authenticator row (secret and backup codes) and ends every session
+    and challenge in progress the member has (`endSessions`), since
+    whoever has the lost phone may be signed in on it. Logged as
+    `auth.twofactor.removed` and `auth.session.ended` with `reason:
+    "two-factor-removed"`, the admin as `userId` and the member as
+    `targetUserId`. It is the trust `resetMemberPassword` already grants an
+    admin — who can set the very password this leaves standing alone — so
+    a stolen admin session plus that admin's password can strip a non-owner's
+    second step; the log records who did it to whom.
   - **Not for native clients yet**: an account with two-step verification
     signs in from a browser (D142).
 - **Only ten endpoints of the auth API answer**: `POST /sign-in/email`,
@@ -1740,18 +1764,21 @@ refused, with Better Auth's refusal as `code`), `auth.twofactor.replayed` (a
 right code sent again), `auth.twofactor.locked` (wrong codes have locked the
 account's second step), `auth.twofactor.unreadable` (the stored secret no
 longer decrypts), `auth.twofactor.enabled`, `auth.twofactor.disabled`,
-`auth.twofactor.codes-regenerated`,
+`auth.twofactor.codes-regenerated`, `auth.twofactor.removed` (an admin took
+a member's off, with the member as `targetUserId`; D150),
 `auth.reauth.refused` (a wrong current password re-entered to confirm an
 action, with the action as `via` — `end-sessions`, `password-change`, which
 replaces the `auth.password.change.refused` event of earlier releases,
-`household-end-all`, or `two-factor`; D143, D144, D147, D148), `access.denied` and
+`household-end-all`, `two-factor`, or `member-two-factor`; D143, D144, D147,
+D148, D150), `access.denied` and
 `request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
 (PROGRESS D135): it is written when somebody ends sessions on purpose, with a
 `reason` — `self` for a person ending their own, `password-change` for the
 other sessions a password change ended (D144), `admin` for an admin ending a
 member's, `removed` for an admin removing a member from the household (D146),
 `owner` for an owner ending every session in the household, with no
-`targetUserId` (D147),
+`targetUserId` (D147), `two-factor-removed` for an admin removing a member's
+two-step verification (D150),
 `replaced` for a sign-in ending the session its browser presented
 (D139), `evicted` for a sign-in ending the account's least recently used
 session to stay within ten (D140) — the `userId` who asked, the
@@ -2147,7 +2174,7 @@ What is actually true: `HouseholdRole` has four values including `KITCHEN`;
 (`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 69 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 70 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
 are read from the database on every call rather than from the session, so a

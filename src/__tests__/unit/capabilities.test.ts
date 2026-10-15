@@ -89,6 +89,12 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // on themselves — all inside the resolver, because a tier cannot see whom
     // the call is about. `integration/household.members.test.ts` holds them.
     resetMemberPassword: "adminProcedure",
+    // Taking a member's second step off for a lost authenticator (D150): the
+    // same authority as setting their password, which is what it leaves
+    // standing alone. Not the whole guard: not the caller, the admin's own
+    // password, this household's member, only an owner on an owner — inside
+    // the resolver. `integration/household.two-factor-removal.test.ts`.
+    removeMemberTwoFactor: "adminProcedure",
   },
   "inventory.ts": {
     getStockOverview: "householdProcedure",

@@ -151,6 +151,34 @@ export const OWNERS_ONLY_MESSAGE =
   "Only an owner may end every session in the household";
 
 /**
+ * An admin removing a member's two-step verification, for somebody who has
+ * lost the phone with their authenticator and has no backup code left
+ * (`household.removeMemberTwoFactor`, PROGRESS D150).
+ *
+ * **The admin's own password**, bounded like sign-in's and not policed, as
+ * `auth.endSessions` asks it: this takes a second factor off somebody else's
+ * account and signs them out everywhere, and a session somebody else is
+ * holding must not be able to do either. Unlike ending a member's sessions
+ * (D145), which the owner decided is not re-asked, this weakens the account
+ * it is done to, so it is.
+ *
+ * Never the caller's own id: your own is turned off from Seguridad y acceso,
+ * with your password (`REMOVE_OWN_TWO_FACTOR_MESSAGE`).
+ */
+export const removeMemberTwoFactorSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+  currentPassword: existingPasswordSchema,
+});
+
+/**
+ * What `household.removeMemberTwoFactor` says when the member named is the
+ * caller. English and shared, like `OWN_SESSIONS_MESSAGE`: the screen never
+ * offers it.
+ */
+export const REMOVE_OWN_TWO_FACTOR_MESSAGE =
+  "Turn your own two-step verification off in Settings, under Security, with your password";
+
+/**
  * What `household.memberSessions` and `household.endMemberSessions` say when
  * the member named is the caller. English and shared, like
  * `RESET_OWN_PASSWORD_MESSAGE`: the screen never offers it.
@@ -163,6 +191,7 @@ export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
 export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
 export type EndHouseholdSessionsInput = z.infer<typeof endHouseholdSessionsSchema>;
+export type RemoveMemberTwoFactorInput = z.infer<typeof removeMemberTwoFactorSchema>;
 export type ResetMemberPasswordInput = z.infer<typeof resetMemberPasswordSchema>;
 export type HouseholdInput = z.infer<typeof householdSchema>;
 export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;

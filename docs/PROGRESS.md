@@ -72,6 +72,7 @@ Rules for this log:
 | "feat(auth): store two-factor backup codes as hashes" (D149) | ASVS 5.0.0 6.5.2: two-step verification's backup codes are ten codes of 24 Crockford base32 characters (120 bits each, six groups of four, `crypto.getRandomValues`) stored as `sha256:<hex>` of the normalised code, in place of Better Auth's ten codes of about 60 bits encrypted with `STOKY_SECRET` (ISSUES AUTH-6). New `src/lib/auth/backup-codes.ts` (`generateBackupCodes`, `normaliseBackupCode`, `hashBackupCode`, and `storeBackupCodes`, whose `encrypt` hashes what is not yet a hash and whose `decrypt` is the identity), passed to `twoFactor({ backupCodeOptions })`; a before-hook in the policy plugin turns the typed code into its hash on `/two-factor/verify-backup-code`. Still no HTTP endpoint hands codes out: enrolment and regeneration open with the settings screen. `unit/backup-codes.test.ts` (12) and `integration/two-factor.test.ts` (+6): the column holds only hashes and none of the codes issued; a code typed in lower case with spaces signs in once and the rest still do; a stored hash typed as the code is refused; regeneration retires the old set; a wrong code is counted towards the lockout; a code signs in after the TOTP secret became unreadable, and two-step verification can then be turned off and on. Breaks that went red: Better Auth's `"encrypted"` storage, its generator, the hook unmatched, a stored hash passed through, `encrypt` rehashing hashes, no normalisation, `decrypt` losing the list, the hook refusing a code itself (uncounted), a biased `% 31`, 20 characters, a fixed random source, codes stored in the clear and an unchecked list. |
 | "feat(auth): ask for the authenticator code when signing in" | The login form's second step, as its own state on `/login` rather than a page: `signInWithPassword` reads `twoFactorRedirect` as `{ ok: false, twoFactor: true }` (it was `ok`, which would have navigated with no session), and the new `verifyTotp` / `verifyBackupCode` in `src/lib/auth/client.ts` post `{ code }` and name each refusal (`SecondStepRefusalCode`). The form then asks for the authenticator code (`one-time-code`, numeric, six characters), with a button to a backup code and back and a **Volver** to the password; focus moves to the step's heading on entry. An expired challenge returns to the password with the reason and the address kept; an unreadable authenticator stays on the step and points at a backup code; a wrong backup code has its own sentence (`backupCodeInvalid`). Step 1 is unchanged, and the status region and the one submit button stay mounted across steps. `components/auth-pages.test.tsx` (+15, both languages), `unit/auth-client.test.ts` (+10), `unit/auth.error-messages.test.ts`. Breaks that went red: `twoFactor` ignored, an expired challenge kept on the step, the toggle stuck, no heading focus, no password focus on return, the fields unkeyed, an unreadable secret sent back to the password, the address dropped, **Volver** a submit, a backup code sent to the TOTP check, the autocomplete hint, a missing English sentence, the backup sentence shared, and the client's redirect, codes, path and body. |
 | "feat(auth): set up two-step verification in settings" | **Seguridad y acceso** gains **Verificación en dos pasos**, for every role, the kitchen's shared account included (the owner's decision of 2026-10-15): an `ok` "Activada" or `neutral` "Desactivada" badge; turning it on (`ReauthDialog`, then a QR code drawn in the browser with `uqr` 0.1.3, the key in fours, an `otpauth:` link, and the first code through `verify-totp`, which turns it on and is used up); the ten backup codes shown once, after that code and never before, kept only in the step's state, with a copy and a `.txt` made in the browser; new codes and turning it off, each with the password; and after any change a link to *Tus dispositivos* (ASVS 5.0.0 7.4.3). The route opens `POST /two-factor/enable`, `/disable` and `/generate-backup-codes` (ten endpoints): a signed-in session or 401; the D143 budgets per session and per account before Better Auth, 429 `REAUTH_RATE_LIMITED` with `Retry-After`, 503 without Valkey; `password` alone forwarded; the session's attempt refunded on a right password; `auth.reauth.refused` `via: "two-factor"`, and the new `auth.twofactor.disabled` and `auth.twofactor.codes-regenerated`. `get-totp-uri` stays closed. `auth.me` carries `twoFactorEnabled`; `src/lib/auth/client.ts` gains `startTotpEnrolment`, `turnOffTwoFactor`, `replaceBackupCodes` and `AccountChangeRefusedError`, which `reauthRefusalOf` reads. Tokens `--qr-dark`/`--qr-light`, dark on light in every theme, held to 7:1. ASVS 6.3.3 (a second factor for every account) is recorded in SECURITY.md as a deviation. `components/TotpSetup.test.tsx` (19), `unit/auth-handler.test.ts` (+10), `unit/auth-client.test.ts` (+8), `integration/two-factor.test.ts` (+6): the kitchen account enrols through the route; a wrong password logged and nothing set up; the sixth try from one session refused even with the right password; off keeps the browser signed in; new codes retire the old; no session, 401. New `e2e/two-factor.spec.ts` (chromium): enrol from the key the page shows, sign in with a code, the same code refused in a fresh browser. Breaks that went red: a role refusal in the route, the log dropped, the body passed through, no budget, `get-totp-uri` allowlisted, no refund, no account budget, failing open, the codes kept after saving or across a remount or shown before the first code, the section hidden by role, the QR unnamed, the dialog not reading the refusal, no link to the devices, and `--qr-dark` at 4.48:1. |
+| "feat(household): let an admin remove a member's two-step verification" (D150) | The way back from a lost authenticator with no backup code left, without the operator's SQL: `household.removeMemberTwoFactor` takes `{userId, currentPassword}` and refuses the caller's own id (`BAD_REQUEST`), then asks for the admin's own password (`confirmCurrentPassword`, `via: "member-two-factor"`) before looking the member up, then `memberOfHousehold` (`NOT_FOUND`) and `assertMayActOnOwner` (`FORBIDDEN`); one transaction clears `twoFactorEnabled` conditioned on the household, the role checked and that it is on (`CONFLICT` otherwise, nothing touched), deletes the `TwoFactor` row and ends every session and challenge the member has (`endSessions`); logged as the new `auth.twofactor.removed` and `auth.session.ended` `reason: "two-factor-removed"`. `household.members` carries `twoFactorEnabled`. **Personas del hogar**: each row says "Verificación en dos pasos: Activada/Desactivada", and rows that have it — never the caller's own, never an owner's to an admin — offer "Quitar la verificación en dos pasos" (`RemoveMemberTwoFactorDialog`, a `ReauthDialog` that says first that every session ends; `FORBIDDEN` and `CONFLICT` worded, the list read again). *Seguridad y acceso*'s explanation names the admin as the way back. 70 procedures. New `integration/household.two-factor-removal.test.ts` (6): members enrolled through `auth.api` and signed in for real lose the authenticator row, the cookie and a pending challenge, then sign in with the password alone; an owner removes another owner's; a wrong password is refused and logged, and is asked before a missing id is looked up; an admin on an owner is `FORBIDDEN`; another household's is `NOT_FOUND`, a member is refused, the caller's own is `BAD_REQUEST`; a member without it is `CONFLICT` and keeps their session; no line carries the code, the secret, a password or an email address. `components/EndSession.test.tsx` (+8) and `unit/procedure-inputs.test.ts` (+1). `e2e/two-factor.spec.ts` (+1, not run in this commit): an admin removes an enrolled member's and the member's browser is signed out and signs in with the password alone. Breaks that went red: `endSessions` skipped, no password, the member looked up first, no owner guard, `twoFactorEnabled` out of the write's guard, no self check, the row kept, reason `admin`, the event renamed, `via` `end-sessions`; on the page the button offered without it, on the own row or on an owner's to an admin, the meta always "Activada", `FORBIDDEN` unmapped, no refetch on `CONFLICT` or success, the dialog left open, no password sent. The household in the write's guard survives every test: it holds only against a member who leaves between the check and the write, the race `resetMemberPassword`'s identical guard answers. |
 
 ### Stock recounts retain only supported details (2026-09-12)
 
@@ -3324,3 +3325,54 @@ rotation has just made their authenticator unreadable (ISSUES AUTH-6).
   `storeBackupCodes`, `includes` plus the compare-and-set write, and how a
   before-hook's returned body is merged. `integration/two-factor.test.ts`
   goes red if any of them changes.
+
+**D150 — A household admin removes a member's two-step verification, after
+the admin's own password.** A member who loses the phone with their
+authenticator and has no backup code left could not sign in again; the only
+way back was the operator's SQL in INSTALL, which most households cannot
+run and none should need for a lost phone. The owner decided on 2026-10-15
+that a household admin can do it, re-entering their own password, logged,
+ending all of the member's sessions (`household.removeMemberTwoFactor`).
+
+- **Not yourself.** The caller's own id is `BAD_REQUEST`, owners included:
+  your own is turned off from *Seguridad y acceso* with your password, and
+  an admin session that could skip that would be the way round it.
+- **The admin's password, first.** It weakens somebody else's account to a
+  password alone, so a session somebody else holds must not be able to —
+  unlike ending a member's sessions (D145), which the owner decided is not
+  re-asked. Asked before the member is looked up, so without it a stolen
+  session cannot tell `NOT_FOUND` from `FORBIDDEN` and learn which ids are
+  whose. The D143 budgets and `via: "member-two-factor"`; no token
+  rotation, as for every re-entry (D143's 7.2.4 deviation).
+- **The member guards of the rest of member management**: this household's
+  (`memberOfHousehold`), and only an owner on an owner
+  (`assertMayActOnOwner`), so an owner's can be removed only by another
+  owner. A sole owner with no backup code keeps the operator's runbook.
+- **One transaction, its write repeating the guards.** `updateMany` clears
+  `twoFactorEnabled` only where the household, the role that was checked
+  and `twoFactorEnabled: true` still hold; a count of zero is `CONFLICT` —
+  the member changed, or never had it — and rolls back, so nothing is
+  deleted and no session ends. Then the `TwoFactor` row (the secret and the
+  backup codes) and `endSessions(tx, { userId })`, which also deletes the
+  member's challenges in progress (D148): whoever has the lost phone may be
+  signed in on it, or halfway through a sign-in with it. The household in
+  that guard is for a member leaving between the check and the write; no
+  test can make that happen without a race, which is why it is the same
+  guard `resetMemberPassword` has.
+- **Two log lines**, after the commit: `auth.twofactor.removed` and
+  `auth.session.ended` with `reason: "two-factor-removed"` and the count,
+  the admin as `userId` and the member as `targetUserId`. Neither carries a
+  code, a secret or an email address; the client address is in, as on
+  every line.
+- **Passkeys will be left alone.** None exist yet; when they do they are
+  another way in, with their own removal, and losing the phone with an
+  authenticator says nothing about a passkey on a laptop. Whether removing
+  one should remove the other is left to the owner.
+- **The screen** offers it only where it can succeed: rows that have it,
+  not the caller's own, not an owner's to an admin. Each row says in words
+  whether it is on. *Seguridad y acceso*'s explanation, once it is on,
+  names the admin as the way back after the backup codes.
+- **The risk accepted**: a compromised admin session together with that
+  admin's password can strip a non-owner's second step. That is the trust
+  `resetMemberPassword` already grants — the admin can set the very password
+  this leaves standing alone — and the log records who did it to whom.

@@ -84,4 +84,21 @@ describe("mutation inputs", () => {
     expect(ok({ currentPassword: "x", scope: "everyone" })).toBe(false);
     expect(ok({ currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1), scope: "all" })).toBe(false);
   });
+
+  it("household.removeMemberTwoFactor asks for the admin's password, and names one member", () => {
+    // D150. Without the password a session somebody else holds could strip a
+    // member's second step; without a bounded id there is nobody to scope to.
+    const schema = (procedures["household.removeMemberTwoFactor"] as ProcedureDef)._def
+      .inputs[0] as { safeParse: (value: unknown) => { success: boolean } };
+    const ok = (value: unknown) => schema.safeParse(value).success;
+
+    expect(ok({ userId: "u1", currentPassword: "x" })).toBe(true);
+
+    expect(ok({ userId: "u1" })).toBe(false);
+    expect(ok({ userId: "u1", currentPassword: "" })).toBe(false);
+    expect(ok({ userId: "u1", currentPassword: "x".repeat(MAX_PASSWORD_LENGTH + 1) })).toBe(false);
+    expect(ok({ currentPassword: "x" })).toBe(false);
+    expect(ok({ userId: "", currentPassword: "x" })).toBe(false);
+    expect(ok({ userId: "u".repeat(65), currentPassword: "x" })).toBe(false);
+  });
 });

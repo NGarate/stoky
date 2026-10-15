@@ -27,6 +27,11 @@ import es from "../messages/es.json";
  * **Its own account, registered here**, for the reason `session-revocation`
  * gives: the shared demo session must not end up asking for a code.
  *
+ * The second test is the way back from a lost phone (PROGRESS D150): a
+ * household admin removes a member's two-step verification from **Personas
+ * del hogar** with the admin's own password, the member's browser is signed
+ * out, and the member signs in with the password alone.
+ *
  * Chromium only, via `CHROMIUM_ONLY` in `playwright.config.ts`: whether a
  * server accepts a code has one engine's answer.
  */
@@ -111,6 +116,39 @@ async function passwordStep(browser: Browser, email: string) {
   return { context, page };
 }
 
+/**
+ * Two-step verification turned on from `/settings/security` with `password`,
+ * through the key the page shows; the key, as the authenticator holds it.
+ * Leaves the page on the section, with it on.
+ */
+async function enrol(page: Page, password: string): Promise<Buffer> {
+  await page.goto("/settings/security");
+  const section = page.getByRole("region", { name: es.auth.twoFactorTitle });
+  await expect(section.getByText(t.statusOff, { exact: true })).toBeVisible({ timeout: 30_000 });
+  await section.getByRole("button", { name: t.turnOn }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(es.reauth.password).fill(password);
+  await dialog.getByRole("button", { name: t.turnOnAction, exact: true }).click();
+
+  await expect(section.getByRole("heading", { name: t.scanTitle })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(section.getByRole("img", { name: t.qrLabel })).toBeVisible();
+  const key = base32Decode((await section.locator("code").innerText()).trim());
+  expect(key.length, "the key on the page is not a whole secret").toBeGreaterThanOrEqual(20);
+
+  await section.getByLabel(t.codeLabel).fill(totp(key));
+  await section.getByRole("button", { name: t.verify }).click();
+  const codes = section.getByRole("list", { name: t.codesListLabel });
+  await expect(codes).toBeVisible({ timeout: 30_000 });
+  await expect(codes.getByRole("listitem")).toHaveCount(10);
+  await section.getByRole("button", { name: t.codesDone }).click();
+  await expect(section.getByText(t.changedEnabled)).toBeVisible();
+  await expect(section.getByText(t.statusOn, { exact: true })).toBeVisible();
+  await expect(codes).toBeHidden();
+  return key;
+}
+
 async function enterCode(page: Page, code: string): Promise<void> {
   await page.getByLabel(es.auth.totpLabel).fill(code);
   await page.getByRole("button", { name: es.auth.twoFactorVerify }).click();
@@ -124,30 +162,7 @@ test.describe("two-step verification", () => {
     const email = await register(page);
 
     // ----------------------------------------------------------- set up --
-    await page.goto("/settings/security");
-    const section = page.getByRole("region", { name: es.auth.twoFactorTitle });
-    await expect(section.getByText(t.statusOff, { exact: true })).toBeVisible({ timeout: 30_000 });
-    await section.getByRole("button", { name: t.turnOn }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByLabel(es.reauth.password).fill(PASSWORD);
-    await dialog.getByRole("button", { name: t.turnOnAction, exact: true }).click();
-
-    await expect(section.getByRole("heading", { name: t.scanTitle })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(section.getByRole("img", { name: t.qrLabel })).toBeVisible();
-    const key = base32Decode((await section.locator("code").innerText()).trim());
-    expect(key.length, "the key on the page is not a whole secret").toBeGreaterThanOrEqual(20);
-
-    await section.getByLabel(t.codeLabel).fill(totp(key));
-    await section.getByRole("button", { name: t.verify }).click();
-    const codes = section.getByRole("list", { name: t.codesListLabel });
-    await expect(codes).toBeVisible({ timeout: 30_000 });
-    await expect(codes.getByRole("listitem")).toHaveCount(10);
-    await section.getByRole("button", { name: t.codesDone }).click();
-    await expect(section.getByText(t.changedEnabled)).toBeVisible();
-    await expect(section.getByText(t.statusOn, { exact: true })).toBeVisible();
-    await expect(codes).toBeHidden();
+    const key = await enrol(page, PASSWORD);
 
     // This browser stayed signed in through it.
     expect(await signedIn(page), "turning it on signed this browser out").toBe(true);
@@ -170,5 +185,73 @@ test.describe("two-step verification", () => {
 
     await first.context.close();
     await second.context.close();
+  });
+});
+
+test.describe("a lost authenticator", () => {
+  const h = es.household;
+  const MEMBER_PASSWORD = "E2ELostPhone123!";
+
+  test("an admin removes a member's, who is signed out and signs in with the password alone", async ({
+    page,
+    browser,
+  }) => {
+    // ---------------------------------------------------------------- given --
+    // The owner, and a kitchen account (the form's default) they create.
+    await register(page);
+    const memberEmail = freshEmail();
+    const memberName = `Movil perdido E2E ${Date.now()}`;
+    await page.goto("/settings/people");
+    await page.getByLabel(h.addName, { exact: true }).fill(memberName);
+    await page.getByLabel(h.addEmail, { exact: true }).fill(memberEmail);
+    await page.getByLabel(h.addPassword, { exact: true }).fill(MEMBER_PASSWORD);
+    await page.getByRole("button", { name: h.addSubmit }).click();
+    const row = page
+      .getByRole("listitem")
+      .filter({ hasText: memberName })
+      .filter({ has: page.getByRole("button", { name: h.memberSessionsButton }) });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+
+    // The member signs in on their own browser and sets it up.
+    const context = await browser.newContext();
+    const member = await context.newPage();
+    await member.goto("/login");
+    await member.waitForSelector('input[name="email"]');
+    await member.waitForTimeout(1500);
+    await member.fill('input[name="email"]', memberEmail);
+    await member.fill('input[name="password"]', MEMBER_PASSWORD);
+    await member.click('button[type="submit"]');
+    await expect(member).not.toHaveURL(/\/login/, { timeout: 30_000 });
+    await enrol(member, MEMBER_PASSWORD);
+    expect(await signedIn(member), "the member's browser was not signed in to begin with").toBe(true);
+
+    // ----------------------------------------------------------------- when --
+    await page.reload();
+    await expect(row.getByText(h.twoFactorOn, { exact: true })).toBeVisible({ timeout: 30_000 });
+    await row.getByRole("button", { name: h.removeTwoFactorButton }).click();
+    const dialog = page.getByRole("dialog", {
+      name: h.removeTwoFactorTitle.replace("{name}", memberName),
+    });
+    await dialog.getByLabel(es.reauth.password).fill(PASSWORD);
+    await dialog.getByRole("button", { name: h.removeTwoFactorAction, exact: true }).click();
+
+    // ----------------------------------------------------------------- then --
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    await expect(row.getByText(h.twoFactorOff, { exact: true })).toBeVisible({ timeout: 30_000 });
+    expect(await signedIn(page), "removing it signed the admin out").toBe(true);
+    expect(await signedIn(member), "the member's browser was still signed in").toBe(false);
+
+    // The password alone signs the member in again: no step for a code.
+    await member.goto("/login");
+    await member.waitForSelector('input[name="email"]');
+    await member.waitForTimeout(1500);
+    await member.fill('input[name="email"]', memberEmail);
+    await member.fill('input[name="password"]', MEMBER_PASSWORD);
+    await member.click('button[type="submit"]');
+    await expect(member).not.toHaveURL(/\/login/, { timeout: 30_000 });
+    await expect(member.getByRole("heading", { name: es.auth.twoFactorTitle })).toHaveCount(0);
+    expect(await signedIn(member), "the password alone did not sign the member in").toBe(true);
+
+    await context.close();
   });
 });

@@ -897,7 +897,17 @@
     "resetFailedNotOwner": "Only an owner may set another owner's password.",
     "resetTooMany": "You have created accounts or set passwords too many times in the last hour. Wait a while and try again.",
     "resetFailed": "The password could not be changed. Try again.",
-    "resetDone": "{name}'s password is set and their sessions have ended. Give it to them and ask them to change it in Settings as soon as they sign in."
+    "resetDone": "{name}'s password is set and their sessions have ended. Give it to them and ask them to change it in Settings as soon as they sign in.",
+    "twoFactorLabel": "Two-step verification",
+    "twoFactorOn": "On",
+    "twoFactorOff": "Off",
+    "removeTwoFactorButton": "Remove two-step verification",
+    "removeTwoFactorTitle": "Remove {name}'s two-step verification?",
+    "removeTwoFactorBody": "For when they have lost the phone with their authenticator app and have no recovery codes left. Every session they have ends, and they will need to set it up again; until then they sign in with their password alone. Enter yours to confirm.",
+    "removeTwoFactorAction": "Remove it",
+    "removeTwoFactorDone": "{name}'s two-step verification has been removed and their sessions have ended. Ask them to set it up again as soon as they sign in.",
+    "removeTwoFactorNotOwner": "Only another owner may remove an owner's two-step verification.",
+    "removeTwoFactorChanged": "This person no longer has two-step verification on, or their account changed. The list has been updated."
   },
   "session": {
     "expiringIn": "Your session will close in {minutes} min after being idle. Anything unsaved will be lost.",
@@ -1106,7 +1116,7 @@
     "statusOn": "On",
     "statusOff": "Off",
     "explainOff": "Besides the password, signing in will ask for a code from an authenticator app on your phone. Someone who knows your password then cannot get in without your phone.",
-    "explainOn": "Signing in asks for a code from your authenticator app. If you lose your phone, sign in with one of your recovery codes.",
+    "explainOn": "Signing in asks for a code from your authenticator app. If you lose your phone, sign in with one of your recovery codes; if you have none either, ask whoever runs the household to remove it.",
     "turnOn": "Turn on two-step verification",
     "turnOnTitle": "Turn on two-step verification?",
     "turnOnBody": "Next you will see a QR code to add Stoky to your authenticator app.",

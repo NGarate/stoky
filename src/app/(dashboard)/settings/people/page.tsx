@@ -20,6 +20,7 @@ import {
 } from "@/components/household/add-member-refusal";
 import { ResetMemberPasswordDialog } from "@/components/household/ResetMemberPasswordDialog";
 import { MemberSessionsDialog } from "@/components/household/MemberSessionsDialog";
+import { RemoveMemberTwoFactorDialog } from "@/components/household/RemoveMemberTwoFactorDialog";
 import { EndHouseholdSessions } from "@/components/household/EndHouseholdSessions";
 import { Section } from "@/components/ui/section";
 import type { HouseholdRole } from "@prisma/client";
@@ -46,6 +47,14 @@ import type { FormEvent, JSX } from "react";
  * one (`household.memberSessions`, `household.endMemberSessions`, D145): the
  * answer to a lost kitchen tablet that does not also sign the member out of
  * the phone in their pocket.
+ *
+ * "Quitar la verificación en dos pasos" (`household.removeMemberTwoFactor`,
+ * D150) is the way back for a member who has lost the phone with their
+ * authenticator and has no backup code left: after the admin's own password,
+ * it takes the second step off and ends every session they have. Each row
+ * says whether the member has it, in words, and the action is on the rows
+ * that do — never the caller's own, which is turned off from Seguridad y
+ * acceso, and never an owner's to an admin.
  *
  * Last, for owners only, "Cerrar todas las sesiones del hogar"
  * (`household.endHouseholdSessions`, D147): every member signed out of every
@@ -113,6 +122,13 @@ export default function PeoplePage(): JSX.Element {
   const resetOpener = useRef<HTMLButtonElement | null>(null);
   const [viewing, setViewing] = useState<{ id: string; name: string } | null>(null);
   const sessionsOpener = useRef<HTMLButtonElement | null>(null);
+  const [removingTwoFactor, setRemovingTwoFactor] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const twoFactorOpener = useRef<HTMLButtonElement | null>(null);
+  // Where focus goes when removing a member's two-step verification took
+  // the button that opened it off their row: the list of people.
+  const memberList = useRef<HTMLUListElement>(null);
 
   /**
    * The server's refusal, in words this household can act on.
@@ -278,11 +294,17 @@ export default function PeoplePage(): JSX.Element {
         title={t("peopleTitle")}
       />
 
-      <ul className="space-y-3">
+      <ul className="space-y-3" ref={memberList} tabIndex={-1}>
         {members.data.map((member) => (
           <ItemRow
             key={member.id}
-            meta={[{ label: t("addEmail"), value: member.email }]}
+            meta={[
+              { label: t("addEmail"), value: member.email },
+              {
+                label: t("twoFactorLabel"),
+                value: member.twoFactorEnabled ? t("twoFactorOn") : t("twoFactorOff"),
+              },
+            ]}
             /* The role in words. Never a colour or a letter. */
             status={<Badge tone="neutral">{t(`role${member.role}`)}</Badge>}
             title={member.name}
@@ -421,6 +443,28 @@ export default function PeoplePage(): JSX.Element {
                     </Button>
                   ) : null}
 
+                  {/* Only where there is something to remove, and never on
+                      the caller's own row (turned off from Seguridad y
+                      acceso, with their password) or, for an admin, on an
+                      owner's: the server refuses both, and a button that
+                      can only be refused is not offered. */}
+                  {member.twoFactorEnabled &&
+                  me.data &&
+                  me.data.id !== member.id &&
+                  (member.role !== "OWNER" || me.data.role === "OWNER") ? (
+                    <Button
+                      onClick={(event) => {
+                        twoFactorOpener.current = event.currentTarget;
+                        setRemovingTwoFactor({ id: member.id, name: member.name });
+                        setRowFailure(null);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("removeTwoFactorButton")}
+                    </Button>
+                  ) : null}
+
                   <Button
                     onClick={() => {
                       setConfirmingRemoval(member.id);
@@ -463,6 +507,13 @@ export default function PeoplePage(): JSX.Element {
             : Promise.resolve()
         }
         returnFocus={resetOpener}
+      />
+
+      <RemoveMemberTwoFactorDialog
+        member={removingTwoFactor}
+        onClose={() => setRemovingTwoFactor(null)}
+        returnFocus={twoFactorOpener}
+        fallbackFocus={memberList}
       />
 
       <MemberSessionsDialog

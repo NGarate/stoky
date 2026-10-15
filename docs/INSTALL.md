@@ -408,8 +408,17 @@ person — the kitchen's shared account included — from **Configuración →
 Seguridad y acceso → Verificación en dos pasos**. Somebody who
 has lost the phone with the app signs in with one of the backup codes they
 were given when they set it up, then turns it off and on again there, which
-sets up the new phone and gives them new codes. If they have no
-backup code either, remove two-step verification in the database, so the
+sets up the new phone and gives them new codes.
+
+If they have no backup code either, **a household admin removes it** from
+**Configuración → Personas del hogar**: "Quitar la verificación en dos pasos"
+on that person's row, confirmed with the admin's own password. It signs the
+person out on every device, and they then sign in with their password alone
+and set it up again. An admin cannot remove an owner's; another owner can.
+The action is recorded in the security log as `auth.twofactor.removed`.
+
+Only when nobody in the application can — a household's sole owner, with no
+backup code — remove two-step verification in the database, so the
 password alone signs them in. Run this in the installation directory,
 replacing the address with the person's:
 
@@ -979,7 +988,7 @@ migration again.
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
-| Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | From the release after v0.1.0-alpha.3: a backup code signs them in; without one, see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
+| Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | From the release after v0.1.0-alpha.3: a backup code signs them in; without one, a household admin removes it from **Personas del hogar** — see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
 | Turning two-step verification on or off, or asking for new recovery codes, says there have been too many tries | From the release after v0.1.0-alpha.3: five wrong passwords from one session, or twenty across the account, within 15 minutes; the screen can be used again once that window ends. Wrong passwords are on the log as `auth.reauth.refused` with `"via":"two-factor"` — many of them from a session the person does not recognise means somebody else has it: end it from **Tus dispositivos** |
 | The authenticator app does not take the QR code | From the release after v0.1.0-alpha.3: type the key shown under the code into the app instead, or, on the phone that has the app, use the link beside it. The phone's clock must be right to within a minute |
 | Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |

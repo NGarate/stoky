@@ -22,7 +22,9 @@ import {
   OWN_SESSIONS_MESSAGE,
   OWNERS_ONLY_MESSAGE,
   RESET_OWN_PASSWORD_MESSAGE,
+  REMOVE_OWN_TWO_FACTOR_MESSAGE,
   removeMemberSchema,
+  removeMemberTwoFactorSchema,
   resetMemberPasswordSchema,
   updateMemberRoleSchema,
 } from "@/lib/validations/household";
@@ -251,11 +253,15 @@ export const householdRouter = createTRPCRouter({
    * `adminProcedure`, because the matrix puts "see account data and emails"
    * behind admin — a KITCHEN tablet left on a counter must not list the
    * household's email addresses to whoever picks it up.
+   *
+   * `twoFactorEnabled` so the screen can say who has a second step and offer
+   * to remove it (`removeMemberTwoFactor`, D150) — whether it is on, never
+   * anything of the authenticator itself.
    */
   members: adminProcedure.query(async ({ ctx }) => {
     return ctx.db.user.findMany({
       where: { householdId: ctx.householdId },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, twoFactorEnabled: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     });
   }),
@@ -656,5 +662,97 @@ export const householdRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  /**
+   * Take a member's two-step verification off, after the admin's own
+   * password, and end every session they have (PROGRESS D150).
+   *
+   * **The way back from a lost authenticator.** Somebody whose phone is gone
+   * and who has no backup code left could not sign in at all; until this
+   * existed the only remedy was the operator's SQL (INSTALL, *A lost
+   * authenticator*). The admin removes it, the person signs in with the
+   * password alone and sets it up again on the new phone. It is the trust
+   * `resetMemberPassword` already places in an admin, who can set the very
+   * password this leaves standing on its own.
+   *
+   * The order is the point:
+   *
+   * 1. **Not yourself.** Your own is turned off from Seguridad y acceso, with
+   *    your password; owners and admins are no exception.
+   * 2. **The admin's password** (`confirmCurrentPassword`, D143), before
+   *    anything is read about the member: this weakens somebody else's
+   *    account, and a session somebody else holds must not be able to — nor
+   *    learn, from `NOT_FOUND` against `FORBIDDEN`, which ids are whose.
+   *    Unlike ending a member's sessions (D145), which is not re-asked.
+   * 3. **The member is this household's** (`memberOfHousehold`), `NOT_FOUND`
+   *    for anyone else's.
+   * 4. **Only an owner may act on an owner** (`assertMayActOnOwner`): an
+   *    admin who could strip an owner's second step, then set their password,
+   *    would be signing in as the owner.
+   * 5. **One transaction**, its write repeating the guards — the household,
+   *    the role that was checked, and that two-step verification is on — so
+   *    a member who changed in between, or never had it, is `CONFLICT` and
+   *    nothing is touched. Then the authenticator row (secret and backup
+   *    codes), then every session and challenge in progress (`endSessions`):
+   *    whoever has the lost phone may also have a session open on it, and a
+   *    challenge is half a sign-in.
+   *
+   * Logged as `auth.twofactor.removed` and `auth.session.ended` with
+   * `reason: "two-factor-removed"`, the admin as `userId` and the member as
+   * `targetUserId`, after the transaction has committed.
+   */
+  removeMemberTwoFactor: adminProcedure
+    .input(removeMemberTwoFactorSchema)
+    .mutation(async ({ ctx, input }) => {
+      const callerId = ctx.session.user.id;
+
+      if (input.userId === callerId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: REMOVE_OWN_TWO_FACTOR_MESSAGE });
+      }
+
+      await confirmCurrentPassword(ctx, input.currentPassword, "member-two-factor");
+
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+
+      const ended = await ctx.db.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({
+          where: {
+            id: member.id,
+            householdId: ctx.householdId,
+            role: member.role,
+            twoFactorEnabled: true,
+          },
+          data: { twoFactorEnabled: false },
+        });
+        if (count === 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This member has no two-step verification to remove, or changed. Try again.",
+          });
+        }
+        await tx.twoFactor.deleteMany({ where: { userId: member.id } });
+        return endSessions(tx, { userId: member.id });
+      });
+
+      const address = ctx.headers ? clientAddress(ctx.headers) : undefined;
+      logSecurityEvent("auth.twofactor.removed", {
+        userId: callerId,
+        targetUserId: member.id,
+        householdId: ctx.householdId,
+        address,
+      });
+      logSecurityEvent("auth.session.ended", {
+        userId: callerId,
+        targetUserId: member.id,
+        householdId: ctx.householdId,
+        reason: "two-factor-removed",
+        count: ended,
+        address,
+      });
+
+      return { ended };
     }),
 });

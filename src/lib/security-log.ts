@@ -67,10 +67,14 @@ export type SecurityEvent =
   // authenticator, and the operator is the one who can tell them why;
   // `disabled` when the account's holder turns it off with the password, and
   // `codes-regenerated` when they replace the backup codes, which ends the
-  // old set (both from `/settings/security`, `auth-handler.ts`).
+  // old set (both from `/settings/security`, `auth-handler.ts`); `removed`
+  // when a household admin takes it off somebody else's account after their
+  // own password, for a lost authenticator (D150): `userId` is the admin,
+  // `targetUserId` the account it was taken off.
   | "auth.twofactor.enabled"
   | "auth.twofactor.disabled"
   | "auth.twofactor.codes-regenerated"
+  | "auth.twofactor.removed"
   | "auth.twofactor.failed"
   | "auth.twofactor.replayed"
   | "auth.twofactor.locked"
@@ -81,7 +85,8 @@ export type SecurityEvent =
   // other one (`password-change`), an admin ending a member's
   // (`admin`), an admin removing a member from the household (`removed`),
   // an owner ending every session in the household (`owner`, with no
-  // `targetUserId`: they were everybody's),
+  // `targetUserId`: they were everybody's), an admin removing a member's
+  // two-step verification, which ends all of theirs (`two-factor-removed`),
   // a sign-in ending the session its browser presented
   // (`replaced`), or a sign-in that would be the account's eleventh session
   // ending its least recently used one (`evicted`; both in
@@ -107,7 +112,8 @@ export type SecurityEvent =
   // The current password re-entered to confirm an action was wrong
   // (`src/lib/auth/reauth.ts`, and the auth route for two-step
   // verification). `via` names the action — `end-sessions`,
-  // `password-change`, `household-end-all`, `two-factor` — so a grep tells a typo before
+  // `password-change`, `household-end-all`, `two-factor`, `member-two-factor`
+  // — so a grep tells a typo before
   // ending a session from a stolen session guessing. BAD_REQUEST, which the
   // refusal middleware in `trpc.ts` does not record, so written here.
   | "auth.reauth.refused"
@@ -139,7 +145,7 @@ export interface SecurityDetails {
    * `"cross-site"` marks a request the route handler refused before tRPC saw
    * it, which has no procedure to have thrown it. On `auth.session.ended` it
    * is why: `"self"`, `"password-change"`, `"admin"`, `"removed"`,
-   * `"owner"`, `"replaced"` or `"evicted"`.
+   * `"owner"`, `"two-factor-removed"`, `"replaced"` or `"evicted"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */
