@@ -2530,8 +2530,13 @@ full in the section named.
   The shared per-account budget is what bounds a distributed guess, so it stays
   shared for browsers that have never signed in; known browsers have their own
   ([*Rate limiting*](#rate-limiting-covers-authentication-and-the-expensive-calls-not-the-rest)).
-  The operator clears it by hand. A second factor or an email channel would
-  change it.
+  The operator clears it by hand. An email channel would change it. Since
+  2026-10-15 a passkey does, for whoever has one: a passkey sign-in is
+  charged per address only (PROGRESS D151), since it names no account and
+  cannot be guessed, so a person with a passkey signs in past an exhausted
+  per-account password budget, on an instance where passkeys are offered.
+  Two-step verification (D148) does not: the password step is charged per
+  account before a code is asked for.
 - **The first-user claim window.** Whoever reaches `/register` first on a fresh
   installation owns it; register at once, and start again if somebody else did
   ([*Registration closes after the first account*](#registration-closes-after-the-first-account)).
