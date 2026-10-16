@@ -409,7 +409,8 @@ Verified against the files named in each row.
 
 - **The API routes bound a request body themselves**: 15 MiB for `/api/trpc`
   (a 10 MB receipt is 13.98 MB once base64'd into JSON) and 64 KiB for a POST to
-  `/api/auth`, whose forms are a few hundred bytes. A declared
+  `/api/auth`, whose bodies are a few hundred bytes of JSON (a form is
+  refused there with 415 before Better Auth sees it). A declared
   `Content-Length` over the limit is refused with 413 without reading the body;
   a body with no declared length is counted as it arrives and refused at the
   first byte over. The tRPC route does this before it looks up the session, so
