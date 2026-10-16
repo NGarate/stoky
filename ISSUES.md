@@ -3579,7 +3579,9 @@ and keeps a password in the `credential` row of `Account`.
 `User.passwordHash` while next-auth was still the thing signing people in
 (`20261015120000_credential_accounts`), so the swap (D135) found a schema
 Better Auth accepts and carried no data move. `credentials.ts` is still the
-one module that reads or writes the hash.
+one module of ours that reads or writes the hash; Better Auth is the one
+other, reading it at sign-in and writing it when a person changes their own
+password (D144), with our Argon2id.
 
 ### ✅ AUTH-3: Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options
 

@@ -578,11 +578,14 @@ Verified against the files named in each row.
   adding a member or setting a member's password, and for a person changing
   their own password, and verifies for sign-in and for that change. A test
   pins the parameters and that the dummy hash for unknown addresses was made
-  with the same ones. Where the hash is stored is known to one module,
-  `src/lib/auth/credentials.ts`, which every account create, hash read and
-  hash write goes through. It is stored in the account's `credential` row of
-  the `Account` table, where Better Auth reads it, not on `User` (PROGRESS
-  D134); that row is deleted with its account.
+  with the same ones. Where the hash is stored is known to one module of
+  ours, `src/lib/auth/credentials.ts`: every caller of ours that creates an
+  account with a password, reads a stored hash or sets a new one goes
+  through it. Better Auth is the one other reader and writer: it reads the
+  hash at sign-in and writes it when a person changes their own password
+  (PROGRESS D144), with our Argon2id either way. It is stored in the
+  account's `credential` row of the `Account` table, where Better Auth reads
+  it, not on `User` (PROGRESS D134); that row is deleted with its account.
 - **Better Auth 1.7.7, with sessions in the database** (PROGRESS D135,
   replacing next-auth and D125). A session is a `Session` row and the cookie
   is a signed reference to it: Better Auth reads the row on every request —
