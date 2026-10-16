@@ -1,7 +1,6 @@
 import type { TRPCError } from "@trpc/server";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import * as argon2 from "argon2";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
@@ -26,7 +25,7 @@ const OWNER = { userId: "", householdId: "" };
 const stamp = Date.now();
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: `overview-${stamp}@example.com`,
@@ -35,6 +34,8 @@ async function caller() {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -73,11 +74,6 @@ beforeAll(async () => {
     data: {
       email: `overview-${stamp}@example.com`,
       name: "Overview",
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

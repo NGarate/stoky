@@ -57,6 +57,7 @@ export function Dialog({
   footer,
   tone = "neutral",
   returnFocus,
+  fallbackFocus,
   className,
 }: {
   open: boolean;
@@ -71,6 +72,14 @@ export function Dialog({
   tone?: "neutral" | "danger";
   /** Where focus goes on close, when the opener is not a Radix trigger. */
   returnFocus?: RefObject<HTMLElement | null>;
+  /**
+   * Where focus goes on close when `returnFocus`'s element has left the page:
+   * the row it sat in, removed by the very action the dialog confirmed. A
+   * detached element takes no focus, so without this focus fell to <body>
+   * (WCAG 2.4.3). Something that stays — the list, the section — focusable
+   * with `tabIndex={-1}`.
+   */
+  fallbackFocus?: RefObject<HTMLElement | null>;
   className?: string;
 }): JSX.Element {
   const t = useTranslations("common");
@@ -100,11 +109,16 @@ export function Dialog({
           )}
           data-testid="dialog"
           onCloseAutoFocus={(event) => {
-            if (!returnFocus?.current) return;
             // The opener is an ordinary button rather than a Radix trigger, so
             // Radix has nothing to restore to and would drop focus on <body>.
+            // An opener no longer in the page cannot take focus either, so
+            // the fallback has it then.
+            const target = [returnFocus?.current, fallbackFocus?.current].find(
+              (element) => element?.isConnected,
+            );
+            if (!target) return;
             event.preventDefault();
-            returnFocus.current.focus();
+            target.focus();
           }}
           onOpenAutoFocus={(event) => {
             // Focus the panel, never the first control in it. A destructive
@@ -182,6 +196,7 @@ export function ConfirmDialog({
   cancelLabel,
   pending = false,
   returnFocus,
+  fallbackFocus,
 }: {
   open: boolean;
   onCancel: () => void;
@@ -193,6 +208,7 @@ export function ConfirmDialog({
   cancelLabel?: string;
   pending?: boolean;
   returnFocus?: RefObject<HTMLElement | null>;
+  fallbackFocus?: RefObject<HTMLElement | null>;
 }): JSX.Element {
   const t = useTranslations("common");
 
@@ -217,6 +233,7 @@ export function ConfirmDialog({
       onClose={onCancel}
       open={open}
       returnFocus={returnFocus}
+      fallbackFocus={fallbackFocus}
       title={title}
       tone="danger"
     />

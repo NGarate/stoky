@@ -1,6 +1,6 @@
 # Stoky Verification Sequence
 
-Updated: 2026-10-11
+Updated: 2026-10-16
 
 Use this as the source of truth for local and CI-style validation.
 
@@ -19,6 +19,48 @@ Run the browser suite with `bun run test:e2e`, which brings its own browsers
 is `bunx --bun playwright test`, and the E2E directory declares ES modules so
 Bun retains its TypeScript loader (see `TEST_SETUP.md`).
 The `node` command in the Bun image is a compatibility symlink to Bun itself.
+
+## When to run what
+
+**Each commit is checked narrowly; each push is checked fully.** Running every
+suite to learn whether one case broke costs minutes per commit and tells you
+nothing the affected files would not — the browser suite alone takes about ten.
+The full run still happens, once, where it decides something: before the work
+leaves the machine.
+
+Before a commit:
+
+```bash
+bun run lint
+bun run typecheck                    # whole project: a changed signature breaks callers you did not touch
+bun test <unit files>
+bun test --preload ./src/__tests__/setup/register-dom.ts <component files>
+bash scripts/test-integration-local.sh <integration files>
+```
+
+- **Only the test files the change affects** — the ones next to what changed,
+  and the ones a search finds using the changed modules, procedures, routes or
+  message keys.
+- `bun run build`, `check:react`, `check:links` and `check:contrast` only when
+  the change touches what each one checks: the route tree, configuration or
+  dependencies; components; links; colour tokens.
+- **No browser suite**, even for a change that renders. A spec the change
+  makes wrong (a string, a label, a route) is updated in the same commit, and
+  is run before the push with all the others.
+- A mutation check runs the one test file that should go red, not a suite.
+
+Before a push:
+
+```bash
+bun run verify:ci
+bun run test:e2e
+```
+
+Both whole, both once. A failure is fixed in the commit that introduced it,
+while the branch is still unpushed (`git commit --fixup=<sha>`, then
+`GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`), and the two are run
+again on the result. Something that fails once and passes three isolated
+reruns is reported as flaky, never retried until it happens to pass.
 
 ## Command ladder
 
@@ -66,10 +108,15 @@ bun run verify:ci
 This runs the fast gate plus `bun run test:integration` (which brings up its own
 database and cache) and `bun run build`.
 
-### 3. Critical-path browser smoke
+### 3. Browser suite
 
-Run when a slice changes visible flows in auth, inventory, receipts, shopping,
-or prices:
+Before a push, whole (see "When to run what"):
+
+```bash
+bun run test:e2e
+```
+
+One spec at a time, when diagnosing a failure the whole run found:
 
 ```bash
 bun run test:e2e -- e2e/critical-paths.spec.ts
@@ -165,6 +212,20 @@ a pre-commit hook it did not write.
   browser deps, missing fixture data, or time constraints
 
 ## Current validation notes
+
+**2026-10-15, a long agent branch: the browser suite once, before the push.**
+On `feat/better-auth-2026-10-15` the owner decided that the browser suite is
+too slow to run for every commit that changes something visible. From its
+28th commit on, each commit ran `bun run lint`, `bun run typecheck`, the
+unit, component and integration tests its change touched, and `bun run
+build` when it touched dependencies, the route tree, the proxy or start-up;
+`bun run verify:ci` and the whole `bun run test:e2e` run once, on the
+finished branch, before it is pushed. A commit that changes something a
+spec asserts still changes the spec in the same commit; it just does not
+run it. The price is that a commit in the middle of such a branch is not
+proven to pass the browser suite on its own, only the branch's head is, so
+a revert of one of those commits wants the suite run again. `STATUS.md`
+says what was measured that way and what was not.
 
 Last measured 2026-08-19 at `70386ea`, before the move to bun, so each gate is
 recorded under the command that ran it at the time. See `docs/STATUS.md` for the

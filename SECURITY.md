@@ -326,8 +326,10 @@ Verified against the files named in each row.
   `Referrer-Policy: same-origin` (below),
   `X-Permitted-Cross-Domain-Policies: none`, HSTS with the value Traefik
   sends (`src/__tests__/unit/deployment.test.ts` keeps the two equal), and a
-  `Permissions-Policy` that allows `camera=(self)` for the barcode scanner and
-  denies, by name, nineteen powerful features Stoky does not use —
+  `Permissions-Policy` that allows `camera=(self)` for the barcode scanner,
+  `publickey-credentials-create=(self)` and `publickey-credentials-get=(self)`
+  for passkeys (PROGRESS D151), and
+  denies, by name, eighteen powerful features Stoky does not use —
   microphone, geolocation, payment, USB, serial, HID, MIDI, screen capture,
   wake lock, the motion sensors and the rest (the list is in
   `next.config.ts`). It is a deny list, not a default: the header has no
@@ -336,9 +338,12 @@ Verified against the files named in each row.
   `interest-cohort`, the token of the retired FLoC, while its successor
   `browsing-topics` went undenied — and this line claimed the rest were
   denied (`docs/SECURITY_REVIEW.md` §8).
-  `publickey-credentials-get` is left unset because passkey sign-in would
-  need it, and `bluetooth` because the suite's Chromium (151) does not
-  recognise the token. `e2e/security-headers.spec.ts` pins the value and
+  `publickey-credentials-create` was on that list until 2026-10-15, when the
+  settings screen began adding passkeys: denied, every registration fails
+  with a `NotAllowedError` that reads like the person cancelling. Both
+  passkey grants are `(self)`, their default, written out so the next edit of
+  the list sees them; no frame is granted either. `bluetooth` is left unset
+  because the suite's Chromium (151) does not recognise the token. `e2e/security-headers.spec.ts` pins the value and
   fails on any token that Chromium does not recognise.
 - **`Cross-Origin-Opener-Policy: same-origin` and
   `Cross-Origin-Resource-Policy: same-origin`**, on every route, since
@@ -404,7 +409,8 @@ Verified against the files named in each row.
 
 - **The API routes bound a request body themselves**: 15 MiB for `/api/trpc`
   (a 10 MB receipt is 13.98 MB once base64'd into JSON) and 64 KiB for a POST to
-  `/api/auth`, whose forms are a few hundred bytes. A declared
+  `/api/auth`, whose bodies are a few hundred bytes of JSON (a form is
+  refused there with 415 before Better Auth sees it). A declared
   `Content-Length` over the limit is refused with 413 without reading the body;
   a body with no declared length is counted as it arrives and refused at the
   first byte over. The tRPC route does this before it looks up the session, so
@@ -460,9 +466,9 @@ Verified against the files named in each row.
   procedure is unlimited" below). `src/__tests__/unit/trpc-handler.test.ts`
   sends 101 calls and 100 through the real handler.
 
-### Cross-site requests — `src/server/http/trpc-handler.ts`
+### Cross-site requests — `src/server/http/trpc-handler.ts`, `src/server/http/auth-handler.ts`
 
-- **The session cookie is `SameSite=Lax`** (Auth.js's default, not
+- **The session cookie is `SameSite=Lax`** (Better Auth's default, not
   overridden), so a POST from another *site* carries no session. A sibling
   subdomain under the operator's own domain — a photo gallery at
   `photos.home.example` beside Stoky at `stoky.home.example` — is the same
@@ -471,22 +477,23 @@ Verified against the files named in each row.
   which a plain HTML form sends with no CORS preflight: a compromised sibling
   could post a form to `auth.revokeMySessions`, which took no input, and sign
   the household out of every device. Procedures with an input refuse a form
-  body at validation; the three that took none did not.
-- **Every mutation declares an input**, and the three that take nothing —
-  `auth.revokeMySessions`, `auth.logout`, `shopping.generateFromLowStock` —
-  declare `z.void()`, so a form body that got past the rule below would now
-  fail validation there too, with 400 and nothing written. `z.void()` and not
+  body at validation; the three that took none did not. (`auth.endSessions`
+  replaced it on 2026-10-15, and asks for the password.)
+- **Every mutation declares an input**, and the two that take nothing —
+  `auth.logout` and `shopping.generateFromLowStock`, and
+  `auth.revokeMySessions` until `auth.endSessions` replaced it — declare
+  `z.void()`, so a form body that got past the rule below would now fail
+  validation there too, with 400 and nothing written. `z.void()` and not
   `z.object({})`, which a `FormData` satisfies. It does not refuse every JSON
   body: superjson reads only a body's `json` field, so `{}` or any object
-  without one arrives as no input — the same-origin control in
-  `e2e/request-guards.spec.ts` posts `{}` and revokes. The application's own
-  call sends `{"json":null,"meta":{"values":["undefined"]}}`, which superjson
-  reads back as `undefined`; a bare `{"json":null}` is `null`, and `z.void()`
-  now refuses it with 400.
+  without one arrives as no input. The application's own call sends
+  `{"json":null,"meta":{"values":["undefined"]}}`, which superjson reads back
+  as `undefined`; a bare `{"json":null}` is `null`, and `z.void()` now
+  refuses it with 400.
   `src/__tests__/unit/procedure-inputs.test.ts` walks the running router and
   names any mutation without an input parser; `integration/routers.test.ts`
-  shows `revokeMySessions` refusing an object and a `FormData` before its
-  write. The nine queries that take no input do not declare one: they write
+  shows `auth.logout` refusing an object and a `FormData` on the running
+  router. The nine queries that take no input do not declare one: they write
   nothing.
 - **A POST whose content type is not `application/json` is refused with 415**
   before its body is read. Both of the application's links send JSON, and a
@@ -512,19 +519,59 @@ Verified against the files named in each row.
   `http://172.17.0.1` — and all three sent `same-origin` to the same `fetch`
   on `http://localhost`. There the JSON-only rule, with Lax, is the whole
   defence — and it is the one that refuses the form.
-- **`Origin` is deliberately not compared with `NEXTAUTH_URL`**: a plain-HTTP
-  LAN install is reached at an address that URL does not name, and a strict
-  comparison would lock it out.
-- **The consequence:** a browser front-end on another origin cannot call this
-  API. None exists. Server Actions are outside this route and carry Next's
-  own `Origin` check; Auth.js's routes carry its own CSRF token.
+- **On tRPC, `Origin` is deliberately not compared with `STOKY_URLS`**: tRPC
+  stays on Fetch Metadata, and a strict comparison would lock out an address
+  somebody forgot to list for no gain over that header.
+- **The auth API (`/api/auth/*`) applies the same Fetch Metadata and JSON-only
+  rules, and compares `Origin` too** (PROGRESS D135). Fetch Metadata covers
+  its GETs as well, before anything is charged: the passkey options spend a
+  per-address budget (D151), and an `<img>` on a page a household member
+  visits would otherwise spend it from the household's address. Better Auth refuses a
+  POST that carries a cookie unless its `Origin` (or `Referer`) is a trusted
+  origin — the origin of every entry in `STOKY_URLS` (PROGRESS D138), plus,
+  outside production only, each `DEV_ALLOWED_ORIGIN` host as
+  `http://<host>:<PORT or 3000>` and `https://<host>`; production never reads
+  `DEV_ALLOWED_ORIGIN` for this — with 403 `INVALID_ORIGIN`, or `MISSING_OR_NULL_ORIGIN`
+  when there is none. Nothing else can join that list: Better Auth would add
+  `BETTER_AUTH_TRUSTED_ORIGINS` to it whatever the configuration says, so the
+  server refuses to start while that variable is set (PROGRESS D136). A POST
+  with no cookie — a native client — needs none.
+  Better Auth switches this check off when `NODE_ENV` is `test`; the
+  configuration sets `disableOriginCheck: false`, so the suites run what
+  production runs, and `integration/auth.surface.test.ts` and
+  `e2e/auth.prod.spec.ts` send a foreign origin and see 403. A sign-in is the
+  one request that sets a session, which is why this check is here and not on
+  tRPC. A plain-HTTP LAN install reached both by name and by address lists
+  both; before D138 one URL named one of them, and the other answered 403.
+  Every listed origin can send a cookie-bearing sign-in, so the list holds
+  only addresses that reach this instance; the bundle lists only
+  `https://${DOMAIN}`, the one host Traefik routes.
+  `integration/auth.origins.test.ts` signs in, under a production instance
+  with two entries, at both, and is refused from an unlisted origin and from
+  a `DEV_ALLOWED_ORIGIN` host.
+- **A bearer token is no way round these rules** (PROGRESS D142). A native
+  client sends `Authorization: Bearer` and no cookie, no `Origin` and no
+  Fetch Metadata, so both APIs let it through as they let curl through. A
+  page on another origin cannot send that header: `Authorization` is not a
+  header a cross-origin request may carry without a preflight, which nothing
+  here answers. Nor can it read the token: `set-auth-token` is withheld from
+  every answer to a request that carried a cookie, so a page's script cannot
+  turn the browser's `HttpOnly` session into a header it could copy.
+  `integration/bearer.test.ts` signs in without a cookie or `Origin`, uses the
+  token on `get-session` and on a tRPC query, and is refused with an unsigned
+  or foreign-signed one; `unit/trpc-handler.test.ts` shows a bearer call with
+  no Fetch Metadata passing and a cross-site one carrying the cookie refused.
+- **The consequence:** a browser front-end on another origin cannot call
+  these APIs. None exists. Server Actions are outside these routes and carry
+  Next's own `Origin` check.
 - `src/__tests__/unit/trpc-handler.test.ts` shows tRPC alone running a
   mutation sent as a form, then the handler refusing it; `e2e/request-guards.spec.ts`
-  sends a cross-site and a form-encoded `auth.revokeMySessions` with a real
-  session against the production build, shows the session alive afterwards,
-  and then sends the same request as `same-origin` to show it does revoke.
+  sends a cross-site and a form-encoded `auth.endSessions` — every session,
+  with the right password — with a real session against the production
+  build, shows the session alive afterwards, and then sends the same request
+  as `same-origin` to show it does end it.
 
-### Authentication — `src/lib/auth.ts`, `src/server/trpc/routers/auth.ts`
+### Authentication — `src/lib/auth/instance.ts`, `src/server/http/auth-handler.ts`, `src/server/trpc/routers/auth.ts`
 
 - Passwords are hashed with **Argon2id**, `memoryCost: 65536` (64 MiB),
   `timeCost: 3` and `parallelism: 4`, in one place:
@@ -532,47 +579,558 @@ Verified against the files named in each row.
   adding a member or setting a member's password, and for a person changing
   their own password, and verifies for sign-in and for that change. A test
   pins the parameters and that the dummy hash for unknown addresses was made
-  with the same ones.
-- Auth.js v5 with the credentials provider; sessions are encrypted JWTs with
-  no server-side record. **Fifteen minutes is the idle timeout, not the
-  lifetime**: every read of the session re-issues the token with a fresh
-  fifteen-minute expiry (`@auth/core` 0.41.3 `lib/actions/session.js`; the
-  `updateAge` setting is read only by database sessions), so a session in use
-  slides. **It slides for at most thirty days** (`MAX_SESSION_AGE_S`, security
-  review 2026-10-12 — until then it slid for ever): sign-in stamps an
-  `authTime` claim that re-issue copies forward unchanged, and the `jwt`
-  callback refuses a token whose `authTime` is more than thirty days old, or
-  that has none, before it reaches the revocation query. Thirty days is OWASP
-  ASVS 4.0.3 V3.3.2's Level 1 ceiling, chosen for the kitchen tablet that
-  should not ask for a password every shift; it is a constant, not a setting.
-  A token without `authTime` was issued before the claim existed, and it is
-  refused rather than given a fresh thirty days, which would extend a token
-  stolen before the upgrade — so everybody signs in once after upgrading to
-  the release that carries this. A refusal is logged as
-  `auth.session.revoked` with `reason: "absolute-lifetime"`. Nothing warns
-  before the thirty days run out: the next session read is refused and the
-  cookie cleared, the same path a revoked session takes, so the offline queue
-  keeps its unsent changes and asks for a sign-in.
-- **Signing out clears this device's cookie and nothing else.** `signOutAction`
-  records nothing on the server, so a copy of the token taken before the
-  sign-out stays valid until it is idle for fifteen minutes, its thirty days
-  run out, or somebody ends the account's sessions — **Cerrar la sesión en
-  todos los dispositivos** in Configuración (`auth.revokeMySessions`), or an
-  admin from **Personas del hogar**. That is the answer to a session that may
-  have leaked; a plain sign-out is not. See *Known gaps*.
-- Credentials are validated with a Zod schema before the database is touched,
-  and `authorize` returns `null` for both an unknown email and a wrong password.
-- **A signed-in person can change their own password**, from Settings
-  (`auth.changePassword`, security review 2026-10-12 — until then nothing
+  with the same ones. Where the hash is stored is known to one module of
+  ours, `src/lib/auth/credentials.ts`: every caller of ours that creates an
+  account with a password, reads a stored hash or sets a new one goes
+  through it. Better Auth is the one other reader and writer: it reads the
+  hash at sign-in and writes it when a person changes their own password
+  (PROGRESS D144), with our Argon2id either way. It is stored in the
+  account's `credential` row of the `Account` table, where Better Auth reads
+  it, not on `User` (PROGRESS D134); that row is deleted with its account.
+- **Better Auth 1.7.7, with sessions in the database** (PROGRESS D135,
+  replacing next-auth and D125). A session is a `Session` row and the cookie
+  is a signed reference to it: Better Auth reads the row on every request —
+  its cookie cache is off — and refuses one whose `expiresAt` has passed,
+  deleting it as it does. The cookies are `stoky.session_token` and
+  `stoky.dont_remember`, `HttpOnly`, `SameSite=Lax` and with no `Max-Age`, so
+  they end with the browser — except a remembered session's token, below,
+  which has ninety days; behind https they are `__Secure-` prefixed and
+  `Secure` (below). The token is never in a response body: the auth route
+  strips `token` and `session.token` from every JSON answer, and the bearer
+  plugin's `set-auth-token` header, with its `Access-Control-Expose-Headers`
+  entry, from any answer to a request that carried a cookie
+  (`src/server/http/auth-handler.ts`). A browser always carries one there:
+  the page that signs in was rendered, which gave it `stoky_device`.
+- **A native client signs in with a bearer token** (PROGRESS D142). The iOS
+  app is written against this contract:
+  1. It keeps no cookies (`httpShouldSetCookies = false`): the token is handed
+     only to a request that carried none.
+  2. It signs in with `POST /api/auth/sign-in/email`, `Content-Type:
+     application/json` and `{"email", "password", "rememberMe": true}`. It
+     needs no `Origin`, since Better Auth asks for one only beside a cookie.
+     `rememberMe` must be the literal `true`; anything else is a browser
+     session, ended by fifteen idle minutes.
+  3. It reads the `set-auth-token` response header, `<token>.<signature>`
+     (possibly percent-encoded), and keeps it in the Keychain. It is not in the
+     body.
+  4. It sends `Authorization: Bearer <that value>` on every request, tRPC and
+     the auth API alike. Better Auth reads it as the session cookie
+     (`bearer({ requireSignature: true })`).
+  5. It signs out with `POST /api/auth/sign-out`, the header,
+     `Content-Type: application/json` and `{}`. That deletes the row.
+
+  A 401 from tRPC, or `null` from `get-session`, means the session has
+  ended, and the client asks for the password again. A token with a wrong or
+  missing signature reads the same.
+  Only the signed value is accepted, because the `Session` table holds tokens
+  unsigned: a copy of the table is not a set of credentials. The signature is
+  an HMAC with `STOKY_SECRET`, so rotating the secret ends every native
+  session too. The token does not change while the session lives; the row
+  slides as a remembered browser's does, at most daily on a tRPC read and
+  never past a year. A native sign-in is charged, tidied (D139) and counted
+  toward the ten sessions (D140) like any other. A password change, or an
+  admin setting the password, ends it with the rest. **Not supported yet:**
+  an account with two-step verification on a native client — deferred by
+  the owner on 2026-10-15 — so such an account signs in on the web only. The
+  proxy never mints `stoky_device` for a bearer request, so a native client
+  is never handed a cookie it did not ask for (`src/proxy.ts`).
+- **Fifteen minutes is a browser session's idle timeout, and only activity
+  moves it.** The row is created fifteen minutes out, and only `auth.session` — which the
+  keep-alive calls when a pointer or a key moves, at most every four minutes —
+  slides it, by writing the row itself (`src/lib/auth/session-policy.ts`).
+  Page renders and tRPC calls read the session without moving it: a
+  dashboard left polling on a counter is not somebody at the screen, and its
+  session ends. Better Auth's own refresh would push a row ninety days out; it
+  is never asked for on a browser session, and a database hook drops
+  `expiresAt` from any update it makes to one anyway.
+- **A session lasts a day at most, however active** (`BROWSER_CAP_S`),
+  counted from `Session.authenticatedAt` — when the password was typed — not
+  from `createdAt`, which Better Auth resets when it re-creates a session. The
+  slide is clamped to it. This replaces D125's thirty days for a browser
+  session, which is what a sign-in gets unless the box below is ticked, and a
+  day is what one shift on a shared device needs. Two minutes before the day runs out the keep-alive says so, and
+  says that it is the day's limit rather than inactivity, with no "Seguir
+  conectado" button, because nothing can extend it (WCAG 2.2.6; `auth.session`
+  answers which deadline is next, `deadlineKind`). Then the next read is
+  refused, the same path an ended session takes, so the offline queue keeps
+  its unsent changes and asks for a sign-in. Everybody signed in on a JWT before this
+  release signs in once after upgrading; passwords are kept.
+- **"Mantener la sesión iniciada" makes a remembered session** (ASVS 5.0.0
+  7.1.1, PROGRESS D141). The login form's box, unticked by default, with a hint
+  saying it is for home devices used every day, the kitchen screen included.
+  Ticked, the row is marked `persistent`, the cookie gets a ninety-day
+  `Max-Age`, and the row lives ninety idle days under a year from
+  `authenticatedAt` (`REMEMBERED_IDLE_S`, `REMEMBERED_CAP_S`). Better Auth
+  slides it on a tRPC read at most once a day — `readSession` asks for the
+  refresh only when the row was last written a day or more ago — and a
+  database hook holds the slide to the year. Page renders never slide it, and
+  `auth.session` only reads it. The route passes `rememberMe` only when the
+  body says exactly `true`, because Better Auth reads a missing value as
+  true; it says which it was in an internal `x-stoky-remember` header that it
+  deletes from every client request; and a ticked sign-in expires the
+  `dont_remember` cookie an earlier unticked one left, which Better Auth
+  clears only at a sign-out or a read that finds the session gone, never at a
+  ticked sign-in. **Why these numbers** (7.1.1 asks for the justification):
+  the kitchen screen is a shared device in a home whose point is to be picked
+  up, and fifteen minutes would ask for a password at nearly every glance —
+  which in practice means a password taped to the tablet. Ninety idle days
+  ends a device left in a drawer; the year ends any session however used.
+  **Deviation from NIST SP 800-63B-4**: a password alone is AAL1, for which
+  the guidance is re-authentication at least every thirty days; a remembered
+  session asks once a year. Accepted by the owner on 2026-10-15 for the
+  compensating controls: every session is a row that can be ended at once — by
+  signing out, from **Tus dispositivos** in **Seguridad y acceso**, by an admin,
+  by a password change, by removal from the household — the account holds ten
+  at most (below), and the box is off unless somebody ticks it. A browser
+  session meets AAL2's figures (fifteen idle minutes, a day in all).
+- **Signing out ends this device's session**: `signOutAction` asks Better Auth
+  to delete the row and expire the cookies, so a copy of the cookie taken
+  before the sign-out is refused too. The other devices' sessions end when
+  idle for fifteen minutes, a day after their sign-in, or when somebody ends
+  the account's sessions — from **Tus dispositivos** in Configuración ›
+  **Seguridad y acceso** (`auth.endSessions`, below), or an admin from
+  **Personas del hogar** (`household.endMemberSessions`, below), or an admin
+  removing them from the household (below) — which delete the rows and log
+  `auth.session.ended` with the `reason` (`self`, `admin`, `removed`), who
+  asked and how many sessions went.
+- **A person can list their sessions and end one, every other or every one,
+  after re-entering the current password** (ASVS 5.0.0 7.5.2, PROGRESS
+  D143). `auth.listSessions` answers each live row as the browser and system
+  its User-Agent names (`src/lib/auth/device-label.ts`), the screen its
+  device opens on when it has chosen one — so the kitchen tablet reads as the
+  kitchen screen — when it was signed in, last used and ends, whether it is
+  remembered, and whether it is the one asking. It never answers a token or
+  the device id: the select names its columns, and the device id is
+  `Session.deviceId`, the `stoky_device` cookie the sign-in carried, which
+  Better Auth is told never to return (`returned: false`) and which the list
+  reads only to join `ScreenChoice`. `auth.endSessions` takes the current
+  password and a scope. Every branch deletes only rows of the caller's own
+  account, so another account's session id is `NOT_FOUND`, like an id
+  nobody has; "every other" keeps the asking session by its id, and a
+  context without one is refused before the password is asked, because
+  Prisma reads `{ id: { not: undefined } }` as no condition and
+  `endSessions` refuses that filter too. A wrong password is `BAD_REQUEST`,
+  ends nothing and logs `auth.reauth.refused` with `via: "end-sessions"`.
+  The re-entry is metered twice before Argon2id runs: five per fifteen
+  minutes **per session**, refunded when the password is right, so whoever
+  holds a stolen session cannot spend the owner's way to end it; and twenty
+  per fifteen minutes **per account**, never refunded, so ten sessions are
+  not ten budgets (`reauthRateLimit`, `reauthAccountRateLimit`). Better
+  Auth's own session-listing and revoking endpoints stay closed (below).
+  **Deviation from ASVS 5.0.0 7.2.4**, accepted by the owner on 2026-10-15:
+  re-entering the password does not rotate the session token. 7.2.4 reads a
+  re-authentication as an authentication, after which a new token is due.
+  Here the password confirms one action and nothing else — the session is
+  not marked as freshly authenticated and gains no standing it did not have
+  — and the call is tRPC, whose response headers are on their way before a
+  resolver could set a rotated cookie. The same holds for every later
+  re-entry (`confirmCurrentPassword`, `src/lib/auth/reauth.ts`).
+  The screen is **Tus dispositivos** at `/settings/security`
+  (`src/components/session/DeviceList.tsx`): a row per session, this
+  device's marked, each with **Cerrar esta sesión**, then **Cerrar las
+  demás** and **Cerrar todas**; every one asks for the password first
+  (`ReauthDialog`). An ending that includes this device runs the sign-out
+  sequence after the server has answered — the queue, the saved reads and
+  the cached shell go, then the redirect — and one that does not purges
+  nothing. The screen also says the account holds ten sessions at most and
+  which one an eleventh sign-in ends.
+- **An admin can list a member's sessions and end one or every one**
+  (ASVS 5.0.0 7.4.5, PROGRESS D145). On **Personas del hogar**, "Ver sus
+  sesiones" on another member's row opens their sessions
+  (`household.memberSessions`), read exactly as the member's own list is
+  (`liveSessionsOf`, `src/lib/auth/session-list.ts`) — the device and the
+  screen it opens on, never a token or the device id — each with **Cerrar
+  esta**, and **Cerrar todas sus sesiones** below them
+  (`household.endMemberSessions`). One rather than only all: the lost
+  kitchen tablet need not sign the member out of the phone in their pocket.
+  `adminProcedure`, then the guards of the rest of member management: the
+  caller's own id is `BAD_REQUEST` — their own sessions end from **Tus
+  dispositivos**, behind their password, and an admin session must not be a
+  way round that question — the member must be this household's
+  (`NOT_FOUND` otherwise, without confirming the id exists), and only an
+  owner may list or end an owner's (`FORBIDDEN`, logged as
+  `access.denied`). The delete names the member's id beside the session id,
+  so another account's session id is `NOT_FOUND` and ends nothing, and it
+  repeats the household and the role that were checked, so a member who
+  left or was made an owner in between is not touched. Logged as
+  `auth.session.ended` with `reason: "admin"`, the admin as `userId`, the
+  member as `targetUserId` and the count; the answer is the count alone.
+  **No password**: the owner confirmed on 2026-10-15 that an admin ending
+  somebody else's sessions is not re-asked. Whoever holds an admin's
+  session can therefore sign the household's non-owners out — and they can
+  sign straight back in, since nothing about their password changes — but
+  cannot reach an owner's sessions or the admin's own.
+- **An owner can end every session in the household, their own included**
+  (ASVS 5.0.0 7.4.5, PROGRESS D147). On **Personas del hogar**, owners alone
+  are shown "Cerrar todas las sesiones del hogar"
+  (`household.endHouseholdSessions`): every member signed out of every
+  device, other owners and the owner asking included, for when somebody who
+  should not have been has had an account or a device. `adminProcedure`,
+  then owners only inside the resolver — an admin is `FORBIDDEN` before the
+  password is asked, since an admin may not reach an owner's sessions one at
+  a time either — then the owner's current password through
+  `confirmCurrentPassword` and its two budgets, because this ends the
+  owner's own sessions too and a session somebody else is holding must not
+  be able to sign the household out. A wrong password is `BAD_REQUEST`,
+  ends nothing and logs `auth.reauth.refused` with `via:
+  "household-end-all"`. One filter, the household through each session's
+  account, so nothing outside it is touched. Logged as one
+  `auth.session.ended` with `reason: "owner"`, the owner as `userId`, the
+  household and the count, with no `targetUserId`. The screen then signs
+  this device out the way **Cerrar todas** on **Tus dispositivos** does —
+  the server first, then the queue, the saved reads and the cached shell —
+  and offers to send unsent changes first. No token rotation, as for every
+  re-entry (the 7.2.4 deviation above).
+- **Removing somebody from the household signs them out everywhere** (ASVS
+  5.0.0 7.4.2, PROGRESS D146). `household.removeMember` deletes every
+  session the member has (`endSessions`) in the transaction that clears
+  their household, after the guards that removal already had — this
+  household's member, only an owner removes an owner, the household keeps an
+  owner — so a refused removal ends nothing, and a removal never leaves the
+  sessions behind. Losing the household already refused every household
+  request; what a live session still reached was the account itself — its
+  password, its devices, a new household of its own — on a device such as
+  the kitchen tablet that the household may no longer control. The account
+  stays (the application deletes none, below), so the person can sign in
+  again, to no household. An owner removing themselves beside another owner
+  is signed out too, this device included. Logged as `auth.session.ended`
+  with `reason: "removed"`, the admin as `userId`, the member as
+  `targetUserId` and the count, once the transaction has committed. The
+  confirmation on **Personas del hogar** says so before the fact.
+- **Signing in ends the session the browser presented** (ASVS 5.0.0 7.2.4,
+  PROGRESS D139). Better Auth issues a new token at every sign-in and leaves
+  the old row alive, so after the sign-in succeeds the auth route deletes the
+  session whose cookie the request carried — whoever it belonged to: on a
+  shared tablet, the previous person's — together with the signing-in
+  account's expired rows (`src/lib/auth/sign-in-tidy.ts`). A wrong password
+  ends nothing. Another browser's session is untouched: the tidy knows only
+  the cookie this request sent. It writes `auth.session.ended` with `reason:
+  "replaced"`, the `userId` who signed in and the `targetUserId` whose session
+  went. If the tidy itself fails, the sign-in still succeeds and the failure
+  is an `[auth] error` line; the old session then ends on its own clock.
+- **Ten sessions per account at most** (ASVS 5.0.0 7.1.2, PROGRESS D140,
+  `MAX_SESSIONS_PER_ACCOUNT`). The sign-in that would make the eleventh ends
+  the least recently used one — the oldest `updatedAt` — never the session it
+  just issued, and logs `auth.session.ended` with `reason: "evicted"`. It runs
+  after the tidy above, so signing in again in the same browser never costs
+  another device its session, and inside one transaction holding the
+  account's `User` row `FOR UPDATE`, so sign-ins of one account at the same
+  moment still leave ten. "Least recently used" is as fine-grained as the
+  writes that move `updatedAt`. For a browser session that is the
+  keep-alive's slide (`auth.session`), which asks at most every four minutes
+  of activity and writes only when more than a minute has passed since the
+  last write, so the row trails real use by about five minutes at most. For a
+  remembered session it is Better Auth's daily refresh, so the row trails
+  real use by up to a day: of two remembered devices used on the same day,
+  either may be the one evicted. A row is not written on every request, by
+  design (D135), so there is no finer clock to read. Ten is above a household's devices; an account signed in on more
+  loses its least-used one at each new sign-in, the kitchen screen included
+  if that is it. Like the tidy, it runs from the route once a sign-in has
+  succeeded, never from a session-create hook: Better Auth creates and then
+  deletes a session at the password step of a two-step sign-in, and a hook
+  would let a password alone end other sessions.
+- **Two-step verification with an authenticator app** (TOTP, PROGRESS D148),
+  Better Auth's two-factor plugin. For an account that has it, a right
+  password is not a sign-in: Better Auth deletes the session it made and
+  answers `twoFactorRedirect` with a signed `two_factor` cookie naming a
+  ten-minute challenge (a `Verification` row), and `POST
+  /two-factor/verify-totp` or `/two-factor/verify-backup-code` with the code
+  turns the challenge into a session. The password step settles its budget
+  there — the account's counter cleared, the address refunded — ends the
+  session the browser presented, as a sign-in does (Better Auth has already
+  expired its cookie, so the row would otherwise outlive any copy of it), and
+  is logged `auth.signin.challenged`. A sign-in's code is charged against the
+  address only, since it names no account; Better Auth counts wrong codes itself, five
+  per challenge and ten in a row per account, which locks the account's
+  second step for fifteen minutes: refused 429 with a `Retry-After` of the
+  seconds left until the lock ends, which Better Auth's own refusal leaves
+  out and the policy plugin adds. That lock forgets its count when it ends,
+  and a right password opens a new challenge for nothing, so on their own
+  those limits let somebody who has the password guess ten codes every
+  quarter of an hour, about 960 a day, for ever — even odds of getting past
+  the second factor in about eight months. So every authenticator code of a
+  sign-in is also charged to its account's budget for the day
+  (`twoFactorCodeRateLimit`, twenty a day, `RATE_LIMIT_TWO_FACTOR_CODE_*`),
+  before it is compared; a right code gives its attempt back, and nothing
+  else clears it, a right password included. Past it every code, the right
+  one too, is refused 429 `TOO_MANY_WRONG_CODES` with `Retry-After` until
+  the day's window ends, and logged `auth.twofactor.locked`; a recovery code
+  still signs in. The bound is twenty guesses a day per account — with the
+  ±1 step, about 2% a year — at the cost that a guesser who has the
+  password can keep the owner's authenticator out for the rest of the day,
+  which says the password needs changing. The code step is a sign-in only when it
+  carried the challenge cookie and was answered with a session: then the
+  address is refunded, the browser becomes a known device, the account is
+  tidied and held to ten sessions as above, and `auth.signin.succeeded` says
+  `method: "totp"` or `"backup-code"`. The route passes on the `code` alone:
+  not `trustDevice`, a cookie that would skip the code on that browser for a
+  month, nor `disableSession`, which spends a backup code without a session
+  to show for it. A remembered-or-not choice made at the password step
+  carries through.
+  - **A code works once** (ASVS 5.0.0 6.5.1). Better Auth accepts any code
+    inside its window as often as it is sent — the spike signed in twice with
+    one — so a before-hook of ours (`src/lib/auth/policy-plugin.ts`) works out
+    which time step the code is for and claims it in the same `UPDATE` that
+    checks it: `TwoFactor.lastTotpCounter` must be below the step. A code for
+    a step already used, or for an earlier one, is refused as `INVALID_CODE`
+    and logged `auth.twofactor.replayed`. A code matching no step is replaced
+    with one no step can produce, so Better Auth refuses it *and counts it*;
+    passing it on would let a request whose two clock reads straddle a step
+    boundary through unclaimed. The first code from a new authenticator is
+    claimed the same way, a native client's included: Better Auth hands the
+    hook the request before the bearer plugin turns `Authorization: Bearer`
+    into the session cookie, so the hook runs that plugin's own conversion
+    first and reads the session the endpoint will (`requestSession`);
+    without it a bearer enrolment's code was never claimed and worked again
+    at a web sign-in. `integration/two-factor.test.ts` holds the row
+    locked while two requests with one code reach the claim, and exactly one
+    gets in.
+  - **±1 step** (ASVS 5.0.0 6.5.5 deviation, accepted by the owner on
+    2026-10-15). Better Auth accepts the code for the previous and the next
+    30-second step as well as the current one, so a code is good for up to a
+    minute and a half. The window is Better Auth's, kept for phones whose
+    clocks drift; single use, above, is what stops a code being reused within
+    it.
+  - **Optional, for every role**, set up from Settings → *Seguridad y
+    acceso* → *Verificación en dos pasos*. The kitchen's shared account may
+    turn it on too (the owner's decision of 2026-10-15); a household that does
+    needs the authenticator, or a backup code, wherever that account signs
+    in. Nothing requires it, which is a deviation from ASVS 5.0.0 6.3.3
+    (more than one factor for every account, at L2): a household instance's
+    accounts are its members, and whether to carry a second factor is each
+    one's choice.
+  - **Setting it up takes the password, three times over.** `POST
+    /two-factor/enable` (the new authenticator's `otpauth:` address and the
+    backup codes, once; nothing is on until the first code from the app is
+    accepted at `verify-totp`, which also uses that code up), `/disable` and
+    `/generate-backup-codes` are answered only for a signed-in session, with
+    its password, charged before Better Auth checks it against the same two
+    re-entry budgets as every other confirmation (five per session and twenty
+    per account a quarter of an hour, the session's refunded on a right
+    password; D143). The route passes on `password` alone — no `issuer`, no
+    `method`. That first code, and any code a signed-in session sends, is
+    charged to the same two re-entry budgets, the session's given back when
+    it is right — never to sign-in's per-address budget, which nothing would
+    give it back to, so a household behind one address setting up its
+    authenticators would otherwise spend the attempts everyone there signs
+    in with. A wrong password is `auth.reauth.refused` with `via:
+    "two-factor"`; turning it off is `auth.twofactor.disabled`, new codes are
+    `auth.twofactor.codes-regenerated`, and turning it on is
+    `auth.twofactor.enabled` at the first code. Turning it on (at that code)
+    and off re-creates the session Better Auth was asked from, which keeps
+    its sign-in time, kind and device; new codes leave it as it is. After
+    every change the screen reads the devices list again and points to *Tus
+    dispositivos* to end any other session (ASVS 5.0.0 7.4.3). The QR code is drawn in the browser
+    (`uqr`), never fetched: the address holds the secret. The backup codes
+    are shown once, kept in the screen's state and nowhere else, offered as a
+    copy and as a text file made in the browser, and cannot be shown again.
+    `POST /two-factor/get-totp-uri` never opens: it hands the decrypted
+    secret back to whoever holds the session, password or not.
+  - **A challenge ends with the account's sessions.** Whoever holds one has
+    the password, so a password set by an admin or changed by its owner, a
+    removal from the household and every "end these sessions" also delete
+    the account's challenges in progress (`src/lib/auth/end-sessions.ts`).
+    The sign-in's own tidy does not: an expired row going is no reason to
+    stop the same person signing in on another device.
+  - **Backup codes are 120-bit codes stored as hashes** (ASVS 5.0.0 6.5.2,
+    PROGRESS D149, `src/lib/auth/backup-codes.ts`). Ten, each 24 Crockford
+    base32 characters shown as six groups of four, drawn from
+    `crypto.getRandomValues`, in place of Better Auth's ten-character codes
+    of about 60 bits kept encrypted with `STOKY_SECRET`. Each is stored as
+    `sha256:` and the hex digest of the code upper-cased without spaces or
+    dashes, O read as 0 and I or L as 1, so a code typed off paper in lower
+    case still matches; ASVS 6.5.2 allows a plain hash at 112 bits or more.
+    The policy plugin hashes whatever is typed before Better Auth compares
+    it, so a stored hash sent as the code is hashed again and refused:
+    reading the column is not a way in. A code works once — Better Auth
+    rewrites the list without it, conditionally on the list it read — and a
+    wrong one counts towards the same lockout as a wrong TOTP code.
+    Generating a new set replaces the old one whole. No secret is involved,
+    so a rotation of `STOKY_SECRET` leaves them working.
+  - **The secret is encrypted with `STOKY_SECRET`**
+    ([*Secrets*](#secrets)). One that no longer decrypts — the secret was
+    rotated — is refused as `TWO_FACTOR_UNREADABLE` before Better Auth counts
+    an attempt, and logged `auth.twofactor.unreadable`: no code will ever
+    work, and the operator is the one who can say why. The way back is a
+    backup code, or a household admin removing it (below), or — for a sole
+    owner without a backup code — the operator's runbook in
+    [the installation guide](docs/INSTALL.md#a-lost-authenticator).
+  - **A household admin can remove a member's** (PROGRESS D150), for a lost
+    authenticator with no backup code left: "Quitar la verificación en dos
+    pasos" on **Personas del hogar** (`household.removeMemberTwoFactor`).
+    The admin's own current password first (`confirmCurrentPassword`, the
+    two D143 budgets; a wrong one is `BAD_REQUEST` and
+    `auth.reauth.refused` with `via: "member-two-factor"`), before the
+    member is looked up, so a session somebody else holds learns nothing
+    about ids; then the member must be this household's (`NOT_FOUND`), and
+    only an owner may act on an owner (`FORBIDDEN`) — so an owner's can be
+    removed only by another owner. Never the caller's own (`BAD_REQUEST`):
+    owners and admins turn theirs off from *Seguridad y acceso* like
+    anybody. One transaction clears `twoFactorEnabled` — conditioned on the
+    household, the role checked and that it is on, so a member who changed
+    in between or has none is `CONFLICT` and nothing is touched — deletes
+    the authenticator row (secret and backup codes) and ends every session
+    and challenge in progress the member has (`endSessions`), since
+    whoever has the lost phone may be signed in on it. Logged as
+    `auth.twofactor.removed` and `auth.session.ended` with `reason:
+    "two-factor-removed"`, the admin as `userId` and the member as
+    `targetUserId`. It is the trust `resetMemberPassword` already grants an
+    admin — who can set the very password this leaves standing alone — so
+    a stolen admin session plus that admin's password can strip a non-owner's
+    second step; the log records who did it to whom.
+  - **Not for native clients yet**: an account with two-step verification
+    signs in from a browser (D142).
+- **Passkeys** (PROGRESS D151, `@better-auth/passkey` 1.7.7 with
+  `@simplewebauthn/server`), where WebAuthn can work:
+  - **Only at the first `STOKY_URLS` address.** A passkey belongs to a
+    relying party named by a host, and here that is the canonical entry's
+    (`src/lib/auth/passkeys.ts`): its hostname is the `rpID` and its origin
+    the only `origin` a ceremony is accepted from — never the list, so a
+    signature made for one listed address is refused at another. A passkey
+    therefore cannot be used or registered at any other listed address (they
+    sign in with the password), and **changing the first entry orphans every
+    passkey**: people sign in with the password and add a new one.
+  - **Only in a secure context, never at an IP address.** Browsers expose
+    WebAuthn to https and to http on `localhost`, and a relying party id must
+    be a domain name, so the plugin is registered only when the first entry
+    is https, or http at `localhost`, with a host that is not an IP literal.
+    Elsewhere — a plain-HTTP LAN install, `https://192.168.1.10` — there are
+    no passkeys and their endpoints answer 404, and the settings screen says
+    the install cannot have them rather than showing an empty list.
+  - **The person must be verified, not only present** (ASVS 5.0.0 6.6.x):
+    registration asks the authenticator for user verification as
+    `required`, and both ceremonies refuse an answer without the UV flag
+    (`USER_VERIFICATION_REQUIRED`), after the signature is checked and before
+    anything is written. Better Auth itself asks for it only as "preferred"
+    at sign-in and checks for none, so a security key without a PIN would
+    otherwise be a single factor anybody holding it could use. That is why a
+    passkey sign-in is not asked for an authenticator code: it is two
+    factors already, the device and the fingerprint, face or PIN.
+  - **Added or removed only after the password** (ASVS 5.0.0 7.5.1): the
+    settings page first calls `auth.confirmPassword` (`confirmCurrentPassword`,
+    the D143 budgets, `via: "step-up"`), which leaves a step-up — a
+    `Verification` row `stoky-step-up:<session id>`, five minutes,
+    `src/lib/auth/step-up.ts`. Asking for the registration options needs one;
+    the registration and the removal spend it, in the statement that checks
+    it, so it confirms one change. It is bound to the session that asked: the
+    same account's tablet cannot spend the phone's. Without it the answer is
+    `403 STEP_UP_REQUIRED`, and with no session at all `401`. A native
+    client's bearer token is held to it as a cookie is: the check reads the
+    session the endpoint will be served as (`requestSession`), not the one
+    Better Auth shows a hook before the bearer plugin has turned the token
+    into a cookie, which for a token was none — and a check that stood aside
+    on none let a stolen token add a passkey with no password at all. It
+    goes with its session when `endSessions` ends
+    the session. Renaming one and listing one's own need the session alone.
+    No token rotation, as for every re-entry (the 7.2.4 deviation above).
+  - **A registration never signs anybody in**: the route forwards only the
+    WebAuthn answer and a name, and the policy plugin forces Better Auth's
+    `createSession` off as well.
+  - **A passkey sign-in is a sign-in like the password's**: charged per
+    address against sign-in's budget and given back when it gets in, the
+    remember-me box honoured (an unticked box is a browser session with a
+    cookie without `Max-Age`; the policy plugin sets Better Auth's ninety-day
+    cookie again as a browser cookie and takes the first `Set-Cookie` out, so
+    the answer carries one), the presented session ended, the account's
+    expired rows and any past ten ended, and `auth.signin.succeeded` with
+    `method: "passkey"`. A refusal is `auth.passkey.signin-failed` with
+    Better Auth's code. The options that start it are charged per address on
+    a budget of their own, thirty a quarter of an hour
+    (`RATE_LIMIT_PASSKEY_OPTIONS_*`): they are not a guess, but each writes a
+    challenge row, and they cannot be given back from sign-in's five — a
+    household signing in with passkeys behind one address would otherwise
+    lock itself out.
+  - **Managed from Seguridad y acceso** (*Llaves de acceso*,
+    `src/components/security/PasskeyManager.tsx`): the list shows a name,
+    when it was added and whether the authenticator syncs it — never the
+    public key, credential id or counter the endpoint answers, which
+    `listPasskeys` drops. Adding and removing go through the password dialog
+    and `auth.confirmPassword`; renaming needs the session alone. Where adding
+    cannot work the screen says why instead of offering a button that fails:
+    `auth.me` carries `passkeyOrigin` (the first `STOKY_URLS` origin, or null
+    when the install cannot have them), and a page at any other origin is
+    told the address that works; then an insecure context, then a browser
+    without WebAuthn. The list and removal work at every listed address, so a
+    lost phone's passkey can be removed from wherever the person is.
+    `@simplewebauthn/browser` (13.3.0, exact, the version
+    `@better-auth/passkey` already resolved) is loaded on the click, not with
+    the page.
+  - **Only one's own can be renamed or removed.** The route forwards the
+    passkey's `id` as sent; Better Auth's plugin looks the row up and answers
+    401 when it belongs to another account (`requireResourceOwnership`), in
+    another household or the same one, its owner included — a household role
+    gives no say over a member's passkeys. That check is Better Auth's, not
+    Stoky's, so `integration/passkeys.test.ts` holds it against an upgrade
+    that drops it. A removal refused there has still spent the step-up.
+  - **Every role may have them**, the kitchen's shared account included (the
+    owner's decision of 2026-10-15); the add dialog advises against adding
+    one on a device other people use. Removing a member's two-step
+    verification (D150) leaves their passkeys alone. Rotating `STOKY_SECRET`
+    leaves them working: nothing about them is encrypted with it.
+  - **Logged**: `auth.passkey.added` and `auth.passkey.removed` with whose it
+    was, never the credential or its public key.
+- **Only seventeen endpoints of the auth API answer**: `POST /sign-in/email`,
+  `POST /two-factor/verify-totp`, `POST /two-factor/verify-backup-code`,
+  `POST /two-factor/enable`, `POST /two-factor/disable`,
+  `POST /two-factor/generate-backup-codes`,
+  `GET /passkey/generate-authenticate-options`,
+  `POST /passkey/verify-authentication`,
+  `GET /passkey/generate-register-options`,
+  `POST /passkey/verify-registration`, `POST /passkey/delete-passkey`,
+  `POST /passkey/update-passkey`, `GET /passkey/list-user-passkeys`,
+  `POST /sign-out`, `GET /get-session`, `GET /ok` and `GET /error`. Every other
+  path Better Auth mounts — sign-up, password reset, account deletion, session
+  listing, about forty in all — is 404 before Better Auth sees it, so one a
+  later version adds is closed until somebody decides otherwise.
+  `integration/auth.surface.test.ts` reads the list off the running instance
+  and tries each by GET and POST with a signed-in cookie and its own origin,
+  and finds no row changed. A sign-in is rebuilt before Better Auth gets it —
+  the address trimmed and lower-cased, the password, `rememberMe` as a
+  boolean and nothing else — so no `callbackURL` or other option reaches it;
+  every other POST carries only the keys its endpoint needs, and the
+  registration options GET only `authenticatorAttachment`. A passkey's name,
+  which Better Auth only trims into an unbounded column, is held to 64
+  characters with no control or text-direction characters
+  (`passkeyNameSchema`, the settings field's own limit), or the request is
+  answered 400.
+- The address is validated with a Zod schema before the database is touched,
+  and an unknown email and a wrong password get the same 401
+  `INVALID_EMAIL_OR_PASSWORD`, after the same Argon2id cost.
+- **A signed-in person can change their own password**, from Settings →
+  *Seguridad y acceso* (`auth.changePassword`, security review 2026-10-12 — until then nothing
   changed a password once it was set, so a leaked one could not be rotated and
   one an admin chose stayed known to that admin). It asks for the current
-  password through the same `verifyPassword` as sign-in, metered (below); a
-  wrong one is `BAD_REQUEST`, never `UNAUTHORIZED`, because the offline queue
-  reads that as a session that has ended. The new password meets the policy,
-  identity rule included, and one update writes the hash and
-  `sessionsValidFrom`, so every session the account had ends — the one that
-  asked included, and the form says so before it is submitted. Both outcomes
-  are logged (`auth.password.changed`, `auth.password.change.refused`).
+  password through `confirmCurrentPassword`, the re-entry every confirmation
+  uses, with its two budgets (D143, below); a wrong one is `BAD_REQUEST`,
+  never `UNAUTHORIZED`, because the offline queue reads that as a session
+  that has ended, and is logged as `auth.reauth.refused` with `via:
+  "password-change"`. The new password meets the policy, identity rule
+  included — checked after the current password, so it answers nobody who
+  has not proved they know it. **Every other session ends and this one stays
+  signed in under a new token** (ASVS 5.0.0 7.4.3, PROGRESS D144): Better
+  Auth's `changePassword` writes the hash, deletes every session row the
+  account has, and creates one for the device that asked, which keeps that
+  session's `authenticatedAt`, remembered-or-not and device; its cookie comes
+  back with the answer. The browser sends this one call without streaming
+  (`src/lib/trpc/links.ts`), because a streamed answer's headers leave before
+  the resolver sets the cookie — measured: with the stream, the device was
+  signed out by its own change. Nor does a request this device sent with the
+  old cookie just before the change undo it: a session read that finds the
+  row gone answers no session without expiring any cookie (the policy
+  plugin takes Better Auth's expiring `Set-Cookie` lines out of every
+  `get-session` answer), so an answer arriving after the rotation's cannot
+  delete the new cookie. A copy of the old cookie is refused, its row
+  being gone. Nothing on the device is discarded, since the same person is
+  still there. A request that carried no cookie — a native client — is not
+  given a new session: every session ends, its own included, and the app asks
+  for the new password (D142). Logged as `auth.password.changed` and
+  `auth.session.ended` with `reason: "password-change"` and the count.
+  **Not one transaction**: Better Auth writes the hash, deletes the sessions
+  and creates the new one as separate statements, so a failure between the
+  first two would leave the new password beside sessions meant to end, and
+  the form would report a failure although the hash is already new; the
+  sessions are then ended from **Tus dispositivos**. The single transaction
+  it replaces could not split, and ended this device too.
 - **A household admin can set a member's password**, from **Personas del
   hogar** (`household.resetMemberPassword`, security review 2026-10-12). There
   is no email, so this is the way back from a forgotten password; until it
@@ -581,8 +1139,15 @@ Verified against the files named in each row.
   an owner — an admin who could set an owner's password could sign in as that
   owner — and nobody may use it on themselves, because their own password
   changes through the current one. The new password meets the policy, the
-  identity rule checked against the member, and one write sets the hash and
-  `sessionsValidFrom`, so whoever used the old password is signed out too. The
+  identity rule checked against the member, and one transaction sets the hash,
+  deletes the member's session rows and removes their passkeys (D151), so
+  whoever used the old password is signed out too and keeps no passkey they
+  added with it — the step-up that adding one asks for is that password, and
+  a passkey signs in without any. The admin cannot see a member's passkeys to
+  tell whose they are, so all of them go, and the member adds theirs again.
+  Ending a member's sessions, or the whole household's, leaves passkeys
+  alone: neither changes a password, which already lets whoever knows it
+  back in, and the way to shut such a person out is this reset. The
   write repeats the household and role in its `where`, so a member who leaves
   or is made an owner during the quarter-second hash is not written to. It
   shares `addMember`'s limit (below) and is logged as `auth.password.reset`,
@@ -591,26 +1156,39 @@ Verified against the files named in each row.
   the person to change it, and nothing makes the person do so. The owner of a
   single-owner household has nobody above them: their way back is the
   operator, through [the installation guide](docs/INSTALL.md#a-forgotten-password).
-- **The session cookie is `Secure` only when the public URL is https**, and
-  the server says so when it is not. Auth.js decides per request:
-  `useSecureCookies ?? url.protocol === "https:"` (`@auth/core` 0.41.3
-  `lib/init.js`), where `url` is `AUTH_URL ?? NEXTAUTH_URL` when one is set
-  and otherwise the request's own URL, built from `Host` and
-  `X-Forwarded-Proto`. The release bundle sets `NEXTAUTH_URL` to
-  `https://${DOMAIN}`, so its session cookie is `__Secure-` prefixed and
-  `Secure`. Until 2026-10-12 nothing noticed the two configurations that
-  downgrade it (security review, 2026-10-12, low): no URL behind a TLS proxy
-  that does not send `X-Forwarded-Proto` (nginx does not by default), and an
-  `http://` URL for another machine, which is where an operator ends up after
-  publishing the app port on a LAN. In production, `src/lib/auth/public-url.ts`
-  now logs one `[auth] warning:` line at start-up for either, and for a value
-  that is not an http(s) URL at all. The plain-http one names the consequences
-  — passwords and session cookies in cleartext, no barcode camera, no offline
-  support — and the way to TLS. **A warning, not a refusal**:
-  refusing would reverse D84 and stop every plain-http LAN install on upgrade,
-  and forcing `useSecureCookies` would make sign-in there impossible, because a
-  browser drops a `Secure` cookie set over http. `localhost`, `*.localhost`,
-  `127.0.0.0/8` and `[::1]` are not warned about: browsers treat them as this
+- **The session cookie is `Secure` only when the canonical address is
+  https**, and the server says so when it is not. `STOKY_URLS` lists the
+  addresses the instance is reached at; the first is canonical (PROGRESS
+  D138). Better Auth is built once, from it, and decides then:
+  `useSecureCookies` is set exactly when the first entry is https
+  (`src/lib/auth/instance.ts`), never from a request's `Host` or
+  `X-Forwarded-Proto`. The release bundle sets `STOKY_URLS` to
+  `https://${DOMAIN}`, so its session cookie is `__Secure-stoky.session_token`
+  and `Secure`; `unit/public-url.test.ts` builds the instance with an https, a
+  LAN http and a loopback first entry, and with lists in both orders, and
+  reads the cookie's name and flag back. Because one entry decides for all, an
+  https first entry beside plain HTTP to another machine is refused in
+  production: the cookie would be `Secure`, and the browser would drop it at
+  the plain-HTTP address — a sign-in loop. `http://localhost` beside it is
+  accepted, because Chromium and Firefox keep a `Secure` cookie on localhost.
+  An https address listed after a plain-HTTP first entry gets a cookie that is
+  not `Secure` either, and the server warns about it. In production a missing
+  `STOKY_URLS` is not guessed: the server refuses to start, as it does for an
+  entry that is not a bare `http(s)` origin — a path, a query, a fragment or
+  credentials (PROGRESS D136, `src/lib/auth/environment.ts`). Messages name
+  an entry by its position and print only its origin, never the text as
+  written, which may carry a password. The deprecated `NEXTAUTH_URL` is read,
+  as a list of one, when `STOKY_URLS` is unset (D137). An `http://` address for
+  another machine — where an operator ends up after publishing the app port
+  on a LAN — is allowed, and `src/lib/auth/public-url.ts` logs one
+  `[auth] warning:` line at start-up for each. It
+  names the consequences — passwords and session cookies in
+  cleartext, no barcode camera, no offline support — and the way to TLS. **A
+  warning, not a refusal**: refusing would reverse D84 and stop every
+  plain-http LAN install on upgrade, and forcing `Secure` would make sign-in
+  there impossible, because a browser drops a `Secure` cookie set over http.
+  `localhost`, `*.localhost`, `127.0.0.0/8` and `[::1]` are not warned about:
+  browsers treat them as this
   machine, and CI and the browser suite serve there.
   `src/__tests__/unit/public-url.test.ts` pins each case and that the hook
   warns without exiting.
@@ -1056,6 +1634,19 @@ authentication only from known devices":
   so a distributed guess is still bounded at ten per window.
   `src/lib/auth/known-devices.ts`; the integration suite proves each case and
   the twenty-device cap.
+- The id is minted by the proxy when a page is rendered, never for the auth
+  API or for a request carrying `Authorization: Bearer` (`src/proxy.ts`). So
+  **a client that never rendered a page — a native app, a script — has no
+  id and is charged to the shared account budget**, as a browser with a
+  cleared cookie jar is. For its first sign-in that is the same outcome as
+  before, when the id it was handed on the spot had never been recorded
+  either. It is not the same for the next one: a client that kept cookies
+  used to have that minted id recorded by its successful sign-in, and so
+  signed in on a budget of its own afterwards; now it stays on the shared
+  one, and a stranger filling that budget can keep it from signing in again
+  (not from using a session it already holds). That is accepted: not
+  handing it an id keeps a cookie the client never sent off requests that
+  are judged by whether they carry a cookie.
 - The set is deliberately not under `rl:login:`. Without a proxy the per-IP
   counter is `rl:login:<whatever X-Forwarded-For says>`, and a forged header
   naming the set would plant a string at its key and, failing closed, stop
@@ -1230,9 +1821,11 @@ publishing an instance:
   read off the refusal rather than recomputed, so the header and the message
   cannot disagree — RFC 9110 §10.2.3. Two things deliberately do not carry it:
   the 503 a dead Valkey produces, because nothing knows when the cache is
-  coming back and an invented number would be worse than none; and sign-in,
-  which never produces a 429 at all, since Auth.js answers a refused
-  credentials callback with a redirect to `/login?error=…`.
+  coming back and an invented number would be worse than none. Sign-in is
+  answered by the auth route, not tRPC, and does the same: 429 with
+  `Retry-After` and a code (`RATE_LIMITED`, `ACCOUNT_RATE_LIMITED`), 503
+  `AUTH_UNAVAILABLE` without one (`src/server/http/auth-handler.ts`). Better
+  Auth's own limiter is switched off; these counters are the only ones.
 - **It fails closed.** If Valkey is unreachable, nobody can sign in. That is
   deliberate — failing open would hand an unlimited auth endpoint to anyone who
   can take the cache down — but it makes Valkey a hard dependency of signing
@@ -1282,9 +1875,13 @@ publishing an instance:
   `RATE_LIMIT_REGISTER_WINDOW_SECONDS`, `RATE_LIMIT_UPLOAD_ATTEMPTS`,
   `RATE_LIMIT_UPLOAD_WINDOW_SECONDS`, `RATE_LIMIT_PRODUCT_LOOKUP_ATTEMPTS`,
   `RATE_LIMIT_PRODUCT_LOOKUP_WINDOW_SECONDS`, `RATE_LIMIT_ADD_MEMBER_ATTEMPTS`,
-  `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`,
-  `RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS` and
-  `RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS`. Raising them raises the
+  `RATE_LIMIT_ADD_MEMBER_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ATTEMPTS`,
+  `RATE_LIMIT_REAUTH_WINDOW_SECONDS`, `RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS`,
+  `RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS`,
+  `RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS`,
+  `RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS`,
+  `RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS` and
+  `RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS`. Raising them raises the
   exposure; the browser suite raises the sign-in, known-device, registration,
   add-member and product-lookup attempts (`playwright.config.ts` says why for
   each), and a
@@ -1306,14 +1903,53 @@ Docker collects. With `jq` installed on the host, `docker compose logs
 lists the refusals: `--no-log-prefix` drops the `app-1  | ` Compose puts
 before every line, which jq cannot parse, and `fromjson?` skips the lines that
 are not JSON. The events are
-`auth.signin.failed`, `auth.signin.throttled`, `auth.unavailable`,
-`auth.session.revoked`, `auth.password.changed`,
-`auth.password.change.refused`, `auth.password.reset`, `access.denied` and
-`request.throttled`. `auth.session.revoked` carries a `reason`:
-`sessions-valid-from` for a session somebody ended, `absolute-lifetime` for
-one signed in more than thirty days ago or carrying no sign-in time at all —
-which is every session left from before the limit, so expect these lines from
-every device that was signed in when that upgrade was installed.
+`auth.signin.failed`, `auth.signin.throttled`, `auth.signin.succeeded`,
+`auth.unavailable`,
+`auth.session.ended`, `auth.password.changed`, `auth.password.reset`,
+`auth.signin.challenged` (a right password on an account with two-step
+verification, before the code; D148), `auth.twofactor.failed` (a code
+refused, with Better Auth's refusal as `code`), `auth.twofactor.replayed` (a
+right code sent again), `auth.twofactor.locked` (wrong codes have locked the
+account's second step), `auth.twofactor.unreadable` (the stored secret no
+longer decrypts), `auth.twofactor.enabled`, `auth.twofactor.disabled`,
+`auth.twofactor.codes-regenerated`, `auth.twofactor.removed` (an admin took
+a member's off, with the member as `targetUserId`; D150),
+`auth.passkey.added` and `auth.passkey.removed` (a passkey added or removed
+by its account's holder, after the password; D151),
+`auth.passkey.signin-failed` (a passkey sign-in refused, with Better Auth's
+refusal as `code`; D151),
+`auth.reauth.refused` (a wrong current password re-entered to confirm an
+action, with the action as `via` — `end-sessions`, `password-change`, which
+replaces the `auth.password.change.refused` event of earlier releases,
+`household-end-all`, `two-factor`, `member-two-factor`, or `step-up` before
+a passkey is added or removed; D143, D144, D147, D148, D150, D151),
+`access.denied` and
+`request.throttled`. `auth.session.ended` replaces `auth.session.revoked`
+(PROGRESS D135): it is written when somebody ends sessions on purpose, with a
+`reason` — `self` for a person ending their own, `password-change` for the
+other sessions a password change ended (D144), `admin` for an admin ending a
+member's, `removed` for an admin removing a member from the household (D146),
+`owner` for an owner ending every session in the household, with no
+`targetUserId` (D147), `two-factor-removed` for an admin removing a member's
+two-step verification (D150),
+`replaced` for a sign-in ending the session its browser presented
+(D139), `evicted` for a sign-in ending the account's least recently used
+session to stay within ten (D140) — the `userId` who asked, the
+`targetUserId` whose they were, and
+the `count` of sessions ended (`self` covers ending one, every other or every
+one, D143; for `replaced`, the account's expired rows the
+same sign-in deleted are counted too). A session that simply runs out writes nothing;
+its row is deleted when next read.
+
+A sign-in that gets in is recorded as well, as ASVS 5.0.0 **16.3.1** asks:
+`auth.signin.succeeded` carries the `userId` it signed in as, the factor in
+`method` (`password`, `totp`, `backup-code` or `passkey`, D151), and the
+same `account` tag and `address` a
+failure carries, so one filter follows an account from its refusals to the
+sign-in that ended them — the line that tells a member who mistyped twenty
+times from somebody who guessed right on the twenty-first. Like every other
+line it holds no address that was typed, no token and no password, and it is
+written only once the sign-in has completed.
 
 - **The release bundle rotates them; Docker alone does not.** Docker's default
   `json-file` driver has no size limit, and every throttled refusal writes a
@@ -1328,10 +1964,11 @@ every device that was signed in when that upgrade was installed.
   **An unauthenticated client can make that flood**, and nothing throttles
   it: an anonymous tRPC request writes at most one refusal line (about
   130 bytes; [*Batched calls*](#batched-calls--srclibtrpcbatchts)), and a
-  session cookie that does not decrypt makes Auth.js write about 1 KB per
-  request (the Auth.js bullet below). At about 1 KB a request, some fifty
-  thousand requests replace the 50 MB — arithmetic, not a measurement — and
-  with it the `auth.signin.failed` lines of a guessing run made just before.
+  sign-in from a foreign origin makes Better Auth write one line of at most
+  313 bytes beside the security event (the Better Auth bullet below). At
+  about 430 bytes a request, some hundred and twenty thousand requests replace
+  the 50 MB — arithmetic, not a measurement — and with it the
+  `auth.signin.failed` lines of a guessing run made just before.
   The cap protects the disk, not the record. An operator who needs the record
   to survive ships the logs off the host ([Install](docs/INSTALL.md#logs)),
   which is the only defence against having it flushed. The driver is named next to its options
@@ -1389,7 +2026,7 @@ every device that was signed in when that upgrade was installed.
   database never holds, kept for as long as the container's output and in
   every paste of `docker compose logs` (security review, 2026-10-12). They
   now carry `account`: the first 16 hex characters of an HMAC-SHA256, keyed
-  with `NEXTAUTH_SECRET`, over `stoky-log-account:` and the address trimmed
+  with `STOKY_SECRET`, over `stoky-log-account:` and the address trimmed
   and lowercased (`src/lib/account-tag.ts`). Keyed rather than a plain hash
   because an address is guessable: without the secret, a pasted log cannot be
   checked against a list of likely addresses. `email` is one of the keys the
@@ -1400,38 +2037,47 @@ every device that was signed in when that upgrade was installed.
 
   ```bash
   printf 'stoky-log-account:%s' 'ana@example.org' \
-    | openssl dgst -sha256 -hmac "$(sed -n 's/^NEXTAUTH_SECRET=//p' .env)" \
+    | openssl dgst -sha256 -hmac "$(sed -n 's/^STOKY_SECRET=//p' .env)" \
     | cut -d' ' -f2 | cut -c1-16
   ```
 
   Type the address in lowercase. The command reads the secret as `install.sh`
   writes it, without quotes; a value quoted by hand in `.env` gives a tag that
-  matches nothing. **Rotating `NEXTAUTH_SECRET` changes every
+  matches nothing. On an installation whose `.env` still says
+  `NEXTAUTH_SECRET` (PROGRESS D137), read that line instead: it is the key in
+  use until it is renamed, and renaming it, value kept, leaves every tag as it
+  was. **Rotating `STOKY_SECRET` changes every
   tag**, so lines from before a rotation do not match lines from after it.
   Lines written before this change keep the address they were written with
   until the log holding them is removed.
-- **Auth.js writes a refused sign-in as one line, not a stack.** Its built-in
-  logger followed every `CredentialsSignin` — every wrong password — with the
-  stack trace of `@auth/core`'s callback, the same frames every time, so each
-  failed attempt cost several lines of log on top of the security event that
-  already records it (security review, 2026-10-12). `authConfig.logger.error`
-  (`logAuthError` in `src/lib/auth.ts`) now writes `CredentialsSignin` and
-  `MissingCSRF` as the single `[auth][error] <type>: <message>` line and stops.
-  Measured by calling `@auth/core`'s `Auth()` under Bun with a credentials
-  provider that refuses: 4 lines and 462 bytes per refused sign-in before, 1
-  line and 99 bytes after; a POST with no CSRF token, 508 bytes to 137. The
-  production build (`bun .next/standalone/server.js`, sign-ins posted with
-  `curl`) writes the same 99 and 137 bytes. **Every other Auth.js error is
-  still written whole**, cause, stack and details as Auth.js wrote them,
-  because a `Configuration` error or a `CallbackRouteError` from something
-  `authorize` threw is an operator's only signal that sign-in is broken. This
-  shortens what one refusal writes; it does not bound how many refusals can be
-  written. **Nor is a refused sign-in the largest thing an unauthenticated
-  request can make Auth.js write.** Measured against the same production
-  build: a session cookie that does not decrypt (`JWTSessionError`) writes 10
-  lines and 988 bytes on `/api/trpc`, and twice that on a page; an unknown
-  action under `/api/auth` (`UnknownAction`) writes 1,252 bytes, and an
-  unknown provider 1,022. Those still carry their stack.
+- **Better Auth writes nothing for a refused sign-in.** At its default level
+  it writes a warning for every wrong password and unknown address;
+  `src/lib/auth/instance.ts` sets its logger to `error`, writing one
+  `[auth] <level> <message>` line, never the arguments, with the message cut
+  to 300 characters and its whitespace collapsed. Measured
+  through the route on 2026-10-15 (PROGRESS D135), against what next-auth
+  wrote for the same request: a wrong password, 0 lines from the library and
+  the one `auth.signin.failed` line of about 117 bytes (next-auth: 1 line and
+  99 bytes beside it); a session cookie whose signature does not verify, 0
+  lines (a `JWTSessionError`, 10 lines and 988 bytes); an endpoint nobody
+  allowed, 0 lines (an `UnknownAction`, 1,252 bytes). Two refusals still
+  write. A cookie-bearing sign-in from a foreign origin: one
+  `[auth] error Invalid origin: …` line of at most 313 bytes, the origin
+  being the caller's choice. And a passkey answer the verifier refuses: one
+  `[auth] error Failed to verify authentication` line of 45 bytes, beside the
+  `auth.passkey.signin-failed` security line (about 127 bytes for an IPv4
+  address; measured 2026-10-16). There Better Auth 1.7.7 hands the logger the
+  `@simplewebauthn/server` error, which quotes the origin the answer was
+  signed for; dropping the arguments is what keeps it out.
+  `integration/security-log.test.ts` signs in with ten wrong passwords and
+  finds ten security lines and nothing else on any console stream; its
+  `what the auth library writes` block reads every console method through an
+  unknown address, a refused authenticator code, that refused passkey and a
+  sign-out, and finds no line naming the address, its local part, the
+  password, the code, the authenticator secret, the origin or a session
+  token. Of the four, only the passkey writes a line of the library's. A
+  failure of the server's own — a database that does not answer — is still
+  written, as one line with the error's name and message.
 
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still
@@ -1441,11 +2087,12 @@ expires. The counting itself is proven against a real Valkey in
 
 ### The session signing key cannot be the example one
 
-`NEXTAUTH_SECRET` signs the session JWT, and Auth.js never inspects it — so
-until Phase 7's slice nothing in this application had looked at what it was.
-`.env.example` ships a placeholder, and that placeholder is **published in this
-repository**: an instance deployed without changing it signs sessions with a key
-anybody can read, and nothing about the running system looks wrong.
+`STOKY_SECRET` signs the session cookie, and Better Auth only warns about a
+weak one — so until Phase 7's slice nothing in this application had looked at
+what it was. `.env.example` ships a placeholder, and that placeholder is
+**published in this repository**: an instance deployed without changing it
+signs sessions with a key anybody can read, and nothing about the running
+system looks wrong.
 
 `src/lib/auth/secret.ts` refuses to serve in production if the secret is
 missing, is the example value, or is shorter than 32 characters — with a message
@@ -1464,26 +2111,43 @@ reading it is looking at a container that will not start.
 - **`/api/health` checks it too**, answering 503 with the same opaque body as
   any other failed dependency, so an instance that somehow got past start-up
   with an unusable key is reported unhealthy rather than healthy.
-- **The key it checks is the key that signs.** `authConfig` in
-  `src/lib/auth.ts` passes `secret: process.env.NEXTAUTH_SECRET` to Auth.js
-  explicitly. Until 2026-10-12 it passed nothing, and next-auth 5.0.0-beta.32
-  resolves an absent secret as `AUTH_SECRET ?? NEXTAUTH_SECRET`: `AUTH_SECRET`
-  — the name the Auth.js v5 docs and `npx auth secret` use — won whenever it was
-  set, while the guard and `/api/health` read only `NEXTAUTH_SECRET`. A valid
-  `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme` started, answered healthy, and
-  signed every session with `changeme`. The release bundle was never exposed —
-  `deploy/docker-compose.yml` hands the container an explicit `environment:`
-  map with no `env_file`, so an `AUTH_SECRET` added to `deploy/.env` never
-  reaches it — but a hand-edited compose file or a source deployment was.
-  `AUTH_SECRET` is now ignored, not refused: once it signs nothing, refusing to
-  start over it is only one more way not to start. Auth.js's key rotation
-  through `AUTH_SECRET_1..3` was never available here and still is not —
-  `@auth/core` reads that list only when the secret is empty, and next-auth has
-  already filled it from `NEXTAUTH_SECRET`, which production requires — so
-  rotating means changing `NEXTAUTH_SECRET`, which signs everyone out.
-  `src/__tests__/unit/auth-secret.test.ts` imports `@/lib/auth` in a fresh
-  process with both variables set and asserts the resolved key is
-  `NEXTAUTH_SECRET`; without the explicit `secret` it receives `changeme`.
+- **The key it checks is the key that signs.** `src/lib/auth/instance.ts`
+  hands Better Auth `STOKY_SECRET` twice: as `secret`, and as the one entry
+  of `secrets` (`[{ version: 1, value }]`). Left to itself Better Auth reads
+  `BETTER_AUTH_SECRETS`, then `BETTER_AUTH_SECRET`, then `AUTH_SECRET`; with
+  `secrets` named it never reads the first, and with `secret` named the other
+  two never fill its legacy fallback. Those variables are therefore ignored,
+  not refused, and the server says so: each one that is set gets an
+  `[auth] warning: … is set and ignored` line at start-up naming the variable
+  read instead, never its value (PROGRESS D136; `BETTER_AUTH_URL` and
+  next-auth's `AUTH_URL` likewise, since `STOKY_URLS` is what is read).
+  The guard, `/api/health`, the account tag and the instance all read the key
+  through one function (`configuredSecret`), so they cannot disagree about
+  which variable it came from.
+  The same bug was found under next-auth on 2026-10-12, where
+  `AUTH_SECRET` won over `NEXTAUTH_SECRET` while the guard and `/api/health`
+  read only the latter: a valid `NEXTAUTH_SECRET` beside `AUTH_SECRET=changeme`
+  started, answered healthy, and signed every session with `changeme`.
+  `src/__tests__/unit/auth-secret.test.ts` builds the instance in a fresh
+  production process with `STOKY_SECRET` beside `BETTER_AUTH_SECRETS`,
+  `BETTER_AUTH_SECRET` and `AUTH_SECRET` all set to something else, and reads
+  back the key it signs with: `STOKY_SECRET`. Outside production, with no
+  key set, it signs with a random 32-byte key for the life of the process and
+  says so once, so a restart signs everybody out.
+- **Its name is ours.** Until D137 it was `NEXTAUTH_SECRET`, a name a library
+  reads on its own, as `AUTH_*` and `BETTER_AUTH_*` are; that is how
+  `AUTH_SECRET` came to win above. An installation not yet renamed keeps
+  working: with `STOKY_SECRET` unset the old name is read, and the start-up
+  log says once `[config] NEXTAUTH_SECRET is deprecated`; with both set
+  `STOKY_SECRET` wins and the log says the other is ignored. An empty value is
+  unset, as Compose passes it. Every refusal names the variable the value came
+  from. `deploy/install.sh` renames the line and keeps the value — a new key
+  would sign everybody out and change every account tag — and the bundle's
+  Compose file passes both names through, so the application, not Compose,
+  refuses an empty one.
+- **Rotating it signs everybody out** and changes every account tag in the
+  security log. Better Auth's versioned keys are not used beyond that single
+  version-1 entry, so there is no window in which an old key still verifies.
 - **Production only.** Development and the suites use whatever is to hand;
   refusing there would trade a risk nobody faces for an obstacle everybody does.
 - **Not during `next build`.** The image is built without a runtime secret and
@@ -1520,9 +2184,12 @@ through `household.addMember`, which the setting does not govern.
 - **The first-user count cannot race.** The account is created in a
   transaction that holds a PostgreSQL advisory lock
   (`pg_advisory_xact_lock`) and counts again under it, so two people claiming a
-  fresh instance at once cannot both see zero. The household is a nested write
-  of the account in the same transaction; before this, a registration that
-  failed after its household was written left a household nobody belonged to.
+  fresh instance at once cannot both see zero. The household is written first,
+  then the account and then its credential `Account` row, which holds the
+  password hash, all in the same transaction, so a failure at any step rolls
+  back every earlier one; before this, a registration that failed after its
+  household was written left a household nobody belonged to, and a user row
+  without its credential could neither sign in nor be registered again.
 - **`/register` says so before anyone types.** The page is a server component
   that asks the same rule after `connection()`, so the answer is the running
   container's and not the build's, and renders a page saying registration is
@@ -1535,8 +2202,10 @@ through `household.addMember`, which the setting does not govern.
   (`src/__tests__/integration/registration.test.ts`): `closed` refuses
   everyone without touching the database; `first-user` admits exactly one;
   two simultaneous claims leave one account and one household; a registration
-  waits while the lock is held and is then refused. Removing the re-count,
-  the lock, the `closed` branch, or the nested household each turns a test red.
+  waits while the lock is held and is then refused; a credential row that
+  cannot be written leaves no user, account or household behind. Removing the
+  re-count, the lock, the `closed` branch, or the nested household each turns
+  a test red.
 
 What is still open:
 
@@ -1609,6 +2278,18 @@ household name were bare strings too, and a failed sign-in wrote the address
 it was given into the security log, whatever its length. All three are bounded
 now, with every other input (see *Input validation* above).
 
+**At sign-in the maximum is Better Auth's, not this schema's.** Since the move
+to Better Auth the sign-in route (`src/server/http/auth-handler.ts`) checks
+only that the password is a string and runs no Stoky schema over it;
+`loginSchema` still names the bound, but nothing on that path reads it. The
+bound holds because `src/lib/auth/instance.ts` sets Better Auth's
+`maxPasswordLength` to `MAX_PASSWORD_LENGTH`, and Better Auth refuses a longer
+password with `PASSWORD_TOO_LONG` before it looks the account up — so before
+Argon2id runs. The login form reads that code as wrong credentials. That this
+holds at the route, and that a password of exactly 128 is still checked, is
+`auth.flow.test.ts` (*refuses a password over the maximum before Argon2id
+runs*), which goes red if the setting is raised or lowered by one.
+
 ### ~~The services layer still throws bare `Error`~~ — closed
 
 **Corrected 2026-08-26 by the Phase 7 review.** `ISSUES.md` DEBT-6 closed this
@@ -1651,6 +2332,16 @@ message, the "database is down" line, which names host and port but not the
 credentials. Anything that is not a Prisma error is logged as before. The
 tRPC `errorFormatter`, the receipt pipeline's background processing and the
 start-up sweep of receipts a restart interrupted all log through it; `src/__tests__/unit/log-error.test.ts` checks each kind.
+So do the two auth lines that write an error as text, through
+`describeErrorLine` — the first line of the description, flattened and still
+cut at 300 characters: what Better Auth's router writes when an endpoint
+throws (`onAPIError.onError` in `src/lib/auth/instance.ts`; the Prisma
+adapter rethrows the client's errors as they are) and what a failed sign-in
+tidy or session ending writes (`quietly` in `src/server/http/auth-handler.ts`,
+whose tidy passes the new session's token as an argument). Both had written
+`name: message` until 2026-10-16; `unit/auth-log.test.ts` and
+`unit/auth-handler.test.ts` feed each a validation error carrying a marker and
+went red with the marker on the line before the change.
 
 ### ~~Household roles are decorative~~ — this section was false
 
@@ -1665,13 +2356,14 @@ a household can perform any operation on that household's data". All four were
 false, and had been since Phase 3.
 
 What is actually true: `HouseholdRole` has four values including `KITCHEN`;
-`src/types/next-auth.d.ts` declares `role` on the session non-optionally;
+`src/lib/auth/session.ts` declares `role` on the session the application reads
+(`AppSession`) non-optionally;
 `src/server/trpc/trpc.ts` defines `CAPABILITY_ROLES` and three enforced tiers,
 where `writeProcedure` refuses `KITCHEN` and `adminProcedure` refuses `MEMBER`;
-and all 65 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
+and all 71 procedures are assigned, with `src/__tests__/unit/capabilities.test.ts`
 pinning every one against the matrix rather than sampling, and failing when the
 count in this sentence stops matching the router's. Membership and role
-are read from the database on every call rather than from the JWT, so a
+are read from the database on every call rather than from the session, so a
 demotion takes effect on the next request.
 
 The real limit is one level down and is recorded in `docs/SECURITY_REVIEW.md`
@@ -1691,9 +2383,11 @@ stored in `localStorage` under `stoky.reads.v1.<account>`.
 
 What removes them:
 
-- **Signing out** — **Cerrar sesión**, ending every session from this device,
-  or changing the password, all through `useEndSession` — clears the memory
-  cache, the queue, the saved reads and the shell before it leaves.
+- **Signing out** — **Cerrar sesión**, or ending a set of sessions that
+  includes this device's from **Tus dispositivos**, both through
+  `useEndSession` — clears the memory cache, the queue, the saved reads and
+  the shell before it leaves. Changing the password no longer does: it keeps
+  this device signed in, and what is stored is the same person's (D144).
 - **Reaching `/login` with the network up** — where an expired or ended
   session is sent — clears the previous account's saved reads, its shell and
   the memory cache (`ShellCacheGuard`). So does a different account signing
@@ -1711,8 +2405,8 @@ What removes them:
 
 What does not:
 
-- **Ending a session ends the token, not the device's copy.** Expiry, the
-  thirty-day ceiling, **Cerrar la sesión en todos los dispositivos** and an
+- **Ending a session ends its row, not the device's copy.** Expiry, the
+  day's ceiling, **Cerrar todas** in **Tus dispositivos** and an
   admin in **Personas del hogar** all work on the server. A device that is not
   online never hears of it: opened offline, or when a navigation takes longer
   than the service worker's 2.5 seconds, the cached shell renders and the
@@ -1792,29 +2486,25 @@ own.
   about one person ([*What the JSON export does not include*](#what-the-json-export-does-not-include)).
 - Refusals are audit-logged, but there is no complete history of who changed what.
 - No account or household deletion in the application. Removing somebody from
-  a household keeps their account. The operator deletes an account in the
-  database ([Install](docs/INSTALL.md#deleting-somebodys-account)), which
+  a household keeps their account and ends its sessions (D146). The operator
+  deletes an account in the database
+  ([Install](docs/INSTALL.md#deleting-somebodys-account)), which
   leaves its id on the stock movements and receipts it recorded, and its
   receipt photographs until they are removed by the command given there.
   Nothing deletes a household (ASVS 4.0.3 V8.3.2, security review 2026-10-12).
 - No invitations: with registration closed, an admin sets a new person's first
-  password and hands it over. The person can change it from Settings once
-  signed in; nothing makes them.
+  password and hands it over. The person can change it from Settings →
+  *Seguridad y acceso* once signed in; nothing makes them.
 - No permanent account lockout — but the per-account sign-in limit is a
   temporary one that a stranger can renew every fifteen minutes against a
   browser that has never signed in to the account (see *Rate limiting* above
   for the known-device budget that keeps it off the rest).
-- No email verification, no two-factor authentication,
-  and no self-service password reset: there is no email to send a link to. A
-  forgotten password is set again by a household admin; an owner's by another
-  owner or, for a sole owner, by the operator in the database.
-- No per-session sign-out. Signing out clears the cookie on this device and
-  ends no copy of the token taken earlier; ending a session elsewhere means
-  ending all of the account's (*Authentication* above). Ending one session
-  needs a session identifier carried in the token and a record of the ones
-  ended — the per-device design `docs/SECURITY_REVIEW.md` §6 sketches — and
-  a check on every session read that must not fail closed on a cache outage,
-  since every page render reads the session.
+- No email verification and no self-service password reset: there is no
+  email to send a link to. A forgotten password is set again by a household
+  admin; an owner's by another owner or, for a sole owner, by the operator in
+  the database. (Two-step verification and passkeys exist since 2026-10-15,
+  PROGRESS D148 and D151, and ending one other device's session since D143:
+  *Authentication* above.)
 - No secret scanning or SAST of the source in CI. `ci.yml` and the weekly
   `rescan.yml` are the only workflows; Trivy scans images, and zizmor the
   workflows, not the source. Secret scanning, push protection and CodeQL are
@@ -1840,8 +2530,13 @@ full in the section named.
   The shared per-account budget is what bounds a distributed guess, so it stays
   shared for browsers that have never signed in; known browsers have their own
   ([*Rate limiting*](#rate-limiting-covers-authentication-and-the-expensive-calls-not-the-rest)).
-  The operator clears it by hand. A second factor or an email channel would
-  change it.
+  The operator clears it by hand. An email channel would change it. Since
+  2026-10-15 a passkey does, for whoever has one: a passkey sign-in is
+  charged per address only (PROGRESS D151), since it names no account and
+  cannot be guessed, so a person with a passkey signs in past an exhausted
+  per-account password budget, on an instance where passkeys are offered.
+  Two-step verification (D148) does not: the password step is charged per
+  account before a code is asked for.
 - **The first-user claim window.** Whoever reaches `/register` first on a fresh
   installation owns it; register at once, and start again if somebody else did
   ([*Registration closes after the first account*](#registration-closes-after-the-first-account)).
@@ -1851,10 +2546,11 @@ full in the section named.
   closes the first after the first account; the second is admin-only and
   metered, and a uniform answer would hide real errors from the household's
   own admins.
-- **No per-session sign-out.** Signing out clears this device's cookie; a
-  copied token lasts until fifteen idle minutes or thirty days. A denylist
-  would make every request depend on Valkey ([*Other things that do not
-  exist*](#other-things-that-do-not-exist)).
+- ~~**No per-session sign-out.**~~ Closed by PROGRESS D135 and D143
+  (2026-10-15): sessions are database rows, and signing out deletes this
+  device's, so a copied cookie is refused at once; **Tus dispositivos**
+  (`/settings/security`) lists every session and ends one, every other or
+  every one, after the password.
 - **IPv6 clients share the bridge gateway's budget by default.** IPv6 on
   Traefik's network is an opt-in, because enabling it breaks older Docker
   engines, hosts without IPv6 and existing networks; /64 grouping applies once
@@ -1897,7 +2593,9 @@ full in the section named.
   Encrypting `localStorage` would not resist a local attacker.
 - **Plain-HTTP LAN installations stay supported** (D84): the server warns at
   start-up instead of refusing, and the weaker guarantees are documented under
-  *Authentication* and *Cross-site requests*.
+  *Authentication* and *Cross-site requests*. They have no passkeys (D151):
+  browsers offer WebAuthn only to https or `localhost`, and the security
+  screen says so in place of the button.
 - **Trivy does not inventory the Bun binary**, so a Bun advisory is invisible to
   the image scans. The version is tracked through `.bun-version` and
   Dependabot's `docker` updates, and each update reads Bun's security notes.
@@ -1930,22 +2628,28 @@ is stored, logged or sent.
 
 | Data | Where | How long |
 |---|---|---|
-| Accounts: email address, name, Argon2id password hash, role, language and display preference, and when the account's sessions were last ended | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| Accounts: email address, name, role, language and display preference | PostgreSQL `User`, on the `postgres_data` volume | Until it is deleted in the database ([Install](docs/INSTALL.md#deleting-somebodys-account)). The application cannot delete an account. Removing somebody from a household clears their household and keeps the rest of the row |
+| Each account's Argon2id password hash, in its `credential` row: the account id, the hash and when the row was written | PostgreSQL `Account`, on the `postgres_data` volume | As long as the account. The database deletes the row with its `User` row (a cascade, PROGRESS D134), so no hash outlives its account |
+| Sessions, one row each: the account id, the session token (the value the cookie signs), when it expires, was created, last written and was signed in, whether it is remembered, the browser's User-Agent string, and the `stoky_device` cookie value the sign-in carried (`deviceId`, D143), which the list of a person's sessions joins to `ScreenChoice` and never returns. No IP address: Better Auth's address tracking is off, so `ipAddress` stays null | PostgreSQL `Session` | Until the session ends: signing out, ending sessions (one's own, a member's, or the whole household's, D147), a password being set, removal from the household (D146), signing in again in the same browser, an eleventh session ending the least recently used one (D140), or the account's deletion (a cascade) delete it, and an expired row is deleted the next time its cookie is read or the account next signs in (D139). A row whose cookie is never sent again stays, expired, until one of them happens. At most fifteen idle minutes and a day in all for a live browser session (PROGRESS D135); ninety idle days and a year in all for a remembered one (D141) |
+| Each passkey a person adds (D151): the account id, the credential's id and public key, its signature counter, whether it can sync to the person's other devices and is backed up, the transports the browser named, when it was added, the name the person gave it, and its AAGUID — the make of authenticator or password manager, never the device or the person | PostgreSQL `Passkey` | Until the person removes it, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
+| A confirmed password, for five minutes after it is re-entered before a passkey is added or removed (D151): the session's id and the account id | PostgreSQL `Verification` (`stoky-step-up:…`) | Until the change spends it, its session ends, or it lapses |
+| Each account's authenticator, once two-step verification is set up (D148): the account id, the TOTP secret, encrypted with `STOKY_SECRET`, the unused backup codes as SHA-256 hashes (D149), whether the first code has been accepted, the count of wrong codes in a row and the lockout's end, and the last time step a code was accepted for | PostgreSQL `TwoFactor` | Until two-step verification is removed, or the account's deletion (a cascade, like `Account`). Not in the JSON export |
+| Better Auth's short-lived values: an identifier, a value and an expiry. Today, a two-step sign-in in progress (the account id, under a random identifier) and its count of wrong codes | PostgreSQL `Verification` | Ten minutes, or until the code is accepted, the challenge has had five wrong codes, or the account's sessions are ended (D148). An expired row stays until it is next read |
 | The household's things: products, stock movements (each one records the member who made it, and can carry a free-text note), locations, stores (a name and an optional address), price records and shopping lists | PostgreSQL | Until somebody deletes them in the application, where it allows that, or in the database. Price records and stock movements add up to the household's purchase history |
 | Receipts: the photograph, re-encoded as a JPEG with no EXIF or GPS data; the OCR text of the whole ticket (`rawOcrText`), which can include a masked card number, a loyalty number and the cashier's name; the text of each line; the store, date and total; and the member who uploaded it | The photograph on the `uploads` volume, everything else in PostgreSQL | Indefinitely. Nothing in the application deletes a receipt or its photograph (`docs/SECURITY_REVIEW.md` finding 16). The photographs a deleted account uploaded can be removed by hand ([Install](docs/INSTALL.md#deleting-somebodys-account)) |
 | Which screen each person opens on each device: an account id, the `stoky_device` cookie value and the chosen screen | PostgreSQL `ScreenChoice` | Indefinitely. Deleting the account as [Install](docs/INSTALL.md#deleting-somebodys-account) describes deletes its rows; deleting the `User` row alone leaves them (`prisma/schema.prisma`) |
 | Offline replay records: account, household, procedure, a hash of the request and the ids of the rows it wrote | PostgreSQL `MutationReplay` | 90 days (`REPLAY_RETENTION_DAYS`). An expired row is deleted the next time the same account sends a replayable write, so an account that stops writing leaves its rows behind |
 | The security log: time, event, the client's full address, account and household ids, procedure, and for a sign-in the keyed tag of the address that was tried ([*Refusals are recorded*](#refusals-are-recorded)) | The `app` container's log | Until rotation removes it. Each container keeps at most 50 MB of log, so how far back it reaches depends on traffic ([Install](docs/INSTALL.md#logs)) |
 | An email address entered a second time. PostgreSQL logs `DETAIL: Key (email)=(…) already exists` with the address in full when an admin adds a member whose address already has an account, or when two registrations of one address race. Query values are sent as bind parameters, so no other value reaches this log | The `db` container's log | As above |
-| Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
+| Rate-limit counters, each with its key. The key is the client's IPv4 address or IPv6 /64 for the per-address sign-in and registration limits. It is the first 32 hex characters of an unkeyed SHA-256 of the address that was tried for the per-account sign-in limit, followed by a SHA-256 fingerprint of the `stoky_device` id when the browser has signed in to that account before. It is the account id for the metered actions, and the session id for the per-session budget of a re-entered password (D143) | Valkey memory, saved to `dump.rdb` on the `valkey_data` volume | The limit's window: 15 minutes or an hour. A snapshot taken during the window keeps a counter until the next snapshot replaces it. Under the release bundle's command line, the pinned Valkey saves at least once an hour while anything changes (`CONFIG GET save` answers `3600 1 300 100 60 10000`, measured 2026-10-12) |
 | Known devices: for each account (keyed by the same unkeyed hash), SHA-256 fingerprints of up to 20 `stoky_device` ids | Valkey | A year after the last successful sign-in from that device |
 | The Open Food Facts cache: product data, keyed by barcode alone, with nothing about who scanned the code | Valkey | 30 days. A day for a code Open Food Facts does not know |
 | Certificates: the ACME account key, `ACME_EMAIL`, and the certificates with their private keys | `acme.json` on the `letsencrypt` volume | Until the volume is removed |
-| On each device: the saved reads, the write queue and the `stoky_device` cookie | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The cookie lasts a year |
+| On each device: the saved reads, the write queue, the `stoky_device` cookie, and while signed in the `stoky.session_token` and `stoky.dont_remember` cookies (`__Secure-` prefixed behind https) | The browser's storage | See [*A device keeps the last account's data while it stays offline*](#a-device-keeps-the-last-accounts-data-while-it-stays-offline). The device cookie lasts a year; the session cookies end with the browser, and are refused once their row has gone |
 | Backups made with [the documented commands](docs/INSTALL.md#backup-and-restore): the database dump (every PostgreSQL row above, password hashes included), the uploads, `.env`, and the Compose and Traefik files | Wherever the operator puts them | As long as the operator keeps them. Nothing in Stoky rotates or expires a backup, and a backup still holds accounts and receipts deleted after it was taken. Valkey, the logs and the certificates are not in it |
 
 Two hashes in that table are weaker than they look. The security log's
-account tag is keyed with `NEXTAUTH_SECRET`, so a pasted log line cannot be
+account tag is keyed with `STOKY_SECRET`, so a pasted log line cannot be
 checked against a list of likely addresses. The Valkey account hash is not
 keyed. Anyone who can read the Valkey data can confirm whether a guessed
 address has tried to sign in during the window, or has a known device.
@@ -1964,7 +2668,8 @@ stores; its products, each with its stock movements and price records; its
 receipts, each with the photograph's path and each line's text; and its
 shopping lists. It leaves out:
 
-- password hashes, always;
+- password hashes, always, and every other way a member signs in: the
+  authenticator secret and backup codes, and passkeys;
 - receipt photographs, which it gives only as paths, and each receipt's
   whole-ticket OCR text (`rawOcrText`). The file says so in its `notes`;
 - who uploaded a receipt and who made a stock movement;
@@ -2006,7 +2711,10 @@ What an instance contacts on its own, as released:
   anonymous usage statistics are both off ([*Release deployment*](#release-deployment--deploydocker-composeyml)).
 - **Nothing else, and no telemetry.** Stoky reports nothing to the project or
   to anybody else: there is no analytics, no error tracking and no update
-  check. The OCR model is part of the image (`TESSDATA_PATH`). Fonts come from
+  check. Better Auth's telemetry is off in its configuration, and a
+  `BETTER_AUTH_TELEMETRY` that would turn it back on stops the server at
+  start-up rather than send (`src/lib/auth/environment.ts`, PROGRESS D136).
+  The OCR model is part of the image (`TESSDATA_PATH`). Fonts come from
   the instance itself (`font-src 'self'`). The image sets
   `NEXT_TELEMETRY_DISABLED=1`. PostgreSQL and Valkey sit only on the
   `internal: true` network, which has no route out.
@@ -2035,13 +2743,18 @@ An operator who runs the image any other way should set
 
 ### Secrets
 
-`.env` holds `POSTGRES_PASSWORD` and `NEXTAUTH_SECRET`. `NEXTAUTH_SECRET`
-signs sessions and keys the security log's account tags. Both reach the
-containers as environment variables:
+`.env` holds `POSTGRES_PASSWORD` and `STOKY_SECRET` (`NEXTAUTH_SECRET` in an
+`.env` not yet renamed; D137). `STOKY_SECRET` signs sessions, keys the
+security log's account tags and encrypts each authenticator's TOTP secret
+(D148). Backup codes are hashes, not encrypted, so it does not reach them
+(D149). Both reach the containers as environment variables:
 
 - the database password in `db`'s environment and inside the app's
   `DATABASE_URL`;
-- `NEXTAUTH_SECRET` in the app's environment.
+- `STOKY_SECRET` in the app's environment, beside an empty `NEXTAUTH_SECRET`
+  unless the `.env` still uses the old name. The Compose file passes both
+  through without requiring either; the application refuses to start without
+  a usable one and names the variable.
 
 Measured, `docker inspect` of a container prints its environment. Plain
 `docker compose config` printed both secrets of a filled-in `.env`, while
@@ -2053,13 +2766,36 @@ They are not mounted as files, because files would help less than it seems.
 Prisma reads `DATABASE_URL` from the environment, so `POSTGRES_PASSWORD_FILE`
 on `db` alone would leave the same password in the app's environment. Moving
 it properly needs an entrypoint that builds the URL from a mounted file, plus
-`_FILE` support for `NEXTAUTH_SECRET`. Anyone who can read a container's
+`_FILE` support for `STOKY_SECRET`. Anyone who can read a container's
 environment, as root or as code running inside it, can also read a file
 mounted into it. What remains is accidental disclosure: pasting `inspect` or
 `config` output into an issue. [Troubleshooting](docs/INSTALL.md#troubleshooting)
 warns against that. Backups copy `.env` in plaintext beside the database dump,
 and the backup instructions say to
 [encrypt them](docs/INSTALL.md#backup-and-restore).
+
+**Rotating `STOKY_SECRET`** does three things at once, and the
+[installation guide](docs/INSTALL.md#rotating-stoky_secret) lists them before
+the command:
+
+- everyone is signed out, native clients included, because every cookie and
+  bearer token is signed with it;
+- every account tag in the security log changes, so a filter written for one
+  account stops matching its older lines;
+- every authenticator becomes unreadable: a sign-in answers
+  `TWO_FACTOR_UNREADABLE`, and the person's way back is a backup code and
+  then turning two-step verification off and on again, which needs only the
+  password, or the operator removing it.
+
+Passwords, passkeys and backup codes are unaffected: backup codes are
+stored as hashes, which no secret goes into (D149), and a passkey is a public
+key (D151). **Better Auth's versioned secrets are not
+adopted** beyond the single version-1 entry the instance is given (PROGRESS
+D135, D148): keeping old enrolments readable through a rotation would need a
+second variable holding every retired value until each enrolment was redone,
+and version numbers the operator keeps stable by hand, which the owner's
+condition — "only if trivial" — rules out. Every ciphertext already carries
+Better Auth's `$ba$1$` envelope, so adopting versions later is additive.
 
 ### Keys `next build` writes into the image
 
@@ -2147,8 +2883,10 @@ release. The bundled automatic certificate flow needs a hostname and inbound
 TCP 443. LAN/VPN deployments need their own trusted TLS configuration.
 Plain HTTP to another machine is tolerated for testing, not supported: it sends
 every password and session cookie in cleartext, and the app logs a warning at
-start-up when `NEXTAUTH_URL` is such an address or is not set. For TLS without a
-public hostname, use your own proxy — setting `NEXTAUTH_URL` to its https
+start-up for each `STOKY_URLS` entry that is such an address (and does not
+start when it is not set). Nor does it have passkeys, which need the first
+entry to be https with a domain name. For TLS without a
+public hostname, use your own proxy — listing its https address in `STOKY_URLS`
 address and forwarding `X-Forwarded-Proto` and `X-Forwarded-For` — or
 `tailscale serve` ([local bootstrap](docs/LOCAL_BOOTSTRAP.md), way 4).
 An instance open to the internet needs a per-address connection cap in front

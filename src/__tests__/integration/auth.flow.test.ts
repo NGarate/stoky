@@ -19,15 +19,19 @@ import {
   generateTestEmail,
   generateTestName,
   createMockSession,
+  storedPasswordHash,
 } from "../utils/test-helpers";
 import * as argon2 from "argon2";
+import { createHmac } from "node:crypto";
+import { resolveSecret } from "@/lib/auth/instance";
 import { signInWith } from "../utils/authorize";
 import { TRPCError } from "@trpc/server";
 import {
   isPasswordIdentityRefusal,
   isWrongCurrentPasswordRefusal,
+  MAX_PASSWORD_LENGTH,
 } from "@/lib/validations/password";
-import { authConfig } from "@/lib/auth";
+import { readSession } from "@/lib/auth";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 
 /**
@@ -162,8 +166,10 @@ describe("Authentication Flow Integration Tests", () => {
       });
       expect(result.user.email).toBe(lower);
 
-      expect(await signInWith({ email: lower, password })).not.toBeNull();
-      expect(await signInWith({ email: typed, password })).not.toBeNull();
+      // The second through the route's trim and lower-casing, the spaces and
+      // the capitals as the person typed them.
+      expect((await signInWith({ email: lower, password })).status).toBe(200);
+      expect((await signInWith({ email: typed, password })).status).toBe(200);
 
       await expect(
         caller.auth.register({ email: lower, name: "Second", password }),
@@ -183,7 +189,7 @@ describe("Authentication Flow Integration Tests", () => {
       let thrown: unknown;
       try {
         await prisma.user.create({
-          data: { email: lower.toUpperCase(), name: "Twin", passwordHash: "x" },
+          data: { email: lower.toUpperCase(), name: "Twin" },
         });
       } catch (error) {
         thrown = error;
@@ -275,7 +281,7 @@ describe("Authentication Flow Integration Tests", () => {
     });
   });
 
-  describe("Sign-in, through Auth.js", () => {
+  describe("Sign-in, through the auth API", () => {
     // Repointed from `auth.login`, a second credential endpoint on the public
     // tRPC router that nothing in the interface called and that the CRITICAL-4
     // limiter never covered. It has been removed; this is the path the login
@@ -290,8 +296,9 @@ describe("Authentication Flow Integration Tests", () => {
 
       const result = await signInWith({ email, password });
 
-      expect(result).not.toBeNull();
-      expect((result as { email: string }).email).toBe(email);
+      expect(result.status).toBe(200);
+      expect(result.user?.email).toBe(email);
+      expect(result.cookieHeader).toContain("stoky.session_token=");
     });
 
     it("should refuse an invalid password", async () => {
@@ -303,7 +310,9 @@ describe("Authentication Flow Integration Tests", () => {
 
       const result = await signInWith({ email, password: "WrongPassword123!" });
 
-      expect(result).toBeNull();
+      expect(result.status).toBe(401);
+      expect(result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+      expect(result.setCookie).toEqual([]);
     });
 
     it("should refuse a non-existent email the same way", async () => {
@@ -314,7 +323,8 @@ describe("Authentication Flow Integration Tests", () => {
 
       // Indistinguishable from a wrong password, which is what stops an
       // attacker enumerating which addresses have accounts.
-      expect(result).toBeNull();
+      expect(result.status).toBe(401);
+      expect(result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
     });
 
     it("takes as long for a non-existent email as for a wrong password", async () => {
@@ -346,10 +356,48 @@ describe("Authentication Flow Integration Tests", () => {
       expect(median(noAccount)).toBeGreaterThan(median(wrongPassword) * 0.5);
     });
 
+    it("refuses a password over the maximum before Argon2id runs, and still checks one at it", async () => {
+      // Argon2id here is 64 MiB per call, on an endpoint reachable without an
+      // account, so the length bound is the one rule sign-in applies. The
+      // route checks only that a password is a string; the bound is Better
+      // Auth's `maxPasswordLength`, set to MAX_PASSWORD_LENGTH in
+      // `instance.ts`. `loginSchema` still names it, but nothing on this path
+      // runs that schema, so this is the test that the bound holds here.
+      const email = runEmail("too-long");
+      await createTestUser({ email, name: generateTestName("Too Long"), password: "CorrectPassword123!" });
+
+      const attempt = async (password: string) => {
+        const verify = spyOn(argon2, "verify");
+        const hash = spyOn(argon2, "hash");
+        try {
+          const result = await signInWith({ email, password });
+          return { result, argon2Calls: verify.mock.calls.length + hash.mock.calls.length };
+        } finally {
+          verify.mockRestore();
+          hash.mockRestore();
+        }
+      };
+
+      const over = await attempt("a".repeat(MAX_PASSWORD_LENGTH + 1));
+      expect(over.result.status).toBe(400);
+      // What the login form reads as wrong credentials (`client.ts`).
+      expect(over.result.code).toBe("PASSWORD_TOO_LONG");
+      expect(over.result.setCookie).toEqual([]);
+      expect(over.argon2Calls).toBe(0);
+
+      const at = await attempt("a".repeat(MAX_PASSWORD_LENGTH));
+      expect(at.result.status).toBe(401);
+      expect(at.result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+      expect(at.argon2Calls).toBe(1);
+    });
+
     it("should refuse empty credentials", async () => {
       const result = await signInWith({ email: "", password: "" });
 
-      expect(result).toBeNull();
+      // Answered by the route, charged and never handed to Better Auth.
+      expect(result.status).toBe(400);
+      expect(result.code).toBe("INVALID_REQUEST");
+      expect(result.setCookie).toEqual([]);
     });
   });
 
@@ -563,19 +611,14 @@ describe("Authentication Flow Integration Tests", () => {
         password,
       });
 
-      const dbUser = await prisma.user.findUnique({
+      const dbUser = await prisma.user.findUniqueOrThrow({
         where: { email },
       });
+      const passwordHash = await storedPasswordHash(dbUser.id);
 
-      expect(dbUser).toBeDefined();
-      expect(dbUser?.passwordHash).not.toBe(password);
-      expect(dbUser?.passwordHash).toStartWith("$argon2id$");
-
-      // Verify the hash is valid
-      if (dbUser) {
-        const isValid = await argon2.verify(dbUser.passwordHash, password);
-        expect(isValid).toBe(true);
-      }
+      expect(passwordHash).not.toBe(password);
+      expect(passwordHash).toStartWith("$argon2id$");
+      expect(await argon2.verify(passwordHash, password)).toBe(true);
     });
 
     it("should reject weak passwords during registration", async () => {
@@ -640,34 +683,92 @@ describe("Authentication Flow Integration Tests", () => {
   });
   /**
    * A signed-in person replacing their own password — security review,
-   * 2026-10-12. Until `auth.changePassword` existed nothing changed a password
-   * once it was set, so a leaked one could not be rotated and one an admin
-   * chose stayed the admin's.
+   * 2026-10-12, and since D144 without signing this device out.
    *
-   * Through the router, with real Argon2id and a real Valkey, and the old
-   * session checked through the `jwt` callback that actually refuses it — the
-   * same way `session.revocation.test.ts` does, because a timestamp written is
-   * not a session ended.
+   * Every session here is a real one: signed in through the auth route, read
+   * back with `readSession` from the cookie it set, and given to the
+   * procedure with the request's headers, as the tRPC route does — because
+   * Better Auth finds the session to rotate in those headers, and a mock
+   * session has no row to rotate. What `bun test` cannot see is the new
+   * cookie reaching the browser (`nextCookies` writes it to Next's store,
+   * which exists only inside a request); `e2e/password-change.spec.ts` is
+   * that proof. Here the new row is opened with a token signed the way the
+   * cookie is, which is the same claim from the server's side.
    */
   describe("Changing your own password", () => {
     const OLD = "cocina despensa nevera";
     const NEW = "tarro de garbanzos azul";
+    const COOKIE = "stoky.session_token";
 
-    async function accountWithCaller(label: string, password = OLD) {
-      const user = await createTestUser({
+    async function account(label: string, password = OLD) {
+      return createTestUser({
         email: runEmail(label),
         name: generateTestName(`Change ${label}`),
         password,
       });
-      const ctx = await createTRPCContext({ session: createMockSession(user) });
-      return { user, api: appRouter.createCaller(ctx) };
     }
 
-    const stored = (id: string) =>
-      prisma.user.findUniqueOrThrow({
-        where: { id },
-        select: { passwordHash: true, sessionsValidFrom: true },
+    interface Device {
+      headers: Headers;
+      session: NonNullable<Awaited<ReturnType<typeof readSession>>>;
+    }
+
+    /** A browser signed in through the route, holding its cookie and device id. */
+    async function browser(
+      email: string,
+      options: { rememberMe?: boolean; password?: string } = {},
+    ): Promise<Device> {
+      const deviceId = crypto.randomUUID();
+      const outcome = await signInWith(
+        { email, password: options.password ?? OLD, rememberMe: options.rememberMe },
+        { deviceId },
+      );
+      expect(outcome.status).toBe(200);
+      const headers = new Headers({
+        cookie: `stoky_device=${deviceId}; ${outcome.cookieHeader}`,
+        "x-forwarded-for": "203.0.113.41",
       });
+      const session = await readSession(headers, { refresh: false });
+      if (!session) throw new Error("the sign-in left no session to read");
+      return { headers, session };
+    }
+
+    /** A native client: no cookie, the signed token as a bearer (D142). */
+    async function native(email: string): Promise<Device> {
+      const outcome = await signInWith({ email, password: OLD, rememberMe: true });
+      expect(outcome.status).toBe(200);
+      const token = outcome.headers.get("set-auth-token");
+      if (!token) throw new Error("a native sign-in was given no set-auth-token");
+      const headers = new Headers({
+        authorization: `Bearer ${decodeURIComponent(token)}`,
+        "x-forwarded-for": "203.0.113.42",
+      });
+      const session = await readSession(headers, { refresh: false });
+      if (!session) throw new Error("the native sign-in left no session to read");
+      return { headers, session };
+    }
+
+    /** A caller on that device's session, as the tRPC route builds one. */
+    async function callerOn(device: Device) {
+      const ctx = await createTRPCContext({ session: device.session, headers: device.headers });
+      return appRouter.createCaller(ctx);
+    }
+
+    const alive = async (device: Device) =>
+      (await readSession(device.headers, { refresh: false })) !== null;
+
+    /** Headers presenting a row by its raw token, signed as the cookie is. */
+    function presenting(token: string): Headers {
+      const signature = createHmac("sha256", resolveSecret()).update(token).digest("base64");
+      return new Headers({ cookie: `${COOKIE}=${encodeURIComponent(`${token}.${signature}`)}` });
+    }
+
+    const stored = async (id: string) => ({
+      passwordHash: await storedPasswordHash(id),
+      sessions: (
+        await prisma.session.findMany({ where: { userId: id }, select: { id: true }, orderBy: { id: "asc" } })
+      ).map((row) => row.id),
+    });
 
     async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
       try {
@@ -677,15 +778,6 @@ describe("Authentication Flow Integration Tests", () => {
         throw error;
       }
       throw new Error("expected a refusal, and the call succeeded");
-    }
-
-    /** The configured `jwt` callback, which is where a session is refused. */
-    function jwtCallback() {
-      const callback = authConfig.callbacks?.jwt;
-      if (typeof callback !== "function") {
-        throw new Error("authConfig exposes no jwt callback");
-      }
-      return callback;
     }
 
     /** The security events written while `run` ran, parsed. */
@@ -707,42 +799,80 @@ describe("Authentication Flow Integration Tests", () => {
       });
     }
 
-    it("refuses a wrong current password with BAD_REQUEST, and changes nothing", async () => {
+    /** How many times Argon2id hashed while `run` ran: Better Auth hashes first. */
+    async function hashesDuring(run: () => Promise<unknown>): Promise<number> {
+      const hash = spyOn(argon2, "hash");
+      try {
+        await run();
+      } finally {
+        hash.mockRestore();
+      }
+      return hash.mock.calls.length;
+    }
+
+    it("refuses a wrong current password with BAD_REQUEST, changes nothing, and never reaches Better Auth", async () => {
       // BAD_REQUEST and not UNAUTHORIZED: the offline queue and the screens
       // read UNAUTHORIZED as a session that has ended, and this person is
       // still signed in with a typo.
-      const { user, api } = await accountWithCaller("wrong-current");
+      const user = await account("wrong-current");
+      const here = await browser(user.email);
       const before = await stored(user.id);
 
       let refusal: TRPCError | undefined;
+      let hashes = -1;
       const events = await eventsDuring(async () => {
-        refusal = await refusalOf(
-          api.auth.changePassword({
-            currentPassword: "not the password at all",
-            newPassword: NEW,
-          }),
-        );
+        hashes = await hashesDuring(async () => {
+          refusal = await refusalOf(
+            (await callerOn(here)).auth.changePassword({
+              currentPassword: "not the password at all",
+              newPassword: NEW,
+            }),
+          );
+        });
       });
 
       expect(refusal?.code).toBe("BAD_REQUEST");
       expect(isWrongCurrentPasswordRefusal(refusal?.message)).toBe(true);
+      // Better Auth hashes the new password before it checks the current one;
+      // no hash means it was never asked.
+      expect(hashes).toBe(0);
       expect(await stored(user.id)).toEqual(before);
-      expect(before.sessionsValidFrom).toBeNull();
-      expect(await signInWith({ email: user.email, password: OLD })).not.toBeNull();
+      expect(await alive(here)).toBe(true);
 
-      // Recorded, because the refusal middleware does not see a BAD_REQUEST,
-      // and this is the line that says a session is guessing at a password.
-      const refused = events.filter((e) => e.event === "auth.password.change.refused");
+      // Recorded as every re-entry is, because the refusal middleware does
+      // not see a BAD_REQUEST.
+      const refused = events.filter((e) => e.event === "auth.reauth.refused");
       expect(refused).toHaveLength(1);
       expect(refused[0]?.userId).toBe(user.id);
+      expect(refused[0]?.via).toBe("password-change");
       expect(JSON.stringify(events)).not.toContain("not the password at all");
     });
 
-    it("replaces the password, so the new one signs in and the old one does not", async () => {
-      const { user, api } = await accountWithCaller("replaces");
+    it("answers a wrong current password before the identity rule", async () => {
+      // The identity rule says something about the account's address; only
+      // somebody who knows the password may hear it.
+      const user = await account("identity-after-verify");
+      const here = await browser(user.email);
+      const localPart = user.email.split("@")[0] ?? "";
 
-      const events = await eventsDuring(() =>
-        api.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+      const refusal = await refusalOf(
+        (await callerOn(here)).auth.changePassword({
+          currentPassword: "not the password at all",
+          newPassword: `${localPart}!`,
+        }),
+      );
+
+      expect(refusal.code).toBe("BAD_REQUEST");
+      expect(isWrongCurrentPasswordRefusal(refusal.message)).toBe(true);
+      expect(isPasswordIdentityRefusal(refusal.message)).toBe(false);
+    });
+
+    it("replaces the password, so the new one signs in and the old one does not", async () => {
+      const user = await account("replaces");
+      const here = await browser(user.email);
+
+      const events = await eventsDuring(async () =>
+        (await callerOn(here)).auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
       );
 
       const after = await stored(user.id);
@@ -750,8 +880,8 @@ describe("Authentication Flow Integration Tests", () => {
       expect(await argon2.verify(after.passwordHash, NEW)).toBe(true);
       expect(await argon2.verify(after.passwordHash, OLD)).toBe(false);
 
-      expect(await signInWith({ email: user.email, password: NEW })).not.toBeNull();
-      expect(await signInWith({ email: user.email, password: OLD })).toBeNull();
+      expect((await signInWith({ email: user.email, password: NEW })).status).toBe(200);
+      expect((await signInWith({ email: user.email, password: OLD })).status).toBe(401);
 
       const changed = events.filter((e) => e.event === "auth.password.changed");
       expect(changed).toHaveLength(1);
@@ -761,32 +891,135 @@ describe("Authentication Flow Integration Tests", () => {
       expect(written).not.toContain(OLD);
     });
 
-    it("ends every session issued before the change, this one included", async () => {
+    it("ends every other session, and logs how many", async () => {
       // The point of changing a leaked password: whoever used it has a
       // session too, and a new password beside a live session is half a fix.
-      const { user, api } = await accountWithCaller("ends-sessions");
-      const signedIn = Math.floor((Date.now() - 60_000) / 1000);
-      const token = { sub: user.id, iat: signedIn, authTime: signedIn };
+      const user = await account("ends-others");
+      const here = await browser(user.email);
+      const phone = await browser(user.email);
+      const tablet = await browser(user.email, { rememberMe: true });
 
-      // The control: the same token is accepted before the change, so the
-      // refusal below is the change's doing and not the token's shape.
-      expect(await jwtCallback()({ token: { ...token } } as never)).not.toBeNull();
+      // The control: both are accepted before the change, so the refusal
+      // below is the change's doing and not the cookies' shape.
+      expect(await alive(phone)).toBe(true);
+      expect(await alive(tablet)).toBe(true);
 
-      await api.auth.changePassword({ currentPassword: OLD, newPassword: NEW });
+      const events = await eventsDuring(async () =>
+        (await callerOn(here)).auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+      );
 
-      expect((await stored(user.id)).sessionsValidFrom).not.toBeNull();
-      expect(await jwtCallback()({ token: { ...token } } as never)).toBeNull();
+      expect(await alive(phone)).toBe(false);
+      expect(await alive(tablet)).toBe(false);
+      const left = await prisma.session.findMany({ where: { userId: user.id } });
+      expect(left).toHaveLength(1);
+      expect([phone.session.sessionId, tablet.session.sessionId]).not.toContain(left[0]?.id);
+
+      const ended = events.filter((e) => e.event === "auth.session.ended");
+      expect(ended).toHaveLength(1);
+      expect(ended[0]).toMatchObject({
+        userId: user.id,
+        targetUserId: user.id,
+        reason: "password-change",
+        count: "2",
+      });
+    });
+
+    it("ends a native client's session too", async () => {
+      // D142 promised it: a token handed out before the change is a session
+      // like any other.
+      const user = await account("ends-native");
+      const here = await browser(user.email);
+      const app = await native(user.email);
+      expect(await alive(app)).toBe(true);
+
+      await (await callerOn(here)).auth.changePassword({ currentPassword: OLD, newPassword: NEW });
+
+      expect(await alive(app)).toBe(false);
+    });
+
+    for (const rememberMe of [false, true]) {
+      const kind = rememberMe ? "a remembered" : "a browser";
+
+      it(`keeps ${kind} session signed in under a new token, with its sign-in time, kind and device`, async () => {
+        const user = await account(`rotates-${rememberMe ? "remembered" : "browser"}`);
+        const here = await browser(user.email, { rememberMe });
+        const before = await prisma.session.findUniqueOrThrow({
+          where: { id: here.session.sessionId },
+        });
+        expect(before.persistent).toBe(rememberMe);
+        // The sign-in time is in the past by the time the change happens, so
+        // a re-create that started the clock again would be seen.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        await (await callerOn(here)).auth.changePassword({ currentPassword: OLD, newPassword: NEW });
+
+        // The old token is refused: its row is gone (ASVS 5.0.0 7.4.3, and
+        // 3.3.x's rotation on a credential change).
+        expect(await alive(here)).toBe(false);
+        expect(
+          await prisma.session.findUnique({ where: { id: here.session.sessionId } }),
+        ).toBeNull();
+
+        const rows = await prisma.session.findMany({ where: { userId: user.id } });
+        expect(rows).toHaveLength(1);
+        const after = rows[0];
+        if (!after) throw new Error("no session after the change");
+        expect(after.token).not.toBe(before.token);
+        // Carried over by the create hook, not started again: the day's (or
+        // the year's) limit still counts from when the password was typed.
+        expect(after.authenticatedAt.getTime()).toBe(before.authenticatedAt.getTime());
+        expect(after.createdAt.getTime()).toBeGreaterThan(before.createdAt.getTime());
+        expect(after.persistent).toBe(rememberMe);
+        expect(after.deviceId).toBe(before.deviceId);
+        expect(after.deviceId).not.toBeNull();
+        if (rememberMe) {
+          expect(after.expiresAt.getTime()).toBeGreaterThan(Date.now() + 24 * 3600_000);
+        } else {
+          expect(after.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 15 * 60_000);
+        }
+
+        // And it is a session: the token, signed as the cookie Better Auth
+        // set is, reads as the same person.
+        const reread = await readSession(presenting(after.token), { refresh: false });
+        expect(reread?.user.id).toBe(user.id);
+        expect(reread?.sessionId).toBe(after.id);
+      });
+    }
+
+    it("ends a native client's own session when it is the one changing", async () => {
+      // It keeps no cookies, so a rotated session would be a row nobody can
+      // present. Every session ends, its own with them, and the app asks for
+      // the new password (D142).
+      const user = await account("native-changes");
+      const app = await native(user.email);
+      const here = await browser(user.email);
+
+      const events = await eventsDuring(async () =>
+        (await callerOn(app)).auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+      );
+
+      expect(await alive(app)).toBe(false);
+      expect(await alive(here)).toBe(false);
+      expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+      expect((await signInWith({ email: user.email, password: NEW })).status).toBe(200);
+      expect(
+        events.find((e) => e.event === "auth.session.ended"),
+      ).toMatchObject({ reason: "password-change", count: "2" });
     });
 
     it("refuses a new password built from the person's own address, and changes nothing", async () => {
       // The input carries no address, so the schema cannot apply the identity
       // rule; the procedure loads the account and applies it itself.
-      const { user, api } = await accountWithCaller("identity-change");
+      const user = await account("identity-change");
+      const here = await browser(user.email);
       const before = await stored(user.id);
       const localPart = user.email.split("@")[0] ?? "";
 
       const refusal = await refusalOf(
-        api.auth.changePassword({ currentPassword: OLD, newPassword: `${localPart}!` }),
+        (await callerOn(here)).auth.changePassword({
+          currentPassword: OLD,
+          newPassword: `${localPart}!`,
+        }),
       );
 
       expect(refusal.code).toBe("BAD_REQUEST");
@@ -795,12 +1028,13 @@ describe("Authentication Flow Integration Tests", () => {
     });
 
     it("refuses a new password the policy refuses, and changes nothing", async () => {
-      const { user, api } = await accountWithCaller("policy-change");
+      const user = await account("policy-change");
+      const here = await browser(user.email);
       const before = await stored(user.id);
 
       for (const newPassword of ["corta", "password1234"]) {
         const refusal = await refusalOf(
-          api.auth.changePassword({ currentPassword: OLD, newPassword }),
+          (await callerOn(here)).auth.changePassword({ currentPassword: OLD, newPassword }),
         );
         expect(refusal.code).toBe("BAD_REQUEST");
       }
@@ -812,9 +1046,13 @@ describe("Authentication Flow Integration Tests", () => {
       // one with most reason to change it. Policing the current password
       // would lock exactly that account into keeping it.
       const legacy = "corta1";
-      const { user, api } = await accountWithCaller("legacy-current", legacy);
+      const user = await account("legacy-current", legacy);
+      const here = await browser(user.email, { password: legacy });
 
-      await api.auth.changePassword({ currentPassword: legacy, newPassword: NEW });
+      await (await callerOn(here)).auth.changePassword({
+        currentPassword: legacy,
+        newPassword: NEW,
+      });
 
       expect(await argon2.verify((await stored(user.id)).passwordHash, NEW)).toBe(true);
     });
@@ -826,26 +1064,29 @@ describe("Authentication Flow Integration Tests", () => {
       expect(refusal.code).toBe("UNAUTHORIZED");
     });
 
-    describe("how many attempts an account gets", () => {
-      // Lowered so the test spends three calls rather than six. Each account
-      // is new, so its counter is too.
+    describe("how many attempts a session gets", () => {
+      // The re-entry budgets every confirmation shares (D143). Lowered so the
+      // test spends three calls rather than six. Each session is new, so its
+      // counter is too.
       const ATTEMPTS = 2;
-      const original = process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
+      const original = process.env.RATE_LIMIT_REAUTH_ATTEMPTS;
 
       beforeAll(() => {
-        process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = String(ATTEMPTS);
+        process.env.RATE_LIMIT_REAUTH_ATTEMPTS = String(ATTEMPTS);
       });
 
       afterAll(() => {
-        if (original === undefined) delete process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
-        else process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = original;
+        if (original === undefined) delete process.env.RATE_LIMIT_REAUTH_ATTEMPTS;
+        else process.env.RATE_LIMIT_REAUTH_ATTEMPTS = original;
       });
 
       it("refuses once the budget is spent, before checking anything, even the right password", async () => {
         // A stolen session guessing the password behind it is the attack.
         // The refusal has to come before Argon2id runs, or the limit is a
         // count of guesses already answered.
-        const { user, api } = await accountWithCaller("metered");
+        const user = await account("metered");
+        const here = await browser(user.email);
+        const api = await callerOn(here);
         const before = await stored(user.id);
 
         for (let i = 0; i < ATTEMPTS; i++) {
@@ -876,25 +1117,29 @@ describe("Authentication Flow Integration Tests", () => {
         expect(await stored(user.id)).toEqual(before);
       });
 
-      it("leaves another account's budget alone", async () => {
-        const spender = await accountWithCaller("spender");
-        const other = await accountWithCaller("unspent");
+      it("leaves another session's budget alone, so the owner can still change it", async () => {
+        // Per session, not per account: a thief who spends the budget from a
+        // stolen session must not keep the owner from changing the password
+        // that session was opened with.
+        const user = await account("spender");
+        const stolen = await callerOn(await browser(user.email));
+        const owner = await browser(user.email);
 
         for (let i = 0; i < ATTEMPTS; i++) {
           await refusalOf(
-            spender.api.auth.changePassword({ currentPassword: `guess ${i}`, newPassword: NEW }),
+            stolen.auth.changePassword({ currentPassword: `guess ${i}`, newPassword: NEW }),
           );
         }
         expect(
           (
             await refusalOf(
-              spender.api.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
+              stolen.auth.changePassword({ currentPassword: OLD, newPassword: NEW }),
             )
           ).code,
         ).toBe("TOO_MANY_REQUESTS");
 
-        await other.api.auth.changePassword({ currentPassword: OLD, newPassword: NEW });
-        expect(await argon2.verify((await stored(other.user.id)).passwordHash, NEW)).toBe(true);
+        await (await callerOn(owner)).auth.changePassword({ currentPassword: OLD, newPassword: NEW });
+        expect(await argon2.verify((await stored(user.id)).passwordHash, NEW)).toBe(true);
       });
     });
   });

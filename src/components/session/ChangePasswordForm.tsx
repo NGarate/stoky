@@ -2,16 +2,11 @@
 
 import { TRPCClientError } from "@trpc/client";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/trpc/client";
-import {
-  EndSessionError,
-  useEndSession,
-} from "@/components/session/use-end-session";
 import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
@@ -19,7 +14,6 @@ import {
   isWrongCurrentPasswordRefusal,
 } from "@/lib/validations/password";
 import type { FormEvent, JSX } from "react";
-import type { ChangePasswordInput } from "@/lib/validations/auth";
 
 /** Every reason a change can be refused, each with its own sentence. */
 type Problem =
@@ -30,8 +24,7 @@ type Problem =
   | "tooEasy"
   | "identity"
   | "tooMany"
-  | "failed"
-  | "failedUnsent";
+  | "failed";
 
 /**
  * The server's refusal, in words the person can act on.
@@ -57,24 +50,23 @@ function serverProblem(error: unknown): Problem {
 }
 
 /**
- * A signed-in person changing their own password, on `/settings`.
+ * A signed-in person changing their own password, on `/settings/security`.
  *
  * Until `auth.changePassword` existed, nothing changed a password once it was
  * set: the one an admin chose for a member stayed known to that admin, and a
  * leaked one could not be rotated (security review, 2026-10-12).
  *
- * **A success signs this device out, through `useEndSession`.** The procedure
- * moves `sessionsValidFrom`, so the token rendering this form is already
- * refused; leaving through the same sequence as the two sign-out controls
- * purges the queue, the persisted reads and the cached shell before the
- * redirect rather than leaving the next read to discover it. The form says so
- * before it is submitted. Changes still waiting to be sent go first, and a
- * change is refused rather than made when they cannot — the same rule as
- * "Enviar y cerrar sesión".
+ * **This device stays signed in** (PROGRESS D144). The server ends every
+ * other session the account has and gives this one a new token, whose cookie
+ * comes back with the answer — which is why the call goes by a link that does
+ * not stream (`src/lib/trpc/links.ts`). Nothing local is discarded: the
+ * queue, the saved reads and the cached shell belong to the same person, who
+ * is still here. The form says so before it is submitted, says so again in
+ * place when it is done, empties its fields, and has the devices list above
+ * read again, since the sessions on it are gone and this one's id changed.
  *
- * **The server write comes first and may refuse**, which is `useEndSession`'s
- * `before`: a wrong current password discards nothing and leaves the person
- * signed in, holding the form, and told which field is wrong.
+ * A wrong current password, a new one the policy refuses, a spent budget:
+ * each is named, and the person stays on the form holding what they typed.
  *
  * A confirmation field, because there is no way back from a mistyped new
  * password but an admin or the database. The checks the browser can make —
@@ -83,23 +75,16 @@ function serverProblem(error: unknown): Problem {
  */
 export function ChangePasswordForm(): JSX.Element {
   const t = useTranslations("password");
-  const tSession = useTranslations("session");
-  const tOffline = useTranslations("offline");
   const fieldId = useId();
+  const utils = api.useUtils();
   const change = api.auth.changePassword.useMutation({
-    // `always`, for `RevokeSessionsButton`'s reason: offline, an `online`
+    // `always`, for `DeviceList`'s reason: offline, an `online`
     // mutation pauses, its promise never settles, and this form would sit on
     // "Cambiando…" with every control disabled.
     networkMode: "always",
   });
-  // What `before` sends, set on submit. A ref rather than state because the
-  // sequence reads it in the same tick the submit handler writes it.
-  const pendingInput = useRef<ChangePasswordInput | null>(null);
-  const { pending, unsaved, working, leave, sendThenLeave } = useEndSession(() =>
-    change.mutateAsync(pendingInput.current as ChangePasswordInput),
-  );
   const [problems, setProblems] = useState<Problem[]>([]);
-  const [changedButStuck, setChangedButStuck] = useState(false);
+  const [changed, setChanged] = useState(false);
   const [focusSignal, setFocusSignal] = useState(0);
 
   function refuse(found: Problem[]): void {
@@ -109,9 +94,12 @@ export function ChangePasswordForm(): JSX.Element {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    setChangedButStuck(false);
+    setChanged(false);
+    // Read before the await: React clears `currentTarget` once the handler
+    // has returned control.
+    const form = event.currentTarget;
 
-    const data = new FormData(event.currentTarget);
+    const data = new FormData(form);
     const currentPassword = String(data.get("currentPassword") ?? "");
     const newPassword = String(data.get("newPassword") ?? "");
     const again = String(data.get("confirmPassword") ?? "");
@@ -126,30 +114,20 @@ export function ChangePasswordForm(): JSX.Element {
     }
 
     setProblems([]);
-    pendingInput.current = { currentPassword, newPassword };
 
     // The React Compiler cannot yet memoise a component with a `try`/`catch`
     // around an await, the same limitation `RegisterForm` records.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      await (pending > 0 ? sendThenLeave() : leave());
+      await change.mutateAsync({ currentPassword, newPassword });
     } catch (error) {
-      if (error instanceof EndSessionError && error.phase === "local") {
-        // The password *was* changed and every session ended; only signing
-        // out here did not finish. Saying "not changed" would send the person
-        // back to type the old one.
-        setChangedButStuck(true);
-        setFocusSignal((signal) => signal + 1);
-        return;
-      }
-      if (error instanceof EndSessionError && error.phase === "unsent") {
-        refuse(["failedUnsent"]);
-        return;
-      }
-      refuse([serverProblem(error instanceof EndSessionError ? error.cause : error)]);
-    } finally {
-      pendingInput.current = null;
+      refuse([serverProblem(error)]);
+      return;
     }
+
+    form.reset();
+    setChanged(true);
+    void utils.auth.listSessions.invalidate();
   }
 
   const sentence: Record<Problem, string> = {
@@ -161,7 +139,6 @@ export function ChangePasswordForm(): JSX.Element {
     identity: t("identity"),
     tooMany: t("tooMany"),
     failed: t("failed"),
-    failedUnsent: t("failedUnsent"),
   };
 
   const currentInvalid = problems.some((p) => p === "missingCurrent" || p === "wrongCurrent");
@@ -177,9 +154,21 @@ export function ChangePasswordForm(): JSX.Element {
       <FormErrorSummary
         className="mt-4"
         focusSignal={focusSignal}
-        messages={changedButStuck ? [t("failedAfter")] : problems.map((p) => sentence[p])}
-        title={changedButStuck ? t("changedTitle") : t("refusedTitle")}
+        messages={problems.map((p) => sentence[p])}
+        title={t("refusedTitle")}
       />
+
+      {/* Always mounted, empty until a change succeeds, so the sentence is
+          announced when it appears (WCAG 4.1.3) without taking focus from
+          the button that was pressed. */}
+      <div aria-live="polite" className="mt-4 space-y-1 text-sm empty:mt-0" role="status">
+        {changed ? (
+          <>
+            <p className="font-medium text-foreground">{t("changedTitle")}</p>
+            <p className="text-muted-foreground">{t("changedDetail")}</p>
+          </>
+        ) : null}
+      </div>
 
       {/* `noValidate`: the browser would stop the submit at the first empty
           field and say one thing; the summary above says all of them, in
@@ -256,20 +245,13 @@ export function ChangePasswordForm(): JSX.Element {
         </div>
 
         {/* Before the button and attached to it, so what pressing it does to
-            this session is heard with the button's name, not after. */}
-        <div className="space-y-1 text-sm text-muted-foreground" id={`${fieldId}-ends`}>
-          <p>{t("endsSessions")}</p>
-          {pending > 0 ? <p>{t("pending", { count: pending })}</p> : null}
-          {unsaved > 0 ? <p>{tSession("endSessionUnsaved", { count: unsaved })}</p> : null}
-        </div>
-        {unsaved > 0 ? (
-          <Button asChild className="px-0" variant="link">
-            <Link href="/settings/unsaved">{tOffline("seeUnsaved")}</Link>
-          </Button>
-        ) : null}
+            the sessions is heard with the button's name, not after. */}
+        <p className="text-sm text-muted-foreground" id={`${fieldId}-ends`}>
+          {t("endsSessions")}
+        </p>
 
-        <Button aria-describedby={`${fieldId}-ends`} disabled={working} type="submit">
-          {working ? t("working") : t("submit")}
+        <Button aria-describedby={`${fieldId}-ends`} disabled={change.isPending} type="submit">
+          {change.isPending ? t("working") : t("submit")}
         </Button>
       </form>
     </div>

@@ -3,8 +3,10 @@ import {
   MIN_SECRET_LENGTH,
   PLACEHOLDER_SECRET,
   assertUsableSecret,
+  configuredSecret,
   secretProblem,
 } from "@/lib/auth/secret";
+import { accountTag } from "@/lib/account-tag";
 import * as receiptRecovery from "@/server/services/receipt-recovery";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,8 +14,10 @@ import { join } from "node:path";
 /**
  * The signing key, and refusing to start without a real one.
  *
- * `NEXTAUTH_SECRET` signs the session JWT. Auth.js never inspects it, so
- * until this nothing in the application had ever looked at what it was — while
+ * `STOKY_SECRET` (formerly `NEXTAUTH_SECRET`, still read when it is the only
+ * one set; D137) signs the session cookie. Better Auth only warns about a
+ * weak one, so until this nothing in the application had ever looked at what
+ * it was — while
  * `.env.example` ships a placeholder that is published in this repository. An
  * instance deployed with that value signs sessions with a key anybody can
  * read, and nothing about it looks wrong from outside.
@@ -47,10 +51,69 @@ describe("in production", () => {
     expect(REAL.length).toBeGreaterThanOrEqual(MIN_SECRET_LENGTH);
   });
 
+  it("judges the value as it will sign, with the whitespace around it gone", () => {
+    // The signer trims; the guard compared the raw value with `===` and
+    // counted its untrimmed length. The published placeholder with a space
+    // or a newline after it was therefore not the placeholder, started, and
+    // signed every session with the placeholder itself.
+    for (const padded of [` ${PLACEHOLDER_SECRET}`, `${PLACEHOLDER_SECRET}\n`, `\t${PLACEHOLDER_SECRET}  `]) {
+      expect(secretProblem(padded, "production")).toMatch(/published in this repository/i);
+    }
+    // Thirty-one characters padded past the floor are still thirty-one.
+    const short = "a".repeat(MIN_SECRET_LENGTH - 1);
+    expect(secretProblem(`    ${short}    `, "production")).toBe(
+      `STOKY_SECRET is ${MIN_SECRET_LENGTH - 1} characters; it needs at least ${MIN_SECRET_LENGTH}. Generate one with \`openssl rand -base64 32\`.`,
+    );
+    expect(secretProblem(`  ${REAL}\n`, "production")).toBeNull();
+  });
+
   it("says which file and which command, not just 'invalid'", () => {
     // The person reading this is looking at a container that will not start.
     for (const value of [undefined, PLACEHOLDER_SECRET, "short"]) {
       expect(secretProblem(value, "production")).toContain("openssl rand -base64 32");
+    }
+  });
+});
+
+describe("which variable it names", () => {
+  it("names STOKY_SECRET by default, and the variable the value came from when told", () => {
+    // An installation still on NEXTAUTH_SECRET (D137) must be told to edit
+    // the line it has, not one it does not.
+    for (const value of [undefined, PLACEHOLDER_SECRET, "short"]) {
+      expect(secretProblem(value, "production")).toStartWith("STOKY_SECRET ");
+      expect(secretProblem(value, "production", "NEXTAUTH_SECRET")).toStartWith("NEXTAUTH_SECRET ");
+    }
+  });
+});
+
+describe("the value every reader is given", () => {
+  it("is trimmed once, whichever name it came from", () => {
+    // The guard, `/api/health`, the account tag and the signer all take it
+    // from here, so trimming here is what makes them judge one string.
+    expect(configuredSecret({ STOKY_SECRET: `  ${REAL}\n` })).toEqual({
+      value: REAL,
+      name: "STOKY_SECRET",
+      from: "current",
+    });
+    expect(configuredSecret({ STOKY_SECRET: "", NEXTAUTH_SECRET: `\t${REAL} ` })).toEqual({
+      value: REAL,
+      name: "NEXTAUTH_SECRET",
+      from: "legacy",
+    });
+  });
+
+  it("keys the account tag with the key the sessions are signed with", () => {
+    const env = process.env as Record<string, string | undefined>;
+    const saved = { STOKY_SECRET: env.STOKY_SECRET, NEXTAUTH_SECRET: env.NEXTAUTH_SECRET };
+    try {
+      delete env.NEXTAUTH_SECRET;
+      env.STOKY_SECRET = `  ${REAL}\n`;
+      expect(accountTag("ana@example.com")).toBe(accountTag("ana@example.com", REAL));
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete env[key];
+        else env[key] = value;
+      }
     }
   });
 });
@@ -85,13 +148,18 @@ describe("when it refuses", () => {
 
   /** Runs `body` with the environment of a production Node server. */
   async function asProductionServer(secret: string | undefined, body: () => Promise<void>) {
-    const keys = ["NODE_ENV", "NEXTAUTH_SECRET", "NEXT_PHASE", "NEXT_RUNTIME"];
+    const keys = ["NODE_ENV", "STOKY_SECRET", "NEXTAUTH_SECRET", "STOKY_URLS", "NEXTAUTH_URL", "NEXT_PHASE", "NEXT_RUNTIME"];
     const saved = Object.fromEntries(keys.map((key) => [key, env[key]]));
     env.NODE_ENV = "production";
     env.NEXT_RUNTIME = "nodejs";
+    // Production refuses to start without one (D136); set, so the secret is
+    // the only thing these cases change.
+    env.STOKY_URLS = "https://stoky.example.com";
+    delete env.NEXTAUTH_URL;
     delete env.NEXT_PHASE;
-    if (secret === undefined) delete env.NEXTAUTH_SECRET;
-    else env.NEXTAUTH_SECRET = secret;
+    delete env.NEXTAUTH_SECRET;
+    if (secret === undefined) delete env.STOKY_SECRET;
+    else env.STOKY_SECRET = secret;
     try {
       await body();
     } finally {
@@ -129,6 +197,20 @@ describe("when it refuses", () => {
         await expect(register()).rejects.toThrow("exit 1");
       });
 
+      // The placeholder with whitespace around it, which the signer would
+      // have trimmed back into the placeholder, and a short key padded past
+      // the floor.
+      logged.mockClear();
+      await asProductionServer(`  ${PLACEHOLDER_SECRET}\n`, async () => {
+        await expect(register()).rejects.toThrow("exit 1");
+      });
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(/published in this repository/i);
+      logged.mockClear();
+      await asProductionServer(` ${"k".repeat(MIN_SECRET_LENGTH - 1)}    `, async () => {
+        await expect(register()).rejects.toThrow("exit 1");
+      });
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(/needs at least/i);
+
       exit.mockClear();
       await asProductionServer(REAL, async () => {
         await register();
@@ -144,38 +226,85 @@ describe("when it refuses", () => {
 
 describe("the key that actually signs sessions", () => {
   /**
-   * Imports `@/lib/auth` in a fresh process with `env` and reports the secret
-   * Auth.js ended up with.
+   * Builds the Better Auth instance in a fresh process with `env` and reports
+   * the secret it ended up signing with — `$context.secret`, what signs the
+   * cookie, not what the file wrote.
    *
-   * A fresh process because the value is read when the module loads, and
-   * every other file in this suite shares one module cache in which it loaded
-   * long ago. `NextAuth(authConfig)` runs next-auth's `setEnvDefaults` on the
-   * config object at load, so `authConfig.secret` afterwards is the resolved
-   * key — the one that signs and decrypts — not just what the file wrote.
+   * A fresh process because the instance is built once per process, and
+   * every other file in this suite shares one.
    */
   function resolvedSecret(env: Record<string, string>) {
     const base: Record<string, string | undefined> = { ...process.env };
     for (const key of Object.keys(base)) {
-      if (/^(NEXT)?AUTH_SECRET/.test(key)) delete base[key];
+      if (/^(STOKY_SECRET|NEXTAUTH_SECRET|AUTH_SECRET|BETTER_AUTH_)/.test(key)) delete base[key];
     }
     delete base.NEXT_PHASE;
-    const script = `const { authConfig } = await import("@/lib/auth");
-      console.log(JSON.stringify({ secret: authConfig.secret }));`;
+    const script = `const { getAuth } = await import("@/lib/auth/instance");
+      const ctx = await getAuth().$context;
+      console.log(JSON.stringify({ secret: ctx.secret }));
+      process.exit(0);`;
     const child = Bun.spawnSync([process.execPath, "-e", script], {
       cwd: join(import.meta.dir, "../../.."),
-      env: { ...base, NODE_ENV: "production", NEXT_RUNTIME: "nodejs", ...env },
+      env: {
+        ...base,
+        NEXT_RUNTIME: "nodejs",
+        STOKY_URLS: "https://stoky.example.com",
+        // Empty rather than absent: Bun loads `.env` for a key that is absent.
+        NEXTAUTH_URL: "",
+        ...env,
+      },
     });
     if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-    return (JSON.parse(child.stdout.toString()) as { secret: unknown }).secret;
+    const last = child.stdout.toString().trim().split("\n").at(-1)!;
+    return { secret: (JSON.parse(last) as { secret: unknown }).secret, stderr: child.stderr.toString() };
   }
 
-  it("is the NEXTAUTH_SECRET the guard checked, even when AUTH_SECRET is set", () => {
-    // next-auth resolves `config.secret ??= AUTH_SECRET ?? NEXTAUTH_SECRET`,
-    // and the guard reads only NEXTAUTH_SECRET. Without an explicit `secret`
-    // in authConfig this started — the guard passed on REAL — and signed every
-    // session with "changeme". `AUTH_SECRET` is what the Auth.js v5 docs and
-    // `npx auth secret` write, so it is the likely stray.
-    expect(resolvedSecret({ NEXTAUTH_SECRET: REAL, AUTH_SECRET: "changeme" })).toBe(REAL);
+  it("is the STOKY_SECRET the guard checked, whatever Better Auth's own variables say", () => {
+    // Better Auth prefers BETTER_AUTH_SECRETS, then BETTER_AUTH_SECRET, then
+    // AUTH_SECRET, and the guard reads only ours. Without an explicit
+    // `secret` and `secrets` this started — the guard passed on REAL — and
+    // signed every session with "changeme".
+    expect(
+      resolvedSecret({
+        NODE_ENV: "production",
+        STOKY_SECRET: REAL,
+        NEXTAUTH_SECRET: "",
+        BETTER_AUTH_SECRETS: "1:changeme-changeme-changeme-changeme",
+        BETTER_AUTH_SECRET: "changeme",
+        AUTH_SECRET: "changeme",
+      }).secret,
+    ).toBe(REAL);
+  });
+
+  it("is the trimmed value the guard judged, not the line as written", () => {
+    expect(resolvedSecret({ NODE_ENV: "production", STOKY_SECRET: `  ${REAL}\n` }).secret).toBe(REAL);
+  });
+
+  it("is STOKY_SECRET when the old name is set beside it, and the old name when it is alone", () => {
+    // D137: the new name wins. An installation not yet renamed signs with the
+    // key it always had, so nobody is signed out by the upgrade.
+    const OTHER = "an-older-key-0123456789abcdef0123456789ab";
+    expect(
+      resolvedSecret({ NODE_ENV: "production", STOKY_SECRET: REAL, NEXTAUTH_SECRET: OTHER }).secret,
+    ).toBe(REAL);
+    // Empty, as Compose passes an unset `${STOKY_SECRET:-}`.
+    expect(
+      resolvedSecret({ NODE_ENV: "production", STOKY_SECRET: "", NEXTAUTH_SECRET: OTHER }).secret,
+    ).toBe(OTHER);
+  });
+
+  it("is a key of this process's own outside production, when none is set", () => {
+    // Empty rather than absent: Bun fills an absent variable from `.env`, and
+    // an empty one is what Compose passes for an unset `${X:-}`.
+    const none = { NODE_ENV: "development", STOKY_SECRET: "", NEXTAUTH_SECRET: "" };
+    const first = resolvedSecret(none);
+    const second = resolvedSecret(none);
+
+    expect(typeof first.secret).toBe("string");
+    expect(String(first.secret).length).toBeGreaterThanOrEqual(MIN_SECRET_LENGTH);
+    // A restart is a new key: it signs nobody in with yesterday's cookie.
+    expect(first.secret).not.toBe(second.secret);
+    expect(first.stderr).toContain("STOKY_SECRET is not set");
   });
 });
 

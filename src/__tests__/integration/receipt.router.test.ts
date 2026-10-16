@@ -1372,10 +1372,11 @@ describe("what a receipt read sends", () => {
   function expectNothingPrivate(response: unknown): void {
     const sent = JSON.stringify(response);
 
-    for (const key of ["rawOcrText", "imagePath", "uploadedBy", "passwordHash"]) {
+    for (const key of ["rawOcrText", "imagePath", "uploadedBy", "accounts", "password"]) {
       expect(sent).not.toContain(`"${key}"`);
     }
     // The values too, so a rename cannot carry them out under another key.
+    expect(sent).not.toContain("$argon2");
     expect(sent).not.toContain("SOCIO CLUB");
     expect(sent).not.toContain("uploads/receipts/");
   }

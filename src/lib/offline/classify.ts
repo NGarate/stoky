@@ -10,7 +10,7 @@ import { TRPCClientError } from "@trpc/client";
  *   "later". Keep it and try again.
  * - **auth** — the session ended. Keep *everything*, stop sending, and ask for
  *   a sign-in. This is the likeliest outcome of a real shop and it must never
- *   discard: the JWT lasts fifteen minutes, slides only on activity, and a
+ *   discard: a session lasts fifteen idle minutes, slides only on activity, and a
  *   phone in aeroplane mode makes no requests. Reconnect after a twenty-minute
  *   shop is a 401 by construction.
  * - **permanent** — the server decided, and the answer will not change. Do not

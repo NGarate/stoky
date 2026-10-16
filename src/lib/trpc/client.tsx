@@ -1,16 +1,11 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  TRPCClientError,
-  loggerLink,
-  unstable_httpBatchStreamLink,
-} from "@trpc/client";
+import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { useState } from "react";
-import SuperJSON from "superjson";
 import { seedOnlineManager } from "@/lib/offline/onlineManager";
-import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
+import { trpcLinks } from "@/lib/trpc/links";
 import type { AppRouter } from "@/server/trpc/router";
 
 export const api = createTRPCReact<AppRouter>();
@@ -90,29 +85,9 @@ export function TRPCProvider(
   );
 
   const [trpcClient] = useState(() =>
-    api.createClient({
-      links: [
-        loggerLink({
-          enabled: (op) => {
-            if (process.env.NODE_ENV === "development") return true;
-            if (op.direction === "down" && op.result instanceof Error) return true;
-            return false;
-          },
-        }),
-        unstable_httpBatchStreamLink({
-          transformer: SuperJSON,
-          url: getUrl(),
-          // The server refuses a longer batch outright; this splits one into
-          // several requests first (`src/lib/trpc/batch.ts`).
-          maxItems: MAX_TRPC_BATCH_SIZE,
-          headers() {
-            return {
-              "x-trpc-source": "react",
-            };
-          },
-        }),
-      ],
-    }),
+    // Streamed and batched, except the calls whose answer sets a cookie
+    // (`src/lib/trpc/links.ts`).
+    api.createClient({ links: trpcLinks({ url: getUrl() }) }),
   );
 
   return (

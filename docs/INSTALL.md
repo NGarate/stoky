@@ -162,7 +162,7 @@ Open `.env` in your editor and fill in:
 | `DOMAIN` | The hostname alone, for example `stoky.example.com`; no scheme or path |
 | `ACME_EMAIL` | Your email address for Let's Encrypt |
 | `POSTGRES_PASSWORD` | The first generated hex value |
-| `NEXTAUTH_SECRET` | The second generated hex value |
+| `STOKY_SECRET` (`NEXTAUTH_SECRET` in v0.1.0-alpha.3's files) | The second generated hex value |
 
 From the release after v0.1.0-alpha.3, `.env` also carries
 `STOKY_REGISTRATION`, which decides who may create an account at `/register`:
@@ -185,8 +185,46 @@ v0.1.0-alpha.3's files have no such setting, and adding the line to its `.env`
 changes nothing: registration there stays open to anyone (see Requirements).
 
 Use hex for the database password: it is inserted into a connection URL without
-percent-encoding. Do not reuse the development `.env.example`. Rotating `NEXTAUTH_SECRET` invalidates existing sessions. The bundle derives
-`DATABASE_URL`, `VALKEY_URL` and `NEXTAUTH_URL` itself, so you do not edit them.
+percent-encoding. Do not reuse the development `.env.example`. Rotating the
+session secret signs everybody out, changes every account tag in the
+security log and makes every authenticator app unreadable (see
+[Rotating `STOKY_SECRET`](#rotating-stoky_secret)). From the release after v0.1.0-alpha.3 the secret is called
+`STOKY_SECRET`; the old name, `NEXTAUTH_SECRET`, is still read when
+`STOKY_SECRET` is unset, with a `[config]` warning at start-up, until a later
+release stops reading it (see [Upgrade and rollback](#upgrade-and-rollback)).
+
+The bundle derives `DATABASE_URL`, `VALKEY_URL` and the instance's address
+itself, so you do not edit them; the address is `https://` and `DOMAIN`, the
+one host Traefik routes. Outside the bundle — a source install, or one behind
+your own proxy — set `STOKY_URLS` (from the release after v0.1.0-alpha.3; it
+was `NEXTAUTH_URL`) to every address people type, comma-separated, the
+canonical one first, for example
+`STOKY_URLS="http://stoky.lan:3000,http://192.168.1.10:3000"`. List only
+addresses that reach this instance: every one is trusted to sign a browser in.
+The first is canonical: the session cookie is `Secure` only when it is https,
+and **passkeys work only at the first address**. A passkey is registered for
+that address's host and cannot be used or added at any other listed address,
+where people sign in with the password; changing the first entry later
+orphans every passkey, and each person signs in with the password and adds a
+new one. Passkeys need the first address to be https with a domain name (or
+`http://localhost`): at an IP address, or plain HTTP to another machine,
+browsers offer none and Stoky does not either.
+In
+production the app does not start without `STOKY_URLS`, with an entry that is
+not a bare `http(s)://host[:port]` address (a path such as `/api/auth`, a query
+or a `user:password@` counts as not bare), or with an https first entry beside
+plain-HTTP addresses on the network: the cookie would be `Secure`, the browser
+drops a `Secure` cookie over plain HTTP, and signing in at those addresses
+would loop back to the login page. Serve every address over https, or every
+one over http. `http://localhost` beside an https first entry is accepted,
+because browsers keep a `Secure` cookie on localhost. `docker compose logs app`
+ends with a line starting `[auth] refusing to start:` that names the entry by
+its position, never its full text. The same release also refuses to
+start while `BETTER_AUTH_TRUSTED_ORIGINS` is set or `BETTER_AUTH_TELEMETRY` is
+on, because Better Auth, which signs people in, would obey those over its
+configuration. It ignores `BETTER_AUTH_SECRET`, `BETTER_AUTH_SECRETS`,
+`AUTH_SECRET`, `BETTER_AUTH_URL` and `AUTH_URL`, logging an `[auth] warning:`
+line for each one set: `STOKY_SECRET` and `STOKY_URLS` are what it reads.
 Keep `.env` private and out of version control.
 
 **Prefer a dedicated subdomain for `DOMAIN`.** Stoky sends HSTS for two years
@@ -293,7 +331,7 @@ Check it with `docker compose config --quiet`, keep it with your backups, and
 apply it with `docker compose up -d --wait`;
 `docker inspect --format '{{.HostConfig.LogConfig.Type}}' stoky-release-app-1`
 then names the driver in use. Plain `docker compose config` would show the
-override too, but it prints your database password and `NEXTAUTH_SECRET` with
+override too, but it prints your database password and session secret with
 it. Upgrades replace the Compose and Traefik files, not the override, so it
 stays in place.
 
@@ -324,23 +362,125 @@ STOKY_HASH=$(printf '%s' "$STOKY_NEW_PASSWORD" | docker compose run --rm --no-de
 unset STOKY_NEW_PASSWORD
 docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
   -v hash="$STOKY_HASH" -v email='you@example.com' <<'SQL'
+BEGIN;
+UPDATE "Account"
+SET password = :'hash',
+    "updatedAt" = now() AT TIME ZONE 'UTC'
+WHERE "providerId" = 'credential'
+  AND "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'))
+  AND "accountId" = "userId";
+DELETE FROM "Session"
+WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
+DELETE FROM "Verification"
+WHERE identifier LIKE '2fa-%'
+  AND value = (SELECT id FROM "User" WHERE email = lower(:'email'));
+COMMIT;
+SQL
+unset STOKY_HASH
+```
+
+`psql` must answer `UPDATE 1` to the update, and `DELETE` with the number of
+sessions it ended, which may be 0, then the number of two-step sign-ins in
+progress it ended, usually 0; `UPDATE 0` means no account has that
+address. From the release after v0.1.0-alpha.3 the hash is kept in the
+account's `credential` row of the `Account` table, which is where sign-in reads
+it, and each session is a row of `Session`. On v0.1.0-alpha.3 the hash is
+still a column of `User` and there are no session or verification rows:
+there, replace the three statements with
+
+```sql
 UPDATE "User"
 SET "passwordHash" = :'hash',
     "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
     "updatedAt" = now() AT TIME ZONE 'UTC'
 WHERE email = lower(:'email');
-SQL
-unset STOKY_HASH
 ```
 
-`psql` must answer `UPDATE 1`; `UPDATE 0` means no account has that address.
+The other way round fails safely, with `relation "Session" does not exist` or
+`column "passwordHash" does not exist` and nothing changed.
 The password is read without echo and passed on standard input, so it stays out
 of your shell history and the process list; `IFS=` keeps any leading or
 trailing space in it, which a plain `read` would drop and sign-in would not. The hash is made by the
-application's own Argon2id library with its own parameters, and setting
-`sessionsValidFrom` ends every session the account had, as a reset from the
-application does. This path skips the application's password rules: choose at
+application's own Argon2id library with its own parameters. Both statements
+run in one transaction, so the new password never stands without the others,
+which delete every session the account had and any sign-in waiting for its
+authenticator code, as a reset from the application does. This path skips the application's password rules: choose at
 least 12 characters that do not contain your name or address.
+
+## A lost authenticator
+
+From the release after v0.1.0-alpha.3 an account can ask for a code from an
+authenticator app after its password (two-step verification), set up by each
+person — the kitchen's shared account included — from **Configuración →
+Seguridad y acceso → Verificación en dos pasos**. Somebody who
+has lost the phone with the app signs in with one of the backup codes they
+were given when they set it up, then turns it off and on again there, which
+sets up the new phone and gives them new codes.
+
+If they have no backup code either, **a household admin removes it** from
+**Configuración → Personas del hogar**: "Quitar la verificación en dos pasos"
+on that person's row, confirmed with the admin's own password. It signs the
+person out on every device, and they then sign in with their password alone
+and set it up again. An admin cannot remove an owner's; another owner can.
+The action is recorded in the security log as `auth.twofactor.removed`.
+
+Only when nobody in the application can — a household's sole owner, with no
+backup code — remove two-step verification in the database, so the
+password alone signs them in. Run this in the installation directory,
+replacing the address with the person's:
+
+```bash
+docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
+  -v email='person@example.com' <<'SQL'
+BEGIN;
+DELETE FROM "TwoFactor"
+WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
+UPDATE "User"
+SET "twoFactorEnabled" = false,
+    "updatedAt" = now() AT TIME ZONE 'UTC'
+WHERE email = lower(:'email');
+DELETE FROM "Session"
+WHERE "userId" = (SELECT id FROM "User" WHERE email = lower(:'email'));
+DELETE FROM "Verification"
+WHERE identifier LIKE '2fa-%'
+  AND value = (SELECT id FROM "User" WHERE email = lower(:'email'));
+COMMIT;
+SQL
+```
+
+`psql` must answer `DELETE 1` and then `UPDATE 1`; `UPDATE 0` means no account
+has that address, and `DELETE 0` first means it had no authenticator. The
+last two statements sign the account out everywhere and end any sign-in
+waiting for a code, because whoever has the lost phone may have used it. Ask
+the person to set two-step verification up again once they are in. Do this
+only for somebody whose identity you are sure of: it leaves their password as
+the only thing protecting the account.
+
+## Rotating `STOKY_SECRET`
+
+`STOKY_SECRET` signs every session and encrypts every authenticator secret
+(not the backup codes, which are hashes, nor passkeys, which are public keys),
+so replacing it is not only a new value. From the release after
+v0.1.0-alpha.3, a new value:
+
+- **signs everybody out**, phones and the kitchen screen included: every
+  cookie and native token was signed with the old one;
+- **changes every account tag in the security log**, so lines written before
+  and after cannot be matched to the same account by tag;
+- **makes every authenticator unreadable**. A person with two-step
+  verification is told at sign-in that the server can no longer check their
+  app. Their way in is one of their backup codes, which are stored as hashes
+  rather than encrypted and so still work; once in, they turn two-step
+  verification off and on again in **Configuración → Seguridad y acceso**,
+  which sets up the app with a new secret and
+  gives them new codes. Somebody without a backup code needs
+  [A lost authenticator](#a-lost-authenticator).
+
+Passwords, passkeys and backup codes are not affected. Old values are not kept: Stoky reads one secret,
+so there is no way to rotate without these consequences. Rotate when the
+secret may have leaked, not on a schedule. To do it, generate a new value with
+`openssl rand -hex 32`, replace `STOKY_SECRET` in `.env`, and run
+`docker compose up -d --wait`.
 
 ## Somebody keeps being told to wait
 
@@ -437,9 +577,11 @@ IPv4; try another one.
 
 Stoky cannot delete an account. Removing a person from **Personas del hogar**
 takes them out of the household and keeps their account: name, address,
-password hash and language. When somebody asks to be erased, delete the account
-in the database. Run these in the installation directory, replacing the address
-with the person's:
+password hash and language. From the release after v0.1.0-alpha.3 it also
+signs them out on every device at once; on v0.1.0-alpha.3 their browsers stay
+signed in, with every request for household data refused. When somebody asks
+to be erased, delete the account in the database. Run these in the
+installation directory, replacing the address with the person's:
 
 1. Look at the account:
 
@@ -499,9 +641,18 @@ with the person's:
    was deleted: no account has that address, or it is the last owner of a
    household that still has other members. It is one statement, so it is one
    transaction: the account, the start screen it chose on each device and its
-   offline replay records go together or not at all. A browser still signed in
-   to the account keeps its cookie, but every request it makes for household
-   data is refused. It can still record a start screen; see what stays, below.
+   offline replay records go together or not at all. From the release after
+   v0.1.0-alpha.3 the account's password hash, in its `credential` row of the
+   `Account` table, goes with it too: the database deletes that row along with
+   the account, so the statement does not name it, and so do its sessions: a
+   browser signed in to it is signed out on its next request. Its
+   authenticator secret and backup codes, if it set up two-step verification,
+   go the same way, and so do its passkeys. A sign-in waiting for its code is a `Verification` row
+   that names the deleted `id`; it expires within ten minutes and can no
+   longer become a session. On
+   v0.1.0-alpha.3 a browser still signed in keeps its cookie, but every
+   request it makes for household data is refused; it can still record a
+   start screen, see what stays, below.
 3. The receipts the person uploaded belong to the household and stay, with
    their photographs on the `uploads` volume. To remove those photographs too,
    put the `id` from step 1 in place of `the-id`:
@@ -542,10 +693,10 @@ What stays after these steps:
 - **The receipts' text.** The whole-ticket OCR text can include a masked card
   number, a loyalty number or the cashier's name. It is the household's
   purchase history and stays with each receipt.
-- **A start screen chosen afterwards.** A browser still signed in when the
-  account was deleted stays signed in until it goes fifteen minutes unused, or
-  for at most thirty days after it signed in (from the release after
-  v0.1.0-alpha.3; on v0.1.0-alpha.3, for as long as it keeps being used). Choosing a start screen there
+- **A start screen chosen afterwards**, on v0.1.0-alpha.3 only. There a
+  browser still signed in when the account was deleted stays signed in for as
+  long as it keeps being used; from the release after it, the account's
+  sessions are deleted with it. Choosing a start screen there
   records one under the old `id`, because that does not ask the database
   whether the account still exists. If the person may have done that, remove
   it with the `id` from step 1 in place of `the-id`:
@@ -586,7 +737,7 @@ cp .env docker-compose.yml traefik.yml "$STOKY_BACKUP/"
 docker compose up -d --wait app
 ```
 
-The directory holds `.env` (the database password and `NEXTAUTH_SECRET`), every
+The directory holds `.env` (the database password and the session secret), every
 account's password hash and every receipt, all in plaintext. **Encrypt it before
 it leaves the server.** With [age](https://age-encryption.org), installed on
 both machines, create a key pair once on the machine that keeps the backups,
@@ -629,9 +780,14 @@ docker compose exec -T db pg_restore -U stoky -d stoky \
   --exit-on-error --no-owner < database.dump
 docker compose run --rm --no-deps -T --entrypoint tar app \
   -C /app/uploads -xzf - < uploads.tar.gz
+docker compose exec -T db psql -U stoky -d stoky -c 'DELETE FROM "Session";'
 docker compose up -d --wait --wait-timeout 180
 ```
 
+The `DELETE` ends every session the backup carried, from the release after
+v0.1.0-alpha.3 (before it there is no `Session` table, and the line answers
+`relation "Session" does not exist`; skip it). A restored instance is a new
+place to sign in to, and a cookie lifted from the old one must not open it.
 Sign in and check inventory and a receipt image. Restoring over existing data is
 not covered by these commands. Never delete the original volumes to test a backup.
 
@@ -669,6 +825,13 @@ installation with the previous image and configuration. A rollback takes the
 previous release's Compose file, not only its tag, and returning to the previous
 image is not by itself a guaranteed rollback.
 
+**Returning to v0.1.0-alpha.3 needs the pre-upgrade dump.** The release after
+it moves every password hash from a column of `User` into a new `Account`
+table and drops the column (`20261015120000_credential_accounts`). The
+v0.1.0-alpha.3 image reads that column, so started against an upgraded
+database it signs nobody in. Restore the backup taken before the upgrade into
+an empty installation of v0.1.0-alpha.3 instead, as above.
+
 PostgreSQL, Valkey and Traefik change only with a Stoky release. The Compose
 file names each of them by exact version and by digest
 (`postgres:16.15-alpine@sha256:…`), so `docker compose pull` fetches the build
@@ -692,13 +855,45 @@ it is absent. The new release's `install.sh` adds every missing setting to
 the Compose and Traefik files: against the previous release's copies it stops
 before it reaches `.env`.
 
-**Everybody signs in once after upgrading** from a release before sessions
-had a thirty-day limit. A session from the old release has no record of when
-it started, so the new one refuses it the next time it is read rather than
-guess, and each device has to sign in again; changes a phone queued offline
-are kept, as they are whenever a session ends. From then on a session ends thirty
-days after sign-in however much it is used, or after fifteen minutes unused —
-*Authentication* in [SECURITY.md](../SECURITY.md) says why.
+**Everybody signs in once after upgrading** to the release after
+v0.1.0-alpha.3. Sessions move from a signed token in the browser to a row in
+the database, and a token from the old release names no row, so each device
+is asked to sign in again the first time it is used; passwords are kept, and
+changes a phone queued offline are kept, as they are whenever a session ends.
+From then on a session ends after fifteen minutes unused, a day after
+sign-in however much it is used, or when somebody ends it — *Authentication*
+in [SECURITY.md](../SECURITY.md) says why — unless **Mantener la sesión
+iniciada** was ticked at sign-in: then it ends after ninety days unused or a
+year after sign-in. **Sign each kitchen tablet in again with that box
+ticked**, or it asks for the password after every fifteen idle minutes; the
+box is unticked by default, and an old session does not become a remembered
+one. If nobody remembers the kitchen account's password, an admin sets a new
+one from **Configuración → Personas del hogar** (see
+[A forgotten password](#a-forgotten-password)). Set `STOKY_URLS` to the addresses
+people use before upgrading a deployment that is not the bundle; the bundle
+sets it from `DOMAIN`.
+
+**`NEXTAUTH_SECRET` is now `STOKY_SECRET`** from the release after
+v0.1.0-alpha.3: names starting `NEXTAUTH_`, `AUTH_` and `BETTER_AUTH_` are read
+by libraries on their own, and Stoky's settings should be read by Stoky alone.
+The new release's `install.sh` renames the line in `.env` and keeps its value,
+printing `renombrado NEXTAUTH_SECRET → STOKY_SECRET`. By hand, rename the key
+and keep the value: generating a new one signs everybody out and changes every
+account tag in the security log. Until the line is renamed the app starts and
+reads the old name, logging `[config] NEXTAUTH_SECRET is deprecated` once at
+start-up; with both set, `STOKY_SECRET` is used and the warning says the other
+is ignored. A later release stops reading the old name. The Compose file no
+longer refuses an empty secret itself: the app does, at start-up, with a line
+naming `STOKY_SECRET`, and `docker compose up --wait` reports the container
+unhealthy.
+
+**`NEXTAUTH_URL` is now `STOKY_URLS`**, a list, from the same release. Bundle
+installs have nothing to do: the Compose file sets it from `DOMAIN`, and
+`.env` never held it. A deployment that is not the bundle renames the line;
+its one URL is a list of one. Until then the app reads `NEXTAUTH_URL`, logging
+`[config] NEXTAUTH_URL is deprecated` once at start-up. An old value with a
+path, such as `https://stoky.example.com/api/auth`, is refused in production:
+keep only the scheme, host and port.
 
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
@@ -755,6 +950,10 @@ previous release left it. Run these steps in the installation directory:
 
    `psql` must answer `UPDATE 1`. Renaming an account keeps everything it
    recorded and ends its sessions. Deleting it would take its data with it.
+   Prisma applies migrations in order and stops at the first that fails, so
+   this runs before the later `20261015120000_credential_accounts` has moved
+   the password hashes out of `User`; neither statement touches them, and they
+   stay as written.
 3. Clear the recorded failure:
 
    ```bash
@@ -791,9 +990,15 @@ migration again.
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
+| App exits with `[auth] refusing to start:` | From the release after v0.1.0-alpha.3: the line names the setting to fix — `STOKY_SECRET` unset, the example value or too short; `STOKY_URLS` unset, an entry that is not a bare address, or an https first entry beside plain-HTTP network addresses; `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
+| Log says `[config] NEXTAUTH_SECRET is deprecated` or `[config] NEXTAUTH_URL is deprecated` | From the release after v0.1.0-alpha.3: rename the key to `STOKY_SECRET` or `STOKY_URLS` in `.env`, keeping the value, then `docker compose up -d --wait`. See [Upgrade and rollback](#upgrade-and-rollback) |
+| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | From the release after v0.1.0-alpha.3: the browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the one host Traefik routes. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
 | Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
+| Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | From the release after v0.1.0-alpha.3: a backup code signs them in; without one, a household admin removes it from **Personas del hogar** — see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
+| Turning two-step verification on or off, or asking for new recovery codes, says there have been too many tries | From the release after v0.1.0-alpha.3: five wrong passwords from one session, or twenty across the account, within 15 minutes; the screen can be used again once that window ends. Wrong passwords are on the log as `auth.reauth.refused` with `"via":"two-factor"` — many of them from a session the person does not recognise means somebody else has it: end it from **Tus dispositivos** |
+| The authenticator app does not take the QR code | From the release after v0.1.0-alpha.3: type the key shown under the code into the app instead, or, on the phone that has the app, use the link beside it. The phone's clock must be right to within a minute |
 | Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |
 | `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
 | App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
@@ -808,7 +1013,8 @@ database dumps, session cookies or unredacted receipt photos.
 **Never share the output of `docker inspect` or of `docker compose config`
 without `--quiet`.** The secrets reach the containers as environment variables,
 and both commands print them: the database password, which is also in
-`DATABASE_URL`, and `NEXTAUTH_SECRET`, which signs every session. Remove client
+`DATABASE_URL`, and `STOKY_SECRET` (`NEXTAUTH_SECRET` before the release after
+v0.1.0-alpha.3), which signs every session. Remove client
 addresses and email addresses from log lines before you share them as well.
 
 A security problem is not an issue: report it through the private form in

@@ -19,9 +19,11 @@ import { closeValkey, valkey } from "@/lib/valkey";
  *
  * It started as auth-only and is no longer: `uploadRateLimit` below meters
  * receipt upload, `addMemberRateLimit` the Argon2id hash behind adding a
- * member, and `passwordChangeRateLimit` a signed-in person's own password
- * change — all authenticated, all expensive enough that an account looping
- * on them is its own denial of service — and `productLookupRateLimit` meters
+ * member, and `reauthRateLimit` with `reauthAccountRateLimit` the password
+ * re-entered to confirm an action, a person's own password change among them
+ * — all authenticated, all either expensive
+ * enough that an account looping on them is its own denial of service or a
+ * way to guess the password behind a session — and `productLookupRateLimit` meters
  * the requests an account makes this instance send to Open Food Facts. The
  * counting machinery is the
  * same; what differs per limit is the number, the window, and what the counter
@@ -138,6 +140,36 @@ export function registerRateLimit(): RateLimit {
 }
 
 /**
+ * Authenticator codes refused at a sign-in's second step, **per account,
+ * over a day** (D148).
+ *
+ * Better Auth's own limits are five wrong codes a challenge and ten in a row
+ * an account, then a fifteen-minute lock — and the lock clears the count
+ * when it ends, while the password step that opens each new challenge costs
+ * whoever knows the password nothing (a right password is refunded). So a
+ * password holder had ten guesses at six digits every quarter of an hour,
+ * about 960 a day, for ever: even odds of getting past the second factor in
+ * about eight months, with nobody having to notice. Nothing clears this
+ * counter but its window — not a right password, not a new challenge.
+ *
+ * Twenty: twice Better Auth's lock, so somebody who mistypes their way into
+ * that lock still has ten more tries the same day. Against a guesser, with
+ * the ±1 step window, it is 20 × 3/10⁶ a day, about 2% a year. A right code
+ * gives its own attempt back. Past it the authenticator is refused until the
+ * window ends; a backup code and a passkey still sign in. Keyed on the
+ * account id, which is already opaque.
+ */
+export function twoFactorCodeRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:2fa-code",
+    "RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS",
+    "RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS",
+    20,
+    24 * 60 * 60,
+  );
+}
+
+/**
  * Receipt uploads, per account.
  *
  * OWASP ASVS V11.1.4 asks for anti-automation on expensive operations, and
@@ -222,25 +254,69 @@ export function addMemberRateLimit(): RateLimit {
 }
 
 /**
- * A signed-in person changing their own password, per account.
+ * Re-entering the current password to confirm an action — ending sessions,
+ * changing the password — counted **per session** (`src/lib/auth/reauth.ts`,
+ * PROGRESS D143, D144).
  *
- * Not for the hash this time but for the question it answers. The procedure
- * checks the current password before anything else, so unmetered it would be
- * a way for whoever holds a stolen session — a phone left unlocked, a kitchen
- * tablet — to guess the password behind it, with none of the limits sign-in
- * has. Five per fifteen minutes is sign-in's per-address number: a person who
- * mistypes the current password twice and then changes it is three, and an
- * attacker gets five guesses a quarter of an hour. Per account, like upload,
- * because the caller is already authenticated and the account is what the
- * guesses are against. Each one also costs two Argon2id runs at most — the
- * verify, and the hash on success — so this bounds that too.
+ * The question is "is this the password?", asked from a session somebody may
+ * have stolen. It used to have a limit of its own for the password change,
+ * per account (`RATE_LIMIT_PASSWORD_CHANGE_*`, retired by D144): the change
+ * now asks through the same re-entry as everything else. Per session
+ * rather than per account because of what the answer is for: the owner
+ * ending a stolen session re-enters the password *from their own session*,
+ * and a budget the thief could spend from theirs would let the thief keep the
+ * owner from evicting them. Five a quarter of an hour is sign-in's
+ * per-address number. A right answer gives its attempt back, so a person who
+ * confirms several actions in a row is never refused.
  */
-export function passwordChangeRateLimit(): RateLimit {
+export function reauthRateLimit(): RateLimit {
   return limitFromEnv(
-    "rl:pwchange",
-    "RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS",
-    "RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS",
+    "rl:reauth",
+    "RATE_LIMIT_REAUTH_ATTEMPTS",
+    "RATE_LIMIT_REAUTH_WINDOW_SECONDS",
     5,
+    15 * 60,
+  );
+}
+
+/**
+ * The same re-entry, counted **per account**: the backstop to the per-session
+ * budget above, which ten sessions (D140), each signed in afresh, would
+ * otherwise multiply. Twenty a quarter of an hour is above anything a person
+ * does and below what guessing needs. Not refunded on a right answer: only
+ * the per-session charge is, so a thief's wrong guesses stay counted here
+ * whatever the owner does. Keyed on the account id, which is already opaque.
+ */
+export function reauthAccountRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:reauth-acct",
+    "RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS",
+    "RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS",
+    20,
+    15 * 60,
+  );
+}
+
+/**
+ * Asking for the options of a passkey sign-in, counted **per address** (D151).
+ *
+ * The first half of the ceremony is not a guess at anything — the options are
+ * a random challenge, and the signature that answers it is counted against
+ * sign-in's own budget (`loginRateLimit`) and given back when it gets in — but
+ * every request writes a challenge row, so an unauthenticated client must not
+ * be able to write them without end. Not sign-in's budget, because the
+ * options cannot be given back: nothing ties them to the sign-in that follows,
+ * and a household behind one address signing in with passkeys five times a
+ * quarter of an hour would otherwise lock itself out, passwords included.
+ * Thirty is six ceremonies a person cannot finish for every one sign-in's
+ * budget allows.
+ */
+export function passkeyOptionsRateLimit(): RateLimit {
+  return limitFromEnv(
+    "rl:passkey-options",
+    "RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS",
+    "RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS",
+    30,
     15 * 60,
   );
 }

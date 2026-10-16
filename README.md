@@ -32,7 +32,7 @@ there is no external service holding your data.
 ## Tech stack
 
 Next.js 16 (App Router) · TypeScript 5 strict · tRPC 11 · Prisma 6 ·
-PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Auth.js v5 (Argon2id) ·
+PostgreSQL 16 (`pg_trgm`) · Valkey 8 · Better Auth 1.7 (Argon2id) ·
 Tailwind CSS 4 · TanStack Query v5 · next-intl v4 ·
 Tesseract.js · Bun.Image
 
@@ -71,7 +71,7 @@ troubleshooting.
 
 ```bash
 bun install --frozen-lockfile
-cp .env.example .env                                  # then set NEXTAUTH_SECRET
+cp .env.example .env                                  # then set STOKY_SECRET
 docker compose -f docker-compose.dev.yml up -d db cache
 bunx --bun prisma generate
 bunx --bun prisma migrate dev
@@ -175,15 +175,16 @@ src/
   app/
     (auth)/                   login, register
     (dashboard)/              inventory, products, receipts, shopping, prices, settings
-    api/trpc/[trpc]/          tRPC route: wires the router and Auth.js into server/http
+    api/trpc/[trpc]/          tRPC route: wires the router and the session read into server/http
+    api/auth/[...all]/        auth API route: wires Better Auth into server/http
   server/
-    http/                     the tRPC HTTP handler and the API routes' body bound, testable without Next
+    http/                     the tRPC and auth API handlers and their guards, testable without Next
     trpc/routers/             one router per domain
     services/                 ocr, receiptParser, productMatcher, openFoodFacts
   lib/
     validations/              Zod schemas shared by client and server
-    auth.ts                   Auth.js configuration (the config is this file)
-    auth/                     Error-message mapping only
+    auth.ts                   auth() and readSession: the session as the app reads it
+    auth/                     the Better Auth instance, session policy, sign-in limits, browser calls
   components/
     ui/                       shadcn/ui primitives
     <domain>/                 inventory, receipt, price, shopping, barcode, ...
@@ -242,8 +243,8 @@ directly to `master`, in small focused commits, with no feature branch and no
 pull request. Unattended and semi-attended agent work is the exception: it goes
 on a `<type>/<topic>-<YYYY-MM-DD>` branch with a pull request, squash-merged once
 the owner has reviewed it. [`CLAUDE.md`](CLAUDE.md) (Git Workflow) owns the rule.
-Either way `master` must be green at every commit — run the checks before
-committing, not after.
+Either way `master` must be green at every commit — check each commit before
+making it, and the whole branch before pushing it.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -255,8 +256,11 @@ fix(inventory): correct stock quantity aggregation query
 Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`, `shopping`,
 `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
 
-Before every commit: `bun run verify:ci` must pass, new behaviour needs
-tests, and user-facing strings go in `messages/es.json` first.
+Before every commit: lint, typecheck and the tests the change affects must
+pass, new behaviour needs tests, and user-facing strings go in
+`messages/es.json` first. Before every push: `bun run verify:ci` and
+`bun run test:e2e`, whole. [`docs/VERIFICATION_SEQUENCE.md`](docs/VERIFICATION_SEQUENCE.md)
+has the commands.
 
 **Tests must be able to fail.** An assertion that holds regardless of the code
 is not a test — this repository has been burned by that before, see the note in

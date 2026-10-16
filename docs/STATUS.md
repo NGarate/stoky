@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-12
+Updated: 2026-10-16
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,98 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-10-16 the Better Auth branch, finished:**
+`feat/better-auth-2026-10-15` replaces next-auth with Better Auth in 56
+commits after the security branch's `f8090fe`, this record included
+(`git rev-list --count f8090fe..HEAD` at it), and
+`docs/SECURITY_REVIEW.md` (*The Better Auth migration*) maps every finding
+to the commit that answered it, those of the review of 2026-10-16 included;
+five of that review's fixes are commits of their own after the record. How far it is measured, said plainly,
+because its stages were measured differently:
+
+- **The first 27 commits**, through "let an owner end every session in the
+  household", each ran `bun run verify:ci`, and all but six the whole
+  browser suite too, as each commit's message records (the six — the 5th,
+  10th, 12th, 13th, 16th and 17th — render nothing, and say so). At the
+  27th: `verify:ci` exit 0 in
+  144 seconds — lint 0 warnings, 96 contrast checks, 1,660 unit tests in 126
+  files, 989 component tests in 79, 779 integration tests in 51, the build
+  generating 37 static pages — and `bun run test:e2e` **202 passed in 3.6
+  minutes**. Across those commits' full runs the service worker's offline
+  spec failed three times and passed nineteen in a row after them
+  (`ISSUES.md` TEST-10).
+- **The last eight**, two-step verification and passkeys, ran lint,
+  typecheck, the tests each change touched, and the build when it touched
+  dependencies or the route tree, by the owner's decision of 2026-10-15: the
+  browser suite is too slow to run per commit, so it runs once, in full,
+  with `verify:ci`, on the finished branch before it is pushed. That run
+  is the last point below. It is the first in which three browser tests
+  ran at all — the two in `two-factor.spec.ts` and the one in
+  `passkeys.spec.ts` — and the first of the whole suite with `STOKY_URLS`
+  listing `localhost` first (`playwright.config.ts`).
+- **The review of 2026-10-16** (*What the review of 2026-10-16 found*):
+  ten fixes, each with a test that went red without it, run against lint,
+  typecheck and the test files it touched. Six went, whole or in part,
+  into the seven commits that brought the defects, which rewrote those and
+  every commit after the first of them; each commit a fix went into, and
+  each of the five after the record, was then checked out alone and passed
+  lint, typecheck and the tests it touches. On
+  the new head the unit (1,776), component (1,066) and integration (845)
+  suites pass; one integration run of three hit a five-second hook timeout
+  that the other two did not. The image and the bundle smoke in the next
+  point were not run again: they describe the head before the review.
+- **Measured on the head before the review, 2026-10-16** (host Bun 1.4.3):
+  `bun run lint` 0 warnings and 0 errors over 558 files and 101 rules;
+  `bun run typecheck` clean; `bun audit --audit-level moderate` no
+  vulnerabilities in 598 packages. The production image,
+  `git archive HEAD | docker build --target production -`, builds with no
+  secret in its build environment — the Dockerfile names none, and Better
+  Auth is built on first use, not at import — in 1 minute 36 with only its
+  system-package layers cached: 569 MB, runs as `bun` (uid 1000),
+  `bun --version` 1.4.3, no `prisma/seed.ts`, `next build` generating 37
+  static pages and listing 8 Partial Prerender routes. **The release bundle, smoked** from `deploy/`
+  with that image on a throwaway Compose project (Traefik on loopback
+  ports, removed afterwards): an alpha.3-style `.env` holding
+  `NEXTAUTH_SECRET` came out of `install.sh` with the line renamed
+  `STOKY_SECRET` and its value unchanged; all four services healthy, with
+  no `[auth]` or `[config]` line in the app's log; `/api/health` 200; the
+  first registration 200. A sign-in through Traefik at `https://DOMAIN` set
+  `__Secure-stoky.session_token` (`HttpOnly`, `Secure`, `SameSite=Lax`, no
+  `Max-Age`), with no `set-auth-token` header and no `token` in the body,
+  and `get-session` answered the account with `persistent: false`; with
+  the box ticked the cookie carried `Max-Age=7776000`. The same sign-in
+  from an unlisted origin got 403 `INVALID_ORIGIN`. The passkey sign-in
+  options answered 200 there, an https domain being where the plugin is
+  registered, while `/two-factor/get-totp-uri`, `/sign-up/email` and
+  `/list-sessions` answered 404.
+- **The full run, on `28f2a46`**, the head before this record, with the
+  shared `stoky` services. `COMPOSE_PROJECT_NAME=stoky bun run verify:ci`
+  exit 0 in 195 of its 600 seconds: lint, typecheck, react-doctor, the
+  internal links, contrast and the dependency audit passed (no
+  vulnerabilities in 598 packages); 1,784 unit tests in 130 files, 1,066
+  component tests in 81 and 852 integration tests in 54, none failing; the
+  build passed. `COMPOSE_PROJECT_NAME=stoky bun run test:e2e`
+  (`scripts/e2e-in-image.sh`, the pinned Playwright image) exit 0: **205
+  passed in 3.3 minutes**, none failed, flaky or skipped. A first
+  `bun run verify:ci` without `COMPOSE_PROJECT_NAME` exited 1 at the
+  integration step, "Bind for 127.0.0.1:5432 failed: port is already
+  allocated": it tried to start a database of its own beside the main
+  checkout's running one. The unit and component suites had passed in
+  that run; the environment, not the branch, failed it.
+  Since the review's record, the branch gained `363b245`, the CI fix:
+  the production case in `integration/auth.origins.test.ts` started a
+  child that inherited CI's 25-character secret and was refused at start
+  (CI run 38891583855), and now gets a signing key of its own. Then two
+  fixes, `4177b9a` (the start-up guard and the signer judge one trimmed
+  key) and `4744303` (a failed auth call's Prisma error logged without
+  its arguments); three tests that pin premises PR #11 relied on,
+  `d0d2df2` (a passkey changed only by its own account), `bcecb36` (an
+  over-long password refused before Argon2id) and `824b91b` (the auth
+  library's output never names an account, a password or a session);
+  and seven corrections to the documents, `2c69df9` to `28f2a46`. Each
+  ran lint, typecheck and the tests it touches, as its message records;
+  the full run above is the head after all of them.
 
 **2026-10-12 the security branch, finished:** `fix/security-hardening-2026-10-12`
 carries the 2026-10-12 review's fixes, and fixes for 19 of the 20 defects its
@@ -369,7 +461,7 @@ binary you happen to be holding.
 
 | Gate | Command | Result |
 |---|---|---|
-| Lint | `bun run lint` | ✅ 0 errors, 0 warnings — 493 files, 101 rules (2026-10-12, security branch head) |
+| Lint | `bun run lint` | ✅ 0 errors, 0 warnings — 558 files, 101 rules (2026-10-16, Better Auth branch head; 493 files at the security branch head) |
 | Typecheck | `bun run typecheck` | ✅ clean |
 | React | `bun run check:react` | ✅ 0 errors (react-doctor 0.9.11, gates on errors) |
 | Internal links | `bun run check:links` | ✅ 118 links against 35 routes, none broken (2026-10-12, security branch head) |
@@ -380,8 +472,8 @@ binary you happen to be holding.
 | Build | `bun run build` | ✅ **35 routes, 8 of them Partial Prerender** since Cache Components landed 2026-08-25 (`2b6eba5`) — 9 was a miscount, see below. Re-confirmed 2026-08-28 at `f643550` on a Bun-installed tree, which also re-proved the count: a naive grep answers 9 there too, and the ninth is still the legend line. 45.8s cold was the 2026-08-11 measurement with the React Compiler on (39.8 off); ~10s warm. Not re-measured cold: a cold build deletes state a running dev server shares |
 | Migration | `bunx --bun prisma migrate deploy` | ✅ all committed migrations on fresh databases; production image also starts against a restored backup (2026-09-25) |
 | Seed | `bun run db:seed` | ✅ idempotent across re-runs |
-| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
-| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 563 packages (2026-10-12, security branch head) |
+| E2E | `bun run test:e2e` | ✅ 194 pass / 0 fail in 3.0 minutes (2026-10-12, security branch head; on the Better Auth branch 202 pass in 3.6 minutes at its 27th commit, and its finished head, with `two-factor.spec.ts` and the `passkeys` project, is measured by the run before its push — *Gate status* above), in `mcr.microsoft.com/playwright:v1.62.1-noble` with Bun 1.4.3 (`scripts/e2e-in-image.sh`) — Chromium, Firefox, WebKit and Mobile Safari from the image, nothing installed on the host. On 2026-10-09 a host `bunx --bun playwright test` reported 21 failures, 20 of them `Executable doesn't exist` |
+| Dependency audit | `bun audit --audit-level moderate` | ✅ no vulnerabilities across 598 packages (2026-10-16, Better Auth branch head; 563 at the security branch head, 2026-10-12) |
 
 **Nothing enforces the installer version any more.** corepack left with pnpm,
 and `setup-bun` pins only the copy CI runs, so on a developer's own machine the
@@ -684,7 +776,8 @@ independent axes together.
 
 | Project | Runs | Why |
 |---|---|---|
-| chromium | Everything | The reference engine |
+| chromium | Everything but `passkeys.spec.ts` | The reference engine |
+| passkeys | `passkeys.spec.ts` | Chromium at `localhost`, the only address a passkey can belong to — WebAuthn takes no IP address as a relying party. The server lists `STOKY_URLS=http://localhost:3100,http://127.0.0.1:3100`: `localhost` canonical, 127.0.0.1 still trusted for every other project, both plain http so the cookie is unchanged (D151) |
 | Mobile Safari | `dynamic-routes`, `location-picker` | WebKit at a phone width — the combination where this project's layout defects have actually appeared (UI-5, UI-6) |
 | firefox | `@smoke` — 4 tests | Register, sign in, write, read Spanish |
 | webkit | `@smoke` — 4 tests | As above |
@@ -711,6 +804,7 @@ answer: composed target size, and whether a fixed bar is painted over an option.
 | `offline-shop.spec.ts` | A shop composed in aeroplane mode, applied once | chromium |
 | `auth.prod.spec.ts` | The deployed artefact signs people in: `trustHost`, and the production CSP breaking nothing | chromium |
 | `service-worker.prod.spec.ts` | A real worker registers, precaches, and serves offline — the one file that opts back into `serviceWorkers` | chromium |
+| `two-factor.spec.ts` | Two-step verification set up in settings from the key the page shows, asked for at the next sign-in, and a code refused the second time | chromium |
 
 `globalTimeout` is **5 minutes locally and 9 in CI**, and since 2026-08-17 it
 covers the `next build` too, because the build runs inside Playwright's
@@ -889,13 +983,21 @@ These are recorded because each one produced a confident, wrong number.
 
 **Backend — substantially complete.** 10 tRPC routers (`auth`, `data`,
 `household`, `product`, `location`, `inventory`, `receipt`, `store`, `price`,
-`shopping`) merged in `src/server/trpc/router.ts`, **65 procedures** — a count
-that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65: it reached 64
+`shopping`) merged in `src/server/trpc/router.ts`, **71 procedures** — a count
+that has never held still (44 → 45 → 55 → 59 → 64 → 62 → 63 → 64 → 65 → 66 → 68 → 67 → 68 → 69 → 70 → 71: it reached 64
 unrecorded while this file said 59, fell to 62 when the two dead pipeline
 procedures were deleted, reached 63 with `product.resolveScan` on
 2026-08-31 while this file went on saying 62 until 2026-10-12, 64 with
-`auth.changePassword` on 2026-10-12, and 65 with
-`household.resetMemberPassword` the same day) as phases closed
+`auth.changePassword` on 2026-10-12, 65 with
+`household.resetMemberPassword` the same day, 66 with `auth.session` at the
+Better Auth switch on 2026-10-15, 68 with `auth.listSessions` and
+`auth.endSessions` the same day, 67 when `auth.revokeMySessions`, which
+they replace, was deleted with its button, and 68 when
+`household.memberSessions` and `household.endMemberSessions` replaced
+`household.revokeMemberSessions`, 69 with
+`household.endHouseholdSessions`, 70 with
+`household.removeMemberTwoFactor`, and 71 with `auth.confirmPassword`, the
+step-up before a passkey is added or removed) as phases closed
 and the export router arrived. Asserting the count structurally did not stop
 the drift, because nothing compared it with this sentence; since 2026-10-12
 `capabilities.test.ts` does, and fails when the two disagree. 10 Zod
@@ -922,16 +1024,42 @@ they show as done, and drain one at a time on reconnect. A refused consumption
 is not a failure but a question — see *Reconciliation* below. Proven by
 `e2e/offline-shop.spec.ts`, which is the phase's done-when.
 
-**Auth — working.** Real forms wired to Auth.js `signIn()` with Argon2id
-hashing, error mapping and i18n. Rate-limited per IP in Valkey since Phase 3 —
-5 sign-ins per 15 minutes, 3 registrations per hour (CRITICAL-4 closed).
+**Auth — working, on Better Auth 1.7.7 since 2026-10-15 (D135).** Real forms
+post to the auth API through `src/lib/auth/client.ts`, with Argon2id hashing,
+error mapping and i18n; the route in front of Better Auth
+(`src/server/http/auth-handler.ts`) answers seventeen endpoints and applies
+the limits. Two-step verification with an authenticator app is in, each code
+usable once (D148), with backup codes stored as hashes (D149): the login form
+asks for the code, and every role, the kitchen's shared account included, sets
+it up from *Seguridad y acceso* with the password (`e2e/two-factor.spec.ts`
+enrols, signs in with a code and has the same code refused). A member who
+loses the authenticator with no backup code left gets it removed by a
+household admin, after the admin's own password, which ends all of the
+member's sessions (D150). Passkeys work on the server (D151): a sign-in with
+user verification required and the remember-me box honoured, and adding or
+removing one after the password, at the first `STOKY_URLS` address only, on
+https or `localhost` and never at an IP address; proven by
+`integration/passkeys.test.ts` with a software authenticator. *Seguridad y
+acceso* lists, adds, renames and removes them, and says why where adding
+cannot work (another listed address, an install without https on a domain
+name, a browser without WebAuthn); the login page offers a passkey sign-in
+at that address, in a browser that can, honouring the remember-me box
+(`e2e/passkeys.spec.ts` adds one in settings through Chromium's virtual
+authenticator, signs out and signs back in with it). Sessions are database rows: fifteen idle minutes, slid only by the
+keep-alive, a day at most, and deleted to end them — or, with "Mantener la
+sesión iniciada" ticked at sign-in, ninety idle days under a year (D141). Rate-limited in Valkey
+since Phase 3 — 5 sign-ins per 15 minutes per address, 10 per account, 3
+registrations per hour (CRITICAL-4 closed); Better Auth's own limiter is off.
 
 **Frontend — 27 pages, and no route is linked that does not exist.** That last
 part is enforced by `check:links` in CI rather than by audit; the manual version
 missed a dead route three times running, twice from routes linked on every row
 of a table. The five newest pages are Phase 5's: `/kitchen`, `/shopping` as
 Screen A (the list manager moved to `/shopping/lists`), `/settings/people`,
-and `/settings/unsaved`.
+and `/settings/unsaved`. `/settings/security` (2026-10-15, D143) lists a
+person's sessions and ends them; `e2e/session-revocation.spec.ts` drives it
+with two browsers, and `page-titles`, `a11y-structure`, `accessibility` and
+`a11y-aaa` cover it like every other private route.
 
 **Design system — one, and it is in CSS.** 37 tokens under `@theme` in
 `src/app/globals.css` — this line said 26 while line 39 of this same file said
@@ -955,10 +1083,10 @@ which is what I18N-5 is.
 
 **Roles — enforced on the server, per procedure.** Four values
 (`OWNER`, `ADMIN`, `MEMBER`, `KITCHEN`), three procedure tiers in
-`src/server/trpc/trpc.ts`, and all 65 procedures assigned. Membership and role
-are read from the database on every call rather than from the JWT, so a
-demotion takes effect on the next request rather than whenever the 15-minute
-token expires. `src/__tests__/unit/capabilities.test.ts` checks the assignment
+`src/server/trpc/trpc.ts`, and all 71 procedures assigned. Membership and role
+are read from the database on every call rather than from the session, so a
+demotion takes effect on the next request rather than whenever the session
+happens to end. `src/__tests__/unit/capabilities.test.ts` checks the assignment
 of every procedure against the matrix; the integration suite proves the
 refusals by calling the router as a kitchen account.
 
@@ -1009,7 +1137,7 @@ What is measured, and by what:
 | Reading order | `screen-reader.spec.ts`, tree order vs geometry | ✅ desktop only |
 | Announcements | `screen-reader.spec.ts` | ✅ refusals and saved movements both announced — A11Y-1 closed in Phase 5, and the pinned assertion flipped |
 | Reading level (3.1.5) | `src/__tests__/unit/readability.test.ts` | ✅ es 69.0 "fácil", en 66.3 |
-| Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, driven in a browser | ✅ slides on activity, warns at T−2min |
+| Timeouts (2.2.6) | `SessionKeepAlive.test.tsx`, `session.policy.test.ts`, driven in a browser | ✅ slides on activity, warns at T−2min, and says which deadline: inactivity with "Seguir conectado", or the day's limit with no button, because nothing extends it (re-measured 2026-10-15: 12 component, 13 integration, 10 unit cases) |
 
 **Two honest limits.** Automated testing catches roughly a third of real
 accessibility problems, so this is a floor that stops regressions, not a
@@ -1102,7 +1230,9 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | react | 19.2.8 |
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
-| next-auth | 5.0.0-beta.32 |
+| better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
+| @better-auth/passkey, @simplewebauthn/browser | 1.7.7 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey or signs in with one (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
+| uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
 | next-intl | 4.14.0 |
 | tailwindcss | 4.3.3 |
 | zod | 3.25.76 |
@@ -1225,7 +1355,9 @@ Setting `NEXTAUTH_URL` correctly does **not** help — verified against a build
 whose value matched the server's own address exactly.
 
 Nothing caught it because `next dev` does not apply the check and every suite
-ran against `next dev`. `trustHost: true` is now set, with the trade written
+ran against `next dev`. (Auth.js was replaced by Better Auth on 2026-10-15,
+D135; the spec now asserts Better Auth's `get-session` answers on the
+production build, and that it refuses a foreign origin.) `trustHost: true` is now set, with the trade written
 down (Traefik's `Host(...)` rule is what makes trusting the header safe here),
 and `e2e/auth.prod.spec.ts` guards it in the one config that serves the
 standalone artefact. Verified to fail without the fix.
@@ -1392,7 +1524,12 @@ Two things that sequence surfaced, both operational rather than defects:
   request — ~1500 in a browser-suite run, and **pre-dating the fix**: the same
   21-test subset raised 250 on master and 253 after. No response changes and no
   gate fails, which is what makes it expensive — with no error tracking (bullet
-  above), the logs are what this project has.
+  above), the logs are what this project has. **2026-10-15:** Auth.js is gone
+  (D135), and with it the CSRF mint that tripped the prerender; `auth()` still
+  awaits `connection()` first, because reading a session is request data
+  whichever library reads it, and `auth-dynamic.test.ts` still holds the
+  ordering. Not re-measured on the standalone artefact at that commit; the
+  `AbortError` half does not involve authentication.
 
 ---
 

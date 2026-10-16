@@ -101,8 +101,8 @@ docker run --rm \
   --env "DATABASE_URL=${DATABASE_URL:-}" \
   --env "VALKEY_URL=${VALKEY_URL:-}" \
   --env "CHANGED_BASE=${CHANGED_BASE:-}" \
-  --env "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-ci-only-not-a-real-secret}" \
-  --env "NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}" \
+  --env "STOKY_SECRET=${STOKY_SECRET:-ci-only-not-a-real-secret}" \
+  --env "STOKY_URLS=${STOKY_URLS:-http://localhost:3000}" \
   --env CI=true \
   "$IMAGE_TAG" \
   sh -c "$COMMANDS"

@@ -17,6 +17,8 @@ const SRC = join(import.meta.dir, "..", "..");
 const SVG_ALLOWED: Record<string, string> = {
   "components/barcode/Scanner.tsx":
     "the torch toggle's two states carry a <title> each and are what its tests address",
+  "components/security/TotpQr.tsx":
+    "a QR code is not a glyph: it is drawn from the data it encodes, and named with role=img",
 };
 
 function sourceFiles(dir: string, found: string[] = []): string[] {

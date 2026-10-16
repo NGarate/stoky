@@ -23,7 +23,7 @@ out
 # start, so an unlisted one ships its secrets in a layer. At every depth, not
 # only the root: the documented source build (`docker-compose.prod.yml`) has the
 # operator write `deploy/.env` with the real database password and
-# NEXTAUTH_SECRET inside this context, and `COPY . .` would put it in the
+# STOKY_SECRET inside this context, and `COPY . .` would put it in the
 # builder and development layers. `deploy/example.env` does not match and stays.
 **/.env*
 !.env.example

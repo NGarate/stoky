@@ -2,8 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import * as argon2 from "argon2";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { createTRPCRouter, createTRPCContext, writeProcedure } from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
 import { replayable } from "@/lib/validations/idempotency";
@@ -83,7 +82,7 @@ const testRouter = createTRPCRouter({
 });
 
 async function caller(account: { userId: string; householdId: string }) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: account.userId,
       email: `${account.userId}@example.com`,
@@ -92,6 +91,8 @@ async function caller(account: { userId: string; householdId: string }) {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
   };
   return testRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -143,11 +144,6 @@ async function makeHousehold(label: string) {
     data: {
       email: `replay-${label}-${Date.now()}@example.com`,
       name: `Replay ${label}`,
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

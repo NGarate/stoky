@@ -5,37 +5,45 @@ import { DEMO_EMAIL, DEMO_PASSWORD } from "./session";
 /**
  * Authentication, under a real production build.
  *
- * This exists because production auth was **completely broken** and every suite
- * was green. Auth.js v5 defaults `trustHost` to false off Vercel and then
- * refuses any request whose Host it cannot vouch for — `UntrustedHost`, a 500
- * from `/api/auth/session`, nobody able to sign in. Setting `NEXTAUTH_URL`
- * correctly does not help; it was verified against a build whose `NEXTAUTH_URL`
- * matched the server's own address exactly.
- *
- * Nothing noticed because `next dev` does not apply the check, and every other
- * suite runs against `next dev`. So the guard has to live here, in the one
- * config that serves the standalone artefact the image runs.
+ * This exists because production auth was once **completely broken** while
+ * every suite was green: Auth.js v5 refused any request whose Host it could not
+ * vouch for — a 500 from its session endpoint, nobody able to sign in — and
+ * `next dev`, which every other suite ran against, did not apply the check. So
+ * the guard lives here, in the one config that serves the standalone artefact
+ * the image runs, and it outlived the library: Better Auth builds its
+ * configuration once, from `STOKY_URLS`, and a production build is where a
+ * mistake in that would show (PROGRESS D135, D138).
  */
 
 test.describe("a production build's authentication", () => {
   test("answers the session endpoint instead of refusing the host", async ({
     request,
   }) => {
-    // The exact call that returned 500 `UntrustedHost`. `null` is the right
-    // answer for a request with no cookie; what matters is that it is answered.
-    const response = await request.get("/api/auth/session");
+    // `null` is the right answer for a request with no cookie; what matters is
+    // that it is answered.
+    const response = await request.get("/api/auth/get-session");
 
     expect(response.status()).toBe(200);
     expect(await response.json()).toBeNull();
   });
 
-  test("issues a CSRF token, which sign-in cannot proceed without", async ({
+  test("refuses a sign-in from a foreign origin when a cookie rides along", async ({
     request,
   }) => {
-    const response = await request.get("/api/auth/csrf");
+    // Better Auth's origin check, which it switches off under NODE_ENV=test
+    // unless told not to. A browser that already holds a cookie for this
+    // instance is exactly the one another page could make post here.
+    const response = await request.post("/api/auth/sign-in/email", {
+      headers: {
+        "content-type": "application/json",
+        origin: "https://evil.example",
+        cookie: "stoky_device=00000000-0000-4000-8000-000000000000",
+      },
+      data: JSON.stringify({ email: DEMO_EMAIL, password: "no es la contraseña" }),
+    });
 
-    expect(response.status()).toBe(200);
-    expect(await response.json()).toHaveProperty("csrfToken");
+    expect(response.status()).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "INVALID_ORIGIN" });
   });
 
   test("serves the login page", async ({ page }) => {
@@ -50,7 +58,7 @@ test.describe("a production build's authentication", () => {
 /**
  * The journey, rather than the endpoints.
  *
- * The three tests above prove Auth.js answers. This proves a person can get in
+ * The three tests above prove the auth API answers. This proves a person can get in
  * — against the standalone artefact, under the production Content-Security
  * Policy, which is a stricter policy than any other suite ever exercises: no
  * `unsafe-eval`, no websocket origins, and `upgrade-insecure-requests` on top.

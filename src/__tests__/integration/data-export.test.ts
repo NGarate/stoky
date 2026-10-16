@@ -32,6 +32,8 @@ let owner: Caller;
 let member: Caller;
 let householdId: string;
 let productId: string;
+const AUTHENTICATOR_SECRET = "$ba$1$secreto-del-autenticador";
+const PASSKEY_PUBLIC_KEY = "pQECAyYgASFYIclave-publica-de-la-llave";
 
 beforeAll(async () => {
   const household = await createTestHousehold({ name: HOUSEHOLD });
@@ -49,6 +51,22 @@ beforeAll(async () => {
     householdId,
     role: "MEMBER",
   });
+
+  // An authenticator secret, which the export must not carry (D148).
+  await prisma.passkey.create({
+    data: {
+      userId: ownerUser.id,
+      credentialID: `${PASSKEY_PUBLIC_KEY}-${crypto.randomUUID()}`,
+      publicKey: PASSKEY_PUBLIC_KEY,
+      counter: 0,
+      deviceType: "multiDevice",
+      backedUp: true,
+    },
+  });
+  await prisma.twoFactor.create({
+    data: { userId: ownerUser.id, secret: AUTHENTICATOR_SECRET, backupCodes: AUTHENTICATOR_SECRET },
+  });
+  await prisma.user.update({ where: { id: ownerUser.id }, data: { twoFactorEnabled: true } });
 
   owner = appRouter.createCaller(
     await createTRPCContext({ session: createMockSession(ownerUser) }),
@@ -121,6 +139,13 @@ afterAll(async () => {
   await prisma.household.deleteMany({ where: { id: { in: ids } } });
 });
 
+/** Every object key anywhere inside `value`, however deep. */
+function keysOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(keysOf);
+  if (value === null || typeof value !== "object" || value instanceof Date) return [];
+  return Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)]);
+}
+
 describe("what must never be in the file", () => {
   it("carries no password hash, anywhere", async () => {
     // The single most important assertion here. An export is a file somebody
@@ -128,10 +153,40 @@ describe("what must never be in the file", () => {
     // procedure uses explicit `select` clauses rather than `include` precisely
     // so that a new column cannot arrive in this file by default — this is the
     // test that notices if that discipline slips.
-    const dump = JSON.stringify(await owner.data.exportHousehold());
+    const exported = await owner.data.exportHousehold();
+    const dump = JSON.stringify(exported);
 
-    expect(dump).not.toContain("passwordHash");
+    // The hash lives in a related row (the credential Account), so the way it
+    // would arrive is a relation selected beside the members' columns. The
+    // value check catches it under any key; the key check catches the column
+    // even if a hash ever stopped looking like Argon2id. (`notes.passwords`,
+    // the sentence saying hashes are never exported, is not one of them.)
     expect(dump).not.toContain("$argon2");
+    expect(
+      keysOf(exported).filter((key) => /^(password|passwordHash|accounts)$/i.test(key)),
+    ).toEqual([]);
+  });
+
+  it("carries no authenticator secret or backup codes", async () => {
+    // `TwoFactor` is a credential like the password hash: a relation of the
+    // member, so it would arrive the same way, selected beside the columns.
+    const exported = await owner.data.exportHousehold();
+
+    expect(JSON.stringify(exported)).not.toContain(AUTHENTICATOR_SECRET);
+    expect(
+      keysOf(exported).filter((key) => /^(twoFactor|secret|backupCodes)$/i.test(key)),
+    ).toEqual([]);
+  });
+
+  it("carries no passkey", async () => {
+    // A credential like the others (D151): public, but the export is the
+    // household's data, not how its members sign in.
+    const exported = await owner.data.exportHousehold();
+
+    expect(JSON.stringify(exported)).not.toContain(PASSKEY_PUBLIC_KEY);
+    expect(
+      keysOf(exported).filter((key) => /^(passkeys?|publicKey|credentialID)$/i.test(key)),
+    ).toEqual([]);
   });
 
   it("carries no whole-image OCR dump", async () => {

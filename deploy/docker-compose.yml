@@ -119,8 +119,15 @@ services:
       # One password configures BOTH services; hex avoids URL escaping issues.
       DATABASE_URL: "postgresql://stoky:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env con openssl rand -hex 32}@db:5432/stoky?schema=public"
       VALKEY_URL: redis://cache:6379
-      NEXTAUTH_URL: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
-      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:?Define NEXTAUTH_SECRET en .env con openssl rand -hex 32}"
+      # The one address Traefik routes. A list in STOKY_URLS outside the bundle;
+      # here a second entry would be trusted for sign-in and never reach us.
+      STOKY_URLS: "https://${DOMAIN:?Define DOMAIN en .env sin https ni ruta}"
+      # Passed through, not required here: the application refuses to start
+      # without a usable secret and names the variable, and an .env from an
+      # earlier release may still hold the old name. install.sh renames it.
+      STOKY_SECRET: "${STOKY_SECRET:-}"
+      # Legacy name, read only when STOKY_SECRET is empty, with a warning.
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-}"
       # Who may create an account: open | first-user | closed. Defaulted, unlike
       # the lines above: an .env from an earlier release lacks it, and the safe
       # value for that installation is the one that closes registration.

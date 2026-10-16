@@ -184,6 +184,24 @@ green suites, and `upgrade-insecure-requests` killing every fetch on WebKit
 over plain http. The build adds under a minute and the production server serves
 faster than dev compiled, so the suite's wall clock barely moved.
 
+**Passkeys are tested at `localhost`, everything else at 127.0.0.1.** The
+suite names `127.0.0.1` everywhere because `localhost` is two addresses and
+stacks disagree about which comes first (STATUS trap 8). A passkey cannot
+live there: it belongs to a relying party named by a host, WebAuthn takes no
+IP address as that name, and the server registers no passkey plugin at an IP
+(`src/lib/auth/passkeys.ts`). So the one `webServer` lists both, **localhost
+first** — `STOKY_URLS=http://localhost:3100,http://127.0.0.1:3100` — which
+makes `localhost` the canonical address and the relying party while
+127.0.0.1 stays a trusted origin for every other spec; both are plain http,
+so the cookie's `Secure` decision, the only other thing the first entry
+decides, is unchanged. The `passkeys` project runs `e2e/passkeys.spec.ts`
+alone, in Chromium at `http://localhost:3100` with
+`--host-resolver-rules=MAP localhost 127.0.0.1`, so trap 8 cannot come back
+for the one project that has to use the name; its authenticator is
+Chromium's virtual one, over the DevTools protocol. Setting
+`PLAYWRIGHT_BASE_URL` to any other server leaves the project out, because
+nothing says that server lists `localhost` first.
+
 **Do not start a server for it, and do not stop yours.** `reuseExistingServer`
 is off, so the suite never adopts a foreign server — a taken port fails loudly
 instead. Your own `bun run dev` and the suite coexist: different port, different
@@ -235,7 +253,10 @@ For GitHub Actions, use:
 ```yaml
 - name: Run tests
   env:
-    NEXTAUTH_SECRET: test-secret
+    # 32 characters or more, the length production requires; the URL is the
+    # one Better Auth is built with and the origin the sign-in helper sends.
+    STOKY_SECRET: integration-suite-secret-not-a-real-one
+    STOKY_URLS: http://localhost:3000
   run: |
     bun run test:integration
 ```

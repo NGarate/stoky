@@ -12,32 +12,97 @@ export type AuthErrorKey =
   | "loginError"
   | "registerError"
   | "passwordContainsIdentity"
-  | "registrationClosed";
+  | "registrationClosed"
+  | "twoFactorInvalidCode"
+  | "backupCodeInvalid"
+  | "twoFactorExpired"
+  | "twoFactorLocked"
+  | "twoFactorCodesSpent"
+  | "twoFactorUnreadable"
+  | "passkeyFailed"
+  | "passkeyNotFound"
+  | "passkeyNotVerified"
+  | "passkeyCancelled"
+  | "stepUpRequired";
 
 /**
- * Auth.js flattens every sign-in failure to "CredentialsSignin" so a login
- * form cannot leak whether the address or the password was wrong. The one
- * thing it does pass through is a `CredentialsSignin` subclass's `code`, which
- * is why the rate-limit refusals are modelled as subclasses in `@/lib/auth`.
+ * Refusal codes, read before any message so a refusal is worded by what it
+ * is. A rate-limited attempt is the case that matters: worded as a wrong
+ * password it is the worst possible sentence, since the password was very
+ * likely right.
  *
- * Matched before the message markers below, because a rate-limited attempt
- * also arrives carrying "credentials" and would otherwise be reported as a
- * wrong password — which is the worst possible wording for it, since the
- * password was very likely right.
+ * Two vocabularies reach here, both looked up in lower case: the sign-in
+ * module's (`SignInRefusalCode`, `src/lib/auth/client.ts`), which the forms
+ * pass, and the auth API's own upper-case codes — Better Auth's and the
+ * route's (`src/server/http/auth-handler.ts`) — for any caller that hands one
+ * over as it came.
  */
 const CODE_KEYS: Record<string, AuthErrorKey> = {
+  invalid_credentials: "invalidCredentials",
   rate_limited: "tooManyAttempts",
   // The account's counter, not the address's: a different network cannot
   // help, and the person may be the one someone else is locking out.
   account_rate_limited: "accountTooManyAttempts",
   auth_unavailable: "authUnavailable",
+  // Better Auth's wrong address or password, and its refusal of a password
+  // too long to check: both are "wrong", and saying "too long" would describe
+  // the rule to a guesser.
+  invalid_email_or_password: "invalidCredentials",
+  password_too_long: "invalidCredentials",
+  // An origin the instance does not trust is its configuration, not the
+  // person's input; "unavailable" is the only true thing to tell them.
+  invalid_origin: "authUnavailable",
+  missing_or_null_origin: "authUnavailable",
+  // The second step of a sign-in (D148). A replayed code is refused as
+  // INVALID_CODE too, so the sentence says "or already used". A backup code
+  // has its own sentence: "the one your app shows now" is the wrong advice
+  // for a code written on paper.
+  invalid_code: "twoFactorInvalidCode",
+  invalid_backup_code: "backupCodeInvalid",
+  // The challenge is gone — ten minutes passed, or five wrong codes ended it
+  // — and only the password step makes another. `two_factor_expired` and
+  // `two_factor_locked` are the sign-in module's names for these
+  // (`SecondStepRefusalCode`, `src/lib/auth/client.ts`).
+  invalid_two_factor_cookie: "twoFactorExpired",
+  too_many_attempts_request_new_code: "twoFactorExpired",
+  two_factor_expired: "twoFactorExpired",
+  // Better Auth's lockout, per account, across challenges: fifteen minutes.
+  account_temporarily_locked: "twoFactorLocked",
+  two_factor_locked: "twoFactorLocked",
+  // The account's day of wrong authenticator codes is spent (D148,
+  // `twoFactorCodeRateLimit`): waiting fifteen minutes will not help, a
+  // backup code will.
+  too_many_wrong_codes: "twoFactorCodesSpent",
+  two_factor_codes_spent: "twoFactorCodesSpent",
+  // `STOKY_SECRET` changed and the stored secret no longer decrypts: no
+  // authenticator code will ever work, but a backup code, stored as a hash,
+  // still does (D149), so the sentence offers one before the operator.
+  two_factor_unreadable: "twoFactorUnreadable",
+  // A passkey sign-in (D151). A passkey the server does not know — removed,
+  // or registered at another address — is its own sentence, because trying
+  // again cannot help; so is an authenticator that did not check who was
+  // holding it (`USER_VERIFICATION_REQUIRED`, `src/lib/auth/instance.ts`),
+  // which the person can change on the device. A challenge that lapsed, or
+  // a signature that did not verify, is worth one more try.
+  passkey_not_found: "passkeyNotFound",
+  user_verification_required: "passkeyNotVerified",
+  authentication_failed: "passkeyFailed",
+  challenge_not_found: "passkeyFailed",
+  auth_cancelled: "passkeyFailed",
+  // The sign-in module's names for the same (`PasskeySignInRefusalCode`,
+  // `src/lib/auth/client.ts`), and one of its own: a prompt the person
+  // dismissed, or one that found no passkey for this address, never reached
+  // the server, and "it did not work" would be the wrong thing to say about a
+  // "no".
+  passkey_not_verified: "passkeyNotVerified",
+  passkey_failed: "passkeyFailed",
+  passkey_cancelled: "passkeyCancelled",
+  // Adding or removing a passkey without the password re-entered first, or
+  // after the five minutes it stands for (`src/lib/auth/step-up.ts`).
+  step_up_required: "stepUpRequired",
 };
 
-const INVALID_CREDENTIALS_MARKERS = [
-  "credentialssignin",
-  "invalid credentials",
-  "credentials",
-];
+const INVALID_CREDENTIALS_MARKERS = ["invalid credentials", "invalid email or password"];
 
 const EMAIL_EXISTS_MARKERS = [
   "already registered",
@@ -69,8 +134,8 @@ export function getAuthErrorKey(
   const normalizedMessage = message?.trim().toLowerCase() ?? "";
 
   if (normalizedMessage.includes("too many")) {
-    // The registration path is tRPC rather than Auth.js, so it carries a
-    // message rather than a code.
+    // The registration path is tRPC rather than the auth API, so it carries
+    // a message rather than a code.
     return "tooManyAttempts";
   }
 

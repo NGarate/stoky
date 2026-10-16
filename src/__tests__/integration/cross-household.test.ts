@@ -3,8 +3,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
-import * as argon2 from "argon2";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { envelope } from "../utils/test-helpers";
 
 /**
@@ -48,7 +47,7 @@ const B = {
 };
 
 async function callerFor(account: { userId: string; householdId: string }) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: account.userId,
       email: `${account.userId}@example.com`,
@@ -57,6 +56,8 @@ async function callerFor(account: { userId: string; householdId: string }) {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -72,11 +73,6 @@ async function makeHousehold(
     data: {
       email: `cross-${label}-${Date.now()}@example.com`,
       name: `Cross ${label}`,
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

@@ -4,10 +4,16 @@ import { useOnline } from "@/lib/useOnline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { readSessionExpiry, type SessionExpiry } from "@/lib/auth/client";
+import type { DeadlineKind } from "@/lib/auth/session-policy";
 import type { JSX } from "react";
 
 /**
  * Keeps an active session alive, and warns before an idle one ends.
+ *
+ * A remembered session (the login form's box, D141) has ninety days ahead of
+ * it, so the warning below never appears in a day's use; the activity refresh
+ * still asks, and only reads it (`auth.session`).
  *
  * WCAG 2.1 **2.2.6 Timeouts** (AAA): a user must be warned of an inactivity
  * duration that could cause data loss. This application had neither half — the
@@ -18,17 +24,28 @@ import type { JSX } from "react";
  * Two behaviours, and they are deliberately different:
  *
  * - **Activity refreshes silently.** A pointer or a key, throttled to once
- *   every four minutes, asks the server for the session; Auth.js re-issues the
- *   token, with a fresh expiry, on every read. Someone who is using
- *   the application never sees this component at all, which is the point — a
- *   warning that fires while you are typing is a nuisance, not an
+ *   every four minutes, asks `auth.session`, which moves the session's expiry
+ *   fifteen minutes on — up to the day's limit from the sign-in and never past
+ *   it. It is the only thing that moves it: a background read is not somebody
+ *   at the screen (`src/lib/auth/session-policy.ts`). Someone who is using the
+ *   application never sees this component until that limit, which is the
+ *   point — a warning that fires while you are typing is a nuisance, not an
  *   accessibility feature.
- * - **Inactivity warns, out loud.** Two minutes before expiry a live region
- *   announces how long is left and offers to stay signed in. It is
- *   `role="alert"`, so a screen reader says it without anyone having to look,
- *   and it does **not** take focus: the warning arrives when the person is
- *   already away from the keyboard, and stealing focus would move a caret that
- *   someone may be about to come back to.
+ * - **The deadline warns, out loud.** Two minutes before expiry a live region
+ *   announces how long is left. It is `role="alert"`, so a screen reader says
+ *   it without anyone having to look, and it does **not** take focus: the
+ *   warning arrives when the person is already away from the keyboard, and
+ *   stealing focus would move a caret that someone may be about to come back
+ *   to.
+ *
+ * **Which deadline it is decides what the warning says.** An idle deadline
+ * (`kind: "idle"`) names the inactivity and offers to stay signed in, because
+ * pressing the button moves it. The day's limit (`kind: "cap"`) names the limit
+ * and offers nothing: no request can extend it, and a button that answers with
+ * the same countdown tells the person they did something when they did not.
+ * The server says which (`deadlineKind`), on the first render and on every
+ * refresh, so a session that slides into its last fifteen minutes changes its
+ * warning without a reload.
  */
 
 /** How long before expiry the warning appears. */
@@ -38,13 +55,13 @@ const WARN_BEFORE_MS = 2 * 60 * 1000;
  * The shortest gap between two silent refreshes.
  *
  * Continuous use costs at most one extra request every four minutes, which
- * keeps an active session well inside its fifteen idle minutes. Every read
- * re-issues the token (`src/lib/auth.ts`, the `session` settings), so a
- * shorter throttle would only spend requests moving the expiry a little
- * further each time.
+ * keeps an active session well inside its fifteen idle minutes; a shorter
+ * throttle would only spend requests moving the expiry a little further each
+ * time.
  *
- * Nothing here can move the thirty-day limit (`MAX_SESSION_AGE_S`): the
- * server refuses the token at that point however recently it was refreshed.
+ * It keeps asking at the day's limit, where the expiry no longer moves: the
+ * answer still says the session is live, and the slide's write is what dates
+ * the row's last use for the ten-session cap (`src/lib/auth/sign-in-tidy.ts`).
  */
 const REFRESH_THROTTLE_MS = 4 * 60 * 1000;
 
@@ -54,17 +71,24 @@ const TICK_MS = 15 * 1000;
 interface SessionKeepAliveProps {
   /** `session.expires`, as the server rendered it. */
   expiresAt: string;
-  /** Injected by the tests; the browser's own fetch otherwise. */
-  fetcher?: typeof fetch;
+  /** `session.expiresKind`: which deadline `expiresAt` is. */
+  kind: DeadlineKind;
+  /**
+   * Reads, and so slides, the session's expiry. Injected by the tests;
+   * `readSessionExpiry` (`src/lib/auth/client.ts`) otherwise.
+   */
+  readExpiry?: () => Promise<SessionExpiry | null>;
 }
 
 export function SessionKeepAlive({
   expiresAt,
-  fetcher,
+  kind: renderedKind,
+  readExpiry = readSessionExpiry,
 }: SessionKeepAliveProps): JSX.Element | null {
   const t = useTranslations("session");
   const online = useOnline();
   const [expiry, setExpiry] = useState(() => new Date(expiresAt).getTime());
+  const [kind, setKind] = useState<DeadlineKind>(renderedKind);
   const [remainingMs, setRemainingMs] = useState(
     () => new Date(expiresAt).getTime() - Date.now(),
   );
@@ -79,11 +103,10 @@ export function SessionKeepAlive({
     // stays, because a failed session refresh must not take the timer with it.
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
-      const request = fetcher ?? fetch;
-      const response = await request("/api/auth/session", { cache: "no-store" });
-      const session = (await response.json()) as { expires?: string } | null;
-      if (session?.expires) {
+      const session = await readExpiry();
+      if (session) {
         setExpiry(new Date(session.expires).getTime());
+        setKind(session.kind);
         setRemainingMs(new Date(session.expires).getTime() - Date.now());
       }
       lastRefresh.current = Date.now();
@@ -94,7 +117,7 @@ export function SessionKeepAlive({
     } finally {
       refreshing.current = false;
     }
-  }, [fetcher]);
+  }, [readExpiry]);
 
   // The countdown. Recomputed rather than decremented, because a laptop that
   // slept through the timer would otherwise think it still had time.
@@ -125,7 +148,7 @@ export function SessionKeepAlive({
    *
    * A shell restored from the service worker's cache carries a stale
    * `session.expires`, rendered as a prop by the dashboard layout. Offline,
-   * `/api/auth/session` is passed through and fails, so the session cannot be
+   * `auth.session` is passed through and fails, so the session cannot be
    * refreshed — and greeting someone with a countdown they can do nothing
    * about is an interruption with no action attached, which is the failure
    * §7 rule 3 is about.
@@ -139,6 +162,14 @@ export function SessionKeepAlive({
 
   const minutesLeft = Math.max(0, Math.ceil(remainingMs / 60000));
   const expired = remainingMs <= 0;
+  const atLimit = kind === "cap";
+  const message = atLimit
+    ? expired
+      ? t("capReached")
+      : t("capIn", { minutes: minutesLeft })
+    : expired
+      ? t("expired")
+      : t("expiringIn", { minutes: minutesLeft });
 
   return (
     <div
@@ -146,16 +177,16 @@ export function SessionKeepAlive({
       role="alert"
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-warn-foreground">
-          {expired ? t("expired") : t("expiringIn", { minutes: minutesLeft })}
-        </p>
-        <Button
-          className="sm:w-auto"
-          onClick={() => void refresh()}
-          type="button"
-        >
-          {t("staySignedIn")}
-        </Button>
+        <p className="text-sm text-warn-foreground">{message}</p>
+        {atLimit ? null : (
+          <Button
+            className="sm:w-auto"
+            onClick={() => void refresh()}
+            type="button"
+          >
+            {t("staySignedIn")}
+          </Button>
+        )}
       </div>
     </div>
   );

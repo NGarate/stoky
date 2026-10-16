@@ -5,7 +5,7 @@
 This document tracks open issues and technical debt. It started as the Phase 0
 (Foundation) code review and is kept current as items are fixed.
 
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-16
 
 **Status:** after Phase 7's slice of the backlog, the browser suite's move
 to isolated data and the production artefact, and the owner's first pass
@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1 and TEST-9.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9 and TEST-10.** TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -54,6 +54,13 @@ SHOP-2, DB-1 and UPLOAD-1 — a race that is a defect rather than a weakness,
 and two gaps whose fixes need a schema change it did not take — and, from the
 final review of its branch, TEST-9, a test gap in the member password reset.
 
+The move to Better Auth (2026-10-15, `feat/better-auth-2026-10-15`) filed
+five defects of the library's, AUTH-2 to AUTH-6, and closed each on that
+branch before it could ship; `docs/SECURITY_REVIEW.md` (*The Better Auth
+migration*) maps every finding to its commit. It also filed TEST-10, a
+browser test that failed three of its full runs and was never caught
+failing with a trace.
+
 The individual entries below are authoritative; this line is a summary and has
 twice been the last thing updated. If it disagrees with an entry, the entry is
 right.
@@ -92,7 +99,12 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | PROD-1 | Deleting a used product fails, and says something else | ✅ Resolved (Phase 7 slice) |
 | SHOP-1 | A shopping item with no name at all is accepted | ✅ Resolved (Phase 7 slice), superseded 2026-08-22 |
 | OCR-2 | Receipt scanning does not work in the production image | ✅ Resolved |
-| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right |
+| AUTH-1 | An inert adapter picks a session strategy the schema cannot serve | ✅ Resolved `3e973ff` — the adapter is gone, so the default is right; next-auth itself replaced 2026-10-15 (D135) |
+| AUTH-2 | Better Auth refuses to serve with a required column it never writes | ✅ Resolved 2026-10-15 by D134 — the hash moved to `Account` and `User.passwordHash` went before the switch |
+| AUTH-3 | Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options | ✅ Resolved 2026-10-15 by D135 and D136 — the secrets are named in the options, the other two stop the server at start-up |
+| AUTH-4 | `set-auth-token` exposed to cookie clients; native 403 from an injected cookie | ✅ Resolved 2026-10-15 — the proxy stops injecting `stoky_device` on the auth API and bearer calls, and the route withholds the header from any request that carried a cookie (D142) |
+| AUTH-5 | Better Auth accepts one TOTP code more than once | ✅ Resolved 2026-10-15 by D148 — a before-hook claims the code's time step in the same statement that checks it |
+| AUTH-6 | Better Auth's backup codes are 60 bits, kept encrypted with the secret that a rotation replaces | ✅ Resolved 2026-10-15 by D149 — 120-bit codes stored as SHA-256 hashes, before any endpoint hands one out |
 | TEST-5 | bun abandons a test body at a rejecting `await` | 🟡 Open upstream — reproduction in `docs/reproductions/` |
 | TEST-6 | Two inert mobile skips cite a phase that closed | ✅ Resolved `bcd1e74` — 8 of 8 pass on a phone once the locators were fixed |
 | TEST-7 | ProductRating tests fail in the component suite but pass alone | ✅ Resolved — removed process-wide mocks from product-detail tests |
@@ -130,6 +142,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | DB-1 | The data model's invariants are held only by application code | 🟡 Open — deferred by the 2026-10-12 security review; needs a data audit first |
 | UPLOAD-1 | Receipt photographs have no per-household storage quota | 🟡 Open — deferred by the 2026-10-12 security review |
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
+| TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | 🟡 Open — cause not found; first step is a traced failing run |
 
 ---
 
@@ -1003,6 +1016,39 @@ go red with the `me.data.id !== member.id` check removed; and
 `resetRefusalOf` matching `RESET_OWN_PASSWORD_MESSAGE`, as it matches the
 identity message, and mapping it to `"failed"` or a sentence of its own,
 never `"tooEasy"`.
+
+---
+
+### 🟡 TEST-10: The service worker's offline spec failed three full runs on the Better Auth branch
+
+**File:** `e2e/service-worker.prod.spec.ts` ("signed in › serves a page with
+the network cut off")
+**Severity:** LOW — an intermittent browser test; nothing a person meets has
+been tied to it
+**Status:** OPEN — seen while building the Better Auth branch
+(`feat/better-auth-2026-10-15`), cause not found
+
+With the network cut off, `/inventory` is expected to come from the worker
+with the app's own navigation on it. Three full runs of `bun run test:e2e`
+failed there instead: `getByRole('navigation', { name: 'Navegación
+principal' })` was not found within 10 seconds. One run at the branch's
+15th commit ("list every address the instance answers at in STOKY_URLS")
+and two at its 18th ("tell an idle timeout from the session limit in the
+warning"); the 18th's parent passed the suite in each of its runs that
+session. Repeated on its own (`--repeat-each`) at both commits, the spec
+never failed, and the test passed in every one of the nineteen full runs
+from the 19th commit to the 27th. Retries are off locally, so a run that
+hits it fails.
+
+What is not known is whether it belongs to the branch. The test reads a
+signed-in shell through the shared session from `session.setup.ts`, and the
+branch changed how that session is kept, so that is where to look first;
+but no run was traced while failing (four traced runs passed), and no
+record says whether it ever failed before the branch.
+
+**The fix** starts with a failing run under `--trace=retain-on-failure`: the
+trace says whether the offline navigation got the worker's page, the
+browser's own "no internet" page, or a page that went to `/login`.
 
 ---
 
@@ -3040,6 +3086,12 @@ afterAll(async () => {
 **Files:** the standalone artefact as served; `playwright.config.ts:267`, `Dockerfile`'s production `CMD`
 **Severity:** MEDIUM — the page renders correctly; what is lost is the log, and a Node default is now being relied on
 **Status:** PARTLY CLOSED — measured 2026-08-26, re-measured the same day.
+**2026-10-15:** next-auth, whose CSRF mint inside a session read was the
+`crypto` half's trigger, was replaced by Better Auth (PROGRESS D135). `auth()`
+still awaits `connection()` before reading the session, because a session read
+is request data whichever library makes it, and `auth-dynamic.test.ts` still
+holds that ordering. Not re-measured on the standalone artefact at that
+commit; the `AbortError` half does not involve authentication.
 **This entry described two causes as one.** The `crypto.getRandomValues()` half
 is fixed (`d0e7566`); the `AbortError` half is untouched and is the larger
 number. Both measurements are at the end, and one of them contradicts the table
@@ -3504,6 +3556,154 @@ Verified: typecheck, lint, verify:local, `auth.flow` + `capabilities` +
 **What this is not.** It is not an argument for or against JWT sessions. Auth.js
 gives no choice here: credentials sign-in always produces a JWT.
 
+**2026-10-15 — closed for good.** next-auth was replaced by Better Auth
+(PROGRESS D135), whose sessions are rows in a `Session` table: the database
+strategy this entry found unreachable with credentials is now the only one.
+The configuration this entry guarded is gone with the library; nothing picks a
+strategy by the presence of an adapter any more.
+
+### ✅ AUTH-2: Better Auth refuses to serve with a required column it never writes
+
+**Files:** `prisma/schema.prisma` (`User`, `Account`), `src/lib/auth/credentials.ts`
+**Severity:** HIGH for the migration — sign-in would not have worked at all
+**Status:** RESOLVED 2026-10-15 by PROGRESS D134, before the switch it would have broken.
+
+Found by the Better Auth spike (`spike/better-auth-2026-10-15`, `1c8156b`):
+Better Auth checks the Prisma data model against the schema it expects when it
+starts, and a column on `User` that is required, has no default and is not one
+of its fields — `passwordHash` — is a mismatch it refuses to serve with. It
+would never write that column either: it creates users through its own adapter
+and keeps a password in the `credential` row of `Account`.
+
+**How it closed.** D134 moved every hash into that `Account` row and dropped
+`User.passwordHash` while next-auth was still the thing signing people in
+(`20261015120000_credential_accounts`), so the swap (D135) found a schema
+Better Auth accepts and carried no data move. `credentials.ts` is still the
+one module of ours that reads or writes the hash; Better Auth is the one
+other, reading it at sign-in and writing it when a person changes their own
+password (D144), with our Argon2id.
+
+### ✅ AUTH-3: Better Auth honours `BETTER_AUTH_SECRETS` / `TRUSTED_ORIGINS` / `TELEMETRY` over its options
+
+**Files:** `src/lib/auth/environment.ts`, `src/lib/auth/instance.ts`, `src/lib/auth/startup.ts`
+**Severity:** HIGH for the migration — a forged session, or an origin nobody reviewed, with every check green
+**Status:** RESOLVED 2026-10-15 by PROGRESS D135 (the swap) and D136 (start-up).
+
+Found reading Better Auth 1.7.7 for the swap. It reads environment variables
+of its own, and three of them change what the instance does whatever its
+options say:
+
+- **`BETTER_AUTH_SECRETS`** is used whenever `secrets` is not given, and
+  `BETTER_AUTH_SECRET` or `AUTH_SECRET` whenever `secret` is empty
+  (`context/create-context.mjs`). The start-up guard reads only
+  `NEXTAUTH_SECRET`, so a real one beside `AUTH_SECRET=changeme` would pass
+  the guard and `/api/health` and sign every session with `changeme` — the
+  bug found under next-auth on 2026-10-12, in a new place.
+- **`BETTER_AUTH_TRUSTED_ORIGINS`** is appended to the trusted origins after
+  the configured ones (`context/helpers.mjs`), so a value left in an
+  environment file adds an origin allowed to send a signed-in browser's
+  POSTs.
+- **`BETTER_AUTH_TELEMETRY`** turns telemetry on whatever
+  `telemetry.enabled` says.
+
+**How it closed.** The swap (D135) names both `secret` and `secrets` from
+`NEXTAUTH_SECRET`, so the secret variables are never read;
+`unit/auth-secret.test.ts` sets all three to something else and reads back
+the key the instance signs with. No option overrides the other two, so the
+swap refused them when the instance was built, which answered 503 at the
+first sign-in while `/api/health` said the instance was healthy. D136 moves
+that refusal to start-up: the process exits with an `[auth] refusing to
+start:` line naming the variable (`unit/auth-environment.test.ts`). The
+ignored ones — the three secrets, `BETTER_AUTH_URL` and next-auth's
+`AUTH_URL` — are each named in an `[auth] warning:` line at start-up, so an
+operator does not go on believing one is in use.
+
+### ✅ AUTH-4: `set-auth-token` exposed to cookie clients; native 403 from an injected cookie
+
+**Files:** `src/server/http/auth-handler.ts`, `src/proxy.ts`, `src/lib/auth/instance.ts`
+**Severity:** HIGH for the migration — the first defeats `HttpOnly`, the second locks the native client out
+**Status:** RESOLVED 2026-10-15 by "refactor(auth): never mint a device id for an auth API or bearer request" and PROGRESS D142.
+
+Both were found by the Better Auth spike (`spike/better-auth-2026-10-15`),
+with the bearer plugin on:
+
+- **The bearer plugin hands the session token to scripts.** Its after-hook
+  copies the session cookie's signed value into a `set-auth-token` header,
+  and adds that header to `Access-Control-Expose-Headers`, on every answer
+  that sets the cookie. That includes a browser's sign-in and a remembered
+  session's refresh. Any script on the page could then read the value the
+  cookie's `HttpOnly` exists to hide, and replay it from anywhere as
+  `Authorization: Bearer`.
+- **A native client was refused with 403 `MISSING_OR_NULL_ORIGIN`** on
+  sign-in and on every bearer POST. `src/proxy.ts` minted `stoky_device` for
+  every request and wrote it into the request's own `Cookie` header, so
+  Better Auth saw a cookie on a request that had sent none and asked it for
+  an `Origin`, which a native client has no reason to send.
+
+**How it closed.** The proxy no longer mints the device id under
+`/api/auth/` or for a request carrying `Authorization: Bearer`
+(`unit/proxy-device.test.ts`), so a native request reaches Better Auth with
+no cookie and no `Origin` check applies. The auth route drops
+`set-auth-token`, and its entry in `Access-Control-Expose-Headers`, from any
+answer to a request that carried a cookie, which a browser always does here;
+the bodies never carry the token. `integration/bearer.test.ts` signs in with
+and without a cookie through the real route: only the cookie-less request
+gets the header, and removing the strip turns it red.
+
+### ✅ AUTH-5: Better Auth accepts one TOTP code more than once
+
+**Files:** `src/lib/auth/policy-plugin.ts`, `prisma/schema.prisma` (`TwoFactor.lastTotpCounter`)
+**Severity:** HIGH for the migration — a code seen over a shoulder, or replayed from a captured request, signs in again for up to a minute and a half
+**Status:** RESOLVED 2026-10-15 by "feat(auth): add TOTP two-step verification with single-use codes" (PROGRESS D148).
+
+Found by the Better Auth spike (`spike/better-auth-2026-10-15`, `1c8156b`):
+`/two-factor/verify-totp` checks a code against the current 30-second step
+and the one either side, and stores nothing about it, so the same code
+completed two sign-ins in a row. ASVS 5.0.0 6.5.1 asks that a time-based code
+be usable once.
+
+**How it closed.** A before-hook on that endpoint works out which of the three
+steps the code is for and claims it with one conditional `UPDATE` on a column
+of ours, `TwoFactor.lastTotpCounter`, which must be below the step; zero rows
+is a replay, refused as `INVALID_CODE` and logged `auth.twofactor.replayed`.
+A code matching no step is rewritten to one Better Auth must refuse, so a
+request whose clock reads straddle a step cannot be accepted unclaimed, and
+Better Auth still counts the failure. `integration/two-factor.test.ts` signs
+in with one code twice, with an earlier step after a later one, with the
+enrolment's code, and twice at once while the row is held locked — exactly
+one gets in — and goes red when the hook is removed, when the claim is not
+checked, and when it is made a read followed by a write.
+
+### ✅ AUTH-6: Better Auth's backup codes are 60 bits, kept encrypted with the secret that a rotation replaces
+
+**Files:** `src/lib/auth/backup-codes.ts`, `src/lib/auth/policy-plugin.ts`, `src/lib/auth/instance.ts`
+**Severity:** MEDIUM for the migration — no release handed one out (the enrolment endpoints were still closed), but the first that did would have
+**Status:** RESOLVED 2026-10-15 by "feat(auth): store two-factor backup codes as hashes" (PROGRESS D149).
+
+Better Auth's two-factor plugin makes ten backup codes of ten characters
+from 62 — about 60 bits each — and by default stores the list encrypted with
+the instance's secret, `STOKY_SECRET` here. Two things follow. ASVS 5.0.0
+6.5.2 asks for lookup secrets to be hashed, and allows a plain hash only at
+112 bits or more, so neither the storage nor the size met it: the database
+plus the secret read every code back. And rotating the secret makes the codes
+unreadable on the very day they are needed, because the same rotation makes
+every TOTP secret unreadable (`TWO_FACTOR_UNREADABLE`, D148): the documented
+way back from a rotation went through a door the rotation had just shut.
+
+**How it closed.** The plugin's own extension points, not a patch: a
+generator of ten 24-character Crockford base32 codes (120 bits), and a
+`storeBackupCodes` whose `encrypt` hashes each code to `sha256:<hex>` and
+leaves existing hashes alone, whose `decrypt` returns the list as stored. A
+before-hook on `/two-factor/verify-backup-code` hashes the typed code, so
+Better Auth's comparison, its single-use rewrite of the list and its failure
+counting run unchanged over hashes. `integration/two-factor.test.ts` finds
+none of the issued codes in the column, signs in with a code typed in lower
+case with spaces once and not twice, refuses a stored hash typed as the code,
+retires the old set on regeneration, counts a wrong code, and signs in with a
+code after the TOTP secret has become unreadable. Better Auth's `"encrypted"`
+storage, its generator, an unmatched hook and a hook that passes hashes
+through each turn it red.
+
 ### ✅ BUILD-1: The image and CI pin different bun versions, and nothing compares them
 
 **Files:** `Dockerfile:40`, `.bun-version`, `src/__tests__/unit/bun-version.test.ts`
@@ -3960,6 +4160,9 @@ which is short:
   OFFLINE-1 has the most specified fix (a client-side age gate) and SHOP-2 the
   smallest (LOC-1's lock); DB-1 and UPLOAD-1 each need a schema change, and
   DB-1 a data audit before it.
+- **TEST-10** — an intermittent browser test, seen only on the Better Auth
+  branch. Re-run before investigating, and keep the trace of the run that
+  fails: that is the one missing piece of evidence.
 - Everything else that remains is *unbuilt or human-shaped, not a defect*, and
   lives in `docs/REDESIGN_PLAN.md` §10: the three manual passes, T7, and
   Phase 8's done-when — the owner repeating their pass. The Phase 7 review

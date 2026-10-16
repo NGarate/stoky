@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { z } from "zod";
 import { MAX_TRPC_BATCH_SIZE } from "@/lib/trpc/batch";
 import { MAX_TRPC_BODY_BYTES } from "@/server/http/body-limit";
@@ -26,9 +26,11 @@ import {
  * application's own middleware stack.
  */
 
-const SIGNED_IN: Session = {
-  user: { id: "user-1", role: "MEMBER" },
+const SIGNED_IN: AppSession = {
+  user: { id: "user-1", email: "u@example.com", name: "U", role: "MEMBER" },
   expires: "2099-01-01T00:00:00.000Z",
+  expiresKind: "idle",
+  sessionId: "session-under-test",
 };
 
 /** How many times `touch` has run in the current test. */
@@ -52,15 +54,16 @@ const router = createTRPCRouter({
   echo: publicProcedure
     .input(z.object({ name: z.string() }))
     .mutation(({ input }) => input.name),
-  // No input, as `auth.revokeMySessions` had before it declared `z.void()`:
-  // nothing for a form's body to fail, so only the handler can refuse it.
+  // No input, as the mutation that ended every session had before it
+  // declared `z.void()`: nothing for a form's body to fail, so only the
+  // handler can refuse it.
   touch: publicProcedure.mutation(() => {
     touches++;
     return "touched";
   }),
 });
 
-function handlerFor(session: Session | null, onSession?: () => void) {
+function handlerFor(session: AppSession | null, onSession?: () => void) {
   return createTrpcHandler({
     router,
     getSession: async () => {
@@ -275,7 +278,9 @@ describe("a batch", () => {
     // request, and a screen that mounted more than the limit would lose all of
     // them to the 400 above. Read from source: the link's options are not
     // observable from outside a rendered provider.
-    const client = readFileSync(join(import.meta.dir, "../../lib/trpc/client.tsx"), "utf8");
+    // The links live in their own module since the password change needed a
+    // second one (`src/lib/trpc/links.ts`, D144).
+    const client = readFileSync(join(import.meta.dir, "../../lib/trpc/links.ts"), "utf8");
 
     expect(client).toContain('from "@/lib/trpc/batch"');
     expect(client).toMatch(/httpBatchStreamLink\(\{[^]*?maxItems: MAX_TRPC_BATCH_SIZE,[^]*?\}\)/);
@@ -388,6 +393,37 @@ describe("who sent the request, and in what form", () => {
       expect(consoleWarn).not.toHaveBeenCalled();
     });
   }
+
+  it("runs a native client's bearer call, which carries no Fetch Metadata and no cookie", async () => {
+    // What the iOS app sends (D142): the session in Authorization, nothing a
+    // browser adds. The session itself is the stub's; what is pinned here is
+    // that nothing in front of the procedure turns the request away.
+    let sessionLookups = 0;
+    const response = await handlerFor(SIGNED_IN, () => sessionLookups++)(
+      touch({ "content-type": "application/json", authorization: "Bearer token.signature" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(touches).toBe(1);
+    expect(sessionLookups).toBe(1);
+  });
+
+  it("refuses a cross-site request that carries the session cookie with 403", async () => {
+    // The case the bearer path must not open: a browser's cookie, sent by a
+    // page on another site.
+    let sessionLookups = 0;
+    const response = await handlerFor(SIGNED_IN, () => sessionLookups++)(
+      touch({
+        "content-type": "application/json",
+        cookie: "stoky.session_token=token.signature",
+        "sec-fetch-site": "cross-site",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(touches).toBe(0);
+    expect(sessionLookups).toBe(0);
+  });
 });
 
 describe("every response", () => {

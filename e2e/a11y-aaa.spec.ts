@@ -48,6 +48,7 @@ const PRIVATE_ROUTES = [
   "/prices",
   "/settings",
   "/settings/locations",
+  "/settings/security",
   "/settings/stores",
 ];
 

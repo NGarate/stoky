@@ -3,6 +3,10 @@ import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import { enforceRateLimit } from "../throttle";
 import { addMemberRateLimit, clientAddress } from "@/lib/rate-limit";
 import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser, setPasswordAndEndSessions } from "@/lib/auth/credentials";
+import { endSessions } from "@/lib/auth/end-sessions";
+import { liveSessionsOf } from "@/lib/auth/session-list";
+import { confirmCurrentPassword } from "@/lib/auth/reauth";
 import { logSecurityEvent } from "@/lib/security-log";
 import {
   PASSWORD_CONTAINS_IDENTITY_MESSAGE,
@@ -11,9 +15,16 @@ import {
 import type { HouseholdRole, PrismaClient, Prisma } from "@prisma/client";
 import {
   addMemberSchema,
+  endHouseholdSessionsSchema,
+  endMemberSessionsSchema,
   householdSchema,
+  memberSessionsSchema,
+  OWN_SESSIONS_MESSAGE,
+  OWNERS_ONLY_MESSAGE,
   RESET_OWN_PASSWORD_MESSAGE,
+  REMOVE_OWN_TWO_FACTOR_MESSAGE,
   removeMemberSchema,
+  removeMemberTwoFactorSchema,
   resetMemberPasswordSchema,
   updateMemberRoleSchema,
 } from "@/lib/validations/household";
@@ -242,11 +253,15 @@ export const householdRouter = createTRPCRouter({
    * `adminProcedure`, because the matrix puts "see account data and emails"
    * behind admin — a KITCHEN tablet left on a counter must not list the
    * household's email addresses to whoever picks it up.
+   *
+   * `twoFactorEnabled` so the screen can say who has a second step and offer
+   * to remove it (`removeMemberTwoFactor`, D150) — whether it is on, never
+   * anything of the authenticator itself.
    */
   members: adminProcedure.query(async ({ ctx }) => {
     return ctx.db.user.findMany({
       where: { householdId: ctx.householdId },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, twoFactorEnabled: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     });
   }),
@@ -290,18 +305,20 @@ export const householdRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.password);
 
-      const user = await ctx.db.user.create({
-        data: {
+      const user = await createCredentialUser(
+        ctx.db,
+        {
           name: input.name,
           email: input.email,
-          passwordHash,
           householdId: ctx.householdId,
           role: input.role,
         },
-        select: { id: true, name: true, email: true, role: true },
-      });
+        passwordHash,
+      );
 
-      return user;
+      // Named fields, never the row: it is the whole `User`, and any column it
+      // grows would reach the browser by default.
+      return { id: user.id, name: user.name, email: user.email, role: user.role };
     }),
   /**
    * Change what an existing member may do.
@@ -343,15 +360,28 @@ export const householdRouter = createTRPCRouter({
    * `PRECONDITION_FAILED` from `householdProcedure`, because it re-reads the
    * household too.
    *
-   * **This is the nearest thing to session revocation this application has**,
-   * and it is not a substitute for it: it ends a member's access to *this
-   * household*, not their session. Removing somebody does not sign them out
-   * anywhere else, and there is nowhere else. See §10.
+   * **And it signs them out everywhere** (ASVS 5.0.0 7.4.2, PROGRESS D146).
+   * Every session the member has is deleted in the same transaction that
+   * takes their household away (`endSessions`), so the phone in their pocket
+   * and the kitchen tablet they left signed in are signed out together, and
+   * neither the household nor the sessions can go without the other. Losing
+   * the household alone already refused every household request; what a
+   * session left alive still reached was the account itself — its password,
+   * its devices list, a new household of its own (`household.create`) — on
+   * a device the household may no longer control, such as the kitchen
+   * tablet. The account stays, so the person can sign in
+   * again, to an account with no household.
+   *
+   * Removing yourself, which an owner beside another owner may do, ends your
+   * own sessions too, this one included: you no longer belong anywhere, and
+   * nothing about that needs a session. Logged as `auth.session.ended` with
+   * `reason: "removed"`, after the transaction has committed, so a refused
+   * removal writes no line.
    */
   removeMember: adminProcedure
     .input(removeMemberSchema)
     .mutation(async ({ ctx, input }) => {
-      await withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
+      const removed = await withOwnersLocked(ctx.db, ctx.householdId, async (tx) => {
         const member = await memberOfHousehold(tx, input.userId, ctx.householdId);
 
         assertMayActOnOwner(ctx.role, member.role);
@@ -361,43 +391,181 @@ export const householdRouter = createTRPCRouter({
           where: { id: member.id },
           data: { householdId: null },
         });
+
+        return { id: member.id, ended: await endSessions(tx, { userId: member.id }) };
+      });
+
+      logSecurityEvent("auth.session.ended", {
+        userId: ctx.session.user.id,
+        targetUserId: removed.id,
+        householdId: ctx.householdId,
+        reason: "removed",
+        count: removed.ended,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
 
       return { success: true };
     }),
 
   /**
-   * End every session a member of this household has.
+   * A member's live sessions, for an admin deciding which to end (ASVS 5.0.0
+   * 7.4.5, PROGRESS D145).
    *
-   * The other half of what §10 asked for, and the reason the admin panel
-   * exists: "the kitchen tablet has walked out of the house" needs an answer
-   * that is not "wait fifteen minutes and hope nobody touches it" — an active
-   * session slides forward on every read, for up to the thirty days of
-   * `MAX_SESSION_AGE_S` in `src/lib/auth.ts`.
+   * The same reading as the member's own **Tus dispositivos**
+   * (`liveSessionsOf`), so an admin is never shown more about somebody than
+   * they are shown about themselves: the device and the screen it opens on,
+   * when it signed in, was last used and ends, whether it is remembered —
+   * never a token, never the device id. There is no "this one": none of
+   * these is the admin's.
    *
-   * The same two guards as the rest of member management: the member must be
-   * **this** household's, and only an owner may act on an owner. There is no
-   * last-owner guard here and there should not be — ending somebody's sessions
-   * does not change who owns anything, and refusing to sign out the last owner
-   * would be refusing exactly the person most likely to have lost a device.
-   *
-   * Removing a member ends their access to this household; this ends their
-   * sessions. They are different acts and the screen offers both, because
-   * "they left" and "their phone was stolen" are different problems.
+   * The guards of the rest of member management, in the same order as
+   * `endMemberSessions` below, because what an admin may not end they have
+   * no reason to list: not the caller (their own are behind their password,
+   * D143), the member must be **this** household's (`NOT_FOUND` otherwise,
+   * which does not confirm the id exists), and only an owner may act on an
+   * owner.
    */
-  revokeMemberSessions: adminProcedure
-    .input(removeMemberSchema)
-    .mutation(async ({ ctx, input }) => {
+  memberSessions: adminProcedure
+    .input(memberSessionsSchema)
+    .query(async ({ ctx, input }) => {
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: OWN_SESSIONS_MESSAGE });
+      }
+
       const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
 
       assertMayActOnOwner(ctx.role, member.role);
 
-      await ctx.db.user.update({
-        where: { id: member.id },
-        data: { sessionsValidFrom: new Date() },
+      return liveSessionsOf(ctx.db, member.id);
+    }),
+
+  /**
+   * End one of a member's sessions, or every one (ASVS 5.0.0 7.4.5, PROGRESS
+   * D145).
+   *
+   * The answer to "the kitchen tablet has walked out of the house" that is
+   * not "wait and hope nobody touches it": a session in use lasts up to a
+   * day, a remembered one up to a year (`src/lib/auth/session-policy.ts`).
+   * Deleting the rows (`endSessions`) signs those devices out on their next
+   * request. With a `sessionId` it ends that one — the lost tablet, and not
+   * the phone in the member's pocket — and with none, every one.
+   *
+   * **No password**, unlike ending your own (D143): the owner confirmed on
+   * 2026-10-15 that an admin acting on somebody else is not re-asked. What
+   * stands in for it is the tier and the guards:
+   *
+   * 1. **Not yourself.** Your own sessions end from **Tus dispositivos**,
+   *    which asks for your password; an admin session that could skip that
+   *    question would be the way round it for whoever holds the session.
+   * 2. **The member is this household's**, through `memberOfHousehold`.
+   * 3. **Only an owner may act on an owner** (`assertMayActOnOwner`): an
+   *    admin who could sign an owner out could keep them out of answering.
+   *    There is no last-owner guard, and there should not be — ending
+   *    somebody's sessions changes nothing about who owns what, and refusing
+   *    the last owner would refuse the person most likely to have lost a
+   *    device.
+   * 4. **Scoped in the filter.** The delete names the member's id beside the
+   *    session's, so another account's session id ends nothing and is
+   *    `NOT_FOUND`, like an id nobody has; and it repeats the household and
+   *    the role that were checked, so a member who left the household or was
+   *    made an owner in between is not acted on.
+   *
+   * Logged as `auth.session.ended` with `reason: "admin"`, who asked, whose,
+   * and how many. Answers only the count.
+   *
+   * Removing a member ends their access to this household and every session
+   * they have (D146); this ends sessions and leaves them in the household.
+   * They are different acts and the screen offers both, because "they left"
+   * and "their phone was stolen" are different problems.
+   */
+  endMemberSessions: adminProcedure
+    .input(endMemberSessionsSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: OWN_SESSIONS_MESSAGE });
+      }
+
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+
+      // The guards again, in the write: a member who stopped being the one
+      // checked above — gone from the household, or made an owner — matches
+      // nothing. Written as two literals rather than a spread, so the session
+      // id never sits in a filter without the member's id beside it.
+      const still = { householdId: ctx.householdId, role: member.role };
+      const where =
+        input.sessionId === undefined
+          ? { userId: member.id, user: still }
+          : { userId: member.id, id: input.sessionId, user: still };
+      const ended = await endSessions(ctx.db, where);
+
+      if (input.sessionId !== undefined && ended === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      }
+
+      logSecurityEvent("auth.session.ended", {
+        userId: ctx.session.user.id,
+        targetUserId: member.id,
+        householdId: ctx.householdId,
+        reason: "admin",
+        count: ended,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
       });
 
-      return { success: true };
+      return { ended };
+    }),
+
+  /**
+   * End every session in the household, the owner's own included, after the
+   * owner's password (ASVS 5.0.0 7.4.5, PROGRESS D147).
+   *
+   * The answer to "somebody has been in the house who should not have been":
+   * every phone, tablet and laptop signed in to this household signs in
+   * again, and the owner with them. One act rather than a round of
+   * `endMemberSessions` per member, which leaves the owner's own and the
+   * other owners' for last, or never.
+   *
+   * The order is the point:
+   *
+   * 1. **Owners only.** `adminProcedure` lets an admin in, and an admin is
+   *    refused here before the password is asked: an admin may not reach an
+   *    owner's sessions one at a time (`assertMayActOnOwner`, D145), so not
+   *    all at once either. `FORBIDDEN`, which the refusal middleware logs.
+   * 2. **The password** (`confirmCurrentPassword`, D143), because this ends
+   *    the owner's own sessions too, and a session somebody else is holding
+   *    must not be able to sign the household out — the owner included, out
+   *    of the screen that would answer it. Unlike an admin ending one
+   *    member's (D145), which the owner confirmed is not re-asked.
+   * 3. **One filter**, the household through each session's account, so
+   *    nothing outside it is touched and a member who joined a moment ago is
+   *    included. Removed members have no household and are not.
+   *
+   * Logged as one `auth.session.ended` with `reason: "owner"`, the owner as
+   * `userId`, the household and the count — no `targetUserId`, because it
+   * was everybody's. The answer is the count; the screen then signs this
+   * device out, as `auth.endSessions` with `"all"` does.
+   */
+  endHouseholdSessions: adminProcedure
+    .input(endHouseholdSessionsSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.role !== "OWNER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: OWNERS_ONLY_MESSAGE });
+      }
+
+      await confirmCurrentPassword(ctx, input.currentPassword, "household-end-all");
+
+      const ended = await endSessions(ctx.db, { user: { householdId: ctx.householdId } });
+
+      logSecurityEvent("auth.session.ended", {
+        userId: ctx.session.user.id,
+        householdId: ctx.householdId,
+        reason: "owner",
+        count: ended,
+        address: ctx.headers ? clientAddress(ctx.headers) : undefined,
+      });
+
+      return { ended };
     }),
 
   /**
@@ -429,10 +597,11 @@ export const householdRouter = createTRPCRouter({
    *    which is the escalation the guard exists to refuse.
    * 5. **The identity rule**, against the member's own name and address,
    *    which the input does not carry.
-   * 6. **One write** sets the hash and `sessionsValidFrom`, so the new
-   *    password and the end of the old sessions land together. A password
-   *    reset because somebody else may know the old one is half a fix if a
-   *    session opened with it survives.
+   * 6. **One transaction** sets the hash, deletes every session row and
+   *    removes every passkey, so the new password and the end of the old ways
+   *    in land together. A password reset because somebody else may know the
+   *    old one is half a fix if a session opened with it survives, or a
+   *    passkey added with it (D151): a passkey signs in with no password.
    *
    * **The write repeats the guards in its `where`.** Argon2id takes about a
    * quarter of a second between the checks above and the write, and in that
@@ -473,10 +642,11 @@ export const householdRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.newPassword);
 
-      const { count } = await ctx.db.user.updateMany({
-        where: { id: member.id, householdId: ctx.householdId, role: member.role },
-        data: { passwordHash, sessionsValidFrom: new Date() },
-      });
+      const count = await setPasswordAndEndSessions(
+        ctx.db,
+        { userId: member.id, guard: { householdId: ctx.householdId, role: member.role } },
+        passwordHash,
+      );
 
       if (count === 0) {
         throw new TRPCError({
@@ -493,5 +663,97 @@ export const householdRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  /**
+   * Take a member's two-step verification off, after the admin's own
+   * password, and end every session they have (PROGRESS D150).
+   *
+   * **The way back from a lost authenticator.** Somebody whose phone is gone
+   * and who has no backup code left could not sign in at all; until this
+   * existed the only remedy was the operator's SQL (INSTALL, *A lost
+   * authenticator*). The admin removes it, the person signs in with the
+   * password alone and sets it up again on the new phone. It is the trust
+   * `resetMemberPassword` already places in an admin, who can set the very
+   * password this leaves standing on its own.
+   *
+   * The order is the point:
+   *
+   * 1. **Not yourself.** Your own is turned off from Seguridad y acceso, with
+   *    your password; owners and admins are no exception.
+   * 2. **The admin's password** (`confirmCurrentPassword`, D143), before
+   *    anything is read about the member: this weakens somebody else's
+   *    account, and a session somebody else holds must not be able to — nor
+   *    learn, from `NOT_FOUND` against `FORBIDDEN`, which ids are whose.
+   *    Unlike ending a member's sessions (D145), which is not re-asked.
+   * 3. **The member is this household's** (`memberOfHousehold`), `NOT_FOUND`
+   *    for anyone else's.
+   * 4. **Only an owner may act on an owner** (`assertMayActOnOwner`): an
+   *    admin who could strip an owner's second step, then set their password,
+   *    would be signing in as the owner.
+   * 5. **One transaction**, its write repeating the guards — the household,
+   *    the role that was checked, and that two-step verification is on — so
+   *    a member who changed in between, or never had it, is `CONFLICT` and
+   *    nothing is touched. Then the authenticator row (secret and backup
+   *    codes), then every session and challenge in progress (`endSessions`):
+   *    whoever has the lost phone may also have a session open on it, and a
+   *    challenge is half a sign-in.
+   *
+   * Logged as `auth.twofactor.removed` and `auth.session.ended` with
+   * `reason: "two-factor-removed"`, the admin as `userId` and the member as
+   * `targetUserId`, after the transaction has committed.
+   */
+  removeMemberTwoFactor: adminProcedure
+    .input(removeMemberTwoFactorSchema)
+    .mutation(async ({ ctx, input }) => {
+      const callerId = ctx.session.user.id;
+
+      if (input.userId === callerId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: REMOVE_OWN_TWO_FACTOR_MESSAGE });
+      }
+
+      await confirmCurrentPassword(ctx, input.currentPassword, "member-two-factor");
+
+      const member = await memberOfHousehold(ctx.db, input.userId, ctx.householdId);
+
+      assertMayActOnOwner(ctx.role, member.role);
+
+      const ended = await ctx.db.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({
+          where: {
+            id: member.id,
+            householdId: ctx.householdId,
+            role: member.role,
+            twoFactorEnabled: true,
+          },
+          data: { twoFactorEnabled: false },
+        });
+        if (count === 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This member has no two-step verification to remove, or changed. Try again.",
+          });
+        }
+        await tx.twoFactor.deleteMany({ where: { userId: member.id } });
+        return endSessions(tx, { userId: member.id });
+      });
+
+      const address = ctx.headers ? clientAddress(ctx.headers) : undefined;
+      logSecurityEvent("auth.twofactor.removed", {
+        userId: callerId,
+        targetUserId: member.id,
+        householdId: ctx.householdId,
+        address,
+      });
+      logSecurityEvent("auth.session.ended", {
+        userId: callerId,
+        targetUserId: member.id,
+        householdId: ctx.householdId,
+        reason: "two-factor-removed",
+        count: ended,
+        address,
+      });
+
+      return { ended };
     }),
 });

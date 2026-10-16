@@ -7,17 +7,13 @@ import {
   closeRateLimiter,
   loginAccountRateLimit,
   loginDeviceRateLimit,
+  loginRateLimit,
   consumeRateLimit,
   refundRateLimit,
   registerRateLimit,
   resetRateLimit,
   type RateLimit,
 } from "@/lib/rate-limit";
-import {
-  AccountRateLimitedSignin,
-  AuthUnavailableSignin,
-  RateLimitedSignin,
-} from "@/lib/auth";
 import {
   KNOWN_DEVICE_CAP,
   KNOWN_DEVICE_TTL_SECONDS,
@@ -252,7 +248,7 @@ describe("consumeRateLimit", () => {
  * `consumeRateLimit` throwing is necessary and not sufficient. What protects the
  * application is what each caller does with that throw, and every caller has to
  * decide separately: `enforceRateLimit` turns it into `SERVICE_UNAVAILABLE`, and
- * `authorize` turns it into `AuthUnavailableSignin`. Both are hand-written
+ * the auth route turns it into a 503 `AUTH_UNAVAILABLE`. Both are hand-written
  * `catch` blocks, and a `catch` that swallowed the error instead would leave
  * every test in this file green while the limit stopped existing.
  *
@@ -290,12 +286,12 @@ describe("what a call site does when it cannot count", () => {
   });
 
   it("refuses a sign-in it cannot count", async () => {
-    // The other call site, and the one that matters most: `authorize` is the
-    // application's only credential-verification path, so a `catch` that let
-    // this through would be unlimited password guessing for as long as Valkey
-    // is down.
+    // The other call site, and the one that matters most: the auth route is
+    // the application's only credential-verification path, so a `catch` that
+    // let this through would be unlimited password guessing for as long as
+    // Valkey is down.
     //
-    // **Malformed credentials deliberately.** `authorize` consults two limits —
+    // **Malformed credentials deliberately.** The route consults two limits —
     // per address before parsing, per account after — and with the cache down
     // both throw. Written with a well-formed address this test passed with the
     // first `catch` block replaced by a fail-open, because the second one
@@ -307,20 +303,19 @@ describe("what a call site does when it cannot count", () => {
     // here: reaching it requires the address limit to have succeeded and the
     // account limit to then fail, which is a cache that died between two
     // commands, not a state this suite can produce.
-    let thrown: unknown;
+    let answer: Awaited<ReturnType<typeof signInWith>> | undefined;
 
     await withUnreachableCache(async () => {
-      try {
-        await signInWith({ email: "not an address", password: "" });
-      } catch (error) {
-        thrown = error;
-      }
+      answer = await signInWith({ email: "not an address", password: "" });
     });
 
-    // Not `RateLimitedSignin`: the two produce different messages, and telling
+    // Not RATE_LIMITED: the two produce different messages, and telling
     // somebody they have tried too often when the cache is down sends them
-    // away to wait instead of to the operator.
-    expect(thrown).toBeInstanceOf(AuthUnavailableSignin);
+    // away to wait instead of to the operator. No Retry-After either: nothing
+    // here knows when the cache comes back.
+    expect(answer?.status).toBe(503);
+    expect(answer?.code).toBe("AUTH_UNAVAILABLE");
+    expect(answer?.retryAfter).toBeNull();
   });
 });
 
@@ -329,10 +324,10 @@ describe("what a call site does when it cannot count", () => {
  *
  * Asserting this against `consumeRateLimit` with an account-shaped key would
  * prove nothing: it would pass just as well with the limit never wired into
- * `authorize` at all. The property is that *sign-in* stops, so sign-in is what
+ * the auth route at all. The property is that *sign-in* stops, so sign-in is what
  * this drives.
  */
-describe("the per-account limit, through authorize", () => {
+describe("the per-account limit, through the auth route", () => {
   const ATTEMPTS = 3;
   const original = process.env.RATE_LIMIT_LOGIN_ACCOUNT_ATTEMPTS;
 
@@ -356,19 +351,16 @@ describe("the per-account limit, through authorize", () => {
     for (let i = 0; i < ATTEMPTS; i++) {
       // Wrong password, no such account — both irrelevant, because the count
       // happens before either is looked at.
-      expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
+      expect((await signInWith({ email, password: "wrong password here" })).status).toBe(401);
     }
 
-    let thrown: unknown;
-    try {
-      await signInWith({ email, password: "wrong password here" });
-    } catch (error) {
-      thrown = error;
-    }
+    const refused = await signInWith({ email, password: "wrong password here" });
 
     // The account's own refusal, not the address's: the person is told the
     // account is being tried, because another network would not help them.
-    expect(thrown).toBeInstanceOf(AccountRateLimitedSignin);
+    expect(refused.status).toBe(429);
+    expect(refused.code).toBe("ACCOUNT_RATE_LIMITED");
+    expect(Number(refused.retryAfter)).toBeGreaterThan(0);
   });
 
   it("counts an address that does not exist, so it cannot be used to find one that does", async () => {
@@ -379,11 +371,8 @@ describe("the per-account limit, through authorize", () => {
     const unknown = generateTestEmail("never-registered");
 
     for (let i = 0; i <= ATTEMPTS; i++) {
-      try {
-        await signInWith({ email: unknown, password: "wrong password here" });
-      } catch {
-        // The refusal on the last iteration is the point.
-      }
+      // The refusal on the last iteration is the point.
+      await signInWith({ email: unknown, password: "wrong password here" });
     }
 
     const key = `${loginAccountRateLimit().prefix}:${accountIdentifier(unknown)}`;
@@ -400,14 +389,14 @@ describe("the per-account limit, through authorize", () => {
 
     try {
       for (let i = 0; i < ATTEMPTS - 1; i++) {
-        expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
+        expect((await signInWith({ email, password: "wrong password here" })).status).toBe(401);
       }
 
       // The last attempt of the budget, and it is correct.
-      expect(await signInWith({ email, password })).not.toBeNull();
+      expect((await signInWith({ email, password })).status).toBe(200);
 
       // Which means the next one is not refused.
-      expect(await signInWith({ email, password: "wrong password here" })).toBeNull();
+      expect((await signInWith({ email, password: "wrong password here" })).status).toBe(401);
     } finally {
       await cleanupTestUsers(email);
       await cleanupTestHouseholds(`Rate Limit Household ${process.pid}`);
@@ -416,7 +405,7 @@ describe("the per-account limit, through authorize", () => {
 });
 
 /**
- * Known devices, through authorize (security review, 2026-10-12).
+ * Known devices, through the auth route (security review, 2026-10-12).
  *
  * The per-account limit above refuses the right password once it is full, so
  * anyone who knows an address could spend it every window and keep its owner
@@ -426,7 +415,7 @@ describe("the per-account limit, through authorize", () => {
  * stranger can send — no cookie, a minted one, one recorded for another
  * account — is treated as that device.
  */
-describe("known devices, through authorize", () => {
+describe("known devices, through the auth route", () => {
   const ACCOUNT_ATTEMPTS = 3;
   const DEVICE_ATTEMPTS = 2;
   const MARKER = `known-device-${process.pid}-${Date.now().toString(36)}`;
@@ -479,7 +468,7 @@ describe("known devices, through authorize", () => {
   /** A browser that has signed in to `email` once, successfully. */
   async function knownDevice(email: string): Promise<string> {
     const deviceId = crypto.randomUUID();
-    expect(await signInWith({ email, password: PASSWORD }, { deviceId })).not.toBeNull();
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId })).status).toBe(200);
     return deviceId;
   }
 
@@ -489,11 +478,9 @@ describe("known devices, through authorize", () => {
    */
   async function fillSharedBudget(email: string): Promise<void> {
     for (let i = 0; i < ACCOUNT_ATTEMPTS; i++) {
-      expect(await signInWith({ email, password: WRONG })).toBeNull();
+      expect((await signInWith({ email, password: WRONG })).status).toBe(401);
     }
-    await expect(signInWith({ email, password: WRONG })).rejects.toBeInstanceOf(
-      RateLimitedSignin,
-    );
+    expect((await signInWith({ email, password: WRONG })).status).toBe(429);
   }
 
   it("lets a device recorded by an earlier sign-in in while a stranger holds the shared budget", async () => {
@@ -502,7 +489,7 @@ describe("known devices, through authorize", () => {
 
     await fillSharedBudget(email);
 
-    expect(await signInWith({ email, password: PASSWORD }, { deviceId: phone })).not.toBeNull();
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId: phone })).status).toBe(200);
   });
 
   it("still refuses a browser with no device cookie once the shared budget is full", async () => {
@@ -511,9 +498,7 @@ describe("known devices, through authorize", () => {
 
     await fillSharedBudget(email);
 
-    await expect(signInWith({ email, password: PASSWORD })).rejects.toBeInstanceOf(
-      RateLimitedSignin,
-    );
+    expect((await signInWith({ email, password: PASSWORD })).status).toBe(429);
   });
 
   it("does not trust a freshly minted device id", async () => {
@@ -525,9 +510,7 @@ describe("known devices, through authorize", () => {
 
     await fillSharedBudget(email);
 
-    await expect(
-      signInWith({ email, password: PASSWORD }, { deviceId: crypto.randomUUID() }),
-    ).rejects.toBeInstanceOf(RateLimitedSignin);
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId: crypto.randomUUID() })).status).toBe(429);
   });
 
   it("does not remember a device whose sign-in failed", async () => {
@@ -537,14 +520,12 @@ describe("known devices, through authorize", () => {
     const email = await member("failed");
     const guesser = crypto.randomUUID();
 
-    expect(await signInWith({ email, password: WRONG }, { deviceId: guesser })).toBeNull();
+    expect((await signInWith({ email, password: WRONG }, { deviceId: guesser })).status).toBe(401);
     for (let i = 1; i < ACCOUNT_ATTEMPTS; i++) {
-      expect(await signInWith({ email, password: WRONG })).toBeNull();
+      expect((await signInWith({ email, password: WRONG })).status).toBe(401);
     }
 
-    await expect(
-      signInWith({ email, password: WRONG }, { deviceId: guesser }),
-    ).rejects.toBeInstanceOf(RateLimitedSignin);
+    expect((await signInWith({ email, password: WRONG }, { deviceId: guesser })).status).toBe(429);
     expect(await inspector.exists(`rl:known:${accountIdentifier(email)}`)).toBe(0);
   });
 
@@ -557,9 +538,7 @@ describe("known devices, through authorize", () => {
 
     await fillSharedBudget(victim);
 
-    await expect(
-      signInWith({ email: victim, password: PASSWORD }, { deviceId: tablet }),
-    ).rejects.toBeInstanceOf(RateLimitedSignin);
+    expect((await signInWith({ email: victim, password: PASSWORD }, { deviceId: tablet })).status).toBe(429);
   });
 
   it("gives a known device a budget of its own that still runs out, without touching the shared one", async () => {
@@ -569,15 +548,13 @@ describe("known devices, through authorize", () => {
     const phone = await knownDevice(email);
 
     for (let i = 0; i < DEVICE_ATTEMPTS; i++) {
-      expect(await signInWith({ email, password: WRONG }, { deviceId: phone })).toBeNull();
+      expect((await signInWith({ email, password: WRONG }, { deviceId: phone })).status).toBe(401);
     }
-    await expect(
-      signInWith({ email, password: PASSWORD }, { deviceId: phone }),
-    ).rejects.toBeInstanceOf(AccountRateLimitedSignin);
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId: phone })).code).toBe("ACCOUNT_RATE_LIMITED");
 
     const shared = `${loginAccountRateLimit().prefix}:${accountIdentifier(email)}`;
     expect(await inspector.get(shared)).toBeNull();
-    expect(await signInWith({ email, password: PASSWORD })).not.toBeNull();
+    expect((await signInWith({ email, password: PASSWORD })).status).toBe(200);
   });
 
   it("leaves the shared budget as it found it when a known device signs in", async () => {
@@ -587,9 +564,9 @@ describe("known devices, through authorize", () => {
     const phone = await knownDevice(email);
 
     for (let i = 0; i < ACCOUNT_ATTEMPTS - 1; i++) {
-      expect(await signInWith({ email, password: WRONG })).toBeNull();
+      expect((await signInWith({ email, password: WRONG })).status).toBe(401);
     }
-    expect(await signInWith({ email, password: PASSWORD }, { deviceId: phone })).not.toBeNull();
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId: phone })).status).toBe(200);
 
     const shared = `${loginAccountRateLimit().prefix}:${accountIdentifier(email)}`;
     expect(await inspector.get(shared)).toBe(String(ACCOUNT_ATTEMPTS - 1));
@@ -607,13 +584,9 @@ describe("known devices, through authorize", () => {
     await fillSharedBudget(email);
 
     // The first one recorded is the one pushed out, so it is a stranger again…
-    await expect(
-      signInWith({ email, password: PASSWORD }, { deviceId: devices[0] }),
-    ).rejects.toBeInstanceOf(RateLimitedSignin);
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId: devices[0] })).status).toBe(429);
     // …and the newest is still known.
-    expect(
-      await signInWith({ email, password: PASSWORD }, { deviceId: devices[KNOWN_DEVICE_CAP] }),
-    ).not.toBeNull();
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId: devices[KNOWN_DEVICE_CAP] })).status).toBe(200);
   });
 
   it("cannot be pre-empted by a forged address naming the device set", async () => {
@@ -625,12 +598,10 @@ describe("known devices, through authorize", () => {
     const address = `known:${accountIdentifier(email)}`;
     const deviceId = crypto.randomUUID();
 
-    expect(await signInWith({ email, password: WRONG }, { address })).toBeNull();
-    expect(
-      await signInWith({ email, password: PASSWORD }, { address, deviceId }),
-    ).not.toBeNull();
+    expect((await signInWith({ email, password: WRONG }, { address })).status).toBe(401);
+    expect((await signInWith({ email, password: PASSWORD }, { address, deviceId })).status).toBe(200);
     await fillSharedBudget(email);
-    expect(await signInWith({ email, password: PASSWORD }, { deviceId })).not.toBeNull();
+    expect((await signInWith({ email, password: PASSWORD }, { deviceId })).status).toBe(200);
   });
 
   it("fails closed when it cannot ask whether a device is known", async () => {
@@ -647,7 +618,7 @@ describe("known devices, through authorize", () => {
 });
 
 /**
- * The per-address limit, through authorize — and what a success does to it.
+ * The per-address limit, through the auth route — and what a success does to it.
  *
  * A successful sign-in used to *clear* the address's counter. Anybody can sign
  * in successfully from an address: register an account of your own, and a few
@@ -655,7 +626,7 @@ describe("known devices, through authorize", () => {
  * left the counter at zero, round after round. That is an unlimited password
  * spray from one address — the attack the per-address limit exists to stop.
  */
-describe("the per-address limit, through authorize", () => {
+describe("the per-address limit, through the auth route", () => {
   const ATTEMPTS = 3;
   const original = process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
   const MARKER = `spray-${process.pid}-${Date.now().toString(36)}`;
@@ -693,22 +664,37 @@ describe("the per-address limit, through authorize", () => {
     // Each round: guesses up to one short of the budget, each at a different
     // victim so no per-account limit fires and this is about the address
     // counter alone, then one good sign-in to the attacker's own account.
-    let refused: unknown;
-    try {
-      for (let round = 0; round < 4; round++) {
-        for (let guess = 0; guess < ATTEMPTS - 1; guess++) {
-          const victim = generateTestEmail(`${MARKER}-victim-${round}-${guess}`);
-          await signInWith({ email: victim, password: "wrong password here" }, { address });
-        }
-        expect(await signInWith({ email: mine, password: PASSWORD }, { address })).not.toBeNull();
+    let refused: string | undefined;
+    rounds: for (let round = 0; round < 4; round++) {
+      for (let guess = 0; guess < ATTEMPTS - 1; guess++) {
+        const victim = generateTestEmail(`${MARKER}-victim-${round}-${guess}`);
+        await signInWith({ email: victim, password: "wrong password here" }, { address });
       }
-    } catch (error) {
-      refused = error;
+      const own = await signInWith({ email: mine, password: PASSWORD }, { address });
+      if (own.status !== 200) {
+        refused = own.code;
+        break rounds;
+      }
     }
 
-    expect(refused).toBeInstanceOf(RateLimitedSignin);
     // The address's refusal, which says "this connection" — not the account's.
-    expect(refused).not.toBeInstanceOf(AccountRateLimitedSignin);
+    expect(refused).toBe("RATE_LIMITED");
+  });
+
+  it("counts a body that is not JSON, before anything reads it", async () => {
+    // The charge comes before the parse: a limit that counted only bodies it
+    // could read would let anyone probe for free by sending ones it cannot.
+    const address = `203.0.113.9-${MARKER}`;
+    const key = `${loginRateLimit().prefix}:${address}`;
+
+    const answer = await signInWith(
+      { email: "", password: "" },
+      { address, rawBody: '{"email": "ana@example.com", "password": ' },
+    );
+
+    expect(answer.status).toBe(400);
+    expect(answer.code).toBe("INVALID_REQUEST");
+    expect(await inspector.get(key)).toBe("1");
   });
 
   it("still does not charge a household for signing in successfully", async () => {
@@ -718,20 +704,20 @@ describe("the per-address limit, through authorize", () => {
     const mine = await ownAccount("household");
 
     for (let i = 0; i < ATTEMPTS + 2; i++) {
-      expect(await signInWith({ email: mine, password: PASSWORD }, { address })).not.toBeNull();
+      expect((await signInWith({ email: mine, password: PASSWORD }, { address })).status).toBe(200);
     }
   });
 });
 
 /**
- * An IPv6 client, through authorize: counted by its /64, logged in full.
+ * An IPv6 client, through the auth route: counted by its /64, logged in full.
  *
  * The unit suite pins the bucket `rateLimitIdentifier` computes. This pins
  * that sign-in counts on it and logs the other thing — one value used to do
  * both, so the grouping could be undone at the call site, or could erase the
  * address from the log, with every unit test still green.
  */
-describe("an IPv6 client, through authorize", () => {
+describe("an IPv6 client, through the auth route", () => {
   const ATTEMPTS = 3;
   const original = process.env.RATE_LIMIT_LOGIN_ATTEMPTS;
   // A /64 of the documentation prefix that is this run's alone: Valkey is
@@ -761,19 +747,15 @@ describe("an IPv6 client, through authorize", () => {
     // and what an attacker does on purpose. Per address, none of these would
     // ever be refused.
     for (let host = 1; host <= ATTEMPTS; host++) {
-      expect(await signInWith(malformed, { address: `${PREFIX}::${host}` })).toBeNull();
+      expect((await signInWith(malformed, { address: `${PREFIX}::${host}` })).status).toBe(400);
     }
 
-    let refused: unknown;
-    try {
-      await signInWith(malformed, { address: `${PREFIX}:dead:beef:1234:5678` });
-    } catch (error) {
-      refused = error;
-    }
-    expect(refused).toBeInstanceOf(RateLimitedSignin);
+    const refused = await signInWith(malformed, { address: `${PREFIX}:dead:beef:1234:5678` });
+    expect(refused.status).toBe(429);
+    expect(refused.code).toBe("RATE_LIMITED");
 
     // The next subscriber's /64 is somebody else, and keeps its own budget.
-    expect(await signInWith(malformed, { address: `${NEIGHBOUR}::1` })).toBeNull();
+    expect((await signInWith(malformed, { address: `${NEIGHBOUR}::1` })).status).toBe(400);
   });
 
   it("writes the full address to the security log, not the /64", async () => {
@@ -898,7 +880,7 @@ describe("the registration limit, through the router", () => {
   });
 
   it("counts an IPv6 client by its /64, so rotating addresses buys nothing", async () => {
-    // The sign-in block pins that authorize counts on the /64; this pins the
+    // The sign-in block pins that the auth route counts on the /64; this pins the
     // other per-address limit. Register could count the raw address again
     // with every unit test still green.
     const prefix = `2001:db8:${(process.pid & 0xffff).toString(16)}:${(Date.now() & 0xffff).toString(16)}`;

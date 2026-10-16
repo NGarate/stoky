@@ -11,7 +11,26 @@ model User {
   id            String     @id @default(cuid())
   email         String     @unique
   name          String
-  passwordHash  String
+  /// The ways this person signs in. Today only the `credential` row, which
+  /// holds the password hash where Better Auth reads it; see `Account`.
+  accounts      Account[]
+  /// The sessions this person is signed in with, one row each; see `Session`.
+  sessions      Session[]
+  /// Better Auth's: whether a sign-in asks for an authenticator code after
+  /// the password (PROGRESS D148). Set when an enrolment's first code is
+  /// accepted, cleared when two-step verification is removed; the secret is
+  /// on `TwoFactor`.
+  twoFactorEnabled Boolean  @default(false)
+  /// The authenticator secret, once this person has started enrolling.
+  twoFactor     TwoFactor?
+  /// The passkeys this person signs in with, one row each; see `Passkey`.
+  passkeys      Passkey[]
+  /// Better Auth's. Nothing here sends mail, so no address is ever verified
+  /// and this stays false; registration and sign-in never consult it.
+  emailVerified Boolean    @default(false)
+  /// Better Auth's, for a provider's profile picture. Always null: there are
+  /// no social providers.
+  image         String?
   /// The language this person reads. Beats the `locale` cookie; see src/i18n/request.ts.
   locale        String     @default("es")
   /// How long a confirmation stays on screen: "default" | "long" | "forever".
@@ -22,26 +41,201 @@ model User {
   household     Household? @relation(fields: [householdId], references: [id])
   householdId   String?
   role          HouseholdRole @default(MEMBER)
-  /// Sessions issued before this moment are refused — the whole of session
-  /// revocation, in one column.
-  ///
-  /// The session is a JWT with no server-side record, so there is nothing to
-  /// delete. What there is instead is a line in time: `src/lib/auth.ts`'s `jwt`
-  /// callback compares the token's `iat` against this and returns null when the
-  /// token is older, which makes Auth.js clear the cookie.
-  ///
-  /// **Coarse on purpose.** Per-session revocation would need a row per session
-  /// and a write on every renewal — every five minutes per active account,
-  /// which is the cost `session.updateAge` was tuned to avoid. This answers
-  /// both things asked of it, "end my sessions" and "end theirs", and is a
-  /// strict subset of the finer version if that is ever wanted.
-  ///
-  /// Null means never revoked, which is every account until somebody asks.
-  sessionsValidFrom DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   @@index([householdId])
+}
+
+/// A way to sign in to a `User`, in the shape Better Auth reads.
+///
+/// The password hash lives here, on the row whose `providerId` is
+/// `"credential"` and whose `accountId` is the user's own id: that is where
+/// Better Auth's email-and-password sign-in looks for it. It moved off `User`
+/// before the switch to Better Auth (PROGRESS D134), so the switch itself
+/// carries no data move. `src/lib/auth/credentials.ts` is the only code that
+/// reads or writes it.
+///
+/// The token columns are Better Auth's, for social providers this application
+/// does not use; they stay null and are kept so the shape is the one its
+/// adapter expects.
+///
+/// **Cascades from User**, an exception to the schema's rule that there are no
+/// cascades (see `ScreenChoice`). A credential that outlives its account is a
+/// password hash nobody can remove, and ASVS 7.4.2 asks for an account's
+/// credentials to go when it does. Better Auth's adapter never deletes these
+/// rows itself, so the database has to.
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  /// The Argon2id hash (`src/lib/auth/password-hash.ts`) on the `credential`
+  /// row; null on any other.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+/// One signed-in browser or app, in the shape Better Auth reads.
+///
+/// A row per session is what lets a single session be ended — this one, a
+/// lost phone, every one but this — where a signed token can only be refused
+/// wholesale. The cookie carries `token`, signed; Better Auth looks the row up
+/// by it on every read, and a row that is gone or past `expiresAt` is a
+/// signed-out request whatever the cookie says.
+///
+/// Created ahead of the switch to Better Auth and empty until it: next-auth
+/// neither reads nor writes it.
+///
+/// **Cascades from User**, like `Account`: a session that outlives its account
+/// is a way in to nothing, but ASVS 7.4.2 asks for it to go with the account,
+/// and Better Auth's adapter never deletes these rows itself.
+model Session {
+  id              String   @id @default(cuid())
+  /// The bearer secret. Unique because it is the lookup key.
+  token           String   @unique
+  /// The only lifetime that counts: a row past it is refused on every path.
+  expiresAt       DateTime
+  /// Reset by Better Auth each time it re-creates a session (a password
+  /// change, enabling two-step verification), so it is not when the person
+  /// signed in; `authenticatedAt` is.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  /// When this person last proved who they are on this session: set at
+  /// sign-in, carried across Better Auth's re-creates. The absolute session
+  /// ceiling is measured from here, not from `createdAt`.
+  authenticatedAt DateTime @default(now())
+  /// Whether the person ticked "Mantener la sesión iniciada" when they signed
+  /// in (PROGRESS D141). It decides which lifetime the row lives under: a
+  /// browser session's fifteen idle minutes under a day, or a remembered
+  /// session's ninety idle days under a year, both from `authenticatedAt`
+  /// (`src/lib/auth/session-policy.ts`). Carried across Better Auth's
+  /// re-creates with `authenticatedAt`. False for every row written before.
+  persistent      Boolean  @default(false)
+  /// Better Auth's. Its address tracking is to be switched off, so this
+  /// stays null.
+  ipAddress       String?
+  userAgent       String?
+  /// The `stoky_device` cookie the sign-in carried, if it carried a valid
+  /// one (PROGRESS D143); carried across Better Auth's re-creates. What joins
+  /// a session to the screen its device opens on (`ScreenChoice`), so the
+  /// list of a person's sessions can say "kitchen screen" where the
+  /// User-Agent alone cannot tell two tablets apart. Never sent to a client:
+  /// it is a cookie value, and the list reads it only to make that join.
+  /// Null for a native client, which keeps no cookies, and for rows written
+  /// before.
+  deviceId        String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  // So expired rows can be found and deleted without reading the table.
+  @@index([expiresAt])
+}
+
+/// One person's authenticator, in the shape Better Auth's two-factor plugin
+/// reads (PROGRESS D148).
+///
+/// `secret` is the TOTP seed, encrypted with `STOKY_SECRET` (Better Auth's
+/// `$ba$1$` envelope): rotating the secret makes it unreadable, which a
+/// sign-in answers with `TWO_FACTOR_UNREADABLE` (SECURITY.md, *Secrets*).
+/// `backupCodes` is the list of one-off recovery codes, as JSON, each stored
+/// as `sha256:<hex>` and never encrypted (D149, `src/lib/auth/backup-codes.ts`):
+/// the column gives none of them back, and a rotation leaves them working.
+///
+/// **One per person** (`userId` is unique). Better Auth's enrolment updates
+/// the row it finds rather than adding a second, and the replay guard
+/// (`src/lib/auth/policy-plugin.ts`) and Better Auth must read the same row:
+/// with two, which one "the" secret is would be the database's choice.
+///
+/// **Cascades from User**, like `Account` and `Session` (D134): an
+/// authenticator secret is a credential, and ASVS 7.4.2 asks for an account's
+/// credentials to go with it. Better Auth's adapter never deletes it itself.
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String    @unique
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// False between enrolment and its first accepted code: a secret nobody has
+  /// proved they hold does not protect a sign-in yet.
+  verified                Boolean   @default(true)
+  /// Better Auth's account lockout: consecutive wrong codes across sign-ins,
+  /// reset by a right one; at ten, `lockedUntil` is set fifteen minutes out.
+  /// Not nullable, because a null counter never reaches ten.
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+  /// The highest TOTP time step a code has been accepted for (ASVS 5.0.0
+  /// 6.5.1, single use). A code is accepted only for a step above it, claimed
+  /// in the same UPDATE that checks it. Ours, not Better Auth's.
+  lastTotpCounter         Int?
+}
+
+/// One passkey: a WebAuthn credential a person's device or password manager
+/// holds, in the shape Better Auth's passkey plugin reads (PROGRESS D151).
+///
+/// Nothing here is a secret. `publicKey` is the credential's public key (a
+/// COSE key, base64) and checks a signature only the device can make;
+/// `credentialID` is how the browser names it back, so it is unique and the
+/// sign-in looks it up. `counter` is the authenticator's signature counter,
+/// which a cloned credential would repeat. `aaguid` names the authenticator's
+/// make (a password manager, a security key model), never the device or the
+/// person; `name` is what the person called it.
+///
+/// **Bound to one host.** A passkey is registered for the canonical
+/// `STOKY_URLS` host (the relying party id) and works only there: changing
+/// that first entry orphans every row (SECURITY.md, *Authentication*).
+///
+/// **Cascades from User**, like `Account`, `Session` and `TwoFactor` (D134):
+/// a passkey is a credential, and ASVS 7.4.2 asks for an account's
+/// credentials to go with it. Better Auth's adapter never deletes it itself.
+model Passkey {
+  id           String    @id @default(cuid())
+  name         String?
+  publicKey    String
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialID String    @unique
+  counter      Int
+  /// "singleDevice" or "multiDevice": whether it can be synced to the
+  /// person's other devices.
+  deviceType   String
+  backedUp     Boolean
+  /// Comma-separated, as Better Auth writes them ("internal,hybrid"); empty
+  /// when the browser named none.
+  transports   String?
+  createdAt    DateTime? @default(now())
+  aaguid       String?
+
+  @@index([userId])
+}
+
+/// Better Auth's short-lived one-off values: an identifier, a value, an
+/// expiry — a two-step sign-in in progress, for one. Empty until the switch,
+/// like `Session`.
+///
+/// No foreign key: an identifier is whatever the feature that wrote it chose,
+/// not always a user id, and a row is useless past `expiresAt` anyway.
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Household {
@@ -280,8 +474,9 @@ enum LandingScreen {
 /// No foreign key to User, matching `MutationReplay` above and the schema's
 /// standing rule that there are no cascades. A deleted account leaves rows
 /// keyed on a user id that no longer exists; nothing reads them, they are two
-/// short strings each, and the alternative is a cascade this schema does not
-/// have anywhere else.
+/// short strings each, and a cascade is kept for the auth tables alone
+/// (`Account`, `Session`), where a row left behind is a credential rather than
+/// a preference.
 model ScreenChoice {
   userId    String
   deviceId  String
@@ -310,8 +505,9 @@ model ScreenChoice {
 /// copy of the household's data, which for a privacy-first application is the
 /// wrong thing to keep.
 ///
-/// No foreign key to User: the schema has no cascades, and a cascade would take
-/// a KEY SHARE lock on the user row on every replayable write.
+/// No foreign key to User: outside the auth tables the schema has no cascades,
+/// and a cascade would take a KEY SHARE lock on the user row on every
+/// replayable write.
 model MutationReplay {
   key         String
   userId      String

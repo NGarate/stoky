@@ -211,6 +211,7 @@ describe("the settings index", () => {
       "/settings/stores",
       "/settings/people",
       "/settings/screen",
+      "/settings/security",
       "/settings/unsaved",
     ]) {
       expect(source).toMatch(new RegExp(`<ItemRow[^>]*href="${href}"`, "s"));

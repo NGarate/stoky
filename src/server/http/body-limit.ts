@@ -36,11 +36,11 @@
 export const MAX_TRPC_BODY_BYTES = 15 * 1024 * 1024;
 
 /**
- * The Auth.js endpoint's ceiling: 64 KiB.
+ * The auth API's ceiling: 64 KiB.
  *
- * What reaches `/api/auth` by POST is a form — a CSRF token, an address, a
- * password of at most a few hundred characters and a callback URL — so a
- * kilobyte is generous and 64 is not a number anybody will meet by accident.
+ * What reaches `/api/auth` by POST is a small JSON body — an address and a
+ * password of at most 128 characters — so a kilobyte is generous and 64 is not
+ * a number anybody will meet by accident.
  */
 export const MAX_AUTH_BODY_BYTES = 64 * 1024;
 
@@ -101,8 +101,8 @@ export async function readBodyWithin(req: Request, maxBytes: number): Promise<Bo
  *
  * The length is restated as what was actually read, and a chunked encoding is
  * dropped, because both described a stream that no longer exists. Plain data
- * rather than a `Request`, because Auth.js needs a `NextRequest` built from it
- * and tRPC a `Request`.
+ * rather than a `Request`, so a caller can build whichever request type it
+ * needs from it.
  */
 export function initWithBody(
   req: Request,

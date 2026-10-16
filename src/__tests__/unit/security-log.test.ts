@@ -158,15 +158,62 @@ describe("the address a sign-in tried", () => {
     expect(accountTag(ADDRESS, other)).not.toBe(accountTag(ADDRESS, SECRET));
   });
 
-  it("is keyed with NEXTAUTH_SECRET when no secret is passed", () => {
-    const original = process.env.NEXTAUTH_SECRET;
-    process.env.NEXTAUTH_SECRET = SECRET;
+  it("is keyed with STOKY_SECRET when no secret is passed, and with the legacy name until it is renamed", () => {
+    // The tag is how an operator greps for one person across a rename, so an
+    // installation still on NEXTAUTH_SECRET must tag with the same value it
+    // will carry once install.sh renames the line (D137).
+    const env = process.env as Record<string, string | undefined>;
+    const other = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+    const saved = { current: env.STOKY_SECRET, legacy: env.NEXTAUTH_SECRET };
     try {
+      env.STOKY_SECRET = SECRET;
+      env.NEXTAUTH_SECRET = other;
+      expect(accountTag(ADDRESS)).toBe(accountTag(ADDRESS, SECRET));
+
+      // Empty, as Compose passes an unset `${STOKY_SECRET:-}`.
+      env.STOKY_SECRET = "";
+      env.NEXTAUTH_SECRET = SECRET;
       expect(accountTag(ADDRESS)).toBe(accountTag(ADDRESS, SECRET));
     } finally {
-      if (original === undefined) delete process.env.NEXTAUTH_SECRET;
-      else process.env.NEXTAUTH_SECRET = original;
+      for (const [key, value] of [
+        ["STOKY_SECRET", saved.current],
+        ["NEXTAUTH_SECRET", saved.legacy],
+      ] as const) {
+        if (value === undefined) delete env[key];
+        else env[key] = value;
+      }
     }
+  });
+});
+
+describe("a sign-in that got in", () => {
+  // ASVS 5.0.0 16.3.1: successes are logged with the factor used. The
+  // success path is the one holding a live session token and the address
+  // that was typed, so it is the one most tempted to pass them along.
+  it("names the user, the factor, the tag and the client — and nothing else", () => {
+    const smuggled = {
+      userId: "user-1",
+      method: "password",
+      account: "2829b95a295aaf0a",
+      address: "203.0.113.7",
+      email: "vecina.del.quinto@example.org",
+      token: "sesion-viva-abc123",
+    } as unknown as SecurityDetails;
+
+    const line = securityLine("auth.signin.succeeded", smuggled, AT);
+    const parsed = JSON.parse(line);
+
+    expect(parsed).not.toHaveProperty("email");
+    expect(parsed).not.toHaveProperty("token");
+    expect(line).not.toContain("vecina");
+    expect(line).not.toContain("sesion-viva");
+    expect(parsed).toMatchObject({
+      event: "auth.signin.succeeded",
+      userId: "user-1",
+      method: "password",
+      account: "2829b95a295aaf0a",
+      address: "203.0.113.7",
+    });
   });
 });
 

@@ -23,9 +23,13 @@ const EXPECTED: Record<string, Record<string, string>> = {
   "auth.ts": {
     // `login` used to be here: a second credential-verification procedure the
     // interface never called and the CRITICAL-4 limiter never covered. Removed
-    // rather than limited — Auth.js already owns that path.
+    // rather than limited — the auth API owns that path.
     register: "publicProcedure",
     me: "protectedProcedure",
+    // The keep-alive's question, "when does this session end?". Public,
+    // because "no session" is an answer (null) rather than a refusal, and it
+    // reads or moves nothing but the caller's own session row.
+    session: "publicProcedure",
     logout: "protectedProcedure",
     // An account setting, so `protectedProcedure` and deliberately not
     // `householdProcedure`: an account with no household still sees
@@ -33,15 +37,24 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // matrix has no column for "how long you need to read a message". It is
     // nobody's household data.
     setSnackbarDuration: "protectedProcedure",
-    // An account with no household still has sessions, and needing one to end
-    // them would put the control out of reach of the account that has least
-    // else. `protectedProcedure` for the same reason as the row above.
-    revokeMySessions: "protectedProcedure",
+    // Listing and ending one's own sessions (D143). An account with no
+    // household still has sessions, and needing one to end them would put the
+    // control out of reach of the account that has least else, so
+    // `protectedProcedure` for the same reason as the row above. What keeps a
+    // stolen session from ending the
+    // owner's is the current password inside `endSessions` and its two
+    // budgets, which a tier cannot express; the list carries no token.
+    listSessions: "protectedProcedure",
+    endSessions: "protectedProcedure",
     // A person's own password, which an account with no household still has.
     // The same tier as the row above, and for the same reason; what keeps a
     // stolen session from using it is the current password and the limit
     // inside the resolver, which a tier cannot express.
     changePassword: "protectedProcedure",
+    // The step-up before a passkey is added or removed (D151): the current
+    // password, for an account that may have no household. Every role may
+    // have passkeys, the kitchen's shared account included.
+    confirmPassword: "protectedProcedure",
   },
   // Reachable by an account with no household, which is the whole reason it
   // exists — see ISSUES.md HOUSE-1. `householdProcedure` here would make the
@@ -61,15 +74,31 @@ const EXPECTED: Record<string, Record<string, string>> = {
     // is asking. `integration/household.roles.test.ts` holds both.
     updateRole: "adminProcedure",
     removeMember: "adminProcedure",
-    // Ending somebody else's sessions is the same authority as removing them,
-    // and a strictly smaller act — it changes nothing about the household.
-    revokeMemberSessions: "adminProcedure",
+    // Seeing and ending somebody else's sessions is the same authority as
+    // removing them, and a strictly smaller act — it changes nothing about
+    // the household. Not the whole guard: not the caller, the member must be
+    // this household's, and only an owner may act on an owner — inside the
+    // resolver (D145). `integration/session.revocation.test.ts` holds them.
+    memberSessions: "adminProcedure",
+    endMemberSessions: "adminProcedure",
+    // Every session in the household, the owner's own included (D147).
+    // Narrower than the tier: owners only, refused inside the resolver
+    // before the owner's password is asked — the matrix has no owner tier,
+    // and one procedure is no reason to add it.
+    // `integration/session.revocation.test.ts` holds the refusals.
+    endHouseholdSessions: "adminProcedure",
     // Setting somebody else's password is the same authority that set their
     // first one in `addMember`. Not the whole guard: the member must be this
     // household's, only an owner may act on an owner, and nobody may use it
     // on themselves — all inside the resolver, because a tier cannot see whom
     // the call is about. `integration/household.members.test.ts` holds them.
     resetMemberPassword: "adminProcedure",
+    // Taking a member's second step off for a lost authenticator (D150): the
+    // same authority as setting their password, which is what it leaves
+    // standing alone. Not the whole guard: not the caller, the admin's own
+    // password, this household's member, only an owner on an owner — inside
+    // the resolver. `integration/household.two-factor-removal.test.ts`.
+    removeMemberTwoFactor: "adminProcedure",
   },
   "inventory.ts": {
     getStockOverview: "householdProcedure",

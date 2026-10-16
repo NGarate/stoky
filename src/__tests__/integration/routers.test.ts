@@ -2,8 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test"
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
-import * as argon2 from "argon2";
-import type { Session } from "next-auth";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
+import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { signInWith, freshTestAddress } from "../utils/authorize";
 import { loginRateLimit } from "@/lib/rate-limit";
@@ -56,7 +57,7 @@ async function createTestContext(
   /** A fresh replay envelope for this account. See validations/idempotency. */
   envelope: () => { idempotencyKey: string; composedByUserId: string };
 }> {
-  const session: Session | null =
+  const session: AppSession | null =
     userId === "anon"
       ? null
       : {
@@ -68,6 +69,8 @@ async function createTestContext(
             role,
           },
           expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+          expiresKind: "idle",
+          sessionId: crypto.randomUUID(),
         };
 
   const ctx = await createTRPCContext({ session });
@@ -89,26 +92,18 @@ async function createTestUserWithHousehold(
   name: string,
   householdName: string
 ) {
-  const passwordHash = await argon2.hash("TestPassword123!", {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-  });
+  const passwordHash = await hashPassword("TestPassword123!");
 
   const household = await prisma.household.create({
     data: { name: householdName },
   });
   testData.households.push(household.id);
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name,
-      passwordHash,
-      householdId: household.id,
-      role: "OWNER",
-    },
-  });
+  const user = await createCredentialUser(
+    prisma,
+    { email, name, householdId: household.id, role: "OWNER" },
+    passwordHash,
+  );
 
   testData.users.push(user.id);
   return { user, householdId: household.id };
@@ -116,20 +111,9 @@ async function createTestUserWithHousehold(
 
 // Helper to create a test user without household
 async function createTestUserWithoutHousehold(email: string, name: string) {
-  const passwordHash = await argon2.hash("TestPassword123!", {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-  });
+  const passwordHash = await hashPassword("TestPassword123!");
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name,
-      passwordHash,
-      role: "MEMBER",
-    },
-  });
+  const user = await createCredentialUser(prisma, { email, name, role: "MEMBER" }, passwordHash);
 
   testData.users.push(user.id);
   return { user };
@@ -388,7 +372,7 @@ describe("tRPC Router Integration Tests", () => {
       });
     });
 
-    describe("sign-in, through Auth.js", () => {
+    describe("sign-in, through the auth API", () => {
       // These used to call `auth.login`, a second credential-verification
       // procedure on the public tRPC router that the interface never called
       // and that CRITICAL-4's limiter never covered. It is gone; the only
@@ -406,10 +390,10 @@ describe("tRPC Router Integration Tests", () => {
           password: "TestPassword123!",
         });
 
-        expect(result).not.toBeNull();
-        expect((result as { id: string }).id).toBe(user.id);
+        expect(result.status).toBe(200);
+        expect(result.userId).toBe(user.id);
         // The role has to come back, or no procedure downstream can check one.
-        expect((result as { role: string }).role).toBe("MEMBER");
+        expect(result.user?.role).toBe("MEMBER");
       });
 
       it("refuses a wrong password", async () => {
@@ -423,7 +407,8 @@ describe("tRPC Router Integration Tests", () => {
           password: "NotThePassword123!",
         });
 
-        expect(result).toBeNull();
+        expect(result.status).toBe(401);
+        expect(result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
       });
 
       it("refuses an unknown address without saying it is unknown", async () => {
@@ -432,9 +417,10 @@ describe("tRPC Router Integration Tests", () => {
           password: "WrongPassword123!",
         });
 
-        // Null either way: the caller cannot tell a wrong password from an
-        // address that has no account, which is what stops enumeration.
-        expect(result).toBeNull();
+        // The same answer either way: the caller cannot tell a wrong password
+        // from an address that has no account, which is what stops enumeration.
+        expect(result.status).toBe(401);
+        expect(result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
       });
 
       it("refuses input that is not a valid email", async () => {
@@ -443,12 +429,13 @@ describe("tRPC Router Integration Tests", () => {
           password: "TestPassword123!",
         });
 
-        expect(result).toBeNull();
+        expect(result.status).toBe(400);
+        expect(result.setCookie).toEqual([]);
       });
 
       it("stops accepting attempts from one address once the limit is spent", async () => {
-        // CRITICAL-4 at the layer that enforces it. The limiter lives inside
-        // `authorize`, so nothing below the browser covered it before.
+        // CRITICAL-4 at the layer that enforces it: the auth route, in front
+        // of Better Auth.
         const { user } = await createTestUserWithoutHousehold(
           "limited@example.com",
           "Limited User"
@@ -464,21 +451,22 @@ describe("tRPC Router Integration Tests", () => {
         }
 
         // The budget is spent, so even the correct password is refused - and
-        // refused by throwing rather than by returning null, so the browser can
-        // say "wait" instead of "wrong password".
-        await expect(
-          signInWith(
-            { email: "limited@example.com", password: "TestPassword123!" },
-            { address }
-          )
-        ).rejects.toThrow();
+        // refused as a 429 with its own code, so the browser can say "wait"
+        // instead of "wrong password".
+        const refused = await signInWith(
+          { email: "limited@example.com", password: "TestPassword123!" },
+          { address }
+        );
+        expect(refused.status).toBe(429);
+        expect(refused.code).toBe("RATE_LIMITED");
+        expect(refused.setCookie).toEqual([]);
 
         // A different address is unaffected.
         const elsewhere = await signInWith({
           email: "limited@example.com",
           password: "TestPassword123!",
         });
-        expect((elsewhere as { id: string } | null)?.id).toBe(user.id);
+        expect(elsewhere.userId).toBe(user.id);
       });
     });
 
@@ -497,6 +485,11 @@ describe("tRPC Router Integration Tests", () => {
         expect(result.email).toBe("metest@example.com");
         expect(result.name).toBe("Me Test User");
         expect(result.household).toBeDefined();
+        // `/settings/security` reads it to say whether the second step is on.
+        expect(result.twoFactorEnabled).toBe(false);
+        // The security screen compares it with the page's origin (D151): the
+        // suite runs at http://localhost:3000, where passkeys can work.
+        expect(result.passkeyOrigin).toBe("http://localhost:3000");
       });
 
       it("should throw when not authenticated", async () => {
@@ -527,33 +520,27 @@ describe("tRPC Router Integration Tests", () => {
       });
     });
 
-    describe("revokeMySessions", () => {
+    describe("logout's input", () => {
       // It takes nothing, so it accepts nothing. Before `z.void()` it had no
       // parser and ran on whatever arrived — a cross-site form's body
-      // included — and signed the account out everywhere. The walk in
+      // included — as did the mutation that ended every session, which
+      // `auth.endSessions` replaced. The walk in
       // `unit/procedure-inputs.test.ts` holds every mutation to having one;
-      // this shows the refusal happens before the write.
-      it("refuses an input, and writes nothing", async () => {
+      // this shows the refusal happens on the running router.
+      it("refuses an input", async () => {
         const { user } = await createTestUserWithoutHousehold(
-          "revoke-input@example.com",
-          "Revoke Input User"
+          "logout-input@example.com",
+          "Logout Input User"
         );
         const { caller } = await createTestContext(user.id);
         const form = new FormData();
         form.set("anything", "1");
 
         // The cast is the point: the type already says no, the runtime must too.
-        const revoke = caller.auth.revokeMySessions as (
-          input: unknown
-        ) => Promise<unknown>;
-        await expectCode(revoke({}), "BAD_REQUEST");
-        await expectCode(revoke(form), "BAD_REQUEST");
-
-        const after = await prisma.user.findUniqueOrThrow({
-          where: { id: user.id },
-          select: { sessionsValidFrom: true },
-        });
-        expect(after.sessionsValidFrom).toBeNull();
+        const logout = caller.auth.logout as (input: unknown) => Promise<unknown>;
+        await expectCode(logout({}), "BAD_REQUEST");
+        await expectCode(logout(form), "BAD_REQUEST");
+        expect(await logout(undefined)).toEqual({ success: true });
       });
     });
   });
@@ -652,7 +639,6 @@ describe("tRPC Router Integration Tests", () => {
         data: {
           email: "product4b-member@example.com",
           name: "Product Member 4b",
-          passwordHash: "not-a-real-hash",
           householdId,
           role: "MEMBER",
         },

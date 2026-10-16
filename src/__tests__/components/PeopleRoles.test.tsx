@@ -13,6 +13,11 @@ import {
   ResetMemberPasswordDialog,
   resetRefusalOf,
 } from "@/components/household/ResetMemberPasswordDialog";
+import {
+  MemberSessionsDialog,
+  memberSessionsRefusalOf,
+  type MemberSession,
+} from "@/components/household/MemberSessionsDialog";
 import { MIN_PASSWORD_LENGTH } from "@/lib/validations/password";
 import { addMemberSchema } from "@/lib/validations/household";
 import type { JSX } from "react";
@@ -48,32 +53,20 @@ function MemberRow({
   role,
   onSave,
   onRemove,
-  onRevoke = () => {},
 }: {
   name: string;
   role: Role;
   onSave: (role: Role) => void;
   onRemove: () => void;
-  onRevoke?: () => void;
 }): JSX.Element {
   const [pending, setPending] = useState<Role>(role);
   const [confirming, setConfirming] = useState(false);
-  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   return (
     <ul>
       <ItemRow
         actions={
-          confirmingRevoke ? (
-            <div role="group" aria-label={`¿Cerrar todas las sesiones de ${name}?`}>
-              <Button onClick={onRevoke} type="button">
-                Sí, cerrar sus sesiones
-              </Button>
-              <Button onClick={() => setConfirmingRevoke(false)} type="button" variant="outline">
-                Cancelar
-              </Button>
-            </div>
-          ) : confirming ? (
+          confirming ? (
             <div role="group" aria-label={`¿Quitar a ${name} del hogar?`}>
               <Button onClick={onRemove} type="button" variant="destructive">
                 Sí, quitar del hogar
@@ -105,9 +98,6 @@ function MemberRow({
                   Guardar el rol
                 </Button>
               </form>
-              <Button onClick={() => setConfirmingRevoke(true)} type="button" variant="outline">
-                Cerrar sus sesiones
-              </Button>
               <Button onClick={() => setConfirming(true)} type="button" variant="outline">
                 Quitar del hogar
               </Button>
@@ -262,62 +252,138 @@ describe("removing a member", () => {
   });
 });
 
-describe("ending a member's sessions", () => {
-  it("asks before doing it, like a removal", async () => {
-    const onRevoke = mock(() => {});
-    renderWithIntl(
-      <MemberRow
-        name="Ana"
-        onRemove={() => {}}
-        onRevoke={onRevoke}
-        onSave={() => {}}
-        role="KITCHEN"
-      />,
+/**
+ * A member's sessions — `household.memberSessions` and
+ * `household.endMemberSessions`, ASVS 5.0.0 7.4.5, D145. The real dialog: it
+ * takes the list and the server calls as props, so it needs no tRPC provider.
+ * Which row offers it, and what the page sends, are `EndSession.test.tsx`'s
+ * (the tRPC mock lives there, D50); the guards are
+ * `integration/session.revocation.test.ts`'s.
+ */
+describe("a member's sessions", () => {
+  const ANA = { id: "member-ana", name: "Ana" };
+  const SESSIONS: MemberSession[] = [
+    {
+      id: "s-tablet",
+      device: { browser: "Firefox", os: "Android" },
+      screen: "KITCHEN",
+      signedInAt: new Date("2026-10-10T08:00:00.000Z"),
+      lastUsedAt: new Date("2026-10-15T08:30:00.000Z"),
+      remembered: true,
+    },
+    {
+      id: "s-phone",
+      device: { browser: null, os: null },
+      screen: null,
+      signedInAt: new Date("2026-10-15T07:00:00.000Z"),
+      lastUsedAt: new Date("2026-10-15T07:10:00.000Z"),
+      remembered: false,
+    },
+  ];
+
+  function refusal(code: string): TRPCClientError<never> {
+    const error = new TRPCClientError<never>("refused");
+    Object.defineProperty(error, "data", { value: { code } });
+    return error;
+  }
+
+  function Harness({
+    sessions = SESSIONS,
+    loadError = null,
+    onEndOne = async () => {},
+    onEndAll = async () => {},
+  }: {
+    sessions?: MemberSession[] | undefined;
+    loadError?: unknown;
+    onEndOne?: (session: { id: string; name: string }) => Promise<unknown>;
+    onEndAll?: () => Promise<unknown>;
+  }): JSX.Element {
+    const [member, setMember] = useState<{ id: string; name: string } | null>(ANA);
+    return (
+      <MemberSessionsDialog
+        loadError={loadError}
+        member={member}
+        onClose={() => setMember(null)}
+        onEndAll={onEndAll}
+        onEndOne={onEndOne}
+        sessions={sessions}
+      />
     );
+  }
 
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sus sesiones" }));
+  it("names the person, and says they stay in the household", () => {
+    renderWithIntl(<Harness />, { locale: "es" });
 
-    expect(onRevoke).toHaveBeenCalledTimes(0);
+    const dialog = screen.getByRole("dialog", { name: "Sesiones de Ana" });
+    expect(dialog).toHaveAccessibleDescription(/sigue perteneciendo al hogar/i);
+  });
+
+  it("lists each session as a row named by its device, with an action that says which", () => {
+    renderWithIntl(<Harness />, { locale: "es" });
+
+    const rows = within(screen.getByRole("dialog")).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText("Pantalla de cocina")).toBeInTheDocument();
+    // The browser too, when the title is the screen.
+    expect(within(rows[0]!).getByText("Firefox en Android")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("Recordada")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("Dispositivo desconocido")).toBeInTheDocument();
     expect(
-      screen.getByRole("group", { name: "¿Cerrar todas las sesiones de Ana?" }),
+      within(rows[1]!).getByRole("button", { name: "Cerrar esta: Dispositivo desconocido" }),
     ).toBeInTheDocument();
   });
 
-  it("is a different act from removing them, offered separately", async () => {
-    // "They left" and "their phone was stolen" are different problems. A
-    // household offered only a removal would delete somebody to answer the
-    // second, which is why both buttons sit in the row.
-    renderWithIntl(
-      <MemberRow name="Ana" onRemove={() => {}} onSave={() => {}} role="KITCHEN" />,
-    );
+  it("ends the row pressed, by its id, and nothing else", async () => {
+    const onEndOne = mock(async (_session: { id: string; name: string }) => {});
+    const onEndAll = mock(async () => {});
+    renderWithIntl(<Harness onEndAll={onEndAll} onEndOne={onEndOne} />, { locale: "es" });
 
-    expect(
-      screen.getByRole("button", { name: "Cerrar sus sesiones" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Quitar del hogar" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar esta: Pantalla de cocina" }));
+
+    expect(onEndOne).toHaveBeenCalledTimes(1);
+    expect(onEndOne.mock.calls[0]?.[0]).toEqual({ id: "s-tablet", name: "Pantalla de cocina" });
+    expect(onEndAll).toHaveBeenCalledTimes(0);
   });
 
-  it("ends them on the second answer", async () => {
-    const onRevoke = mock(() => {});
+  it("says an owner's are an owner's to end, and keeps the rows", async () => {
     renderWithIntl(
-      <MemberRow
-        name="Ana"
-        onRemove={() => {}}
-        onRevoke={onRevoke}
-        onSave={() => {}}
-        role="KITCHEN"
-      />,
+      <Harness onEndAll={() => Promise.reject(refusal("FORBIDDEN"))} />,
+      { locale: "es" },
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Cerrar sus sesiones" }));
-    const confirm = screen.getByRole("group", {
-      name: "¿Cerrar todas las sesiones de Ana?",
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar todas sus sesiones" }));
+
+    expect(
+      await screen.findByText("Solo una persona propietaria puede cerrar las sesiones de otra."),
+    ).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("says an owner's are an owner's even to list, and shows no rows", () => {
+    renderWithIntl(<Harness loadError={refusal("FORBIDDEN")} sessions={undefined} />, {
+      locale: "es",
     });
-    await userEvent.click(
-      within(confirm).getByRole("button", { name: "Sí, cerrar sus sesiones" }),
-    );
 
-    expect(onRevoke).toHaveBeenCalledTimes(1);
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText("Solo una persona propietaria puede cerrar las sesiones de otra."),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryAllByRole("listitem")).toHaveLength(0);
+  });
+
+  it("says when somebody is signed in nowhere, and offers nothing to end", () => {
+    renderWithIntl(<Harness sessions={[]} />, { locale: "es" });
+
+    expect(screen.getByText("Ana no tiene ninguna sesión abierta.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cerrar todas sus sesiones" })).toBeDisabled();
+  });
+
+  it("reads each refusal the procedures can give", () => {
+    expect(memberSessionsRefusalOf(refusal("FORBIDDEN"))).toBe("notOwner");
+    // Ended already, from elsewhere or by its clock: the list was out of date.
+    expect(memberSessionsRefusalOf(refusal("NOT_FOUND"))).toBe("gone");
+    expect(memberSessionsRefusalOf(refusal("INTERNAL_SERVER_ERROR"))).toBe("failed");
+    expect(memberSessionsRefusalOf(new Error("offline"))).toBe("failed");
   });
 });
 

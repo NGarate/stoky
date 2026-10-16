@@ -3,7 +3,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import type { LocationTreeNode } from "@/server/trpc/routers/location";
 
 /**
@@ -28,7 +28,7 @@ const ROUNDS = 20;
 const account = { userId: "", householdId: "" };
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: account.userId,
       email: `${account.userId}@example.com`,
@@ -37,6 +37,8 @@ async function caller() {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -73,7 +75,6 @@ beforeAll(async () => {
       email: `location-cycles-${Date.now()}@example.com`,
       name: "Location cycles",
       // Never signed in with: the session above is built directly.
-      passwordHash: "not-a-hash",
       householdId: household.id,
       role: "OWNER",
     },

@@ -1,12 +1,29 @@
-import { publicUrlWarning } from "@/lib/auth/public-url";
-import { assertKnownRegistrationMode } from "@/lib/auth/registration";
-import { assertUsableSecret } from "@/lib/auth/secret";
+import {
+  authEnvironmentProblems,
+  authEnvironmentWarnings,
+  ignoredAuthVariableWarnings,
+} from "@/lib/auth/environment";
+import { publicUrlWarnings } from "@/lib/auth/public-url";
+import { REGISTRATION_ENV, assertKnownRegistrationMode } from "@/lib/auth/registration";
+import { assertUsableSecret, configuredSecret } from "@/lib/auth/secret";
+import { renamedVariableWarnings } from "@/lib/env-names";
 
 /**
  * Logs, without stopping anything, a configuration this application tolerates
- * but should not be left in: today, a public URL that is missing or plain HTTP
- * to another machine (`src/lib/auth/public-url.ts`, which says why it is a
- * warning and not a refusal).
+ * but should not be left in:
+ *
+ * - an address in `STOKY_URLS` that is plain HTTP to another machine
+ *   (`src/lib/auth/public-url.ts`, which says why it is a warning and not a
+ *   refusal), and, outside production, the problems with the list that
+ *   production refuses;
+ * - a variable Better Auth or next-auth would have read and this application
+ *   ignores — `BETTER_AUTH_SECRET(S)`, `AUTH_SECRET`, `BETTER_AUTH_URL`,
+ *   `AUTH_URL` (`src/lib/auth/environment.ts`);
+ * - a variable still set under the name it had before the `STOKY_` rename
+ *   — `NEXTAUTH_SECRET` or `NEXTAUTH_URL`, alone or beside its new name
+ *   (`src/lib/env-names.ts`, D137, D138). In every environment, and only
+ *   here: this runs once, from `register()`, so each deprecation is said once
+ *   per process rather than per read.
  *
  * Called before `refuseToStartMisconfigured`, so an operator whose instance
  * refuses to start reads this too, in the same log.
@@ -15,14 +32,25 @@ export function warnAboutRiskyConfiguration(
   env: Record<string, string | undefined> = process.env,
   warn: (message: string) => void = console.warn,
 ): void {
-  const warning = publicUrlWarning(env);
-  if (warning) warn(warning);
+  for (const warning of publicUrlWarnings(env)) warn(warning);
+  for (const warning of authEnvironmentWarnings(env)) warn(warning);
+  for (const ignored of ignoredAuthVariableWarnings(env)) warn(ignored);
+  for (const renamed of renamedVariableWarnings(env)) warn(renamed);
 }
 
 /**
  * Ends the process if the configuration is one this application refuses: a
- * session signing key anybody could have, or a `STOKY_REGISTRATION` it does
- * not know.
+ * session signing key anybody could have, a `STOKY_REGISTRATION` it does not
+ * know, or an environment the auth API would refuse to be built in — no
+ * `STOKY_URLS` in production, an entry that is not an origin, an https first
+ * entry beside plain HTTP, or a Better Auth variable that would override its
+ * options (`src/lib/auth/environment.ts`).
+ *
+ * The last used to be found only by the first sign-in, which answered 503
+ * while `/api/health` said the instance was healthy (PROGRESS D136). Unlike
+ * the secret and the registration mode it is refused in development too,
+ * because there the auth API would refuse it just the same: a dev server that
+ * stops with the reason is quicker to read than one whose sign-in fails.
  *
  * Called from `src/instrumentation.ts` as the Node server starts; see there for
  * why it is called at start rather than on first import of `@/lib/auth`.
@@ -41,16 +69,27 @@ export function warnAboutRiskyConfiguration(
  * `process.exit` does not exist on the Edge and Next warns at build time about
  * any instrumentation code that could reach it there.
  */
-export function refuseToStartMisconfigured(): void {
+export function refuseToStartMisconfigured(
+  env: Record<string, string | undefined> = process.env,
+): void {
   let refused = false;
 
-  for (const check of [assertUsableSecret, assertKnownRegistrationMode]) {
+  const secret = configuredSecret(env);
+  for (const check of [
+    () => assertUsableSecret(secret.value, env.NODE_ENV, env.NEXT_PHASE, secret.name),
+    () => assertKnownRegistrationMode(env[REGISTRATION_ENV], env.NODE_ENV, env.NEXT_PHASE),
+  ]) {
     try {
       check();
     } catch (error) {
       console.error(error instanceof Error ? error.message : error);
       refused = true;
     }
+  }
+
+  for (const problem of authEnvironmentProblems(env)) {
+    console.error(`[auth] refusing to start: ${problem}`);
+    refused = true;
   }
 
   if (refused) process.exit(1);

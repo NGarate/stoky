@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import type { User, Household, HouseholdRole, Product, StockEntry, StorageLocation } from "@prisma/client";
+import type { AppSession } from "@/lib/auth/session";
 
 /**
  * Test data factories for creating database entities
@@ -50,15 +52,33 @@ export interface TestLocationData {
 export async function createTestUser(data: TestUserData): Promise<User> {
   const passwordHash = await hashPassword(data.password ?? "TestPassword123!");
 
-  return prisma.user.create({
-    data: {
+  return createCredentialUser(
+    prisma,
+    {
       email: data.email,
       name: data.name,
-      passwordHash,
       householdId: data.householdId,
       role: data.role || "MEMBER",
     },
+    passwordHash,
+  );
+}
+
+/**
+ * The password hash stored for `userId`, read straight from its credential
+ * Account row — the row Better Auth reads — rather than through
+ * `src/lib/auth/credentials.ts`, so a test of that module is not checked by
+ * the module itself. Throws when the account has no credential row.
+ */
+export async function storedPasswordHash(userId: string): Promise<string> {
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { providerId_accountId: { providerId: "credential", accountId: userId } },
+    select: { userId: true, password: true },
   });
+  if (account.userId !== userId || account.password === null) {
+    throw new Error(`the credential row of ${userId} holds no password of its own`);
+  }
+  return account.password;
 }
 
 /**
@@ -246,7 +266,7 @@ export function generateTestName(prefix = "Test"): string {
 /**
  * Helper to create a mock session for tRPC context
  */
-export function createMockSession(user: User & { household?: Household | null }) {
+export function createMockSession(user: User & { household?: Household | null }): AppSession {
   return {
     user: {
       id: user.id,
@@ -259,7 +279,29 @@ export function createMockSession(user: User & { household?: Household | null })
       role: user.role,
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    // A fresh id that names no row: a procedure that filters on "this
+    // session" then matches nothing rather than, through an undefined id,
+    // everything.
+    sessionId: crypto.randomUUID(),
   };
+}
+
+/**
+ * A live session row for `userId`, as a sign-in leaves one: what a test needs
+ * when it asks whether something ended a session, or carefully did not. Not a
+ * session anyone can use — no cookie carries its token — so it is only ever
+ * evidence. `integration/session.policy.test.ts` signs in for real when the
+ * cookie matters.
+ */
+export function openTestSession(userId: string, expiresInMs = 15 * 60 * 1000) {
+  return prisma.session.create({
+    data: {
+      token: crypto.randomUUID(),
+      userId,
+      expiresAt: new Date(Date.now() + expiresInMs),
+    },
+  });
 }
 
 /**

@@ -4,13 +4,16 @@ import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import * as argon2 from "argon2";
+import { hashPassword } from "@/lib/auth/password-hash";
+import { createCredentialUser } from "@/lib/auth/credentials";
 import type { HouseholdRole } from "@prisma/client";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { isPasswordIdentityRefusal } from "@/lib/validations/password";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
 import { RESET_OWN_PASSWORD_MESSAGE } from "@/lib/validations/household";
-import { authConfig } from "@/lib/auth";
+import { readSession } from "@/lib/auth";
 import { signInWith } from "../utils/authorize";
+import { openTestSession, storedPasswordHash } from "../utils/test-helpers";
 
 /**
  * Making the KITCHEN role reachable.
@@ -26,7 +29,7 @@ const HOUSEHOLD = { id: "", ownerId: "", memberId: "" };
 const OTHER = { id: "", adminId: "" };
 
 async function callerFor(userId: string, householdId: string) {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: userId,
       email: `${userId}@example.com`,
@@ -35,6 +38,8 @@ async function callerFor(userId: string, householdId: string) {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -44,19 +49,16 @@ async function makeUser(
   role: HouseholdRole,
   label: string,
 ) {
-  return prisma.user.create({
-    data: {
+  return createCredentialUser(
+    prisma,
+    {
       email: `people-${label}-${Date.now()}-${Math.round(performance.now())}@example.com`,
       name: `People ${label}`,
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId,
       role,
     },
-  });
+    await hashPassword("TestPassword123!"),
+  );
 }
 
 async function codeOf(call: Promise<unknown>): Promise<string> {
@@ -66,6 +68,25 @@ async function codeOf(call: Promise<unknown>): Promise<string> {
   } catch (error) {
     return error instanceof TRPCError ? error.code : `not TRPCError: ${error}`;
   }
+}
+
+/** The security events written while `run` ran, parsed. */
+async function eventsDuring(run: () => Promise<unknown>) {
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  let lines: string[];
+  try {
+    await run();
+  } finally {
+    lines = warn.mock.calls.map((call) => String(call[0]));
+    warn.mockRestore();
+  }
+  return lines.flatMap((line) => {
+    try {
+      return [JSON.parse(line) as Record<string, string>];
+    } catch {
+      return [];
+    }
+  });
 }
 
 beforeAll(async () => {
@@ -120,14 +141,12 @@ describe("creating a kitchen account", () => {
     const account = newAccount("KITCHEN");
 
     const created = await api.household.addMember(account);
-    const stored = await prisma.user.findUnique({ where: { id: created.id } });
+    const stored = await storedPasswordHash(created.id);
 
     // Argon2id, the same as registration. A row with an unusable hash would
     // look created and be a locked-out tablet.
-    expect(stored?.passwordHash).toStartWith("$argon2id$");
-    expect(
-      await argon2.verify(stored?.passwordHash ?? "", account.password),
-    ).toBe(true);
+    expect(stored).toStartWith("$argon2id$");
+    expect(await argon2.verify(stored, account.password)).toBe(true);
   });
 
   it("never returns the hash", async () => {
@@ -136,7 +155,7 @@ describe("creating a kitchen account", () => {
     const created = await api.household.addMember(newAccount("KITCHEN"));
 
     expect(JSON.stringify(created)).not.toContain("argon2");
-    expect(created).not.toHaveProperty("passwordHash");
+    expect(Object.keys(created).sort()).toEqual(["email", "id", "name", "role"]);
   });
 
   it("refuses a password built from the person's own name, and creates nothing", async () => {
@@ -339,20 +358,38 @@ describe("listing who is in the household", () => {
  * 2026-10-12. There is no email in this application, so before this a member
  * who forgot their password was locked out for good.
  *
- * Through the router, with real Argon2id, a real Valkey and the `jwt`
- * callback that actually refuses a session, the same way the change of one's
- * own password is tested in `auth.flow.test.ts`: a timestamp written is not a
- * session ended. Every test makes its own admin, so none spends another's
+ * Through the router, with real Argon2id, a real Valkey and a session read
+ * with the cookie a real sign-in set, the same way the change of one's own
+ * password is tested in `auth.flow.test.ts`: a row deleted is only half of a
+ * session ended; the cookie being refused is the other. Every test makes its own admin, so none spends another's
  * budget, and the accounts it acts on, so none sees another's password.
  */
 describe("setting a member's password", () => {
   const OLD = "TestPassword123!";
   const NEW = "tarro de garbanzos azul";
 
-  const stored = (id: string) =>
-    prisma.user.findUniqueOrThrow({
+  const stored = async (id: string) => ({
+    ...(await prisma.user.findUniqueOrThrow({
       where: { id },
-      select: { passwordHash: true, sessionsValidFrom: true, householdId: true },
+      select: { householdId: true },
+    })),
+    passwordHash: await storedPasswordHash(id),
+    sessions: await prisma.session.count({ where: { userId: id } }),
+    passkeys: await prisma.passkey.count({ where: { userId: id } }),
+  });
+
+  /** A passkey row for `userId`, as a registration leaves one. */
+  const passkeyFor = (userId: string) =>
+    prisma.passkey.create({
+      data: {
+        userId,
+        name: "Móvil",
+        publicKey: "pk",
+        credentialID: crypto.randomUUID(),
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+      },
     });
 
   async function refusalOf(call: Promise<unknown>): Promise<TRPCError> {
@@ -365,44 +402,16 @@ describe("setting a member's password", () => {
     throw new Error("expected a refusal, and the call succeeded");
   }
 
-  /** The configured `jwt` callback, which is where a session is refused. */
-  function jwtCallback() {
-    const callback = authConfig.callbacks?.jwt;
-    if (typeof callback !== "function") {
-      throw new Error("authConfig exposes no jwt callback");
-    }
-    return callback;
-  }
-
-  /** The security events written while `run` ran, parsed. */
-  async function eventsDuring(run: () => Promise<unknown>) {
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
-    let lines: string[];
-    try {
-      await run();
-    } finally {
-      lines = warn.mock.calls.map((call) => String(call[0]));
-      warn.mockRestore();
-    }
-    return lines.flatMap((line) => {
-      try {
-        return [JSON.parse(line) as Record<string, string>];
-      } catch {
-        return [];
-      }
-    });
-  }
-
   it("sets the password, so the new one signs in, the old one does not, and old sessions end", async () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-admin");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
-    const signedIn = Math.floor((Date.now() - 60_000) / 1000);
-    const token = { sub: member.id, iat: signedIn, authTime: signedIn };
+    const signedIn = await signInWith({ email: member.email, password: OLD });
+    const cookie = new Headers({ cookie: signedIn.cookieHeader });
 
-    // The control: the same token is accepted before, so the refusal after is
-    // the reset's doing and not the token's shape.
-    expect(await jwtCallback()({ token: { ...token } } as never)).not.toBeNull();
+    // The control: the same cookie is accepted before, so the refusal after is
+    // the reset's doing and not the cookie's shape.
+    expect(await readSession(cookie, { refresh: false })).not.toBeNull();
 
     let result: unknown;
     const events = await eventsDuring(async () => {
@@ -415,12 +424,12 @@ describe("setting a member's password", () => {
     expect(JSON.stringify(result)).not.toContain("argon2");
     const after = await stored(member.id);
     expect(after.passwordHash).toStartWith("$argon2id$");
-    expect(await signInWith({ email: member.email, password: NEW })).not.toBeNull();
-    expect(await signInWith({ email: member.email, password: OLD })).toBeNull();
-
     // Whoever knew the old password may hold a session opened with it.
-    expect(after.sessionsValidFrom).not.toBeNull();
-    expect(await jwtCallback()({ token: { ...token } } as never)).toBeNull();
+    expect(after.sessions).toBe(0);
+    expect(await readSession(cookie, { refresh: false })).toBeNull();
+
+    expect((await signInWith({ email: member.email, password: NEW })).status).toBe(200);
+    expect((await signInWith({ email: member.email, password: OLD })).status).toBe(401);
 
     // Who did it, to whom — and neither password.
     const reset = events.filter((e) => e.event === "auth.password.reset");
@@ -429,6 +438,23 @@ describe("setting a member's password", () => {
     expect(reset[0]?.targetUserId).toBe(member.id);
     expect(reset[0]?.householdId).toBe(HOUSEHOLD.id);
     expect(JSON.stringify(events)).not.toContain(NEW);
+  });
+
+  it("removes the member's passkeys, which whoever knew the old password could have added", async () => {
+    // A passkey signs in with no password at all, so a reset that left one
+    // standing would leave whoever it is meant to shut out a way back in.
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-passkeys-admin");
+    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-passkeys-target");
+    const bystander = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-passkeys-bystander");
+    await passkeyFor(member.id);
+    await passkeyFor(member.id);
+    await passkeyFor(bystander.id);
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+
+    await api.household.resetMemberPassword({ userId: member.id, newPassword: NEW });
+
+    expect((await stored(member.id)).passkeys).toBe(0);
+    expect((await stored(bystander.id)).passkeys).toBe(1);
   });
 
   it("refuses a member of another household with NOT_FOUND, and changes nothing", async () => {
@@ -521,6 +547,8 @@ describe("setting a member's password", () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-race");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-race-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
+    // A session the reset would end, so "ends nothing" can be seen.
+    await openTestSession(member.id);
     const before = await stored(member.id);
 
     const realHash = argon2.hash;
@@ -542,7 +570,7 @@ describe("setting a member's password", () => {
     expect(refusal.code).toBe("CONFLICT");
     const after = await stored(member.id);
     expect(after.passwordHash).toBe(before.passwordHash);
-    expect(after.sessionsValidFrom).toBeNull();
+    expect(after.sessions).toBe(1);
   });
 
   it("writes nothing to a member made an owner while the password was hashed", async () => {
@@ -552,6 +580,8 @@ describe("setting a member's password", () => {
     const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "reset-race-role");
     const member = await makeUser(HOUSEHOLD.id, "MEMBER", "reset-race-role-target");
     const api = await callerFor(admin.id, HOUSEHOLD.id);
+    // A session the reset would end, so "ends nothing" can be seen.
+    await openTestSession(member.id);
     const before = await stored(member.id);
 
     const realHash = argon2.hash;
@@ -573,7 +603,7 @@ describe("setting a member's password", () => {
     expect(refusal.code).toBe("CONFLICT");
     const after = await stored(member.id);
     expect(after.passwordHash).toBe(before.passwordHash);
-    expect(after.sessionsValidFrom).toBeNull();
+    expect(after.sessions).toBe(1);
   });
 
   describe("how often", () => {
@@ -617,5 +647,87 @@ describe("setting a member's password", () => {
       expect(retryAfterSeconds([refusal])).toBeGreaterThan(0);
       expect(await stored(member.id)).toEqual(before);
     });
+  });
+});
+
+/**
+ * Removing somebody from the household signs them out everywhere (ASVS 5.0.0
+ * 7.4.2, PROGRESS D146). Before, it took the household away and left every
+ * session alive: the account itself — its password, a new household of its
+ * own — stayed reachable from whatever device the person had been signed in
+ * on. Cookies from real sign-ins through the route, read back through
+ * `readSession`, because a row deleted is only half of a session ended; the
+ * cookie being refused is the other.
+ */
+describe("removing a member", () => {
+  const PASSWORD = "TestPassword123!";
+
+  async function browser(email: string) {
+    const signedIn = await signInWith({ email, password: PASSWORD });
+    expect(signedIn.status).toBe(200);
+    return new Headers({ cookie: signedIn.cookieHeader });
+  }
+
+  it("signs them out on every device, leaves everyone else signed in, and says who did it", async () => {
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "remove-admin");
+    const member = await makeUser(HOUSEHOLD.id, "MEMBER", "remove-target");
+    const bystander = await makeUser(HOUSEHOLD.id, "MEMBER", "remove-bystander");
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+    try {
+      const phone = await browser(member.email);
+      const tablet = await browser(member.email);
+      const stays = await browser(bystander.email);
+
+      // The control: the cookies are good before, so the refusal after is
+      // the removal's doing and not the cookies' shape.
+      expect(await readSession(phone, { refresh: false })).not.toBeNull();
+      expect(await readSession(tablet, { refresh: false })).not.toBeNull();
+
+      const events = await eventsDuring(() =>
+        api.household.removeMember({ userId: member.id }),
+      );
+
+      expect(await prisma.session.count({ where: { userId: member.id } })).toBe(0);
+      expect(await readSession(phone, { refresh: false })).toBeNull();
+      expect(await readSession(tablet, { refresh: false })).toBeNull();
+      expect(await readSession(stays, { refresh: false })).not.toBeNull();
+
+      const ended = events.filter((e) => e.event === "auth.session.ended");
+      expect(ended).toHaveLength(1);
+      expect(ended[0]?.reason).toBe("removed");
+      expect(ended[0]?.userId).toBe(admin.id);
+      expect(ended[0]?.targetUserId).toBe(member.id);
+      expect(ended[0]?.householdId).toBe(HOUSEHOLD.id);
+      expect(ended[0]?.count).toBe("2");
+
+      // The account stays: the person can sign in again, to no household.
+      const again = await signInWith({ email: member.email, password: PASSWORD });
+      expect(again.status).toBe(200);
+      expect(
+        (await prisma.user.findUniqueOrThrow({ where: { id: member.id } })).householdId,
+      ).toBeNull();
+    } finally {
+      // Out of the household, so `afterAll` no longer finds the account.
+      await prisma.user.deleteMany({ where: { id: member.id } });
+    }
+  });
+
+  it("ends nothing and writes no line when the removal is refused", async () => {
+    // Only an owner may remove an owner. The sessions go with the household
+    // or not at all: a refused removal must not have signed anybody out.
+    const admin = await makeUser(HOUSEHOLD.id, "ADMIN", "remove-admin-owner");
+    const owner = await makeUser(HOUSEHOLD.id, "OWNER", "remove-owner-target");
+    const api = await callerFor(admin.id, HOUSEHOLD.id);
+    const signedIn = await browser(owner.email);
+
+    let code = "no error";
+    const events = await eventsDuring(async () => {
+      code = await codeOf(api.household.removeMember({ userId: owner.id }));
+    });
+
+    expect(code).toBe("FORBIDDEN");
+    expect(await readSession(signedIn, { refresh: false })).not.toBeNull();
+    expect(await prisma.session.count({ where: { userId: owner.id } })).toBe(1);
+    expect(events.filter((e) => e.event === "auth.session.ended")).toHaveLength(0);
   });
 });

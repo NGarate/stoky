@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createTRPCRouter, writeProcedure, createTRPCContext } from "@/server/trpc/trpc";
 import { withReplay } from "@/server/trpc/replay";
 import { prisma } from "@/lib/prisma";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 
 /**
  * A self-contained reproduction of ISSUES.md TEST-5.
@@ -72,7 +72,9 @@ async function caller() {
   const session = {
     user: { id: userId, email: "r@example.com", name: "R", householdId, role: "OWNER" },
     expires: new Date(Date.now() + 3600_000).toISOString(),
-  } as unknown as Session;
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
+  } as unknown as AppSession;
   return router.createCaller(await createTRPCContext({ session }));
 }
 
@@ -80,7 +82,7 @@ beforeAll(async () => {
   const h = await prisma.household.create({ data: { name: "Repro F Household" } });
   householdId = h.id;
   const u = await prisma.user.create({
-    data: { email: `repro-f-${Date.now()}@example.com`, name: "R", passwordHash: "x", householdId, role: "OWNER" },
+    data: { email: `repro-f-${Date.now()}@example.com`, name: "R", householdId, role: "OWNER" },
   });
   userId = u.id;
 });

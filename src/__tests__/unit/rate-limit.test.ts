@@ -6,10 +6,13 @@ import {
   loginAccountRateLimit,
   loginDeviceRateLimit,
   loginRateLimit,
-  passwordChangeRateLimit,
+  passkeyOptionsRateLimit,
   productLookupRateLimit,
   rateLimitIdentifier,
+  reauthAccountRateLimit,
+  reauthRateLimit,
   registerRateLimit,
+  twoFactorCodeRateLimit,
   uploadRateLimit,
 } from "@/lib/rate-limit";
 
@@ -275,6 +278,29 @@ describe("the configured limits", () => {
     expect(loginRateLimit().prefix).not.toBe(registerRateLimit().prefix);
   });
 
+  it("bounds a sign-in's wrong authenticator codes at twenty per account a day, apart from every other", () => {
+    // D148: Better Auth's own limits forget wrong codes when its fifteen
+    // minutes' lock ends, and a password holder opens challenges for free,
+    // so without this a day was about 960 guesses at six digits.
+    delete process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS;
+    delete process.env.RATE_LIMIT_TWO_FACTOR_CODE_WINDOW_SECONDS;
+
+    expect(twoFactorCodeRateLimit()).toEqual({
+      prefix: "rl:2fa-code",
+      attempts: 20,
+      windowSeconds: 86_400,
+    });
+    for (const other of [loginRateLimit(), loginAccountRateLimit(), registerRateLimit()]) {
+      expect(twoFactorCodeRateLimit().prefix).not.toBe(other.prefix);
+    }
+
+    process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS = "0";
+    expect(twoFactorCodeRateLimit().attempts).toBe(20);
+    process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS = "4";
+    expect(twoFactorCodeRateLimit().attempts).toBe(4);
+    delete process.env.RATE_LIMIT_TWO_FACTOR_CODE_ATTEMPTS;
+  });
+
   it("bounds a distributed guess at ten attempts per account", () => {
     // NIST SP 800-63B §5.2.2 asks for a limit on consecutive failed attempts
     // against *an account*. Ten rather than five because this counter cannot
@@ -337,28 +363,60 @@ describe("the configured limits", () => {
     expect(addMemberRateLimit().attempts).toBe(20);
   });
 
-  it("meters changing a password at five per account per fifteen minutes", () => {
-    // The procedure answers "is this the current password?" before anything
-    // else, so this is the number of guesses a stolen session gets at the
-    // password behind it (security review, 2026-10-12) — sign-in's own
-    // per-address number.
-    delete process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS;
-    delete process.env.RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS;
+  it("meters re-entering the password at five per session and twenty per account", () => {
+    // D143: per session, so a stolen session cannot spend the owner's way to
+    // end it; per account as the backstop ten sessions would otherwise
+    // multiply.
+    for (const name of [
+      "RATE_LIMIT_REAUTH_ATTEMPTS",
+      "RATE_LIMIT_REAUTH_WINDOW_SECONDS",
+      "RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS",
+      "RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS",
+    ]) {
+      delete process.env[name];
+    }
 
-    expect(passwordChangeRateLimit()).toEqual({
-      prefix: "rl:pwchange",
-      attempts: 5,
+    expect(reauthRateLimit()).toEqual({ prefix: "rl:reauth", attempts: 5, windowSeconds: 900 });
+    expect(reauthAccountRateLimit()).toEqual({
+      prefix: "rl:reauth-acct",
+      attempts: 20,
       windowSeconds: 900,
     });
   });
 
-  it("reads the password-change override, and refuses one that would disable it", () => {
-    process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = "2";
-    process.env.RATE_LIMIT_PASSWORD_CHANGE_WINDOW_SECONDS = "60";
-    expect(passwordChangeRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+  it("reads the re-entry overrides, and refuses ones that would disable them", () => {
+    process.env.RATE_LIMIT_REAUTH_ATTEMPTS = "2";
+    process.env.RATE_LIMIT_REAUTH_WINDOW_SECONDS = "60";
+    process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "3";
+    process.env.RATE_LIMIT_REAUTH_ACCOUNT_WINDOW_SECONDS = "120";
+    expect(reauthRateLimit()).toMatchObject({ attempts: 2, windowSeconds: 60 });
+    expect(reauthAccountRateLimit()).toMatchObject({ attempts: 3, windowSeconds: 120 });
 
-    process.env.RATE_LIMIT_PASSWORD_CHANGE_ATTEMPTS = "0";
-    expect(passwordChangeRateLimit().attempts).toBe(5);
+    process.env.RATE_LIMIT_REAUTH_ATTEMPTS = "0";
+    process.env.RATE_LIMIT_REAUTH_ACCOUNT_ATTEMPTS = "-1";
+    expect(reauthRateLimit().attempts).toBe(5);
+    expect(reauthAccountRateLimit().attempts).toBe(20);
+  });
+
+  it("meters a passkey sign-in's options at thirty per address, apart from sign-in's", () => {
+    // D151: the options write a challenge row and cannot be given back, so
+    // they have their own budget; sharing sign-in's would make every passkey
+    // sign-in spend one of the address's five for good.
+    delete process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS;
+    delete process.env.RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS;
+
+    expect(passkeyOptionsRateLimit()).toEqual({
+      prefix: "rl:passkey-options",
+      attempts: 30,
+      windowSeconds: 900,
+    });
+    expect(passkeyOptionsRateLimit().prefix).not.toBe(loginRateLimit().prefix);
+
+    process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS = "3";
+    process.env.RATE_LIMIT_PASSKEY_OPTIONS_WINDOW_SECONDS = "60";
+    expect(passkeyOptionsRateLimit()).toMatchObject({ attempts: 3, windowSeconds: 60 });
+    process.env.RATE_LIMIT_PASSKEY_OPTIONS_ATTEMPTS = "0";
+    expect(passkeyOptionsRateLimit().attempts).toBe(30);
   });
 
   it("counts the account separately from the address", () => {
@@ -373,12 +431,6 @@ describe("the configured limits", () => {
     expect(loginDeviceRateLimit().prefix).not.toBe(loginAccountRateLimit().prefix);
     const others = [loginRateLimit(), loginAccountRateLimit(), registerRateLimit(), uploadRateLimit()];
     expect(others.map((limit) => limit.prefix)).not.toContain(addMemberRateLimit().prefix);
-    // Nor does changing a password: sign-in clears the account's sign-in
-    // counter on success, and sharing it would let a stolen session's
-    // guesses be wiped by the owner signing in somewhere else.
-    expect([...others, addMemberRateLimit()].map((limit) => limit.prefix)).not.toContain(
-      passwordChangeRateLimit().prefix,
-    );
   });
 
   it("meters sixty Open Food Facts lookups an hour per account", () => {
@@ -402,9 +454,26 @@ describe("the configured limits", () => {
       registerRateLimit(),
       uploadRateLimit(),
       addMemberRateLimit(),
-      passwordChangeRateLimit(),
     ]) {
       expect(other.prefix).not.toBe(lookup);
     }
+  });
+
+  it("counts re-entries apart from every other limit, and the two apart", () => {
+    // Sharing the sign-in account counter would let the owner's sign-in
+    // elsewhere wipe a thief's guesses; sharing the two re-entry budgets
+    // would make the per-session one the account's.
+    const others = [
+      loginRateLimit(),
+      loginAccountRateLimit(),
+      loginDeviceRateLimit(),
+      registerRateLimit(),
+      uploadRateLimit(),
+      addMemberRateLimit(),
+      productLookupRateLimit(),
+    ].map((limit) => limit.prefix);
+    expect(others).not.toContain(reauthRateLimit().prefix);
+    expect(others).not.toContain(reauthAccountRateLimit().prefix);
+    expect(reauthRateLimit().prefix).not.toBe(reauthAccountRateLimit().prefix);
   });
 });

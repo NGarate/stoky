@@ -39,7 +39,7 @@ function setup(
   // Project-owned release tooling must also work on a host with only Bun.
   writeFileSync(join(fixture, "bin/node"), "#!/bin/sh\necho 'Node must not be used' >&2\nexit 99\n", { mode: 0o755 });
   writeFileSync(join(fixture, "package.json"), JSON.stringify({ version: options.packageVersion ?? "0.1.0-alpha.1" }));
-  writeFileSync(join(fixture, "deploy/example.env"), `# ${guide("master")}\nSTOKY_VERSION=${options.envVersion ?? tag}\nNEXTAUTH_SECRET=\n`);
+  writeFileSync(join(fixture, "deploy/example.env"), `# ${guide("master")}\nSTOKY_VERSION=${options.envVersion ?? tag}\nSTOKY_SECRET=\n`);
   writeFileSync(join(fixture, "deploy/docker-compose.yml"), compose(options.appLines));
   writeFileSync(
     join(fixture, "deploy/install.sh"),
@@ -47,7 +47,7 @@ function setup(
   );
   writeFileSync(join(fixture, "deploy/traefik.yml"), "http:\n  services:\n    stoky:\n      loadBalancer:\n        servers:\n          - url: http://app:3000\n");
   // An operator's local credentials must never become a release attachment.
-  writeFileSync(join(fixture, "deploy/.env"), "NEXTAUTH_SECRET=private-local-value\n");
+  writeFileSync(join(fixture, "deploy/.env"), "STOKY_SECRET=private-local-value\n");
   const guideVersion = options.guideVersion ?? tag;
   writeFileSync(join(fixture, "docs/INSTALL.md"), `This guide is for **${guideVersion}**.\n\ngh release download ${guideVersion}\n`);
   writeFileSync(join(fixture, "README.md"), `Status: ${tag}. See [notes](docs/releases/${tag}.md).\n`);

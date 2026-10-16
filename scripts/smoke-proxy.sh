@@ -144,36 +144,41 @@ refused_by_proxy "https://$DOMAIN/ with Host: other.$DOMAIN" \
 # behind one that passes them through, each attempt is a stranger with a fresh
 # budget and the refusal never comes.
 #
-# Malformed credentials, so nothing is looked up and nothing is hashed: the
-# limit counts an attempt before it reads one. The outcome is the `code` Auth.js
-# puts on the redirect to the sign-in page.
-COOKIES="$WORK/cookies"
-CSRF="$("${CURL[@]}" "${VERIFY[@]}" --cookie-jar "$COOKIES" "https://$DOMAIN/api/auth/csrf" \
-  | sed -n 's/.*"csrfToken":"\([^"]*\)".*/\1/p')"
-if [ -z "$CSRF" ]; then
-  echo "Error: https://$DOMAIN/api/auth/csrf returned no CSRF token." >&2
-  exit 1
-fi
-
+# Malformed credentials — no address — so nothing is looked up and nothing is
+# hashed: the limit counts an attempt before it reads one, and the auth API
+# answers 400 INVALID_REQUEST until the budget is spent, then 429 RATE_LIMITED
+# with Retry-After (src/server/http/auth-handler.ts). A JSON POST with no
+# cookie, as a native client sends one: no Origin is needed without a cookie.
+#
 # Well past the default of 5, so an installation that raised its limit still
 # fails loudly here rather than passing a check it never reached.
 MAX_ATTEMPTS="${SMOKE_MAX_SIGNIN_ATTEMPTS:-20}"
 THROTTLED=""
 for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   FORGED="203.0.113.$attempt"
-  LOCATION="$("${CURL[@]}" "${VERIFY[@]}" --cookie "$COOKIES" \
+  HEADERS="$WORK/signin-headers"
+  STATUS="$("${CURL[@]}" "${VERIFY[@]}" \
     --header "X-Forwarded-For: $FORGED" --header "X-Real-IP: $FORGED" \
-    --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=" --data-urlencode "password=" \
-    --output /dev/null --write-out '%{redirect_url}' \
-    "https://$DOMAIN/api/auth/callback/credentials")"
-  case "$LOCATION" in
-    "https://$DOMAIN/login?"*"code=rate_limited"*)
+    --header "Content-Type: application/json" \
+    --data '{"email":"","password":""}' \
+    --dump-header "$HEADERS" --output "$WORK/signin-body" --write-out '%{http_code}' \
+    "https://$DOMAIN/api/auth/sign-in/email")"
+  case "$STATUS" in
+    429)
+      if ! grep -q '"code":"RATE_LIMITED"' "$WORK/signin-body"; then
+        echo "Error: sign-in attempt $attempt was throttled, but not by the per-address limit: $(cat "$WORK/signin-body")" >&2
+        exit 1
+      fi
+      if ! grep -qi '^retry-after: [0-9]' "$HEADERS"; then
+        echo "Error: sign-in attempt $attempt was throttled without a Retry-After header." >&2
+        exit 1
+      fi
       THROTTLED="$attempt"
       break
       ;;
-    "https://$DOMAIN/login?"*"code=credentials"*) ;;
+    400) ;;
     *)
-      echo "Error: sign-in attempt $attempt should have been refused as malformed or throttled; it redirected to: ${LOCATION:-nothing}" >&2
+      echo "Error: sign-in attempt $attempt should have been refused as malformed (400) or throttled (429); it answered ${STATUS:-nothing}: $(cat "$WORK/signin-body" 2>/dev/null)" >&2
       exit 1
       ;;
   esac

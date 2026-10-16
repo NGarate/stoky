@@ -51,6 +51,7 @@ export const ROUTE_TITLES: Readonly<Record<string, string>> = {
   "/settings/locations": "locations.title",
   "/settings/people": "household.peopleTitle",
   "/settings/screen": "start.settingsTitle",
+  "/settings/security": "security.title",
   "/settings/stores": "stores.title",
   "/settings/unsaved": "offline.unsavedTitle",
 };

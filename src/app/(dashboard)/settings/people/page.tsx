@@ -19,6 +19,10 @@ import {
   type AddMemberRefusal,
 } from "@/components/household/add-member-refusal";
 import { ResetMemberPasswordDialog } from "@/components/household/ResetMemberPasswordDialog";
+import { MemberSessionsDialog } from "@/components/household/MemberSessionsDialog";
+import { RemoveMemberTwoFactorDialog } from "@/components/household/RemoveMemberTwoFactorDialog";
+import { EndHouseholdSessions } from "@/components/household/EndHouseholdSessions";
+import { Section } from "@/components/ui/section";
 import type { HouseholdRole } from "@prisma/client";
 import type { FormEvent, JSX } from "react";
 
@@ -38,6 +42,26 @@ import type { FormEvent, JSX } from "react";
  * exist. For the same reason the admin is also the way back from a forgotten
  * password: "Cambiar su contraseña" sets a new one and ends every session the
  * person had (`household.resetMemberPassword`).
+ *
+ * "Ver sus sesiones" lists where a member is signed in and ends one or every
+ * one (`household.memberSessions`, `household.endMemberSessions`, D145): the
+ * answer to a lost kitchen tablet that does not also sign the member out of
+ * the phone in their pocket.
+ *
+ * "Quitar la verificación en dos pasos" (`household.removeMemberTwoFactor`,
+ * D150) is the way back for a member who has lost the phone with their
+ * authenticator and has no backup code left: after the admin's own password,
+ * it takes the second step off and ends every session they have. Each row
+ * says whether the member has it, in words, and the action is on the rows
+ * that do — never the caller's own, which is turned off from Seguridad y
+ * acceso, and never an owner's to an admin.
+ *
+ * Last, for owners only, "Cerrar todas las sesiones del hogar"
+ * (`household.endHouseholdSessions`, D147): every member signed out of every
+ * device, the owner too, after the owner's password. Below everything else
+ * because it is the widest act on the screen, and absent rather than
+ * disabled for an admin, because nothing an admin can do here would enable
+ * it.
  */
 export default function PeoplePage(): JSX.Element {
   const t = useTranslations("household");
@@ -46,8 +70,9 @@ export default function PeoplePage(): JSX.Element {
   const utils = api.useUtils();
 
   const members = api.household.members.useQuery();
-  // Only to know which row is the caller's own, which gets no reset: your own
-  // password changes from Settings, with your current one.
+  // To know which row is the caller's own, which gets no reset — your own
+  // password changes from Settings, with your current one — and whether the
+  // caller is an owner, who alone is offered the household-wide ending.
   const me = api.auth.me.useQuery(undefined, { retry: false });
 
   const [name, setName] = useState("");
@@ -88,7 +113,6 @@ export default function PeoplePage(): JSX.Element {
    */
   const [pendingRole, setPendingRole] = useState<Record<string, HouseholdRole>>({});
   const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
-  const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
   const [rowFailure, setRowFailure] = useState<{ id: string; message: string } | null>(
     null,
   );
@@ -96,6 +120,15 @@ export default function PeoplePage(): JSX.Element {
   // The button that opened the dialog, where focus goes back to. One ref for
   // every row, set on the click: only one dialog is open at a time.
   const resetOpener = useRef<HTMLButtonElement | null>(null);
+  const [viewing, setViewing] = useState<{ id: string; name: string } | null>(null);
+  const sessionsOpener = useRef<HTMLButtonElement | null>(null);
+  const [removingTwoFactor, setRemovingTwoFactor] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const twoFactorOpener = useRef<HTMLButtonElement | null>(null);
+  // Where focus goes when removing a member's two-step verification took
+  // the button that opened it off their row: the list of people.
+  const memberList = useRef<HTMLUListElement>(null);
 
   /**
    * The server's refusal, in words this household can act on.
@@ -142,31 +175,59 @@ export default function PeoplePage(): JSX.Element {
     },
   });
 
-  const revokeSessions = api.household.revokeMemberSessions.useMutation({
-    onSuccess: (_result, variables) => {
-      const target = members.data?.find((candidate) => candidate.id === variables.userId);
-      snackbar.show({
-        kind: "confirm",
-        message: {
-          key: "household.revokeDone",
-          values: { name: target?.name ?? "" },
-        },
-      });
-      setRowFailure(null);
-      setConfirmingRevoke(null);
-    },
-    onError: (error, variables) => {
-      const code =
-        error instanceof TRPCClientError ? (error.data?.code as string | undefined) : undefined;
-      setRowFailure({
-        id: variables.userId,
-        message: code === "FORBIDDEN" ? t("revokeFailedNotOwner") : t("revokeFailed"),
-      });
-    },
+  /**
+   * The member whose sessions are open, read only while their dialog is.
+   * `viewing` is never the caller: the button is not on their own row.
+   *
+   * `gcTime: 0`: closing the dialog drops the list, so opening it again reads
+   * it again. Kept, it would come back inside the client's 30-second
+   * `staleTime` and show the admin the sessions "Cerrar todas" had just ended
+   * (measured in `e2e/session-revocation.spec.ts`).
+   */
+  const memberSessions = api.household.memberSessions.useQuery(
+    { userId: viewing?.id ?? "" },
+    { enabled: viewing !== null, gcTime: 0 },
+  );
+  const endMemberSessions = api.household.endMemberSessions.useMutation({
+    // `always`, for `DeviceList`'s reason: offline, an `online` mutation
+    // pauses, its promise never settles, and the dialog would sit with every
+    // button disabled and nothing saying why.
+    networkMode: "always",
   });
 
+  async function endOne(session: { id: string; name: string }): Promise<void> {
+    if (viewing === null) return;
+    const member = viewing;
+    await endMemberSessions
+      .mutateAsync({ userId: member.id, sessionId: session.id })
+      .catch(async (error: unknown) => {
+        // Gone already: the list the admin chose from is out of date.
+        await memberSessions.refetch();
+        throw error;
+      });
+    snackbar.show({
+      kind: "confirm",
+      message: {
+        key: "household.memberSessionsEndedOne",
+        values: { name: member.name, device: session.name },
+      },
+    });
+    await memberSessions.refetch();
+  }
+
+  async function endAll(): Promise<void> {
+    if (viewing === null) return;
+    const member = viewing;
+    await endMemberSessions.mutateAsync({ userId: member.id });
+    snackbar.show({
+      kind: "confirm",
+      message: { key: "household.revokeDone", values: { name: member.name } },
+    });
+    setViewing(null);
+  }
+
   const resetPassword = api.household.resetMemberPassword.useMutation({
-    // `always`, for `RevokeSessionsButton`'s reason: offline, an `online`
+    // `always`, for `DeviceList`'s reason: offline, an `online`
     // mutation pauses, its promise never settles, and the dialog would sit on
     // "Cambiando…" with nothing saying why.
     networkMode: "always",
@@ -233,54 +294,23 @@ export default function PeoplePage(): JSX.Element {
         title={t("peopleTitle")}
       />
 
-      <ul className="space-y-3">
+      <ul className="space-y-3" ref={memberList} tabIndex={-1}>
         {members.data.map((member) => (
           <ItemRow
             key={member.id}
-            meta={[{ label: t("addEmail"), value: member.email }]}
+            meta={[
+              { label: t("addEmail"), value: member.email },
+              {
+                label: t("twoFactorLabel"),
+                value: member.twoFactorEnabled ? t("twoFactorOn") : t("twoFactorOff"),
+              },
+            ]}
             /* The role in words. Never a colour or a letter. */
             status={<Badge tone="neutral">{t(`role${member.role}`)}</Badge>}
             title={member.name}
             actions={
               <div className="w-full">
-                {confirmingRevoke === member.id ? (
-                  /* Asked twice like a removal, and for the same reason: it
-                     cannot be undone from here. Not `destructive` though —
-                     nothing is destroyed, and the copy says so. Somebody who
-                     has lost a device should not be made to feel they are
-                     deleting the person. */
-                  <div
-                    role="group"
-                    aria-label={t("revokeConfirmTitle", { name: member.name })}
-                    className="rounded border border-border bg-muted p-3"
-                  >
-                    <p className="font-semibold text-foreground">
-                      {t("revokeConfirmTitle", { name: member.name })}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {t("revokeConfirmBody")}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      <Button
-                        disabled={revokeSessions.isPending}
-                        onClick={() => revokeSessions.mutate({ userId: member.id })}
-                        type="button"
-                      >
-                        {t("revokeConfirm")}
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setConfirmingRevoke(null);
-                          setRowFailure(null);
-                        }}
-                        type="button"
-                        variant="outline"
-                      >
-                        {t("revokeCancel")}
-                      </Button>
-                    </div>
-                  </div>
-                ) : confirmingRemoval === member.id ? (
+                {confirmingRemoval === member.id ? (
                 /* The same shape `product.delete` uses: asked twice, in the
                    audited danger pair, as a group a screen reader can announce
                    whole. A removal is not undoable from this screen. */
@@ -396,17 +426,44 @@ export default function PeoplePage(): JSX.Element {
                   {/* Two different problems, two different acts. "They left"
                       is a removal; "their phone was stolen" is this, and
                       offering only the first would make a household delete
-                      somebody to answer the second. */}
-                  <Button
-                    onClick={() => {
-                      setConfirmingRevoke(member.id);
-                      setRowFailure(null);
-                    }}
-                    type="button"
-                    variant="outline"
-                  >
-                    {t("revokeButton")}
-                  </Button>
+                      somebody to answer the second. Not on the caller's own
+                      row: your own sessions are in Seguridad y acceso, and
+                      ending them there asks for your password. */}
+                  {me.data && me.data.id !== member.id ? (
+                    <Button
+                      onClick={(event) => {
+                        sessionsOpener.current = event.currentTarget;
+                        setViewing({ id: member.id, name: member.name });
+                        setRowFailure(null);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      {t("memberSessionsButton")}
+                    </Button>
+                  ) : null}
+
+                  {/* Only where there is something to remove, and never on
+                      the caller's own row (turned off from Seguridad y
+                      acceso, with their password) or, for an admin, on an
+                      owner's: the server refuses both, and a button that
+                      can only be refused is not offered. */}
+                  {member.twoFactorEnabled &&
+                  me.data &&
+                  me.data.id !== member.id &&
+                  (member.role !== "OWNER" || me.data.role === "OWNER") ? (
+                    <Button
+                      onClick={(event) => {
+                        twoFactorOpener.current = event.currentTarget;
+                        setRemovingTwoFactor({ id: member.id, name: member.name });
+                        setRowFailure(null);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("removeTwoFactorButton")}
+                    </Button>
+                  ) : null}
 
                   <Button
                     onClick={() => {
@@ -450,6 +507,23 @@ export default function PeoplePage(): JSX.Element {
             : Promise.resolve()
         }
         returnFocus={resetOpener}
+      />
+
+      <RemoveMemberTwoFactorDialog
+        member={removingTwoFactor}
+        onClose={() => setRemovingTwoFactor(null)}
+        returnFocus={twoFactorOpener}
+        fallbackFocus={memberList}
+      />
+
+      <MemberSessionsDialog
+        loadError={memberSessions.error}
+        member={viewing}
+        onClose={() => setViewing(null)}
+        onEndAll={endAll}
+        onEndOne={endOne}
+        returnFocus={sessionsOpener}
+        sessions={viewing ? memberSessions.data : undefined}
       />
 
       <section className="mt-8 rounded-lg border border-border bg-card p-4">
@@ -588,6 +662,12 @@ export default function PeoplePage(): JSX.Element {
           </Button>
         </form>
       </section>
+
+      {me.data?.role === "OWNER" ? (
+        <Section className="mt-8" title={t("endAllHouseholdTitle")}>
+          <EndHouseholdSessions />
+        </Section>
+      ) : null}
     </PageShell>
   );
 }

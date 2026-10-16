@@ -145,7 +145,12 @@ docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d "$TEST_
 
 export DATABASE_URL="$TEST_DATABASE_URL"
 export VALKEY_URL="${VALKEY_URL:-redis://localhost:6379}"
-export NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-test-secret}"
+# Thirty-two characters or more, the length production requires
+# (src/lib/auth/secret.ts), so the suites sign with a key of the shape a real
+# one has. The first STOKY_URLS entry is the one Better Auth is built with, and
+# the origin the sign-in helper sends (src/__tests__/utils/authorize.ts).
+export STOKY_SECRET="${STOKY_SECRET:-integration-suite-secret-not-a-real-one}"
+export STOKY_URLS="${STOKY_URLS:-http://localhost:3000}"
 
 echo "Applying database migrations..."
 # `bunx`, not `bun run`: prisma is a binary in node_modules/.bin, not a script

@@ -127,6 +127,16 @@
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
+
+  /* The two-step verification QR code (`TotpQr`). Dark modules on a light
+     ground in every theme, on purpose: that is the polarity QR codes are
+     specified in, and an inverted code is one many phone cameras and
+     authenticator apps do not read. So the dark theme repeats these values
+     rather than swapping them; the code is a light square at night too, the
+     way a printed one would be. Pure black and white: a scanner has more
+     margin than a reader, and needs it, through a camera at an angle. */
+  --qr-dark: #000000;
+  --qr-light: #ffffff;
 }
 
 :root[data-theme="light"] {
@@ -186,6 +196,9 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
+
+  --qr-dark: #000000;
+  --qr-light: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -239,6 +252,9 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
+
+    --qr-dark: #000000;
+    --qr-light: #ffffff;
   }
 }
 
@@ -297,6 +313,9 @@
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
   --color-series-4: var(--series-4);
+
+  --color-qr-dark: var(--qr-dark);
+  --color-qr-light: var(--qr-light);
 }
 
 /* WCAG 1.4.8 (AAA) asks for at least 1.5 line spacing in a block of text.

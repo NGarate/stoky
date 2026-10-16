@@ -18,7 +18,7 @@ import {
  * wants rid of has something on it, and that case had never been run.
  *
  * It did not work. `ShoppingItem`'s foreign key is `ON DELETE RESTRICT` — the
- * schema has no cascades anywhere, deliberately — so `shoppingList.delete` hit
+ * schema has no cascades outside the auth tables, deliberately — so `shoppingList.delete` hit
  * the constraint, and the error translation turned P2003 into `BAD_REQUEST`,
  * *"That refers to something that does not exist"*. About a list the person was
  * looking at. Measured before the fix, not inferred: the call threw that, and

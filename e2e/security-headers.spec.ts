@@ -32,11 +32,12 @@ const STATIC_HEADERS: Record<string, string> = {
   // Written out rather than imported from the config, so a token dropped from
   // or added to the deny list there is a difference here.
   "permissions-policy":
-    "camera=(self), microphone=(), geolocation=(), browsing-topics=(), " +
+    "camera=(self), publickey-credentials-create=(self), publickey-credentials-get=(self), " +
+    "microphone=(), geolocation=(), browsing-topics=(), " +
     "payment=(), usb=(), serial=(), hid=(), midi=(), " +
     "display-capture=(), screen-wake-lock=(), xr-spatial-tracking=(), " +
     "accelerometer=(), gyroscope=(), magnetometer=(), " +
-    "publickey-credentials-create=(), otp-credentials=(), idle-detection=(), " +
+    "otp-credentials=(), idle-detection=(), " +
     "local-fonts=(), compute-pressure=()",
   "strict-transport-security": "max-age=63072000; includeSubDomains",
   "x-permitted-cross-domain-policies": "none",
@@ -482,18 +483,15 @@ test.describe("what a prefetch label cannot do", () => {
     expect(labelled.status()).toBe(413);
   });
 
-  test("an oversized sign-in from nobody is refused before Auth.js reads it", async ({
+  test("an oversized sign-in from nobody is refused before Better Auth reads it", async ({
     request,
   }) => {
-    // Auth.js's own route, with its own, smaller bound: every POST there is a
-    // form of a few hundred bytes. Without the bound this is read whole and
-    // answered with a redirect to a CSRF error.
-    const labelled = await request.post("/api/auth/callback/credentials", {
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        purpose: "prefetch",
-      },
-      data: `email=nadie%40example.com&password=${"A".repeat(1024 * 1024)}`,
+    // The auth API's own route, with its own, smaller bound: every POST there
+    // is a few hundred bytes of JSON. Without the bound this is read whole and
+    // parsed before the sign-in limit can count it.
+    const labelled = await request.post("/api/auth/sign-in/email", {
+      headers: { "content-type": "application/json", purpose: "prefetch" },
+      data: JSON.stringify({ email: "nadie@example.com", password: "A".repeat(1024 * 1024) }),
       maxRedirects: 0,
     });
     expect(labelled.status()).toBe(413);

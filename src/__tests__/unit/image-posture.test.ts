@@ -249,7 +249,7 @@ describe("the build context leaves out local secrets and state", () => {
   // `COPY . .` in the builder and development stages takes whatever the
   // context holds, and .dockerignore patterns match from the context root: a
   // bare `.env*` misses `deploy/.env`, which the documented source build has
-  // the operator fill with the real database password and NEXTAUTH_SECRET.
+  // the operator fill with the real database password and STOKY_SECRET.
   // Measured with sentinels sent through a throwaway build: with root-only
   // rules, deploy/.env, nested node_modules and .next, `.claude/`,
   // `.playwright/auth/` and a stray traineddata all arrived.

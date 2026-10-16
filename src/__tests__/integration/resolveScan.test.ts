@@ -12,8 +12,7 @@ import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
-import * as argon2 from "argon2";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import { TRPCError } from "@trpc/server";
 import { MAX_NAME_LENGTH } from "@/lib/validations/bounds";
 import { closeValkey } from "@/lib/valkey";
@@ -33,7 +32,7 @@ import { createMockSession, createTestUser, generateTestEmail } from "../utils/t
 const OWNER = { userId: "", householdId: "" };
 
 async function caller() {
-  const session: Session = {
+  const session: AppSession = {
     user: {
       id: OWNER.userId,
       email: "resolvescan@example.com",
@@ -42,6 +41,8 @@ async function caller() {
       role: "OWNER",
     },
     expires: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresKind: "idle",
+    sessionId: crypto.randomUUID(),
   };
   return appRouter.createCaller(await createTRPCContext({ session }));
 }
@@ -74,11 +75,6 @@ beforeAll(async () => {
     data: {
       email: `resolvescan-${Date.now()}@example.com`,
       name: "Resolve scan",
-      passwordHash: await argon2.hash("TestPassword123!", {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-      }),
       householdId: household.id,
       role: "OWNER",
     },

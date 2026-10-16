@@ -3,6 +3,7 @@ import {
   RateLimitUnavailableError,
   consumeRateLimit,
   type RateLimit,
+  type RateLimitResult,
 } from "@/lib/rate-limit";
 
 /**
@@ -71,6 +72,32 @@ export async function enforceRateLimit(
   message: string,
   { whenUnavailable = "refuse" }: { whenUnavailable?: WhenUnavailable } = {},
 ): Promise<boolean> {
+  return (await consumeOrRefuse(limit, identifier, message, whenUnavailable)) !== null;
+}
+
+/**
+ * `enforceRateLimit` for a caller that may give the attempt back: answers the
+ * window it was counted in, which is what `refundRateLimit` needs to refund
+ * that attempt and no later one. Always fails closed — an attempt that may be
+ * refunded is one that guards something.
+ */
+export async function chargeRateLimit(
+  limit: RateLimit,
+  identifier: string,
+  message: string,
+): Promise<number> {
+  const result = await consumeOrRefuse(limit, identifier, message, "refuse");
+  // Unreachable: "refuse" never answers null. Said, so the type says so too.
+  if (!result) throw new Error("chargeRateLimit counted nothing");
+  return result.window;
+}
+
+async function consumeOrRefuse(
+  limit: RateLimit,
+  identifier: string,
+  message: string,
+  whenUnavailable: WhenUnavailable,
+): Promise<RateLimitResult | null> {
   let result;
 
   try {
@@ -82,7 +109,7 @@ export async function enforceRateLimit(
           `[trpc] skipped work metered by ${limit.prefix}: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.`,
           error.cause,
         );
-        return false;
+        return null;
       }
       console.error(
         "[trpc] refused: the rate limiter could not reach Valkey. Check VALKEY_URL and the cache service.",
@@ -104,7 +131,7 @@ export async function enforceRateLimit(
     });
   }
 
-  return true;
+  return result;
 }
 
 /**

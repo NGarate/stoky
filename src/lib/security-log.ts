@@ -10,6 +10,13 @@
  * my instance?" — had no answer anywhere, and the first evidence of a break-in
  * would have been the data changing.
  *
+ * **A success is an event too.** ASVS 5.0.0 **16.3.1** asks for every
+ * authentication attempt, successful or not, and the factor it used. Without
+ * the successes the failures cannot be read: twenty refused sign-ins on an
+ * account followed by silence is a typo-prone member or a guesser who got
+ * in, and only the line that says somebody *did* sign in, from where and how,
+ * tells the two apart (`auth.signin.succeeded`).
+ *
  * **One line of JSON per event, on stderr** (`console.warn`, below). Not a
  * file, not a table: the deployment is Docker, so stderr is already collected
  * and reachable with `docker compose logs` — and rotated only because the
@@ -39,31 +46,97 @@
 export type SecurityEvent =
   | "auth.signin.failed"
   | "auth.signin.throttled"
+  // A sign-in that got in — ASVS 5.0.0 16.3.1, which asks for successful
+  // authentications as well as failed ones, and for the factor used:
+  // `method`, with the `userId` it signed in as and the same `account` tag
+  // and `address` a failure carries, so one jq filter follows a person from
+  // their refusals to their way in.
+  | "auth.signin.succeeded"
+  // The password was right and the account asks for a second step (D148):
+  // not a sign-in yet, so not `succeeded`, and not a failure either. The
+  // same `account` tag and `address`; the sign-in, if it completes, is the
+  // `succeeded` line that follows with `method: "totp"` or `"backup-code"`.
+  | "auth.signin.challenged"
+  // Two-step verification (D148), never with the code or the secret:
+  // `enabled` when an enrolment's first code is accepted; `failed` when a
+  // code is refused at the second step, with the refusal as `code`;
+  // `replayed` when a right code is sent again for a step already used
+  // (ASVS 5.0.0 6.5.1); `locked` when the account's wrong codes have locked
+  // it for a while; `unreadable` when the stored secret no longer decrypts
+  // because `STOKY_SECRET` changed — the person cannot get in with that
+  // authenticator, and the operator is the one who can tell them why;
+  // `disabled` when the account's holder turns it off with the password, and
+  // `codes-regenerated` when they replace the backup codes, which ends the
+  // old set (both from `/settings/security`, `auth-handler.ts`); `removed`
+  // when a household admin takes it off somebody else's account after their
+  // own password, for a lost authenticator (D150): `userId` is the admin,
+  // `targetUserId` the account it was taken off.
+  | "auth.twofactor.enabled"
+  | "auth.twofactor.disabled"
+  | "auth.twofactor.codes-regenerated"
+  | "auth.twofactor.removed"
+  | "auth.twofactor.failed"
+  | "auth.twofactor.replayed"
+  | "auth.twofactor.locked"
+  | "auth.twofactor.unreadable"
+  // Passkeys (D151), never with the credential, its public key or the
+  // signature: `added` when a registration is accepted and `removed` when one
+  // is deleted, both by the account's holder after their password (the
+  // step-up); `signin-failed` when a passkey sign-in is refused, with Better
+  // Auth's refusal as `code` — an unknown passkey, a ceremony from another
+  // address, or an authenticator that did not verify the person. A passkey
+  // sign-in that gets in is `auth.signin.succeeded`, `method: "passkey"`.
+  | "auth.passkey.added"
+  | "auth.passkey.removed"
+  | "auth.passkey.signin-failed"
   | "auth.unavailable"
-  // A session refused by the `jwt` callback, with the `reason`: issued before
-  // the account's revocation line (`sessions-valid-from`), or signed in more
-  // than thirty days ago or at an unrecorded time, i.e. before the limit
-  // existed (`absolute-lifetime`). Worth a line of its own rather
-  // than folding into `access.denied`: it is the only event here that
-  // somebody *asked for*, and an operator reading a household's log should be
-  // able to tell "they revoked their sessions" from "somebody was refused".
-  | "auth.session.revoked"
-  // A signed-in person changed their own password, which also ended every
-  // session the account had. The credential change ASVS V7 asks to be able
-  // to reconstruct — "who changed it, and when" — with no password in it.
+  // Sessions somebody ended on purpose, with the `reason`: the account's own
+  // holder ending all of theirs (`self`), a password change ending every
+  // other one (`password-change`), an admin ending a member's
+  // (`admin`), an admin removing a member from the household (`removed`),
+  // an owner ending every session in the household (`owner`, with no
+  // `targetUserId`: they were everybody's), an admin removing a member's
+  // two-step verification, which ends all of theirs (`two-factor-removed`),
+  // a sign-in ending the session its browser presented
+  // (`replaced`), or a sign-in that would be the account's eleventh session
+  // ending its least recently used one (`evicted`; both in
+  // `src/lib/auth/sign-in-tidy.ts`). `userId` did it,
+  // `targetUserId` is whose they were, `count` is how many rows went. Worth a
+  // line of its own rather than folding into `access.denied`: it is the only
+  // event here that somebody *asked for*, and an operator reading a
+  // household's log should be able to tell "they ended their sessions" from
+  // "somebody was refused". A session that simply runs out writes nothing; its
+  // row is deleted when next read, or at its account's next sign-in.
+  | "auth.session.ended"
+  // A signed-in person changed their own password. The credential change
+  // ASVS V7 asks to be able to reconstruct — "who changed it, and when" —
+  // with no password in it. The sessions it ended are their own
+  // `auth.session.ended` line, `reason: "password-change"` (D144); a wrong
+  // current password is `auth.reauth.refused`, `via: "password-change"`.
   | "auth.password.changed"
-  // The current password offered for a change was wrong. From a signed-in
-  // session, so it is either a typo or somebody holding a session that is not
-  // theirs guessing at the password behind it. Refused with BAD_REQUEST, which
-  // the refusal middleware in `trpc.ts` does not record, so it is written here.
-  | "auth.password.change.refused"
   // An admin set a new password for somebody else in the household, which
   // also ended every session that person had. `userId` is the admin who did
   // it and `targetUserId` the account it was done to: the line that answers
   // "who set my password?" when the answer is not "you".
   | "auth.password.reset"
+  // The current password re-entered to confirm an action was wrong
+  // (`src/lib/auth/reauth.ts`, and the auth route for two-step
+  // verification). `via` names the action — `end-sessions`,
+  // `password-change`, `household-end-all`, `two-factor`, `member-two-factor`,
+  // `step-up` (before a passkey is added or removed, D151) — so a grep tells
+  // a typo before
+  // ending a session from a stolen session guessing. BAD_REQUEST, which the
+  // refusal middleware in `trpc.ts` does not record, so written here.
+  | "auth.reauth.refused"
   | "access.denied"
   | "request.throttled";
+
+/**
+ * How a sign-in proved who it was: the factor `auth.signin.succeeded` names.
+ * A closed list for the same reason the events are one: a grep for
+ * `"method":"passkey"` has to find every passkey sign-in.
+ */
+export type SignInMethod = "password" | "totp" | "backup-code" | "passkey";
 
 export interface SecurityDetails {
   /** The account the request was made by, when there was one. */
@@ -81,9 +154,9 @@ export interface SecurityDetails {
    * lookup that missed: another household's id and an id nobody has are
    * refused alike, so the line cannot say which (`householdProcedure`).
    * `"cross-site"` marks a request the route handler refused before tRPC saw
-   * it, which has no procedure to have thrown it. On `auth.session.revoked`
-   * it is which rule refused: `"sessions-valid-from"` or
-   * `"absolute-lifetime"`.
+   * it, which has no procedure to have thrown it. On `auth.session.ended` it
+   * is why: `"self"`, `"password-change"`, `"admin"`, `"removed"`,
+   * `"owner"`, `"two-factor-removed"`, `"replaced"` or `"evicted"`.
    */
   reason?: string;
   /** The `Sec-Fetch-Site` a browser declared, for a cross-site refusal. */
@@ -95,6 +168,12 @@ export interface SecurityDetails {
   account?: string;
   /** The account an action was done *to*, when that is not `userId`. */
   targetUserId?: string;
+  /** The factor a successful sign-in used (`auth.signin.succeeded`). */
+  method?: SignInMethod;
+  /** How many things an action affected: sessions, for `auth.session.ended`. */
+  count?: number;
+  /** The action a re-entered password was to confirm (`auth.reauth.refused`). */
+  via?: string;
 }
 
 /**

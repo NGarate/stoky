@@ -70,6 +70,10 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           STOKY_VERSION: ${{ steps.release.outputs.tag }}
           POSTGRES_PASSWORD: unused
+          STOKY_SECRET: unused
+          # The released file this scans may predate the STOKY_ rename (D137):
+          # v0.1.0-alpha.3's Compose requires the old name, and `config`
+          # fails without it.
           NEXTAUTH_SECRET: unused
           DOMAIN: rescan.invalid
           ACME_EMAIL: rescan@example.invalid

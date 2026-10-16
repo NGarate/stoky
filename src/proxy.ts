@@ -28,6 +28,8 @@ import {
  * component cannot set cookies, and a client component setting one would put
  * the value out of reach of the render that needs it — which is the whole
  * point, since it decides which screen a person lands on. See `@/lib/device`.
+ * A request that renders nothing — the auth API, a bearer call — is never
+ * given one; the comment at the mint says why.
  */
 export function proxy(request: NextRequest): NextResponse {
   const isDev = process.env.NODE_ENV !== "production";
@@ -37,10 +39,30 @@ export function proxy(request: NextRequest): NextResponse {
   // rewrites the cookie header — and it is that copy the render reads. Set it
   // afterwards and this request sees no device id, so every first visit would
   // be decided as though the device were unknown, and only the first.
+  //
+  // Never minted for the auth API or for a bearer request. Neither renders
+  // anything, so a fresh id buys the request itself nothing: a device is
+  // known only once a sign-in has recorded the id it already had, and a
+  // just-minted one never has been. (It did buy a client that keeps cookies
+  // something later: its sign-in recorded the minted id, so its next one had
+  // a budget of its own. A client that never renders a page now stays on the
+  // shared account budget — SECURITY.md, known devices.) What a minted cookie
+  // *does* do there is harmful. A native
+  // client sends no cookies and no Origin; Better Auth treats a request that
+  // carries a cookie as a browser's and refuses it without an Origin (403
+  // MISSING_OR_NULL_ORIGIN, measured in the spike), so the cookie this
+  // function injected would be the one that refused it. And a Set-Cookie on
+  // a bearer-authenticated tRPC response is stored and replayed by iOS's
+  // URLSession, turning a token client into a cookie client behind its back.
+  // A valid id the client did send is still forwarded: a browser posting its
+  // sign-in is exactly the request that should be charged to its own budget,
+  // and leaving the header untouched is what forwards it. An invalid one is
+  // left as it came too: every reader validates it (`deviceIdFromHeaders`),
+  // and replacing it would hand Better Auth a cookie the client never sent.
   const existing = request.cookies.get(DEVICE_ID_COOKIE)?.value;
-  const deviceId = isDeviceId(existing) ? existing : mintDeviceId();
-  const isNewDevice = deviceId !== existing;
-  if (isNewDevice) request.cookies.set(DEVICE_ID_COOKIE, deviceId);
+  const minted =
+    isDeviceId(existing) || isAuthOrBearer(request) ? undefined : mintDeviceId();
+  if (minted) request.cookies.set(DEVICE_ID_COOKIE, minted);
 
   // `upgrade-insecure-requests` is keyed on how this request actually
   // travelled: behind Traefik that is the x-forwarded-proto header TLS
@@ -60,13 +82,13 @@ export function proxy(request: NextRequest): NextResponse {
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("content-security-policy", csp);
 
-  // Only when it was actually minted. Re-setting an unchanged cookie on every
+  // Only when it was actually minted here. Re-setting an unchanged cookie on every
   // request costs a `Set-Cookie` on every response and, more to the point,
   // slides its expiry constantly — so a device would be remembered a year
   // after its *last* visit rather than a year after its first, which is not
   // what a year was chosen to mean.
-  if (isNewDevice) {
-    response.cookies.set(DEVICE_ID_COOKIE, deviceId, {
+  if (minted) {
+    response.cookies.set(DEVICE_ID_COOKIE, minted, {
       httpOnly: true,
       sameSite: "lax",
       // A Secure cookie on a plain-http LAN install is one the browser
@@ -79,6 +101,22 @@ export function proxy(request: NextRequest): NextResponse {
   }
 
   return response;
+}
+
+/**
+ * A request no device id should be minted for: the auth API, which only a
+ * page that has already been rendered (and so already minted one) or a
+ * native client ever calls, and anything presenting a bearer token, which is
+ * a native client by definition. The prefix keeps its trailing slash so
+ * `/api/authors` would not match; the scheme is case-insensitive (RFC 9110
+ * §11.1), and `\s` after it means `Bearer` alone, with no token, still is not
+ * a bearer request.
+ */
+function isAuthOrBearer(request: NextRequest): boolean {
+  return (
+    request.nextUrl.pathname.startsWith("/api/auth/") ||
+    /^Bearer\s/i.test(request.headers.get("authorization") ?? "")
+  );
 }
 
 export const config = {

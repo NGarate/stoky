@@ -69,6 +69,28 @@ export function describeError(error: unknown): unknown {
 }
 
 /**
+ * `describeError` for a log line that holds one line of text and no object:
+ * the auth logs, which bound and flatten what they write (`logLine` in
+ * `src/lib/auth/instance.ts`, `quietly` in `src/server/http/auth-handler.ts`).
+ *
+ * A Prisma error gives its first line — class, code, the call that failed and,
+ * for a validation error, which argument was wrong — and not the frames, which
+ * flattened onto that line would only be cut off by its bound. Anything else
+ * gives `name: message`, what those lines wrote before; whitespace runs,
+ * newlines included, become one space.
+ */
+export function describeErrorLine(error: unknown): string {
+  const described = describeError(error);
+  const text =
+    typeof described === "string" && described !== error
+      ? described.split("\n")[0]
+      : error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
  * The stack's "    at …" lines, without any line of the message.
  *
  * Matching "    at " alone is not enough: Bun's stack starts with the

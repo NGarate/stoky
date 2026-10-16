@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { cache } from "react";
 import superjson from "superjson";
-import type { Session } from "next-auth";
+import type { AppSession } from "@/lib/auth/session";
 import type { HouseholdRole, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { translatePrismaError, underlying } from "./prisma-errors";
@@ -12,7 +12,7 @@ import { clientAddress } from "@/lib/rate-limit";
 
 export const createTRPCContext = cache(
   async (opts: {
-    session: Session | null;
+    session: AppSession | null;
     headers?: Headers;
     db?: PrismaClient;
   }) => {
@@ -137,7 +137,7 @@ const anonymousRefusalRecorded = new WeakSet<object>();
  * account, which is accountable, and each one can be a different row of
  * somebody else's household.
  */
-function mayRecordRefusal(ctx: { session: Session | null }): boolean {
+function mayRecordRefusal(ctx: { session: AppSession | null }): boolean {
   if (ctx.session?.user?.id) return true;
   if (anonymousRefusalRecorded.has(ctx)) return false;
   anonymousRefusalRecorded.add(ctx);
@@ -270,15 +270,15 @@ export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
  * Authenticated, in a household, and carrying that household's role.
  *
  * **Membership and role are read from the database, not from the session.**
- * The JWT carries both so the interface can hide what an account cannot do,
+ * The session carries both so the interface can hide what an account cannot do,
  * but the interface is not the control: hiding a button is not a restriction
  * (`REDESIGN_PLAN.md` §5.2). Reading them here has two consequences worth
  * having:
  *
- * - a role change or a removal takes effect on the next request, rather than
- *   whenever the 15-minute token happens to expire;
+ * - a role change or a removal takes effect on the next request, whatever the
+ *   session was read as;
  * - an account that has just created its household can use it immediately,
- *   without signing out and in again to mint a token that knows about it.
+ *   without signing out and in again.
  *
  * The cost is one primary-key lookup per call, and in four of the eight
  * routers it is not even that — those procedures were already making exactly

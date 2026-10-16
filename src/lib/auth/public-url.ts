@@ -1,31 +1,53 @@
+import { URLS_VARIABLE, readRenamed } from "@/lib/env-names";
+
 /**
- * Saying so at start-up when the address people sign in at is not https.
+ * The addresses this instance is reached at, what they decide, and saying so
+ * at start-up when they are missing, malformed or plain HTTP (PROGRESS D138).
  *
- * Auth.js decides per request whether the session cookie is `Secure` and
- * `__Secure-`/`__Host-` prefixed: `useSecureCookies ?? url.protocol ===
- * "https:"` (`@auth/core` `lib/init.js`). That `url` is `AUTH_URL ??
- * NEXTAUTH_URL` when one is set (`next-auth` `lib/env.js`, `reqWithEnvURL`),
- * and otherwise the request's own URL, which Next builds from the `Host` and
- * `X-Forwarded-Proto` headers. So two configurations downgrade the cookie
- * without a line in any log (security review, 2026-10-12, low; OWASP ASVS
- * 4.0.3 V3.4.1, V9.1.1):
+ * `STOKY_URLS` is a comma-separated list of the URLs people type to reach this
+ * instance. `NEXTAUTH_URL`, its name before the `STOKY_` rename, is still read
+ * when it is unset, as a list of one (`src/lib/env-names.ts`, D137). Better
+ * Auth is built from the list once, when the instance is built
+ * (`src/lib/auth/instance.ts`) — never from a request's `Host` or
+ * `X-Forwarded-Proto`:
  *
- * - **No URL at all**, behind a TLS proxy that does not send
- *   `X-Forwarded-Proto` — nginx does not by default. The person is on https,
- *   the cookie is issued without `Secure`, and any plain-http request to the
- *   host carries it in cleartext.
- * - **An `http://` URL for an address that is not this machine** — what an
- *   operator ends up with after publishing the app port on a LAN and finding
- *   the https URL's `Secure` cookies refused. Every password and every session
- *   cookie then crosses the network in cleartext.
+ * - **The first entry is canonical.** It is Better Auth's `baseURL`, and it
+ *   alone decides **whether the session cookie is `Secure`** and `__Secure-`
+ *   prefixed: exactly when it is https. The passkey relying party is its host
+ *   too, so a passkey works only there (`src/lib/auth/passkeys.ts`, D151).
+ * - **Every entry's origin is trusted** to send a cookie-bearing POST to the
+ *   auth API. In production nothing else is; outside production each
+ *   `DEV_ALLOWED_ORIGIN` host is added too, the two ways
+ *   `docs/LOCAL_BOOTSTRAP.md` reaches a development server from a phone.
  *
- * **A warning, never a refusal.** D84 (`docs/PROGRESS.md`) keeps a plain-http
- * LAN install working on purpose, and `src/proxy.ts` drops the device cookie's
- * `Secure` flag and `upgrade-insecure-requests` for it; refusing to start would
- * reverse that decision and stop every such install on upgrade. Forcing
- * `useSecureCookies` instead would make sign-in impossible there: the browser
- * drops a `Secure` cookie set over http, which is the sign-in loop that pushes
- * an operator to an http URL in the first place.
+ * Before the list, a plain-HTTP LAN install reached both by name and by
+ * address answered 403 at whichever one the single URL did not name.
+ *
+ * **Refused in production**, at start-up (`src/lib/auth/environment.ts`, D136):
+ *
+ * - **no entry.** Guessing the address from the request is the downgrade that
+ *   issued a session cookie without `Secure` behind a TLS proxy that does not
+ *   send `X-Forwarded-Proto` (security review, 2026-10-12; OWASP ASVS 4.0.3
+ *   V3.4.1, V9.1.1);
+ * - **an entry that is not an http(s) origin**: empty, not a URL, another
+ *   scheme, or carrying a path, query, fragment or credentials. An origin is
+ *   all that is compared, so anything more is a misunderstanding to correct,
+ *   not a detail to drop silently;
+ * - **an https first entry beside plain HTTP to another machine.** The cookie
+ *   is `Secure` because of the first, and a browser drops a `Secure` cookie
+ *   set over plain HTTP: signing in at the other address would land back on
+ *   the login page every time. Loopback http is accepted beside it, because
+ *   Chromium and Firefox accept a `Secure` cookie on localhost.
+ *
+ * Outside production these are warnings, except a first entry that is not an
+ * http(s) URL at all, which is refused everywhere: Better Auth cannot be built
+ * from it, and would say so in words about itself rather than the variable.
+ *
+ * **Plain http to another machine is a warning, never a refusal.** D84
+ * (`docs/PROGRESS.md`) keeps a plain-http LAN install working on purpose, and
+ * `src/proxy.ts` drops the device cookie's `Secure` flag and
+ * `upgrade-insecure-requests` for it; refusing to start would reverse that
+ * decision and stop every such install on upgrade.
  *
  * **Loopback http is not warned about.** `localhost`, `*.localhost`,
  * `127.0.0.0/8` and `[::1]` are what browsers treat as potentially
@@ -33,24 +55,47 @@
  * context. CI, the in-image gate and the browser suite all serve a production
  * build at one of them, and a warning there would be noise nobody acts on.
  *
+ * No message ever prints an entry as written, only its origin: a
+ * `user:password@` in a URL is someone's password, and the log outlives the
+ * file it came from.
+ *
  * Pure and environment-injected, so the tests need not touch `process.env`.
  */
 
-/** What the configured public URL means for transport security. */
-export type PublicUrlState =
-  /** Neither variable is set (or the one next-auth reads is empty). */
-  | { kind: "missing" }
-  /** Set, but not something next-auth can parse. */
-  | { kind: "unparsable"; variable: PublicUrlVariable }
-  /** Parsed, but neither http nor https. */
-  | { kind: "other-scheme"; variable: PublicUrlVariable; protocol: string }
+type Env = Record<string, string | undefined>;
+
+/** What one entry of the list is, and what it means for transport security. */
+export type PublicUrlEntry =
+  /** Nothing between two commas, or after the last. */
+  | { kind: "empty" }
+  /** Not a URL. */
+  | { kind: "unparsable" }
+  /** A URL, but neither http nor https. */
+  | { kind: "other-scheme"; protocol: string }
+  /** http(s), but with a path, query, fragment or credentials. */
+  | { kind: "not-an-origin"; origin: string }
   | { kind: "https"; origin: string }
   /** http to this machine: a secure context, and the cookie stays local. */
   | { kind: "loopback-http"; origin: string }
   /** http to anywhere else: cleartext on the network. */
-  | { kind: "insecure-http"; variable: PublicUrlVariable; origin: string };
+  | { kind: "insecure-http"; origin: string };
 
-export type PublicUrlVariable = "AUTH_URL" | "NEXTAUTH_URL";
+/** The list as configured, and the variable it was read from. */
+export interface PublicUrls {
+  /**
+   * `STOKY_URLS`, or `NEXTAUTH_URL` when only that is set — the line an
+   * operator should edit. `STOKY_URLS` when neither is.
+   */
+  variable: string;
+  /** Each comma-separated entry, trimmed. None when the variable is unset. */
+  entries: string[];
+}
+
+/**
+ * Where Better Auth is told it lives when nothing says otherwise: `bun run
+ * dev`'s own address. Never used in production, where a missing list refuses.
+ */
+export const DEVELOPMENT_URL = "http://localhost:3000";
 
 /**
  * The hostnames browsers treat as this machine, after `URL` has normalised
@@ -68,63 +113,196 @@ function isLoopbackHostname(hostname: string): boolean {
   );
 }
 
-/**
- * Which URL next-auth will use, and what it means.
- *
- * `AUTH_URL ?? NEXTAUTH_URL`, exactly next-auth's own precedence: an empty
- * `AUTH_URL` hides `NEXTAUTH_URL` there too, and is reported as missing
- * because that is what next-auth then does with it.
- */
-export function classifyPublicUrl(env: Record<string, string | undefined>): PublicUrlState {
-  const variable: PublicUrlVariable = env.AUTH_URL !== undefined ? "AUTH_URL" : "NEXTAUTH_URL";
-  const raw = env.AUTH_URL ?? env.NEXTAUTH_URL;
-  if (!raw) return { kind: "missing" };
+/** The entries of `STOKY_URLS`, or of `NEXTAUTH_URL` when only that is set. */
+export function parsePublicUrls(env: Env): PublicUrls {
+  const { value, name } = readRenamed(env, URLS_VARIABLE);
+  if (value === undefined) return { variable: name, entries: [] };
+  return { variable: name, entries: value.split(",").map((entry) => entry.trim()) };
+}
+
+/** What one entry is. */
+export function classifyUrl(raw: string): PublicUrlEntry {
+  if (raw === "") return { kind: "empty" };
 
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return { kind: "unparsable", variable };
+    return { kind: "unparsable" };
   }
 
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { kind: "other-scheme", protocol: url.protocol };
+  }
   // The origin, never the raw value: it drops any `user:password@` and path.
   const { origin } = url;
-  if (url.protocol === "https:") return { kind: "https", origin };
-  if (url.protocol !== "http:") {
-    return { kind: "other-scheme", variable, protocol: url.protocol };
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") {
+    return { kind: "not-an-origin", origin };
   }
+  if (url.protocol === "https:") return { kind: "https", origin };
   if (isLoopbackHostname(url.hostname)) return { kind: "loopback-http", origin };
-  return { kind: "insecure-http", variable, origin };
+  return { kind: "insecure-http", origin };
+}
+
+/** What each entry is, in order. Empty when the variable is unset. */
+export function classifyPublicUrls(env: Env): PublicUrlEntry[] {
+  return parsePublicUrls(env).entries.map(classifyUrl);
+}
+
+/** The entry's origin, when it has one worth comparing. */
+function originOf(entry: PublicUrlEntry): string | null {
+  return "origin" in entry ? entry.origin : null;
+}
+
+/**
+ * The URL Better Auth is built with: the first entry's origin, or
+ * `DEVELOPMENT_URL` outside production with none set. `null` in production
+ * with none set, or when the first entry has no origin — both of which
+ * `assertAuthEnvironment` refuses before anything reads it.
+ */
+export function canonicalUrl(env: Env): string | null {
+  const [first] = classifyPublicUrls(env);
+  if (!first) return env.NODE_ENV === "production" ? null : DEVELOPMENT_URL;
+  return originOf(first);
+}
+
+/**
+ * The origins a signed-in browser may POST to the auth API from: every entry's,
+ * once each, the canonical first. Outside production, also each
+ * `DEV_ALLOWED_ORIGIN` host at the dev server's port over http and behind
+ * `tailscale serve` over https. Production never reads `DEV_ALLOWED_ORIGIN`
+ * here.
+ */
+export function trustedAuthOrigins(env: Env): string[] {
+  const origins = classifyPublicUrls(env)
+    .map(originOf)
+    .filter((origin): origin is string => origin !== null);
+  if (env.NODE_ENV !== "production") {
+    if (origins.length === 0) origins.push(DEVELOPMENT_URL);
+    const port = env.PORT || "3000";
+    for (const host of (env.DEV_ALLOWED_ORIGIN ?? "").split(",")) {
+      const name = host.trim();
+      if (!name) continue;
+      origins.push(`http://${name}:${port}`, `https://${name}`);
+    }
+  }
+  return [...new Set(origins)];
+}
+
+/** One thing wrong with the list, and whether it is refused outside production. */
+export interface PublicUrlProblem {
+  message: string;
+  /**
+   * Refused in every environment: the first entry is not an http(s) URL, so
+   * Better Auth could not be built from it. Every other problem is refused in
+   * production and warned about elsewhere.
+   */
+  everywhere: boolean;
+}
+
+/** How a message names an entry: the variable alone when it holds one. */
+function entryName(variable: string, index: number, count: number): string {
+  return count === 1 ? variable : `${variable} entry ${index + 1}`;
+}
+
+/**
+ * Everything wrong with the list, in words an operator can act on, without a
+ * prefix. "Not set" only in production, where nothing is guessed.
+ */
+export function publicUrlProblems(env: Env): PublicUrlProblem[] {
+  const { variable, entries } = parsePublicUrls(env);
+  if (entries.length === 0) {
+    return env.NODE_ENV === "production"
+      ? [
+          {
+            message: `${variable} is not set. Set it to the https address people use — or every address, comma-separated, the canonical one first. Sign-in is accepted only from those origins, and the session cookie is marked Secure only when the first is https.`,
+            everywhere: false,
+          },
+        ]
+      : [];
+  }
+
+  const problems: PublicUrlProblem[] = [];
+  const classified = entries.map(classifyUrl);
+  classified.forEach((entry, index) => {
+    const name = entryName(variable, index, entries.length);
+    const everywhere = index === 0;
+    switch (entry.kind) {
+      case "empty":
+        problems.push({
+          message: `${name} is empty. Remove the extra comma.`,
+          everywhere,
+        });
+        break;
+      case "unparsable":
+        problems.push({
+          message: `${name} is not a URL (a missing https:// is the usual cause). Write each address as https://host, or http://host:port.`,
+          everywhere,
+        });
+        break;
+      case "other-scheme":
+        problems.push({
+          message: `${name} uses the ${entry.protocol.replace(/:$/, "")} scheme. Each address must be https, or http.`,
+          everywhere,
+        });
+        break;
+      case "not-an-origin":
+        problems.push({
+          message: `${name} has a path, query, fragment or credentials. List the address alone: ${entry.origin}.`,
+          everywhere: false,
+        });
+        break;
+    }
+  });
+
+  if (classified[0]?.kind === "https") {
+    for (const entry of classified) {
+      if (entry.kind !== "insecure-http") continue;
+      problems.push({
+        message: `${variable} starts with an https address but also lists ${entry.origin}, plain HTTP to another machine. The session cookie is marked Secure because of the first entry, and a browser drops a Secure cookie over plain HTTP, so signing in there would loop back to the login page. Serve that address over https too, or remove it.`,
+        everywhere: false,
+      });
+    }
+  }
+  return problems;
 }
 
 /** Where to go instead, shared by the warnings about transport. */
-const TLS_ROUTE =
-  "Put TLS in front — the release bundle, your own proxy setting X-Forwarded-Proto and X-Forwarded-For, or `tailscale serve` — and set NEXTAUTH_URL to that https address.";
+const TLS_ROUTE = (variable: string) =>
+  `Put TLS in front — the release bundle, your own proxy setting X-Forwarded-For, or \`tailscale serve\` — and list that https address in ${variable}.`;
 
 /**
- * The warning for this configuration, in words an operator can act on, or
- * null. Production only: development and the suites use whatever is to hand.
+ * The warnings for this configuration, in words an operator can act on, one
+ * per line. Production only: development and the suites use whatever is to
+ * hand.
+ *
+ * Nothing for a list that is missing or malformed: the server refuses to start
+ * on those, with a line of its own (`publicUrlProblems`), and a warning beside
+ * it would only say the same thing twice.
  */
-export function publicUrlWarning(
-  env: Record<string, string | undefined>,
-): string | null {
-  if (env.NODE_ENV !== "production") return null;
+export function publicUrlWarnings(env: Env): string[] {
+  if (env.NODE_ENV !== "production") return [];
 
-  const state = classifyPublicUrl(env);
-  switch (state.kind) {
-    case "https":
-    case "loopback-http":
-      return null;
-    case "missing":
-      return `[auth] warning: neither AUTH_URL nor NEXTAUTH_URL is set, so each request's Host and X-Forwarded-Proto headers decide this instance's address. Behind a proxy that does not send X-Forwarded-Proto: https, the session cookie is issued without Secure and any plain-http request to this host carries it in cleartext. ${TLS_ROUTE}`;
-    case "unparsable":
-      // `reqWithEnvURL` calls `new URL()` on it, uncaught, for every request
-      // to the auth handlers: measured, `stoky.example.com` throws
-      // `TypeError: Invalid URL` there.
-      return `[auth] warning: ${state.variable} is not a URL (a missing https:// is the usual cause). next-auth parses it on every authentication request and fails, so nobody can sign in. Set it to the https address people use, or remove it.`;
-    case "other-scheme":
-      return `[auth] warning: ${state.variable} is a ${state.protocol} URL; it must be https, or http only for this machine. The session cookie is not marked Secure. ${TLS_ROUTE}`;
-    case "insecure-http":
-      return `[auth] warning: ${state.variable} is ${state.origin}, plain HTTP to an address that is not this machine. The session cookie is not marked Secure, and everyone who signs in at that address sends their password and session cookie across the network in cleartext. Browsers also treat a page there as insecure, so the barcode camera and offline support are unavailable. ${TLS_ROUTE}`;
+  const { variable, entries } = parsePublicUrls(env);
+  const classified = entries.map(classifyUrl);
+  const warnings: string[] = [];
+  classified.forEach((entry, index) => {
+    if (entry.kind !== "insecure-http") return;
+    const name = entryName(variable, index, entries.length);
+    warnings.push(
+      `[auth] warning: ${name} is ${entry.origin}, plain HTTP to an address that is not this machine. The session cookie is not marked Secure, and everyone who signs in at that address sends their password and session cookie across the network in cleartext. Browsers also treat a page there as insecure, so the barcode camera and offline support are unavailable. ${TLS_ROUTE(variable)}`,
+    );
+  });
+
+  // The first entry decides `Secure` for every address, so an https address
+  // listed after an http one gets a cookie that is not Secure either.
+  if (classified[0] && classified[0].kind !== "https") {
+    for (const entry of classified.slice(1)) {
+      if (entry.kind !== "https") continue;
+      warnings.push(
+        `[auth] warning: ${variable} lists ${entry.origin}, but its first entry is not https, and only the first decides whether the session cookie is marked Secure: it is not, at that address either. List the https address first, and only https addresses beside it.`,
+      );
+    }
   }
+  return warnings;
 }

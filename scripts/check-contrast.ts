@@ -266,6 +266,12 @@ const PAIRS: Pair[] = [
   { fg: "chart-muted", bg: "card", scale: "nonText", where: "a context series on a card" },
   { fg: "chart-emphasis", bg: "background", scale: "nonText", where: "the answering series on the page" },
   { fg: "chart-muted", bg: "background", scale: "nonText", where: "a context series on the page" },
+
+  // The two-step verification QR code. A camera reads it, not a person, so
+  // 1.4.11's 3:1 is the floor and not the need: held to the body-text bar,
+  // the strictest here, because a code scanned at an angle under a kitchen
+  // light loses contrast before it loses anything else.
+  { fg: "qr-dark", bg: "qr-light", scale: "body", where: "the QR code's modules on its ground" },
 ];
 
 // --- run --------------------------------------------------------------------

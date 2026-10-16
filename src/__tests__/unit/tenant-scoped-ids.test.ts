@@ -96,7 +96,8 @@ function inputSurface(body: string): string {
 }
 
 /**
- * The input fields that name a row belonging to a household.
+ * The input fields that name a row belonging to a household — or, for
+ * `sessionId`, to an account.
  *
  * `productId` is included even though most procedures check it, because the two
  * receipt confirm procedures did not — and that is exactly the asymmetry the
@@ -125,6 +126,11 @@ const SCOPED: Record<string, RegExp> = {
   productId: /product\.(findFirst|findUnique)|assertOwnProduct/,
   shoppingListId: /shoppingList\.(findFirst|findUnique)/,
   receiptItemId: /receiptItem\.(findFirst|findUnique|findMany)/,
+  // Not a household's row but an account's: a `Session` id from
+  // `auth.listSessions` (D143). Scoped by the caller's own `userId` in the
+  // very filter that uses it, so another account's id matches nothing — the
+  // object that names `input.sessionId` must also name `userId`.
+  sessionId: /\{[^{}]*\buserId\b[^{}]*\binput\.sessionId\b[^{}]*\}|\{[^{}]*\binput\.sessionId\b[^{}]*\buserId\b[^{}]*\}/,
 };
 
 // Bodies are stripped of comments before they are tested against `SCOPED`,

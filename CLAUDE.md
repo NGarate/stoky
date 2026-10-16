@@ -60,7 +60,11 @@ for end-to-end type inference. This is an enforced constraint, not a stage.
   are the deliberate exception: the landing/start screens and anything that must
   work without JavaScript, which reach the server through Server Actions
   (`src/lib/landing/choose.ts`, `src/lib/auth/actions.ts`, the locale cookie) —
-  the one sanctioned surface beside tRPC, for no-JS flows only. There is no
+  the one sanctioned surface beside tRPC, for no-JS flows only. The third is
+  the auth API (`/api/auth/*`, Better Auth behind
+  `src/server/http/auth-handler.ts`), for authentication ceremonies only —
+  signing in and out — and the browser reaches it through
+  `src/lib/auth/client.ts` and nothing else. There is no
   server-side tRPC caller; do not reintroduce one, or move a dashboard page to
   SSR, without revisiting the offline design (`REDESIGN_PLAN.md` §5).
 - **Server state is TanStack Query's. Local UI state is React's. A `zustand`
@@ -166,7 +170,7 @@ wear two different words (ISSUES UI-11).
 - Never raw SQL without parameterised queries (tagged template literals). An
   `ORDER BY` built by interpolation is the one that looks fine.
 - Never commit secrets. `.env.example` is documentation, and the application
-  refuses to start on its published `NEXTAUTH_SECRET`.
+  refuses to start on its published `STOKY_SECRET`.
 
 ---
 
@@ -214,7 +218,8 @@ branch as much as on the trunk:
   holds more than one change — it has swept a migration, and once an unrelated
   in-progress security hole, into unrelated commits.
 - **Never commit something known-broken.** If work must pause mid-change, leave
-  it uncommitted or stash it. Push when the tree is green.
+  it uncommitted or stash it. Push only once the full gate is green (Agent
+  Instructions, rule 4).
 
 ---
 
@@ -225,13 +230,19 @@ branch as much as on the trunk:
    regression.
 2. **Add tests, and make sure each one can fail.** An assertion that holds
    regardless of the implementation is not a test. Break the code deliberately
-   and confirm it goes red. This has caught five tests here that could not.
+   and confirm it goes red, running only the test file that should catch it.
+   This has caught five tests here that could not.
 3. **Measure rather than recall.** Every claim in the documents must be
    reproducible by a command. Before reporting a number, check the thing you
    measured was actually running — `docs/STATUS.md` lists the traps that have
    produced confident wrong answers here.
-4. **Validate before committing**, not after a batch: `bun run verify:ci`, plus
-   `bun run test:e2e` for anything that renders. Then judge whether the
+4. **Validate each commit narrowly and each push fully.** Before a commit:
+   lint, typecheck, and only the test files the change affects — never the
+   whole suite to learn whether one case broke, and never the browser suite,
+   even for a change that renders. Before a push: the whole `bun run verify:ci`
+   and the whole `bun run test:e2e`, once; a failure is fixed in the commit
+   that introduced it while the branch is still unpushed.
+   `docs/VERIFICATION_SEQUENCE.md` has the commands. Then judge whether the
    change introduced a regression, a security weakness, or a standards drift —
    green gates are necessary, not sufficient.
 5. **Update the owning document** when a change makes it wrong. `docs/README.md`

@@ -27,9 +27,9 @@ import { createTRPCRouter, adminProcedure } from "../trpc";
  *
  * The `select` clauses are deliberate rather than incidental. `include` would
  * hand over whatever the schema grows next — and the first thing it would have
- * handed over is `User.passwordHash`, which is exactly the field an export must
- * never contain. Naming the columns means a new one has to be added here on
- * purpose.
+ * handed over is the password hash, once a `User` column and now its
+ * credential `Account` row, which is exactly what an export must never
+ * contain. Naming the columns means a new one has to be added here on purpose.
  */
 export const dataRouter = createTRPCRouter({
   /**
@@ -56,7 +56,8 @@ export const dataRouter = createTRPCRouter({
           select: { id: true, name: true, createdAt: true },
         }),
 
-        // No `passwordHash`, and no `include` that could quietly acquire one.
+        // No `accounts` (the password hash is there), and no `include` that
+        // could quietly acquire them.
         ctx.db.user.findMany({
           where: { householdId },
           select: {

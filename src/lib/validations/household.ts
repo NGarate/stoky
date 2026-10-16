@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { emailSchema } from "./auth";
 import { MAX_ID_LENGTH, MAX_NAME_LENGTH } from "./bounds";
-import { newPasswordSchema, withIdentityRule } from "./password";
+import { existingPasswordSchema, newPasswordSchema, withIdentityRule } from "./password";
 
 export const householdSchema = z.object({
   name: z.string().trim().min(1).max(MAX_NAME_LENGTH),
@@ -104,9 +104,94 @@ export const resetMemberPasswordSchema = z.object({
 export const RESET_OWN_PASSWORD_MESSAGE =
   "Change your own password from Settings, with your current one";
 
+/**
+ * The member whose sessions an admin is looking at (`household.memberSessions`,
+ * D145). Never the caller: their own are in **Tus dispositivos**, behind
+ * their password (`OWN_SESSIONS_MESSAGE`).
+ */
+export const memberSessionsSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+});
+
+/**
+ * An admin ending a member's sessions: one, by the id `memberSessions`
+ * listed, or — with no `sessionId` — every one (`household.endMemberSessions`,
+ * ASVS 5.0.0 7.4.5, D145).
+ *
+ * No password. An admin acting on somebody else is the household's authority
+ * over its own accounts, the same one that sets their password in
+ * `resetMemberPassword`, and the owner confirmed on 2026-10-15 that it is
+ * not re-asked here. A person ending their *own* sessions is asked
+ * (`auth.endSessions`, D143), which is why the caller's own id is refused.
+ */
+export const endMemberSessionsSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+  sessionId: z.string().min(1).max(MAX_ID_LENGTH).optional(),
+});
+
+/**
+ * An owner ending every session in the household, their own included
+ * (`household.endHouseholdSessions`, ASVS 5.0.0 7.4.5, D147).
+ *
+ * The current password, bounded like sign-in's and not policed, as
+ * `auth.endSessions` asks it: this ends the owner's own sessions too, and a
+ * session somebody else is holding must not be able to sign the whole
+ * household out. Nothing else: there is no "which", it is every one.
+ */
+export const endHouseholdSessionsSchema = z.object({
+  currentPassword: existingPasswordSchema,
+});
+
+/**
+ * What `household.endHouseholdSessions` says to an admin who is not an owner.
+ * English and shared, like `OWN_SESSIONS_MESSAGE`: the screen offers the
+ * control to owners only.
+ */
+export const OWNERS_ONLY_MESSAGE =
+  "Only an owner may end every session in the household";
+
+/**
+ * An admin removing a member's two-step verification, for somebody who has
+ * lost the phone with their authenticator and has no backup code left
+ * (`household.removeMemberTwoFactor`, PROGRESS D150).
+ *
+ * **The admin's own password**, bounded like sign-in's and not policed, as
+ * `auth.endSessions` asks it: this takes a second factor off somebody else's
+ * account and signs them out everywhere, and a session somebody else is
+ * holding must not be able to do either. Unlike ending a member's sessions
+ * (D145), which the owner decided is not re-asked, this weakens the account
+ * it is done to, so it is.
+ *
+ * Never the caller's own id: your own is turned off from Seguridad y acceso,
+ * with your password (`REMOVE_OWN_TWO_FACTOR_MESSAGE`).
+ */
+export const removeMemberTwoFactorSchema = z.object({
+  userId: z.string().trim().min(1).max(MAX_ID_LENGTH),
+  currentPassword: existingPasswordSchema,
+});
+
+/**
+ * What `household.removeMemberTwoFactor` says when the member named is the
+ * caller. English and shared, like `OWN_SESSIONS_MESSAGE`: the screen never
+ * offers it.
+ */
+export const REMOVE_OWN_TWO_FACTOR_MESSAGE =
+  "Turn your own two-step verification off in Settings, under Security, with your password";
+
+/**
+ * What `household.memberSessions` and `household.endMemberSessions` say when
+ * the member named is the caller. English and shared, like
+ * `RESET_OWN_PASSWORD_MESSAGE`: the screen never offers it.
+ */
+export const OWN_SESSIONS_MESSAGE =
+  "Your own sessions are in Settings, under Security, where ending them asks for your password";
+
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
+export type EndMemberSessionsInput = z.infer<typeof endMemberSessionsSchema>;
+export type EndHouseholdSessionsInput = z.infer<typeof endHouseholdSessionsSchema>;
+export type RemoveMemberTwoFactorInput = z.infer<typeof removeMemberTwoFactorSchema>;
 export type ResetMemberPasswordInput = z.infer<typeof resetMemberPasswordSchema>;
 export type HouseholdInput = z.infer<typeof householdSchema>;
 export type UpdateHouseholdInput = z.infer<typeof updateHouseholdSchema>;

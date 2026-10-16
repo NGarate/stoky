@@ -21,6 +21,7 @@
  */
 import { PrismaClient, type Prisma, type StockOperation } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth/password-hash";
+import { createCredentialUser } from "../src/lib/auth/credentials";
 import { demoSeedRefusal } from "./seed-guard";
 
 // Before the client exists and before anything is read or written.
@@ -105,16 +106,17 @@ async function seedDemoData(tx: Prisma.TransactionClient, passwordHash: string):
     data: { name: HOUSEHOLD_NAME },
   });
 
-  const user = await tx.user.create({
-    data: {
+  const user = await createCredentialUser(
+    tx,
+    {
       email: DEMO_EMAIL,
       name: "Usuario Demo",
-      passwordHash,
       locale: "es",
       role: "OWNER",
       householdId: household.id,
     },
-  });
+    passwordHash,
+  );
 
   // --- Storage locations (two levels, to exercise the location tree) -------
   const kitchen = await tx.storageLocation.create({
