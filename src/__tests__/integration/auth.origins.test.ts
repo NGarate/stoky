@@ -23,6 +23,13 @@ const PASSWORD = "cocina despensa nevera";
 const MARKER = `origins-${process.pid}-${Date.now().toString(36)}`;
 const FIRST = "http://stoky.lan:3000";
 const SECOND = "http://192.168.1.10:3000";
+/**
+ * The child's own signing key, at least the 32 characters production demands
+ * (`src/lib/auth/secret.ts`). Inheriting the outer one made the production
+ * case pass or fail on whichever secret the runner exported: the local script
+ * sets 39 characters, CI sets 25, and the child refused to start in CI.
+ */
+const CHILD_SECRET = "origins-suite-child-secret-not-a-real-one";
 let email: string;
 
 beforeAll(async () => {
@@ -65,6 +72,8 @@ function signInFrom(origins: string[], env: Record<string, string>): Answer[] {
       ...base,
       // Empty rather than absent: Bun loads `.env` for a key that is absent.
       NEXTAUTH_URL: "",
+      NEXTAUTH_SECRET: "",
+      STOKY_SECRET: CHILD_SECRET,
       DEV_ALLOWED_ORIGIN: "",
       ...env,
       ORIGINS_UNDER_TEST: JSON.stringify(origins),
