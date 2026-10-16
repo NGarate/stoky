@@ -2754,7 +2754,11 @@ once from `register()`, so each is said once per process, in every
 environment, and never with the value. The start-up guard, `/api/health`, the
 account tag and the Better Auth instance all read the key through
 `configuredSecret`, so none of them can disagree about which name won, and
-every refusal names the variable the value came from.
+every refusal names the variable the value came from. It returns the value
+trimmed, so they cannot disagree about what it says either: the guard once
+judged the raw line while the instance signed with the trimmed one, and the
+published placeholder with a space after it started and signed with the
+placeholder (review of 2026-10-16).
 
 The bundle keeps existing installations signed in. `deploy/install.sh`
 renames a non-empty `NEXTAUTH_SECRET` to `STOKY_SECRET` in `.env` in place,

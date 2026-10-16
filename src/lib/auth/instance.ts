@@ -82,9 +82,9 @@ let generatedSecret: string | undefined;
  * error.
  */
 export function resolveSecret(env: Record<string, string | undefined> = process.env): string {
+  // Already trimmed, by the same rule the guard judged it under.
   const { value, name } = configuredSecret(env);
-  const configured = value?.trim();
-  if (configured) return configured;
+  if (value) return value;
   if (env.NODE_ENV === "production") {
     throw new Error(`[auth] unavailable: ${name} is not set.`);
   }

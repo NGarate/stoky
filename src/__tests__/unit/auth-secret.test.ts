@@ -3,8 +3,10 @@ import {
   MIN_SECRET_LENGTH,
   PLACEHOLDER_SECRET,
   assertUsableSecret,
+  configuredSecret,
   secretProblem,
 } from "@/lib/auth/secret";
+import { accountTag } from "@/lib/account-tag";
 import * as receiptRecovery from "@/server/services/receipt-recovery";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -49,6 +51,22 @@ describe("in production", () => {
     expect(REAL.length).toBeGreaterThanOrEqual(MIN_SECRET_LENGTH);
   });
 
+  it("judges the value as it will sign, with the whitespace around it gone", () => {
+    // The signer trims; the guard compared the raw value with `===` and
+    // counted its untrimmed length. The published placeholder with a space
+    // or a newline after it was therefore not the placeholder, started, and
+    // signed every session with the placeholder itself.
+    for (const padded of [` ${PLACEHOLDER_SECRET}`, `${PLACEHOLDER_SECRET}\n`, `\t${PLACEHOLDER_SECRET}  `]) {
+      expect(secretProblem(padded, "production")).toMatch(/published in this repository/i);
+    }
+    // Thirty-one characters padded past the floor are still thirty-one.
+    const short = "a".repeat(MIN_SECRET_LENGTH - 1);
+    expect(secretProblem(`    ${short}    `, "production")).toBe(
+      `STOKY_SECRET is ${MIN_SECRET_LENGTH - 1} characters; it needs at least ${MIN_SECRET_LENGTH}. Generate one with \`openssl rand -base64 32\`.`,
+    );
+    expect(secretProblem(`  ${REAL}\n`, "production")).toBeNull();
+  });
+
   it("says which file and which command, not just 'invalid'", () => {
     // The person reading this is looking at a container that will not start.
     for (const value of [undefined, PLACEHOLDER_SECRET, "short"]) {
@@ -64,6 +82,38 @@ describe("which variable it names", () => {
     for (const value of [undefined, PLACEHOLDER_SECRET, "short"]) {
       expect(secretProblem(value, "production")).toStartWith("STOKY_SECRET ");
       expect(secretProblem(value, "production", "NEXTAUTH_SECRET")).toStartWith("NEXTAUTH_SECRET ");
+    }
+  });
+});
+
+describe("the value every reader is given", () => {
+  it("is trimmed once, whichever name it came from", () => {
+    // The guard, `/api/health`, the account tag and the signer all take it
+    // from here, so trimming here is what makes them judge one string.
+    expect(configuredSecret({ STOKY_SECRET: `  ${REAL}\n` })).toEqual({
+      value: REAL,
+      name: "STOKY_SECRET",
+      from: "current",
+    });
+    expect(configuredSecret({ STOKY_SECRET: "", NEXTAUTH_SECRET: `\t${REAL} ` })).toEqual({
+      value: REAL,
+      name: "NEXTAUTH_SECRET",
+      from: "legacy",
+    });
+  });
+
+  it("keys the account tag with the key the sessions are signed with", () => {
+    const env = process.env as Record<string, string | undefined>;
+    const saved = { STOKY_SECRET: env.STOKY_SECRET, NEXTAUTH_SECRET: env.NEXTAUTH_SECRET };
+    try {
+      delete env.NEXTAUTH_SECRET;
+      env.STOKY_SECRET = `  ${REAL}\n`;
+      expect(accountTag("ana@example.com")).toBe(accountTag("ana@example.com", REAL));
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete env[key];
+        else env[key] = value;
+      }
     }
   });
 });
@@ -147,6 +197,20 @@ describe("when it refuses", () => {
         await expect(register()).rejects.toThrow("exit 1");
       });
 
+      // The placeholder with whitespace around it, which the signer would
+      // have trimmed back into the placeholder, and a short key padded past
+      // the floor.
+      logged.mockClear();
+      await asProductionServer(`  ${PLACEHOLDER_SECRET}\n`, async () => {
+        await expect(register()).rejects.toThrow("exit 1");
+      });
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(/published in this repository/i);
+      logged.mockClear();
+      await asProductionServer(` ${"k".repeat(MIN_SECRET_LENGTH - 1)}    `, async () => {
+        await expect(register()).rejects.toThrow("exit 1");
+      });
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(/needs at least/i);
+
       exit.mockClear();
       await asProductionServer(REAL, async () => {
         await register();
@@ -210,6 +274,10 @@ describe("the key that actually signs sessions", () => {
         AUTH_SECRET: "changeme",
       }).secret,
     ).toBe(REAL);
+  });
+
+  it("is the trimmed value the guard judged, not the line as written", () => {
+    expect(resolvedSecret({ NODE_ENV: "production", STOKY_SECRET: `  ${REAL}\n` }).secret).toBe(REAL);
   });
 
   it("is STOKY_SECRET when the old name is set beside it, and the old name when it is alone", () => {

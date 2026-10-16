@@ -10,7 +10,8 @@ import { SECRET_VARIABLE, readRenamed, type RenamedValue } from "@/lib/env-names
  * message here names the variable the value actually came from, so the
  * operator edits the line that is there. Every reader — this guard,
  * `/api/health`, the account tag and the instance — goes through
- * `configuredSecret`, so they cannot disagree about which name won.
+ * `configuredSecret`, so they cannot disagree about which name won, nor about
+ * what it says: the value comes back trimmed, once, there.
  *
  * `src/lib/auth/instance.ts` hands the key to Better Auth as both
  * `secret` and the single entry of `secrets`, because left to itself Better
@@ -50,11 +51,27 @@ export const MIN_SECRET_LENGTH = 32;
 /**
  * The signing key as configured, and the variable it came from:
  * `STOKY_SECRET`, else the deprecated `NEXTAUTH_SECRET`. Read at call time.
+ *
+ * **Trimmed, here and nowhere else.** The instance signs with the trimmed
+ * value, because a line in `.env` or a Compose file easily carries a stray
+ * space or newline. When the guard judged the raw value and the signer the
+ * trimmed one, the published placeholder with a space after it passed the
+ * guard — it is not `===` the placeholder — and then signed every session
+ * with the placeholder itself; so did a 31-character key padded past the
+ * floor. Normalised once, the guard, `/api/health`, the account tag and the
+ * signer all see the same string.
  */
 export function configuredSecret(
   env: Record<string, string | undefined> = process.env,
 ): RenamedValue {
-  return readRenamed(env, SECRET_VARIABLE);
+  const read = readRenamed(env, SECRET_VARIABLE);
+  return { ...read, value: normaliseSecret(read.value) };
+}
+
+/** The one rule for what a configured key says: surrounding whitespace is not part of it. */
+function normaliseSecret(secret: string | undefined): string | undefined {
+  const trimmed = secret?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 /**
@@ -71,7 +88,10 @@ export function secretProblem(
 ): string | null {
   if (nodeEnv !== "production") return null;
 
-  if (!secret || secret.trim() === "") {
+  // Judged as it will be used, whoever passes it in (see `configuredSecret`).
+  secret = normaliseSecret(secret);
+
+  if (!secret) {
     return `${name} is not set. Generate one with \`openssl rand -base64 32\` and put it in .env.`;
   }
 
