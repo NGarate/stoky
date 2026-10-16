@@ -10,8 +10,8 @@
  * `household.addMember`, a security-log line — was multiplied by it before any
  * limit counted anything. `src/server/http/trpc-handler.ts` passes this as
  * `maxBatchSize`, which tRPC checks against the path list before it reads a
- * single input: a longer batch is a 400 and runs nothing. The browser client
- * (`src/lib/trpc/client.tsx`) passes it as `maxItems`, so the link splits a
+ * single input: a longer batch is a 400 and runs nothing. The browser client's
+ * links (`src/lib/trpc/links.ts`) pass it as `maxItems`, so the link splits a
  * long batch into several requests instead of tripping the refusal.
  *
  * **Why 100 and not fewer.** The widest batch a screen sends today is
