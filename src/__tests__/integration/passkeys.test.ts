@@ -60,9 +60,15 @@ interface Device extends BrowserState {
   sessionId: string;
 }
 
-async function person(label: string, role: HouseholdRole = "MEMBER"): Promise<Person> {
+async function person(label: string, role: HouseholdRole = "MEMBER", household = householdId): Promise<Person> {
   const email = generateTestEmail(`${MARKER}-${label.toLowerCase()}`);
-  const user = await createTestUser({ email, name: `${MARKER} ${label}`, password: PASSWORD, householdId, role });
+  const user = await createTestUser({
+    email,
+    name: `${MARKER} ${label}`,
+    password: PASSWORD,
+    householdId: household,
+    role,
+  });
   made.push(user.id);
   return { id: user.id, email };
 }
@@ -111,8 +117,8 @@ async function eventsDuring<T>(run: () => Promise<T>): Promise<{ result: T; even
 }
 
 /** A person with a passkey registered, and the browser they registered it from. */
-async function enrolled(label: string, role: HouseholdRole = "MEMBER") {
-  const who = await person(label, role);
+async function enrolled(label: string, role: HouseholdRole = "MEMBER", household = householdId) {
+  const who = await person(label, role, household);
   const device = await signedIn(who);
   const authenticator = SoftAuthenticator.create();
   await confirmPassword(device);
@@ -280,6 +286,53 @@ describe("removing a passkey", () => {
     expect(await stepUps(device.sessionId)).toBe(0);
     expect(events.find((line) => line.event === "auth.passkey.removed")).toMatchObject({ userId: who.id });
   });
+});
+
+describe("another account's passkey", () => {
+  // Better Auth's passkey plugin (1.7.7) checks the passkey named by `id`
+  // belongs to the session's account (`requireResourceOwnership`) before it
+  // renames or removes it; the route forwards `id` as sent. Nothing proved
+  // it, so a release that dropped the check would have let anybody signed in
+  // rename or remove anybody's passkey by its id.
+  const cases = [
+    ["in another household", "OtherHousehold", "MEMBER", true],
+    ["in the same household, its owner", "SameHouseholdOwner", "OWNER", false],
+  ] as const;
+
+  for (const [where, label, role, elsewhere] of cases) {
+    it(`cannot be renamed or removed by an account ${where}`, async () => {
+      const victim = await enrolled(`${label}Victim`);
+      const before = await prisma.passkey.findFirstOrThrow({ where: { userId: victim.who.id } });
+      const household = elsewhere ? (await createTestHousehold({ name: `${MARKER} ${label} casa` })).id : householdId;
+      const intruder = await enrolled(`${label}Intruder`, role, household);
+      const own = await prisma.passkey.findFirstOrThrow({ where: { userId: intruder.who.id } });
+
+      // The intruder's session can change passkeys: its own answers.
+      const renamedOwn = await authPost("/passkey/update-passkey", { id: own.id, name: "Mía" }, intruder.device);
+      expect(renamedOwn.status).toBe(200);
+
+      const { result: rename, events: renameEvents } = await eventsDuring(() =>
+        authPost("/passkey/update-passkey", { id: before.id, name: "Robada" }, intruder.device),
+      );
+      expect(rename.status).toBe(401);
+
+      // With the step-up held, so it is the ownership that refuses, not the password.
+      await confirmPassword(intruder.device);
+      const { result: removal, events: removalEvents } = await eventsDuring(() =>
+        authPost("/passkey/delete-passkey", { id: before.id }, intruder.device),
+      );
+      expect(removal.status).toBe(401);
+      // Spent before the plugin looked at whose it was: the policy plugin's before-hook.
+      expect(await stepUps(intruder.device.sessionId)).toBe(0);
+
+      const after = await prisma.passkey.findUniqueOrThrow({ where: { id: before.id } });
+      expect(after).toEqual(before);
+      expect(after.userId).toBe(victim.who.id);
+      expect(
+        [...renameEvents, ...removalEvents].filter((line) => line.event === "auth.passkey.removed"),
+      ).toEqual([]);
+    });
+  }
 });
 
 describe("a bearer token (D142) is no way round the step-up", () => {

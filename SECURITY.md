@@ -1051,6 +1051,13 @@ Verified against the files named in each row.
     `@simplewebauthn/browser` (13.3.0, exact, the version
     `@better-auth/passkey` already resolved) is loaded on the click, not with
     the page.
+  - **Only one's own can be renamed or removed.** The route forwards the
+    passkey's `id` as sent; Better Auth's plugin looks the row up and answers
+    401 when it belongs to another account (`requireResourceOwnership`), in
+    another household or the same one, its owner included — a household role
+    gives no say over a member's passkeys. That check is Better Auth's, not
+    Stoky's, so `integration/passkeys.test.ts` holds it against an upgrade
+    that drops it. A removal refused there has still spent the step-up.
   - **Every role may have them**, the kitchen's shared account included (the
     owner's decision of 2026-10-15); the add dialog advises against adding
     one on a device other people use. Removing a member's two-step
