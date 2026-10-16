@@ -2263,6 +2263,18 @@ household name were bare strings too, and a failed sign-in wrote the address
 it was given into the security log, whatever its length. All three are bounded
 now, with every other input (see *Input validation* above).
 
+**At sign-in the maximum is Better Auth's, not this schema's.** Since the move
+to Better Auth the sign-in route (`src/server/http/auth-handler.ts`) checks
+only that the password is a string and runs no Stoky schema over it;
+`loginSchema` still names the bound, but nothing on that path reads it. The
+bound holds because `src/lib/auth/instance.ts` sets Better Auth's
+`maxPasswordLength` to `MAX_PASSWORD_LENGTH`, and Better Auth refuses a longer
+password with `PASSWORD_TOO_LONG` before it looks the account up — so before
+Argon2id runs. The login form reads that code as wrong credentials. That this
+holds at the route, and that a password of exactly 128 is still checked, is
+`auth.flow.test.ts` (*refuses a password over the maximum before Argon2id
+runs*), which goes red if the setting is raised or lowered by one.
+
 ### ~~The services layer still throws bare `Error`~~ — closed
 
 **Corrected 2026-08-26 by the Phase 7 review.** `ISSUES.md` DEBT-6 closed this

@@ -29,6 +29,7 @@ import { TRPCError } from "@trpc/server";
 import {
   isPasswordIdentityRefusal,
   isWrongCurrentPasswordRefusal,
+  MAX_PASSWORD_LENGTH,
 } from "@/lib/validations/password";
 import { readSession } from "@/lib/auth";
 import { retryAfterSeconds } from "@/server/trpc/throttle";
@@ -353,6 +354,41 @@ describe("Authentication Flow Integration Tests", () => {
       }
 
       expect(median(noAccount)).toBeGreaterThan(median(wrongPassword) * 0.5);
+    });
+
+    it("refuses a password over the maximum before Argon2id runs, and still checks one at it", async () => {
+      // Argon2id here is 64 MiB per call, on an endpoint reachable without an
+      // account, so the length bound is the one rule sign-in applies. The
+      // route checks only that a password is a string; the bound is Better
+      // Auth's `maxPasswordLength`, set to MAX_PASSWORD_LENGTH in
+      // `instance.ts`. `loginSchema` still names it, but nothing on this path
+      // runs that schema, so this is the test that the bound holds here.
+      const email = runEmail("too-long");
+      await createTestUser({ email, name: generateTestName("Too Long"), password: "CorrectPassword123!" });
+
+      const attempt = async (password: string) => {
+        const verify = spyOn(argon2, "verify");
+        const hash = spyOn(argon2, "hash");
+        try {
+          const result = await signInWith({ email, password });
+          return { result, argon2Calls: verify.mock.calls.length + hash.mock.calls.length };
+        } finally {
+          verify.mockRestore();
+          hash.mockRestore();
+        }
+      };
+
+      const over = await attempt("a".repeat(MAX_PASSWORD_LENGTH + 1));
+      expect(over.result.status).toBe(400);
+      // What the login form reads as wrong credentials (`client.ts`).
+      expect(over.result.code).toBe("PASSWORD_TOO_LONG");
+      expect(over.result.setCookie).toEqual([]);
+      expect(over.argon2Calls).toBe(0);
+
+      const at = await attempt("a".repeat(MAX_PASSWORD_LENGTH));
+      expect(at.result.status).toBe(401);
+      expect(at.result.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+      expect(at.argon2Calls).toBe(1);
     });
 
     it("should refuse empty credentials", async () => {
