@@ -2056,13 +2056,24 @@ written only once the sign-in has completed.
   the one `auth.signin.failed` line of about 117 bytes (next-auth: 1 line and
   99 bytes beside it); a session cookie whose signature does not verify, 0
   lines (a `JWTSessionError`, 10 lines and 988 bytes); an endpoint nobody
-  allowed, 0 lines (an `UnknownAction`, 1,252 bytes). The one refusal that
-  still writes is a cookie-bearing sign-in from a foreign origin: one
+  allowed, 0 lines (an `UnknownAction`, 1,252 bytes). Two refusals still
+  write. A cookie-bearing sign-in from a foreign origin: one
   `[auth] error Invalid origin: …` line of at most 313 bytes, the origin
-  being the caller's choice. `integration/security-log.test.ts` signs in with
-  ten wrong passwords and finds ten security lines and nothing else on any
-  console stream. A failure of the server's own — a database that does not
-  answer — is still written, as one line with the error's name and message.
+  being the caller's choice. And a passkey answer the verifier refuses: one
+  `[auth] error Failed to verify authentication` line of 45 bytes, beside the
+  `auth.passkey.signin-failed` security line (about 127 bytes for an IPv4
+  address; measured 2026-10-16). There Better Auth 1.7.7 hands the logger the
+  `@simplewebauthn/server` error, which quotes the origin the answer was
+  signed for; dropping the arguments is what keeps it out.
+  `integration/security-log.test.ts` signs in with ten wrong passwords and
+  finds ten security lines and nothing else on any console stream; its
+  `what the auth library writes` block reads every console method through an
+  unknown address, a refused authenticator code, that refused passkey and a
+  sign-out, and finds no line naming the address, its local part, the
+  password, the code, the authenticator secret, the origin or a session
+  token. Of the four, only the passkey writes a line of the library's. A
+  failure of the server's own — a database that does not answer — is still
+  written, as one line with the error's name and message.
 
 Verified in a browser, not only by test: five wrong passwords are refused as
 wrong, the sixth is refused as rate-limited, a *correct* password is still

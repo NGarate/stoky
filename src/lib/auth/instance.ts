@@ -107,7 +107,9 @@ export function resolveSecret(env: Record<string, string | undefined> = process.
  * At level `error`, which is what keeps a refused sign-in silent: Better Auth
  * writes a `warn` for every wrong password and unknown address ("Invalid
  * password", "User not found"), which the security log already records with
- * more in it. `integration/security-log.test.ts` fails at level `warn`.
+ * more in it. `integration/security-log.test.ts` fails at level `warn`, and
+ * its refused passkey fails if the arguments are written: the verifier's error
+ * quotes the origin the answer was signed for.
  */
 function logLine(level: string, message: string): void {
   const text = String(message).replace(/\s+/g, " ").slice(0, 300);

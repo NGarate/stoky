@@ -7,17 +7,27 @@ import {
   beforeEach,
   spyOn,
 } from "bun:test";
+import { symmetricDecrypt } from "better-auth/crypto";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { prisma } from "@/lib/prisma";
 import { openFoodFacts } from "@/server/services/openFoodFacts";
 import { accountTag } from "@/lib/account-tag";
+import { readSession } from "@/lib/auth";
+import { getAuth } from "@/lib/auth/instance";
+import { hotp, totpStep } from "@/lib/auth/policy-plugin";
 import {
   accountIdentifier,
   loginAccountRateLimit,
   resetRateLimit,
 } from "@/lib/rate-limit";
 import { freshTestAddress, signInWith } from "../utils/authorize";
+import {
+  SoftAuthenticator,
+  authPost,
+  registerPasskey,
+  signInWithPasskey,
+} from "../utils/webauthn";
 import {
   createTestUser,
   createTestHousehold,
@@ -475,5 +485,187 @@ describe("ten wrong passwords", () => {
     expect(lines.filter((line) => line.event === "auth.signin.failed")).toHaveLength(10);
     expect(lines).toHaveLength(10);
     expect(library).toEqual([]);
+  });
+});
+
+/**
+ * What the auth library itself writes while it turns a credential away, and
+ * while it ends a session: never the address, the password, a code, or a
+ * session's token — the half of "logs record an account tag instead of an
+ * email address" (PR #11) that the security log's own tests cannot reach.
+ *
+ * Every console method is read, not only the ones the logger uses today,
+ * because the guarantee is about the process's output, and a library that
+ * moved a line from `error` to `log` would otherwise walk out of the test.
+ * `logLine` in `src/lib/auth/instance.ts` is what holds it: it writes the
+ * message and drops the arguments, where Better Auth hands over request
+ * bodies and the errors that carry them.
+ *
+ * Of the four, only the refused passkey reaches the library's logger in the
+ * version installed (it hands over the verifier's error, which quotes the
+ * origin); the others write nothing of the library's even at level `debug`.
+ * They stay for the upgrade that adds a line, and they read this
+ * application's own writers on the same paths, the security log's included.
+ */
+describe("what the auth library writes", () => {
+  const PASSWORD = "despensa nevera congelador";
+  const METHODS = ["error", "warn", "log", "info", "debug"] as const;
+
+  /** Every console line written while `run` ran, rendered as a terminal would show it. */
+  async function consoleDuring(run: () => Promise<void>): Promise<string> {
+    const spies = METHODS.map((method) => spyOn(console, method).mockImplementation(() => {}));
+    let calls: unknown[][] = [];
+    try {
+      await run();
+    } finally {
+      // Read before the restore, which forgets them.
+      calls = spies.flatMap((spy) => spy.mock.calls);
+      for (const spy of spies) spy.mockRestore();
+    }
+    return calls
+      .map((call) => call.map((arg) => (typeof arg === "string" ? arg : Bun.inspect(arg))).join(" "))
+      .join("\n");
+  }
+
+  /** The token a `stoky.session_token` cookie carries, and the signed value around it. */
+  function sessionTokens(cookieHeader: string): string[] {
+    const pair = cookieHeader
+      .split("; ")
+      .find((cookie) => cookie.startsWith("stoky.session_token="));
+    if (!pair) return [];
+    const signed = decodeURIComponent(pair.slice("stoky.session_token=".length));
+    return [signed, signed.split(".")[0]];
+  }
+
+  /** What no line may contain: the address, its local part, the password, and `more`. */
+  function expectNoneOf(text: string, email: string, more: string[] = []) {
+    for (const secret of [email, email.split("@")[0], PASSWORD, ...more]) {
+      expect(secret.length).toBeGreaterThan(5);
+      expect(text).not.toContain(secret);
+    }
+  }
+
+  /** Every session token the account holds in the database. */
+  async function storedTokens(userId: string): Promise<string[]> {
+    return (await prisma.session.findMany({ where: { userId }, select: { token: true } })).map(
+      (row) => row.token,
+    );
+  }
+
+  async function account(label: string) {
+    const email = generateTestEmail(`seclog-lib-${label}`);
+    const user = await createTestUser({ email, name: `Security Log ${label}`, password: PASSWORD });
+    return { id: user.id, email };
+  }
+
+  it("writes nothing that names an address nobody registered", async () => {
+    const stranger = generateTestEmail("seclog-lib-nobody");
+
+    const text = await consoleDuring(async () => {
+      expect((await signInWith({ email: stranger, password: PASSWORD })).status).toBe(401);
+    });
+
+    // Read, not silence: the security log's own line, which names a tag.
+    expect(text).toContain('"event":"auth.signin.failed"');
+    expectNoneOf(text, stranger);
+    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(stranger));
+  });
+
+  it("writes nothing that names the account, its secret or the code of a refused second step", async () => {
+    const who = await account("totp");
+    const signedIn = await signInWith({ email: who.email, password: PASSWORD });
+    expect(signedIn.status).toBe(200);
+    const auth = getAuth();
+    await auth.api.enableTwoFactor({
+      body: { password: PASSWORD },
+      headers: new Headers({ cookie: signedIn.cookieHeader }),
+    });
+    const row = await prisma.twoFactor.findUniqueOrThrow({ where: { userId: who.id } });
+    const secret = await symmetricDecrypt({ key: (await auth.$context).secretConfig, data: row.secret });
+    const step = totpStep(Date.now());
+    const enrolled = await auth.api.verifyTOTP({
+      body: { code: hotp(secret, step) },
+      headers: new Headers({ cookie: signedIn.cookieHeader }),
+      asResponse: true,
+    });
+    expect(enrolled.status).toBe(200);
+    const near = new Set([-2, -1, 0, 1, 2].map((steps) => hotp(secret, step + steps)));
+    let wrong = "000000";
+    for (let n = 0; near.has(wrong); n += 1) wrong = String(n).padStart(6, "0");
+
+    let challenge = "";
+    const text = await consoleDuring(async () => {
+      const password = await signInWith({ email: who.email, password: PASSWORD });
+      expect(password.body).toMatchObject({ twoFactorRedirect: true });
+      challenge = password.cookieHeader;
+      const refused = await authPost("/two-factor/verify-totp", { code: wrong }, { cookie: challenge });
+      expect(refused.status).toBe(401);
+      expect(refused.code).toBe("INVALID_CODE");
+    });
+
+    expect(text).toContain('"event":"auth.twofactor.failed"');
+    const challengeValue = challenge.split("; ").find((pair) => pair.startsWith("stoky.two_factor="));
+    expect(challengeValue).toBeDefined();
+    expectNoneOf(text, who.email, [
+      secret,
+      wrong,
+      decodeURIComponent(challengeValue?.split("=").slice(1).join("=") ?? ""),
+      ...sessionTokens(signedIn.cookieHeader),
+      ...(await storedTokens(who.id)),
+    ]);
+    await resetRateLimit(loginAccountRateLimit(), accountIdentifier(who.email));
+  });
+
+  it("writes only its own message for a passkey assertion it could not verify", async () => {
+    const who = await account("passkey");
+    const signedIn = await signInWith({ email: who.email, password: PASSWORD });
+    expect(signedIn.status).toBe(200);
+    const session = await readSession(new Headers({ cookie: signedIn.cookieHeader }), { refresh: false });
+    if (!session) throw new Error("the sign-in left no session");
+    await appRouter
+      .createCaller(
+        await createTRPCContext({
+          session,
+          headers: new Headers({ "x-forwarded-for": "203.0.113.34", cookie: signedIn.cookieHeader }),
+        }),
+      )
+      .auth.confirmPassword({ currentPassword: PASSWORD });
+    const authenticator = SoftAuthenticator.create();
+    expect((await registerPasskey(authenticator, { cookie: signedIn.cookieHeader })).verified?.status).toBe(200);
+
+    const text = await consoleDuring(async () => {
+      // An answer signed for another site: the library's verifier throws, and
+      // the library logs what it caught — the path that hands it an error.
+      const { verified } = await signInWithPasskey(authenticator, {}, { clientOrigin: "https://otro.example" });
+      expect(verified.status).toBe(400);
+      expect(verified.code).toBe("AUTHENTICATION_FAILED");
+    });
+
+    // The library did write, so the test is reading the logger and not silence.
+    expect(text).toContain("[auth] error Failed to verify authentication");
+    expectNoneOf(text, who.email, [
+      "otro.example",
+      authenticator.id,
+      who.id,
+      ...sessionTokens(signedIn.cookieHeader),
+      ...(await storedTokens(who.id)),
+    ]);
+  });
+
+  it("writes nothing that names the account or the session it ends", async () => {
+    const who = await account("signout");
+    let cookie = "";
+    let bearer: string | null = null;
+    const text = await consoleDuring(async () => {
+      const signedIn = await signInWith({ email: who.email, password: PASSWORD });
+      expect(signedIn.status).toBe(200);
+      cookie = signedIn.cookieHeader;
+      bearer = signedIn.headers.get("set-auth-token");
+      expect((await authPost("/sign-out", {}, { cookie })).status).toBe(200);
+    });
+
+    expect(text).toContain('"event":"auth.signin.succeeded"');
+    expect(await readSession(new Headers({ cookie }), { refresh: false })).toBeNull();
+    expectNoneOf(text, who.email, [...sessionTokens(cookie), ...(bearer ? [bearer] : [])]);
   });
 });
