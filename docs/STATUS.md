@@ -12,13 +12,14 @@ say what measured it.
 
 ## Gate status
 
-**2026-10-16 the Better Auth branch, before its full run:**
-`feat/better-auth-2026-10-15` replaces next-auth with Better Auth in 35
-commits on top of the security branch, and
+**2026-10-16 the Better Auth branch, finished:**
+`feat/better-auth-2026-10-15` replaces next-auth with Better Auth in 56
+commits after the security branch's `f8090fe`, this record included
+(`git rev-list --count f8090fe..HEAD` at it), and
 `docs/SECURITY_REVIEW.md` (*The Better Auth migration*) maps every finding
 to the commit that answered it, those of the review of 2026-10-16 included;
 five of that review's fixes are commits of their own after the record. How far it is measured, said plainly,
-because two stages were measured differently:
+because its stages were measured differently:
 
 - **The first 27 commits**, through "let an owner end every session in the
   household", each ran `bun run verify:ci`, and all but six the whole
@@ -36,11 +37,10 @@ because two stages were measured differently:
   dependencies or the route tree, by the owner's decision of 2026-10-15: the
   browser suite is too slow to run per commit, so it runs once, in full,
   with `verify:ci`, on the finished branch before it is pushed. That run
-  comes after this paragraph was written, so its numbers are in the pull
-  request and not here; the gate table below still holds the security
-  branch's. **Until it has run, three browser tests have never run** — the
-  two in `two-factor.spec.ts` and the one in `passkeys.spec.ts` — and the
-  whole suite has never run with `STOKY_URLS` listing `localhost` first.
+  is the last point below. It is the first in which three browser tests
+  ran at all — the two in `two-factor.spec.ts` and the one in
+  `passkeys.spec.ts` — and the first of the whole suite with `STOKY_URLS`
+  listing `localhost` first (`playwright.config.ts`).
 - **The review of 2026-10-16** (*What the review of 2026-10-16 found*):
   ten fixes, each with a test that went red without it, run against lint,
   typecheck and the test files it touched. Six went, whole or in part,
@@ -50,10 +50,9 @@ because two stages were measured differently:
   lint, typecheck and the tests it touches. On
   the new head the unit (1,776), component (1,066) and integration (845)
   suites pass; one integration run of three hit a five-second hook timeout
-  that the other two did not. The image, the bundle smoke and the browser
-  suite in the next point were not run again: they describe the head
-  before the review.
-- **Measured on the branch head itself, 2026-10-16** (host Bun 1.4.3):
+  that the other two did not. The image and the bundle smoke in the next
+  point were not run again: they describe the head before the review.
+- **Measured on the head before the review, 2026-10-16** (host Bun 1.4.3):
   `bun run lint` 0 warnings and 0 errors over 558 files and 101 rules;
   `bun run typecheck` clean; `bun audit --audit-level moderate` no
   vulnerabilities in 598 packages. The production image,
@@ -77,6 +76,33 @@ because two stages were measured differently:
   options answered 200 there, an https domain being where the plugin is
   registered, while `/two-factor/get-totp-uri`, `/sign-up/email` and
   `/list-sessions` answered 404.
+- **The full run, on `28f2a46`**, the head before this record, with the
+  shared `stoky` services. `COMPOSE_PROJECT_NAME=stoky bun run verify:ci`
+  exit 0 in 195 of its 600 seconds: lint, typecheck, react-doctor, the
+  internal links, contrast and the dependency audit passed (no
+  vulnerabilities in 598 packages); 1,784 unit tests in 130 files, 1,066
+  component tests in 81 and 852 integration tests in 54, none failing; the
+  build passed. `COMPOSE_PROJECT_NAME=stoky bun run test:e2e`
+  (`scripts/e2e-in-image.sh`, the pinned Playwright image) exit 0: **205
+  passed in 3.3 minutes**, none failed, flaky or skipped. A first
+  `bun run verify:ci` without `COMPOSE_PROJECT_NAME` exited 1 at the
+  integration step, "Bind for 127.0.0.1:5432 failed: port is already
+  allocated": it tried to start a database of its own beside the main
+  checkout's running one. The unit and component suites had passed in
+  that run; the environment, not the branch, failed it.
+  Since the review's record, the branch gained `363b245`, the CI fix:
+  the production case in `integration/auth.origins.test.ts` started a
+  child that inherited CI's 25-character secret and was refused at start
+  (CI run 38891583855), and now gets a signing key of its own. Then two
+  fixes, `4177b9a` (the start-up guard and the signer judge one trimmed
+  key) and `4744303` (a failed auth call's Prisma error logged without
+  its arguments); three tests that pin premises PR #11 relied on,
+  `d0d2df2` (a passkey changed only by its own account), `bcecb36` (an
+  over-long password refused before Argon2id) and `824b91b` (the auth
+  library's output never names an account, a password or a session);
+  and seven corrections to the documents, `2c69df9` to `28f2a46`. Each
+  ran lint, typecheck and the tests it touches, as its message records;
+  the full run above is the head after all of them.
 
 **2026-10-12 the security branch, finished:** `fix/security-hardening-2026-10-12`
 carries the 2026-10-12 review's fixes, and fixes for 19 of the 20 defects its
