@@ -657,7 +657,13 @@ both tRPC cases go red on a 400 — the register body read whole and refused by
 Zod — and with the Auth.js route's removed, the sign-in case gets a 302. The unit tier
 (`body-limit.test.ts`, `trpc-handler.test.ts`,
 `auth-route-body-limit.test.ts`) pins the chunked case and the boundary:
-exactly the limit passes, one byte over does not.
+exactly the limit passes, one byte over does not. *(Since 2026-10-15 Better
+Auth replaces Auth.js, and the 64 KiB bound is applied by the auth API's own
+route, `src/server/http/auth-handler.ts`, before Better Auth reads the body;
+`auth-route-body-limit.test.ts` went with the Auth.js route, and
+`unit/auth-handler.test.ts`, "the body bound", pins the same boundary and
+chunked case. The production-build case is now
+`POST /api/auth/sign-in/email` in `e2e/security-headers.spec.ts`.)*
 
 The residual is concurrency, not size: a body may still be up to 15 MiB,
 held more than once while it is read and parsed, and nothing limits how many
