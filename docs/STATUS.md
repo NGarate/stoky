@@ -16,7 +16,8 @@ say what measured it.
 `feat/better-auth-2026-10-15` replaces next-auth with Better Auth in 35
 commits on top of the security branch, and
 `docs/SECURITY_REVIEW.md` (*The Better Auth migration*) maps every finding
-to the commit that answered it. How far it is measured, said plainly,
+to the commit that answered it, those of the review of 2026-10-16 included;
+five of that review's fixes are commits of their own after the record. How far it is measured, said plainly,
 because two stages were measured differently:
 
 - **The first 27 commits**, through "let an owner end every session in the
@@ -40,6 +41,18 @@ because two stages were measured differently:
   branch's. **Until it has run, three browser tests have never run** — the
   two in `two-factor.spec.ts` and the one in `passkeys.spec.ts` — and the
   whole suite has never run with `STOKY_URLS` listing `localhost` first.
+- **The review of 2026-10-16** (*What the review of 2026-10-16 found*):
+  ten fixes, each with a test that went red without it, run against lint,
+  typecheck and the test files it touched. Six went, whole or in part,
+  into the seven commits that brought the defects, which rewrote those and
+  every commit after the first of them; each commit a fix went into, and
+  each of the five after the record, was then checked out alone and passed
+  lint, typecheck and the tests it touches. On
+  the new head the unit (1,776), component (1,066) and integration (845)
+  suites pass; one integration run of three hit a five-second hook timeout
+  that the other two did not. The image, the bundle smoke and the browser
+  suite in the next point were not run again: they describe the head
+  before the review.
 - **Measured on the branch head itself, 2026-10-16** (host Bun 1.4.3):
   `bun run lint` 0 warnings and 0 errors over 558 files and 101 rules;
   `bun run typecheck` clean; `bun audit --audit-level moderate` no

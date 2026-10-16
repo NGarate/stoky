@@ -1399,6 +1399,34 @@ settings.
 
 <!-- /branch-commits -->
 
+<!-- branch-commits feat/better-auth-2026-10-15 since f8090fe -->
+
+### What the review of 2026-10-16 found
+
+A review of the finished branch, before its full run: eleven reports, each
+checked against the code and Better Auth 1.7.7's source and, where it could
+be, reproduced through the real route. Two were one defect (the enrolment
+code's budget), so ten fixes. Each has a test that went red without it.
+Where the commit that brought the defect could take the fix, it was folded
+in, which rewrote the hashes in the table above; where the fold conflicted
+with a later commit, the fix landed after this record, as a commit of its
+own that names the one it corrects.
+
+| # | Finding | Severity | Fixed in |
+|---|---|---|---|
+| R1 | A bearer token skipped the passkey step-up, and its TOTP enrolment code was never claimed: Better Auth hands other before-hooks the request before the bearer plugin turns the token into a cookie, so the policy plugin saw no session and stood aside | high | `b692fdd` sign in with passkeys on the server (the step-up, which now refuses a request with no session too) and `1b0f250` add TOTP two-step verification with single-use codes (the claim): both read the session through the bearer plugin's own conversion |
+| R2 | A member's password reset left any passkey added with the old password working | medium | `b692fdd`: the reset's transaction removes the member's passkeys |
+| R3 | Wrong authenticator codes were limited per quarter of an hour and never capped: about 960 a day for whoever has the password | low | `ea7f74f` cap a sign-in's wrong authenticator codes per account per day |
+| R4 | A request still carrying the pre-rotation cookie could expire the rotated one: a session read that finds the row gone expires the cookie, and `nextCookies` puts that on the tRPC answer | low | `67724d5` never expire the session cookie from a session read |
+| R5 | A locked second step was refused 429 without `Retry-After` | low | `e870265` say when a locked second step may try again |
+| R6 | The enrolment check's code was charged to sign-in's per-address budget and never given back | low | `ea455cd` charge a signed-in session's authenticator code to its own budgets |
+| R7 | A page on another site could spend the passkey options' per-address budget with `<img>` GETs | low | `b692fdd`: Fetch Metadata on the auth API's GETs too |
+| R8 | A passkey's name had no server-side bound | low | `b692fdd` (`passkeyNameSchema`) and `3baf15b` bound the passkey rename field by the route's own limit |
+| R9 | "Mantener la sesión iniciada" came back unticked from the code step | low | `ab5fd7e` ask for the authenticator code when signing in |
+| R10 | Focus fell to `<body>` when the action a dialog confirmed removed its opener | low | `f8e8ff8` show your devices in security settings (`Dialog`'s `fallbackFocus`), `6cb7597` set up two-step verification in settings, `ec337af` let an admin remove a member's two-step verification and `0472d47` manage passkeys in settings |
+
+<!-- /branch-commits -->
+
 ### The owner's decisions of 2026-10-15
 
 The plan's eleven open questions, answered by the owner, and recorded in
@@ -1454,6 +1482,10 @@ the reason; none lets one household read or change another's data.
   because no row is written on every request.
 - A plain-HTTP LAN install, or one at an IP address, has no passkeys
   (added to D84's entry in *What the 2026-10-12 review accepted*).
+- Somebody who has an account's password can spend its twenty wrong
+  authenticator codes for the day and keep the owner's authenticator out
+  until the day's window ends (R3); recovery codes and passkeys still sign
+  in, and the cost says the password needs changing.
 
 ### What an operator meets on upgrading
 
@@ -1493,6 +1525,12 @@ None blocks the merge.
   own removal.
 - **The bundle lists only `https://DOMAIN`**, the one host Traefik routes;
   more addresses there would need Traefik routing as well as `STOKY_URLS`.
+- **Should ending a member's sessions, or the whole household's, remove
+  passkeys too**, as a password reset now does (R2)? It does not: neither
+  changes a password, which already lets whoever knows it back in.
+- **Twenty wrong authenticator codes a day per account** (R3,
+  `RATE_LIMIT_TWO_FACTOR_CODE_*`) is the review's number, twice Better
+  Auth's lock; the owner may prefer another.
 
 ---
 
