@@ -7,6 +7,7 @@ import { bearer } from "better-auth/plugins/bearer";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
 import { prisma } from "@/lib/prisma";
+import { describeErrorLine } from "@/server/log-error";
 import { assertAuthEnvironment } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
@@ -120,12 +121,16 @@ function logLine(level: string, message: string): void {
  * the line would carry the error's name and nothing else; this writes the name
  * and the message. A refusal is the caller's input being turned away and
  * writes nothing.
+ *
+ * Through `describeErrorLine`, because what reaches here is often Prisma's:
+ * the adapter rethrows the client's errors as they are, and a validation
+ * error's message is the whole call, argument values included — an address, a
+ * password hash (`src/server/log-error.ts`). Exported for
+ * `unit/auth-log.test.ts`.
  */
-function logEndpointError(error: unknown): void {
+export function logEndpointError(error: unknown): void {
   if (isAPIError(error) && error.status !== "INTERNAL_SERVER_ERROR") return;
-  const name = error instanceof Error ? error.name : "Error";
-  const message = error instanceof Error ? error.message : String(error);
-  logLine("error", `${name}: ${message}`);
+  logLine("error", describeErrorLine(error));
 }
 
 /**

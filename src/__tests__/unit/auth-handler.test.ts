@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { Prisma } from "@prisma/client";
 import { DEVICE_ID_COOKIE, mintDeviceId } from "@/lib/device";
 import {
   RateLimitUnavailableError,
@@ -538,6 +539,47 @@ describe("what a sign-in ends", () => {
     expect(errors.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
       "sign-in tidy failed: Error: database went away",
     );
+  });
+
+  it("does not write the arguments of a Prisma call that failed the tidy to the log", async () => {
+    // The tidy's arguments include the new session's token
+    // (`NOT: { token: newToken }`), and a validation error prints them.
+    const { sessions } = fakeSessions(undefined, async () => {
+      throw new Prisma.PrismaClientValidationError(
+        [
+          "",
+          "Invalid `prisma.session.deleteMany()` invocation:",
+          "",
+          "{",
+          "  where: {",
+          '    userId: "user-1",',
+          "    NOT: {",
+          '      token: "MARKERTOKEN"',
+          "    },",
+          '    createdAt: "not a date"',
+          "               ~~~~~~~~~~~~",
+          "  }",
+          "}",
+          "",
+          "Invalid value for argument `createdAt`: premature end of input. Expected ISO-8601 DateTime.",
+        ].join("\n"),
+        { clientVersion: "6.19.3" },
+      );
+    });
+
+    const response = await handleAuthRequest(signInRequest(), {
+      handler: fakeHandler(signedIn).handler,
+      limiter: fakeLimiter().limiter,
+      sessions,
+    });
+
+    expect(response.status).toBe(200);
+    const logged = errors.mock.calls.flat().map(String).join("\n");
+    expect(logged).not.toContain("MARKERTOKEN");
+    // What is left still says which call failed, and why.
+    expect(logged).toContain("sign-in tidy failed: PrismaClientValidationError (Prisma 6.19.3)");
+    expect(logged).toContain("Invalid `prisma.session.deleteMany()` invocation");
+    expect(logged).toContain("Invalid value for argument `createdAt`");
   });
 });
 

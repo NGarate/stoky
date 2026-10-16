@@ -2298,6 +2298,16 @@ message, the "database is down" line, which names host and port but not the
 credentials. Anything that is not a Prisma error is logged as before. The
 tRPC `errorFormatter`, the receipt pipeline's background processing and the
 start-up sweep of receipts a restart interrupted all log through it; `src/__tests__/unit/log-error.test.ts` checks each kind.
+So do the two auth lines that write an error as text, through
+`describeErrorLine` — the first line of the description, flattened and still
+cut at 300 characters: what Better Auth's router writes when an endpoint
+throws (`onAPIError.onError` in `src/lib/auth/instance.ts`; the Prisma
+adapter rethrows the client's errors as they are) and what a failed sign-in
+tidy or session ending writes (`quietly` in `src/server/http/auth-handler.ts`,
+whose tidy passes the new session's token as an argument). Both had written
+`name: message` until 2026-10-16; `unit/auth-log.test.ts` and
+`unit/auth-handler.test.ts` feed each a validation error carrying a marker and
+went red with the marker on the line before the change.
 
 ### ~~Household roles are decorative~~ — this section was false
 

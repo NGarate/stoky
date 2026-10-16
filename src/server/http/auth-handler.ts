@@ -22,6 +22,7 @@ import type { PresentedSession, SignInTidy } from "@/lib/auth/sign-in-tidy";
 import { deviceIdFromHeaders } from "@/lib/auth/known-devices";
 import { REMEMBER_HEADER } from "@/lib/auth/session-policy";
 import { passkeyNameSchema } from "@/lib/validations/auth";
+import { describeErrorLine } from "@/server/log-error";
 import { MAX_AUTH_BODY_BYTES, readBodyWithin } from "./body-limit";
 import { refuseCrossSite, refuseNonJson } from "./request-guards";
 
@@ -530,13 +531,17 @@ async function tidyQuietly(sessions: SignInSessions, input: SignInTidy): Promise
 /**
  * Runs `work` after an answer has been decided, logging rather than throwing
  * if it fails: what it would have ended still ends on its own clock.
+ *
+ * The failure is a Prisma one more often than not, so it is written through
+ * `describeErrorLine`: a validation error's message carries the call's
+ * arguments, and the tidy's include the new session's token
+ * (`NOT: { token: newToken }` in `src/lib/auth/sign-in-tidy.ts`).
  */
 async function quietly(what: string, work: () => Promise<unknown>): Promise<void> {
   try {
     await work();
   } catch (error) {
-    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    console.error(`[auth] error ${what} failed: ${reason.replace(/\s+/g, " ").slice(0, 300)}`);
+    console.error(`[auth] error ${what} failed: ${describeErrorLine(error).slice(0, 300)}`);
   }
 }
 
