@@ -20,10 +20,10 @@ const STORAGE_KEY = "stoky.shell.user";
  * `/login` matters more than it looks. Signing out (`useEndSession`, behind
  * **Cerrar sesión** and every control that ends this account's sessions from
  * here) purges this device itself before it leaves — but most sessions do not
- * end that way. An idle token expiring, the thirty-day ceiling, or another
- * device ending this account's sessions all end it on the server, and the
- * browser only finds out by being sent to `/login`. Nothing runs on the client
- * before that redirect, so this is the only cleanup those endings get.
+ * end that way. An idle session expiring, the day's or the year's limit, or
+ * another device ending this account's sessions all end it on the server, and
+ * the browser only finds out by being sent to `/login`. Nothing runs on the
+ * client before that redirect, so this is the only cleanup those endings get.
  *
  * **The previous account's saved reads go too**, on `/login` and on a change
  * of account: the allowlisted queries `ReadCache` keeps in `localStorage`

@@ -463,6 +463,13 @@ thirty days after sign-in however active it is (`MAX_SESSION_AGE_S` and the
 `authTime` claim in `src/lib/auth.ts`; `PROGRESS.md` D125; SECURITY.md,
 *Authentication*). The 15 minutes remains the idle timeout.
 
+**Superseded 2026-10-15 (D135, D141).** Sessions are database rows under
+Better Auth, and the limits are `src/lib/auth/session-policy.ts`'s: a browser
+session ends after 15 idle minutes and a day after sign-in at most; a
+remembered one ("Mantener la sesión iniciada") after 90 idle days and a year
+after sign-in at most. Ending a session deletes its row, so revocation bites
+on the next request.
+
 ## 7. Dependency and image posture
 
 **Verified today:**
@@ -1116,7 +1123,7 @@ and *owner* to [Owner actions](#owner-actions).
 | 4 | The identity password rule was documented and never applied; the screens stated a minimum of 8 | 1, low | `3d1c6a6` state the twelve-character password minimum; `65ad102` refuse a password built from the person's own email or name |
 | 5 | `register` and `addMember` reveal whether an address has an account | 2, low | Accepted; `first-user` closes the first after the first account |
 | 6 | `AUTH_SECRET` overrides the `NEXTAUTH_SECRET` the startup guard checks | 1, low | `1db505d` sign sessions with the secret the startup guard checked. Since the switch to Better Auth (2026-10-15, D135) the same holds by naming the key as both `secret` and `secrets`, so `BETTER_AUTH_SECRET(S)` and `AUTH_SECRET` are ignored. The guard and the signer also judge one string: `configuredSecret` trims it for both, since a review of 2026-10-16 found the guard comparing the raw value while the signer trimmed it, so the placeholder with whitespace around it started |
-| 7 | No absolute session lifetime; signing out does not invalidate a copied token | 1, low | `eed8b82` end every session thirty days after sign-in (D125). Per-session sign-out: accepted. Both superseded 2026-10-15 (D135): a day from sign-in for a browser session, and signing out deletes the session's row, so a copied cookie is refused |
+| 7 | No absolute session lifetime; signing out does not invalidate a copied token | 1, low | `eed8b82` end every session thirty days after sign-in (D125). Per-session sign-out: accepted. Both superseded 2026-10-15 (D135): a day from sign-in for a browser session, or a year for a remembered session (D141), and signing out deletes the session's row, so a copied cookie is refused |
 | 8 | Cross-site requests rest on `SameSite=Lax` alone: tRPC takes multipart bodies, and input-less mutations take any input | 3, low | `5ebbd85` refuse cross-site and non-JSON requests to tRPC; `9068524` declare void inputs on the mutations that took none. A `__Host-` cookie prefix: rejected (Auth.js already sends `__Secure-` without `Domain`; so does Better Auth since 2026-10-15). The auth API applies the same two refusals since then, and checks `Origin` against every entry of `STOKY_URLS` (formerly `NEXTAUTH_URL`; D135, D138) |
 | 9 | `addMember` runs a 64 MiB Argon2id hash per call, unmetered | 1, medium | `cb4db92` meter adding members, which hashes a password; `8d04349` say a too-common password is the problem on the add-member form (final review) |
 | 10 | IPv6 clients share the bridge gateway's address; once IPv6 is on, one client rotates through its /64 | 1, medium | `a653ab1` rate-limit IPv6 clients by their /64 prefix. The shared default: accepted |
