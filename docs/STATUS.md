@@ -1,6 +1,6 @@
 # Stoky Project Status
 
-Updated: 2026-10-16
+Updated: 2026-10-19
 
 Single source of truth for where the project actually is.
 
@@ -11,6 +11,21 @@ say what measured it.
 ---
 
 ## Gate status
+
+**2026-10-18 both branches landed on `master`.** The security branch (PR #11)
+and the Better Auth branch on top of it (PR #12) landed as `e9d62eb..d68ffd1`:
+156 commits, linear, a fast-forward of `master`. By the owner's decision they
+landed commit by commit rather than as the squash the Git Workflow in
+`CLAUDE.md` describes, because `docs/PROGRESS.md` and `docs/SECURITY_REVIEW.md`
+cite those commits by sha. For the same reason the one commit `master` held
+that was never pushed, the per-commit gate rule, moved to the top as `d68ffd1`
+instead of the branches being rebased beneath it
+(`git log --oneline e9d62eb..d68ffd1`). CI on that push, run 39171435493
+(`gh run view 39171435493`), passed every job: lint, types and contrast;
+unit, component and integration; end-to-end; the dependency audit; the image
+build and its Trivy scan. It also published the image with its provenance
+attestation. The branch records below are what was measured before the
+landing.
 
 **2026-10-16 the Better Auth branch, finished:**
 `feat/better-auth-2026-10-15` replaces next-auth with Better Auth in 56
