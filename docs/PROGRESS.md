@@ -3216,11 +3216,15 @@ for last — an admin cannot reach them at all — and the owner's own never.
   that changes after the page is drawn is refused by the server and said in
   the dialog.
 
+<!-- branch-commits spike/better-auth-2026-10-15 since f8090fe -->
+
 **D148 — Two-step verification with an authenticator app, each code usable
 once.** ASVS 5.0.0 6.5.1 asks that a time-based code be accepted once.
 Better Auth's two-factor plugin accepts any code inside its window as often
 as it is sent — the spike (`1c8156b`) signed in twice with one code — and
 stores nothing that would say a code was used (ISSUES AUTH-5).
+
+<!-- /branch-commits -->
 
 - **The plugin, behind the route's allowlist.** `twoFactor({ issuer: "Stoky"
   })` in `src/lib/auth/instance.ts`, with its defaults: 30-second steps, six
