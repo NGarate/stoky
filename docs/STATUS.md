@@ -353,11 +353,14 @@ config --images` of it prints `ghcr.io/ngarate/stoky:v0.1.0-alpha.3@sha256:81ebf
 and `pull app` succeeds; with `STOKY_VERSION=v0.1.0-alpha.1` it pulls the same
 digest, and with one hex digit of the digest changed it fails with `not found`.
 The newest published release's images are re-scanned every Monday by
-`rescan.yml` with the same scanner and gate (since 2026-10-12; it has not run on
-GitHub yet). Run by hand that day against `v0.1.0-alpha.3`'s images, the gate
-was clean for the application, Valkey and PostgreSQL (gosu left out, measured
-unreachable) and red for `traefik:v3.7.13` with four HIGH Go advisories that
-`v3.7.14` also carries ([Releasing](RELEASING.md#after-publication-weekly-re-scans)).
+`rescan.yml` with the same scanner and gate (since 2026-10-12). Its first
+scheduled run, 39240416468 on 2026-10-19, was clean for the application, Valkey
+and PostgreSQL (gosu left out, measured unreachable) and red for
+`traefik:v3.7.13` with four HIGH Go advisories; it stays red until a release
+ships a fixed Traefik ([Releasing](RELEASING.md#after-publication-weekly-re-scans)).
+On 2026-10-22 `scripts/scan-bundle-images.sh` found `v3.7.14`, then on
+`master`, red with five, and `traefik:v3.7.16` and the rebuilt
+`postgres:16.15-alpine` clean; `master` names those two since.
 
 `bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-08).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
@@ -1254,7 +1257,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | bun | 1.4.3 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:629e1741…`); all application image stages use Bun. Released 2026-10-10, taken on 2026-10-12 for its TLS and HTTP fixes |
 | node | No separate runtime installed in application images; upstream compatibility command resolves to Bun (2026-09-25) |
 | sharp | 0.35.5, **devDependency only** — not shipped, not loaded at runtime |
-| traefik | v3.7.14 — `deploy/docker-compose.yml`, the release bundle's proxy; the newest v3 release on 2026-10-12 (`gh api repos/traefik/traefik/releases`) |
+| traefik | v3.7.16 — `deploy/docker-compose.yml`, the release bundle's proxy; what `traefik:v3` named on 2026-10-22, and clean under `scripts/scan-bundle-images.sh` that day where v3.7.14 had five HIGH |
 
 **The runtime changed on 2026-08-26 and this is the row that says so.** `next
 dev` and `next start` run under `bun --bun` (`b81102d`), the production image

@@ -211,10 +211,11 @@ reused. So:
   `release-draft` rescans the same digest and changes nothing.
 - **A service image.** Point its `image:` line in `deploy/docker-compose.yml`
   at a fixed upstream release and cut a new version. Until upstream ships a fix, the run
-  stays red every week; that is the signal, not noise to silence. On
-  2026-10-12 the run would have been red for this reason: `traefik:v3.7.13`
-  carries four HIGH advisories in Go 1.26.8 and `golang.org/x/net`, published
-  2026-10-08, and `traefik:v3.7.14` carries the same four.
+  stays red every week; that is the signal, not noise to silence. That is
+  what happened to `v0.1.0-alpha.3`: its `traefik:v3.7.13` carries four HIGH
+  advisories in Go 1.26.8 and `golang.org/x/net`, published 2026-10-08, and
+  the first scheduled run, on 2026-10-19, was red for them. `v3.7.14` carried
+  five by 2026-10-22; `v3.7.16`, clean that day, is in the release after it.
 - **Never** widen `skip-files` or add an ignore file to turn a run green. The
   gosu exclusion is a measured decision; another one needs the same evidence,
   and `src/__tests__/unit/ci-workflow.test.ts` refuses any other skip.
