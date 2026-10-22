@@ -114,7 +114,10 @@ git push origin vVERSION
 ```
 
 The `v*` tag runs the complete CI pipeline and validates the package/environment
-version. The image is built and scanned before publication. After all gates pass
+version. The image is built and scanned before publication, and `release-images`
+scans the bundle's PostgreSQL, Valkey and Traefik with `scripts/scan-bundle-images.sh`
+(step 4); `release-draft` needs it, so a fixable CRITICAL or HIGH in any of them
+stops the release before promotion, as one in the application does. After all gates pass
 it is pushed only as `ghcr.io/ngarate/stoky:candidate-vVERSION`; the `release-draft`
 job scans that digest from the registry with Trivy (fixable CRITICAL/HIGH fail
 it), installs it with the shipped Compose file on fresh volumes, and only when

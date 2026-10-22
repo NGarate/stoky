@@ -464,6 +464,62 @@ describe("the CI workflow's release scans the digest it promotes", () => {
   });
 });
 
+// The bundle's service images were scanned only after publication, by
+// rescan.yml: v0.1.0-alpha.3 shipped a Traefik with four HIGH advisories.
+// release-images scans them with the gate's rule on a tag, and release-draft
+// needs it, so a red bundle never becomes a draft.
+describe("the CI workflow's release scans the bundle's service images", () => {
+  type Job = NonNullable<typeof workflow.jobs>[string] & {
+    needs?: unknown;
+    "continue-on-error"?: unknown;
+  };
+  const job = (name: string) => {
+    const found = workflow.jobs?.[name] as Job | undefined;
+    if (!found) throw new Error(`ci.yml has no ${name} job`);
+    return found;
+  };
+  const scanStep = () => {
+    const steps = (job("release-images").steps ?? []).filter(
+      (s) => typeof s.run === "string" && s.run.includes("scripts/scan-bundle-images.sh"),
+    );
+    expect(steps).toHaveLength(1);
+    return steps[0];
+  };
+
+  it("holds the draft until the scan passes", () => {
+    const needs = job("release-draft").needs;
+    expect(Array.isArray(needs) ? needs : [needs]).toContain("release-images");
+    // A needed job that fails or is skipped skips the dependant, unless the
+    // dependant opts out with a status function.
+    expect(String(job("release-draft").if)).not.toMatch(/always\(|failure\(|cancelled\(|!success\(/);
+  });
+
+  it("runs on every tag, and on a pull request, but never on master", () => {
+    const scan = job("release-images");
+    expect(condition(scan.if, run("push", "refs/tags/v0.1.0-alpha.4", "tag"))).toBe(true);
+    expect(condition(scan.if, run("pull_request", "refs/pull/42/merge", "branch"))).toBe(true);
+    expect(condition(scan.if, run("push", "refs/heads/master", "branch"))).toBe(false);
+  });
+
+  it("scans what the bundle names, and cannot be tolerated", () => {
+    const step = scanStep();
+    // No arguments: the images deploy/docker-compose.yml names, not a list
+    // that could leave one out.
+    expect(String(step.run).trim()).toBe("bash scripts/scan-bundle-images.sh");
+    expect(step.if).toBeUndefined();
+    expect(step["continue-on-error"]).toBeUndefined();
+    expect(job("release-images")["continue-on-error"]).toBeUndefined();
+  });
+
+  it("holds no credential: nothing to push, nothing to write", () => {
+    expect(job("release-images").permissions).toBeUndefined();
+    const checkout = (job("release-images").steps ?? []).find(
+      (s) => typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
+    );
+    expect(String(checkout?.with?.["persist-credentials"])).toBe("false");
+  });
+});
+
 // SHA256SUMS comes from the same release as the files it covers, so it detects
 // damage, not replacement: anything holding contents: write can swap a
 // published file and its checksum line together. release-draft therefore

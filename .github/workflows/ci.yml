@@ -717,6 +717,41 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
+  # --------------------------------------------------------- release-images --
+  # The bundle's PostgreSQL, Valkey and Traefik, as deploy/docker-compose.yml
+  # names them, scanned with the release gate's rule: a fixable CRITICAL or
+  # HIGH fails, postgres's gosu the only skip. release-draft waits for it, so a
+  # bundle that would install a known-vulnerable service never becomes a
+  # draft. Until this job they were scanned only by rescan.yml, after
+  # publication: v0.1.0-alpha.3 shipped traefik:v3.7.13 with four HIGH, and
+  # the first signal was a red Monday.
+  #
+  # The script, not trivy-action, so a maintainer runs the same check before
+  # the tag (RELEASING.md step 4): Trivy pinned by digest in its own container,
+  # its database fetched per run, nothing from the Actions cache.
+  #
+  # On a pull request too, where it is information rather than a gate: a
+  # Dependabot bump of a bundle image learns before its merge whether the next
+  # release could ship it. Never on master, whose image does not run these
+  # services, and whose runs must stay red only for master's own reasons.
+  release-images:
+    name: Scan the bundle's service images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.ref_type == 'tag' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      # `no-cache` for the reason every job here downloads Bun on a tag. The
+      # script reads the Compose file's JSON with it.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+      - name: Fail on critical or high findings in the bundle's images
+        run: bash scripts/scan-bundle-images.sh
+
   # ---------------------------------------------------------- release-draft --
   # The release becomes reviewable only after all gates and its image push.
   # Publishing the draft is the maintainer's last step after an install smoke.
@@ -724,7 +759,9 @@ jobs:
     name: Prepare release draft
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: [image-publish]
+    # release-images is a needed job, so a red or skipped scan skips this one:
+    # no promotion, no draft. It must never opt into always().
+    needs: [image-publish, release-images]
     if: github.ref_type == 'tag'
     permissions:
       contents: write

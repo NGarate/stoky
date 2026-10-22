@@ -1482,6 +1482,15 @@ Verified against the files named in each row.
   or the Bun binary itself. [Releasing](docs/RELEASING.md#after-publication-weekly-re-scans)
   says what a red run asks for. `ci-workflow.test.ts` holds the schedule, the
   permissions, the pins and the gate.
+- **A release's service images are scanned before its draft exists.** On a
+  tag, `ci.yml`'s `release-images` job runs `scripts/scan-bundle-images.sh`
+  over the PostgreSQL, Valkey and Traefik images `deploy/docker-compose.yml`
+  names, with the same rule (Trivy 0.69.3 pinned by digest, from the registry,
+  no cache, fixable CRITICAL/HIGH, gosu the only skip), and `release-draft`
+  needs it: a red bundle is never promoted or packaged. It runs on pull
+  requests too, as information. Before it, these images were first scanned by
+  the weekly re-scan, after publication; `v0.1.0-alpha.3` shipped
+  `traefik:v3.7.13` with four HIGH advisories that way.
 - **A package version younger than three days is not installed.** `bunfig.toml`
   sets `[install] minimumReleaseAge = 259200`, so `bun add`, `bun update` and
   any install that resolves something new skip versions, direct or transitive,
