@@ -283,6 +283,26 @@ Without a signed-in GitHub CLI the command exits 4 at `gh auth login` before
 checking anything, which is why `SECURITY.md` keeps it optional and the
 account-free install path relies on `SHA256SUMS`.
 
+**2026-10-22 fourth-alpha preparation:** `v0.1.0-alpha.4` ships the
+Better Auth migration, the 2026-10-12 security review, Next.js 16.4.2 (two
+critical and one high advisory published that day against 16.4.0, which
+alpha.3 runs) and the bundle's Traefik v3.7.16. It is the first release cut
+with the service-image gate (`release-images`), the generated change list and
+the notes check. Measured before the tag, on the tree it is cut from: `bun run
+verify:ci` passes in 247 seconds (1823 unit, 1066 component, 852 integration,
+build); `bun run test:e2e` passes **205/205 in 3.4 minutes**;
+`scripts/scan-bundle-images.sh` is clean for the three service images; and pull
+request #13's CI run of the same commits passed every job.
+**The upgrade from a real alpha.3 installation was run end to end**: alpha.3's
+own files, `install.sh` and GHCR image, two accounts, then the notes' steps
+with a production image built from `e542bd4`. The new `install.sh` renamed the
+secret and added `STOKY_REGISTRATION` but left `STOKY_VERSION`, which the
+notes now say; the seven auth migrations applied; both accounts signed in with
+their alpha.3 passwords; `/register` was closed; Traefik v3.7.16 served the
+security headers and refused TLS 1.1. Not exercised locally: ports 80/443 (TLS
+on this host's 443 belongs to Tailscale) and ACME; the tag's CI smoke runs the
+published image through the published Compose file.
+
 **2026-10-11 third-alpha preparation:** `v0.1.0-alpha.3` changes installation,
 not the application: `git diff v0.1.0-alpha.2` touches no file under `src/`
 outside tests, nor `prisma/`, the `Dockerfile`, dependencies, or the Compose and
