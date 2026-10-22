@@ -42,6 +42,18 @@ attestation and anonymous-pull steps below depend on that (see
    migration and release note, not a refresh. The release smoke then runs the
    builds operators will pull. `src/__tests__/unit/deployment.test.ts` fails if
    a service image loses its digest or goes back to a bare major tag.
+
+   Then scan them with the release gate's scanner and rule — Trivy 0.69.3,
+   pinned by digest and run in its own container, fixable CRITICAL or HIGH
+   fails, postgres's gosu left out:
+
+   ```bash
+   bash scripts/scan-bundle-images.sh                         # what deploy/docker-compose.yml names
+   bash scripts/scan-bundle-images.sh traefik:v3.7.16@sha256:…   # candidates, before moving a pin
+   ```
+
+   A red image is not refreshed into the bundle. If no release of the same
+   major is clean, the release waits for upstream; never widen the skip.
 5. Run `bun run verify:ci`, `bash scripts/check-ci.sh`, and the full Playwright suite
    for a release. New tests must be shown to fail against the broken behavior.
 6. Build and test the production image with fresh, isolated volumes. Check migrations,
