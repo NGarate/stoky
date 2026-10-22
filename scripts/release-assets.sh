@@ -76,6 +76,23 @@ if [ ! -s "docs/releases/$RELEASE_TAG.md" ]; then
   exit 1
 fi
 
+# Notes are written as the changes land, in NEXT.md, and become the version's
+# file when it is cut. Left behind, NEXT.md would go on collecting the next
+# release's changes under this one's.
+if [ -e docs/releases/NEXT.md ]; then
+  echo "Error: docs/releases/NEXT.md is still there. Make it this release's notes:" >&2
+  echo "  git mv docs/releases/NEXT.md docs/releases/$RELEASE_TAG.md" >&2
+  exit 1
+fi
+
+# The change list must be the one the commits since the previous release
+# give: nothing shipped left out, nothing listed that is not shipped. It needs
+# the history back to that tag, which a depth-1 checkout does not have.
+if ! bun scripts/release-notes.ts --check "docs/releases/$RELEASE_TAG.md" "$RELEASE_TAG"; then
+  echo "Error: docs/releases/$RELEASE_TAG.md does not carry its release's change list (above)." >&2
+  exit 1
+fi
+
 mkdir -p "$ASSET_DIR"
 # The templates link to the guide on master, which is right for a checkout and
 # wrong for a download: once the next release lands, master's guide describes

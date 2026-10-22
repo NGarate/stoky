@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,14 @@ import { join } from "node:path";
 const root = join(import.meta.dir, "..", "..", "..");
 const fixtures: string[] = [];
 const tag = "v0.1.0-alpha.1";
+const previous = "v0.0.8";
+const gitIdentity = {
+  GIT_AUTHOR_NAME: "Test",
+  GIT_AUTHOR_EMAIL: "test@example.invalid",
+  GIT_COMMITTER_NAME: "Test",
+  GIT_COMMITTER_EMAIL: "test@example.invalid",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+};
 const digest = `sha256:${"0123456789abcdef".repeat(4)}`;
 const guide = (ref: string) => `https://github.com/NGarate/stoky/blob/${ref}/docs/INSTALL.md`;
 // The shape of deploy/docker-compose.yml's application line: quoted, with the
@@ -28,6 +37,10 @@ function setup(
     notes?: boolean;
     guideVersion?: string;
     appLines?: string[];
+    /** Notes with no generated change list. */
+    unlisted?: boolean;
+    /** A NEXT.md left beside the version's notes. */
+    next?: boolean;
   } = {},
 ) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-release-"));
@@ -36,6 +49,14 @@ function setup(
     mkdirSync(join(fixture, directory), { recursive: true });
   }
   copyFileSync(join(root, "scripts/release-assets.sh"), join(fixture, "scripts/release-assets.sh"));
+  copyFileSync(join(root, "scripts/release-notes.ts"), join(fixture, "scripts/release-notes.ts"));
+  // A history for the change list: a previous release, then one change.
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: fixture, encoding: "utf8", env: { ...process.env, ...gitIdentity } });
+  git("init", "-q", "-b", "master");
+  git("commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", "chore: start");
+  git("tag", previous);
+  git("commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", "feat(inventory): the first alpha");
   // Project-owned release tooling must also work on a host with only Bun.
   writeFileSync(join(fixture, "bin/node"), "#!/bin/sh\necho 'Node must not be used' >&2\nexit 99\n", { mode: 0o755 });
   writeFileSync(join(fixture, "package.json"), JSON.stringify({ version: options.packageVersion ?? "0.1.0-alpha.1" }));
@@ -51,7 +72,13 @@ function setup(
   const guideVersion = options.guideVersion ?? tag;
   writeFileSync(join(fixture, "docs/INSTALL.md"), `This guide is for **${guideVersion}**.\n\ngh release download ${guideVersion}\n`);
   writeFileSync(join(fixture, "README.md"), `Status: ${tag}. See [notes](docs/releases/${tag}.md).\n`);
-  if (options.notes !== false) writeFileSync(join(fixture, `docs/releases/${tag}.md`), "First alpha.\n");
+  if (options.notes !== false) {
+    const list = options.unlisted
+      ? ""
+      : execFileSync("bun", [join(fixture, "scripts/release-notes.ts"), previous, tag], { cwd: fixture, encoding: "utf8" });
+    writeFileSync(join(fixture, `docs/releases/${tag}.md`), `First alpha.\n\n## Qué ha cambiado\n\n${list}`);
+  }
+  if (options.next) writeFileSync(join(fixture, "docs/releases/NEXT.md"), "The next one.\n");
   const output = join(fixture, "download");
   return {
     fixture,
@@ -191,6 +218,34 @@ describe("release installation assets", () => {
     expect(existsSync(output)).toBe(false);
   });
 
+  it("refuses while NEXT.md has not become the version's notes", () => {
+    const { output, run } = setup({ next: true });
+    const result = run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(`git mv docs/releases/NEXT.md docs/releases/${tag}.md`);
+    expect(existsSync(output)).toBe(false);
+  });
+
+  it("refuses notes that carry no change list", () => {
+    const { output, run } = setup({ unlisted: true });
+    const result = run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("does not carry its release's change list");
+    expect(existsSync(output)).toBe(false);
+  });
+
+  it("refuses a change list that misses a commit the release ships", () => {
+    const { fixture, output, run } = setup();
+    execFileSync("git", ["commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", "fix(receipts): a late fix"], {
+      cwd: fixture,
+      env: { ...process.env, ...gitIdentity },
+    });
+    const result = run();
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(`bun scripts/release-notes.ts ${previous} ${tag}`);
+    expect(existsSync(output)).toBe(false);
+  });
+
   for (const releaseTag of ["latest", "v1/../../secret", "v0.1.0+build.1"]) {
     it(`rejects unsupported tag ${releaseTag}`, () => {
       const { output, run } = setup();
@@ -239,6 +294,16 @@ describe("the CI workflow's packaging", () => {
     expect(result.exitCode).toBe(0);
     return readFileSync(join(runnerTemp, "release/docker-compose.yml"), "utf8");
   };
+
+  // The change-list check reads the commits back to the previous release's
+  // tag; at depth 1 it would fail every tag, or worse, be loosened to pass.
+  it.each(["quality", "release-draft"])("checks out the full history where it packages: %s", (job) => {
+    const checkout = (ci.jobs[job]?.steps ?? []).find(
+      (s) => typeof (s as { uses?: string }).uses === "string" && (s as { uses: string }).uses.startsWith("actions/checkout@"),
+    ) as { with?: Record<string, unknown> } | undefined;
+    expect(checkout).toBeDefined();
+    expect(String(checkout?.with?.["fetch-depth"])).toBe("0");
+  });
 
   it("validates a tag with a digest-shaped placeholder, before any image exists", () => {
     const packaged = runStep(packaging("quality").step);

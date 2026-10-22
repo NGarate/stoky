@@ -16,9 +16,14 @@ attestation and anonymous-pull steps below depend on that (see
    tag: it requires `STOKY_VERSION` from `.env`, so `example.env` is the one place
    the bundle names the image, and `install.sh` names the release it downloads.
    Commit no secrets.
-2. Write `docs/releases/vVERSION.md`, Spanish first, in the shape Immich's
-   releases use, because it puts what an operator must do before what is
-   new:
+2. Make `docs/releases/NEXT.md` this version's notes:
+   `git mv docs/releases/NEXT.md docs/releases/vVERSION.md`. NEXT.md is
+   written as the changes land, in the commit that makes each one visible to
+   a household or an operator, so cutting a release is a rename and a read
+   rather than an archaeology of the log; whoever lands the first such change
+   after a release creates it. The notes are Spanish first, in the shape
+   Immich's releases use, because it puts what an operator must do before
+   what is new:
    - **Alerts first.** A GitHub `> [!WARNING]` for anything that breaks an
      upgrade done the usual way, `> [!CAUTION]` for a security fix to take
      now, `> [!NOTE]` for context. None when there is nothing to say.
@@ -89,7 +94,10 @@ attestation and anonymous-pull steps below depend on that (see
 7. Package locally: `bash scripts/release-assets.sh vVERSION /tmp/stoky-release-assets
    "sha256:$(printf '%064d' 0)"`.
    The script rejects version mismatches (package, `example.env`, `install.sh`, and any version
-   named in `docs/INSTALL.md` or `README.md`) and missing notes, pins the assets'
+   named in `docs/INSTALL.md` or `README.md`), missing notes, a `NEXT.md` not yet
+   renamed, and notes whose change list is not the one
+   `scripts/release-notes.ts` gives for the commits since the previous tag
+   (it reads that history, so a checkout must be full); it pins the assets'
    guide links to the tag, and produces `SHA256SUMS`. Its third argument is the
    image digest the packaged Compose file names (`…:${STOKY_VERSION}@sha256:…`).
    Before the tag no image exists, so a local check passes a placeholder, as the

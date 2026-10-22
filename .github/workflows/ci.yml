@@ -769,9 +769,13 @@ jobs:
       id-token: write # provenance attestation of the installation files
       attestations: write
     steps:
+      # Full history: release-assets.sh checks the notes' change list against
+      # the commits since the previous release's tag, which a depth-1
+      # checkout does not have. quality's checkout is full for the same call.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+          fetch-depth: 0
       # Downloaded, never restored from the Actions cache. setup-bun's cache key
       # is the same in every job, and every job of a master run holds the token
       # that writes the cache — e2e included, whose container holds the
