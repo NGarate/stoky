@@ -212,7 +212,8 @@ upgrades and troubleshooting. Owns the self-hosted installation path.
 
 **[`RELEASING.md`](RELEASING.md)**
 Maintainer checklist for versioning, verification, tagging and publishing. Release
-notes live in `docs/releases/` and describe the specific tagged version. Also
+notes live in `docs/releases/` and describe the specific tagged version; the
+next version's are written in `docs/releases/NEXT.md` as its changes land. Also
 owns the GitHub repository settings the release depends on, and the drift check
 (`scripts/github-settings.ts`) that holds them.
 
