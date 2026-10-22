@@ -193,9 +193,10 @@ Desde `v0.1.0-alpha.3`. Si vienes de una versión anterior, sigue antes las
    cd ../tu-instalacion && chmod 644 traefik.yml
    ```
 
-4. Actualiza `.env`. Con los archivos ya copiados, `bash install.sh` lo hace por
-   ti: renombra el secreto conservando su valor y añade los ajustes que falten,
-   sin cambiar ninguno que ya tengas. Si prefieres hacerlo a mano:
+4. Actualiza `.env`. Con los archivos ya copiados, `bash install.sh` hace casi
+   todo: renombra el secreto conservando su valor y añade los ajustes que
+   falten, sin cambiar ninguno que ya tengas. **`STOKY_VERSION` no lo cambia**
+   (avisa de que no coincide): cámbialo tú. A mano, todo junto:
 
    ```diff
    - STOKY_VERSION=v0.1.0-alpha.3
@@ -260,9 +261,34 @@ secretos ni tickets con datos personales, y las vulnerabilidades por el
 
 ## Verificación
 
-Se completa al preparar la versión con lo que se haya probado de verdad: la
-instalación limpia, la actualización desde un `.env` de alpha.3 y lo que haga
-la CI en el tag.
+**Actualización desde alpha.3, probada el 2026-10-22** con una instalación real
+de `v0.1.0-alpha.3` (sus archivos publicados, su `install.sh` y su imagen de
+GHCR). En ella se crearon dos cuentas y después se siguieron los pasos de
+[Cómo actualizar](#cómo-actualizar) con una imagen de producción compilada desde
+el código de esta versión.
+
+* El `install.sh` nuevo renombró `NEXTAUTH_SECRET → STOKY_SECRET` y añadió
+  `STOKY_REGISTRATION=first-user`. El paso 4 dice que no toca `STOKY_VERSION`
+  porque así se observó.
+* Se aplicaron las siete migraciones de inicio de sesión, y los cuatro
+  servicios arrancaron sanos con Traefik `v3.7.16` y la reconstrucción de
+  PostgreSQL 16.15.
+* Las dos cuentas entraron con su contraseña de alpha.3 (200); una contraseña
+  incorrecta se rechazó (401).
+* Las contraseñas pasaron a `Account` y la columna antigua desapareció.
+* `/register` aparece cerrado, y no hubo avisos `[config]`.
+* Las cabeceras de seguridad están presentes, sin `preload` en HSTS, y TLS 1.1
+  se rechaza.
+
+Lo que no se probó así: el proxy en los puertos 80/443 reales (este equipo
+tiene el 443 ocupado) y la emisión de certificados de Let's Encrypt, que
+depende de tu dominio. La CI del tag arranca la imagen publicada con el Compose
+publicado, a través de Traefik y en volúmenes nuevos, antes de etiquetarla.
+
+Antes del tag, `bun run verify:ci` y `bun run test:e2e` (205 pruebas en
+Chromium, Firefox, WebKit y Mobile Safari) pasaron completos, y
+`scripts/scan-bundle-images.sh` salió limpio para las tres imágenes de
+servicio.
 
 ## Qué ha cambiado
 
@@ -274,6 +300,8 @@ Se genera al preparar la versión:
 **Upgrading changes how people sign in and cannot be undone by going back to
 the previous image: back up first.** Replacing `STOKY_VERSION` alone no longer
 upgrades; replace `docker-compose.yml` and `traefik.yml` too (steps above).
+`install.sh` renames the secret and adds `STOKY_REGISTRATION`, but leaves
+`STOKY_VERSION` for you to set.
 
 New: two-step verification with single-use authenticator codes and hashed
 backup codes; passkeys (at the first address in `STOKY_URLS`); a device list
