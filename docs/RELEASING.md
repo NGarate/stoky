@@ -258,6 +258,16 @@ reused. So:
   gosu exclusion is a measured decision; another one needs the same evidence,
   and `src/__tests__/unit/ci-workflow.test.ts` refuses any other skip.
 
+The same run's `notes` job compares every published release's notes with
+`docs/releases/<tag>.md` (`scripts/check-published-notes.sh`; line endings and
+trailing blank lines aside). The file is the source: correct it there, then
+copy it to the release, which is the step that once went missing — the
+v0.1.0-alpha.2 recovery steps were fixed in the file on 2026-10-12 and still
+wrong on GitHub on 2026-10-22. A red `notes` job names the release and the
+command, `gh release edit vVERSION --notes-file docs/releases/vVERSION.md`.
+Notes stay editable after publication with immutable releases on. Run it by
+hand with `bash scripts/check-published-notes.sh`.
+
 In a public repository GitHub disables a schedule after 60 days without
 repository activity, which on a quiet trunk is exactly when it is needed.
 `gh workflow list --all --repo NGarate/stoky` shows its state, which must be

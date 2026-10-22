@@ -881,6 +881,25 @@ describe("the weekly rescan of the published release", () => {
     expect(trivyEnv).toEqual([]);
   });
 
+  // The published copy of a release's notes drifted from its file once (the
+  // v0.1.0-alpha.2 recovery steps), and nothing said so for ten days.
+  it("compares every published release's notes with its file, untolerated", () => {
+    const runs = Object.entries(jobs).flatMap(([name, job]) =>
+      (job.steps ?? [])
+        .filter((s) => typeof s.run === "string" && s.run.includes("scripts/check-published-notes.sh"))
+        .map((step) => ({ name, job, step })),
+    );
+    expect(runs).toHaveLength(1);
+    const [{ job, step }] = runs;
+    expect(String(step.run).trim()).toBe("bash scripts/check-published-notes.sh");
+    expect(step.if).toBeUndefined();
+    expect((step as { "continue-on-error"?: unknown })["continue-on-error"]).toBeUndefined();
+    expect(job.if).toBeUndefined();
+    expect(job["continue-on-error"]).toBeUndefined();
+    expect(job.needs).toBeUndefined();
+    expect(job.permissions).toBeUndefined();
+  });
+
   it("uploads a report per image, apart from master's, wherever GitHub accepts it", () => {
     const upload = steps.find(
       (s) =>

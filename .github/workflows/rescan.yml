@@ -9,6 +9,9 @@ name: Rescan
 # Compose file names, the application and every service — and fails on a fixable
 # CRITICAL or HIGH finding, so the failure reaches the owner.
 #
+# A second job compares every published release's notes with the file they
+# were made from (notes, below).
+#
 # GitHub sends a scheduled run's failure to the user who last modified the cron
 # line, and disables the schedule of a public repository after 60 days without
 # repository activity. RELEASING.md says what to do with a red run.
@@ -159,3 +162,24 @@ jobs:
           skip-files: usr/local/bin/gosu
           cache: false
           version: v0.69.3
+
+  # ------------------------------------------------------------------- notes --
+  # Every published release's notes on GitHub against docs/releases/<tag>.md,
+  # the file release-draft created them from. A correction is made in the file
+  # and copied to the release by hand; nothing noticed when the copy was not
+  # made, and the v0.1.0-alpha.2 recovery steps stayed wrong on GitHub for ten
+  # days. Weekly, here, so a stale release fails where a red scan does.
+  # Reads the default branch's files, which is where corrections land.
+  notes:
+    name: Published notes match docs/releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Compare every published release's notes with its file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/check-published-notes.sh
