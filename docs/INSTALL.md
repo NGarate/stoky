@@ -1,6 +1,6 @@
 # Install Stoky with Docker Compose
 
-This guide is for **v0.1.0-alpha.3**, the third testing release. Keep backups;
+This guide is for **v0.1.0-alpha.4**, the fourth testing release. Keep backups;
 alpha upgrades can change the database and may require manual migration steps.
 For development from source, use [Local Bootstrap](LOCAL_BOOTSTRAP.md).
 
@@ -27,14 +27,12 @@ and Traefik. You do not need Git, Node.js, Bun or a local build.
 - `curl`, `openssl`, `sha256sum` and a text editor. No GitHub account is needed:
   the release files and the image download anonymously.
 
-From the release after v0.1.0-alpha.3, registration is closed after the first
+Registration is closed after the first
 account. The person who installs Stoky registers first and becomes the owner of
 the household; everyone else is added by them from **Configuración → Personas
-del hogar**. `STOKY_REGISTRATION` in `.env` changes that (step 2).
-**v0.1.0-alpha.3 itself has no such switch:** anyone who can reach it can
-register, each with a household of their own, so restrict access to people you
-trust at your network or proxy boundary. Read [Security](../SECURITY.md) before
-deployment.
+del hogar**. `STOKY_REGISTRATION` in `.env` changes that (step 2). This is
+still an alpha: restrict access to people you trust at your network or proxy
+boundary, and read [Security](../SECURITY.md) before deployment.
 
 ## 1. Download and prepare the release files
 
@@ -58,7 +56,7 @@ upgrade, below), and **never starts anything**: you review `.env` and start
 Stoky yourself in step 3. Running it again is safe.
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.3
+STOKY_RELEASE=v0.1.0-alpha.4
 for asset in install.sh SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
@@ -73,10 +71,10 @@ bash install.sh
 damaged download, not a replaced one: `SHA256SUMS` comes from the same place as
 the file. If you have the GitHub CLI, [check who published the
 files](#optional-check-who-published-the-files) between `sha256sum -c` and
-`bash install.sh`; from the release after v0.1.0-alpha.3 that catches a
+`bash install.sh`; that catches a
 replaced one too. The `--proto` and
 `--tlsv1.2` flags keep every hop on HTTPS with TLS 1.2 or later, GitHub's
-redirect included. From the release after v0.1.0-alpha.3, `install.sh` passes
+redirect included. `install.sh` passes
 `--proto-redir '=https' --tlsv1.2` to its own downloads. The script installs
 the release it came with. Continue with step 2: only `DOMAIN` and `ACME_EMAIL`
 are left.
@@ -87,7 +85,7 @@ Download the exact alpha by its tag. Prereleases are not available through
 GitHub's `releases/latest/download` URL.
 
 ```bash
-STOKY_RELEASE=v0.1.0-alpha.3
+STOKY_RELEASE=v0.1.0-alpha.4
 for asset in docker-compose.yml example.env traefik.yml SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
     --output "$asset" \
@@ -108,8 +106,7 @@ starts without its routes and answers every request with `404 page not found`.
 and environment files from the release, never from `master`: `master` may
 already describe the next release. Checksums detect damaged/mismatched files;
 they are not a separate signature of the publisher, which the
-[attestation below](#optional-check-who-published-the-files) is. Releases after
-v0.1.0-alpha.3 also fix the image through them: the Compose file names it by
+[attestation below](#optional-check-who-published-the-files) is. They also fix the image: the Compose file names it by
 digest as well as tag (`…:${STOKY_VERSION}@sha256:…`), so a tag moved on the
 registry later does not change what you pull. To check who built that image,
 see [Verifying an image's provenance](../SECURITY.md#verifying-an-images-provenance).
@@ -117,8 +114,8 @@ see [Verifying an image's provenance](../SECURITY.md#verifying-an-images-provena
 ### Optional: check who published the files
 
 `SHA256SUMS` comes from the same release as the files it covers, so a writer who
-replaced a file could replace its checksum line too. Releases after
-v0.1.0-alpha.3 also carry a signed provenance attestation for each installation
+replaced a file could replace its checksum line too. A release also carries
+a signed provenance attestation for each installation
 file, `SHA256SUMS` included, made by the CI run of the release tag and stored by
 GitHub rather than in the release. With the [GitHub CLI](https://cli.github.com/)
 signed in to any GitHub account (`gh auth login`), in the directory you
@@ -137,9 +134,7 @@ without changing anything if the `SHA256SUMS` it downloads differs from the one
 already in the directory. Any single file verifies the same way
 (`gh attestation verify install.sh …`). `--source-ref` is what ties the file to
 the tag you chose; `--repo` alone accepts any run of the repository.
-v0.1.0-alpha.3 was packaged before CI attested its files, so for it the command
-fails with `HTTP 404` from the attestations API and the checksums are the only
-check. For any later release, a missing attestation or a failed verification
+A missing attestation or a failed verification
 means do not install those files; report it as a
 [vulnerability](../SECURITY.md#reporting-a-vulnerability).
 
@@ -158,13 +153,13 @@ Open `.env` in your editor and fill in:
 
 | Setting | Value |
 |---|---|
-| `STOKY_VERSION` | Keep `v0.1.0-alpha.3` for this release |
+| `STOKY_VERSION` | Keep `v0.1.0-alpha.4` for this release |
 | `DOMAIN` | The hostname alone, for example `stoky.example.com`; no scheme or path |
 | `ACME_EMAIL` | Your email address for Let's Encrypt |
 | `POSTGRES_PASSWORD` | The first generated hex value |
-| `STOKY_SECRET` (`NEXTAUTH_SECRET` in v0.1.0-alpha.3's files) | The second generated hex value |
+| `STOKY_SECRET` | The second generated hex value |
 
-From the release after v0.1.0-alpha.3, `.env` also carries
+`.env` also carries
 `STOKY_REGISTRATION`, which decides who may create an account at `/register`:
 
 | Value | Who may register |
@@ -181,23 +176,21 @@ form as soon as the first account exists.
 An unknown value, such as `Open` or `true`, stops the app starting, with the
 reason in `docker compose logs app`; it never falls back to `open`. To change it
 later, edit `.env` and run `docker compose up -d --wait` again.
-v0.1.0-alpha.3's files have no such setting, and adding the line to its `.env`
-changes nothing: registration there stays open to anyone (see Requirements).
 
 Use hex for the database password: it is inserted into a connection URL without
 percent-encoding. Do not reuse the development `.env.example`. Rotating the
 session secret signs everybody out, changes every account tag in the
 security log and makes every authenticator app unreadable (see
-[Rotating `STOKY_SECRET`](#rotating-stoky_secret)). From the release after v0.1.0-alpha.3 the secret is called
-`STOKY_SECRET`; the old name, `NEXTAUTH_SECRET`, is still read when
+[Rotating `STOKY_SECRET`](#rotating-stoky_secret)). An `.env` from an earlier
+release may still call it `NEXTAUTH_SECRET`. That name is read while
 `STOKY_SECRET` is unset, with a `[config]` warning at start-up, until a later
-release stops reading it (see [Upgrade and rollback](#upgrade-and-rollback)).
+release stops reading it: rename the key and keep its value.
 
 The bundle derives `DATABASE_URL`, `VALKEY_URL` and the instance's address
 itself, so you do not edit them; the address is `https://` and `DOMAIN`, the
 one host Traefik routes. Outside the bundle — a source install, or one behind
-your own proxy — set `STOKY_URLS` (from the release after v0.1.0-alpha.3; it
-was `NEXTAUTH_URL`) to every address people type, comma-separated, the
+your own proxy — set `STOKY_URLS` (formerly
+`NEXTAUTH_URL`) to every address people type, comma-separated, the
 canonical one first, for example
 `STOKY_URLS="http://stoky.lan:3000,http://192.168.1.10:3000"`. List only
 addresses that reach this instance: every one is trusted to sign a browser in.
@@ -254,9 +247,9 @@ docker compose logs --tail=100 app traefik
 The application applies the included database migrations before starting;
 there is no manual Prisma command and no demo account to seed.
 
-**Register straight away.** From the release after v0.1.0-alpha.3, with
+**Register straight away.** With
 `first-user`, whoever reaches `https://YOUR_DOMAIN/register` first becomes the
-owner of this installation (on v0.1.0-alpha.3 anyone can register at any time),
+owner of this installation,
 and the hostname is public from the moment its certificate is issued:
 certificates are published in Certificate Transparency logs, which people
 watch for new hosts. Visit `/register`, create your account and provide a
@@ -267,9 +260,17 @@ installation with no data you want to keep), and start step 3 again.
 
 Sign in, add a product, record stock, and upload a JPEG, PNG or WebP receipt.
 Review recognized lines before applying them. Add other household members through
-**Configuración → Personas del hogar**. On v0.1.0-alpha.3, and with
-`STOKY_REGISTRATION=open` after it, a separate registration creates a separate
+**Configuración → Personas del hogar**. With
+`STOKY_REGISTRATION=open`, a separate registration creates a separate
 household.
+
+A session ends after fifteen minutes unused, a day after sign-in however much
+it is used, or when somebody ends it — *Authentication* in
+[SECURITY.md](../SECURITY.md) says why — unless **Mantener la sesión
+iniciada** was ticked at sign-in: then it ends after ninety days unused or a
+year after sign-in. **Sign the kitchen tablet in with that box ticked**, or it
+asks for the password after every fifteen idle minutes; the box is unticked by
+default.
 
 ```bash
 curl --fail --show-error https://YOUR_DOMAIN/api/health
@@ -300,13 +301,12 @@ an `unhealthy` status alone does not automatically restart a running process.
 
 ## Logs
 
-From the release after v0.1.0-alpha.3, every container logs through Docker's
+Every container logs through Docker's
 `json-file` driver, capped at five files of 10 MB each: at most 50 MB on disk
 per container, about 200 MB for the four. Docker's own default keeps
 everything, and anyone who can reach the instance can add lines to the app's
 security log, so the cap is what stops logs from filling the disk.
-v0.1.0-alpha.3's Compose file sets no cap, so there the Docker daemon's own
-logging settings apply, which by default keep everything. Older lines are discarded as new ones arrive, so how far back the logs
+Older lines are discarded as new ones arrive, so how far back the logs
 reach depends on traffic. `docker compose logs` reads all five files; the files
 themselves are under Docker's data directory
 (`docker inspect --format '{{.LogPath}}' stoky-release-app-1`).
@@ -342,13 +342,10 @@ Remove them before you share log lines with anybody.
 
 ## A forgotten password
 
-There is no email, so there is no reset link. From the release after
-v0.1.0-alpha.3, a household admin sets a new password for anyone else in the
+There is no email, so there is no reset link. A household admin sets a new password for anyone else in the
 household from **Configuración → Personas del hogar → Cambiar su contraseña**;
 every session that person had ends, and they change the password from
 **Configuración** once signed in. Only an owner can do this for an owner.
-v0.1.0-alpha.3 has neither screen, so there every forgotten password is set in
-the database as below.
 
 If you are the only owner and have forgotten your own password, set it in the
 database. Run these in the installation directory, replacing the address with
@@ -382,22 +379,9 @@ unset STOKY_HASH
 `psql` must answer `UPDATE 1` to the update, and `DELETE` with the number of
 sessions it ended, which may be 0, then the number of two-step sign-ins in
 progress it ended, usually 0; `UPDATE 0` means no account has that
-address. From the release after v0.1.0-alpha.3 the hash is kept in the
+address. The hash is kept in the
 account's `credential` row of the `Account` table, which is where sign-in reads
-it, and each session is a row of `Session`. On v0.1.0-alpha.3 the hash is
-still a column of `User` and there are no session or verification rows:
-there, replace the three statements with
-
-```sql
-UPDATE "User"
-SET "passwordHash" = :'hash',
-    "sessionsValidFrom" = now() AT TIME ZONE 'UTC',
-    "updatedAt" = now() AT TIME ZONE 'UTC'
-WHERE email = lower(:'email');
-```
-
-The other way round fails safely, with `relation "Session" does not exist` or
-`column "passwordHash" does not exist` and nothing changed.
+it, and each session is a row of `Session`.
 The password is read without echo and passed on standard input, so it stays out
 of your shell history and the process list; `IFS=` keeps any leading or
 trailing space in it, which a plain `read` would drop and sign-in would not. The hash is made by the
@@ -409,7 +393,7 @@ least 12 characters that do not contain your name or address.
 
 ## A lost authenticator
 
-From the release after v0.1.0-alpha.3 an account can ask for a code from an
+An account can ask for a code from an
 authenticator app after its password (two-step verification), set up by each
 person — the kitchen's shared account included — from **Configuración →
 Seguridad y acceso → Verificación en dos pasos**. Somebody who
@@ -460,8 +444,7 @@ the only thing protecting the account.
 
 `STOKY_SECRET` signs every session and encrypts every authenticator secret
 (not the backup codes, which are hashes, nor passkeys, which are public keys),
-so replacing it is not only a new value. From the release after
-v0.1.0-alpha.3, a new value:
+so replacing it is not only a new value. A new value:
 
 - **signs everybody out**, phones and the kitchen screen included: every
   cookie and native token was signed with the old one;
@@ -486,15 +469,14 @@ secret may have leaked, not on a schedule. To do it, generate a new value with
 
 Sign-in allows 10 attempts per account every 15 minutes, counted before the
 password is checked, so once they are spent even the right password is refused.
-From the release after v0.1.0-alpha.3 the person is told "Demasiados intentos
+The person is told "Demasiados intentos
 con esta cuenta. Espera unos minutos; si se repite, avisa a quien administra tu
-hogar." v0.1.0-alpha.3 says "Demasiados intentos desde esta conexión" instead,
-the words of the per-address limit, although another connection does not help.
-From the release after v0.1.0-alpha.3, a browser that has signed in to that
+hogar."
+A browser that has signed in to that
 account before has 5 of its own and is not affected; a new phone, a private
 window or a browser whose cookies were cleared shares the 10 with everyone
 else. So, after updating from a release without this, does every browser until
-its first sign-in since. On v0.1.0-alpha.3 every browser shares the 10.
+its first sign-in since.
 If that keeps happening to a person who is waiting as told, somebody who knows
 their address may be spending those attempts. `docker compose logs app | grep
 auth.signin` shows the addresses the attempts come from.
@@ -554,9 +536,8 @@ Choose one:
   cannot be created and nothing starts: delete the override file and start
   again.
 
-From the release after v0.1.0-alpha.3, Stoky counts an IPv6 client by its
-/64, the smallest block an internet provider gives one connection
-(v0.1.0-alpha.3 counts each address on its own). Devices in one home share a budget, as they do
+Stoky counts an IPv6 client by its
+/64, the smallest block an internet provider gives one connection. Devices in one home share a budget, as they do
 behind one IPv4 router, and nobody gets a fresh budget by changing address
 inside their /64.
 
@@ -577,9 +558,8 @@ IPv4; try another one.
 
 Stoky cannot delete an account. Removing a person from **Personas del hogar**
 takes them out of the household and keeps their account: name, address,
-password hash and language. From the release after v0.1.0-alpha.3 it also
-signs them out on every device at once; on v0.1.0-alpha.3 their browsers stay
-signed in, with every request for household data refused. When somebody asks
+password hash and language. It also
+signs them out on every device at once. When somebody asks
 to be erased, delete the account in the database. Run these in the
 installation directory, replacing the address with the person's:
 
@@ -641,18 +621,14 @@ installation directory, replacing the address with the person's:
    was deleted: no account has that address, or it is the last owner of a
    household that still has other members. It is one statement, so it is one
    transaction: the account, the start screen it chose on each device and its
-   offline replay records go together or not at all. From the release after
-   v0.1.0-alpha.3 the account's password hash, in its `credential` row of the
+   offline replay records go together or not at all. The account's password hash, in its `credential` row of the
    `Account` table, goes with it too: the database deletes that row along with
    the account, so the statement does not name it, and so do its sessions: a
    browser signed in to it is signed out on its next request. Its
    authenticator secret and backup codes, if it set up two-step verification,
    go the same way, and so do its passkeys. A sign-in waiting for its code is a `Verification` row
    that names the deleted `id`; it expires within ten minutes and can no
-   longer become a session. On
-   v0.1.0-alpha.3 a browser still signed in keeps its cookie, but every
-   request it makes for household data is refused; it can still record a
-   start screen, see what stays, below.
+   longer become a session.
 3. The receipts the person uploaded belong to the household and stay, with
    their photographs on the `uploads` volume. To remove those photographs too,
    put the `id` from step 1 in place of `the-id`:
@@ -693,22 +669,6 @@ What stays after these steps:
 - **The receipts' text.** The whole-ticket OCR text can include a masked card
   number, a loyalty number or the cashier's name. It is the household's
   purchase history and stays with each receipt.
-- **A start screen chosen afterwards**, on v0.1.0-alpha.3 only. There a
-  browser still signed in when the account was deleted stays signed in for as
-  long as it keeps being used; from the release after it, the account's
-  sessions are deleted with it. Choosing a start screen there
-  records one under the old `id`, because that does not ask the database
-  whether the account still exists. If the person may have done that, remove
-  it with the `id` from step 1 in place of `the-id`:
-
-  ```bash
-  docker compose exec -T db psql -U stoky -d stoky -v ON_ERROR_STOP=1 \
-    -v id='the-id' <<'SQL'
-  DELETE FROM "ScreenChoice" WHERE "userId" = :'id';
-  SQL
-  ```
-
-  It prints `DELETE` and how many it removed.
 - **Backups and logs.** Backups taken before the deletion still hold the
   account and the photographs until you delete them. The app's log keeps the
   account's `id` and the addresses it signed in from until rotation removes
@@ -784,9 +744,7 @@ docker compose exec -T db psql -U stoky -d stoky -c 'DELETE FROM "Session";'
 docker compose up -d --wait --wait-timeout 180
 ```
 
-The `DELETE` ends every session the backup carried, from the release after
-v0.1.0-alpha.3 (before it there is no `Session` table, and the line answers
-`relation "Session" does not exist`; skip it). A restored instance is a new
+The `DELETE` ends every session the backup carried. A restored instance is a new
 place to sign in to, and a cookie lifted from the old one must not open it.
 Sign in and check inventory and a receipt image. Restoring over existing data is
 not covered by these commands. Never delete the original volumes to test a backup.
@@ -804,8 +762,7 @@ checksums and, with the GitHub CLI, [who published
 them](#optional-check-who-published-the-files), with `STOKY_RELEASE` set to the
 target tag. Compare `example.env` with your `.env`; preserve your secrets. Replace
 the installed Compose and Traefik files with that release's files and set `STOKY_VERSION` to
-its exact tag. The Compose file is what selects the image: from releases after
-v0.1.0-alpha.3 it names it by digest, Docker pulls that digest whatever tag
+its exact tag. The Compose file is what selects the image: it names it by digest, Docker pulls that digest whatever tag
 `STOKY_VERSION` gives, and changing `STOKY_VERSION` alone changes nothing. Then:
 
 ```bash
@@ -825,12 +782,16 @@ installation with the previous image and configuration. A rollback takes the
 previous release's Compose file, not only its tag, and returning to the previous
 image is not by itself a guaranteed rollback.
 
-**Returning to v0.1.0-alpha.3 needs the pre-upgrade dump.** The release after
-it moves every password hash from a column of `User` into a new `Account`
-table and drops the column (`20261015120000_credential_accounts`). The
-v0.1.0-alpha.3 image reads that column, so started against an upgraded
-database it signs nobody in. Restore the backup taken before the upgrade into
-an empty installation of v0.1.0-alpha.3 instead, as above.
+**What an upgrade needs beyond these steps is in the target release's notes**,
+under *Cómo actualizar*: a setting renamed or added (as a diff of `.env`),
+everybody signing in again, or a migration after which the previous release
+can no longer start against the upgraded database, so that returning to it
+needs the pre-upgrade backup. Those depend on the version you come from, so
+this guide, which describes one release, does not repeat them. The new
+release's `install.sh` adds every missing setting to `.env`, and renames an
+old `NEXTAUTH_SECRET` to `STOKY_SECRET` keeping its value, but only once `example.env` and
+`SHA256SUMS` have been replaced along with the Compose and Traefik files:
+against the previous release's copies it stops before it reaches `.env`.
 
 PostgreSQL, Valkey and Traefik change only with a Stoky release. The Compose
 file names each of them by exact version and by digest
@@ -840,60 +801,6 @@ security fixes reach you by upgrading to the release that carries them. Within
 one major version (PostgreSQL 16, Valkey 8) an update keeps the stored data
 format and needs no data migration; a release that changes a major version
 says so, and what to do, in its notes.
-
-**Registration closes on upgrade** to the release after v0.1.0-alpha.3 from a
-release whose `example.env` has no `STOKY_REGISTRATION`, such as
-v0.1.0-alpha.3. When `.env` does not set it, the Compose file uses
-`first-user`, and an existing installation already has accounts, so `/register`
-says registration is closed and shows no form. Add people from
-**Configuración → Personas del hogar**, or, if your installation relies on
-people registering themselves, set `STOKY_REGISTRATION=open` in `.env` before
-`docker compose up`. To have the line in `.env`, add
-`STOKY_REGISTRATION=first-user` yourself; the Compose file uses that value when
-it is absent. The new release's `install.sh` adds every missing setting to
-`.env`, but only when `example.env` and `SHA256SUMS` are replaced along with
-the Compose and Traefik files: against the previous release's copies it stops
-before it reaches `.env`.
-
-**Everybody signs in once after upgrading** to the release after
-v0.1.0-alpha.3. Sessions move from a signed token in the browser to a row in
-the database, and a token from the old release names no row, so each device
-is asked to sign in again the first time it is used; passwords are kept, and
-changes a phone queued offline are kept, as they are whenever a session ends.
-From then on a session ends after fifteen minutes unused, a day after
-sign-in however much it is used, or when somebody ends it — *Authentication*
-in [SECURITY.md](../SECURITY.md) says why — unless **Mantener la sesión
-iniciada** was ticked at sign-in: then it ends after ninety days unused or a
-year after sign-in. **Sign each kitchen tablet in again with that box
-ticked**, or it asks for the password after every fifteen idle minutes; the
-box is unticked by default, and an old session does not become a remembered
-one. If nobody remembers the kitchen account's password, an admin sets a new
-one from **Configuración → Personas del hogar** (see
-[A forgotten password](#a-forgotten-password)). Set `STOKY_URLS` to the addresses
-people use before upgrading a deployment that is not the bundle; the bundle
-sets it from `DOMAIN`.
-
-**`NEXTAUTH_SECRET` is now `STOKY_SECRET`** from the release after
-v0.1.0-alpha.3: names starting `NEXTAUTH_`, `AUTH_` and `BETTER_AUTH_` are read
-by libraries on their own, and Stoky's settings should be read by Stoky alone.
-The new release's `install.sh` renames the line in `.env` and keeps its value,
-printing `renombrado NEXTAUTH_SECRET → STOKY_SECRET`. By hand, rename the key
-and keep the value: generating a new one signs everybody out and changes every
-account tag in the security log. Until the line is renamed the app starts and
-reads the old name, logging `[config] NEXTAUTH_SECRET is deprecated` once at
-start-up; with both set, `STOKY_SECRET` is used and the warning says the other
-is ignored. A later release stops reading the old name. The Compose file no
-longer refuses an empty secret itself: the app does, at start-up, with a line
-naming `STOKY_SECRET`, and `docker compose up --wait` reports the container
-unhealthy.
-
-**`NEXTAUTH_URL` is now `STOKY_URLS`**, a list, from the same release. Bundle
-installs have nothing to do: the Compose file sets it from `DOMAIN`, and
-`.env` never held it. A deployment that is not the bundle renames the line;
-its one URL is a list of one. Until then the app reads `NEXTAUTH_URL`, logging
-`[config] NEXTAUTH_URL is deprecated` once at start-up. An old value with a
-path, such as `https://stoky.example.com/api/auth`, is refused in production:
-keep only the scheme, host and port.
 
 For an existing source-built deployment, first back it up. Keep its Compose
 project name and volume identities; the new bundle assumes database/user `stoky`
@@ -990,18 +897,18 @@ migration again.
 | App keeps restarting and its log says `P3018` or `P3009` | A migration failed; see [A migration stops the upgrade](#a-migration-stops-the-upgrade) before restarting again |
 | TLS error / certificate not issued | DNS A/AAAA records, inbound TCP 443, port conflicts and Traefik logs; an incorrect AAAA record can also break issuance |
 | Sign-in unavailable | Valkey must be healthy; authentication rate limiting fails closed |
-| App exits with `[auth] refusing to start:` | From the release after v0.1.0-alpha.3: the line names the setting to fix — `STOKY_SECRET` unset, the example value or too short; `STOKY_URLS` unset, an entry that is not a bare address, or an https first entry beside plain-HTTP network addresses; `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
-| Log says `[config] NEXTAUTH_SECRET is deprecated` or `[config] NEXTAUTH_URL is deprecated` | From the release after v0.1.0-alpha.3: rename the key to `STOKY_SECRET` or `STOKY_URLS` in `.env`, keeping the value, then `docker compose up -d --wait`. See [Upgrade and rollback](#upgrade-and-rollback) |
-| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | From the release after v0.1.0-alpha.3: the browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the one host Traefik routes. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
+| App exits with `[auth] refusing to start:` | The line names the setting to fix — `STOKY_SECRET` unset, the example value or too short; `STOKY_URLS` unset, an entry that is not a bare address, or an https first entry beside plain-HTTP network addresses; `BETTER_AUTH_TRUSTED_ORIGINS` set, or `BETTER_AUTH_TELEMETRY` on. See step 2 |
+| Log says `[config] NEXTAUTH_SECRET is deprecated` or `[config] NEXTAUTH_URL is deprecated` | The `.env` comes from an earlier release: rename the key to `STOKY_SECRET` or `STOKY_URLS`, keeping the value, then `docker compose up -d --wait` |
+| Sign-in refused with 403 `INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` (the form says the service is unavailable; the app's log says `Invalid origin`) | The browser is at an address `STOKY_URLS` does not list, or a proxy strips `Origin`. Add the address people use to `STOKY_URLS` — only one that reaches this instance — or sign in at a listed one. The bundle lists only `https://` and `DOMAIN`, the one host Traefik routes. In development, `DEV_ALLOWED_ORIGIN` hosts are trusted too |
 | People on IPv6, often on mobile data, are told to wait at sign-in | IPv6 clients share the Docker gateway's budget; see [Clients on IPv6](#clients-on-ipv6) |
 | The right password is told to wait for minutes, again and again | The account's shared attempts are being spent; see [Somebody keeps being told to wait](#somebody-keeps-being-told-to-wait) |
-| Somebody forgot their password | From the release after v0.1.0-alpha.3 an admin sets a new one from **Personas del hogar**; a sole owner's, and anybody's on v0.1.0-alpha.3, is set in the database, see [A forgotten password](#a-forgotten-password) |
-| Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | From the release after v0.1.0-alpha.3: a backup code signs them in; without one, a household admin removes it from **Personas del hogar** — see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
-| Turning two-step verification on or off, or asking for new recovery codes, says there have been too many tries | From the release after v0.1.0-alpha.3: five wrong passwords from one session, or twenty across the account, within 15 minutes; the screen can be used again once that window ends. Wrong passwords are on the log as `auth.reauth.refused` with `"via":"two-factor"` — many of them from a session the person does not recognise means somebody else has it: end it from **Tus dispositivos** |
-| The authenticator app does not take the QR code | From the release after v0.1.0-alpha.3: type the key shown under the code into the app instead, or, on the phone that has the app, use the link beside it. The phone's clock must be right to within a minute |
+| Somebody forgot their password | An admin sets a new one from **Personas del hogar**; a sole owner's is set in the database, see [A forgotten password](#a-forgotten-password) |
+| Somebody lost the phone with their authenticator app, or is told at sign-in that the server can no longer check it | A backup code signs them in; without one, a household admin removes it from **Personas del hogar** — see [A lost authenticator](#a-lost-authenticator). Everybody told so at once means `STOKY_SECRET` changed; see [Rotating `STOKY_SECRET`](#rotating-stoky_secret) |
+| Turning two-step verification on or off, or asking for new recovery codes, says there have been too many tries | Five wrong passwords from one session, or twenty across the account, within 15 minutes; the screen can be used again once that window ends. Wrong passwords are on the log as `auth.reauth.refused` with `"via":"two-factor"` — many of them from a session the person does not recognise means somebody else has it: end it from **Tus dispositivos** |
+| The authenticator app does not take the QR code | Type the key shown under the code into the app instead, or, on the phone that has the app, use the link beside it. The phone's clock must be right to within a minute |
 | Somebody asks to be erased | The application cannot delete an account; see [Deleting somebody's account](#deleting-somebodys-account) |
-| `/register` says registration is closed, with no form | From the release after v0.1.0-alpha.3: expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
-| App exits with `refusing to start: STOKY_REGISTRATION` | From the release after v0.1.0-alpha.3: the value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
+| `/register` says registration is closed, with no form | Expected once an account exists with `first-user`, or always with `closed`; an admin adds people from **Configuración → Personas del hogar**. See `STOKY_REGISTRATION` in step 2 |
+| App exits with `refusing to start: STOKY_REGISTRATION` | The value is not `open`, `first-user` or `closed`; fix `.env`, or remove the line for `first-user` |
 | Upload refused | JPEG/PNG/WebP only, maximum 10 MiB; HEIC/HEIF is unsupported |
 | A scanned code always opens the empty product form | Open Food Facts is not being asked: the app needs outbound HTTPS to `world.openfoodfacts.org`, Valkey must be healthy (a lookup that cannot be counted is not sent), and each account may send 60 lookups an hour for codes this instance has not looked up recently — past that the scan page says so. This bundle does not pass `RATE_LIMIT_PRODUCT_LOOKUP_*` to the app, so the default applies |
 | Empty inventory after moving directory | Check `-p`, `COMPOSE_PROJECT_NAME` and volume names before creating or deleting anything |
@@ -1013,8 +920,7 @@ database dumps, session cookies or unredacted receipt photos.
 **Never share the output of `docker inspect` or of `docker compose config`
 without `--quiet`.** The secrets reach the containers as environment variables,
 and both commands print them: the database password, which is also in
-`DATABASE_URL`, and `STOKY_SECRET` (`NEXTAUTH_SECRET` before the release after
-v0.1.0-alpha.3), which signs every session. Remove client
+`DATABASE_URL`, and `STOKY_SECRET`, which signs every session. Remove client
 addresses and email addresses from log lines before you share them as well.
 
 A security problem is not an issue: report it through the private form in
