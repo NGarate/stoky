@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9 and TEST-10.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-10 and TEST-11.** TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -143,6 +143,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UPLOAD-1 | Receipt photographs have no per-household storage quota | 🟡 Open — deferred by the 2026-10-12 security review |
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
 | TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | 🟡 Open — cause not found; first step is a traced failing run |
+| TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | 🟡 Open — seen once, on master's push of the v0.1.0-alpha.4 preparation; passed on re-run |
 
 ---
 
@@ -1049,6 +1050,39 @@ record says whether it ever failed before the branch.
 **The fix** starts with a failing run under `--trace=retain-on-failure`: the
 trace says whether the offline navigation got the worker's page, the
 browser's own "no internet" page, or a page that went to `/login`.
+
+---
+
+### 🟡 TEST-11: `trpc-links.test.ts` failed once in CI with Next's AsyncLocalStorage invariant
+
+**File:** `src/__tests__/unit/trpc-links.test.ts` (both of its tests)
+**Severity:** LOW — a unit test that failed once; it blocked master's image
+until re-run, which is the cost
+**Status:** OPEN — seen 2026-10-22, cause not found
+
+On master's push of `7fffc6e` (`chore: prepare v0.1.0-alpha.4`), run
+39847700105 attempt 1, both tests failed inside the development image with
+`TRPCClientError: Invariant: AsyncLocalStorage accessed in runtime where it
+is not available`, thrown while `next/dist/server/request/cookies.js` was
+being evaluated (through `work-async-storage.external.js` and
+`app-render/async-local-storage.js:31`). The links under test take a fake
+`fetch` and import nothing of Next's at the top, so something reached
+`next/headers` during the call: a module another file of the same Bun process
+loaded, or replaced, before this one. Attempt 2 of the same run passed, as
+did pull request #13's run of the same tree an hour earlier (39842097176),
+two local `verify:ci` runs of the whole unit suite, and the file alone three
+times in a row.
+
+What is known: the unit suite runs every file in one process, and
+`auth-dynamic`, `capabilities`, `procedure-inputs`, `procedure-input-bounds`
+and `replayable` load server modules that import Next. What is not: which one,
+and why the order or timing that exposes it happens rarely. TEST-7 was the
+same shape (process-wide state leaking between files) with a different
+cause.
+
+**The fix** starts with a reproduction: the unit suite in the image with
+`--randomize` and a fixed `--seed`, repeated until a seed fails; that seed
+names the order, and the file before `trpc-links` in it is the suspect.
 
 ---
 
