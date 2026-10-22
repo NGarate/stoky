@@ -362,7 +362,7 @@ On 2026-10-22 `scripts/scan-bundle-images.sh` found `v3.7.14`, then on
 `master`, red with five, and `traefik:v3.7.16` and the rebuilt
 `postgres:16.15-alpine` clean; `master` names those two since.
 
-`bun audit --audit-level moderate` reports no vulnerabilities across 564 packages (2026-10-08).
+`bun audit --audit-level moderate` reports no vulnerabilities across 598 packages (2026-10-22, after moving Next.js to 16.4.2; with 16.4.0 it reported two critical advisories and a high one, published that day).
 Trivy 0.69.3 (the CI version), with a fresh 2026-09-25 database, scans the Bun-only
 production image with zero fixable HIGH/CRITICAL findings. The image was exported
 and scanned read-only, without exposing the Docker socket to the scanner.
@@ -1244,7 +1244,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 
 | Package | Version |
 |---|---|
-| next | 16.4.0 |
+| next | 16.4.2 — from 16.4.0 on 2026-10-22, for GHSA-p3m5-59mp-jv5r (high, Server Actions DoS), GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr (critical RCEs in image optimization with SVG and in `use cache`), all published that day and fixed in 16.4.1 |
 | react | 19.2.8 |
 | @trpc/server, @trpc/client | 11.18.0 |
 | prisma, @prisma/client | 6.19.3 |
