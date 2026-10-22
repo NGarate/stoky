@@ -33,7 +33,7 @@ jobs:
   # the same way a `docker compose pull` would read them this week.
   images:
     name: Resolve the published release's images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       private: ${{ steps.release.outputs.private }}
@@ -101,7 +101,7 @@ jobs:
   scan:
     name: Scan ${{ matrix.service }}
     needs: [images]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read

@@ -56,6 +56,12 @@ permissions:
 # resolves both, but the commits API answers 422 for a tag object, so pin
 # tooling (Dependabot, SHA-pinning enforcement) cannot reliably check or bump
 # it. src/__tests__/unit/ci-workflow.test.ts holds both rules.
+#
+# The runner image is named by version for the same reason. `ubuntu-latest`
+# began moving to Ubuntu 26 on 2026-10-19, under every job at once, the
+# release path's included; a new runner image is a change to review, so it
+# arrives as an edit here rather than on GitHub's schedule. Dependabot does not
+# propose it.
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -64,7 +70,7 @@ jobs:
   # --------------------------------------------------------------- quality --
   quality:
     name: Lint, types, contrast
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       # checkout persists the workflow token into .git/config for the rest of
@@ -143,7 +149,7 @@ jobs:
   # ----------------------------------------------------------------- tests --
   test:
     name: Unit, component, integration
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Measured at 52s for all three suites. Ten is the shared budget, not an
     # estimate of this job.
     timeout-minutes: 10
@@ -196,7 +202,7 @@ jobs:
   # ------------------------------------------------------------------- e2e --
   e2e:
     name: End-to-end
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Ten, like every other test job. Playwright's own `globalTimeout` is nine,
     # which leaves one for install, migrate and seed and means Playwright fails
     # first and names the test it was sitting on — a job killed by the runner
@@ -373,7 +379,7 @@ jobs:
   # ----------------------------------------------------------------- audit --
   audit:
     name: Dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -412,7 +418,7 @@ jobs:
   # not a spare build.
   changes:
     name: What this push touched
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       image: ${{ steps.diff.outputs.image }}
@@ -489,7 +495,7 @@ jobs:
   # back behind `needs: [quality, test, e2e, audit]`.
   image-build:
     name: Build and scan image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [changes]
     # A skipped image-build cascades: image-publish needs it, and a needed
@@ -591,7 +597,7 @@ jobs:
   # ci-workflow.test.ts holds both settings.
   image-publish:
     name: Publish image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ github.ref_type == 'tag' && 30 || 10 }}
     needs: [quality, test, e2e, audit, image-build]
     # Only a push publishes, and `on.push` admits only master and `v*` tags. A
@@ -716,7 +722,7 @@ jobs:
   # Publishing the draft is the maintainer's last step after an install smoke.
   release-draft:
     name: Prepare release draft
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [image-publish]
     if: github.ref_type == 'tag'

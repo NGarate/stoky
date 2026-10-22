@@ -602,6 +602,21 @@ describe("the workflows' action pins", () => {
     },
   );
 
+  // A moving label changes the operating system under every job at once, the
+  // release path included, on GitHub's schedule: `ubuntu-latest` began moving
+  // to Ubuntu 26 on 2026-10-19. A version is changed by an edit someone reads.
+  it.each(sources.map(({ file, source }) => [file, source]))(
+    "runs every job on a runner image named by version: %s",
+    (_, source) => {
+      const parsed = Bun.YAML.parse(source) as {
+        jobs?: Record<string, { "runs-on"?: unknown }>;
+      };
+      const runners = Object.values(parsed.jobs ?? {}).map((job) => job["runs-on"]);
+      expect(runners.length).toBeGreaterThan(0);
+      for (const runner of runners) expect(runner).toMatch(/^ubuntu-\d{2}\.\d{2}$/);
+    },
+  );
+
   it("pins no annotated tag object", () => {
     for (const { source } of sources) {
       for (const sha of tagObjects) expect(source).not.toContain(sha);
