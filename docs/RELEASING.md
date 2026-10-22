@@ -16,9 +16,36 @@ attestation and anonymous-pull steps below depend on that (see
    tag: it requires `STOKY_VERSION` from `.env`, so `example.env` is the one place
    the bundle names the image, and `install.sh` names the release it downloads.
    Commit no secrets.
-2. Write `docs/releases/vVERSION.md`: introduction, highlights, installation link,
-   upgrade instructions, known limitations and verification. Describe user-visible
-   behavior; do not claim that automated tests settle the outstanding human checks.
+2. Write `docs/releases/vVERSION.md`, Spanish first, in the shape Immich's
+   releases use, because it puts what an operator must do before what is
+   new:
+   - **Alerts first.** A GitHub `> [!WARNING]` for anything that breaks an
+     upgrade done the usual way, `> [!CAUTION]` for a security fix to take
+     now, `> [!NOTE]` for context. None when there is nothing to say.
+   - **`## Destacado`**: a short list, then one `###` section per item,
+     saying what changes for the household, not how it was built.
+   - **`## Cambios incompatibles`** and **`## Cómo actualizar`**: every
+     `.env` change as a `diff` block, then the usual commands. The guide
+     describes the current version only; what depends on the version an
+     installation comes from belongs here.
+   - **`## Instalación`**, **`## Límites conocidos`**, **`## Verificación`**:
+     the tag-specific links, what is not supported yet, and what was
+     actually tested. Do not claim that automated tests settle the
+     outstanding human checks.
+   - **`## Qué ha cambiado`**: the generated list, pasted as it prints,
+     markers included:
+
+     ```bash
+     bun scripts/release-notes.ts vPREVIOUS vVERSION
+     ```
+
+     It groups the commits since the previous tag by their Conventional
+     Commit type (🚨 breaking, 🔒 security, 🚀 feat, 🌟 perf, 🐛 fix, 📦
+     dependencies and images, 📚 operator documentation), links each one and
+     ends with the full comparison. A `Changelog: security` trailer files a
+     commit under security, `Changelog: skip` leaves it out. Internal commits
+     are not listed. Edit the subjects in history, never in the list.
+   - **`## English`**: the same release, shorter.
 3. Update the installation guide and owning documents whenever configuration or
    support changes. Keep release assets self-contained: Compose, `example.env`,
    `traefik.yml` and `install.sh` must work without a checkout. `install.sh` only

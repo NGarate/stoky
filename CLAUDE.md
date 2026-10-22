@@ -182,6 +182,12 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
 `ci`, `chore`. Scopes: `auth`, `inventory`, `products`, `receipts`, `prices`,
 `shopping`, `household`, `ocr`, `db`, `ui`, `i18n`, `pwa`, `docker`, `ci`.
 
+The subject is also a line of the next release's change list
+(`scripts/release-notes.ts`), filed by its type: write it for an operator.
+Mark an incompatible change with `!` (`feat(auth)!:`); add a
+`Changelog: security` trailer to a security fix, `Changelog: skip` to a
+`feat`/`fix` no operator would notice.
+
 ## Git Workflow (trunk-based)
 
 `master` is the trunk. Work done **with a person watching** — someone reading
