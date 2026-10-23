@@ -102,6 +102,12 @@ const CODEQL = { state: "configured", query_suite: "extended" } as const;
 const INTERACTION_LIMIT = { limit: "collaborators_only", expiry: "six_months" } as const;
 const INTERACTION_LIMIT_NOTICE_DAYS = 30;
 
+/**
+ * Nothing beyond the code, releases and issues. Issues stay: the owner files
+ * them, and the interaction limit is what keeps other people out of them.
+ */
+const FEATURES = { has_projects: false, has_wiki: false, has_discussions: false } as const;
+
 interface RefCondition {
   include?: string[];
   exclude?: string[];
@@ -444,6 +450,14 @@ const SETTINGS: Setting[] = [
       return problems;
     },
     apply: (gh) => gh.write("PUT", "interaction-limits", INTERACTION_LIMIT),
+  },
+  {
+    name: "Projects, wiki and discussions off",
+    drift: (gh) => {
+      const repo = repository(gh);
+      return (Object.keys(FEATURES) as (keyof typeof FEATURES)[]).flatMap((key) => differs(key, repo[key], FEATURES[key]));
+    },
+    apply: (gh) => gh.write("PATCH", "", FEATURES),
   },
 ];
 

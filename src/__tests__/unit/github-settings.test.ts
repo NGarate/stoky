@@ -72,6 +72,10 @@ function inSync(): State {
         delete_branch_on_merge: true,
         squash_merge_commit_title: "PR_TITLE",
         squash_merge_commit_message: "PR_BODY",
+        has_issues: true,
+        has_projects: false,
+        has_wiki: false,
+        has_discussions: false,
         security_and_analysis: {
           dependabot_security_updates: { status: "enabled" },
           secret_scanning: { status: "enabled" },
@@ -123,6 +127,10 @@ function measured(): State {
       delete_branch_on_merge: false,
       squash_merge_commit_title: "COMMIT_OR_PR_TITLE",
       squash_merge_commit_message: "COMMIT_MESSAGES",
+      has_issues: true,
+      has_projects: true,
+      has_wiki: false,
+      has_discussions: false,
       security_and_analysis: {
         dependabot_security_updates: { status: "disabled" },
         secret_scanning: { status: "disabled" },
@@ -336,6 +344,7 @@ describe("scripts/github-settings.ts check", () => {
       'Ruleset "Release tags are created by an admin"',
       "Dependabot can push its branches",
       "Interactions limited to collaborators",
+      "Projects, wiki and discussions off",
     ]);
   });
 
@@ -463,6 +472,13 @@ describe("scripts/github-settings.ts check", () => {
       "within 30 days",
       (s) => (s["interaction-limits"] = interactionLimit("collaborators_only", 29)),
     ],
+    ...(["has_projects", "has_wiki", "has_discussions"] as const).map(
+      (feature): [string, string, (state: State) => void] => [
+        "Projects, wiki and discussions off",
+        `${feature} is true`,
+        (s) => ((s[""].body as Record<string, unknown>)[feature] = true),
+      ],
+    ),
   ];
 
   for (const [setting, detail, drift] of cases) {
@@ -571,6 +587,7 @@ describe("scripts/github-settings.ts apply", () => {
       "POST rulesets",
       `PUT rulesets/${BRANCH_RULESET.id}`,
       "PUT interaction-limits",
+      "PATCH ",
     ]);
     const body = (index: number) => writes[index].body;
     expect(body(2)).toEqual({
@@ -584,6 +601,8 @@ describe("scripts/github-settings.ts apply", () => {
     // Only the conditions, so the owner's rules and bypass stay as they are.
     expect(body(11)).toEqual({ conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/**"] } } });
     expect(body(12)).toEqual({ limit: "collaborators_only", expiry: "six_months" });
+    // Issues stay on: the owner files them, and the limit keeps others out.
+    expect(body(13)).toEqual({ has_projects: false, has_wiki: false, has_discussions: false });
   });
 
   it("sets an expiring interaction limit again, restarting its six months", () => {
