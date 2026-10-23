@@ -18,24 +18,31 @@ Report privately through GitHub's security advisories:
 
 **<https://github.com/NGarate/stoky/security/advisories/new>**
 
-It needs a GitHub account, and so does the fallback below: no email address or
-other channel is published for someone without one, which is a gap, not a
-policy. Please do not open a public issue for a security problem, and do not
-post details in a discussion or a pull request. The issue chooser carries the
-same link (`.github/ISSUE_TEMPLATE/config.yml`) for anyone who starts there.
+It needs a GitHub account: no email address or other channel is published for
+someone without one, which is a gap, not a policy. Please do not open a public
+issue for a security problem, and do not post details in a discussion or a pull
+request. The issue chooser carries the same link
+(`.github/ISSUE_TEMPLATE/config.yml`) for anyone who starts there.
+
+**The form is the only channel.** Contributions from other people are closed for
+now, and a repository setting, an interaction limit, lets only collaborators
+comment, open issues or open pull requests
+([Releasing](docs/RELEASING.md#repository-settings)). While it holds, an issue
+is not a way in for anyone else.
 
 **If the form is not offered to you.** GitHub offers it to people outside the
 project only while the repository's private vulnerability reporting setting is
 on, and the Security tab then shows a **Report a vulnerability** button that
 opens it. `gh api repos/NGarate/stoky/private-vulnerability-reporting` answers
-`{"enabled":true}` when it is; on 2026-10-12 it answered `{"enabled":false}`,
-and turning it on is a repository setting only the owner can change. If there
-is no button, or the link does not open the form, open an ordinary
-[issue](https://github.com/NGarate/stoky/issues/new) that says only that you
-have a security report and asks for a private channel. Leave out every detail:
-not the affected feature, the version, or the kind of weakness. A public issue
-is read by everyone running the same image, and there is no way for us to patch
-their servers first.
+`{"enabled":true}` when it is; on 2026-10-23 it still answered
+`{"enabled":false}`, and turning it on is a repository setting only the owner
+can change. Without the button there is no private channel at all: that is a
+gap too, and the owner's settings check reports it. If GitHub still lets you
+open an [issue](https://github.com/NGarate/stoky/issues/new), open one that
+says only that you have a security report and asks for a private channel. Leave
+out every detail: not the affected feature, the version, or the kind of
+weakness. A public issue is read by everyone running the same image, and there
+is no way for us to patch their servers first.
 
 **What is in scope.** This project's code, the container image it publishes,
 and the release bundle (`deploy/` and the files attached to a release). Someone

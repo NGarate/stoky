@@ -75,6 +75,18 @@ describe("vulnerability reporting channel", () => {
     expect(reportingSection()).toContain("https://github.com/NGarate/stoky/issues/new");
   });
 
+  it("says in both places that the form is the only channel while issues are closed", () => {
+    // Other people cannot open issues while the interaction limit holds
+    // (scripts/github-settings.ts), so an issue offered as the way in would
+    // send a reporter to a door that is shut.
+    expect(reportingSection()).toContain("**The form is the only channel.**");
+    const about = (chooser.contact_links ?? []).find((l) => l.url === publishedChannel())?.about;
+    expect(typeof about).toBe("string");
+    const text = about as string;
+    expect(text.indexOf("único canal")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("único canal")).toBeLessThan(text.indexOf("only channel"));
+  });
+
   it("keeps the anchor other documents link to", () => {
     for (const [path, link] of [
       ["SECURITY.md", `(#${ANCHOR})`],

@@ -183,12 +183,16 @@ lock. What it measured:
   the image.
 
 **Owner actions still pending.** `bun scripts/github-settings.ts check` (GET
-requests only), re-run 2026-10-12 after the verification above: 11 of its 12
-settings drift. They are private vulnerability reporting, immutable releases,
-secret scanning and push protection, Dependabot security updates, CodeQL
-default setup, the Actions allow-list with SHA pinning, approval for every
-external contributor, squash-only merges, the two release-tag rulesets, and the
-ruleset exclusion Dependabot needs. Dependabot alerts are on. The review's
+requests only), re-run 2026-10-23 after three settings were added for the
+owner's decision to close the repository to other people's contributions: 14 of
+its 15 settings drift, and nothing has been applied. They are private
+vulnerability reporting, immutable releases, secret scanning and push
+protection, Dependabot security updates, CodeQL default setup, the Actions
+allow-list with SHA pinning, approval for every external contributor,
+squash-only merges, the two release-tag rulesets, the ruleset exclusion
+Dependabot needs (the same 11 as on 2026-10-12), and the three new ones: the
+interaction limit to collaborators (none set), Projects (on), and the
+`release` environment (missing). Dependabot alerts are on. The review's
 other owner actions have no check and are listed in `docs/SECURITY_REVIEW.md`
 (*Owner actions*): commit signing, an identity for agents, deleting two merged
 branches, the alpha.2 notes, the LICENSE holder, and the first `rescan.yml`

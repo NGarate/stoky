@@ -2,7 +2,9 @@
 # installation runs the same image and none can be patched before the details
 # are read, so the chooser sends reporters to the private advisory form first.
 # SECURITY.md#reporting-a-vulnerability owns the policy and the fallback when
-# the form is not offered.
+# the form is not offered. Issues are closed to people outside the project for
+# now (an interaction limit, docs/RELEASING.md#repository-settings), so for
+# them the form is the only channel.
 #
 # Blank issues stay enabled: there are no issue templates, and turning them off
 # would leave the chooser with nothing but this link, blocking ordinary bug
@@ -12,7 +14,10 @@ contact_links:
   - name: "Informar de una vulnerabilidad / Report a security vulnerability"
     url: https://github.com/NGarate/stoky/security/advisories/new
     about: >-
-      En privado, nunca en una incidencia pública. Si el formulario no aparece,
-      abre una incidencia pidiendo un canal privado, sin detalles. / Privately,
-      never in a public issue. If the form is not offered, open an issue
-      asking for a private channel, with no details.
+      En privado, nunca en una incidencia pública. Las incidencias están
+      cerradas a quien no colabora en el proyecto, así que este formulario es
+      el único canal; si no aparece y GitHub aún te deja abrir una incidencia,
+      pide en ella solo un canal privado, sin detalles. / Privately, never in a
+      public issue. Issues are closed to people outside the project, so this
+      form is the only channel; if it is not offered and GitHub still lets you
+      open an issue, ask in it only for a private channel, with no details.

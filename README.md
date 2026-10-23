@@ -238,6 +238,11 @@ restricted tester access and operator-managed backups; read [Security](SECURITY.
 
 ## Contributing
 
+**Closed to outside contributions for now.** Pull requests, issues and comments
+from people outside the project are not being taken; forks are welcome. To
+report a vulnerability, use the private form in [Security](SECURITY.md#reporting-a-vulnerability),
+never an issue. What follows is how the project itself works.
+
 Trunk-based: work done with someone reading each change as it lands goes
 directly to `master`, in small focused commits, with no feature branch and no
 pull request. Unattended and semi-attended agent work is the exception: it goes
