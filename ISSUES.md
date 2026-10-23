@@ -13,7 +13,7 @@ to isolated data and the production artefact, and the owner's first pass
 the four criticals, SEC-1, all of INV, I18N, A11Y and DEBT, and UI through
 UI-9.
 
-**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9, TEST-10 and TEST-11.** TEST-7 closed on 2026-09-12 by removing
+**Open: TEST-5, RUNTIME-1, LOC-2, OFFLINE-1, SHOP-2, DB-1, UPLOAD-1, TEST-9 and TEST-10.** TEST-11 closed on 2026-10-23 (`cb08d9a`): every `bun test` now loads Next's environment baseline first. TEST-7 closed on 2026-09-12 by removing
 two process-wide ProductRating mocks from unrelated component tests.
 TEST-5 is the intermittent bun
 failure in the suite that guards the offline queue — upstream, diagnosed,
@@ -143,7 +143,7 @@ For overall project state and gate results, see `docs/STATUS.md`.
 | UPLOAD-1 | Receipt photographs have no per-household storage quota | 🟡 Open — deferred by the 2026-10-12 security review |
 | TEST-9 | Nothing pins that the caller's own row has no reset button, and a self-reset would be reported as "too easy" | 🟡 Open — deferred by the final review of the 2026-10-12 security branch |
 | TEST-10 | The service worker's offline spec failed three full runs on the Better Auth branch | 🟡 Open — cause not found; first step is a traced failing run |
-| TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | 🟡 Open — seen once, on master's push of the v0.1.0-alpha.4 preparation; passed on re-run |
+| TEST-11 | `trpc-links.test.ts` failed once in CI with Next's "AsyncLocalStorage accessed in runtime where it is not available" | ✅ Resolved `cb08d9a` — the first file to import `next/headers` left Next's request storage broken for the rest of the process |
 
 ---
 
@@ -1053,12 +1053,78 @@ browser's own "no internet" page, or a page that went to `/login`.
 
 ---
 
-### 🟡 TEST-11: `trpc-links.test.ts` failed once in CI with Next's AsyncLocalStorage invariant
+### ✅ TEST-11: `trpc-links.test.ts` failed once in CI with Next's AsyncLocalStorage invariant
 
 **File:** `src/__tests__/unit/trpc-links.test.ts` (both of its tests)
 **Severity:** LOW — a unit test that failed once; it blocked master's image
 until re-run, which is the cost
-**Status:** OPEN — seen 2026-10-22, cause not found
+**Status:** RESOLVED 2026-10-23 in `cb08d9a` — seen 2026-10-22
+
+**Resolved 2026-10-23.** Not `trpc-links`, and not a replaced `fetch`: the
+unit process ran Next's server modules without the environment Next sets up
+before them. `next start` loads `node-environment-baseline` first, which
+installs `globalThis.AsyncLocalStorage`; Bun has none.
+`app-render/async-local-storage.js` reads that global once, when it is
+evaluated, and without it hands out stand-ins whose `run` and `exit` throw
+the invariant. Three steps, each in a different file, and the order decides:
+
+1. `auth-dynamic` imports `@/lib/auth`, which reaches `next/headers`
+   (`proxy-device`, through `next/server`, does the same). Evaluated with no
+   global, Next's request storage is a stand-in for the rest of the process
+   — the stack in the CI log is exactly this evaluation.
+2. `proxy-matcher` or `pwa-manifest` loads Next's build analysis
+   (`src/__tests__/utils/proxy-matcher.ts`), which loads `node-environment`.
+   Its `console-exit.js` wraps every `console` method in
+   `workUnitAsyncStorage.exit(...)` — on the stand-in, so from then on every
+   `console.log` in the process throws.
+3. `trpc-links`' logger link logs every call when `NODE_ENV` is
+   `development`, which the development image sets. The log throws inside the
+   link chain, and tRPC hands it back as a `TRPCClientError`.
+
+Locally `NODE_ENV` is `test` and the link logs only failures, which the second
+test silences with a spy — so it passed in every local run, whatever the
+order. Bun runs the files in the order it reads the directory, which is not
+alphabetical and differs between runs: run 39847700105 attempt 1 had
+`auth-dynamic` 40th, `pwa-manifest` 82nd, `proxy-matcher` 123rd and
+`trpc-links` 131st of 133; attempt 2 ran `trpc-links` 18th, before all four,
+and passed.
+
+**Reproduction** (Bun 1.4.3, host and development image alike):
+
+```
+NODE_ENV=development bun test ./src/__tests__/unit/auth-dynamic.test.ts \
+  ./src/__tests__/unit/proxy-matcher.test.ts ./src/__tests__/unit/trpc-links.test.ts
+```
+
+Before: 35 pass / 2 fail, every time, with CI's message and stack. After:
+37 pass / 0 fail. `proxy-device` + `pwa-manifest` + `trpc-links` fails the
+same way before. The whole unit suite under `NODE_ENV=development` with
+`--randomize`: `trpc-links` failed at 4 of seeds 1–10 before, and at none of
+seeds 1–30 after on the host, nor of 50 in the image; the file order of
+run 39847700105 replayed in the image fails it before and passes it after.
+
+**The fix** makes the test process load in Next's order instead of undoing
+the leak file by file — the stand-ins cannot be replaced once the module has
+evaluated, and the `console` patch is what the server does as well.
+`bunfig.toml` `[test] preload` loads `src/__tests__/setup/next-environment.ts`,
+which imports `next/dist/server/node-environment-baseline`, into every
+`bun test`, a single file alone included. `unit/next-environment.test.ts`
+imports `next/headers` first on purpose and asserts the storage is real: 0 of
+3 pass with the preload removed, 3 of 3 with it.
+
+Found while reproducing, and not this entry: with `--randomize`, three tests
+that assert on a `console.warn` spy fail at some seeds, with the preload and
+without it wherever that was checked (seeds 8, 11 and 18 on the host, 21 in
+the image). On the host, seeds 8 and 11 fail a `tidyAfterSignIn` test
+(`sign-in-tidy.test.ts`) and seeds 18 and 22 fail "settles the charge, ends
+the presented session and is logged as challenged" (`auth-handler.test.ts`);
+in the development image, seed 21 fails "bounds the line per request, not for
+ever" (`trpc-handler.test.ts`) 3 of 3 either way, and seed 26 the
+`auth-handler` one. Each file passes alone at those seeds, and CI does not
+randomize. Not investigated; a stray log from another file's unfinished work
+landing on the spy is the first thing to rule in or out.
+
+*The entry as filed:*
 
 On master's push of `7fffc6e` (`chore: prepare v0.1.0-alpha.4`), run
 39847700105 attempt 1, both tests failed inside the development image with
