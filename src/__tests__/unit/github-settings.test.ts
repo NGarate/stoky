@@ -35,6 +35,14 @@ const selectedActions = readJson<{ github_owned_allowed: boolean; verified_allow
 type Reply = { status: number; body?: unknown };
 type State = Record<string, Reply>;
 
+/** An ISO date `days` from now, as GitHub writes `expires_at`. */
+const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+const interactionLimit = (limit: string, days: number) => ({
+  status: 200,
+  body: { limit, origin: "repository", expires_at: daysFromNow(days) },
+});
+
 const BRANCH_RULESET = {
   id: 24892601,
   name: "Block All except me",
@@ -85,6 +93,7 @@ function inSync(): State {
       status: 200,
       body: { approval_policy: "all_external_contributors" },
     },
+    "interaction-limits": interactionLimit("collaborators_only", 150),
     "rulesets?per_page=100": {
       status: 200,
       body: rulesets.map(({ id, name, target, enforcement }) => ({ id, name, target, enforcement })),
@@ -99,7 +108,10 @@ function inSync(): State {
   };
 }
 
-/** What the repository answered on 2026-10-12, before any of this was applied. */
+/**
+ * What the repository answered on 2026-10-12, before any of this was applied;
+ * the settings added on 2026-10-23 as they answered that day.
+ */
 function measured(): State {
   const state = inSync();
   state[""] = {
@@ -146,6 +158,7 @@ function measured(): State {
       ],
     },
   };
+  state["interaction-limits"] = { status: 200, body: {} };
   return state;
 }
 
@@ -322,6 +335,7 @@ describe("scripts/github-settings.ts check", () => {
       'Ruleset "Release tags are immutable"',
       'Ruleset "Release tags are created by an admin"',
       "Dependabot can push its branches",
+      "Interactions limited to collaborators",
     ]);
   });
 
@@ -437,6 +451,18 @@ describe("scripts/github-settings.ts check", () => {
           conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/bun/**"] } },
         }),
     ],
+    ["Interactions limited to collaborators", "no limit", (s) => (s["interaction-limits"].body = {})],
+    [
+      "Interactions limited to collaborators",
+      'limit is "contributors_only"',
+      (s) => (s["interaction-limits"] = interactionLimit("contributors_only", 150)),
+    ],
+    [
+      // It lapses on its own; a month's notice leaves time to set it again.
+      "Interactions limited to collaborators",
+      "within 30 days",
+      (s) => (s["interaction-limits"] = interactionLimit("collaborators_only", 29)),
+    ],
   ];
 
   for (const [setting, detail, drift] of cases) {
@@ -493,6 +519,12 @@ describe("scripts/github-settings.ts check", () => {
     expect(run(state, ["check"]).exitCode).toBe(0);
   });
 
+  it("accepts an interaction limit with more than 30 days left", () => {
+    const state = inSync();
+    state["interaction-limits"] = interactionLimit("collaborators_only", 31);
+    expect(run(state, ["check"]).exitCode).toBe(0);
+  });
+
   it("exits 2, not 1, when GitHub refuses to answer", () => {
     const state = inSync();
     state["private-vulnerability-reporting"] = { status: 403, body: { message: "Must have admin rights to Repository." } };
@@ -538,6 +570,7 @@ describe("scripts/github-settings.ts apply", () => {
       "POST rulesets",
       "POST rulesets",
       `PUT rulesets/${BRANCH_RULESET.id}`,
+      "PUT interaction-limits",
     ]);
     const body = (index: number) => writes[index].body;
     expect(body(2)).toEqual({
@@ -550,6 +583,16 @@ describe("scripts/github-settings.ts apply", () => {
     expect(body(10)).toEqual(creation);
     // Only the conditions, so the owner's rules and bypass stay as they are.
     expect(body(11)).toEqual({ conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/heads/dependabot/**"] } } });
+    expect(body(12)).toEqual({ limit: "collaborators_only", expiry: "six_months" });
+  });
+
+  it("sets an expiring interaction limit again, restarting its six months", () => {
+    const state = inSync();
+    state["interaction-limits"] = interactionLimit("collaborators_only", 5);
+    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    expect(writes).toEqual([
+      { method: "PUT", endpoint: "interaction-limits", body: { limit: "collaborators_only", expiry: "six_months" } },
+    ]);
   });
 
   it("replaces a ruleset that exists under its name rather than adding a second", () => {

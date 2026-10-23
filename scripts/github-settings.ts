@@ -1,5 +1,6 @@
 /**
- * The repository's GitHub security settings, as code, with a drift check.
+ * The repository's GitHub security and contribution settings, as code, with a
+ * drift check.
  *
  * Run: bun scripts/github-settings.ts check [--repo OWNER/NAME]
  *      bun scripts/github-settings.ts apply [--repo OWNER/NAME]
@@ -10,7 +11,9 @@
  * reporting, immutable releases, secret scanning, push protection, Dependabot
  * security updates and CodeQL all off on a public repository, Actions allowing
  * any action at any ref, and no rule protecting a release tag — each a one-off
- * click away, and each a click away from being undone.
+ * click away, and each a click away from being undone. The owner's 2026-10-23
+ * decision to close the repository to other people's contributions for now is
+ * held the same way.
  *
  * `check` makes GET requests only. It prints one line per setting and exits 1
  * when any of them differs from what this file and `.github/` say it should
@@ -88,6 +91,16 @@ const MERGE_SETTINGS = {
 const ACTIONS_PERMISSIONS = { enabled: true, allowed_actions: "selected", sha_pinning_required: true } as const;
 
 const CODEQL = { state: "configured", query_suite: "extended" } as const;
+
+/**
+ * Contributions are closed for now (the owner's decision of 2026-10-23): only
+ * collaborators may comment, open issues or open pull requests. Six months is
+ * the longest GitHub sets, and the limit then lapses on its own, so it is
+ * drift well before it does: `apply` sets it again, which restarts the six
+ * months.
+ */
+const INTERACTION_LIMIT = { limit: "collaborators_only", expiry: "six_months" } as const;
+const INTERACTION_LIMIT_NOTICE_DAYS = 30;
 
 interface RefCondition {
   include?: string[];
@@ -415,6 +428,22 @@ const SETTINGS: Setting[] = [
         });
       }
     },
+  },
+  {
+    // `{}` when there is none. While the owner's account has a limit of its
+    // own, GitHub refuses this repository's PUT with 409.
+    name: "Interactions limited to collaborators",
+    drift: (gh) => {
+      const current = gh.get("interaction-limits").body as { limit?: string; expires_at?: string } | null;
+      if (!current?.limit) return ["no limit"];
+      const problems = differs("limit", current.limit, INTERACTION_LIMIT.limit);
+      const left = Date.parse(current.expires_at ?? "") - Date.now();
+      if (!(left > INTERACTION_LIMIT_NOTICE_DAYS * 86_400_000)) {
+        problems.push(`expires ${current.expires_at ?? "at an unknown date"}, within ${INTERACTION_LIMIT_NOTICE_DAYS} days`);
+      }
+      return problems;
+    },
+    apply: (gh) => gh.write("PUT", "interaction-limits", INTERACTION_LIMIT),
   },
 ];
 
