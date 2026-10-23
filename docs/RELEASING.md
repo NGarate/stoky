@@ -351,9 +351,9 @@ owner's to run, never a CI step: most of these endpoints need the
 administration permission, which a workflow token cannot be granted. Exit 2
 means GitHub refused a request, not that anything drifted. `--repo OWNER/NAME`
 points it at a fork. `apply` sends the same PUT and PATCH
-requests every time and matches rulesets by name, so running it again changes
-nothing; CodeQL's setup completes asynchronously, which is why `check` follows
-it. `src/__tests__/unit/github-settings.test.ts` runs both against a stubbed
+requests every time, matches rulesets by name and the release environment's
+deployment policies by name and type, so running it again changes nothing;
+CodeQL's setup completes asynchronously, which is why `check` follows it. `src/__tests__/unit/github-settings.test.ts` runs both against a stubbed
 `gh`.
 
 | Setting | Why |
@@ -371,10 +371,11 @@ it. `src/__tests__/unit/github-settings.test.ts` runs both against a stubbed
 | Dependabot can push its branches | No enforced branch ruleset with a rule that refuses one of Dependabot's pushes (creation, update, deletion, `non_fast_forward`, or a pull request, status check or deployment requirement) reaches the branch it opens for any entry in `.github/dependabot.yml`. `apply` adds `refs/heads/dependabot/**` to the exclusions of a ruleset that does, and changes nothing else in it. Excluded rather than bypassed, because Dependabot also rewrites its own branch when it rebases a pull request, which `non_fast_forward` refuses. A ruleset narrowed to the default branch passes too. |
 | Interactions limited to collaborators, set for six months | Contributions from other people are closed for now (the owner's decision of 2026-10-23). [GitHub's guide](https://docs.github.com/en/communities/moderating-comments-and-conversations/limiting-interactions-in-your-repository) says the limit stops anyone without write access from commenting, opening issues, creating pull requests, reacting with emojis, editing existing comments, and editing titles of issues and pull requests; [the REST reference](https://docs.github.com/en/rest/interactions/repos) names comments, issues and pull requests. Neither lists forking or starring among the restrictions. The private advisory form is then the only way a reporter reaches the project ([Security](../SECURITY.md#reporting-a-vulnerability)). **It lapses:** six months is the longest GitHub sets, after which anyone can interact again, and nothing in the repository notices but `check`, which reports it from 30 days before it expires. `apply` sets it again, which restarts the six months. Read on 2026-10-23, neither page mentions Dependabot, bots or GitHub Apps, so whether Dependabot's pull requests count as a non-collaborator's is not documented: the first one after `apply` is the measurement. |
 | Projects, wiki and discussions off | Nothing beyond the code, releases and issues. Issues stay on: the owner files them, and the interaction limit is what keeps other people out of them. The wiki and discussions were already off; holding them off makes turning one on drift. |
+| Environment `release`: the repository's owner is the required reviewer, self-review allowed, deployable from tags `v*` only | What the planned `release-publish` job will wait on: a run that reaches it stops until it is approved, and only a run from a `v*` tag can reach it at all, so a branch run, a pull request's included, never can. Every approval here is the owner's, as there is nobody else; with self-review prevented, the person who pushed the tag could not approve its run, and a sole maintainer could never publish. The reviewer is read from `GET /repos/{owner}/{repo}` (`.owner.id`), so `--repo` on a fork names that fork's owner; a repository owned by an organisation would need a person or team instead. `check` reports a missing environment, another reviewer, self-review prevented, and any deployment policy other than exactly one tag pattern `v*`; `apply` deletes the others. GitHub offers required reviewers on the free plan for public repositories only ([REST reference](https://docs.github.com/en/rest/deployments/environments)). |
 
 On 2026-10-12, before any of it was applied, `check` reported 11 of the 12
 drifted: only Dependabot alerts were on. On 2026-10-23 the repository had no
-interaction limit, and Projects were on.
+interaction limit, Projects were on, and there was no environment.
 
 **Adding an action.** A workflow `uses:` that the allow-list does not cover is
 refused when the run starts, so it needs an entry in

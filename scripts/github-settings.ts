@@ -20,8 +20,9 @@
  * be. `apply` writes only the settings that differ, with the same PUT and
  * PATCH requests every time, so running it twice changes nothing the second
  * time; rulesets are matched by name, created when missing and replaced when
- * different. Run `check` again afterwards: CodeQL's default setup is applied
- * asynchronously.
+ * different, and the release environment's deployment policies by name and
+ * type, created when missing and deleted when not listed. Run `check` again
+ * afterwards: CodeQL's default setup is applied asynchronously.
  *
  * Both need `gh` signed in as an administrator of the repository, which is why
  * this is the owner's tool and never a CI step: most of these endpoints need
@@ -107,6 +108,32 @@ const INTERACTION_LIMIT_NOTICE_DAYS = 30;
  * them, and the interaction limit is what keeps other people out of them.
  */
 const FEATURES = { has_projects: false, has_wiki: false, has_discussions: false } as const;
+
+/**
+ * The environment a publishing job waits on: one approval, by the repository's
+ * owner, for a run from a `v*` tag and nothing else. Self-review is allowed
+ * because the owner is the only maintainer, and so the one who pushed the tag:
+ * with it prevented, nobody could approve.
+ */
+const RELEASE_ENVIRONMENT = "environments/release";
+const RELEASE_POLICIES = `${RELEASE_ENVIRONMENT}/deployment-branch-policies`;
+const RELEASE_REFS = [{ name: "v*", type: "tag" }] as const;
+const CUSTOM_BRANCH_POLICIES = { protected_branches: false, custom_branch_policies: true } as const;
+
+interface Environment {
+  protection_rules?: {
+    type: string;
+    prevent_self_review?: boolean;
+    reviewers?: { type?: string; reviewer?: { id?: number } }[];
+  }[];
+  deployment_branch_policy?: { protected_branches?: boolean; custom_branch_policies?: boolean } | null;
+}
+
+interface DeploymentPolicy {
+  id?: number;
+  name?: string;
+  type?: string;
+}
 
 interface RefCondition {
   include?: string[];
@@ -222,7 +249,7 @@ class GitHub {
     return reply;
   }
 
-  write(method: "PUT" | "PATCH" | "POST", path: string, body?: unknown) {
+  write(method: "PUT" | "PATCH" | "POST" | "DELETE", path: string, body?: unknown) {
     const reply = this.request(method, path, body);
     if (!GitHub.ok(reply)) throw this.refused(method, path, reply);
   }
@@ -243,8 +270,29 @@ function differs(field: string, actual: unknown, wanted: unknown): string[] {
 
 function repository(gh: GitHub) {
   return gh.get("").body as Record<string, unknown> & {
+    owner?: { id?: number };
     security_and_analysis?: Record<string, { status?: string } | undefined>;
   };
+}
+
+/**
+ * The environment as `apply` sends it. The reviewer is the repository's owner,
+ * read rather than written down, so `--repo` names a fork's owner on a fork.
+ * A repository owned by an organisation would need a person or team named
+ * instead; NGarate/stoky belongs to a personal account.
+ */
+function releaseEnvironment(gh: GitHub) {
+  return {
+    reviewers: [{ type: "User", id: repository(gh).owner?.id }],
+    prevent_self_review: false,
+    deployment_branch_policy: CUSTOM_BRANCH_POLICIES,
+  };
+}
+
+const refKey = (policy: DeploymentPolicy) => `${policy.type}:${policy.name}`;
+
+function releaseRefs(gh: GitHub): DeploymentPolicy[] {
+  return (gh.get(`${RELEASE_POLICIES}?per_page=100`).body as { branch_policies?: DeploymentPolicy[] }).branch_policies ?? [];
 }
 
 /** `{"enabled": true}` endpoints that a bare PUT turns on. */
@@ -458,6 +506,47 @@ const SETTINGS: Setting[] = [
       return (Object.keys(FEATURES) as (keyof typeof FEATURES)[]).flatMap((key) => differs(key, repo[key], FEATURES[key]));
     },
     apply: (gh) => gh.write("PATCH", "", FEATURES),
+  },
+  {
+    name: "Release environment, approved by the owner, from v* tags only",
+    drift: (gh) => {
+      const reply = gh.get(RELEASE_ENVIRONMENT, [404]);
+      if (reply.status === 404) return ["missing"];
+      const environment = reply.body as Environment;
+      const wanted = releaseEnvironment(gh);
+      const rule = environment.protection_rules?.find((candidate) => candidate.type === "required_reviewers");
+      const policy = environment.deployment_branch_policy;
+      const problems = [
+        ...differs(
+          "reviewers",
+          (rule?.reviewers ?? []).map((reviewer) => `${reviewer.type}:${reviewer.reviewer?.id}`).sort(),
+          wanted.reviewers.map((reviewer) => `${reviewer.type}:${reviewer.id}`),
+        ),
+        ...differs("prevent_self_review", rule?.prevent_self_review, wanted.prevent_self_review),
+        ...differs(
+          "deployment_branch_policy",
+          policy ? { protected_branches: policy.protected_branches, custom_branch_policies: policy.custom_branch_policies } : null,
+          CUSTOM_BRANCH_POLICIES,
+        ),
+      ];
+      // The patterns apply, and can be listed, only while custom policies are on.
+      if (policy?.custom_branch_policies !== true) return problems;
+      return [...problems, ...differs("policies", releaseRefs(gh).map(refKey).sort(), RELEASE_REFS.map(refKey))];
+    },
+    // The environment first: a policy can be added only once custom policies
+    // are on. Then exactly the listed refs, removing the others first so a
+    // branch pattern of the same name cannot stand in the way.
+    apply: (gh) => {
+      gh.write("PUT", RELEASE_ENVIRONMENT, releaseEnvironment(gh));
+      const current = releaseRefs(gh);
+      const wanted = new Set(RELEASE_REFS.map(refKey));
+      for (const policy of current) {
+        if (!wanted.has(refKey(policy))) gh.write("DELETE", `${RELEASE_POLICIES}/${policy.id}`);
+      }
+      for (const policy of RELEASE_REFS) {
+        if (!current.some((existing) => refKey(existing) === refKey(policy))) gh.write("POST", RELEASE_POLICIES, policy);
+      }
+    },
   },
 ];
 

@@ -43,6 +43,43 @@ const interactionLimit = (limit: string, days: number) => ({
   body: { limit, origin: "repository", expires_at: daysFromNow(days) },
 });
 
+/** Not 24436231: the reviewer must be read from the repository, not written down. */
+const OWNER_ID = 583231;
+const RELEASE_POLICIES = "environments/release/deployment-branch-policies?per_page=100";
+
+/** GET environments/release as GitHub answers it, with fields the script must ignore. */
+const releaseEnvironment = (
+  rule: { prevent_self_review?: boolean; reviewers?: { type: string; reviewer: { id: number } }[] } | null,
+  policy: { protected_branches: boolean; custom_branch_policies: boolean } | null = {
+    protected_branches: false,
+    custom_branch_policies: true,
+  },
+) => ({
+  status: 200,
+  body: {
+    id: 1,
+    node_id: "EN_1",
+    name: "release",
+    created_at: "2026-10-23T00:00:00Z",
+    updated_at: "2026-10-23T00:00:00Z",
+    protection_rules: [
+      ...(rule ? [{ id: 10, node_id: "GA_10", type: "required_reviewers", ...rule }] : []),
+      ...(policy ? [{ id: 11, node_id: "GA_11", type: "branch_policy" }] : []),
+    ],
+    deployment_branch_policy: policy,
+  },
+});
+
+const ownerReviews = (id = OWNER_ID) => ({
+  prevent_self_review: false,
+  reviewers: [{ type: "User", reviewer: { id } }],
+});
+
+const releasePolicies = (...policies: { id: number; name: string; type: string }[]) => ({
+  status: 200,
+  body: { total_count: policies.length, branch_policies: policies.map((policy) => ({ node_id: `P_${policy.id}`, ...policy })) },
+});
+
 const BRANCH_RULESET = {
   id: 24892601,
   name: "Block All except me",
@@ -72,6 +109,7 @@ function inSync(): State {
         delete_branch_on_merge: true,
         squash_merge_commit_title: "PR_TITLE",
         squash_merge_commit_message: "PR_BODY",
+        owner: { login: "example", id: OWNER_ID, type: "User" },
         has_issues: true,
         has_projects: false,
         has_wiki: false,
@@ -98,6 +136,8 @@ function inSync(): State {
       body: { approval_policy: "all_external_contributors" },
     },
     "interaction-limits": interactionLimit("collaborators_only", 150),
+    "environments/release": releaseEnvironment(ownerReviews()),
+    [RELEASE_POLICIES]: releasePolicies({ id: 20, name: "v*", type: "tag" }),
     "rulesets?per_page=100": {
       status: 200,
       body: rulesets.map(({ id, name, target, enforcement }) => ({ id, name, target, enforcement })),
@@ -127,6 +167,7 @@ function measured(): State {
       delete_branch_on_merge: false,
       squash_merge_commit_title: "COMMIT_OR_PR_TITLE",
       squash_merge_commit_message: "COMMIT_MESSAGES",
+      owner: { login: "NGarate", id: 24436231, type: "User" },
       has_issues: true,
       has_projects: true,
       has_wiki: false,
@@ -167,6 +208,9 @@ function measured(): State {
     },
   };
   state["interaction-limits"] = { status: 200, body: {} };
+  delete state["environments/release"];
+  // What the list answers once apply's PUT has created the environment.
+  state[RELEASE_POLICIES] = releasePolicies();
   return state;
 }
 
@@ -345,6 +389,7 @@ describe("scripts/github-settings.ts check", () => {
       "Dependabot can push its branches",
       "Interactions limited to collaborators",
       "Projects, wiki and discussions off",
+      "Release environment, approved by the owner, from v* tags only",
     ]);
   });
 
@@ -479,6 +524,51 @@ describe("scripts/github-settings.ts check", () => {
         (s) => ((s[""].body as Record<string, unknown>)[feature] = true),
       ],
     ),
+    ...(
+      [
+        ["missing", (s) => delete s["environments/release"]],
+        [`reviewers is ["User:1"], want ["User:${OWNER_ID}"]`, (s) => (s["environments/release"] = releaseEnvironment(ownerReviews(1)))],
+        ["reviewers is []", (s) => (s["environments/release"] = releaseEnvironment(null))],
+        [
+          // A sole maintainer could never approve their own release.
+          "prevent_self_review is true",
+          (s) => (s["environments/release"] = releaseEnvironment({ ...ownerReviews(), prevent_self_review: true })),
+        ],
+        [
+          // Any branch may deploy; the policies are not even listed then.
+          "deployment_branch_policy is null",
+          (s) => {
+            s["environments/release"] = releaseEnvironment(ownerReviews(), null);
+            delete s[RELEASE_POLICIES];
+          },
+        ],
+        [
+          "deployment_branch_policy is",
+          (s) => {
+            s["environments/release"] = releaseEnvironment(ownerReviews(), {
+              protected_branches: true,
+              custom_branch_policies: false,
+            });
+            delete s[RELEASE_POLICIES];
+          },
+        ],
+        ["policies is []", (s) => (s[RELEASE_POLICIES] = releasePolicies())],
+        ['policies is ["branch:v*"]', (s) => (s[RELEASE_POLICIES] = releasePolicies({ id: 20, name: "v*", type: "branch" }))],
+        [
+          'policies is ["branch:master","tag:v*"]',
+          (s) =>
+            (s[RELEASE_POLICIES] = releasePolicies(
+              { id: 20, name: "v*", type: "tag" },
+              { id: 21, name: "master", type: "branch" },
+            )),
+        ],
+        ['policies is ["tag:*"]', (s) => (s[RELEASE_POLICIES] = releasePolicies({ id: 20, name: "*", type: "tag" }))],
+      ] as [string, (state: State) => void][]
+    ).map(([detail, drift]): [string, string, (state: State) => void] => [
+      "Release environment, approved by the owner, from v* tags only",
+      detail,
+      drift,
+    ]),
   ];
 
   for (const [setting, detail, drift] of cases) {
@@ -588,6 +678,8 @@ describe("scripts/github-settings.ts apply", () => {
       `PUT rulesets/${BRANCH_RULESET.id}`,
       "PUT interaction-limits",
       "PATCH ",
+      "PUT environments/release",
+      "POST environments/release/deployment-branch-policies",
     ]);
     const body = (index: number) => writes[index].body;
     expect(body(2)).toEqual({
@@ -603,6 +695,58 @@ describe("scripts/github-settings.ts apply", () => {
     expect(body(12)).toEqual({ limit: "collaborators_only", expiry: "six_months" });
     // Issues stay on: the owner files them, and the limit keeps others out.
     expect(body(13)).toEqual({ has_projects: false, has_wiki: false, has_discussions: false });
+    // The reviewer is the owner GET /repos names.
+    expect(body(14)).toEqual({
+      reviewers: [{ type: "User", id: 24436231 }],
+      prevent_self_review: false,
+      deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+    });
+    expect(body(15)).toEqual({ name: "v*", type: "tag" });
+  });
+
+  it("names the repository's owner as the release reviewer, whoever that is", () => {
+    const state = inSync();
+    state["environments/release"] = releaseEnvironment(ownerReviews(1));
+    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    // The tag policy is already there, so only the environment is written.
+    expect(writes).toEqual([
+      {
+        method: "PUT",
+        endpoint: "environments/release",
+        body: {
+          reviewers: [{ type: "User", id: OWNER_ID }],
+          prevent_self_review: false,
+          deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+        },
+      },
+    ]);
+  });
+
+  it("leaves the release environment's deployment policies exactly tags v*", () => {
+    const state = inSync();
+    state[RELEASE_POLICIES] = releasePolicies(
+      { id: 20, name: "v*", type: "branch" },
+      { id: 21, name: "master", type: "branch" },
+    );
+    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    expect(writes.map((call) => `${call.method} ${call.endpoint}`)).toEqual([
+      "PUT environments/release",
+      // Removed before the tag is added: a branch v* has the same name.
+      "DELETE environments/release/deployment-branch-policies/20",
+      "DELETE environments/release/deployment-branch-policies/21",
+      "POST environments/release/deployment-branch-policies",
+    ]);
+    expect(writes[3].body).toEqual({ name: "v*", type: "tag" });
+  });
+
+  it("keeps a tag v* policy that is already there", () => {
+    const state = inSync();
+    state[RELEASE_POLICIES] = releasePolicies({ id: 20, name: "v*", type: "tag" }, { id: 21, name: "*", type: "tag" });
+    const writes = run(state, ["apply"]).calls.filter((call) => call.method !== "GET");
+    expect(writes.map((call) => `${call.method} ${call.endpoint}`)).toEqual([
+      "PUT environments/release",
+      "DELETE environments/release/deployment-branch-policies/21",
+    ]);
   });
 
   it("sets an expiring interaction limit again, restarting its six months", () => {
