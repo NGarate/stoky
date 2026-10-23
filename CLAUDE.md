@@ -253,7 +253,13 @@ branch as much as on the trunk:
    green gates are necessary, not sufficient.
 5. **Update the owning document** when a change makes it wrong. `docs/README.md`
    says which one owns what; if two disagree, the owner wins and the other is
-   the bug.
+   the bug. A change a household or an operator would notice also adds its
+   lines to `docs/releases/NEXT.md`, the next release's notes, in the same
+   commit.
+6. **Never start, tag or publish a release.** `release:prepare`,
+   `release:tag` and `release:publish` are the owner's
+   (`docs/RELEASING.md`); an agent may run `release:version`,
+   `release:refresh-images --check` and `release:verify`, which change nothing.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
