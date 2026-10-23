@@ -52,10 +52,10 @@
  *      major change, a registry failure, or a scan that exits other than 0
  *      or 1; nothing written
  *
- * scan-bundle-images.sh exits 1 when Trivy itself fails, not only on a
- * finding — measured 2026-10-23, when its database download returned 404 —
- * so a broken scanner reads here as a red candidate. That errs the safe way:
- * nothing is written. Its output, printed above the summary, says which.
+ * scan-bundle-images.sh exits 1 only on a finding and 2 when Trivy did not
+ * finish (it once read a 404 fetching Trivy's database as a finding), so a
+ * broken scanner is an error here, not a red candidate; nothing is written
+ * either way.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
