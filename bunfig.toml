@@ -1,5 +1,6 @@
 # Bun reads this file for `bun install`, `bun add`, `bun update` and
-# `bun remove`, and also for `bun run` and `bun test`. Only `[install]` is set.
+# `bun remove`, and also for `bun run` and `bun test`. `[install]` and `[test]`
+# are set.
 
 [install]
 # Refuse any package version published less than three days ago, direct or
@@ -16,3 +17,11 @@
 # add a permanent entry to `minimumReleaseAgeExcludes` for it. SECURITY.md,
 # "Supply chain", has the reasoning; package-overrides.test.ts holds the value.
 minimumReleaseAge = 259200 # seconds: 3 days
+
+[test]
+# Installs globalThis.AsyncLocalStorage before any of Next's server modules is
+# evaluated, as `next start` does. Without it, whichever test file imported
+# `next/headers` first left Next's request storage broken for the rest of the
+# process (ISSUES TEST-11). Applies to every `bun test`, including a single
+# file run alone; a suite's own `--preload` adds to it.
+preload = ["./src/__tests__/setup/next-environment.ts"]

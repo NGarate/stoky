@@ -201,9 +201,10 @@ describe("the packages allowed to run install scripts", () => {
 });
 
 describe("the release-age gate", () => {
-  // `bunfig.toml` holds no other setting, so nothing else would notice it gone:
-  // installs keep working, every gate stays green, and the next `bun add` or
-  // `bun update` locks in whatever the registry published a minute earlier.
+  // Nothing else depends on this `bunfig.toml` setting, so nothing would
+  // notice it gone: installs keep working, every gate stays green, and the
+  // next `bun add` or `bun update` locks in whatever the registry published a
+  // minute earlier.
   // SECURITY.md § Supply chain has the reasoning.
   const bunfig = require(join(ROOT, "bunfig.toml")) as {
     install?: { minimumReleaseAge?: unknown; minimumReleaseAgeExcludes?: unknown };

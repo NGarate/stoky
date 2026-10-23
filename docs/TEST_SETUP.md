@@ -218,6 +218,7 @@ src/__tests__/
 ├── components/                # ~31 test files — happy-dom, no database
 ├── setup/                     # preloads and helpers, not tests
 │   ├── matchers.ts
+│   ├── next-environment.ts    # bunfig.toml preloads it into every bun test
 │   ├── register-dom.ts
 │   └── tailwind.ts            # resolves class lists through Tailwind's compiler
 └── utils/
@@ -238,6 +239,14 @@ on purpose; `ls` is the authority. `setup/register-dom.ts` is the preload that
 gives the component suite a DOM; `setup/tailwind.ts` resolves a component's
 class list through Tailwind's real compiler, which is how target size and line
 spacing are checked without a browser.
+
+`setup/next-environment.ts` is preloaded into every `bun test` by `bunfig.toml`,
+whatever the suite or file. It loads Next's `node-environment-baseline` first,
+as `next start` does, so `globalThis.AsyncLocalStorage` exists before any of
+Next's server modules is evaluated. Without it, the first test file to import
+`next/headers` or `next/server` left Next's request storage throwing for every
+file after it in the same process (ISSUES TEST-11);
+`unit/next-environment.test.ts` goes red if the preload is gone.
 
 ## Test Data Cleanup
 
