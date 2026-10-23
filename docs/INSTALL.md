@@ -1,6 +1,6 @@
 # Install Stoky with Docker Compose
 
-This guide is for **v0.1.0-alpha.4**, the fourth testing release. Keep backups;
+This guide is for **v0.1.0-alpha.4**, a testing release. Keep backups;
 alpha upgrades can change the database and may require manual migration steps.
 For development from source, use [Local Bootstrap](LOCAL_BOOTSTRAP.md).
 

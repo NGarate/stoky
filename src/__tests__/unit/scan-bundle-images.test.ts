@@ -33,7 +33,7 @@ const bundle = {
   },
 };
 
-function setup(options: { services?: Record<string, { image?: string }>; red?: string[] } = {}) {
+function setup(options: { services?: Record<string, { image?: string }>; red?: string[]; broken?: string[] } = {}) {
   const fixture = mkdtempSync(join(tmpdir(), "stoky-scan-"));
   fixtures.push(fixture);
   for (const directory of ["scripts", "deploy", "bin", "trivy-bin"]) mkdirSync(join(fixture, directory));
@@ -41,6 +41,7 @@ function setup(options: { services?: Record<string, { image?: string }>; red?: s
   writeFileSync(join(fixture, "deploy/docker-compose.yml"), "# read through the stub\n");
   writeFileSync(join(fixture, "compose.json"), JSON.stringify({ services: options.services ?? bundle.services }));
   writeFileSync(join(fixture, "red"), (options.red ?? []).map((image) => `${image}\n`).join(""));
+  writeFileSync(join(fixture, "broken"), (options.broken ?? []).map((image) => `${image}\n`).join(""));
   const log = join(fixture, "calls");
   writeFileSync(log, "");
 
@@ -67,7 +68,9 @@ exit 99
     `#!/bin/sh
 printf 'trivy' >> "${log}"; printf ' [%s]' "$@" >> "${log}"; echo >> "${log}"
 for last; do :; done
-if grep -Fxq "$last" "${join(fixture, "red")}"; then exit 1; fi
+# Trivy's own convention: the --exit-code value on a finding, 1 on its errors.
+if grep -Fxq "$last" "${join(fixture, "broken")}"; then exit 1; fi
+if grep -Fxq "$last" "${join(fixture, "red")}"; then exit 3; fi
 exit 0
 `,
     { mode: 0o755 },
@@ -103,7 +106,8 @@ describe("scanning the release bundle's service images", () => {
       expect(args[0]).toBe("image");
       expect(args.join(" ")).toContain("--severity CRITICAL,HIGH");
       expect(args).toContain("--ignore-unfixed");
-      expect(args.join(" ")).toContain("--exit-code 1");
+      // 3, not 1: Trivy exits 1 on its own errors, which are not findings.
+      expect(args.join(" ")).toContain("--exit-code 3");
       expect(args.join(" ")).toContain("--image-src remote");
     }
   });
@@ -132,6 +136,21 @@ describe("scanning the release bundle's service images", () => {
     expect(result.exitCode).toBe(1);
     expect(scanned()).toHaveLength(3);
     expect(result.stderr.toString()).toContain("would be refused");
+  });
+
+  // A scanner that did not finish has not vouched for the image, and must not
+  // be reported as a finding: on 2026-10-23 a 404 fetching Trivy's database
+  // read as a vulnerability in every image.
+  it("tells a scanner failure from a finding, and lets neither pass", () => {
+    const broken = setup({ broken: [TRAEFIK] });
+    const failed = broken.run();
+    expect(failed.exitCode).toBe(2);
+    expect(failed.stderr.toString()).toContain("did not finish");
+    expect(failed.stderr.toString()).not.toContain("would be refused");
+    expect(broken.scanned()).toHaveLength(3);
+    // A failure on one image outranks a finding on another.
+    expect(setup({ red: [VALKEY], broken: [TRAEFIK] }).run().exitCode).toBe(2);
+    expect(setup({ red: [VALKEY] }).run().exitCode).toBe(1);
   });
 
   it("scans the images it is given instead of the Compose file's", () => {

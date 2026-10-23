@@ -9,7 +9,7 @@ there is no external service holding your data.
 **Primary language:** Spanish (`es`), with English (`en`) as secondary.
 **Default currency:** EUR.
 
-> **Status: v0.1.0-alpha.4 — fourth alpha.** Intended for testing with backups,
+> **Status: v0.1.0-alpha.4 — an alpha release.** Intended for testing with backups,
 > with Spanish as the default language and EUR as the default currency. Inventory,
 > receipt review, prices, shopping and offline shopping synchronization are built.
 > See [installation](docs/INSTALL.md), [release notes](docs/releases/v0.1.0-alpha.4.md)
