@@ -182,21 +182,32 @@ lock. What it measured:
   that it was built from that head is known from the build step, not from
   the image.
 
-**Owner actions still pending.** `bun scripts/github-settings.ts check` (GET
-requests only), re-run 2026-10-23 after three settings were added for the
-owner's decision to close the repository to other people's contributions: 14 of
-its 15 settings drift, and nothing has been applied. They are private
+**Repository settings applied, 2026-10-23.** The owner ran `bun
+scripts/github-settings.ts apply`, and `check` (GET requests only) then printed
+`ok` for all 15 settings and `NGarate/stoky: in sync.`, exit 0: private
 vulnerability reporting, immutable releases, secret scanning and push
-protection, Dependabot security updates, CodeQL default setup, the Actions
-allow-list with SHA pinning, approval for every external contributor,
+protection, Dependabot alerts and security updates, CodeQL default setup, the
+Actions allow-list with SHA pinning, approval for every external contributor,
 squash-only merges, the two release-tag rulesets, the ruleset exclusion
-Dependabot needs (the same 11 as on 2026-10-12), and the three new ones: the
-interaction limit to collaborators (none set), Projects (on), and the
-`release` environment (missing). Dependabot alerts are on. The review's
-other owner actions have no check and are listed in `docs/SECURITY_REVIEW.md`
-(*Owner actions*): commit signing, an identity for agents, deleting two merged
-branches, the alpha.2 notes, the LICENSE holder, and the first `rescan.yml`
-run. Among them is **the audit's test account in the local development
+Dependabot needs, the interaction limit to collaborators, Projects, wiki and
+discussions off, and the `release` environment. The interaction limit lapses
+after six months; `check` reports it 30 days before. Not yet observed: whether
+the limit lets Dependabot's pull requests through (GitHub's documentation does
+not say), which the first Monday run after this answers. Releases published
+before immutable releases was on (v0.1.0-alpha.1 to .4) stay mutable.
+
+**Signed tags, 2026-10-23.** The owner added `~/.ssh/id_ed25519.pub` to the
+GitHub account as an SSH signing key ("stoky tags"), and this working copy's
+`.git/config` signs every annotated tag with it (`gpg.format ssh`,
+`tag.gpgSign true`, an allowed-signers file for `git verify-tag`); a throwaway
+local tag verified as `Good "git" signature for dev@ngarate.com`. The first
+signed release tag is the next one; v0.1.0-alpha.4 and earlier are unsigned.
+
+**Owner actions still pending.** The review's owner actions that have no check
+are listed in `docs/SECURITY_REVIEW.md` (*Owner actions*): a decision on commit
+signing, an identity for agents, and the LICENSE holder; the alpha.2 notes were
+republished on 2026-10-22 and the first `rescan.yml` run happened on
+2026-10-19. Among them is **the audit's test account in the local development
 database**. An audit verifier registered `a@b.co` there, and it was still
 there on 2026-10-12, created 2026-10-11 23:14 (one read-only `SELECT`).
 Agents may not write to that database, so deleting it, with whatever it
