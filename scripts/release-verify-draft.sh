@@ -185,7 +185,9 @@ check_assets() {
     return 1
   fi
   local have expected
-  have="$(find "$DL" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | paste -sd ' ')"
+  # -exec basename, not GNU's -printf: CI runs this in the Alpine image,
+  # whose BusyBox find has no -printf.
+  have="$(find "$DL" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort | paste -sd ' ')"
   expected="$(printf '%s\n' "${ASSETS[@]}" | sort | paste -sd ' ')"
   if [ "$have" != "$expected" ]; then
     DETAIL="attached: $have; expected: $expected"
