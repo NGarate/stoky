@@ -1254,9 +1254,12 @@ global rather than parent-scoped.** They had to be rewritten rather than
 carried across from `pnpm-workspace.yaml`, because pnpm's `parent>child` key is
 a **silent no-op** under bun: it matches no package, it warns about nothing,
 and the install that looks like it worked has quietly resolved the vulnerable
-version again. lodash, effect, defu, nanoid and deepmerge-ts are pinned
-wherever they appear, which is wider than the advisories strictly need and the
-direction an override should err in.
+version again. effect, defu, nanoid and deepmerge-ts are pinned wherever they
+appear, which is wider than the advisories strictly need and the direction an
+override should err in. lodash was too until 2026-10-26, when Recharts 3
+stopped depending on it and nothing else in the tree did: an override that
+matches no package protects nothing, and `package-overrides.test.ts` refuses
+one that never reaches the lockfile.
 
 **2026-10-06: two more, brace-expansion and fast-uri**, after advisories
 published since the 2026-09-25 measurement turned CI red. Both arrive only

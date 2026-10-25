@@ -49,9 +49,12 @@ export function StockHistoryChart({
   return (
     <div aria-hidden="true" className="h-72 w-full">
       {/* aria-hidden: the ledger table below carries the same information row
-          by row — a reader gets the numbers, not a shape it cannot see. */}
+          by row — a reader gets the numbers, not a shape it cannot see.
+          accessibilityLayer off for the same reason: Recharts 3 makes the
+          chart a tab stop by default, and a tab stop inside aria-hidden is
+          focus landing on something no screen reader can announce. */}
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData}>
+        <LineChart accessibilityLayer={false} data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis
             dataKey="date"
@@ -65,7 +68,7 @@ export function StockHistoryChart({
           />
           <Tooltip
             {...CHART_TOOLTIP}
-            formatter={(value: number) => [units.quantity(value, unit), t("totalHeader")]}
+            formatter={(value) => [units.quantity(Number(value), unit), t("totalHeader")]}
             labelFormatter={(label) => label}
           />
           <Line
