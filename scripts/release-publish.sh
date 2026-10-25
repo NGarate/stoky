@@ -140,8 +140,9 @@ fi
 echo "==> 5/5 Dispatching the rescan of the newest published release"
 RESCAN=""
 # Runs listed from a few seconds before the dispatch, in case the clocks
-# disagree.
-SINCE="$(date -u -d '-10 seconds' +%Y-%m-%dT%H:%M:%SZ)"
+# disagree. In epoch seconds, compared by gh's jq, because only GNU date
+# takes `-d '-10 seconds'`, and CI runs this in the Alpine image.
+SINCE="$(( $(date -u +%s) - 10 ))"
 if OUTPUT="$(gh workflow run rescan.yml --repo "$REPO" --ref master 2>&1)"; then
   echo "$OUTPUT"
   # Recent gh prints the created run's URL; otherwise it is looked up.
@@ -151,7 +152,7 @@ if OUTPUT="$(gh workflow run rescan.yml --repo "$REPO" --ref master 2>&1)"; then
     attempt=$((attempt + 1))
     sleep "$POLL_INTERVAL"
     RESCAN="$(gh run list --repo "$REPO" --workflow rescan.yml --event workflow_dispatch --limit 10 \
-      --json url,createdAt --jq "[.[] | select(.createdAt >= \"$SINCE\")] | .[0].url // empty" || true)"
+      --json url,createdAt --jq "[.[] | select((.createdAt | fromdateiso8601) >= $SINCE)] | .[0].url // empty" || true)"
   done
   [ -n "$RESCAN" ] || RESCAN="dispatched; not listed yet: gh run list --repo $REPO --workflow rescan.yml"
 else
