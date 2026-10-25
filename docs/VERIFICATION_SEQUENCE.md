@@ -72,9 +72,12 @@ Runs the checks that should stay cheap enough for most iteration loops:
 bun run verify:local
 ```
 
-Eight steps:
+Nine steps:
 
 - `bun run lint`
+- `bun run check:format` — `bun fmt --check`: every file Bun's Prettier port
+  has a parser for is formatted as `bunfig.toml`'s `[fmt]` says, Markdown and
+  what else `.prettierignore` names excepted. `bun fmt` fixes it
 - `bun run typecheck`
 - `bun run check:react` — react-doctor, gating on errors, not the score
 - `bun run check:links` — every internal link points at a route that exists
@@ -136,6 +139,7 @@ bun run check:changed --base <ref>   # ...or from another base
 | Check | `all` | `staged` / `changed` |
 |---|---|---|
 | oxlint | the project | the listed `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` files |
+| format | the project | every listed file; `bun fmt` skips what it has no parser for, lockfiles, and `.prettierignore` |
 | React Doctor | `--scope full` | `--staged` / `--scope changed --base <merge base>` — only issues the change introduced |
 | actionlint | every workflow | listed `.github/workflows/*.yml` |
 | shellcheck | `scripts/*.sh` | listed `scripts/*.sh` |

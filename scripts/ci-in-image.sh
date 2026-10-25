@@ -63,6 +63,7 @@ docker build --target development --tag "$IMAGE_TAG" .
 case "$SUITE" in
   quality)
     COMMANDS='bun run lint \
+      && bun run check:format \
       && bun run typecheck \
       && bun run check:react \
       && bun run check:contrast \

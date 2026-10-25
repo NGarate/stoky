@@ -82,7 +82,9 @@ case "$SCOPE" in
 esac
 
 # The same sets `all` covers: oxlint and React Doctor walk the project's
-# sources, actionlint the workflow directory, shellcheck scripts/*.sh and deploy/*.sh,
+# sources, `bun fmt` every file it has a parser for (it is handed the whole
+# list and skips the rest, and what .prettierignore names, itself), actionlint
+# the workflow directory, shellcheck scripts/*.sh and deploy/*.sh,
 # zizmor the workflows and Dependabot's configuration.
 SOURCES=()
 WORKFLOWS=()
@@ -150,6 +152,7 @@ count() {
 case "$SCOPE" in
   all)
     run "oxlint" bun run lint
+    run "format" bun run check:format
     run "React Doctor" bun run check:react --scope full
     if $PIPELINE_LINT; then
       run "actionlint" bash scripts/check-ci.sh actionlint
@@ -169,6 +172,12 @@ case "$SCOPE" in
     else
       skip "oxlint" "no $SCOPE source files"
       skip "React Doctor" "no $SCOPE source files"
+    fi
+
+    if [ "${#FILES[@]}" -gt 0 ]; then
+      run "format ($(count FILES))" bun run check:format "${FILES[@]}"
+    else
+      skip "format" "no $SCOPE files"
     fi
 
     if $PIPELINE_LINT; then

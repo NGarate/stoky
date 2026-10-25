@@ -12,6 +12,7 @@
     "start": "bun --bun node_modules/next/dist/bin/next start",
     "lint": "bun --bun node_modules/oxlint/bin/oxlint",
     "typecheck": "bun --bun node_modules/typescript/bin/tsc --noEmit",
+    "check:format": "bun fmt --check --ignore-unknown",
     "check:react": "bun --bun node_modules/react-doctor/bin/react-doctor.js . --no-telemetry --no-supply-chain --no-warnings --blocking error --max-duration 120",
     "check:contrast": "bun scripts/check-contrast.ts",
     "check:links": "bun scripts/check-links.ts",

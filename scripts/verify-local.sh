@@ -107,6 +107,7 @@ report_budget() {
 }
 
 run_step "Lint" 120 "${RUN_CMD[@]}" lint
+run_step "Format" 60 "${RUN_CMD[@]}" check:format
 run_step "Typecheck" 180 "${RUN_CMD[@]}" typecheck
 run_step "React doctor" 120 "${RUN_CMD[@]}" check:react
 run_step "Internal links" 120 "${RUN_CMD[@]}" check:links

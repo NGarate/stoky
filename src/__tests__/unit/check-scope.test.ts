@@ -129,6 +129,7 @@ describe("check-scope.sh", () => {
     expect(result.exitCode).toBe(0);
     expect(result.calls).toEqual([
       "bun [run] [lint]",
+      "bun [run] [check:format]",
       "bun [run] [check:react] [--scope] [full]",
       "check-ci [actionlint]",
       "check-ci [shellcheck]",
@@ -146,6 +147,9 @@ describe("check-scope.sh", () => {
     expect(result.calls).toEqual([
       "bun [run] [lint] [src/new file.tsx] [src/old.ts]",
       "bun [run] [check:react] [--staged]",
+      // Every staged file: bun fmt skips what it has no parser for, and
+      // what .prettierignore names, itself.
+      "bun [run] [check:format] [.github/dependabot.yml] [.github/selected-actions.json] [.github/workflows/ci.yml] [deploy/examples/old.sh] [deploy/install.sh] [docs/notes.md] [docs/repro.sh] [scripts/release.sh] [src/new file.tsx] [src/old.ts]",
       "check-ci [actionlint] [.github/workflows/ci.yml]",
       "check-ci [shellcheck] [deploy/install.sh] [scripts/release.sh]",
       "check-ci [zizmor] [.github/dependabot.yml] [.github/workflows/ci.yml]",
@@ -186,6 +190,7 @@ describe("check-scope.sh", () => {
     expect(result.calls).toEqual([
       "bun [run] [lint] [src/new file.tsx] [src/old.ts]",
       `bun [run] [check:react] [--scope] [changed] [--base] [${base}]`,
+      "bun [run] [check:format] [.github/dependabot.yml] [.github/selected-actions.json] [.github/workflows/ci.yml] [deploy/examples/old.sh] [deploy/install.sh] [docs/notes.md] [docs/repro.sh] [scripts/release.sh] [scripts/stable.sh] [scripts/uncommitted.sh] [src/new file.tsx] [src/old.ts]",
       "check-ci [actionlint] [.github/workflows/ci.yml]",
       "check-ci [shellcheck] [deploy/install.sh] [scripts/release.sh] [scripts/stable.sh] [scripts/uncommitted.sh]",
       "check-ci [zizmor] [.github/dependabot.yml] [.github/workflows/ci.yml]",
@@ -240,6 +245,7 @@ describe("check-scope.sh", () => {
     for (const check of [
       "oxlint",
       "React Doctor",
+      "format",
       "actionlint",
       "shellcheck",
       "zizmor",
@@ -258,7 +264,7 @@ describe("check-scope.sh", () => {
     stageMixedChange(fixture);
     const result = fixture.run(["staged"], "check:react");
     expect(result.exitCode).toBe(1);
-    expect(result.calls).toHaveLength(6);
+    expect(result.calls).toHaveLength(7);
     expect(result.stdout).toContain("FAILED   React Doctor (exit 3)");
     expect(result.stdout).toContain("ok       typecheck");
   });
@@ -270,6 +276,8 @@ describe("check-scope.sh", () => {
       fixture.git("add", ".");
       const result = fixture.run(["staged"]);
       expect(result.calls).toEqual([
+        // bun fmt itself skips a lockfile, even named on the command line.
+        `bun [run] [check:format] [${manifest}]`,
         "bun [run] [check:audit]",
         "bun [run] [typecheck]",
       ]);
