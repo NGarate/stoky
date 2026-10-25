@@ -247,7 +247,7 @@ jobs:
     # because browsers that do not match the driver fail in a way that reads as
     # a broken test rather than a stale tag.
     container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
       # Docker gives a container 64 MB of /dev/shm; the runner VM has gigabytes.
       # Chromium keeps its renderer surfaces there and, when it runs out, falls
       # back to disk rather than failing — a suite that is quietly slower
@@ -291,7 +291,7 @@ jobs:
       # starts, derived from the same base URL the tests use, so the two can
       # never disagree about the address.
       # Kept beside the image tag it has to agree with.
-      PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
+      PLAYWRIGHT_IMAGE_VERSION: "1.64.1"
       # A container job runs as root, but the default HOME is /github/home,
       # which the image owns as `pwuser`. Firefox refuses to start in a home
       # directory somebody else owns — "Running Nightly as root in a regular

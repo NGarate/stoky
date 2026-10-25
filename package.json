@@ -81,7 +81,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@happy-dom/global-registrator": "^21.0.4",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.0",
@@ -95,7 +95,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "happy-dom": "^21.0.4",
     "oxlint": "^0.16.12",
-    "playwright": "^1.62.1",
+    "playwright": "^1.64.1",
     "postcss": "^8.5.31",
     "react-doctor": "0.9.18",
     "sharp": "^0.35.5",
