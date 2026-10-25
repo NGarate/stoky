@@ -2,9 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// The URL is not here: Prisma 7 reads it for Migrate from prisma.config.ts,
+// and the application hands PrismaClient a driver adapter (src/lib/prisma.ts).
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {

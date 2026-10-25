@@ -7,10 +7,10 @@ import {
   expect,
   it,
 } from "bun:test";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { join } from "node:path";
-import { prisma } from "@/lib/prisma";
+import { createPrismaClient, prisma } from "@/lib/prisma";
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/trpc";
 import { createCredentialUser } from "@/lib/auth/credentials";
@@ -79,7 +79,7 @@ beforeAll(async () => {
     );
   }
 
-  db = new PrismaClient({ datasources: { db: { url: isolated.url } } });
+  db = createPrismaClient(isolated.url);
 }, 120_000);
 
 afterAll(async () => {

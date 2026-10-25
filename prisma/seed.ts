@@ -19,7 +19,8 @@
  * `NODE_ENV=production` (see `seed-guard.ts`), because the password below is
  * published in the README.
  */
-import { PrismaClient, type Prisma, type StockOperation } from "@prisma/client";
+import type { Prisma, StockOperation } from "@prisma/client";
+import { createPrismaClient } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/auth/password-hash";
 import { createCredentialUser } from "../src/lib/auth/credentials";
 import { demoSeedRefusal } from "./seed-guard";
@@ -31,7 +32,7 @@ if (refusal) {
   process.exit(1);
 }
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const HOUSEHOLD_NAME = "Hogar Demo";
 const DEMO_EMAIL = "demo@stoky.local";

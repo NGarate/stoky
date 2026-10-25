@@ -161,14 +161,14 @@ older commit's changes.
 
 ## Upgrading Prisma
 
-The image build checks the native Prisma engines against
-`PRISMA_SCHEMA_ENGINE_SHA256` and `PRISMA_QUERY_ENGINE_SHA256` in the
-`Dockerfile`, because Prisma downloads them at install time, outside
-`bun.lock` ([Security](../SECURITY.md#container-and-runtime--dockerfile)).
-An upgrade that changes the engines (`@prisma/engines-version` names the
-commit they were built from; 6.19.3 is `c2990dca…`) fails `docker build` with
-`sha256sum: WARNING: N of 4 computed checksums did NOT match` until both values
-are refreshed. That failure is the intended signal; never remove the check to
+The image build checks the native Prisma schema engine against
+`PRISMA_SCHEMA_ENGINE_SHA256` in the `Dockerfile`, because Prisma downloads it
+at install time, outside `bun.lock`
+([Security](../SECURITY.md#container-and-runtime--dockerfile)). Prisma 7 has no
+query engine binary to pin. An upgrade that changes the engine
+(`@prisma/engines-version` names the commit it was built from; 7.10.1 is
+`d1b3f377…`) fails `docker build` with `sha256sum: WARNING: 1 of 1 computed
+checksums did NOT match` until the value is refreshed. That failure is the intended signal; never remove the check to
 get past it. Take the new values from the upgraded lockfile's install:
 
 ```bash
@@ -177,9 +177,9 @@ docker run --rm --network none --entrypoint sh stoky-deps -c \
   'sha256sum /app/node_modules/@prisma/engines/*-linux-musl-openssl-3.0.x*'
 ```
 
-Confirm `bun.lock` changed only by the intended Prisma version, write the two
-values into the `ARG`s, and commit them with the upgrade. The pins are for the
-amd64 image; an arm64 build would need its own (`linux-musl-arm64-openssl-3.0.x`),
+Confirm `bun.lock` changed only by the intended Prisma version, write the
+schema engine's value into its `ARG`, and commit it with the upgrade. The pin
+is for the amd64 image; an arm64 build would need its own (`linux-musl-arm64-openssl-3.0.x`),
 chosen by `TARGETARCH`.
 
 ## Tag, inspect, publish
