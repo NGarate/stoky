@@ -163,7 +163,7 @@ describe("the dependency overrides", () => {
 });
 
 describe("the packages allowed to run install scripts", () => {
-  it("are exactly the four whose scripts the install needs", () => {
+  it("are exactly the three whose scripts the install needs", () => {
     // Every entry runs its code at install time, with network access and — on a
     // developer machine — the repository's `.env` in its environment (Bun
     // exports it to lifecycle scripts; `--no-env-file` and bunfig `env = false`
@@ -172,11 +172,13 @@ describe("the packages allowed to run install scripts", () => {
     //
     // - argon2: `install` is node-gyp-build, which picks the shipped prebuild
     //   (musl and glibc, x64 and arm64) and compiles only if none matches.
-    // - @prisma/engines: `postinstall` downloads the query and schema engines.
-    // - @prisma/client: `postinstall` writes the stub client `prisma generate`
-    //   later replaces.
+    // - @prisma/engines: `postinstall` downloads the schema engine.
     // - prisma: `preinstall` only checks the runtime version. Same publisher
-    //   and release as the two above, so it trusts no new party.
+    //   and release as the one above, so it trusts no new party.
+    //
+    // @prisma/client left the list with Prisma 7, which dropped its
+    // `postinstall` (it wrote a stub client); `prisma generate` writes the
+    // client, and nothing runs at install.
     //
     // Deliberately absent, and why (measured 2026-10-12): sharp 0.35.5 has no
     // install script; tesseract.js's is a donation banner; @parcel/watcher's
@@ -191,7 +193,6 @@ describe("the packages allowed to run install scripts", () => {
     // curated default allow-list of popular packages (pm/lifecycle.mdx), which
     // this list replaces rather than extends.
     expect([...(manifest.trustedDependencies ?? [])].sort()).toEqual([
-      "@prisma/client",
       "@prisma/engines",
       "argon2",
       "prisma",

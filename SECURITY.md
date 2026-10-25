@@ -125,13 +125,14 @@ Verified against the files named in each row.
   the same frozen Bun installation used to build the application. There is
   no second package resolution or npm installation. Startup runs that bundled
   CLI through Bun and does not download packages or OCR language data.
-- The native Prisma engines are the one install-time download that
+- The native Prisma schema engine is the one install-time download that
   `bun.lock` does not cover: the trusted `@prisma/engines` postinstall fetches
-  them from `binaries.prisma.sh` and checks them only against a `.sha256` from
-  the same origin. The build checks them against SHA-256 values pinned in the
+  it from `binaries.prisma.sh` and checks it only against a `.sha256` from the
+  same origin. The build checks it against a SHA-256 value pinned in the
   `Dockerfile`, as it does the OCR model: the schema engine `migrate deploy`
-  runs, and the three copies of the query engine, including the one in the
-  standalone output that the server loads. It also fails if a native engine
+  runs. Since Prisma 7 there is no query engine binary; the server queries
+  through the `pg` driver adapter and a WebAssembly query compiler that comes
+  in the npm tarball, which `bun.lock` does cover. It also fails if a native engine
   appears under `/opt/prisma` or the standalone output at a path it does not
   check. `src/__tests__/unit/image-posture.test.ts` fails if a path or a pin
   is dropped. The values are for `linux-musl-openssl-3.0.x` on amd64, the only

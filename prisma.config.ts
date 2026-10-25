@@ -1,13 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import { defineConfig } from "prisma/config";
+import type { PrismaConfig } from "prisma/config";
 
 /**
  * Prisma configuration.
  *
- * Replaces the `prisma` key in package.json, which Prisma 6 deprecates with a
- * warning on every command and removes in Prisma 7. Moving it now means the
- * eventual major upgrade is not also a config migration.
+ * Replaced the `prisma` key in package.json, which Prisma 7 removed. It also
+ * carries the database URL for the CLI, and ships in the production image,
+ * where the entrypoint's `migrate deploy` reads it.
+ *
+ * **A plain object with a type-only import, not `defineConfig()`.** The
+ * production image runs the CLI from /opt/prisma against this file in /app,
+ * whose node_modules is Next's standalone trace and has no `prisma` package:
+ * a value import of `prisma/config` would not resolve there, and the
+ * container would stop before migrating. `defineConfig` only returns its
+ * argument; `satisfies` keeps the checking it gave.
  *
  * The presence of this file makes the Prisma CLI skip its automatic .env
  * loading ("Prisma config detected, skipping environment variable loading"),
@@ -17,10 +24,18 @@ import { defineConfig } from "prisma/config";
 if (fs.existsSync(".env")) {
   process.loadEnvFile(".env");
 }
-export default defineConfig({
+
+// Where Migrate connects, which Prisma 7 no longer reads from the schema.
+// Conditional rather than Prisma's `env()`, which throws when the variable is
+// unset: `prisma generate` needs no database and runs in the image build with
+// none, while `migrate deploy` without one still refuses, naming the URL.
+const url = process.env.DATABASE_URL;
+
+export default {
   schema: path.join("prisma", "schema.prisma"),
+  ...(url ? { datasource: { url } } : {}),
   migrations: {
     // Bun runs the TypeScript seed directly, with no build step.
     seed: "bun run prisma/seed.ts",
   },
-});
+} satisfies PrismaConfig;

@@ -87,30 +87,19 @@ function builderStage(): string {
 }
 
 describe("the Prisma engines are verified against pinned checksums", () => {
-  // Prisma's postinstall downloads the native engines from binaries.prisma.sh
-  // and checks them only against a .sha256 from the same origin; bun.lock's
-  // integrity covers the npm tarballs, not these. The schema engine runs on
-  // every start (`migrate deploy`) and the standalone query engine is loaded
-  // into the server. Measured in a fresh `--target builder` build: these four
-  // paths are every native engine under /opt/prisma and .next/standalone,
-  // which are what the production stage copies.
+  // Prisma's postinstall downloads the native schema engine from
+  // binaries.prisma.sh and checks it only against a .sha256 from the same
+  // origin; bun.lock's integrity covers the npm tarballs, not this. It runs on
+  // every start (`migrate deploy`). Prisma 7 has no query engine binary — the
+  // server queries through the pg adapter and a WebAssembly compiler from the
+  // npm tarball — so measured in a fresh `--target builder` build, this one
+  // path is every native engine under /opt/prisma and .next/standalone, which
+  // are what the production stage copies. Prisma 6 shipped four.
   const ENGINE = "linux-musl-openssl-3.0.x";
   const shipped = [
     [
       "SCHEMA",
       `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/schema-engine-${ENGINE}`,
-    ],
-    [
-      "QUERY",
-      `/opt/prisma/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-${ENGINE}.so.node`,
-    ],
-    [
-      "QUERY",
-      `/opt/prisma/node_modules/prisma/libquery_engine-${ENGINE}.so.node`,
-    ],
-    [
-      "QUERY",
-      `/app/.next/standalone/node_modules/.prisma/client/libquery_engine-${ENGINE}.so.node`,
     ],
   ];
 
@@ -127,7 +116,8 @@ describe("the Prisma engines are verified against pinned checksums", () => {
   it("pins each engine's SHA-256 in an ARG", () => {
     const stage = builderStage();
     expect(stage).toMatch(/^ARG PRISMA_SCHEMA_ENGINE_SHA256=[0-9a-f]{64}$/m);
-    expect(stage).toMatch(/^ARG PRISMA_QUERY_ENGINE_SHA256=[0-9a-f]{64}$/m);
+    // A query-engine pin left behind would check nothing and read as if it did.
+    expect(stage).not.toContain("PRISMA_QUERY_ENGINE_SHA256");
   });
 
   it("checks every shipped copy against its pin with sha256sum -c", () => {
@@ -140,8 +130,9 @@ describe("the Prisma engines are verified against pinned checksums", () => {
   });
 
   it("fails the build on an engine copy the list does not name", () => {
-    // The text check cannot see a fifth copy (a new binaryTarget, a second
-    // generator output). The count in the same RUN can.
+    // The text check cannot see a copy it does not name (a new binaryTarget,
+    // a second generator output, the old query engine coming back). The count
+    // in the same RUN can.
     const run = checkInstruction();
     const count = run.match(
       /find \/opt\/prisma \/app\/\.next\/standalone .*\| wc -l\)" = (\d+)$/m,
@@ -212,6 +203,9 @@ describe("the production image ships no demo seed", () => {
     expect(copies).toEqual([
       ["/schema.prisma", "./prisma/schema.prisma"],
       ["/migrations", "./prisma/migrations"],
+      // /app/prisma.config.ts, beside prisma/ rather than in it: where
+      // migrate deploy reads DATABASE_URL under Prisma 7.
+      [".config.ts", "./prisma.config.ts"],
     ]);
   });
 

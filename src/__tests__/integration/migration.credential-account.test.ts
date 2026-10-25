@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prisma } from "@/lib/prisma";
+import { createPrismaClient, prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
 import { findCredentialByEmail } from "@/lib/auth/credentials";
 
@@ -94,7 +94,7 @@ beforeAll(async () => {
   });
   migrate(join(before, "prisma", "schema.prisma"), isolated.url);
 
-  db = new PrismaClient({ datasources: { db: { url: isolated.url } } });
+  db = createPrismaClient(isolated.url);
 
   // Raw SQL because the generated client no longer knows the column. One real
   // Argon2id hash for both: what matters is that it survives, byte for byte.

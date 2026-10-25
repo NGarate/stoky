@@ -1303,7 +1303,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | next | 16.4.2 — from 16.4.0 on 2026-10-22, for GHSA-p3m5-59mp-jv5r (high, Server Actions DoS), GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr (critical RCEs in image optimization with SVG and in `use cache`), all published that day and fixed in 16.4.1 |
 | react | 19.3.1 — what the component tests and the types use; the App Router renders with the React Next vendors (19.3.0-canary in Next 16.4.2) |
 | @trpc/server, @trpc/client | 11.19.0 |
-| prisma, @prisma/client | 6.19.3 |
+| prisma, @prisma/client | 7.10.1 — from 6.19.3 on 2026-10-26, with `@prisma/adapter-pg` (node-postgres): Prisma 7 has no query engine of its own, and the URL Migrate uses lives in `prisma.config.ts`, which ships in the image |
 | better-auth | 1.7.12 — exact (1.7.7 from 2026-10-15, replacing next-auth 5.0.0-beta.32, D135; 1.7.12 since 2026-10-25); `bun audit` clean with it, no new override |
 | @better-auth/passkey, @simplewebauthn/browser | 1.7.12 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey or signs in with one (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
 | uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
