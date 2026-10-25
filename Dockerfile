@@ -22,7 +22,9 @@ USER root
 WORKDIR /app
 # Fixtures execute Bash; Git inspects the intentionally mounted checkout.
 # Trust exactly /app, not every repository. BUILD-2 pins this behavior.
-RUN apk add --no-cache git bash openssl \
+# ssh-keygen is what Git signs and verifies an SSH-signed tag with, which
+# the release-tag tests do for real.
+RUN apk add --no-cache git bash openssl openssh-keygen \
     && git config --system --add safe.directory /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
