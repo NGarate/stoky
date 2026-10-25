@@ -1,7 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import ts from "typescript";
+// TypeScript 6's compiler API: TypeScript 7, the project's compiler, has no
+// JavaScript API yet, and this is a parse, not a type check.
+import ts from "@typescript/typescript6";
 
 /**
  * No Server Action carries a value from the server to the browser and back.

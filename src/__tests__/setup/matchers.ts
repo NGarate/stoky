@@ -9,7 +9,12 @@
 import { expect } from "bun:test";
 import * as matchers from "@testing-library/jest-dom/matchers";
 
-expect.extend(matchers as Parameters<typeof expect.extend>[0]);
+// All but jest-dom's deprecated `toBeEmpty`, which would replace Bun's own:
+// `expect([]).toBeEmpty()` would then ask whether an array is an empty DOM
+// element. `toBeEmptyDOMElement` is the element check
+// (src/types/bun-test-dom.d.ts).
+const { toBeEmpty: _deprecated, ...domMatchers } = matchers;
+expect.extend(domMatchers as Parameters<typeof expect.extend>[0]);
 
 /**
  * `expect(element).toBeAbsent()` — the safe way to assert something is gone.
