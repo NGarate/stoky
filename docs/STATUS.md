@@ -1304,7 +1304,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 | better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
 | @better-auth/passkey, @simplewebauthn/browser | 1.7.7 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey or signs in with one (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
 | uqr | 0.1.3 — exact; MIT, no dependencies, published 2026-04-03. Draws the two-step verification QR code in the browser (D148); `bun audit` clean with it (575 packages, 2026-10-15) |
-| next-intl | 4.14.0 |
+| next-intl | 4.14.9 |
 | tailwindcss | 4.3.3 |
 | zod | 4.6.7 — from 3.25.76 on 2026-10-25, for GHSA-mrhx-c7xc-m3w5 (high, memory exhaustion validating a large array), which has no 3.x fix. Zod 4 fills a `.default()` in through `.partial()`, so an update schema restates each defaulted field as plain `.optional()` (`update-schemas.test.ts`) |
 | bun | 1.4.4 — `.bun-version` and the Dockerfile pin (tag and index digest `sha256:4cf82f56…`); all application image stages use Bun. Released 2026-10-22, taken on 2026-10-25, the first day the three-day `minimumReleaseAge` allows, for its security fixes and `bun fmt` |
