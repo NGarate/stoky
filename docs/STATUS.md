@@ -1299,7 +1299,7 @@ Application release: **0.1.0-alpha.3**, from `package.json`.
 |---|---|
 | next | 16.4.2 — from 16.4.0 on 2026-10-22, for GHSA-p3m5-59mp-jv5r (high, Server Actions DoS), GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr (critical RCEs in image optimization with SVG and in `use cache`), all published that day and fixed in 16.4.1 |
 | react | 19.3.1 — what the component tests and the types use; the App Router renders with the React Next vendors (19.3.0-canary in Next 16.4.2) |
-| @trpc/server, @trpc/client | 11.18.0 |
+| @trpc/server, @trpc/client | 11.19.0 |
 | prisma, @prisma/client | 6.19.3 |
 | better-auth | 1.7.7 — exact, replacing next-auth 5.0.0-beta.32 on 2026-10-15 (D135); `bun audit` clean with it, no new override |
 | @better-auth/passkey, @simplewebauthn/browser | 1.7.7 and 13.3.0 — both exact. The plugin brings `@simplewebauthn/server` 13.3.3 (D151); the browser half, the version the plugin already resolved, is loaded on the click that adds a passkey or signs in with one (a 6.3 KB chunk of its own in `bun run build`, 2026-10-15). `bun audit` clean (598 packages, 2026-10-15) |
