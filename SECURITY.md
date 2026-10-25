@@ -161,7 +161,7 @@ Verified against the files named in each row.
   Docker does not restart a running container solely because it is unhealthy.
 - The Bun base image is the version pinned in `.bun-version`, named by tag and
   by the digest of its multi-platform index
-  (`oven/bun:1.4.3-alpine@sha256:…`). A tag can be re-pushed and a digest
+  (`oven/bun:1.4.4-alpine@sha256:…`). A tag can be re-pushed and a digest
   cannot, so a re-pushed or substituted upstream tag cannot change what a
   release builds without a change in this repository.
   `src/__tests__/unit/image-posture.test.ts` fails if the digest is dropped
