@@ -188,7 +188,7 @@ describe("refreshing the bundle's service images", () => {
     expect(content()).toBe(real.replace(`image: ${PINS.traefik.image}\n`, `image: ${NEW_TRAEFIK}\n`));
     expect(content()).not.toBe(real);
     expect(pinnedLikeDeploymentTest(content())).toBe(true);
-    expect(result.stdout).toMatch(new RegExp(`traefik\\s+${PINS.traefik.image.replace(/[.$]/g, "\\$&")}\\s+${NEW_TRAEFIK.replace(/[.$]/g, "\\$&")}\\s+clean`));
+    expect(result.stdout).toMatch(new RegExp(`traefik\\s+${RegExp.escape(PINS.traefik.image)}\\s+${RegExp.escape(NEW_TRAEFIK)}\\s+clean`));
   });
 
   // Upstream rebuilds a version on a patched base under the same tag: the pin
