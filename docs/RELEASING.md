@@ -252,7 +252,10 @@ attestation of each file, one attestation check that must fail (the previous
 tag's `--source-ref`), the Compose file against the tagged source, the image
 digest against the registry, the image's provenance, an anonymous pull, a
 fresh install with the release's own `install.sh`, and the images Compose
-resolves. Every check runs even after one fails; exit 0 is all ok.
+resolves. Every check runs even after one fails; exit 0 is all ok. The one
+exception is the install: `install.sh` is never run unless its own
+attestation verified, because a tampered draft can carry a `SHA256SUMS` that
+agrees with it.
 `--published` re-verifies a release already published.
 
 Publish an alpha only after these checks. `bun run release:publish vVERSION`

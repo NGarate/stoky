@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 /**
  * `scripts/release-verify-draft.sh` is the check a draft passes before the
@@ -53,6 +53,11 @@ type Options = {
   pullFails?: boolean;
   /** The released install.sh installs another version by default. */
   installVersion?: string;
+  /**
+   * The released install.sh is someone else's: it only leaves this file
+   * behind, and SHA256SUMS agrees with it, as a tampered draft's would.
+   */
+  hostileInstall?: string;
   /** An image Compose resolves that the released file does not name. */
   extraImage?: string;
 };
@@ -90,10 +95,12 @@ function setup(options: Options = {}) {
     "docker-compose.yml": compose,
     "example.env": relink(readFileSync(join(root, "deploy/example.env"), "utf8")).replace(/^STOKY_VERSION=.*$/m, `STOKY_VERSION=${TAG}`),
     "traefik.yml": relink(readFileSync(join(root, "deploy/traefik.yml"), "utf8")),
-    "install.sh": relink(readFileSync(join(root, "deploy/install.sh"), "utf8")).replace(
-      /^DEFAULT_VERSION=.*$/m,
-      `DEFAULT_VERSION=${options.installVersion ?? TAG}`,
-    ),
+    "install.sh": options.hostileInstall
+      ? `#!/bin/bash\ntouch "${options.hostileInstall}"\n`
+      : relink(readFileSync(join(root, "deploy/install.sh"), "utf8")).replace(
+          /^DEFAULT_VERSION=.*$/m,
+          `DEFAULT_VERSION=${options.installVersion ?? TAG}`,
+        ),
   };
   for (const [name, text] of Object.entries(files)) writeFileSync(join(release, name), text, { mode: 0o755 });
   writeFileSync(join(release, "SHA256SUMS"), Object.entries(files).map(([name, text]) => `${sha256(text)}  ${name}\n`).join(""));
@@ -245,6 +252,16 @@ describe("verifying a release draft", () => {
   it("fails a file with no attestation for this tag", () => {
     const result = setup({ unattested: ["traefik.yml"] }).run();
     expectFailures(result, ["attestation traefik.yml"]);
+  });
+
+  it("never runs an install.sh with no attestation, however its checksum agrees", () => {
+    const ran = join(mkdtempSync(join(tmpdir(), "stoky-release-verify-ran-")), "ran");
+    fixtures.push(dirname(ran));
+    const result = setup({ unattested: ["install.sh"], hostileInstall: ran }).run();
+    expectFailures(result, ["attestation install.sh", "fresh install", "compose images"]);
+    expect(result.rows.get("checksums")?.result).toBe("ok");
+    expect(result.rows.get("fresh install")?.detail).toBe(`install.sh is not attested for refs/tags/${TAG}; not run`);
+    expect(existsSync(ran)).toBe(false);
   });
 
   it("fails when the attestation check would pass for another tag too", () => {

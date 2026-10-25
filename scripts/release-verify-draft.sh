@@ -21,9 +21,10 @@
 #   4. That digest is what ghcr.io/<owner>/stoky:<tag> resolves to.
 #   5. The image under that tag carries this tag's provenance attestation.
 #   6. The image pulls by digest with no saved credentials.
-#   7. The release's install.sh (checked against SHA256SUMS first) installs
-#      into an empty directory from a file:// copy of the release, creating
-#      the files and a .env with both secrets generated; with DOMAIN and
+#   7. The release's install.sh (run only once its attestation verified and
+#      it matched SHA256SUMS) installs into an empty directory from a
+#      file:// copy of the release, creating the files and a .env with both
+#      secrets generated; with DOMAIN and
 #      ACME_EMAIL filled in, `docker compose config --images` lists exactly
 #      the released Compose file's images, the application's being
 #      ghcr.io/<owner>/stoky:<tag>@<digest>.
@@ -219,6 +220,9 @@ check_checksums() {
   DETAIL="sha256sum -c SHA256SUMS: $(grep -c ': OK$' <<< "$output") files OK"
 }
 
+# The files whose attestation verified, so that nothing is run on a checksum
+# alone: a draft's own SHA256SUMS vouches for consistency, not provenance.
+ATTESTED=()
 check_attestation() {
   local file="$1"
   if [ ! -f "$DL/$file" ]; then
@@ -230,6 +234,7 @@ check_attestation() {
     DETAIL="not attested by ci.yml for refs/tags/$TAG"
     return 1
   fi
+  ATTESTED+=("$file")
   DETAIL="attested by ci.yml for refs/tags/$TAG"
 }
 
@@ -334,6 +339,12 @@ check_install() {
       return 1
     fi
   done
+  # Never run a script this tag's CI did not build: a tampered draft can
+  # carry a SHA256SUMS that agrees with its own install.sh.
+  if [[ " ${ATTESTED[*]} " != *" install.sh "* ]]; then
+    DETAIL="install.sh is not attested for refs/tags/$TAG; not run"
+    return 1
+  fi
   # Never run a script the checksums do not vouch for.
   if ! grep -E '^[0-9a-f]{64}  install\.sh$' "$DL/SHA256SUMS" > "$WORK/install.sum" \
      || ! (cd "$DL" && sha256sum -c "$WORK/install.sum"); then
