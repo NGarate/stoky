@@ -40,7 +40,7 @@
       },
       "devDependencies": {
         "@axe-core/playwright": "^4.12.1",
-        "@happy-dom/global-registrator": "^20.11.1",
+        "@happy-dom/global-registrator": "^21.0.4",
         "@playwright/test": "^1.62.1",
         "@tailwindcss/postcss": "^4.3.3",
         "@testing-library/dom": "^10.4.1",
@@ -53,7 +53,7 @@
         "@types/react-dom": "^19.2.4",
         "axe-core": "^4.13.0",
         "babel-plugin-react-compiler": "1.0.0",
-        "happy-dom": "^20.11.1",
+        "happy-dom": "^21.0.4",
         "oxlint": "^0.16.12",
         "playwright": "^1.62.1",
         "postcss": "^8.5.25",
@@ -182,7 +182,7 @@
 
     "@formatjs/intl-localematcher": ["@formatjs/intl-localematcher@0.8.13", "", { "dependencies": { "@formatjs/fast-memoize": "3.1.7" } }, "sha512-kHEAFOkeJSPNi7c5PaKaRjxcBrJwzzt81ifUu+8uve1EDW/VJl83KsxmqgqNZLzcFEhSliZGvx3+pk/RH0IOmg=="],
 
-    "@happy-dom/global-registrator": ["@happy-dom/global-registrator@20.11.12", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^20.11.12" } }, "sha512-Oj9ubX+6/k8D+QSs+SKga0ECVAk8XB2dvbQ1pj54fQSC78EPjEoOQ3aMFFPaI5z4EcvwixVOMaaHf8rxcpAX4Q=="],
+    "@happy-dom/global-registrator": ["@happy-dom/global-registrator@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^21.0.4" } }, "sha512-Bbr0hW9hhDhBf3Jp0EyDlkCbFgbr0z2jd3BMKYOYW+fOkPM4Nx195GMXyCtRCGEgoNn6i09FabXrSkNFm2ONzg=="],
 
     "@hexagon/base64": ["@hexagon/base64@1.1.28", "", {}, "sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw=="],
 
@@ -920,7 +920,7 @@
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
 
-    "happy-dom": ["happy-dom@20.11.12", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-7+mrTTD+6fOG3dx0URrDLrCX8QDTE+YujSOQD4VPZcYze/yJ0vVhRKaIBTjqlk+R4NetxVz21odnevHYIjIJ+g=="],
+    "happy-dom": ["happy-dom@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw=="],
 
     "hermes-estree": ["hermes-estree@0.25.1", "", {}, "sha512-0wUoCcLp+5Ev5pDW2OriHC2MJCbwLwuRx+gAqMTOkGKJJiBCLjtrvy4PWUGn6MIVefecRpzoOZ/UV6iGdOr+Cw=="],
 
